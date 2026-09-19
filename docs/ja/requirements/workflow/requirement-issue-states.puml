@@ -1,0 +1,27 @@
+@startuml requirement-issue-states
+' cumin works v2 - 要求Issueの状態遷移
+' 状態はGitHubのラベルで表す。遷移の番号 (R1など) は issue-states.md の表に対応する。
+' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+
+hide empty description
+
+state "提出済み\n(状態ラベルなし)" as Submitted
+state "cumin/status/ready" as Ready
+state "cumin/status/planning" as Planning
+state "cumin/status/awaiting-owner-review\n(分割結果の確認)" as PlanReview
+state "cumin/status/implementing" as Implementing
+state "cumin/status/awaiting-owner-review\n(受け入れの確認)" as Acceptance
+state "cumin/status/awaiting-owner-decision" as Decision
+
+[*] --> Submitted : Ownerが要求を書き、\ncumin/type/requirement を付ける
+Submitted --> Planning : R1 cuminが分割を依頼する
+Planning --> PlanReview : R2 分割が終わった
+Planning --> Decision : R2 分割に失敗した
+Decision --> Ready : Ownerが要求を直し、\ncumin/status/ready を付ける
+Ready --> Planning : R1 cuminが分割を依頼する
+PlanReview --> Implementing : R3 Ownerがsub-issueに\ncumin/status/ready を付けた
+Implementing --> Acceptance : R4 sub-issueが全て閉じた
+Acceptance --> Implementing : R3 Ownerが差し戻した\n(sub-issueを追加し、cumin/status/ready を付ける)
+Acceptance --> [*] : R5 Ownerが要求Issueを閉じる\n(= 受け入れ)
+
+@enduml

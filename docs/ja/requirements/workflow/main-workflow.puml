@@ -1,0 +1,211 @@
+@startuml main-workflow
+' cumin works v2 - メインワークフロー (要求レベル)
+' 叩き台: 正常系の骨格。Qn の note は未決事項であり、決定ではない。
+' 参加者は ../overview.md の登場人物のみ。実装の詳細は描かない。
+' Issueのラベルと状態遷移、cuminの各動作のきっかけは issue-states.md にある。
+' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+
+autonumber
+
+actor "Owner" as Owner
+participant "cumin" as Cumin
+participant "Chief Engineer" as CE <<Agent>>
+participant "Implementer" as Impl <<Agent>>
+participant "Reviewer" as Rev <<Agent>>
+database "Issue管理\n(GitHub Issues)" as Tracker
+database "リポジトリ\n(GitHub)" as Repo
+
+note over Cumin
+  Host (Mac mini) 上の常駐プログラム。
+  落ちたらlaunchdが再起動する。
+  将来: ハートビートを出し、外部マシンから監視する。
+end note
+/ note over Tracker
+  将来Jiraなどに変わる可能性がある。
+  ソースコードの置き場所はGitHubのまま。
+end note
+
+== 1. 要求の受付 ==
+
+Owner -> Tracker : 要求をIssueに書き、cumin/type/requirement を付ける
+note right of Owner
+  cuminへの入口はIssueだけ。リポジトリの構成は前提にしない。
+  ラベルを付けることが「提出」の合図 (書きかけは拾われない)。
+  Ownerの要件文書 (例: requirements/) をリポジトリに置くのは自由。
+  Issueからリンクすれば、Agentが文脈として読める。
+end note
+
+Cumin -> Tracker : cumin/type/requirement の付いたIssueがないか定期的に確認する
+note right of Cumin
+  cuminは常駐しており、自分から仕事を取りに行く。
+  Ownerが起動するのではない。
+end note
+
+== 2. 計画 ==
+
+Cumin -> Tracker : 要求Issueに cumin/status/planning を付ける
+Cumin -> CE : 依頼: この要求を分割する
+CE -> Repo : リポジトリを読む (要求Issueからリンクされた文書を含む)
+CE -> Tracker : 実装Issueを要求Issueのsub-issueとして作る (1 Issue = 1実装タスク)
+CE -> Tracker : Issue間の依存関係を記録する
+CE -> Tracker : 各Issueにriskを仮付けする
+note right of CE
+  riskの基準:
+  risk/low = 数行で影響が自明な変更。
+  risk/high = revertで戻せない変更 (DBマイグレーション、デプロイやCIの設定、
+  認証や決済、外部サービスへの副作用、公開APIの契約、cumin自身のルール)。
+  risk/medium = それ以外の全て。
+  分割の基準は policies/issue-sizing.md に従う
+  (risk/high の変更は、それだけの最小のIssueに隔離する)。
+end note
+CE --> Cumin : 計画完了 (Agentの実行が終わった)
+Cumin -> Tracker : sub-issueがあり、全てにriskが付いていることを確かめる
+
+== 3. 計画の確認 ==
+
+Cumin -> Tracker : 要求Issueのラベルを cumin/status/awaiting-owner-review に替える
+Cumin -> Owner : 通知: 分割結果の確認が必要
+Owner -> Tracker : 分割結果とriskを確認する (直すときはOwnerが自分で直す)
+Owner -> Tracker : 良ければ実装Issueに cumin/status/ready を付ける
+note right of Owner
+  cumin/status/ready は1つで3つの意味を持つ:
+  分割の承認、riskの確定、実装開始の合図。
+  riskの判断には必ずOwnerが介在する (まずはここから始める)。
+end note
+
+== 4. 実装とレビュー ==
+
+loop cumin/status/ready が付き依存が解決済みのIssueがあり、AIリソースに空きがある間
+  note over Cumin
+    AIリソースの空き = 利用枠 (Claude Codeなら5h枠とweekly枠) の使用率がしきい値 (8〜9割) 未満であること。
+    しきい値は時間帯ごとに変えられる (Ownerが使わない時間帯は高くする)。
+    5h枠のリセットが近づいたら、5h枠のしきい値を100%にする。
+    しきい値と時間帯は、cuminの設定ファイルで変えられる。
+    使用率はcuminが読み取れる (Claude Codeの実行結果に使用率とリセット時刻が含まれる。実測済み)。
+  end note
+  Cumin -> Tracker : 次の着手可能なIssueを選ぶ
+  Cumin -> Tracker : ラベルを cumin/status/ready から cumin/status/implementing に替える
+  note right of Cumin
+    ラベルの付け替えが「着手」。依頼より先に行うので、同じIssueを二重に依頼しない。
+    状態ラベルは実装Issueに付け、常に1つだけ。付け替えは全てcuminが行う (Agentには任せない)。
+    Pull Requestが既にあるIssueは、続きから再開する (Ownerの差し戻しや回答のあと)。
+    このときAgentのセッションは新しくし、Issue、Pull Request、コメントを読み直させる。
+  end note
+  Cumin -> Impl : 依頼: このIssueを実装する
+  Impl -> Repo : ブランチをpushし、Pull Requestを開く
+  Impl --> Cumin : 実装完了 (Agentの実行が終わった)
+  Cumin -> Repo : Pull Requestが開かれていることを確かめる
+  Cumin -> Repo : 必須のcheckが全て通るまで待つ (失敗したらImplementerに修正を依頼する。必須のcheckがなければ待たない)
+  note right of Cumin
+    Pull Requestが開かれただけでは、実装完了としない。
+    cuminは、Agentの申告ではなくGitHub上の事実で判定する。
+    checkを待つ間、Agentは動いていないので利用枠を消費しない。
+  end note
+
+  loop 指摘がなくなるまで (最大3ラウンド。回数は調整していく)
+    Cumin -> Tracker : ラベルを cumin/status/reviewing に替える
+    Cumin -> Rev : 依頼: このPull Requestをレビューする
+    Rev -> Repo : レビューを投稿する (指摘なしなら APPROVE、修正が必要なら REQUEST_CHANGES)
+    Rev --> Cumin : レビュー完了 (Agentの実行が終わった)
+    Cumin -> Repo : 今の先頭のコミットに対するレビューの結果を読む
+    opt 修正すべき指摘あり
+      Cumin -> Tracker : ラベルを cumin/status/implementing に替える
+      Cumin -> Impl : 依頼: 指摘を修正する
+      Impl -> Repo : 修正をpushする
+      Impl --> Cumin : 修正完了
+      Cumin -> Repo : 必須のcheckが全て通るまで待つ
+    end
+  end
+
+  alt 指摘なし、risk/low
+    Cumin -> Repo : mergeする (実装Issueが閉じる)
+  else 指摘なし、risk/medium または risk/high
+    Cumin -> Tracker : ラベルを cumin/status/awaiting-owner-review に替える
+    Cumin -> Owner : 通知: mergeの判断が必要
+    Owner -> Repo : 確認してmergeする (実装Issueが閉じる)
+    note right of Owner
+      差し戻すときは、Pull Requestにコメントし、実装Issueに cumin/status/ready を付け直す。
+      risk/medium は、運用しながら自動mergeに移せるかを判断していく。
+      risk/high は当分Ownerがmergeする。
+    end note
+  else 3ラウンドで指摘が残った
+    Cumin -> Rev : 依頼: 何が決まっていないことが原因かを整理する
+    Rev -> Repo : Owner向けの簡潔なレポートを投稿する
+    Cumin -> Tracker : ラベルを cumin/status/awaiting-owner-decision に替える
+    Cumin -> Owner : 通知: 判断が必要
+    Owner -> Repo : 回答する
+    Owner -> Tracker : 実装Issueに cumin/status/ready を付け直す
+  end
+  Cumin -> Tracker : mergeされたら、残った宿題 (Follow-upと、対応されなかった提案) を要求Issueに転記する
+  note over Owner, Cumin
+    Owner待ちの間も、cuminは依存関係にない他のIssueを進める。
+    Ownerの「進めてよい」の合図は、常に cumin/status/ready を付けること。
+  end note
+end
+
+== 5. 受け入れ ==
+
+note over Cumin, Tracker
+  開始条件: 要求Issueのsub-issueが全て閉じた。
+end note
+Cumin -> Tracker : 要求Issueのラベルを cumin/status/awaiting-owner-review に替える
+Cumin -> Owner : 通知: 要求が受け入れ可能になった
+alt 受け入れる
+  Owner -> Tracker : 要求Issueを閉じる (= 受け入れ)
+  note right of Owner
+    転記された宿題のうち、やりたいものは新しい要求Issueに書く。
+  end note
+else 差し戻す
+  Owner -> Tracker : 要求Issueに追記する、またはsub-issueを追加する
+  Owner -> Tracker : 追加したsub-issueに cumin/status/ready を付ける
+  note right of Owner
+    差し戻しではChief Engineerを通さない (まずはここから始める)。
+    「4. 実装とレビュー」に戻り、sub-issueが全て閉じたら
+    再び受け入れの通知が届く。
+  end note
+end
+
+== 例外: Agentが先に進めない ==
+
+Cumin -> Tracker : ラベルを cumin/status/awaiting-owner-decision に替える
+Cumin -> Owner : 通知: ブロック中、判断が必要
+Owner -> Tracker : 回答する
+Owner -> Tracker : 実装Issueに cumin/status/ready を付け直す
+
+== 例外: 利用枠がしきい値を超えた ==
+
+Cumin -> Owner : 通知: 利用枠がしきい値を超えたので、新しいIssueの着手を止めた
+opt Ownerが今の5h枠の使い切りを許可する
+  Owner -> Cumin : 許可: 今の5h枠は使い切ってよい
+  note right of Owner
+    許可は、その5h枠がリセットされるまで有効。cuminは100%まで着手を続ける。
+    weekly枠の使い切りは許可できない。
+    まずはHost上のコマンドで許可を伝える (外出先からはTailscaleとSSH)。
+    将来: Discordのbotにして、Discordから許可できるようにする。
+  end note
+end
+note over Cumin
+  枠がリセットされたら、cuminは自動で着手を再開する。
+end note
+
+== 例外: 進められるIssueがなくなった ==
+
+Cumin -> Owner : 通知: 待ち状態になった
+note right of Owner
+  まずは通知するだけで、cuminは何もしない。
+  将来: 要件文書から次の要求Issueの草案を作る、など。
+end note
+
+note over Owner, Cumin
+  通知は「見に来てほしい」と伝えるだけ。やりとりの場はIssueとPull Request。
+  通知にはDiscordのwebhookを使う (将来差し替えられるようにする)。
+end note
+
+note over Cumin, Rev
+  GitHub上の身元はOwnerと分け、roleごとにGitHub Appとして持つ (方針):
+  cumin-core、cumin-chief-engineer、cumin-implementer、cumin-reviewer。
+  対象リポジトリ (peppercheck) は公開なので、Freeプランでもrulesetを使える。
+  mainを更新できるのはOwnerとcumin-coreだけ、とrulesetで制限する。
+end note
+
+@enduml

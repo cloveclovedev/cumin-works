@@ -1,0 +1,160 @@
+# cumin本体の要件
+
+## 位置づけ
+
+cumin本体は、Goで書くワークフローの基盤であり、Agentではない。決められたルールだけで動き、AIによる判断を含まない。
+
+- 判断が要ることは、全てAgentかOwnerが行う。要求の解釈、分割、実装、レビュー、riskの判断がこれに当たる。
+- cumin本体が行う判定は、GitHub上の事実と、Agentが返したJSONを、決まった条件に照らすことだけである。同じ状態からは、いつも同じ動作になる。
+
+この文書では、cumin本体を単にcuminと書く。
+
+## 受け持つこと
+
+| 受け持つこと | 内容 |
+|---|---|
+| GitHubの定期確認 | 対象のリポジトリのIssue、Pull Request、check、レビューを、決まった間隔で確かめる |
+| 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う |
+| Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
+| 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
+| merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする |
+| 残った宿題の転記 | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、要求Issueにコメントとして転記する。AIの判断は使わず、決まった形式から機械的に拾う |
+| 通知 | Ownerの対応が要るとき、Discordのwebhookで知らせる |
+| 利用枠の管理 | Agentの実行結果から使用率を読み、しきい値を超えている間は新しい着手を止める |
+| Ownerからの操作の受け付け | Host上のコマンドで、状態の表示と、利用枠の使い切りの許可を受け付ける |
+
+cuminの動作ごとのきっかけと、動く前に確かめることは、[Issueのラベルと状態遷移](workflow/issue-states.md) の表に書いてある。この文書では繰り返さない。
+
+## 受け持たないこと
+
+- コードを書かない。レビューしない。要求を解釈しない。riskを判断しない
+- `risk/medium` と `risk/high` のPull Requestをmergeしない
+- `cumin/type/requirement` と `cumin/status/ready` を付けない。この2つはOwnerの意思表示である。例外として、着手のときに `cumin/status/ready` を外す
+- mainに直接pushしない。強制pushしない。mainへの変更は、Pull Requestのmergeだけで行う
+- Issueを閉じない。実装Issueは、Pull RequestのmergeによってGitHubが閉じる。要求Issueは、Ownerが閉じる
+
+## 動かし方
+
+- Hostの上で、常駐プログラムとして動く。落ちたらlaunchdが再起動する
+- Ownerが起動するのを待たない。自分からGitHubを確かめて、仕事を取りに行く
+- ログは、機械で読める形で標準出力に出す
+- 将来は、ハートビートを出して、外部のマシンから死活を監視できるようにする
+
+Ownerが使うコマンド:
+
+| コマンド | 内容 |
+|---|---|
+| `cumin run` | 常駐して動く。launchdから起動する |
+| `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、利用枠の使用率 |
+| `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
+
+## 利用枠の守り方
+
+- 5h枠とweekly枠のどちらかの使用率がしきい値を超えている間、cuminは新しい着手を止める
+- 使い切りを許可できるのは、5h枠だけである。Ownerの許可 (`cumin quota allow`) と、リセットが近いときにしきい値を100%にする決まりは、どちらも5h枠にだけ効く
+- weekly枠のしきい値は、どの方法でも超えさせない。weekly枠を使い切ると、Ownerが何日も使えなくなるためである。これはClaude Codeでも、Codexでも同じである
+- 5h枠の使い切りが許可されていても、weekly枠がしきい値を超えていれば、着手を止める
+
+## 止めたとき、スリープしたとき
+
+v0.1では、次のように割り切る。Hostが常時動くMac miniになれば、ほとんど起きない。
+
+- cuminを途中で止めても、Hostがスリープしても、作業の状態はGitHubにあるので失われない
+- スリープから戻ると、cuminも実行中のAgentも続きから動く。ただし、次のことが起こりうる。通信の途中だった要求が失敗する。Agentに渡したGitHub Appのtokenが、時間切れになっている (tokenは発行から1時間で失効する)。時間で区切る打ち切りが、戻った直後に働く
+- どれが起きても、Agentの異常終了として扱う。同じ依頼を1回だけやり直し、それでも駄目ならOwnerに知らせる
+- cuminを止めたときに作業中のラベルのまま残ったIssueは、Ownerが `cumin/status/ready` を付け直して再開する
+
+## 状態の持ち方
+
+- 作業の状態は、GitHubに置く。Issue、ラベル、Pull Request、レビュー、コメントが、状態の全てである
+- cuminが手元に持つのは、失っても作業をやり直せるものだけにする。Agentのセッションの番号、checkの修正を依頼した回数、最新の使用率、使い切りの許可がこれに当たる
+- レビューのラウンド数は、手元に持たずに、Pull Requestに出ている `cumin-reviewer` のレビューの数から数える
+- cuminが再起動しても、GitHubを確かめ直せば、続きから動ける。ただし、作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。Ownerが `cumin/status/ready` を付け直せば再開する
+
+## Agentの起動
+
+Agentの起動について、cuminが守ること。Agentの側の要件は [Agentに共通の要件](agents/common.md) にある。
+
+- 着手のときは、Agentを起動する前にラベルを付け替える。同じIssueを二重に依頼しない
+- 作業場所は、`git worktree` でIssueごとに用意する。Issueが閉じたら片付ける
+- GitHub Appのtokenは、依頼のたびに、そのroleのAppの分だけを発行して渡す。Ownerの認証情報を、Agentに渡さない
+- Agentが、ユーザアカウントのグローバルな指示を読まないようにして起動する。Claude Codeでは `--setting-sources project` を付ける
+- 結果のJSONは、cuminの側でも検証する。形式に合わなければ、異常終了として扱う
+- 異常終了したら、同じ依頼を1回だけやり直す。それでも駄目なら、`cumin/status/awaiting-owner-decision` に替えてOwnerに知らせる
+- Agentが `blocked` を返したら、`blocked_reason` をIssueにコメントとして投稿してから、Ownerに知らせる。Ownerは、GitHubの上で理由を読める
+- roleごとに使うCLI (Claude Code、Codexなど) は、設定で選べるようにする。CLIごとの違いは、cuminの中のCLIごとの接続部分に閉じ込める
+
+## 残った宿題の転記
+
+Implementerが範囲の外だと判断した作業と、Reviewerの提案のうち対応されなかったものは、mergeされるとPull Requestの中に埋もれる。cuminは、これを要求Issueに集める。
+
+- きっかけは、実装Issueを閉じるPull Requestがmergeされたことである。cuminがmergeしたときも、Ownerがmergeしたときも同じに扱う
+- 拾うものは2つある。Pull Requestの説明の `Follow-up` の節の文章と、対応されなかった `(non-blocking)` の指摘である
+- 対応されなかった指摘とは、`cumin-reviewer` の `(non-blocking)` の指摘のうち、`Fixed` か `Answer` で始まる返答が付いていないものである。ラベルが `praise` と `note` の指摘は拾わない
+- 拾うものが何もなければ、コメントしない
+- 1つのPull Requestについて、コメントは1回だけにする。コメントに目印を埋め込み、cuminが再起動しても二重に転記しない
+- 形式は [follow-up-note.md](../../../templates/follow-up-note.md) に従う
+- 転記は記録である。Issueにはしない。Ownerは受け入れのときに一覧を見て、やりたいものを新しい要求Issueに書く。そこからは通常のフローに乗り、Chief Engineerが実装Issueに分割する
+
+## 通知
+
+Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止まったときだけである。通知は「見に来てほしい」と伝えるだけで、やりとりはIssueとPull Requestで行う。
+
+| 知らせるとき | 表の番号 |
+|---|---|
+| 分割結果の確認が必要 | R2 |
+| 要求が受け入れ可能になった | R4 |
+| mergeの判断が必要 | I7 |
+| Agentが先に進めない。指摘が残った | I2、I4、I8、R2 |
+| 利用枠がしきい値を超えて、新しい着手を止めた | Q1 |
+| 進められるIssueがなくなった | Q4 |
+
+通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
+
+## 設定
+
+設定はTOMLのファイルに書く。値をコードに埋め込まない。
+
+秘密の値 (GitHub Appの秘密鍵、Discordのwebhookのアドレス) は、設定ファイルにもリポジトリにも書かない。Hostの macOS のKeychainに置き、cuminが起動時に読む。複数のHostから同じ値を使うようになったら、Secrets Managerに移す。
+
+設定には、Hostに属するものと、リポジトリごとに変えてよいものがある。
+
+- Hostに属する設定は、Hostの設定ファイルにだけ書ける。利用枠はアカウントのものであり、作業場所や秘密の値はHostのものなので、リポジトリからは変えられない
+- リポジトリごとに変えてよい設定は、Hostの設定ファイルに書いた値を、対象のリポジトリの `.cumin/` で上書きできる。優先順位は、初期値、Hostの設定ファイル、リポジトリの `.cumin/` の順に強くなる
+
+| 設定 | 内容 | 初期値 | リポジトリで上書き |
+|---|---|---|---|
+| 対象のリポジトリ | cuminが確かめるリポジトリの一覧 | なし | できない |
+| 定期確認の間隔 | GitHubを確かめる間隔 | 60秒 | できない |
+| 同時に動かすAgentの数 | 並行して進めるIssueの数の上限 | 1 | できない |
+| 利用枠のしきい値 | 5h枠とweekly枠のそれぞれに、時間帯ごとに指定できる | 85% | できない |
+| リセットが近いとみなす残り時間 | 5h枠の残り時間がこれを切ったら、5h枠のしきい値を100%にする | 30分 | できない |
+| 作業場所 | `git worktree` を置くディレクトリ | なし | できない |
+| roleとGitHub Appの対応 | roleごとのAppのClient ID。秘密鍵がHostにあるので、Hostの設定に書く。リポジトリの持ち主 (Organization) ごとに指定できる | なし | できない |
+| レビューのラウンドの上限 | これを超えて指摘が残ったら、Ownerに回す | 3 | できる |
+| checkの修正を依頼する回数の上限 | これを超えたら、Ownerに回す | 3 | できる |
+| roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
+| 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/` | できる |
+| riskの基準 | Chief Engineerがriskを仮に付けるときの基準 | [Chief Engineerの要件](agents/chief-engineer.md) の表 | できる |
+
+cuminは、リポジトリの `.cumin/` を、Pull Requestのブランチではなくmainから読む。`.cumin/` の変更は常に `risk/high` なので、Ownerがmergeしたものだけが効く。
+
+## GitHub上の身元
+
+GitHub上では `cumin-core` として振る舞う。持っている権限は、コードの読み書き (mergeに要る)、Pull Requestの読み書き、Issueの読み書きである。mainを更新できるのは、rulesetによってOwnerと `cumin-core` だけに制限する。登録の手順は [GitHub Appの登録手順](../development/github-app-setup.md) にある。
+
+## 上位要件のテスト
+
+| # | 場面 | 期待する結果 |
+|---|---|---|
+| 1 | `cumin/status/ready` の実装Issueを1つ置き、定期確認を2回以上またぐ | Implementerへの依頼は1回だけ行われる |
+| 2 | blocked by のIssueが開いている実装Issueに `cumin/status/ready` を付ける | 着手しない。blocked by のIssueが閉じたら着手する |
+| 3 | `risk/low` で承認され、checkの通ったPull Requestがある | cuminがmergeし、実装Issueが閉じる |
+| 4 | `risk/medium` で承認され、checkの通ったPull Requestがある | mergeしない。`cumin/status/awaiting-owner-review` に替えて、Ownerに通知する |
+| 5 | Agentが形式に合わない結果を返す | 同じ依頼を1回だけやり直す。それでも合わなければ `cumin/status/awaiting-owner-decision` に替えて通知する |
+| 6 | 使用率がしきい値を超える | 新しい着手を止めて、1回だけ通知する。実行中のIssueは最後まで進める。`cumin quota allow` で再開する。リセット時刻を過ぎたら自動で再開する |
+| 7 | 要求Issueのsub-issueが全て閉じる | 要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに通知する |
+| 8 | cuminを止めて、起動し直す | GitHubを確かめ直して動き始める。同じIssueを二重に依頼しない |
+| 9 | 進められるIssueがなくなる | 1回だけ通知する。同じ通知を繰り返さない |
+| 10 | `Follow-up` に文章があり、対応されなかった `(non-blocking)` の指摘が1つあるPull Requestをmergeする | 要求Issueに、決められた形式のコメントが1つ付く。cuminを再起動しても、同じコメントは増えない |
+| 11 | `Follow-up` が None で、`(non-blocking)` の指摘が全て `Fixed` になったPull Requestをmergeする | 要求Issueにコメントは付かない |
