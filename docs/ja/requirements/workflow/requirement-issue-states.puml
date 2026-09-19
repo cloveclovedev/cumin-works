@@ -5,7 +5,7 @@
 
 hide empty description
 
-state "提出済み\n(状態ラベルなし)" as Submitted
+state "下書き\n(状態ラベルなし)" as Draft
 state "cumin/status/ready" as Ready
 state "cumin/status/planning" as Planning
 state "cumin/status/awaiting-owner-review\n(分割結果の確認)" as PlanReview
@@ -13,8 +13,9 @@ state "cumin/status/implementing" as Implementing
 state "cumin/status/awaiting-owner-review\n(受け入れの確認)" as Acceptance
 state "cumin/status/awaiting-owner-decision" as Decision
 
-[*] --> Submitted : Ownerが要求を書き、\ncumin/type/requirement を付ける
-Submitted --> Planning : R1 cuminが分割を依頼する
+[*] --> Draft : Ownerが要求を書き、\ncumin/type/requirement を付ける
+Draft --> Ready : Ownerが書き終えて、\ncumin/status/ready を付ける (= 提出)
+Draft --> Implementing : R3 Ownerが自分でsub-issueを書き、\nsub-issueに cumin/status/ready を付けた
 Planning --> PlanReview : R2 分割が終わった
 Planning --> Decision : R2 分割に失敗した
 Decision --> Ready : Ownerが要求を直し、\ncumin/status/ready を付ける

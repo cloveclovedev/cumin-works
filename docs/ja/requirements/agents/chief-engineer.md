@@ -14,8 +14,7 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 
 | 依頼の種類 | きっかけ | セッション |
 |---|---|---|
-| 分割 | R1: `cumin/type/requirement` の付いた要求Issueが提出された | 新しいセッション |
-| 分割のやり直し | R1: 分割に失敗したあと、Ownerが要求Issueを直して `cumin/status/ready` を付けた | 新しいセッション |
+| 分割 | R1: Ownerが、`cumin/type/requirement` の付いた要求Issueに `cumin/status/ready` を付けた。初めての提出でも、分割に失敗したあとのやり直しでも同じである | 新しいセッション |
 
 ## 入力
 
@@ -38,6 +37,7 @@ GitHubに残すもの:
 - 実装Issue。要求Issueのsub-issueとして作る。1つの実装Issueが、1つのPull Requestになる
 - 実装Issueどうしの依存関係 (blocked by)
 - それぞれの実装Issueに、`risk/*` のラベルをちょうど1つ
+- 要求Issueにmilestoneが付いていれば、それぞれの実装Issueに同じmilestoneを付ける
 - 要求Issueへのコメントを1つ。分割の全体像を、Ownerが確認しやすい形で書く。形式は [plan-summary.md](../../../../templates/plan-summary.md) に従う
 
 実装Issueの本文は、[implementation-issue.md](../../../../templates/implementation-issue.md) の6つの節で書く。

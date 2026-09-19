@@ -18,6 +18,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | 差し戻しでChief Engineerを通す | 受け入れでOwnerが差し戻すとき、追加のsub-issueをOwnerが書く代わりに、Chief Engineerに分割させる | v0.1では、Ownerのほうが正しく決められると考え、Ownerが直接sub-issueを足す形にした | 差し戻しのたびにOwnerが実装Issueを書く手間が目立ってきたとき |
 | `risk/medium` の自動merge | `risk/medium` のPull Requestも、cuminがmergeする | 運用しながら、任せてよいかを判断すると決めた | `risk/medium` のPull Requestを、Ownerが続けて直さずにmergeしている実績がたまったとき |
 | mergeの前にmainの最新を取り込む | mergeの前に、mainの最新を取り込んで、必須のcheckをやり直す。GitHubのrulesetの "Require branches to be up to date before merging" を使う案がある | v0.1では、衝突がなく、実装の時点の必須のcheckが通っていればmergeする。問題が起きるのは、並行して進めた独立のIssueの間だけである | 同時に動かすAgentの数を2以上にするとき。mergeのあとでmainのcheckが壊れることが起きたとき |
+| 第三者のコメントの扱い | 公開リポジトリでは、Ownerでもcuminでもない第三者が、IssueやPull Requestにコメントできる。cuminが第三者のコメントを見つけて、無視してよいかをChief Engineerに相談する。または、テンプレートに沿ったコメントなら、Ownerのコメントと同じに扱う | v0.1では、第三者のコメントは無視する | 対象のリポジトリに、第三者のコメントが付くようになったとき |
 | コメントのスレッドを解決済みにする | Reviewerが、直ったことを確かめた指摘のスレッドを解決済みにする | v0.1では、cuminはレビューの結果だけで判定するので、要らない | Ownerがレビューを読むときに、どの指摘が済んだのかが分かりにくいと感じたとき |
 
 ## Agent
@@ -27,6 +28,8 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | roleの中身をリポジトリごとに変える | Implementer、Reviewerという箱はcuminに固定で持つ。その中のより細かいrole (例: FlutterのAndroidのUIを担当するImplementer) と、渡す指示やskillを、対象のリポジトリの `.cumin/` で指定できるようにする | v0.1では、対象のリポジトリにある指示 (`CLAUDE.md`、skillなど) をAgentが読むので、専用の仕組みがなくても足りる見込み | 1つのリポジトリの中で、作業の種類によって渡す指示を変えたくなったとき |
 | roleごとの保護されたパス | 変更させないパスを、roleごとに指定する | v0.1では、コードをpushするのがImplementerだけなので、一覧は1つで足りる | pushできるroleが増えたとき |
 | セキュリティだけを見るレビュー | 毎回のレビューとは別に、セキュリティだけを見るレビューを足す | v0.1では、毎回のReviewerの6つの問いと、GitHubのcheck (secret scanningなど) で見る | セキュリティを特に重く見るプロダクトを、cuminに任せるとき |
+| Agentの間の引き継ぎ | 次のAgentに引き継ぎたい知識を、CLIの自動メモリではなく、決まった場所 (テンプレートやリポジトリの文書) に残して、永続させる仕組みを作る | v0.1では、自動メモリを切って起動するだけにした。引き継ぐことは、IssueとPull Requestに書く | 同じ調べものや同じ失敗を、Agentが繰り返すのが目立ってきたとき |
+| 1時間を超えるAgentの実行 | Agentの実行の途中で、GitHub Appのtokenを発行し直して渡す | tokenは発行から1時間で失効し、期限を延ばせない。v0.1では、実行時間の上限を55分までにした | 分割基準の大きさの実装Issueが、上限の時間に収まらないことが続くとき |
 | Claude Code以外のCLI | roleごとに、CodexなどのCLIでAgentを動かす。Codexにも、結果をJSON Schemaに従わせる機能があることは確認済み | v0.1はClaude Codeだけで始める | Codexのweekly枠を使いたくなったとき。Claude Codeの `--bare` が `-p` の既定になり、サブスクリプションでのheadless実行に影響が出たとき |
 
 ## 利用枠と並行

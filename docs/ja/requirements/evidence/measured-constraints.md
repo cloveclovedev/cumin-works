@@ -43,3 +43,21 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 23 | レビューを出すREST APIの `event` は `APPROVE`、`REQUEST_CHANGES`、`COMMENT` のどれかで、`REQUEST_CHANGES` と `COMMENT` には本文が要る。レビューのコメントへの返答は、スレッドの最初のコメントに対してだけできる | docs.github.com: rest/pulls/reviews、rest/pulls/comments | 公式文書 |
 | 24 | secret scanning、push protection、code scanning、dependency reviewは、公開リポジトリでは無料で使える。Dependabotは全てのプランで使える | docs.github.com: code-security/getting-started/github-security-features | 公式文書 |
 | 25 | AgentがAPIで作ったPull Requestに、`.github/pull_request_template.md` が自動で使われるか | 公式文書に記載なし | 未確認 |
+
+## 3. 実装の前に確かめたこと (2026-09-20、Claude Code 2.1.267)
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 26 | `--json-schema` は `--output-format stream-json --verbose` と併用できる。1回の実行で、`rate_limit_event` と、`result` のイベントの `structured_output`、`session_id`、`subtype`、`is_error` が取れる | 公式文書は `--output-format json` との組み合わせしか説明していない。実際に併用して、両方が出力されることを確かめた | 実測 |
+| 27 | `--setting-sources project` を付けると、実行の最初に出る `system` / `init` のイベントで、`plugins` と `mcp_servers` が空になり、`skills` は組み込みのものだけになる | ユーザアカウントにplugin、MCPサーバ、skillを入れてあるHostで確かめた | 実測 |
+| 28 | `--setting-sources project` を付けても、自動メモリは止まらない。`init` のイベントの `memory_paths.auto` が、ユーザアカウントの下にある、作業ディレクトリごとのメモリを指す。環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`memory_paths` は null になる。設定の `autoMemoryEnabled: false` でも止められる | https://code.claude.com/docs/en/memory.md と、環境変数の有無で `init` のイベントを比べた結果 | 実測 + 公式文書 |
+| 29 | `claude -p "/usage"` はモデルを呼ばず (`num_turns` が0、`total_cost_usd` が0)、利用枠を使わない。ただし `rate_limit_event` は出ず、人間向けの文章だけが返る。使用率を機械可読で返すサブコマンドは、`claude --help` にない。機械可読の使用率を読むには、モデルを呼ぶ実行が要る | `rate_limit_event` は、モデルへの要求に対する応答に付いてくる情報である | 実測 |
+| 30 | システムプロンプトを `--system-prompt` で短いものに置き換え、1語だけ答えさせる最小の実行でも、`rate_limit_event` は出る。実行は1〜2秒で終わる。入力のほとんどは、CLIが毎回送る定型の部分である | 同左 | 実測 |
+| 31 | `-p` でも `--resume <session_id>` でセッションを再開できる。2.1.223以降は、別のディレクトリからでも再開できる | https://code.claude.com/docs/en/sessions.md | 公式文書 |
+| 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限は、起動する側で持つ必要がある。`-p` の実行は、SIGTERMを受けると終了コード143で終わる | https://code.claude.com/docs/en/headless.md、手元の `--help` | 公式文書 |
+| 33 | installation access tokenの期限は、発行から1時間で固定である。発行のAPIで指定できるのは `repositories`、`repository_ids`、`permissions` だけで、期限を変える項目はない | docs.github.com: rest/apps/apps | 公式文書 |
+| 34 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べる。要る権限は Metadata: Read-only である | docs.github.com: permissions-required-for-github-apps | 公式文書 |
+| 35 | check runの一覧を読むには Checks: Read-only、commit statusを読むには Commit statuses: Read-only が要る、と書かれている。公開リポジトリなら権限なしで読めるかは、確かめていない | 同上 | 公式文書 (公開リポジトリでの要否は未確認) |
+| 36 | GraphQLに、IssueとPull Requestの紐づけを読む項目がある。`Issue.closedByPullRequestsReferences` (既定は開いているPull Requestだけ。`includeClosedPrs` でmerge済みも含む) と、`PullRequest.closingIssuesReferences` である。`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary` もある。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection | 実測 (installation tokenでは未確認) |
+| 37 | sub-issueの一覧と、blocked by の一覧は、Issueのオブジェクト (ラベルと状態を含む) を返す。親のIssueを返す `GET /repos/{owner}/{repo}/issues/{issue_number}/parent` もある | docs.github.com: rest/issues/sub-issues、rest/issues/issue-dependencies | 公式文書 |
+| 38 | GitHub Appは、manifestから登録できる (GitHub App Manifest flow)。名前や権限を書いたmanifestを `https://github.com/organizations/<org>/settings/apps/new` に渡し、人が "Create GitHub App" を押すと、`redirect_url` にcodeが戻る。1時間以内に `POST /app-manifests/{code}/conversions` を呼ぶと、`id` や `pem` (秘密鍵) が返る。`redirect_url` に手元のアドレスを使えるかは、文書に記載がない | docs.github.com: registering-a-github-app-from-a-manifest | 公式文書 (手元のアドレスへのredirectは未確認) |

@@ -28,14 +28,15 @@ end note
 == 1. 要求の受付 ==
 
 Owner -> Tracker : 要求をIssueに書き、cumin/type/requirement を付ける
+Owner -> Tracker : 書き終えたら、要求Issueに cumin/status/ready を付ける
 note right of Owner
   cuminへの入口はIssueだけ。リポジトリの構成は前提にしない。
-  ラベルを付けることが「提出」の合図 (書きかけは拾われない)。
+  cumin/status/ready を付けることが「提出」の合図 (書きかけは拾われない)。
   Ownerの要件文書 (例: requirements/) をリポジトリに置くのは自由。
   Issueからリンクすれば、Agentが文脈として読める。
 end note
 
-Cumin -> Tracker : cumin/type/requirement の付いたIssueがないか定期的に確認する
+Cumin -> Tracker : cumin/type/requirement と cumin/status/ready の付いたIssueがないか定期的に確認する
 note right of Cumin
   cuminは常駐しており、自分から仕事を取りに行く。
   Ownerが起動するのではない。
@@ -43,7 +44,7 @@ end note
 
 == 2. 計画 ==
 
-Cumin -> Tracker : 要求Issueに cumin/status/planning を付ける
+Cumin -> Tracker : 要求Issueのラベルを cumin/status/ready から cumin/status/planning に替える
 Cumin -> CE : 依頼: この要求を分割する
 CE -> Repo : リポジトリを読む (要求Issueからリンクされた文書を含む)
 CE -> Tracker : 実装Issueを要求Issueのsub-issueとして作る (1 Issue = 1実装タスク)
@@ -95,7 +96,8 @@ loop cumin/status/ready が付き依存が解決済みのIssueがあり、AIリ�
   Impl -> Repo : ブランチをpushし、Pull Requestを開く
   Impl --> Cumin : 実装完了 (Agentの実行が終わった)
   Cumin -> Repo : Pull Requestが開かれていることを確かめる
-  Cumin -> Repo : 必須のcheckが全て通るまで待つ (失敗したらImplementerに修正を依頼する。必須のcheckがなければ待たない)
+  Cumin -> Tracker : ラベルを cumin/status/awaiting-checks に替える
+  Cumin -> Repo : 必須のcheckが全て通るまで待つ (失敗したらImplementerに修正を依頼する。必須のcheckがなければ、すぐに通ったとみなす)
   note right of Cumin
     Pull Requestが開かれただけでは、実装完了としない。
     cuminは、Agentの申告ではなくGitHub上の事実で判定する。
@@ -113,6 +115,7 @@ loop cumin/status/ready が付き依存が解決済みのIssueがあり、AIリ�
       Cumin -> Impl : 依頼: 指摘を修正する
       Impl -> Repo : 修正をpushする
       Impl --> Cumin : 修正完了
+      Cumin -> Tracker : ラベルを cumin/status/awaiting-checks に替える
       Cumin -> Repo : 必須のcheckが全て通るまで待つ
     end
   end

@@ -17,7 +17,7 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 | 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う |
 | Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
 | 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
-| merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする |
+| merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする。mergeの方法は設定で選べる (初期値はsquash) |
 | 残った宿題の転記 | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、要求Issueにコメントとして転記する。AIの判断は使わず、決まった形式から機械的に拾う |
 | 通知 | Ownerの対応が要るとき、Discordのwebhookで知らせる |
 | 利用枠の管理 | Agentの実行結果から使用率を読み、しきい値を超えている間は新しい着手を止める |
@@ -62,7 +62,7 @@ v0.1では、次のように割り切る。Hostが常時動くMac miniになれ�
 - cuminを途中で止めても、Hostがスリープしても、作業の状態はGitHubにあるので失われない
 - スリープから戻ると、cuminも実行中のAgentも続きから動く。ただし、次のことが起こりうる。通信の途中だった要求が失敗する。Agentに渡したGitHub Appのtokenが、時間切れになっている (tokenは発行から1時間で失効する)。時間で区切る打ち切りが、戻った直後に働く
 - どれが起きても、Agentの異常終了として扱う。同じ依頼を1回だけやり直し、それでも駄目ならOwnerに知らせる
-- cuminを止めたときに作業中のラベルのまま残ったIssueは、Ownerが `cumin/status/ready` を付け直して再開する
+- cuminを止めたときに作業中のラベルのまま残ったIssueは、Ownerが `cumin/status/ready` を付け直して再開する。`cumin/status/awaiting-checks` のIssueは、Agentが動いていない状態なので、cuminを起動し直せば続きから進む
 
 ## 状態の持ち方
 
@@ -78,7 +78,11 @@ Agentの起動について、cuminが守ること。Agentの側の要件は [Age
 - 着手のときは、Agentを起動する前にラベルを付け替える。同じIssueを二重に依頼しない
 - 作業場所は、`git worktree` でIssueごとに用意する。Issueが閉じたら片付ける
 - GitHub Appのtokenは、依頼のたびに、そのroleのAppの分だけを発行して渡す。Ownerの認証情報を、Agentに渡さない
-- Agentが、ユーザアカウントのグローバルな指示を読まないようにして起動する。Claude Codeでは `--setting-sources project` を付ける
+- Agentが、ユーザアカウントのグローバルな指示を読まないようにして起動する。Claude Codeでは `--setting-sources project` を付け、自動メモリも切る
+- Agentの環境には、そのroleのtokenだけを入れる。Hostのユーザアカウントにあるgitとghの認証の設定は、Agentに参照させない
+- Agentの起動の記録に、作業場所の外にある指示やメモリ、ユーザアカウントのplugin、MCPサーバが現れたら、異常終了として扱う。Claude Codeでは、実行の最初に出る `init` のイベントで確かめられる
+- Agentの実行には、時間の上限を設ける。上限を超えたら打ち切り、異常終了として扱う
+- Agentは、ツールの使用を全て許可するモードで起動する。headlessの実行では、許可を尋ねられても答える人がいないためである。roleごとの制限は、GitHub Appの権限とrulesetで行う
 - 結果のJSONは、cuminの側でも検証する。形式に合わなければ、異常終了として扱う
 - 異常終了したら、同じ依頼を1回だけやり直す。それでも駄目なら、`cumin/status/awaiting-owner-decision` に替えてOwnerに知らせる
 - Agentが `blocked` を返したら、`blocked_reason` をIssueにコメントとして投稿してから、Ownerに知らせる。Ownerは、GitHubの上で理由を読める
@@ -105,8 +109,8 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | 分割結果の確認が必要 | R2 |
 | 要求が受け入れ可能になった | R4 |
 | mergeの判断が必要 | I7 |
-| Agentが先に進めない。指摘が残った | I2、I4、I8、R2 |
-| 利用枠がしきい値を超えて、新しい着手を止めた | Q1 |
+| Agentが先に進めない。指摘が残った | I2、I4、I8、I10、R2 |
+| 利用枠がしきい値を超えた、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
 | 進められるIssueがなくなった | Q4 |
 
 通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
@@ -121,20 +125,23 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 
 - Hostに属する設定は、Hostの設定ファイルにだけ書ける。利用枠はアカウントのものであり、作業場所や秘密の値はHostのものなので、リポジトリからは変えられない
 - リポジトリごとに変えてよい設定は、Hostの設定ファイルに書いた値を、対象のリポジトリの `.cumin/` で上書きできる。優先順位は、初期値、Hostの設定ファイル、リポジトリの `.cumin/` の順に強くなる
+- 保護されたパスだけは、リポジトリの `.cumin/config.toml` だけで決める。強制するのがGitHub Actionsのcheckであり、Hostの設定ファイルはそこから見えないためである
 
 | 設定 | 内容 | 初期値 | リポジトリで上書き |
 |---|---|---|---|
 | 対象のリポジトリ | cuminが確かめるリポジトリの一覧 | なし | できない |
 | 定期確認の間隔 | GitHubを確かめる間隔 | 60秒 | できない |
-| 同時に動かすAgentの数 | 並行して進めるIssueの数の上限 | 1 | できない |
+| リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` にあるIssueの数の上限。Ownerの対応を待っているIssueは数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
 | 利用枠のしきい値 | 5h枠とweekly枠のそれぞれに、時間帯ごとに指定できる | 85% | できない |
 | リセットが近いとみなす残り時間 | 5h枠の残り時間がこれを切ったら、5h枠のしきい値を100%にする | 30分 | できない |
 | 作業場所 | `git worktree` を置くディレクトリ | なし | できない |
+| Agentの実行時間の上限 | roleごとに指定できる。GitHub Appのtokenが発行から1時間で失効し、期限を延ばせないので、55分を超える値は指定できない | 50分 | できない |
 | roleとGitHub Appの対応 | roleごとのAppのClient ID。秘密鍵がHostにあるので、Hostの設定に書く。リポジトリの持ち主 (Organization) ごとに指定できる | なし | できない |
 | レビューのラウンドの上限 | これを超えて指摘が残ったら、Ownerに回す | 3 | できる |
 | checkの修正を依頼する回数の上限 | これを超えたら、Ownerに回す | 3 | できる |
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
-| 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/` | できる |
+| mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
+| 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
 | riskの基準 | Chief Engineerがriskを仮に付けるときの基準 | [Chief Engineerの要件](agents/chief-engineer.md) の表 | できる |
 
 cuminは、リポジトリの `.cumin/` を、Pull Requestのブランチではなくmainから読む。`.cumin/` の変更は常に `risk/high` なので、Ownerがmergeしたものだけが効く。
