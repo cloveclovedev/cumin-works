@@ -1,0 +1,29 @@
+@startuml implementation-issue-states
+' cumin works v2 - 実装Issueの状態遷移
+' 状態はGitHubのラベルで表す。遷移の番号 (I1など) は issue-states.md の表に対応する。
+' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+
+hide empty description
+
+state "下書き\n(状態ラベルなし)" as Draft
+state "cumin/status/ready" as Ready
+state "cumin/status/implementing" as Implementing
+state "cumin/status/reviewing" as Reviewing
+state "cumin/status/awaiting-owner-review" as OwnerReview
+state "cumin/status/awaiting-owner-decision" as Decision
+
+[*] --> Draft : Chief EngineerまたはOwnerが\nsub-issueとして作る
+Draft --> Ready : Ownerが確認し、\ncumin/status/ready を付ける
+Ready --> Implementing : I1 cuminが実装を依頼する
+Implementing --> Implementing : I4 必須のcheckが失敗し、\n修正を依頼する
+Implementing --> Reviewing : I3 必須のcheckが全て通った
+Reviewing --> Implementing : I5 REQUEST_CHANGES\n(修正を依頼する)
+Reviewing --> [*] : I6 APPROVE、risk/low\n(cuminがmergeする)
+Reviewing --> OwnerReview : I7 APPROVE、\nrisk/medium または risk/high
+Reviewing --> Decision : I8 3ラウンドで指摘が残った
+Implementing --> Decision : I2 Agentが blocked を返した\nI4 修正依頼が上限に達した\n異常終了が2回続いた
+OwnerReview --> [*] : I9 Ownerがmergeする
+OwnerReview --> Ready : Ownerが差し戻す\n(コメントし、cumin/status/ready を付け直す)
+Decision --> Ready : Ownerが回答し、\ncumin/status/ready を付け直す
+
+@enduml
