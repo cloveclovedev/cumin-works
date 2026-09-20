@@ -53,7 +53,7 @@ cumin setup github-apps --org <Organizationの名前> [--name-prefix <Appの名�
 コマンドがすること:
 
 1. 4つの App (`cumin-core`、`chief-engineer`、`implementer`、`reviewer`) のうち、この Host でまだ登録していないものを、1つずつ登録する。App ごとにブラウザで手元のページが開き、ページが manifest を GitHub に送る。GitHub の画面で "Create GitHub App" を押す。
-2. App を1つ登録するたびに、秘密鍵を Keychain に入れ、そのあとで Client ID を Host の設定ファイルの `[github_apps.<Organization>]` に書く。設定ファイルの他の行とコメントは変えない。
+2. App を1つ登録するたびに、秘密鍵を Keychain に入れ、そのあとで Client ID を Host の設定ファイルの `[github_apps.<Organization>]` に書く。設定ファイルの他の行とコメントは変えない。設定ファイルが symbolic link なら、リンクの先のファイルを書き換え、リンクは残す。
 3. 登録が済んだら、Organization にまだインストールされていない App のインストールのページを開く。アドレスも表示する。
 
 App の名前は `<prefix>cumin-core`、`<prefix>cumin-chief-engineer`、`<prefix>cumin-implementer`、`<prefix>cumin-reviewer` になる。App の名前は GitHub 全体で一意なので、Organization ごとに `--name-prefix` を変える。34文字を超える名前は、ブラウザを開く前にエラーになる。
@@ -69,7 +69,7 @@ App の名前は `<prefix>cumin-core`、`<prefix>cumin-chief-engineer`、`<prefi
 もう一度実行したとき:
 
 - 登録済みの App は飛ばす。登録済みとは、Host の設定に Client ID があり、Keychain にその Client ID の鍵があることである。足りない App だけを登録する。設計の変更で App が増えたときも、同じコマンドで足りる。
-- 登録済みの App は、先に全て確かめる。Keychain の鍵が鍵として読めること、GitHub がその鍵をその Client ID のものとして受け付けることである。1つでも合わなければ、何も登録せずに止まり、その App の名前を表示する。
+- 登録済みの App は、先に全て確かめる。Keychain の鍵が鍵として読めること、GitHub がその鍵をその Client ID のものとして受け付けること、その App の持ち主がこの Organization であること、App ごとに Client ID が違うことである。同じ App を2つの role に使うと、Agent が別の role の身元と権限で動いてしまう。1つでも合わなければ、何も登録せずに止まり、その App の名前を表示する。
 - Organization の名前は、大文字と小文字を区別しない。設定ファイルに書いてある綴りの表を使う。大文字と小文字だけが違う表が2つあると、止まる。
 - 設定に Client ID があるのに、Keychain に鍵がない App があると、コマンドは何も登録せずに止まり、その App の名前を表示する。推測では直さない。App が GitHub に残っているなら、[GitHub Appの登録手順](github-app-setup.md) の手順2で鍵を発行し直して、Keychain に入れる。残っていないなら、設定ファイルのその行を消して、もう一度実行する。
 

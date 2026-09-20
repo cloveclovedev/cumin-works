@@ -47,6 +47,7 @@ type fakeGitHub struct {
 	keys      map[string]*rsa.PrivateKey // client ID -> key of the App
 	slugs     map[string]string          // client ID -> slug
 	installed map[string]string          // slug -> account that has an installation
+	owner     string                     // the account that owns every App; "example-org" when empty
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -121,7 +122,11 @@ func (f *fakeGitHub) serveAsApp(w http.ResponseWriter, r *http.Request) {
 	slug := f.slugs[claims.Iss]
 	w.Header().Set("Content-Type", "application/json")
 	if r.URL.Path == "/app" {
-		_ = json.NewEncoder(w).Encode(map[string]any{"slug": slug, "html_url": "https://github.example/apps/" + slug})
+		owner := f.owner
+		if owner == "" {
+			owner = "example-org"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"slug": slug, "html_url": "https://github.example/apps/" + slug, "owner": map[string]any{"login": owner}})
 		return
 	}
 	installations := []map[string]any{}
@@ -638,6 +643,49 @@ func TestSetupGitHubApps_BadStoredKeyStopsBeforeAnyRegistration(t *testing.T) {
 				t.Errorf("the settings file changed: %s", text)
 			}
 		})
+	}
+}
+
+// One App for two roles would give an agent the identity of another role, for
+// example the identity that may bypass the ruleset of the default branch.
+func TestSetupGitHubApps_SameClientIDForTwoRolesStops(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	service := newService(t, browser, &memoryStore{}, &out)
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	apps, _ := config.ReadGitHubApps(service.ConfigPath)
+	core := apps["example-org"]["cumin-core"]
+	if err := config.SetGitHubAppClientID(service.ConfigPath, "example-org", "implementer", core); err != nil {
+		t.Fatal(err)
+	}
+
+	err := service.Run(context.Background(), "example-org", "")
+	if err == nil || !strings.Contains(err.Error(), `"cumin-core" and "implementer"`) || !strings.Contains(err.Error(), core) {
+		t.Fatalf("err = %v, want an error that names both Apps and the client ID", err)
+	}
+	if len(browser.manifests) != 4 {
+		t.Errorf("the second run registered an App: %d manifests", len(browser.manifests))
+	}
+}
+
+// A valid Client ID and key of an App that another account owns is not a
+// registration for this organization.
+func TestSetupGitHubApps_AppOfAnotherOwnerStops(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	service := newService(t, browser, &memoryStore{}, &out)
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	browser.gitHub.mu.Lock()
+	browser.gitHub.owner = "another-org"
+	browser.gitHub.mu.Unlock()
+	err := service.Run(context.Background(), "example-org", "")
+	if err == nil || !strings.Contains(err.Error(), `belongs to "another-org"`) {
+		t.Fatalf("err = %v, want an error that names the owner", err)
 	}
 }
 

@@ -92,12 +92,19 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 	// Check every registered App before any change: the key exists, it is a
 	// key, and GitHub accepts it for this Client ID.
 	var missing []string
+	usedBy := map[string]string{} // client ID -> the App that uses it
 	for _, app := range Apps {
 		clientID := clientIDs[app]
 		if clientID == "" {
 			missing = append(missing, app)
 			continue
 		}
+		// Each role has its own App. With one App for two roles, an agent
+		// would act with the identity and the permissions of another role.
+		if other, used := usedBy[clientID]; used {
+			return fmt.Errorf("setup: the apps %q and %q have the same client ID %s in %s. Each App needs its own client ID. Nothing is changed", other, app, clientID, s.ConfigPath)
+		}
+		usedBy[clientID] = app
 		cred, err := s.credentials(ctx, clientID)
 		if errors.Is(err, keychain.ErrNotFound) {
 			return fmt.Errorf("setup: app %q has the client ID %s in %s, but the Keychain has no private key for it. cumin does not guess. If the App still exists on GitHub, make a new private key by hand (docs/ja/development/github-app-setup.md, step 2). If not, remove the line from the settings file and run the command again", app, clientID, s.ConfigPath)
@@ -105,8 +112,13 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 		if err != nil {
 			return fmt.Errorf("setup: app %q (client ID %s): %w", app, clientID, err)
 		}
-		if _, err := s.GitHub.GetApp(ctx, cred); err != nil {
+		info, err := s.GitHub.GetApp(ctx, cred)
+		if err != nil {
 			return fmt.Errorf("setup: app %q: GitHub does not accept the private key in the Keychain for the client ID %s. Nothing is changed: %w", app, clientID, err)
+		}
+		// A private App can be installed only on the account that owns it.
+		if !strings.EqualFold(info.Owner, org) {
+			return fmt.Errorf("setup: app %q: the App %s with the client ID %s belongs to %q, not to %q. Nothing is changed", app, info.Slug, clientID, info.Owner, org)
 		}
 		fmt.Fprintf(s.Out, "already registered %s: client ID %s\n", app, clientID)
 	}

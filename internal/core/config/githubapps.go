@@ -68,6 +68,12 @@ func SetGitHubAppClientID(path, org, app, clientID string) error {
 		return errors.New("set github_apps: the Client ID has an unexpected character")
 	}
 
+	// A person can keep the settings in another place and link to them. Write
+	// the file behind the link, and keep the link.
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	}
+
 	mode := fs.FileMode(0o600)
 	old, err := os.ReadFile(path)
 	switch {
@@ -130,11 +136,19 @@ func setClientIDLine(text, org, app, clientID string) string {
 			break
 		}
 	}
+	// Replace only the value, and keep the text around it, such as a comment
+	// at the end of the line.
+	value := regexp.MustCompile(`^(\s*"?` + regexp.QuoteMeta(app) + `"?\s*=\s*)(?:"[^"]*"|'[^']*')(\s*(?:#.*)?)$`)
 	for i := start + 1; i < end; i++ {
-		if key.MatchString(lines[i]) {
-			lines[i] = line
-			return strings.Join(lines, "\n")
+		if !key.MatchString(lines[i]) {
+			continue
 		}
+		if m := value.FindStringSubmatch(lines[i]); m != nil {
+			lines[i] = fmt.Sprintf("%s%q%s", m[1], clientID, m[2])
+		} else {
+			lines[i] = line // an unusual value; the check after this finds a problem
+		}
+		return strings.Join(lines, "\n")
 	}
 	// Put the new line after the last line of the table that is not blank.
 	insert := start + 1

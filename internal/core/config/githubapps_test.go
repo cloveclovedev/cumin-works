@@ -89,7 +89,7 @@ threshold = 60
 	want := `work_dir = "/tmp/w"
 
 [github_apps.example-org]   # registered by cumin setup
-cumin-core = "Iv23liNEW"
+cumin-core = "Iv23liNEW"  # old value
 reviewer = "Iv23liREV"
 implementer = "Iv23liIMPL"
 
@@ -98,6 +98,49 @@ threshold = 60
 `
 	if got := readFile(t, path); got != want {
 		t.Errorf("the file is:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestSetGitHubAppClientID_KeepsTheCommentAtTheEndOfTheLine(t *testing.T) {
+	path := writeFile(t, "[github_apps.example-org]\n  reviewer   = \"\"   # provision this account\nimplementer = 'Iv23liOLD' # single quotes\n")
+	if err := SetGitHubAppClientID(path, "example-org", "reviewer", "Iv23liREV"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGitHubAppClientID(path, "example-org", "implementer", "Iv23liIMPL"); err != nil {
+		t.Fatal(err)
+	}
+	want := "[github_apps.example-org]\n  reviewer   = \"Iv23liREV\"   # provision this account\nimplementer = \"Iv23liIMPL\" # single quotes\n"
+	if got := readFile(t, path); got != want {
+		t.Errorf("the file is %q, want %q", got, want)
+	}
+}
+
+// A person can keep the settings in a dotfiles repository and link to them.
+func TestSetGitHubAppClientID_WritesBehindASymbolicLink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "dotfiles", "cumin.toml")
+	link := filepath.Join(dir, "config", "config.toml")
+	for _, d := range []string{filepath.Dir(target), filepath.Dir(link)} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(target, []byte("work_dir = \"/tmp/w\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SetGitHubAppClientID(link, "example-org", "reviewer", "Iv23liREV"); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the link is not a symbolic link any more: %v, %v", info.Mode(), err)
+	}
+	if got := readFile(t, target); !strings.Contains(got, `reviewer = "Iv23liREV"`) || !strings.HasPrefix(got, "work_dir") {
+		t.Errorf("the file behind the link is %q", got)
 	}
 }
 

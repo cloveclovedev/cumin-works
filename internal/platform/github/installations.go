@@ -11,6 +11,7 @@ import (
 type AppInfo struct {
 	Slug    string
 	HTMLURL string // the public page of the App
+	Owner   string // the login of the account that owns the App
 }
 
 // InstallURL returns the page where a person installs the App on an account.
@@ -27,6 +28,9 @@ func (c *AppClient) GetApp(ctx context.Context, cred AppCredentials) (AppInfo, e
 	var app struct {
 		Slug    string `json:"slug"`
 		HTMLURL string `json:"html_url"`
+		Owner   struct {
+			Login string `json:"login"`
+		} `json:"owner"`
 	}
 	if err := c.do(ctx, jwt, http.MethodGet, "/app", "/app", nil, http.StatusOK, &app); err != nil {
 		return AppInfo{}, fmt.Errorf("github: read the App with client ID %s: %w", cred.ClientID, err)
@@ -34,7 +38,7 @@ func (c *AppClient) GetApp(ctx context.Context, cred AppCredentials) (AppInfo, e
 	if app.Slug == "" || app.HTMLURL == "" {
 		return AppInfo{}, fmt.Errorf("github: read the App with client ID %s: the response has no slug or no address", cred.ClientID)
 	}
-	return AppInfo{Slug: app.Slug, HTMLURL: app.HTMLURL}, nil
+	return AppInfo{Slug: app.Slug, HTMLURL: app.HTMLURL, Owner: app.Owner.Login}, nil
 }
 
 // IsInstalledOn reports if the App has an installation on the account (an
