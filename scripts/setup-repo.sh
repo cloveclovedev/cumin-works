@@ -39,6 +39,12 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || usage
       # An empty name would be dropped without a word, and the check would not be required.
       [ -n "$2" ] || die "--required-check needs a name that is not empty"
+      # The names are kept one for each line, and grep reads line by line, so a
+      # line break inside a name must stop here.
+      case "$2" in
+        *"
+"*) die "a check name must not contain a line break" ;;
+      esac
       extra_checks="${extra_checks}$2
 "
       shift 2 ;;
