@@ -156,7 +156,8 @@ func Load(path string) (*Settings, error) {
 	f := defaults()
 	md, err := toml.Decode(string(data), &f)
 	if err != nil {
-		// The message of the parser has the line and the full key.
+		// The parser stops at the first syntax or type error. Its message
+		// has the line and the full key.
 		return nil, fmt.Errorf("settings file %s: %w", path, err)
 	}
 	// Report unknown keys and invalid values together.
