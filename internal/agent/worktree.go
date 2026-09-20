@@ -25,7 +25,9 @@ import (
 // checked-out files. It is only the parent of the worktrees.
 const cloneDirName = "clone"
 
-// Workspace is the work directory of cumin, the setting work_dir.
+// Workspace is the work directory of cumin, the setting work_dir. Prepare
+// and Remove resolve a relative Root against the working directory of the
+// process.
 type Workspace struct {
 	Root string
 	// Logger may be nil. Then the default logger is used.
@@ -45,10 +47,10 @@ type Checkout struct {
 
 func (c Checkout) validate() error {
 	var errs []error
-	if c.Owner == "" || strings.ContainsAny(c.Owner, "/\\") {
+	if !isPathElement(c.Owner) {
 		errs = append(errs, fmt.Errorf("owner %q must be one path element", c.Owner))
 	}
-	if c.Repo == "" || strings.ContainsAny(c.Repo, "/\\") {
+	if !isPathElement(c.Repo) {
 		errs = append(errs, fmt.Errorf("repo %q must be one path element", c.Repo))
 	}
 	if c.Issue <= 0 {
@@ -61,6 +63,24 @@ func (c Checkout) validate() error {
 		errs = append(errs, fmt.Errorf("branch %q must not start with -", c.Branch))
 	}
 	return errors.Join(errs...)
+}
+
+// isPathElement reports whether s can be one element of a path under the
+// work directory: not empty, no separator, and not "." or "..". A name
+// such as ".." would leave the work directory.
+func isPathElement(s string) bool {
+	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, "/\\")
+}
+
+// root is the work directory as an absolute path. git runs with the clone
+// as its working directory, so a relative path would be resolved from
+// there, not from the process.
+func (w Workspace) root() (string, error) {
+	root, err := filepath.Abs(w.Root)
+	if err != nil {
+		return "", fmt.Errorf("work directory %q: %w", w.Root, err)
+	}
+	return root, nil
 }
 
 // repoDir is <work_dir>/<owner>/<repo>.
@@ -92,6 +112,11 @@ func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (s
 	if remoteURL == "" {
 		return "", errors.New("prepare worktree: remote URL must not be empty")
 	}
+	root, err := w.root()
+	if err != nil {
+		return "", fmt.Errorf("prepare worktree: %w", err)
+	}
+	w.Root = root
 	dir := w.Dir(c)
 	log := w.logger().With("repository", c.Owner+"/"+c.Repo, "issue", c.Issue, "role", c.Role)
 
@@ -151,6 +176,11 @@ func (w Workspace) Remove(ctx context.Context, c Checkout) error {
 	if err := c.validate(); err != nil {
 		return fmt.Errorf("remove worktree: %w", err)
 	}
+	root, err := w.root()
+	if err != nil {
+		return fmt.Errorf("remove worktree: %w", err)
+	}
+	w.Root = root
 	clone := w.CloneDir(c)
 	if _, err := os.Stat(clone); err != nil {
 		return nil

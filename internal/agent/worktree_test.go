@@ -283,6 +283,34 @@ func TestWorktree_RemoveDeletesWorktreeAndBranch(t *testing.T) {
 	}
 }
 
+// A relative work_dir is resolved against the process, not against the
+// clone that git runs in.
+func TestWorktree_PrepareWithRelativeWorkDir(t *testing.T) {
+	r := newRemote(t)
+	base := t.TempDir()
+	t.Chdir(base)
+	w := Workspace{Root: "relative-work", Logger: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
+	c := checkout(8, config.RoleImplementer, "cumin/8-relative")
+
+	dir, err := w.Prepare(context.Background(), r.path, c)
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	want := filepath.Join(base, "relative-work", "example-org", "example-repo", "8-implementer")
+	if realPath(t, dir) != realPath(t, want) {
+		t.Errorf("dir = %q, want %q", dir, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "README.md")); err != nil {
+		t.Errorf("the worktree is not at the returned path: %v", err)
+	}
+	if err := w.Remove(context.Background(), c); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("the worktree still exists after Remove: %v", err)
+	}
+}
+
 func TestWorktree_RejectsInvalidCheckout(t *testing.T) {
 	w := newWorkspace(t, &bytes.Buffer{})
 	tests := []struct {
@@ -290,6 +318,9 @@ func TestWorktree_RejectsInvalidCheckout(t *testing.T) {
 		c    Checkout
 	}{
 		{"no owner", Checkout{Repo: "r", Issue: 1, Role: config.RoleImplementer}},
+		{"owner is a dot", Checkout{Owner: ".", Repo: "r", Issue: 1, Role: config.RoleImplementer}},
+		{"owner leaves the work directory", Checkout{Owner: "..", Repo: "r", Issue: 1, Role: config.RoleImplementer}},
+		{"repo leaves the work directory", Checkout{Owner: "o", Repo: "..", Issue: 1, Role: config.RoleImplementer}},
 		{"owner with slash", Checkout{Owner: "a/b", Repo: "r", Issue: 1, Role: config.RoleImplementer}},
 		{"no repo", Checkout{Owner: "o", Issue: 1, Role: config.RoleImplementer}},
 		{"issue zero", Checkout{Owner: "o", Repo: "r", Issue: 0, Role: config.RoleImplementer}},
