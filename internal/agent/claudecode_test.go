@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -303,5 +304,133 @@ func TestRun_ResumeAndModel(t *testing.T) {
 		if i < 0 || i+1 >= len(args) || args[i+1] != want {
 			t.Errorf("args have no %s %q: %q", flag, want, args)
 		}
+	}
+}
+
+// The tests below cover the sixth requirement of #7: a run over the time
+// limit is stopped, is an abnormal end, and leaves no child process.
+
+// neverEndingCLI writes a fake CLI that prints the init event, starts a
+// child, records the child's process ID in the returned file, and waits.
+// prologue is shell text that runs first (for example a trap).
+func neverEndingCLI(t *testing.T, prologue string) (path, childPID string) {
+	t.Helper()
+	dir := t.TempDir()
+	path = filepath.Join(dir, "fake-claude")
+	childPID = filepath.Join(dir, "child.pid")
+	script := "#!/bin/sh\n" + prologue + "\n" +
+		"printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\"}'\n" +
+		"sleep 300 &\n" +
+		"echo $! > " + childPID + "\n" +
+		"wait\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path, childPID
+}
+
+// processGone reports whether the process in the file is gone, waiting
+// a short time for the kernel to reap it.
+func processGone(t *testing.T, pidFile string) bool {
+	t.Helper()
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("the fake CLI did not record its child: %v", err)
+	}
+	var pid int
+	if _, err := fmt.Sscan(string(data), &pid); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	syscall.Kill(pid, syscall.SIGKILL) // do not leave it behind
+	return false
+}
+
+func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
+	path, childPID := neverEndingCLI(t, "")
+	c := quiet(path)
+	c.Grace = time.Second
+	req := request(t)
+	req.TimeLimit = time.Second
+
+	start := time.Now()
+	_, err := c.Run(context.Background(), req)
+	elapsed := time.Since(start)
+
+	end := abnormalEnd(t, err)
+	if end.Kind != EndTimeLimit {
+		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
+	}
+	if !strings.Contains(end.Detail, "time limit") || end.PID == 0 || end.SessionID != fixtureSessionID {
+		t.Errorf("AbnormalEnd = %+v", end)
+	}
+	if elapsed > req.TimeLimit+c.Grace+2*time.Second {
+		t.Errorf("Run took %v, want about the limit plus the grace period", elapsed)
+	}
+	if !processGone(t, childPID) {
+		t.Error("the child of the fake CLI is still alive")
+	}
+}
+
+func TestRun_TimeLimitKillsAfterGraceWhenTermIsIgnored(t *testing.T) {
+	// The child inherits the ignored SIGTERM, so only SIGKILL ends it.
+	path, childPID := neverEndingCLI(t, "trap '' TERM")
+	c := quiet(path)
+	c.Grace = time.Second
+	req := request(t)
+	req.TimeLimit = time.Second
+
+	start := time.Now()
+	_, err := c.Run(context.Background(), req)
+	elapsed := time.Since(start)
+
+	if end := abnormalEnd(t, err); end.Kind != EndTimeLimit {
+		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
+	}
+	if elapsed < req.TimeLimit+c.Grace {
+		t.Errorf("Run took %v, want at least the limit plus the grace period", elapsed)
+	}
+	if elapsed > req.TimeLimit+c.Grace+2*time.Second {
+		t.Errorf("Run took %v, want about the limit plus the grace period", elapsed)
+	}
+	if !processGone(t, childPID) {
+		t.Error("the child of the fake CLI is still alive after SIGKILL")
+	}
+}
+
+func TestRun_ExitOnTermEndsBeforeTheGracePeriod(t *testing.T) {
+	// The CLI ends its child and exits on SIGTERM, as Claude Code does.
+	path, childPID := neverEndingCLI(t, "trap 'kill $child; exit 143' TERM")
+	script, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	script = bytes.Replace(script, []byte("echo $! > "), []byte("child=$!\necho $child > "), 1)
+	if err := os.WriteFile(path, script, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := quiet(path)
+	c.Grace = 5 * time.Second
+	req := request(t)
+	req.TimeLimit = time.Second
+
+	start := time.Now()
+	_, err = c.Run(context.Background(), req)
+	elapsed := time.Since(start)
+
+	if end := abnormalEnd(t, err); end.Kind != EndTimeLimit {
+		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
+	}
+	if elapsed > req.TimeLimit+c.Grace/2 {
+		t.Errorf("Run took %v, want well under the limit plus the grace period", elapsed)
+	}
+	if !processGone(t, childPID) {
+		t.Error("the child of the fake CLI is still alive")
 	}
 }
