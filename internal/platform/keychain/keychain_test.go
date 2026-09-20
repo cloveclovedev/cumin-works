@@ -154,6 +154,50 @@ func TestKeychain_MissingKeychainFileIsAnError(t *testing.T) {
 	}
 }
 
+// Get and Delete must name the keychain file. Without it, the security command
+// searches every keychain in the search list.
+func TestItemArgs_NameTheKeychainFile(t *testing.T) {
+	args, err := Open("/tmp/test.keychain-db").itemArgs("find-generic-password", testService, testAccount, "-w")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"find-generic-password", "-s", testService, "-a", testAccount, "-w", "/tmp/test.keychain-db"}
+	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
+		t.Errorf("args = %q, want %q", args, want)
+	}
+}
+
+func TestParseDefaultKeychain(t *testing.T) {
+	got, err := parseDefaultKeychain([]byte("    \"/Users/example/Library/Keychains/login.keychain-db\"\n"))
+	if err != nil || got != "/Users/example/Library/Keychains/login.keychain-db" {
+		t.Errorf("got %q, %v", got, err)
+	}
+	for name, out := range map[string]string{
+		"empty":      "",
+		"no quotes":  "/Users/example/login.keychain-db\n",
+		"two lines":  "    \"/a\"\n    \"/b\"\n",
+		"empty path": "    \"\"\n",
+	} {
+		if _, err := parseDefaultKeychain([]byte(out)); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+}
+
+// Default only asks for the path. It reads and writes no item.
+func TestDefault_ReturnsAnExistingKeychainFile(t *testing.T) {
+	if _, err := os.Stat(securityPath); err != nil {
+		t.Skipf("%s does not exist: the Keychain is a macOS feature", securityPath)
+	}
+	k, err := Default(context.Background())
+	if err != nil {
+		t.Fatalf("Default: %v", err)
+	}
+	if err := k.checkFile(); err != nil {
+		t.Errorf("the default keychain: %v", err)
+	}
+}
+
 func TestCommandError_HidesTheSecret(t *testing.T) {
 	secret := []byte("c2VjcmV0LXZhbHVl")
 	stderr := []byte("security: something failed for c2VjcmV0LXZhbHVl\nadd-generic-password: returned -1\n")
@@ -192,7 +236,7 @@ func TestSetCommand_KeepsTheSecretOutOfTheArguments(t *testing.T) {
 }
 
 func TestSetCommand_RejectsValuesThatTheCommandLineCannotCarry(t *testing.T) {
-	k := Default()
+	k := Open("/tmp/test.keychain-db")
 	for name, c := range map[string]struct{ service, account, secret string }{
 		"secret with a line break":   {testService, testAccount, "line one\nline two"},
 		"secret with a space":        {testService, testAccount, "two words"},

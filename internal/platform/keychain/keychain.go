@@ -26,13 +26,38 @@ const exitItemNotFound = 44
 // account.
 var ErrNotFound = errors.New("keychain: item not found")
 
-// Keychain is one keychain file, or the default keychain of the user.
+// Keychain is one keychain file. Every operation names the file. Without a
+// file, the security command reads and deletes in the whole keychain search
+// list, so it could reach an item with the same names in another keychain.
 type Keychain struct {
 	path string
 }
 
-// Default returns the default keychain of the user (the login keychain).
-func Default() *Keychain { return &Keychain{} }
+// Default returns the default keychain of the user (the login keychain). It
+// asks the security command for the path.
+func Default(ctx context.Context) (*Keychain, error) {
+	out, err := exec.CommandContext(ctx, securityPath, "default-keychain").Output()
+	if err != nil {
+		return nil, fmt.Errorf("keychain: find the default keychain: %w", err)
+	}
+	path, err := parseDefaultKeychain(out)
+	if err != nil {
+		return nil, err
+	}
+	return Open(path), nil
+}
+
+// parseDefaultKeychain reads the output of "security default-keychain": one
+// line with the path in double quotes, after some spaces.
+func parseDefaultKeychain(out []byte) (string, error) {
+	line := strings.TrimSpace(string(out))
+	path, ok := strings.CutPrefix(line, `"`)
+	path, ok2 := strings.CutSuffix(path, `"`)
+	if !ok || !ok2 || path == "" || strings.ContainsAny(path, "\n\"") {
+		return "", errors.New("keychain: cannot read the path of the default keychain")
+	}
+	return path, nil
+}
 
 // Open returns the keychain file at path. Tests use a temporary keychain.
 func Open(path string) *Keychain { return &Keychain{path: path} }
@@ -41,9 +66,6 @@ func Open(path string) *Keychain { return &Keychain{path: path} }
 // Observed on macOS: "security add-generic-password" with the path of a
 // missing file reports success and writes to the default keychain instead.
 func (k *Keychain) checkFile() error {
-	if k.path == "" {
-		return nil
-	}
 	if _, err := os.Stat(k.path); err != nil {
 		return fmt.Errorf("keychain: the keychain file does not exist: %w", err)
 	}
@@ -154,14 +176,10 @@ func (k *Keychain) setCommand(service, account string, secret []byte) (args []st
 		}
 	}
 	var line strings.Builder
-	fmt.Fprintf(&line, "add-generic-password -U -s %q -a %q -w %s", service, account, secret)
-	if k.path != "" {
-		if err := checkName("keychain path", k.path); err != nil {
-			return nil, nil, err
-		}
-		fmt.Fprintf(&line, " %q", k.path)
+	if err := checkName("keychain path", k.path); err != nil {
+		return nil, nil, err
 	}
-	line.WriteString("\n")
+	fmt.Fprintf(&line, "add-generic-password -U -s %q -a %q -w %s %q\n", service, account, secret, k.path)
 	return []string{"-i"}, []byte(line.String()), nil
 }
 
@@ -173,10 +191,7 @@ func (k *Keychain) itemArgs(command, service, account string, flags ...string) (
 		return nil, err
 	}
 	args := append([]string{command, "-s", service, "-a", account}, flags...)
-	if k.path != "" {
-		args = append(args, k.path)
-	}
-	return args, nil
+	return append(args, k.path), nil
 }
 
 // checkName rejects a value that the quoting of the interactive mode cannot
