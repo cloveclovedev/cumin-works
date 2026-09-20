@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
 
 // Exit codes.
@@ -22,13 +24,16 @@ const (
 type command struct {
 	name    string // may have two words, such as "quota allow"
 	summary string
+	// run gets the arguments after the name. A nil run means that the
+	// subcommand is not built yet.
+	run func(args []string, stdout, stderr io.Writer) int
 }
 
 var commands = []command{
-	{"run", "Run as a resident program. launchd starts this command."},
-	{"status", "Show running agents, issues that wait for the Owner, and the quota usage."},
-	{"quota allow", "Allow cumin to use all of the current 5h quota window."},
-	{"setup", "Set up cumin on the Host. \"setup github-apps\" registers the GitHub App of each role."},
+	{"run", "Run as a resident program. launchd starts this command.", runRun},
+	{"status", "Show running agents, issues that wait for the Owner, and the quota usage.", nil},
+	{"quota allow", "Allow cumin to use all of the current 5h quota window.", nil},
+	{"setup", "Set up cumin on the Host. \"setup github-apps\" registers the GitHub App of each role.", nil},
 }
 
 func main() {
@@ -63,9 +68,42 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 		return exitBadUsage
 	}
 
-	// No subcommand is built yet. Each one replaces this message when it is built.
-	fmt.Fprintf(stderr, "cumin %s: not built yet\n", cmd.name)
+	if cmd.run == nil {
+		return notBuilt(cmd.name, stderr)
+	}
+	return cmd.run(rest[len(strings.Fields(cmd.name)):], stdout, stderr)
+}
+
+func notBuilt(name string, stderr io.Writer) int {
+	fmt.Fprintf(stderr, "cumin %s: not built yet\n", name)
 	return exitFailure
+}
+
+// runRun is `cumin run`. For now it loads the Host settings and stops.
+func runRun(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("cumin run", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	configPath := fs.String("config", "", "path of the Host settings file (default ~/.config/cumin/config.toml)")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
+		return exitBadUsage
+	}
+
+	path := *configPath
+	if path == "" {
+		var err error
+		if path, err = config.DefaultPath(); err != nil {
+			fmt.Fprintf(stderr, "cumin run: %v\n", err)
+			return exitFailure
+		}
+	}
+	if _, err := config.Load(path); err != nil {
+		fmt.Fprintf(stderr, "cumin run: %v\n", err)
+		return exitFailure
+	}
+	return notBuilt("run", stderr)
 }
 
 // findCommand matches the start of args against the command names.
