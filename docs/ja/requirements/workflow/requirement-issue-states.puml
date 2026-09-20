@@ -14,7 +14,7 @@ state "cumin/status/awaiting-owner-review\n(受け入れの確認)" as Acceptanc
 state "cumin/status/awaiting-owner-decision" as Decision
 
 [*] --> Draft : Ownerが要求を書き、\ncumin/type/requirement を付ける
-Draft --> Ready : Ownerが書き終えて、\ncumin/status/ready を付ける (= 提出)
+Draft --> Ready : Ownerが書き終えて、\ncumin/status/ready を付ける
 Draft --> Implementing : R3 Ownerが自分でsub-issueを書き、\nsub-issueに cumin/status/ready を付けた
 Planning --> PlanReview : R2 分割が終わった
 Planning --> Decision : R2 分割に失敗した

@@ -16,7 +16,7 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 
 | ラベル | 付く対象 | 意味 | 付ける人 |
 |---|---|---|---|
-| `cumin/type/requirement` | 要求Issue | これは要求Issueである。提出の合図ではない。提出の合図は、要求Issueに `cumin/status/ready` を付けることである | Owner |
+| `cumin/type/requirement` | 要求Issue | これは要求Issueである | Owner |
 | `cumin/status/ready` | 実装Issue、要求Issue | Ownerが「進めてよい」と合図した | Owner |
 | `cumin/status/planning` | 要求Issue | Chief Engineerが分割している | cumin |
 | `cumin/status/implementing` | 実装Issue、要求Issue | 実装Issueでは、Implementerが動いている (修正を含む)。要求Issueでは、sub-issueの実装が進んでいる | cumin |
@@ -53,7 +53,7 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 
 差し戻しのとき、Ownerはsub-issueを追加して `cumin/status/ready` を付ける。これでR3が再び成り立ち、追加分が閉じるとR4が再び成り立つ。
 
-要求の提出も、分割のやり直しも、Ownerの合図は同じである。Ownerは要求Issueに `cumin/status/ready` を付ける。これでR1が成り立つ。分割に失敗して `cumin/status/awaiting-owner-decision` になったときは、要求Issueを直してから `cumin/status/ready` を付ける。sub-issueが途中まで作られていても、Chief Engineerは既にあるsub-issueを確かめて、同じものを二重に作らない。`cumin/type/requirement` は要求Issueである印なので、外さずに付けたままにする。Ownerの「進めてよい」の合図を、実装Issueと同じ `cumin/status/ready` に揃えるため、この形にしている。
+Ownerは、要求Issueを書き終えたら `cumin/status/ready` を付ける。これでR1が成り立つ。分割に失敗して `cumin/status/awaiting-owner-decision` になったときも、要求Issueを直してから `cumin/status/ready` を付ける。sub-issueが途中まで作られていても、Chief Engineerは既にあるsub-issueを確かめて、同じものを二重に作らない。`cumin/type/requirement` は要求Issueである印なので、外さずに付けたままにする。Ownerの「進めてよい」の合図を、実装Issueと同じ `cumin/status/ready` に揃えるため、この形にしている。
 
 OwnerがChief Engineerを通さずに、自分でsub-issueを書いてもよい。このときOwnerは、要求Issueには `cumin/status/ready` を付けず、sub-issueにだけ付ける。R1は成り立たず、R3が成り立つ。
 

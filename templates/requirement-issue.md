@@ -2,7 +2,7 @@
 
 Written by: the Owner.
 Read by: the Chief Engineer.
-Labels: `cumin/type/requirement` marks the issue as a requirement issue. When the text is complete, add `cumin/status/ready`. The label `cumin/status/ready` submits the requirement.
+Labels: `cumin/type/requirement` marks the issue as a requirement issue. When the text is complete, add `cumin/status/ready`.
 
 ## Rules
 
