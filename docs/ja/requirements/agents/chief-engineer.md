@@ -61,7 +61,7 @@ GitHubに残すもの:
 - 要求Issueへのコメントを1つ。形式は [acceptance-check.md](../../../../templates/acceptance-check.md) に従う
 - mainの最新の内容で、要求Issueの Requirements と Constraints を1項目ずつ確かめる。項目ごとに、結果 (Pass か Fail)、証拠 (実行したコマンドと結果、または読んだファイル)、対応したPull Requestを書く
 - 残っている作業を一覧にする。要求Issueに付いたフォローアップノートから、重複と、あとのPull Requestで済んだものを除く。Pull Requestの説明の `Follow-up` 以外の場所に書かれた、範囲の外の作業も拾う
-- Failがあっても、直さない。Issueを作らず、変更もしない。どうするかはOwnerが決める
+- Failがあっても、直さない。Issueを作らず、変更もしない。代わりに、Failごとに、どう直すかの提案をコメントに書く。足すとよいsub-issueの題と、やることを1〜2文で書く。どうするかはOwnerが決める
 
 実行の最後にcuminに返すもの:
 
@@ -128,4 +128,4 @@ cuminが `done` を受けて、GitHub上で確かめること:
 | 5 | コードの変更と、Pull Requestの作成を試みる | どちらも権限で拒否される |
 | 6 | 実装Issueが12個を超える見込みの、大きな要求Issueを渡す | 実装Issueは作られない。結果は `blocked` で、要求Issueの分け方の案が理由に書いてある |
 | 7 | sub-issueが全て閉じた要求Issueで、受け入れの確認を依頼する | 要求Issueに `## Acceptance check` のコメントが1つ付く。Requirements の項目ごとに、結果と証拠がある。Issueは作られず、変更もされない。結果は `done` |
-| 8 | Requirements の1つが満たされていない状態で、受け入れの確認を依頼する | その項目が Fail になり、何が足りないかが証拠と一緒に書いてある |
+| 8 | Requirements の1つが満たされていない状態で、受け入れの確認を依頼する | その項目が Fail になり、何が足りないかが証拠と一緒に書いてある。どう直すかの提案が書いてある。Issueは作られない |
