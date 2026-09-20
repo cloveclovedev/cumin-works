@@ -183,12 +183,26 @@ func TestRun_AbnormalEnds(t *testing.T) {
 func TestRun_CancelIsTimeLimit(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fake-claude")
-	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\"}'\n# The child keeps no pipe open, so the read ends when sh is killed.\n# Children of the real CLI are the subject of #41.\nsleep 60 >/dev/null 2>&1\n"
+	started := filepath.Join(dir, "started")
+	// The script prints the init event, then marks that it started. The
+	// child keeps no pipe open, so the read ends when sh is killed.
+	// Children of the real CLI are the subject of #41.
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\"}'\n: > " + started + "\nsleep 60 >/dev/null 2>&1\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go func() {
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(started); err == nil {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		cancel()
+	}()
 
 	_, err := quiet(path).Run(ctx, request(t))
 	end := abnormalEnd(t, err)
