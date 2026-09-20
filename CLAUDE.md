@@ -27,7 +27,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 
 ## How we work
 
-- Simple first. Look for the simplest way that meets the requirement. v1 stopped because it became too complex (a local database, a job state machine with many states, several subsystems in one binary, very long design documents). When you bring a design from v1, write the reason.
+- Simple first. Look for the simplest way that meets the requirement.
 - Requirement first. Every behavior traces to a row in a requirement document. If no row covers the behavior, ask.
 - Document first. Documents stay current with the code, so that another person can read what works today.
 - Test first. Each requirement document ends with a table "上位要件のテスト" (tests of the top-level requirements). These tables are the starting point for acceptance tests. Prefer a few tests that prove a requirement over many unit tests.
