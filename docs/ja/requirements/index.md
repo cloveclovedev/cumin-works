@@ -22,6 +22,7 @@ cumin works v2 の要求と要件の文書の入口。
 
 ## Agentが従う判断基準
 
+- [要求Issueの分割基準](policies/requirement-sizing.md): Ownerが要求Issueを書くときの、1つの要求Issueの大きさの基準
 - [実装Issueの分割基準](policies/issue-sizing.md): Chief Engineerが要求Issueを分割するときの基準
 - [GitHubに残す文章のテンプレート](policies/writing-templates.md): 要求Issue、実装Issue、Pull Requestの説明、レビュー、返答、Ownerに判断を求める文章の型
 

@@ -8,6 +8,7 @@ Labels: `cumin/type/requirement` marks the issue as a requirement issue. When th
 
 - Write what you want and why. Do not write how to build it, unless the method is a constraint.
 - Write each requirement as a rule that can be checked as true or false.
+- Write one goal for each requirement issue. If you expect more than 12 implementation issues, split the requirement. The Chief Engineer stops and proposes a split when a requirement is larger.
 - Write undecided things under "Open questions". The Chief Engineer stops and asks when a question changes the plan.
 
 ## Template
