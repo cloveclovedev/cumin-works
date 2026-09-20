@@ -27,10 +27,11 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 
 図の元ファイル: [agent-run-layout.puml](agent-run-layout.puml)
 
-- 対象のリポジトリごとに、`<work_dir>/<owner>/<repo>/clone` にcloneを1つ置く。`git clone --no-checkout` で作り、作業ファイルを置かない。worktreeの親としてだけ使う (公式: git-clone の `--no-checkout`)。一度作ったら使い回し、着手のたびに `git fetch --prune origin` で更新する。
+- 対象のリポジトリごとに、`<work_dir>/<owner>/<repo>/clone` にcloneを1つ置く。`git clone --no-checkout` で作り、作業ファイルを置かない。worktreeの親としてだけ使う (公式: git-clone の `--no-checkout`)。一度作ったら使い回し、着手のたびに `git fetch --prune origin` で更新する。fetchは `origin/HEAD` を動かさないので、続けて `git remote set-head origin --auto` で、リモートの既定のブランチを問い合わせる (公式: git-remote)。
 - worktreeは `<work_dir>/<owner>/<repo>/<Issue番号>-<role>` に、Issueとroleごとに1つ作る。並行して進むIssueの作業が混ざらない。
 - 書くrole (Implementer) のworktreeは、cuminが決めた名前のブランチにする。`origin/<ブランチ>` があればそこから始める (続きの依頼)。なければ `origin/HEAD` から新しく作る。読むだけのrole (Chief Engineer) のworktreeは、`origin/HEAD` のdetachedにする。
-- worktreeが既にあれば、fetchもせずに、そのまま返す。異常終了のやり直しは、同じ作業場所で続く。ディレクトリだけが消えていたら、`git worktree prune` で登録を消してから作り直す。
+- worktreeが既にあれば、fetchもせずに、そのまま返す。異常終了のやり直しは、同じ作業場所で続く。gitがworktreeと認めるディレクトリだけを再利用し、途中で止まった用意が残した空のディレクトリは作り直す。ディレクトリだけが消えていたら、`git worktree prune` で登録を消してから作り直す。
+- 用意と片付けは、プロセスの中で直列にする。同じリポジトリの2つのIssueが同時に着手しても、cloneは1回しか作られない。
 - Issueが閉じたら、`git worktree remove --force` でworktreeを消し、ローカルのブランチも消す。呼ぶのは定期確認である。
 - gitは `os/exec` で呼ぶ。`GIT_TERMINAL_PROMPT=0` を付け、認証の入力待ちで止まらないようにする (公式: git の環境変数)。gitの出力は、エラーの文章にだけ入れ、infoのログには出さない。
 - 採らなかった案: Issueごとにcloneする。毎回リポジトリの全体を取り直すので、遅く、ディスクを使う。

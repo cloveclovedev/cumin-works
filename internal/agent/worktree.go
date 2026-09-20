@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
@@ -24,6 +25,10 @@ import (
 // cloneDirName is the clone under <work_dir>/<owner>/<repo>. It has no
 // checked-out files. It is only the parent of the worktrees.
 const cloneDirName = "clone"
+
+// mu serializes Prepare and Remove. Two requests for the same repository
+// must not clone or change the same clone at the same time.
+var mu sync.Mutex
 
 // Workspace is the work directory of cumin, the setting work_dir. Prepare
 // and Remove resolve a relative Root against the working directory of the
@@ -120,9 +125,19 @@ func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (s
 	dir := w.Dir(c)
 	log := w.logger().With("repository", c.Owner+"/"+c.Repo, "issue", c.Issue, "role", c.Role)
 
+	mu.Lock()
+	defer mu.Unlock()
+
 	if _, err := os.Stat(dir); err == nil {
-		log.Info("worktree reused", "branch", c.Branch)
-		return dir, nil
+		// Reuse only a directory that git knows as a worktree. An empty
+		// directory that an interrupted prepare left is created again.
+		if w.isWorktree(ctx, dir) {
+			log.Info("worktree reused", "branch", c.Branch)
+			return dir, nil
+		}
+		if err := os.Remove(dir); err != nil {
+			return "", fmt.Errorf("prepare worktree: %s exists and is not a worktree: %w", dir, err)
+		}
 	}
 
 	clone := w.CloneDir(c)
@@ -137,9 +152,12 @@ func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (s
 		log.Info("clone created")
 	}
 
-	// Keep the clone up to date, and forget worktrees whose directory is gone.
+	// Keep the clone up to date. fetch does not move origin/HEAD, so
+	// set-head asks the remote for its default branch (git-remote). Then
+	// forget worktrees whose directory is gone.
 	steps := [][]string{
 		{"fetch", "--quiet", "--prune", "origin"},
+		{"remote", "set-head", "origin", "--auto"},
 		{"worktree", "prune"},
 	}
 	for _, args := range steps {
@@ -182,6 +200,10 @@ func (w Workspace) Remove(ctx context.Context, c Checkout) error {
 	}
 	w.Root = root
 	clone := w.CloneDir(c)
+
+	mu.Lock()
+	defer mu.Unlock()
+
 	if _, err := os.Stat(clone); err != nil {
 		return nil
 	}
@@ -201,6 +223,12 @@ func (w Workspace) Remove(ctx context.Context, c Checkout) error {
 	}
 	w.logger().Info("worktree removed", "repository", c.Owner+"/"+c.Repo, "issue", c.Issue, "role", c.Role)
 	return nil
+}
+
+// isWorktree reports whether dir is a working tree that git knows.
+func (w Workspace) isWorktree(ctx context.Context, dir string) bool {
+	out, err := w.git(ctx, dir, "rev-parse", "--is-inside-work-tree")
+	return err == nil && out == "true"
 }
 
 // refExists reports whether the full ref name exists in the clone.

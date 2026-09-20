@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -245,6 +246,80 @@ func TestWorktree_PrepareAfterManualDeletion(t *testing.T) {
 	}
 	if got := gitCmd(t, dir, "rev-parse", "--abbrev-ref", "HEAD"); got != c.Branch {
 		t.Errorf("branch = %q, want %q", got, c.Branch)
+	}
+}
+
+// An empty directory that an interrupted prepare left is not a worktree.
+// Prepare creates the worktree there. A directory with other content is
+// an error, so that nothing is deleted by mistake.
+func TestWorktree_PrepareReplacesEmptyDirectory(t *testing.T) {
+	r := newRemote(t)
+	w := newWorkspace(t, &bytes.Buffer{})
+	c := checkout(10, config.RoleImplementer, "cumin/10-empty")
+	dir := w.Dir(c)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := w.Prepare(context.Background(), r.path, c); err != nil || got != dir {
+		t.Fatalf("Prepare = %q, %v; want %q", got, err, dir)
+	}
+	if got := gitCmd(t, dir, "rev-parse", "--abbrev-ref", "HEAD"); got != c.Branch {
+		t.Errorf("branch = %q, want %q", got, c.Branch)
+	}
+
+	other := checkout(11, config.RoleImplementer, "cumin/11-not-empty")
+	if err := os.MkdirAll(w.Dir(other), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(w.Dir(other), "stray.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Prepare(context.Background(), r.path, other); err == nil {
+		t.Error("Prepare over a directory with content succeeded, want an error")
+	}
+}
+
+// The remote may change its default branch after the clone. Prepare
+// follows the new default.
+func TestWorktree_PrepareFollowsNewDefaultBranch(t *testing.T) {
+	r := newRemote(t)
+	w := newWorkspace(t, &bytes.Buffer{})
+	if _, err := w.Prepare(context.Background(), r.path, checkout(1, config.RoleChiefEngineer, "")); err != nil {
+		t.Fatalf("first Prepare: %v", err)
+	}
+	want := r.commit("develop", "develop.txt", "new default\n")
+	gitCmd(t, r.path, "symbolic-ref", "HEAD", "refs/heads/develop")
+
+	dir, err := w.Prepare(context.Background(), r.path, checkout(2, config.RoleChiefEngineer, ""))
+	if err != nil {
+		t.Fatalf("second Prepare: %v", err)
+	}
+	if got := gitCmd(t, dir, "rev-parse", "HEAD"); got != want {
+		t.Errorf("HEAD = %s, want the commit of the new default branch %s", got, want)
+	}
+}
+
+// Two requests for the same repository may prepare at the same time
+// (max_issues_in_progress above 1). Only one of them clones.
+func TestWorktree_PrepareSerializesTheClone(t *testing.T) {
+	r := newRemote(t)
+	w := newWorkspace(t, &bytes.Buffer{})
+	const n = 4
+	errs := make(chan error, n)
+	for i := 1; i <= n; i++ {
+		go func() {
+			_, err := w.Prepare(context.Background(), r.path, checkout(i, config.RoleImplementer, fmt.Sprintf("cumin/%d-parallel", i)))
+			errs <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("Prepare: %v", err)
+		}
+	}
+	list := gitCmd(t, w.CloneDir(checkout(1, "", "")), "worktree", "list", "--porcelain")
+	if got := strings.Count(list, "\nworktree "); got != n {
+		t.Errorf("worktree list has %d linked worktrees, want %d:\n%s", got, n, list)
 	}
 }
 
