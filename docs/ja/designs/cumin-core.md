@@ -45,7 +45,11 @@
 | Discord の webhook のアドレス | `cumin-works` | `discord-webhook-url` |
 
 - 秘密鍵の項目を Client ID で引くのは、設定ファイルにある値だけで項目が決まり、App の名前や Organization の名前をコードに埋め込まずに済むためである。
-- 秘密鍵の値は、PEMをbase64で1行にしたものにする。改行を含む値を `security` の `-w` で読むと、そのままの形で返らないことがある、という報告があるためである (未確認。「まだ決めていないこと」を参照)。
+- 秘密鍵の値は、PEMをbase64で1行にしたものにする。改行を含む値を `security` の `-w` で読むと、16進の文字列で返るためである。base64で1行にした値は、そのままの形で返る (2026-09-20に実機で確かめた)。
+- 読み書きと削除の全てで、keychainのファイルのパスを指定する。既定のkeychainのパスは、`security default-keychain` で求める。パスを指定しないと、読み取りと削除は検索リストの全体を探すので、別のkeychainにある同じ名前の項目に届くことがある (`man security`)。
+- 書くときは、値を `security -i` の標準入力で渡す。プロセスの引数は誰でも読めるので、値を引数に入れない。
+- keychainのファイルのパスを指定して書くときは、先にファイルがあることを確かめる。ファイルがないと、`security add-generic-password` はエラーにならずに、既定のkeychainに書き込む (2026-09-20に実機で確かめた)。
+- launchd が起動したプロセス (ログイン中のユーザの LaunchAgent) は、`security` で作った項目を、確認の画面なしで `security` から読める (2026-09-20に実機で確かめた)。login keychain が開いていることが前提である。ログインしていない状態や、他のアプリが作った項目では、確かめていない。
 - 読むときは、`/usr/bin/security find-generic-password -s <service> -a <account> -w` を `os/exec` で呼ぶ (`man security`)。cgoも、追加の依存も要らない。
 - 要件のとおり、`cumin run` の起動時に読み、メモリにだけ持つ。値をログ、エラーの文章、手元の状態に入れない。
 - Keychain に触れるコードは `internal/platform/keychain` に閉じ込める。
@@ -116,7 +120,6 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 | 決める、または確かめること | どこで |
 |---|---|
 | installation token で、「定期確認で読む内容」の GraphQL の項目を読めるか (実測 36) | #6 |
-| 改行を含む値を `security ... -w` で読んだときの形。launchd から起動したプロセスが、確認の画面なしで項目を読めるか | #5 |
 | 公開リポジトリで、checkの結果を読むのに要る権限 (実測 35) | #5 |
 | 枠の上限に当たったときの、headless実行の終わり方 (実測 6) | 起動前の使用率の確認を作る要求Issue |
 
