@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
@@ -80,8 +82,15 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 	if err != nil {
 		return fmt.Errorf("setup: %w", err)
 	}
+	// Use the spelling of the settings file from here on, so that the command
+	// reads and writes one table.
+	if org, err = settingsKey(apps, org); err != nil {
+		return err
+	}
 	clientIDs := apps[org]
 
+	// Check every registered App before any change: the key exists, it is a
+	// key, and GitHub accepts it for this Client ID.
 	var missing []string
 	for _, app := range Apps {
 		clientID := clientIDs[app]
@@ -89,12 +98,15 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 			missing = append(missing, app)
 			continue
 		}
-		_, err := s.Secrets.GetBase64(ctx, keychain.Service, keychain.PrivateKeyAccount(clientID))
+		cred, err := s.credentials(ctx, clientID)
 		if errors.Is(err, keychain.ErrNotFound) {
 			return fmt.Errorf("setup: app %q has the client ID %s in %s, but the Keychain has no private key for it. cumin does not guess. If the App still exists on GitHub, make a new private key by hand (docs/ja/development/github-app-setup.md, step 2). If not, remove the line from the settings file and run the command again", app, clientID, s.ConfigPath)
 		}
 		if err != nil {
-			return fmt.Errorf("setup: app %q: %w", app, err)
+			return fmt.Errorf("setup: app %q (client ID %s): %w", app, clientID, err)
+		}
+		if _, err := s.GitHub.GetApp(ctx, cred); err != nil {
+			return fmt.Errorf("setup: app %q: GitHub does not accept the private key in the Keychain for the client ID %s. Nothing is changed: %w", app, clientID, err)
 		}
 		fmt.Fprintf(s.Out, "already registered %s: client ID %s\n", app, clientID)
 	}
@@ -105,6 +117,40 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 		}
 	}
 	return s.openInstallPages(ctx, org)
+}
+
+// settingsKey returns the spelling of the organization in the settings file.
+// GitHub account names ignore case, so "Example-Org" and "example-org" are one
+// organization. Two tables that differ only in case are an error.
+func settingsKey(apps map[string]map[string]string, org string) (string, error) {
+	var found []string
+	for key := range apps {
+		if strings.EqualFold(key, org) {
+			found = append(found, key)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return org, nil
+	case 1:
+		return found[0], nil
+	default:
+		slices.Sort(found)
+		return "", fmt.Errorf("setup: the settings file has more than one github_apps table for this organization: %s. Keep one", strings.Join(found, ", "))
+	}
+}
+
+// credentials reads and parses the private key of one registered App.
+func (s *Service) credentials(ctx context.Context, clientID string) (github.AppCredentials, error) {
+	pemBytes, err := s.Secrets.GetBase64(ctx, keychain.Service, keychain.PrivateKeyAccount(clientID))
+	if err != nil {
+		return github.AppCredentials{}, err
+	}
+	key, err := github.ParsePrivateKey(pemBytes)
+	if err != nil {
+		return github.AppCredentials{}, err
+	}
+	return github.AppCredentials{ClientID: clientID, PrivateKey: key}, nil
 }
 
 // RegisterApps registers the given Apps for the organization, one by one. The
@@ -147,16 +193,10 @@ func (s *Service) openInstallPages(ctx context.Context, org string) error {
 		return fmt.Errorf("setup: %w", err)
 	}
 	for _, app := range Apps {
-		clientID := apps[org][app]
-		pemBytes, err := s.Secrets.GetBase64(ctx, keychain.Service, keychain.PrivateKeyAccount(clientID))
+		cred, err := s.credentials(ctx, apps[org][app])
 		if err != nil {
 			return fmt.Errorf("setup: app %q: %w", app, err)
 		}
-		key, err := github.ParsePrivateKey(pemBytes)
-		if err != nil {
-			return fmt.Errorf("setup: app %q: %w", app, err)
-		}
-		cred := github.AppCredentials{ClientID: clientID, PrivateKey: key}
 		installed, err := s.GitHub.IsInstalledOn(ctx, cred, org)
 		if err != nil {
 			return fmt.Errorf("setup: app %q: %w", app, err)

@@ -602,6 +602,78 @@ func TestSetupGitHubApps_ClientIDWithoutKeyStopsBeforeAnyRegistration(t *testing
 	}
 }
 
+// A key that exists is not enough: it must be a key, and GitHub must accept it
+// for the Client ID. The check comes before any registration.
+func TestSetupGitHubApps_BadStoredKeyStopsBeforeAnyRegistration(t *testing.T) {
+	otherKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, stored := range map[string][]byte{
+		"not a key":            []byte("this is not PEM"),
+		"a key of another App": pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(otherKey)}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			browser := &fakeBrowser{org: "example-org"}
+			store := &memoryStore{}
+			service := newService(t, browser, store, &out)
+			settings := "[github_apps.example-org]\nimplementer = \"Iv23liSTALE\"\n"
+			if err := os.WriteFile(service.ConfigPath, []byte(settings), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_ = store.SetBase64(context.Background(), "cumin-works", "github-app-private-key/Iv23liSTALE", stored)
+
+			err := service.Run(context.Background(), "example-org", "")
+			if err == nil || !strings.Contains(err.Error(), `"implementer"`) || !strings.Contains(err.Error(), "Iv23liSTALE") {
+				t.Fatalf("err = %v, want an error that names the App and the client ID", err)
+			}
+			if strings.Contains(err.Error(), "PRIVATE KEY") {
+				t.Errorf("the error holds the key")
+			}
+			if len(browser.manifests) != 0 || len(store.items) != 1 {
+				t.Errorf("the run registered %d Apps and the store has %d items, want 0 and 1", len(browser.manifests), len(store.items))
+			}
+			if text, _ := os.ReadFile(service.ConfigPath); string(text) != settings {
+				t.Errorf("the settings file changed: %s", text)
+			}
+		})
+	}
+}
+
+// GitHub account names ignore case. A second run with another spelling finds
+// the Apps of the first run, and the file keeps one table.
+func TestSetupGitHubApps_OrganizationNameIgnoresCase(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "Example-Org"}
+	service := newService(t, browser, &memoryStore{}, &out)
+	if err := service.Run(context.Background(), "Example-Org", ""); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("second run with another spelling: %v", err)
+	}
+	if len(browser.manifests) != 4 {
+		t.Errorf("the browser saw %d manifests over both runs, want 4", len(browser.manifests))
+	}
+	apps, _ := config.ReadGitHubApps(service.ConfigPath)
+	if len(apps) != 1 || len(apps["Example-Org"]) != 4 {
+		t.Errorf("github_apps = %v, want one table with four Apps", apps)
+	}
+
+	// Two tables that differ only in case: the command does not choose one.
+	text, _ := os.ReadFile(service.ConfigPath)
+	text = append(text, []byte("\n[github_apps.EXAMPLE-ORG]\nreviewer = \"Iv23liOTHER\"\n")...)
+	if err := os.WriteFile(service.ConfigPath, text, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := service.Run(context.Background(), "example-org", "")
+	if err == nil || !strings.Contains(err.Error(), "EXAMPLE-ORG, Example-Org") {
+		t.Errorf("err = %v, want an error that names both tables", err)
+	}
+}
+
 func TestSetupGitHubApps_OpensTheInstallPageOnlyForAppsThatAreNotInstalled(t *testing.T) {
 	var out bytes.Buffer
 	browser := &fakeBrowser{org: "example-org"}
