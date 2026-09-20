@@ -18,7 +18,7 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 | Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
 | 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
 | merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする。mergeの方法は設定で選べる (初期値はsquash) |
-| 残った宿題の転記 | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、要求Issueにコメントとして転記する。AIの判断は使わず、決まった形式から機械的に拾う |
+| フォローアップノート | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、フォローアップノートとして要求Issueに転記する。フォローアップノートは、要求Issueに付ける1つのコメントである。AIの判断は使わず、決まった形式から機械的に拾う |
 | 通知 | Ownerの対応が要るとき、Discordのwebhookで知らせる |
 | 利用枠の管理 | Agentの実行結果から使用率を読み、しきい値を超えている間は新しい着手を止める |
 | Ownerからの操作の受け付け | Host上のコマンドで、状態の表示と、利用枠の使い切りの許可を受け付ける |
@@ -90,19 +90,19 @@ Agentの起動について、cuminが守ること。Agentの側の要件は [Age
 - Agentが `blocked` を返したら、`blocked_reason` をIssueにコメントとして投稿してから、Ownerに知らせる。Ownerは、GitHubの上で理由を読める
 - roleごとに使うCLI (Claude Code、Codexなど) は、設定で選べるようにする。CLIごとの違いは、cuminの中のCLIごとの接続部分に閉じ込める
 
-## 残った宿題の転記
+## フォローアップノート
 
-Implementerが範囲の外だと判断した作業と、Reviewerの提案のうち対応されなかったものは、mergeされるとPull Requestの中に埋もれる。cuminは、これを要求Issueに集める。
+Implementerが範囲の外だと判断した作業と、Reviewerの提案のうち対応されなかったものは、mergeされるとPull Requestの中に埋もれる。cuminは、これをフォローアップノートに転記する。フォローアップノートは、cuminが要求Issueに付けるコメントである。mergeされたPull Requestごとに、1つ付く。Ownerは、受け入れのときに要求Issueを開けば、その要求で残った作業を見渡せる。
 
 - きっかけは、実装Issueを閉じるPull Requestがmergeされたことである。cuminがmergeしたときも、Ownerがmergeしたときも同じに扱う
 - 拾うものは2つある。Pull Requestの説明の `Follow-up` の節の文章と、対応されなかった `(non-blocking)` の指摘である
 - 対応されなかった指摘とは、`cumin-reviewer` の `(non-blocking)` の指摘のうち、`Fixed` か `Answer` で始まる返答が付いていないものである。ラベルが `praise` と `note` の指摘は拾わない
-- 拾うものが何もなければ、コメントしない
-- 転記するのは、要求Issueが開いている間だけである。閉じた要求Issueには転記しない
-- sub-issueが全て閉じたときは、同じ定期確認の中で、転記を受け入れの通知 (R4) より先に行う。Ownerが通知を受けて見に来たときには、転記が済んでいる
-- 1つのPull Requestについて、コメントは1回だけにする。コメントに目印を埋め込み、cuminが再起動しても二重に転記しない
+- 拾うものが何もなければ、フォローアップノートを書かない
+- フォローアップノートを書くのは、要求Issueが開いている間だけである。閉じた要求Issueには書かない
+- sub-issueが全て閉じたときは、同じ定期確認の中で、フォローアップノートを受け入れの通知 (R4) より先に書く。Ownerが通知を受けて見に来たときには、フォローアップノートがそろっている
+- 1つのPull Requestについて、フォローアップノートは1つだけにする。コメントに目印を埋め込み、cuminが再起動しても二重に書かない
 - 形式は [follow-up-note.md](../../../templates/follow-up-note.md) に従う
-- 転記は記録である。Issueにはしない。Ownerは受け入れのときに一覧を見て、やりたいものを新しい要求Issueに書く。そこからは通常のフローに乗り、Chief Engineerが実装Issueに分割する
+- フォローアップノートは記録である。Issueにはしない。Ownerは受け入れのときに一覧を見て、やりたいものを新しい要求Issueに書く。そこからは通常のフローに乗り、Chief Engineerが実装Issueに分割する
 
 ## 通知
 
@@ -180,9 +180,8 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 7 | 要求Issueのsub-issueが全て閉じる | 要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに通知する |
 | 8 | cuminを止めて、起動し直す | GitHubを確かめ直して動き始める。同じIssueを二重に依頼しない |
 | 9 | 進められるIssueがなくなる | 1回だけ通知する。同じ通知を繰り返さない |
-| 10 | `Follow-up` に文章があり、対応されなかった `(non-blocking)` の指摘が1つあるPull Requestをmergeする | 要求Issueに、決められた形式のコメントが1つ付く。cuminを再起動しても、同じコメントは増えない |
-| 11 | `Follow-up` が None で、`(non-blocking)` の指摘が全て `Fixed` になったPull Requestをmergeする | 要求Issueにコメントは付かない |
+| 10 | `Follow-up` に文章があり、対応されなかった `(non-blocking)` の指摘が1つあるPull Requestをmergeする | 要求Issueに、決められた形式のフォローアップノートが1つ付く。cuminを再起動しても、同じフォローアップノートは増えない |
+| 11 | `Follow-up` が None で、`(non-blocking)` の指摘が全て `Fixed` になったPull Requestをmergeする | 要求Issueにフォローアップノートは付かない |
 | 12 | 要求Issueのsub-issueの一部にだけ `cumin/status/ready` を付け、それらが全て閉じる | 要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに1回だけ通知する。残りのsub-issueに `cumin/status/ready` を付けると、要求Issueが `cumin/status/implementing` に戻る |
 | 13 | `cumin/status/ready` のsub-issueが残っている要求Issueを見直し、Chief Engineerが新しいsub-issueを足す | Ownerが新しく `cumin/status/ready` を付けるまで、要求Issueは `cumin/status/awaiting-owner-review` のままである |
 | 14 | cuminが実装Issueのラベルを付け替える。Ownerが実装Issueのriskを変える。OwnerがPull Requestの側のラベルを変える | どの場合も、次の定期確認のあとで、Pull Requestの `cumin/status/*` と `risk/*` が、実装Issueと同じになる。cuminの判定は、Pull Requestのラベルに左右されない |
-| 15 | cuminを止めている間に、Pull Requestをmergeし、要求Issueを閉じる。そのあとでcuminを起動する | 閉じた要求Issueには、コメントもラベルの変更も行われない |

@@ -84,7 +84,7 @@ OwnerがChief Engineerを通さずに、自分でsub-issueを書いてもよい�
 | I6 | Pull Requestをmergeする | 実行終了: Reviewerの実行が終わった | 最新のレビューが今の先頭のコミットに対する `APPROVE` である。checkが全て通っている。riskが `risk/low` である | mergeできない (衝突など) なら、`cumin/status/implementing` に替えてImplementerに解消を依頼する |
 | I7 | ラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「mergeの判断が必要」と通知する | I6と同じ | I6と同じ。ただしriskが `risk/medium` または `risk/high` である | — |
 | I8 | Reviewerに「何が決まっていないことが原因か」の整理を依頼し、レポートが投稿されたら `cumin/status/awaiting-owner-decision` に替えて通知する | 実行終了: Reviewerの実行が終わった | 最新のレビューが `REQUEST_CHANGES` で、ラウンドが上限に達した | — |
-| I9 | 残った宿題を、要求Issueにコメントとして転記する。実装Issueはこれで完了 | 定期確認: OwnerまたはcuminがPull Requestをmergeし、GitHubが実装Issueを閉じた | このPull Requestについて、まだ転記していない。`Follow-up` に文章があるか、対応されなかった `(non-blocking)` の指摘がある | — |
+| I9 | 残った作業を、フォローアップノートとして要求Issueに転記する。実装Issueはこれで完了 | 定期確認: OwnerまたはcuminがPull Requestをmergeし、GitHubが実装Issueを閉じた | このPull Requestのフォローアップノートが、まだない。要求Issueが開いている。`Follow-up` に文章があるか、対応されなかった `(non-blocking)` の指摘がある | — |
 | I10 | `blocked_reason` を実装Issueにコメントとして投稿し、ラベルを `cumin/status/awaiting-owner-decision` に替えて通知する。やり直さない | 実行終了: Reviewerの実行が終わり、結果が `blocked` | — | — |
 | I11 | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする | 定期確認: 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | — | — |
 
