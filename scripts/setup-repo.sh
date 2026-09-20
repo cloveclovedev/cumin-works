@@ -37,8 +37,13 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --implementer-app) [ $# -ge 2 ] || usage; implementer_app="$2"; shift 2 ;;
     --core-app) [ $# -ge 2 ] || usage; core_app="$2"; shift 2 ;;
-    --required-check) [ $# -ge 2 ] || usage; extra_checks="${extra_checks}$2
-"; shift 2 ;;
+    --required-check)
+      [ $# -ge 2 ] || usage
+      # An empty name would be dropped without a word, and the check would not be required.
+      [ -n "$2" ] || die "--required-check needs a name that is not empty"
+      extra_checks="${extra_checks}$2
+"
+      shift 2 ;;
     --dry-run) dry_run=1; shift ;;
     -h|--help) usage ;;
     -*) echo "unknown option: $1" >&2; usage ;;
@@ -164,7 +169,12 @@ put_file "$config_path" "$work/config.toml" keep
 # apply_ruleset <local JSON file>
 apply_ruleset() {
   name="$(sed -n 's/^  "name": "\(.*\)",$/\1/p' "$1")"
-  id="$(gh api --paginate "repos/$repo/rulesets" --jq ".[] | select(.name == \"$name\") | .id" | head -n 1)"
+  # No pipe here: a pipe would hide a failure of gh, and the script would then
+  # create a second ruleset with the same name.
+  ids="$(gh api --paginate "repos/$repo/rulesets" --jq ".[] | select(.name == \"$name\") | .id")" ||
+    die "cannot list the rulesets of $repo"
+  id="${ids%%
+*}"
   if [ "$dry_run" -eq 1 ]; then
     if [ -n "$id" ]; then echo "would update the ruleset $name"; else echo "would create the ruleset $name"; fi
     sed 's/^/           /' "$1"
