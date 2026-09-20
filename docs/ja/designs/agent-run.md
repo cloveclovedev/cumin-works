@@ -38,11 +38,43 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 - 採らなかった案: cloneにmainをチェックアウトしておく。Agentが誤ってそこで作業しうる。同じブランチを2か所でチェックアウトできないので、worktreeの邪魔にもなる。
 - 採らなかった案: bare clone。remote-tracking branchとその設定が作られず (公式: git-clone の `--bare`)、fetchの設定を自分で足すことになる。
 
+### Claude Codeの起動
+
+![1回の実行](agent-run.svg)
+
+図の元ファイル: [agent-run.puml](agent-run.puml)
+
+- 依頼のたびに `claude -p` を、worktreeを作業ディレクトリにして起動する。標準入力はnullデバイスにする。標準入力が開いたまま何も来ないと、CLIは3秒待ってから進む (実測。Claude Code 2.1.267)。プロセスは依頼が終わったら終了する。
+- オプション (公式: Run Claude Code programmatically、CLI reference):
+  - `--append-system-prompt <roleの指示>`: roleの指示は、システムプロンプトの末尾に足す。Claude Code既定のシステムプロンプト (ツールの使い方、リポジトリの `CLAUDE.md`) はそのまま使う。
+  - `-p <依頼文>`: 依頼文は、プロンプトの引数で渡す。
+  - `--setting-sources project`: ユーザアカウントの設定と `CLAUDE.md` を読ませない (実測 6e、27)。
+  - `--permission-mode bypassPermissions`: 全てのツールを許可する。headlessの実行では、許可を尋ねられても答える人がいない。`--dangerously-skip-permissions` と同じ意味である (CLI reference)。
+  - `--json-schema <結果のスキーマ>`: 結果を [共通の形式](../requirements/agents/common.md) に従わせる。スキーマの文字列は、コードで要件文書と同じに保つ。
+  - `--output-format stream-json --verbose`: イベントを1行ずつ読む。`--json-schema` と併用できる (実測 26)。
+  - `--model <モデル>`: 設定 `roles.<role>.model` が空でないときだけ付ける。
+  - `--resume <セッションの番号>`: 続きの依頼のときだけ付ける (実測 31)。roleの指示と依頼文は、続きの依頼でも渡す。
+- 採らなかった案: `--bare`。サブスクリプションのログインを使えない (実測 6a)。
+- 採らなかった案: `--allowedTools` でツールを列挙する。roleごとの制限は、GitHub Appの権限とrulesetで行う (cumin本体の要件)。
+- 採らなかった案: roleの指示を依頼文に含める。続きの依頼で指示を二重に渡すことになり、システムプロンプトとしての扱いも受けない。
+- 実行ファイルは設定 `roles.<role>.cli_path` で決める。受け入れテストは、決まった出力を返すシェルスクリプトを指す。
+
+### 出力の読み取り
+
+- 標準出力の1行を1つのJSONとして読み、`type` で見分ける。読むのは3種類だけで、ほかは飛ばす。
+  - `system` の `init`: セッションの番号 (`session_id`)。
+  - `rate_limit_event`: `rate_limit_info.unifiedWindows` の `five_hour` と `seven_day` の、`utilization` (0から1) と `resetsAt` (Unix秒) (実測 1)。1回の実行に複数回出るので、最後のものを使用率とする。
+  - `result`: `session_id`、`subtype`、`is_error`、`structured_output` (実測 26)。
+- 正常終了は、終了コードが0で、`result` があり、`is_error` が偽で、`structured_output` がスキーマに合い、`blocked` なら理由が空でないときである。cuminのほかの部分には、セッションの番号、結果、使用率を返す。
+- `rate_limit_event` がなくても異常終了にしない。使用率は「読めなかった」として返す。着手の前の使用率の確認は、別の話題 (cumin本体の設計メモ) が受け持つ。
+- 異常終了は、種類を付けて返す。プロセスの失敗 (起動できない、終了コードが0でない)、`result` がない、`is_error` が真、結果がスキーマに合わない、実行時間の上限。やり直すかどうかは、cuminのほかの部分が種類で決める。
+- 使用率の数値は、debugのログにだけ出す。infoのログには、セッションの番号、結果、異常終了の種類を出す。標準エラー出力は、debugのログに出す。
+- `rate_limit_event` の形は公式ドキュメントにない (実測 2)。形が変わったら、使用率は「読めなかった」になる。2026-09-20 に、最小の実機実行で、3つのイベントの項目名と `result` の `subtype: "success"` を確かめた。
+
 ## まだ決めていないこと
 
 | 決める、または確かめること | どこで |
 |---|---|
-| Claude Codeの起動の仕方と、出力の読み取り | #40 |
 | 実行時間の上限と、打ち切りの仕方 | #41 |
 | Reviewerの作業場所。Pull Requestのブランチを、同じIssueのImplementerのworktreeと同時に開けるか | Reviewerへの依頼を作る要求Issue |
 

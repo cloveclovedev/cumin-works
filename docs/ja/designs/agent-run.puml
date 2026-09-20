@@ -1,0 +1,21 @@
+@startuml agent-run
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+participant "cumin\n(internal/agent)" as cumin
+participant "Claude Code\n(claude -p)" as claude
+
+cumin -> claude : 起動 (worktree で)\nroleの指示、依頼文、スキーマ、\n新しいセッションか --resume
+activate claude
+claude --> cumin : system / init\n(セッションの番号)
+claude --> cumin : rate_limit_event\n(使用率とリセット時刻)
+claude --> cumin : assistant, user, ...\n(読み飛ばす)
+claude --> cumin : result\n(structured_output, is_error)
+deactivate claude
+cumin -> cumin : 終了コード、result、\nスキーマ、blocked_reason を確かめる
+alt 正常終了
+  cumin -> cumin : セッションの番号、結果、使用率を返す
+else 異常終了
+  cumin -> cumin : 種類を付けて返す\n(やり直しはほかの部分が決める)
+end
+@enduml
