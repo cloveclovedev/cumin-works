@@ -14,7 +14,7 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 | 受け持つこと | 内容 |
 |---|---|
 | GitHubの定期確認 | 対象のリポジトリのIssue、Pull Request、check、レビューを、決まった間隔で確かめる |
-| 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う。実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestに写す |
+| 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う。実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestにもコピーする |
 | Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
 | 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
 | merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする。mergeの方法は設定で選べる (初期値はsquash) |
