@@ -7,5 +7,6 @@
 
 ## 開発の手順
 
+- [はじめに](getting-started.md)
 - [GitHub Appの登録手順](development/github-app-setup.md)
 - [図の描き方](development/diagrams.md)
