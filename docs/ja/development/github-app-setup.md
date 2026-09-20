@@ -46,6 +46,25 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 
 秘密鍵の発行は、cuminを動かせるようになってからでよい。Appの登録 (手順1) とインストール (手順3) は、秘密鍵がなくても進められる。Keychainに登録するときの項目の名前と形式は、[cumin本体の設計メモ](../designs/cumin-core.md) の「Keychainの項目」にある。
 
+| 項目 | 値 |
+|---|---|
+| service | `cumin-works` |
+| account | `github-app-private-key/<AppのClient ID>` |
+| 値 | PEMをbase64で1行にしたもの |
+
+値をbase64にするのは、改行を含む値を `security find-generic-password -w` で読むと、16進の文字列で返るためである (2026-09-20に実機で確かめた)。base64で1行にした値は、そのままの形で返る。
+
+手作業で登録するときは、次のコマンドを使う。値は標準入力で `security` に渡すので、プロセスの引数には現れない (`printf` はシェルの組み込みコマンドである)。登録したら、PEMファイルを削除する。
+
+```sh
+printf 'add-generic-password -U -s cumin-works -a "github-app-private-key/%s" -w %s\n' \
+  "CLIENT_ID" "$(base64 -i PATH_TO_PEM_FILE | tr -d '\n')" | security -i
+```
+
+注意: `security add-generic-password` の最後にkeychainのファイルのパスを付ける場合、そのファイルが存在しないと、エラーにならずに既定のkeychainに書き込まれる (2026-09-20に実機で確かめた)。上のコマンドはパスを付けないので、既定のkeychain (login keychain) に入る。
+
+cuminがKeychainを読み書きするコードは `internal/platform/keychain` にある。
+
 秘密鍵の扱い:
 
 - 秘密鍵はリポジトリ、設定ファイル、dotfilesに置かない。cuminは起動時にKeychainから読む。複数のHostから同じ秘密鍵を使うようになったら、Secrets Managerに移す。
