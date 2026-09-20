@@ -119,7 +119,7 @@ func (c *AppClient) CreateInstallationToken(ctx context.Context, cred AppCredent
 		ID int64 `json:"id"`
 	}
 	path := "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/installation"
-	if err := c.do(ctx, jwt, http.MethodGet, path, nil, http.StatusOK, &installation); err != nil {
+	if err := c.do(ctx, jwt, http.MethodGet, path, path, nil, http.StatusOK, &installation); err != nil {
 		return InstallationToken{}, fmt.Errorf("github: find the installation of app %q on %s/%s: %w", app, owner, repo, err)
 	}
 
@@ -132,7 +132,7 @@ func (c *AppClient) CreateInstallationToken(ctx context.Context, cred AppCredent
 		ExpiresAt time.Time `json:"expires_at"`
 	}
 	path = fmt.Sprintf("/app/installations/%d/access_tokens", installation.ID)
-	if err := c.do(ctx, jwt, http.MethodPost, path, request, http.StatusCreated, &created); err != nil {
+	if err := c.do(ctx, jwt, http.MethodPost, path, path, request, http.StatusCreated, &created); err != nil {
 		return InstallationToken{}, fmt.Errorf("github: create a token for app %q on %s/%s: %w", app, owner, repo, err)
 	}
 	if created.Token == "" {
@@ -162,10 +162,12 @@ func signJWT(cred AppCredentials, now time.Time) (string, error) {
 	return signingInput + "." + encode(signature), nil
 }
 
-// do sends one request with the JWT. An error never holds the JWT or a
-// response body that could hold a token: it holds only the status code and the
-// "message" field of the error body from GitHub.
-func (c *AppClient) do(ctx context.Context, jwt, method, path string, body any, wantStatus int, out any) error {
+// do sends one request. An empty jwt sends no Authorization header. An error
+// never holds the JWT, the address of the request, or a response body that
+// could hold a token: it holds only the label, the status code, and the
+// "message" field of the error body from GitHub. The label names the request
+// in errors. It is the path, or a text without the secret part of the path.
+func (c *AppClient) do(ctx context.Context, jwt, method, path, label string, body any, wantStatus int, out any) error {
 	var reader io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -176,9 +178,12 @@ func (c *AppClient) do(ctx context.Context, jwt, method, path string, body any, 
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
-		return err
+		// The error of net/http can hold the address. Do not pass it on.
+		return fmt.Errorf("%s %s: cannot build the request", method, label)
 	}
-	req.Header.Set("Authorization", "Bearer "+jwt)
+	if jwt != "" {
+		req.Header.Set("Authorization", "Bearer "+jwt)
+	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "cumin-works")
@@ -188,7 +193,12 @@ func (c *AppClient) do(ctx context.Context, jwt, method, path string, body any, 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		// The error of net/http holds the whole address. Keep only the cause.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
+		return fmt.Errorf("%s %s: %w", method, label, err)
 	}
 	defer resp.Body.Close()
 
@@ -197,7 +207,7 @@ func (c *AppClient) do(ctx context.Context, jwt, method, path string, body any, 
 			Message string `json:"message"`
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, maxErrorBody)).Decode(&apiError)
-		return fmt.Errorf("%s %s: status %d: %s", method, path, resp.StatusCode, apiError.Message)
+		return fmt.Errorf("%s %s: status %d: %s", method, label, resp.StatusCode, apiError.Message)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
