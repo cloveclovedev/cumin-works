@@ -52,7 +52,7 @@
 
 ## 4. GitHubクライアント
 
-- cuminが使う認証は、GitHub App の installation token だけである。Ownerの認証情報と、リポジトリの管理者の権限 (Administration) は使わない。
+- cuminは、GitHub App としてだけ認証する。GitHubへの操作には installation token を使う。installation token の発行にだけ、Appの秘密鍵で署名したJWTを使う (公式: Generating an installation access token for a GitHub App)。Ownerの認証情報と、リポジトリの管理者の権限 (Administration) は使わない。
 - 標準ライブラリ (`net/http`、`encoding/json`、`crypto/rsa`) だけで書く。SDKは使わない。使うendpointが少なく、依存を増やす理由がない。
 - 読み取りは、定期確認の1回分を、リポジトリごとに1つのGraphQLの問い合わせで読む。Issue、sub-issue、ラベル、blocked by、Pull Request、レビュー、checkは入れ子の関係にあり、RESTだとIssueの数に比例して要求が増えるためである。1回で読めば、判定に使うスナップショットの時点も揃う。
 - 同じ問い合わせを、Agentの実行が終わった直後にも行う。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。
