@@ -47,7 +47,7 @@ GitHubに残すもの:
 - `(non-blocking)` の指摘は、数行で直せて、実装Issueの範囲の内にあるものだけを、同じラウンドで直してよい。直したら `Fixed` と返答する。それ以外は、直さずに残す
 - 自分で気づいた範囲の外の作業は、Pull Requestの説明の `Follow-up` に書く。Issueは作らない。`(non-blocking)` の指摘を `Follow-up` に写さない
 
-残った `Follow-up` と、対応されなかった `(non-blocking)` の指摘は、mergeのあとにcuminが要求Issueに転記する。Implementerは何もしなくてよい。
+残った `Follow-up` と、対応されなかった `(non-blocking)` の指摘は、mergeのあとに、cuminがフォローアップノートとして要求Issueに転記する。Implementerは何もしなくてよい。
 - 続きや修正の依頼では、新しいPull Requestを作らずに、同じPull Requestにコミットを積む
 
 実行の最後にcuminに返すもの:
