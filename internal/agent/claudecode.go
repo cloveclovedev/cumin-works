@@ -9,17 +9,20 @@ package agent
 // measured-constraints.md rows 1 and 26.
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
+	"os"
 	"os/exec"
+	"syscall"
 	"time"
 )
+
+// defaultGrace is the time between SIGTERM and SIGKILL at the time limit.
+const defaultGrace = 10 * time.Second
 
 // ClaudeCode starts Claude Code for one request.
 type ClaudeCode struct {
@@ -27,6 +30,16 @@ type ClaudeCode struct {
 	Path string
 	// Logger may be nil. Then the default logger is used.
 	Logger *slog.Logger
+	// Grace is the time that the CLI gets to end after SIGTERM, before
+	// SIGKILL. Zero means defaultGrace. Tests shorten it.
+	Grace time.Duration
+}
+
+func (c ClaudeCode) grace() time.Duration {
+	if c.Grace > 0 {
+		return c.Grace
+	}
+	return defaultGrace
 }
 
 // args builds the command line of one request.
@@ -93,43 +106,65 @@ type stream struct {
 
 // Run starts Claude Code in the work directory of the request, waits for
 // the end, and returns the run. An error is always an *AbnormalEnd.
+//
+// The run ends at the time limit of the request: SIGTERM goes to the
+// process group of the CLI, and SIGKILL follows after the grace period.
+// The CLI is in its own process group, so the signals reach the commands
+// that the agent started. A cancelled context ends the run the same way.
 func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	log := c.logger().With("role", req.Role, "work_dir", req.WorkDir)
 	if req.SessionID == "" {
-		log.Info("agent start", "session", "new")
+		log.Info("agent start", "session", "new", "time_limit", req.TimeLimit)
 	} else {
-		log.Info("agent start", "session", "resumed", "session_id", req.SessionID)
+		log.Info("agent start", "session", "resumed", "session_id", req.SessionID, "time_limit", req.TimeLimit)
 	}
 
-	cmd := exec.CommandContext(ctx, c.Path, c.args(req)...)
+	runCtx := ctx
+	if req.TimeLimit > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(ctx, req.TimeLimit)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(runCtx, c.Path, c.args(req)...)
 	cmd.Dir = req.WorkDir
 	// Stdin is nil: the process reads from the null device (os/exec).
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// When the context is done, Cancel sends SIGTERM to the group. After
+	// WaitDelay, os/exec kills the CLI and closes the pipes (os/exec:
+	// Cmd.Cancel, Cmd.WaitDelay).
+	cmd.Cancel = func() error { return signalGroup(cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.WaitDelay = c.grace()
+	reader := &streamReader{c: c, log: log}
+	cmd.Stdout = reader
 	var stderr bytes.Buffer
 	cmd.Stderr = &limitedWriter{w: &stderr, limit: 64 << 10}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "open stdout", Err: err})
-	}
+
 	if err := cmd.Start(); err != nil {
-		if ctx.Err() != nil {
-			return nil, c.fail(log, &AbnormalEnd{Kind: EndTimeLimit, Detail: "the run was stopped before the start", Err: ctx.Err()})
+		if runCtx.Err() != nil {
+			return nil, c.fail(log, &AbnormalEnd{Kind: EndTimeLimit, Detail: "the run was stopped before the start", Err: runCtx.Err()})
 		}
 		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "start " + c.Path, Err: err})
 	}
 	pid := cmd.Process.Pid
 
-	s := c.read(log, stdout)
 	waitErr := cmd.Wait()
+	reader.flush()
+	if runCtx.Err() != nil {
+		// The grace period is over. Nothing of the group may stay alive.
+		_ = signalGroup(pid, syscall.SIGKILL)
+	}
 	if stderr.Len() > 0 {
 		log.Debug("agent stderr", "text", stderr.String())
 	}
 
+	s := reader.s
 	end := &AbnormalEnd{SessionID: s.sessionID, PID: pid}
 	var exitErr *exec.ExitError
 	switch {
-	case ctx.Err() != nil:
-		// The caller stopped the run. The time limit of the role (#41)
-		// uses the same kind.
+	case runCtx.Err() != nil && ctx.Err() == nil:
+		end.Kind, end.Detail, end.Err = EndTimeLimit, fmt.Sprintf("the time limit of %s passed", req.TimeLimit), runCtx.Err()
+	case runCtx.Err() != nil:
 		end.Kind, end.Detail, end.Err = EndTimeLimit, "the run was stopped", ctx.Err()
 	case waitErr != nil && errors.As(waitErr, &exitErr):
 		end.Kind, end.Detail = EndProcessFailed, fmt.Sprintf("exit code %d", exitErr.ExitCode())
@@ -157,20 +192,50 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	return nil, c.fail(log, end)
 }
 
-// read collects the session ID, the last quota usage, and the result
-// event from stdout. Other lines are skipped.
-func (c ClaudeCode) read(log *slog.Logger, r io.Reader) stream {
-	var s stream
-	reader := bufio.NewReader(r)
-	for {
-		line, err := reader.ReadBytes('\n')
-		if len(bytes.TrimSpace(line)) > 0 {
-			c.readLine(log, &s, line)
-		}
-		if err != nil {
-			return s
-		}
+// signalGroup sends the signal to the process group of pid. A group that
+// is gone counts as done, so that Wait returns the exit status.
+func signalGroup(pid int, sig syscall.Signal) error {
+	err := syscall.Kill(-pid, sig)
+	if errors.Is(err, syscall.ESRCH) {
+		return os.ErrProcessDone
 	}
+	return err
+}
+
+// streamReader is the stdout of the CLI. It reads one event for each
+// line as the lines arrive, so that a line that is still in the pipe when
+// the process exits is not lost.
+type streamReader struct {
+	c   ClaudeCode
+	log *slog.Logger
+	s   stream
+	buf []byte
+}
+
+func (r *streamReader) Write(p []byte) (int, error) {
+	r.buf = append(r.buf, p...)
+	for {
+		i := bytes.IndexByte(r.buf, '\n')
+		if i < 0 {
+			return len(p), nil
+		}
+		r.line(r.buf[:i])
+		r.buf = r.buf[i+1:]
+	}
+}
+
+// flush reads a last line without a newline.
+func (r *streamReader) flush() {
+	r.line(r.buf)
+	r.buf = nil
+}
+
+func (r *streamReader) line(line []byte) {
+	if len(bytes.TrimSpace(line)) == 0 {
+		return
+	}
+	// A copy, because buf is reused.
+	r.c.readLine(r.log, &r.s, append([]byte(nil), line...))
 }
 
 func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte) {
