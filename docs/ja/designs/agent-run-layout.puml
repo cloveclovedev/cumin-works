@@ -1,0 +1,18 @@
+@startuml agent-run-layout
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+cloud "GitHub\n<owner>/<repo>" as github
+
+folder "<work_dir>" as workdir {
+  folder "<owner>/<repo>" as repo {
+    database "clone\n(作業ファイルなし)" as clone
+    folder "<Issue番号>-implementer\nブランチ cumin/<Issue番号>-..." as implementer
+    folder "<Issue番号>-chief-engineer\norigin/HEAD の detached" as chief
+  }
+}
+
+github --> clone : git fetch --prune\n(着手のたび)
+clone --> implementer : git worktree add
+clone --> chief : git worktree add --detach
+@enduml
