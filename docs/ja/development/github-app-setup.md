@@ -15,6 +15,8 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 | `cumin-implementer` | Implementer | Contents: Read & write、Pull requests: Read & write、Issues: Read-only |
 | `cumin-reviewer` | Reviewer | Pull requests: Read & write、Contents: Read-only、Issues: Read-only |
 
+この表と同じ内容を、コードの `internal/platform/github/roles.go` に持つ。Appの登録と、installation access tokenの絞り込みは、コードの表を使う。表を変えるときは、この文書、コードの表、表を固定しているテストの3つを、同じPull Requestで変える。
+
 権限を決めた理由:
 
 - Pull Requestのmergeに必要な権限は Pull requests ではなく Contents: Read & write である。`cumin-core` に Contents の書き込みが要るのはこのため。
@@ -110,6 +112,8 @@ cuminは、mainに適用されるrulesetに登録された必須のcheckが全�
 2. JWTで `POST /app/installations/{installation_id}/access_tokens` を呼び、installation access tokenを受け取る。tokenは1時間で失効する。
 3. 発行時に `repositories` と `permissions` を指定して、tokenをそのAgentの仕事に必要な範囲に絞る。
 4. cuminはAgentを起動するたびに、そのroleのAppのtokenだけを渡す。
+
+1〜3の実装は `internal/platform/github/appauth.go` にある。`permissions` には、上の権限の表のそのAppの行をそのまま渡し、`repositories` には対象のリポジトリ1つだけを渡す。tokenとJWTは、ログにもエラーの文章にも出さない。
 
 ## 出典
 
