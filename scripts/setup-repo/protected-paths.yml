@@ -7,6 +7,9 @@
 # through the GitHub API. It does not check out or run code from the pull
 # request.
 #
+# The job reads the list when it runs. A change of the list on the default
+# branch does not run the job again for a pull request that is already open.
+#
 # Keep the pull_request trigger free of branch and path filters. A workflow
 # that GitHub skips leaves a required check pending. A job that an `if`
 # condition skips reports success.
