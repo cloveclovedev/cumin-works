@@ -21,7 +21,7 @@ Planning --> Decision : R2 分割に失敗した
 Decision --> Ready : Ownerが要求を直し、\ncumin/status/ready を付ける
 Ready --> Planning : R1 cuminが分割を依頼する
 PlanReview --> Implementing : R3 Ownerが確認のあとで、sub-issueに\ncumin/status/ready を付けた
-Implementing --> Acceptance : R4 sub-issueが全て閉じた
+Implementing --> Acceptance : R4 sub-issueが全て閉じ、Chief Engineerが\n受け入れの確認をする\nR7 確認のコメントが付いた
 Implementing --> PlanReview : R6 状態ラベルのない\nsub-issueだけが残った
 Acceptance --> Implementing : R3 Ownerが差し戻した\n(sub-issueを追加し、cumin/status/ready を付ける)
 Acceptance --> [*] : R5 Ownerが要求Issueを閉じる\n(= 受け入れ)

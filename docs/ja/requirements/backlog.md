@@ -13,11 +13,11 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| Chief Engineerによるフォローアップノートの整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがChief Engineerを起動する。Chief Engineerは、mergeされたPull Requestの `Follow-up` と、対応されなかった `(non-blocking)` の指摘を集め、重複を除き、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Ownerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、cuminがフォローアップノートとして機械的に要求Issueへ転記し、Ownerがやりたいものを新しい要求Issueに書く形で足りる。依頼の種類とトリガーが1つずつ増えるのを避けた | フォローアップノートに転記される作業が多く、Ownerが新しい要求Issueに書き直す手間が目立ってきたとき |
+| Chief Engineerによるフォローアップノートの整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがChief Engineerを起動する。Chief Engineerは、受け入れの確認でまとめた残りの作業のうち、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Ownerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、Chief Engineerは、受け入れの確認のコメントに残りの作業を一覧にするところまでを行う。Issueにはしない。Ownerが、やりたいものを新しい要求Issueに書く形で足りる | フォローアップノートに転記される作業が多く、Ownerが新しい要求Issueに書き直す手間が目立ってきたとき |
 | 次の要求Issueの草案づくり | 進められるIssueがなくなったとき、Agentが要件文書を読んで、次に出すべき要求Issueの草案を作る。Ownerは草案を直して提出するだけになる | v0.1では、待ち状態になったら通知するだけにした。「要求を書くのはOwnerだけ」という前提が変わる | 待ち状態の通知が頻繁に届き、稼働率の目標 (8〜9割) に届かないとき。課題の原因2 (自動のトリガーが成果に結びつかない) への根本の対策である |
 | 差し戻しでChief Engineerを通す | 受け入れでOwnerが差し戻すとき、追加のsub-issueをOwnerが書く代わりに、Chief Engineerに分割させる | v0.1では、Ownerのほうが正しく決められると考え、Ownerが直接sub-issueを足す形にした | 差し戻しのたびにOwnerが実装Issueを書く手間が目立ってきたとき |
 | `risk/medium` の自動merge | `risk/medium` のPull Requestも、cuminがmergeする | 運用しながら、任せてよいかを判断すると決めた | `risk/medium` のPull Requestを、Ownerが続けて直さずにmergeしている実績がたまったとき |
-| mergeの前にmainの最新を取り込む | mergeの前に、mainの最新を取り込んで、必須のcheckをやり直す。GitHubのrulesetの "Require branches to be up to date before merging" を使う案がある | v0.1では、衝突がなく、実装の時点の必須のcheckが通っていればmergeする。問題が起きるのは、並行して進めた独立のIssueの間だけである | 同時に動かすAgentの数を2以上にするとき。mergeのあとでmainのcheckが壊れることが起きたとき |
+| mergeの前にmainの最新を取り込む | mergeの前に、mainの最新を取り込んで、必須のcheckをやり直す。GitHubのrulesetの "Require branches to be up to date before merging" を使う案がある。このとき、遅れたPull Requestは、cuminが `update-branch` のAPIで最新にできる (Implementerを起動しないので、利用枠を使わない)。取り込みだけのコミットなら、前の `APPROVE` を有効とみなして、再レビューを省く案もある | v0.1では、衝突がなく、実装の時点の必須のcheckが通っていればmergeする。rulesetでブランチが最新であることを求めると、Ownerが1つmergeするたびに、待っている他のPull Requestが全て遅れ、Ownerの手間と利用枠の消費が増える。v0.1で残る隙間は2つある。並行して進めた独立のIssueの間で、mergeのあとにmainのcheckが壊れること。Ownerが保護されたパスの一覧やworkflowをmainで変えても、既に開いているPull Requestは確かめ直されないこと。後者は、セットアップの手順書に「変えたら、開いているPull Requestのブランチを最新にする」と書いて塞ぐ | リポジトリごとに同時に進めるIssueの数を2以上にするとき。mergeのあとでmainのcheckが壊れることが起きたとき。保護されたパスの一覧やworkflowを、Pull Requestが開いている間に変えることが増えたとき |
 | 第三者のコメントの扱い | 公開リポジトリでは、Ownerでもcuminでもない第三者が、IssueやPull Requestにコメントできる。cuminが第三者のコメントを見つけて、無視してよいかをChief Engineerに相談する。または、テンプレートに沿ったコメントなら、Ownerのコメントと同じに扱う | v0.1では、第三者のコメントは無視する | 対象のリポジトリに、第三者のコメントが付くようになったとき |
 | Pull Requestに付けた `cumin/status/ready` を合図として読む | Ownerが差し戻すとき、実装Issueではなく、見ているPull Requestに `cumin/status/ready` を付けても、cuminが合図として扱う | v0.1では、判定に使うのはIssueのラベルだけにした。Pull Requestのラベルは、Issueからコピーしたものであり、cuminは読まない | OwnerがPull Requestの側に `cumin/status/ready` を付けてしまう間違いが続くとき |
 | コメントのスレッドを解決済みにする | Reviewerが、直ったことを確かめた指摘のスレッドを解決済みにする | v0.1では、cuminはレビューの結果だけで判定するので、要らない | Ownerがレビューを読むときに、どの指摘が済んだのかが分かりにくいと感じたとき |
@@ -26,6 +26,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
+| Chief Engineerが要件文書の変更を下書きする | Ownerが決めた内容を受けて、Chief Engineerが、要件文書の変更をPull Requestにする。Ownerの仕事は、文書を直すことから、読んでmergeすることに変わる。要件文書を変えられるのはOwnerのmergeだけ、という決まりは変えない | v0.1では、要件文書はOwnerが直す。Chief Engineerの権限は、Issueの読み書きとコードの読み取りだけで、ブランチのpushとPull Requestの作成ができない。保護されたパスのcheckも、Implementerが作ったPull Requestだけを見る前提になっている | 要件文書の変更の相談が続き、Ownerが文書を直す手間が目立ってきたとき |
 | roleの中身をリポジトリごとに変える | Implementer、Reviewerという箱はcuminに固定で持つ。その中のより細かいrole (例: FlutterのAndroidのUIを担当するImplementer) と、渡す指示やskillを、対象のリポジトリの `.cumin/` で指定できるようにする | v0.1では、対象のリポジトリにある指示 (`CLAUDE.md`、skillなど) をAgentが読むので、専用の仕組みがなくても足りる見込み | 1つのリポジトリの中で、作業の種類によって渡す指示を変えたくなったとき |
 | roleごとの保護されたパス | 変更させないパスを、roleごとに指定する | v0.1では、コードをpushするのがImplementerだけなので、一覧は1つで足りる | pushできるroleが増えたとき |
 | セキュリティだけを見るレビュー | 毎回のレビューとは別に、セキュリティだけを見るレビューを足す | v0.1では、毎回のReviewerの6つの問いと、GitHubのcheck (secret scanningなど) で見る | セキュリティを特に重く見るプロダクトを、cuminに任せるとき |

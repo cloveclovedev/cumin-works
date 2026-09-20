@@ -52,11 +52,19 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 | R1 | 要求Issueに `cumin/status/planning` を付け、Chief Engineerに分割を依頼する | 定期確認: 開いていて、`cumin/type/requirement` と `cumin/status/ready` が付いた要求Issueがある。sub-issueがあるかどうかは問わない | 要求Issueの blocked by のIssueが全て閉じている。AIリソースに空きがある | — |
 | R2 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「分割結果の確認が必要」と通知する | 実行終了: Chief Engineerの実行が終わった | sub-issueが1つ以上ある。全てのsub-issueにriskのラベルがちょうど1つ付いている | `cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら、その前に1回だけやり直す |
 | R3 | 要求Issueのラベルを `cumin/status/implementing` に替える | 定期確認: 要求Issueに `cumin/status/awaiting-owner-review` が付いたあとで、sub-issueのどれかに `cumin/status/ready` が付いた。要求Issueに状態ラベルがないときは、sub-issueのどれかに `cumin/status/ready` が付いていればよい | — | — |
-| R4 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「受け入れ可能になった」と通知する | 定期確認: sub-issueが全て閉じた | 要求Issueに `cumin/status/implementing` が付いている。sub-issueが1つ以上ある | — |
+| R4 | Chief Engineerに、受け入れの確認を依頼する。ラベルは `cumin/status/implementing` のままにする | 定期確認: sub-issueが全て閉じていて、最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントが、まだない | 要求Issueに `cumin/status/implementing` が付いている。sub-issueが1つ以上ある。閉じたsub-issueのフォローアップノート (I9) を書き終えている。この要求IssueのAgentが動いていない。AIリソースに空きがある | 結果が `blocked` なら、`cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら1回だけやり直し、それでも駄目なら同じ扱いにする |
 | R5 | (何もしない。完了) | Ownerが要求Issueを閉じた | — | — |
 | R6 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「残りのsub-issueの確認が必要」と通知する | 定期確認: 開いているsub-issueが1つ以上あり、その全てに状態ラベルがない | 要求Issueに `cumin/status/implementing` が付いている | — |
+| R7 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「受け入れ可能になった」と通知する | 定期確認: sub-issueが全て閉じていて、最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントがある | 要求Issueに `cumin/status/implementing` が付いている | — |
 
-差し戻しのとき、Ownerはsub-issueを追加して `cumin/status/ready` を付ける。これでR3が再び成り立ち、追加分が閉じるとR4が再び成り立つ。
+差し戻しのとき、Ownerはsub-issueを追加して `cumin/status/ready` を付ける。これでR3が再び成り立ち、追加分が閉じるとR4が再び成り立つ。前の受け入れの確認のコメントは、追加分が閉じるより前に書かれたものなので、Chief Engineerがもう一度確かめる。
+
+受け入れの確認は、sub-issueを全て合わせたmainの上で、要求Issueの Requirements が満たされているかを、Chief Engineerが1項目ずつ確かめることである。Pull Requestは1つずつしか検証されないので、全体を確かめる人がほかにいない。分割が正しいことは、Ownerが分割結果の確認で見ている。受け入れの確認は、その分割を前提にして、まとめた結果が1つの振る舞いとして正しいかを見る。
+
+- 受け入れの確認のコメントとは、Chief EngineerのGitHub Appが要求Issueに書いた、`## Acceptance check` で始まるコメントである。形式は [acceptance-check.md](../../../../templates/acceptance-check.md) に従う
+- cuminは、コメントがあるかどうかだけを見る。表の結果 (Pass か Fail か) は読まない。Failがあっても、R7で `cumin/status/awaiting-owner-review` に替える。差し戻すかどうかは、Ownerが決める
+- R4では、ラベルを付け替えない。受け入れの確認が済んだかどうかは、コメントの有無というGitHub上の事実で分かるためである。cuminが途中で止まっても、コメントがなければR4が、あればR7が、次の定期確認で成り立つ
+- R6では、受け入れの確認をしない。sub-issueが全て閉じたときにだけ行う
 
 R3が `cumin/status/ready` の付いた時刻を見るのは、要求Issueを見直す場面のためである。前の分割で `cumin/status/ready` が付いたsub-issueは、cuminが着手するまでそのラベルのまま残る。ラベルの有無だけで判定すると、Ownerが新しいsub-issueを確認する前に、要求Issueが `cumin/status/implementing` に替わってしまう。ラベルが付いた時刻は、GitHubがIssueのイベントとして記録している。
 

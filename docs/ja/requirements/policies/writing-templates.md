@@ -12,6 +12,7 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 | [requirement-issue.md](../../../../templates/requirement-issue.md) | Owner | Chief Engineer | 要求Issueを書く |
 | [implementation-issue.md](../../../../templates/implementation-issue.md) | Chief Engineer | Implementer、Reviewer | 実装Issueを作る |
 | [plan-summary.md](../../../../templates/plan-summary.md) | Chief Engineer | Owner | 要求Issueに、分割の全体像をコメントする |
+| [acceptance-check.md](../../../../templates/acceptance-check.md) | Chief Engineer | Owner | sub-issueが全て閉じたあとに、要求が満たされているかを確かめた結果を、要求Issueにコメントする |
 | [pull-request.md](../../../../templates/pull-request.md) | Implementer | Reviewer、Owner | Pull Requestの説明を書く |
 | [review.md](../../../../templates/review.md) | Reviewer | Implementer、Owner | レビューの指摘と、レビューのまとめを書く |
 | [review-reply.md](../../../../templates/review-reply.md) | Implementer | Reviewer、Owner | レビューの指摘に返答する |
@@ -47,6 +48,14 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 - 「Requirement coverage」で、要求の1つ1つが、どの実装Issueで満たされるかを示す。抜けがあれば、ここで見つかる。
 - 「Assumptions」に、要求に書かれていなかったのでChief Engineerが決めたことを書く。Ownerは、作業が始まる前に直せる。
 - 承認の方法は、返信ではなく、実装Issueに `cumin/status/ready` を付けることである。
+
+### 受け入れの確認
+
+- Ownerが、自分で確かめ直さなくても、受け入れるかどうかを決められるようにする。
+- 要求Issueの Requirements の1項目を、表の1行にする。要求と結果が、1対1で対応する。
+- 証拠の欄に、実行したコマンドと結果を書かせる。確かめ方の間違いで、不具合があるように見えることがある。証拠があれば、Ownerが切り分けられる。
+- Failがあっても、Chief Engineerは直さない。Issueも作らない。どう直すかの提案を書く。差し戻すかどうかは、Ownerが決める。提案があれば、Ownerは差し戻しのsub-issueを、提案を写して書ける。
+- 見出しの `## Acceptance check` は、cuminが確認の済んだことを判定するのに使う。
 
 ### Pull Requestの説明
 
