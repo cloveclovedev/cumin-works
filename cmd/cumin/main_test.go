@@ -35,8 +35,6 @@ func TestSubcommandThatIsNotBuiltFails(t *testing.T) {
 	}{
 		{[]string{"status"}, "status"},
 		{[]string{"quota", "allow"}, "quota allow"},
-		{[]string{"setup"}, "setup"},
-		{[]string{"setup", "github-apps", "--org", "example-org"}, "setup"},
 	}
 	for _, tt := range tests {
 		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
@@ -138,5 +136,35 @@ func TestRunWithoutConfigFlagUsesTheDefaultPath(t *testing.T) {
 	want := filepath.Join(home, ".config", "cumin", "config.toml")
 	if !strings.Contains(stderr.String(), want) {
 		t.Errorf("stderr does not name the default path %s:\n%s", want, stderr.String())
+	}
+}
+
+func TestSetupChecksTheArgumentsBeforeItOpensAnything(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantCode int
+		message  string
+	}{
+		{"no subcommand", []string{"setup"}, exitBadUsage, "usage: cumin setup github-apps"},
+		{"unknown subcommand", []string{"setup", "repo"}, exitBadUsage, "usage: cumin setup github-apps"},
+		{"no organization", []string{"setup", "github-apps"}, exitBadUsage, "usage: cumin setup github-apps"},
+		{"extra argument", []string{"setup", "github-apps", "--org", "example-org", "extra"}, exitBadUsage, "usage: cumin setup github-apps"},
+		{"App name too long", []string{"setup", "github-apps", "--org", "example-org", "--name-prefix", "a-prefix-that-is-far-too-long-"}, exitFailure, "GitHub allows 34"},
+		{"wrong organization name", []string{"setup", "github-apps", "--org", "example/org"}, exitFailure, "not a name of an organization"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := runCLI(tt.args, &stdout, &stderr); code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d", code, tt.wantCode)
+			}
+			if !strings.Contains(stderr.String(), tt.message) {
+				t.Errorf("stderr does not contain %q:\n%s", tt.message, stderr.String())
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want empty", stdout.String())
+			}
+		})
 	}
 }
