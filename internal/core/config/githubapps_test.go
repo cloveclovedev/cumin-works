@@ -173,6 +173,76 @@ func TestSetGitHubAppClientID_WritesBehindADanglingSymbolicLink(t *testing.T) {
 	}
 }
 
+// A file from Windows ends its lines with CRLF. The table must be found, and
+// the new lines get the same line ending.
+func TestSetGitHubAppClientID_KeepsCRLFLineEndings(t *testing.T) {
+	path := writeFile(t, "work_dir = \"/tmp/w\"\r\n\r\n[github_apps.example-org]\r\ncumin-core = \"Iv23liOLD\" # core\r\n\r\n[quota.weekly]\r\nthreshold = 60\r\n")
+	if err := SetGitHubAppClientID(path, "example-org", "reviewer", "Iv23liREV"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGitHubAppClientID(path, "example-org", "cumin-core", "Iv23liNEW"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGitHubAppClientID(path, "other-org", "reviewer", "Iv23liOTHER"); err != nil {
+		t.Fatal(err)
+	}
+	want := "work_dir = \"/tmp/w\"\r\n\r\n[github_apps.example-org]\r\ncumin-core = \"Iv23liNEW\" # core\r\nreviewer = \"Iv23liREV\"\r\n\r\n[quota.weekly]\r\nthreshold = 60\r\n\r\n[github_apps.other-org]\r\nreviewer = \"Iv23liOTHER\"\r\n"
+	if got := readFile(t, path); got != want {
+		t.Errorf("the file is %q\nwant        %q", got, want)
+	}
+}
+
+// The table is the last thing in a CRLF file that has no final line break.
+func TestSetGitHubAppClientID_CRLFWithoutFinalLineBreak(t *testing.T) {
+	path := writeFile(t, "[github_apps.example-org]\r\ncumin-core = \"Iv23liCORE\"")
+	if err := SetGitHubAppClientID(path, "example-org", "reviewer", "Iv23liREV"); err != nil {
+		t.Fatal(err)
+	}
+	want := "[github_apps.example-org]\r\ncumin-core = \"Iv23liCORE\"\r\nreviewer = \"Iv23liREV\""
+	if got := readFile(t, path); got != want {
+		t.Errorf("the file is %q, want %q", got, want)
+	}
+}
+
+// A loop of links has no file behind it. The write must not replace a link.
+func TestSetGitHubAppClientID_RefusesALoopOfLinks(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a.toml"), filepath.Join(dir, "b.toml")
+	if err := os.Symlink(b, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(a, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGitHubAppClientID(a, "example-org", "reviewer", "Iv23liREV"); err == nil {
+		t.Fatal("no error")
+	}
+	for _, link := range []string{a, b} {
+		if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Errorf("%s is not a symbolic link any more", filepath.Base(link))
+		}
+	}
+}
+
+func TestCheckGitHubAppClientIDWritable(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "config.toml")
+	if err := CheckGitHubAppClientIDWritable(missing, "example-org", "reviewer"); err != nil {
+		t.Errorf("a missing file: %v", err)
+	}
+	if _, err := os.Stat(missing); err == nil {
+		t.Error("the check created the file")
+	}
+
+	content := "github_apps.example-org.cumin-core = \"Iv23liCORE\"\n"
+	path := writeFile(t, content)
+	if err := CheckGitHubAppClientIDWritable(path, "example-org", "reviewer"); err == nil {
+		t.Error("a dotted key: no error")
+	}
+	if got := readFile(t, path); got != content {
+		t.Errorf("the check changed the file: %q", got)
+	}
+}
+
 func TestSetGitHubAppClientID_CreatesTheFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cumin", "config.toml")
 	if err := SetGitHubAppClientID(path, "example-org", "cumin-core", "Iv23liCORE"); err != nil {

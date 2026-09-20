@@ -674,6 +674,30 @@ func TestSetupGitHubApps_SameClientIDForTwoRolesStops(t *testing.T) {
 	}
 }
 
+// The command cannot write into this form of the settings file. It must find
+// that out before GitHub registers an App, not after.
+func TestSetupGitHubApps_SettingsFileThatCannotBeWrittenStopsBeforeAnyRegistration(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	store := &memoryStore{}
+	service := newService(t, browser, store, &out)
+	settings := "work_dir = \"/tmp/w\"\ngithub_apps = { other-org = { reviewer = \"Iv23liOTHER\" } }\n"
+	if err := os.WriteFile(service.ConfigPath, []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := service.Run(context.Background(), "example-org", "")
+	if err == nil || !strings.Contains(err.Error(), "nothing is changed") {
+		t.Fatalf("err = %v, want an error before any change", err)
+	}
+	if len(browser.manifests) != 0 || len(store.items) != 0 {
+		t.Errorf("the run registered %d Apps and stored %d keys, want none", len(browser.manifests), len(store.items))
+	}
+	if text, _ := os.ReadFile(service.ConfigPath); string(text) != settings {
+		t.Errorf("the settings file changed: %s", text)
+	}
+}
+
 // The client IDs of two roles are swapped. Every key is valid, the IDs differ,
 // and the owner is right, but the implementer would act as cumin-core.
 func TestSetupGitHubApps_SwappedClientIDsStop(t *testing.T) {

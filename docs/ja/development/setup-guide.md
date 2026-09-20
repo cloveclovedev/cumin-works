@@ -77,7 +77,7 @@ App の名前は `<prefix>cumin-core`、`<prefix>cumin-chief-engineer`、`<prefi
 
 - GitHub が App を登録するのは、"Create GitHub App" を押した時点ではなく、コマンドが code を交換した時点である。その前にやめたなら、GitHub には何も残らない。もう一度実行すればよい。
 - 交換のあと、Client ID を設定に書く前に止まると、GitHub に App があり、Keychain に鍵があり、設定に Client ID がない状態になる。もう一度実行すると、同じ名前の App を登録しようとして、GitHub に「名前が使われている」と断られる。このときは、GitHub の画面でその App を削除してから、もう一度実行する。
-- 設定ファイルが、コマンドの知らない書き方 (`github_apps` の dotted key や inline table) のときは、コマンドはファイルを変えずに、書くべき1行を表示する。その行を手で書く。
+- 設定ファイルが、コマンドの知らない書き方 (`github_apps` の dotted key や inline table) のときは、コマンドは App を登録する前に止まる。ファイルは変えない。`[github_apps.<Organization>]` の表の形に直してから、もう一度実行する。
 
 登録した App は、個人の設定ではなく、Organization の設定にある: `https://github.com/organizations/<Organization>/settings/apps`。
 

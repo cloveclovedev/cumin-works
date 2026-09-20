@@ -56,21 +56,43 @@ func ReadGitHubApps(path string) (map[string]map[string]string, error) {
 // that only this one value differs. It refuses a file that it cannot change
 // safely, and the person then writes the line by hand.
 func SetGitHubAppClientID(path, org, app, clientID string) error {
+	path, updated, mode, err := prepareClientIDWrite(path, org, app, clientID)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomically(path, []byte(updated), mode)
+}
+
+// CheckGitHubAppClientIDWritable reports if SetGitHubAppClientID can write a
+// Client ID for the App, without a change to the file. The setup command calls
+// it before it registers an App on GitHub, so that a settings file in a form
+// that the command does not know stops the run before any change.
+func CheckGitHubAppClientIDWritable(path, org, app string) error {
+	_, _, _, err := prepareClientIDWrite(path, org, app, "Iv00placeholder")
+	return err
+}
+
+// prepareClientIDWrite returns the file to write (after symbolic links), its
+// new text, and its mode. It writes nothing.
+func prepareClientIDWrite(path, org, app, clientID string) (string, string, fs.FileMode, error) {
 	switch app {
 	case AppCuminCore, string(RoleChiefEngineer), string(RoleImplementer), string(RoleReviewer):
 	default:
-		return fmt.Errorf("set github_apps: unknown GitHub App name %q", app)
+		return "", "", 0, fmt.Errorf("set github_apps: unknown GitHub App name %q", app)
 	}
 	if !ownerPattern.MatchString(org) {
-		return fmt.Errorf("set github_apps: %q is not a name of an organization", org)
+		return "", "", 0, fmt.Errorf("set github_apps: %q is not a name of an organization", org)
 	}
 	if !clientIDPattern.MatchString(clientID) {
-		return errors.New("set github_apps: the Client ID has an unexpected character")
+		return "", "", 0, errors.New("set github_apps: the Client ID has an unexpected character")
 	}
 
 	// A person can keep the settings in another place and link to them. Write
 	// the file behind the link, and keep the link.
-	path = followLinks(path)
+	path, err := followLinks(path)
+	if err != nil {
+		return "", "", 0, err
+	}
 
 	mode := fs.FileMode(0o600)
 	old, err := os.ReadFile(path)
@@ -78,7 +100,7 @@ func SetGitHubAppClientID(path, org, app, clientID string) error {
 	case errors.Is(err, fs.ErrNotExist):
 		old = nil
 	case err != nil:
-		return fmt.Errorf("read the Host settings: %w", err)
+		return "", "", 0, fmt.Errorf("read the Host settings: %w", err)
 	default:
 		if info, err := os.Stat(path); err == nil {
 			mode = info.Mode().Perm()
@@ -93,44 +115,54 @@ func SetGitHubAppClientID(path, org, app, clientID string) error {
 		err = errors.New("the file writes github_apps as a dotted key or as an inline table")
 	}
 	if err != nil {
-		return fmt.Errorf("%s: cannot write github_apps.%s.%s safely (%w). Write this line by hand in the table [github_apps.%s]: %s = %q", path, org, app, err, org, app, clientID)
+		return "", "", 0, fmt.Errorf("%s: cannot write github_apps.%s.%s safely (%w). Write this line by hand in the table [github_apps.%s]: %s = %q", path, org, app, err, org, app, clientID)
 	}
-	return writeFileAtomically(path, []byte(updated), mode)
+	return path, updated, mode, nil
 }
 
 // followLinks returns the file that the path names after every symbolic link.
 // It reads each link by itself, so it also works when the file behind the last
 // link does not exist yet. filepath.EvalSymlinks fails in that case.
-func followLinks(path string) string {
-	for range 16 { // a loop of links ends here
+func followLinks(path string) (string, error) {
+	// More links than any system follows. A loop of links ends here too.
+	const maxLinks = 255
+	for range maxLinks {
 		info, err := os.Lstat(path)
 		if err != nil || info.Mode()&fs.ModeSymlink == 0 {
-			return path
+			return path, nil
 		}
 		target, err := os.Readlink(path)
 		if err != nil {
-			return path
+			return "", fmt.Errorf("read the link of the Host settings: %w", err)
 		}
 		if !filepath.IsAbs(target) {
 			target = filepath.Join(filepath.Dir(path), target)
 		}
 		path = target
 	}
-	return path
+	// Never write to a path that is still a link: the write would replace the link.
+	return "", errors.New("the Host settings file is behind too many symbolic links, or the links make a loop")
 }
 
 // setClientIDLine returns the text with the one line set. It knows only the
 // table form [github_apps.<organization>] from docs/ja/development/configuration.md.
 func setClientIDLine(text, org, app, clientID string) string {
+	// Keep the line endings of the file. With CRLF, every line ends in "\r"
+	// after the split on "\n".
+	eol, cr := "\n", ""
+	if strings.Contains(text, "\r\n") {
+		eol, cr = "\r\n", "\r"
+	}
 	line := fmt.Sprintf("%s = %q", app, clientID)
 	header := regexp.MustCompile(`^\s*\[\s*github_apps\s*\.\s*"?` + regexp.QuoteMeta(org) + `"?\s*\]\s*(#.*)?$`)
 	anyHeader := regexp.MustCompile(`^\s*\[`)
 	key := regexp.MustCompile(`^\s*"?` + regexp.QuoteMeta(app) + `"?\s*=`)
 
 	lines := strings.Split(text, "\n")
+	bare := func(i int) string { return strings.TrimSuffix(lines[i], "\r") }
 	start := -1
-	for i, l := range lines {
-		if header.MatchString(l) {
+	for i := range lines {
+		if header.MatchString(bare(i)) {
 			start = i
 			break
 		}
@@ -139,12 +171,12 @@ func setClientIDLine(text, org, app, clientID string) string {
 		var b strings.Builder
 		b.WriteString(text)
 		if text != "" && !strings.HasSuffix(text, "\n") {
-			b.WriteString("\n")
+			b.WriteString(eol)
 		}
 		if text != "" {
-			b.WriteString("\n")
+			b.WriteString(eol)
 		}
-		fmt.Fprintf(&b, "[github_apps.%s]\n%s\n", org, line)
+		fmt.Fprintf(&b, "[github_apps.%s]%s%s%s", org, eol, line, eol)
 		return b.String()
 	}
 
@@ -162,10 +194,11 @@ func setClientIDLine(text, org, app, clientID string) string {
 		if !key.MatchString(lines[i]) {
 			continue
 		}
-		if m := value.FindStringSubmatch(lines[i]); m != nil {
-			lines[i] = fmt.Sprintf("%s%q%s", m[1], clientID, m[2])
+		ending := strings.TrimPrefix(lines[i], bare(i)) // "\r" or nothing
+		if m := value.FindStringSubmatch(bare(i)); m != nil {
+			lines[i] = fmt.Sprintf("%s%q%s%s", m[1], clientID, m[2], ending)
 		} else {
-			lines[i] = line // an unusual value; the check after this finds a problem
+			lines[i] = line + ending // an unusual value; the check after this finds a problem
 		}
 		return strings.Join(lines, "\n")
 	}
@@ -176,7 +209,13 @@ func setClientIDLine(text, org, app, clientID string) string {
 			insert = i + 1
 		}
 	}
-	lines = append(lines[:insert], append([]string{line}, lines[insert:]...)...)
+	// The last line of a file with no final line break has no "\r" of its own.
+	if insert == len(lines) && cr != "" && !strings.HasSuffix(lines[insert-1], "\r") {
+		lines[insert-1] += cr
+		lines = append(lines, line)
+		return strings.Join(lines, "\n")
+	}
+	lines = append(lines[:insert], append([]string{line + cr}, lines[insert:]...)...)
 	return strings.Join(lines, "\n")
 }
 

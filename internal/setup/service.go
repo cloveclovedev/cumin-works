@@ -131,6 +131,15 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 		fmt.Fprintf(s.Out, "already registered %s: client ID %s\n", app, clientID)
 	}
 
+	// GitHub registers an App for good. So check first that the command can
+	// write its client ID afterwards. A settings file in a form that the
+	// command does not know stops the run here, before any change.
+	for _, app := range missing {
+		if err := config.CheckGitHubAppClientIDWritable(s.ConfigPath, org, app); err != nil {
+			return fmt.Errorf("setup: nothing is changed: %w", err)
+		}
+	}
+
 	if len(missing) > 0 {
 		if _, err := s.RegisterApps(ctx, org, prefix, missing); err != nil {
 			return err
