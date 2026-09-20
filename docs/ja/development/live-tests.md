@@ -17,6 +17,7 @@ Claude Code は起動しないので、利用枠は使わない。
   - Host の設定ファイルに Client ID があり、Keychain に秘密鍵がある。
   - sandbox に `scripts/setup-repo.sh <owner>/<repo> --core-app <slug>` を実行してある。
 - sandbox は、公開のリポジトリである。App の token には Checks の権限がなく、check の結果を読めるのは公開のリポジトリだけだからである。テストは最初に、認証なしでリポジトリを読めることを確かめ、読めなければ止まる。
+- sandbox の保護されたパスの一覧 (`.cumin/config.toml` の `protected_paths`) に `CLAUDE.md` があり、`live/` を守っていない。テストは `live/CLAUDE.md` (保護されている) と `live/<日時>.md` (保護されていない) を使う。ファイルがなければ、初期値の一覧が使われるので、そのままでよい。合っていなければ、テストは Pull Request を作る前に止まる。
 - sandbox は、壊れてもよいリポジトリである。テストは Issue、Pull Request、ブランチ、ラベルを作り、main に小さなファイルを1つ merge する。
 
 ## 実行のしかた

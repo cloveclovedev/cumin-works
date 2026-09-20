@@ -1,11 +1,14 @@
 package github_test
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/BurntSushi/toml"
 )
 
 const protectedPathsCheck = "cumin-protected-paths"
@@ -50,6 +53,9 @@ func TestLiveSetupChecks(t *testing.T) {
 	default:
 		l.record("1", "The Implementer App pushes to the default branch with git", "The ruleset rejects the push", "Rejected: "+firstLineWith(out, "GH013", "rule violations"))
 	}
+
+	// Checks 7a and 7b need these two paths to be unprotected and protected.
+	l.requireProtectedPathFixtures(t, implementer, "live/"+l.runID+".md", "live/CLAUDE.md")
 
 	// A pull request from the Implementer App that changes an unprotected file.
 	branch := "live-" + l.runID + "-unprotected"
@@ -177,6 +183,63 @@ func (i issue) labelNames() []string {
 
 // Each helper registers its clean-up directly after GitHub created the thing,
 // so a later failure of the test leaves nothing open on the sandbox.
+
+// requireProtectedPathFixtures stops the test when the list of protected paths
+// of the sandbox does not fit the two files of checks 7a and 7b. The sandbox
+// can have its own .cumin/config.toml, and scripts/setup-repo.sh keeps it. With
+// another list, the workflow would be right and the checks would still fail.
+//
+// The test knows only the simple rules: a name with no "/" matches at any
+// depth, and a directory entry protects everything below it.
+func (l *live) requireProtectedPathFixtures(t *testing.T, token, unprotected, protected string) {
+	t.Helper()
+	entries := []string{".cumin/", "CLAUDE.md", "AGENTS.md", ".claude/"} // the default list
+	resp := l.api(t, token, http.MethodGet, "/repos/{repo}/contents/.cumin/config.toml?ref="+url.QueryEscape(l.branch), nil)
+	switch resp.status {
+	case http.StatusOK:
+		var file struct {
+			Content string `json:"content"`
+		}
+		resp.json(t, &file)
+		text, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(file.Content, "\n", ""))
+		if err != nil {
+			t.Fatalf("read .cumin/config.toml of the sandbox: %v", err)
+		}
+		var settings struct {
+			ProtectedPaths *[]string `toml:"protected_paths"`
+		}
+		if _, err := toml.Decode(string(text), &settings); err != nil {
+			t.Fatalf(".cumin/config.toml of the sandbox is not valid TOML: %v", err)
+		}
+		if settings.ProtectedPaths != nil {
+			entries = *settings.ProtectedPaths
+		}
+	case http.StatusNotFound: // no file: the workflow uses the default list
+	default:
+		t.Fatalf("read .cumin/config.toml of the sandbox: status %d: %s", resp.status, resp.message())
+	}
+
+	matches := func(path string) bool {
+		parts := strings.Split(strings.ToLower(path), "/")
+		for _, entry := range entries {
+			name := strings.ToLower(strings.Trim(entry, "/"))
+			directory := strings.HasSuffix(entry, "/")
+			for i, part := range parts {
+				last := i == len(parts)-1
+				if part == name && (!directory || !last) && !strings.Contains(name, "/") {
+					return true
+				}
+			}
+			if strings.Contains(name, "/") && (strings.ToLower(path) == name || strings.HasPrefix(strings.ToLower(path), name+"/")) {
+				return true
+			}
+		}
+		return false
+	}
+	if matches(unprotected) || !matches(protected) {
+		t.Fatalf("the list of protected paths of the sandbox does not fit the live checks: %q must be unprotected and %q must be protected. The list is %q. Keep \"CLAUDE.md\" in protected_paths of .cumin/config.toml, and do not protect \"live/\"", unprotected, protected, entries)
+	}
+}
 
 // cleanUp fails the test when a clean-up call did not work, so that a run
 // cannot pass and leave something open on the sandbox.
