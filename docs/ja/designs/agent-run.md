@@ -78,6 +78,7 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 - CLIは自分のプロセスグループで起動する (`Setpgid`)。Agentが起動したコマンドが同じグループに入るので、シグナルがそこまで届く。
 - Goの `os/exec` の `Cmd.Cancel` と `Cmd.WaitDelay` を使う。`Cancel` がSIGTERMを送り、`WaitDelay` (猶予と同じ値) が過ぎたら `os/exec` がCLIを止めてパイプを閉じる。そのあとで、cuminがグループにSIGKILLを送り、残ったものを消す。
 - 標準出力は、行が届くたびに読む (`Cmd.Stdout` に書き込み先を渡す)。プロセスが終わった時点でパイプに残っていた行も、`os/exec` が読み切ってから `Wait` が返る。
+- 実機で確かめたこと (2026-09-20、Claude Code 2.1.267): Bashで `sleep 600` を実行中のCLIに、上限でSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループには何も残らなかった。手順は [Agentの実機の確認](../development/agent-live-check.md) にある。
 - 採らなかった案: `--max-turns`。手元のCLIのヘルプにないうえ、ターンの数は時間の上限にならない (実測 32)。
 - 採らなかった案: SIGKILLだけ。CLIがセッションを記録し、Bashのツリーを止める機会がなくなる。
 
@@ -85,7 +86,6 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 
 | 決める、または確かめること | どこで |
 |---|---|
-| 本物のClaude Codeを打ち切ったあとに、子プロセスが残らないか (実測 32) | #42 |
 | Reviewerの作業場所。Pull Requestのブランチを、同じIssueのImplementerのworktreeと同時に開けるか | Reviewerへの依頼を作る要求Issue |
 
 ## 後回しにしたこと
