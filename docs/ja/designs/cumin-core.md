@@ -73,6 +73,7 @@
 | 状態ラベルが付いた時刻 | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt` と `label` | R3、レビューのラウンド |
 | blocked by のIssueの開閉 | `Issue.blockedBy` | I1 |
 | Issueを閉じるPull Request。番号、開閉、merge済みか、作成者、先頭のコミット | `Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`author`、`headRefOid`、`merged` | I2、I9 |
+| 開いているPull Requestの、今のラベル | `PullRequest.labels` | I11 |
 | レビュー。出した人、結果、対象のコミット、時刻 | `PullRequest.reviews` の `author`、`state`、`commit`、`submittedAt` | I5〜I8、レビューのラウンド |
 | 先頭のコミットのcheckの結果 | `PullRequest.statusCheckRollup` | I3、I4 |
 
@@ -82,9 +83,11 @@
 - レビューのラウンドは、実装Issueに最後に `cumin/status/ready` が付いた時刻と、`cumin-reviewer` の最後の `APPROVE` の時刻の、新しいほうよりあとに出たレビューを数える。
 - 同じラベルが何度も付くので、ラベルごとに、いちばん新しい `LabeledEvent` を使う。今付いているかどうかは、`labels` で見る。
 
-要求Issueが閉じたあと (R5) は、そのsub-issueを読まない。要求Issueが閉じた時点で転記がまだのPull Requestの扱いは、要件にないので、I9を作る要求Issueで決める。
+閉じた要求Issueと、そのsub-issueは読まない。cuminは、閉じた要求Issueには何もしないためである (Issueのラベルと状態遷移の原則6)。
 
-I9で使うものは、mergeされたPull Requestについてだけ、別に読む。Pull Requestの説明、レビューのコメント、転記先の要求Issueのコメントである。要求Issueのコメントを読むのは、転記済みの目印を探して、再起動のあとも二重に転記しないためである。
+Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに読む。判定には使わない (原則5)。
+
+フォローアップノート (I9) で使うものは、mergeされたPull Requestについてだけ、別に読む。Pull Requestの説明、レビューのコメント、要求Issueのコメントである。要求Issueのコメントを読むのは、フォローアップノートの目印を探して、再起動のあとも同じノートを二重に書かないためである。
 
 ## 6. 起動前の使用率の確認
 
