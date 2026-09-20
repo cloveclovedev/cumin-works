@@ -10,6 +10,7 @@ Read by: the Reviewer and the Owner.
 - Show evidence. Paste the result of the commands that you ran. Do not only say that the tests pass.
 - Update the description when you push more commits, so that it still describes the whole change.
 - Under "Follow-up", write only work that you noticed yourself and that is outside the scope of the issue. cumin copies this section to the requirement issue after the merge. Do not create issues.
+- If someone must do something after the merge, write it under "Follow-up", and nowhere else. cumin reads only "Follow-up". Text under "Notes for the reviewer" is lost after the merge.
 
 ## Template
 
