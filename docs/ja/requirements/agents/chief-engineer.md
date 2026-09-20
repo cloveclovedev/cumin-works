@@ -35,7 +35,7 @@ Chief Engineerが自分で読むもの:
 GitHubに残すもの:
 
 - 実装Issue。要求Issueのsub-issueとして作る。1つの実装Issueが、1つのPull Requestになる
-- 実装Issueどうしの依存関係 (blocked by)
+- 実装Issueどうしの依存関係 (blocked by)。同じ要求Issueのsub-issueの間だけに張る。他の要求Issueへの依存は、Ownerが要求Issueどうしに張る
 - それぞれの実装Issueに、`risk/*` のラベルをちょうど1つ
 - 要求Issueにmilestoneが付いていれば、それぞれの実装Issueに同じmilestoneを付ける
 - 要求Issueへのコメントを1つ。分割の全体像を、Ownerが確認しやすい形で書く。形式は [plan-summary.md](../../../../templates/plan-summary.md) に従う
