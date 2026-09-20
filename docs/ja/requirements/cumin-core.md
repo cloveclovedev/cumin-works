@@ -145,6 +145,15 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
 | riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、Chief EngineerとReviewerへの指示にそのまま入れる | [Chief Engineerの要件](agents/chief-engineer.md) の表 | できる |
 
+保護されたパスは、`.cumin/config.toml` の `protected_paths` に、文字列の配列で書く。照合の決まりは、`.gitignore` の一部と同じである。
+
+- 末尾のほかに `/` を含まない項目 (例: `CLAUDE.md`、`.claude/`) は、どの階層にあっても当たる
+- 先頭が `/` の項目、または途中に `/` を含む項目は、リポジトリの直下から数えた位置にだけ当たる
+- 末尾が `/` の項目 (例: `.cumin/`) は、ディレクトリを表し、その下の全てに当たる
+- ワイルドカードは使えない
+
+どの階層でも当たるようにするのは、Claude Codeが、サブディレクトリの `CLAUDE.md` も読むためである。リポジトリの直下だけを守ると、Implementerがサブディレクトリに `CLAUDE.md` を足して、あとに続くAgentへの指示を変えられる。
+
 riskの基準は、TOMLの値ではなく、Markdownのファイルで上書きする。Hostでは、設定ファイルと同じディレクトリの `risk-criteria.md` に書く。リポジトリでは、`.cumin/risk-criteria.md` に書く。ファイルがあれば、その内容が、それより弱い段の基準を丸ごと置き換える。優先順位は他の設定と同じで、初期値、Hostのファイル、リポジトリのファイルの順に強くなる。
 
 cuminは、リポジトリの `.cumin/` を、Pull Requestのブランチではなくmainから読む。`.cumin/` の変更は常に `risk/high` なので、Ownerがmergeしたものだけが効く。

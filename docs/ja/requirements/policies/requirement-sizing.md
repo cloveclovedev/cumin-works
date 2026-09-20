@@ -22,6 +22,7 @@ Ownerが要求Issueを書くときに、1つの要求Issueの大きさを決め�
 ## 基準についての注意
 
 - 1つの要求Issueが、複数の領域 (例: GitHubとやりとりする部分と、Hostの上でAgentを起動する部分) にまたがってよい。領域ごとに切るのは、実装Issueの側であり、Chief Engineerの仕事である。要求Issueを領域で切り直す必要はない。
+- 要求Issueの一部だけが他の要求Issueに依存するなら、依存する部分と、しない部分で、要求Issueを分ける。blocked by の付いた要求Issueは、先の要求Issueが閉じるまで、分割も始まらないためである。
 - 基準4の上限は、Chief Engineerが `blocked` を返す条件でもある。このときChief Engineerは、要求Issueの分け方の案を `blocked_reason` に書く。Ownerは案を見て、要求Issueを書き直す。
 - 基準3を満たそうとすると、sub-issueの数は増えやすい。動くものを1つ通すには、複数の領域の変更が要るためである。基準4の数字は、そのことを見込んで決めた。
 
