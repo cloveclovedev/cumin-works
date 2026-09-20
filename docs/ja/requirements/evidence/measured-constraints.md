@@ -66,3 +66,18 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 41 | macOSの `security find-generic-password -s <service> -a <account> -w` は、項目のパスワードだけを出力する。改行を含む値を読むと形が変わる、という報告があるが、確かめていない | `man security` | 公式文書 (改行を含む値は未確認) |
 | 42 | GitHub Appが作ったPull Requestでは、作成者の種類 (`pull_request.user.type`) が `Bot` になる見込みである。保護されたパスのcheckは、これを条件に使う | 広く観測されている振る舞い。公式文書には、Appが作ったPull Requestについての明記を見つけていない。使い捨てのリポジトリで確かめる | 未確認 |
 | 43 | `GET /apps/{app_slug}` で、privateなGitHub Appを、Organizationの管理者のtokenで読めるかどうか | 公式文書 (rest/apps/apps) に記載がない。保護されたパスのcheckがAppの名前を使わなくなったので、cuminは、この呼び出しに頼らない | 未確認 |
+
+## 4. Agentの起動の実装で確かめたこと (2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1)
+
+要求Issue #7 の実装 (#45、#49、#51) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 44 | `git worktree add <path> <branch>` は、`<branch>` がローカルになく、ちょうど1つのリモートにあれば、`git worktree add --track -b <branch> <path> <remote>/<branch>` と同じに扱われる | git-worktree: "If <commit-ish> is a branch name ... and is not found ... but there does exist a tracking branch in exactly one remote ... treat as equivalent to: git worktree add --track -b <branch> <path> <remote>/<branch>" | 公式文書 |
+| 45 | `git clone --no-checkout` は、remote-tracking branch と `remote.origin.fetch` を作る。`--bare` はどちらも作らない | git-clone: `--no-checkout` は "Do not checkout HEAD after the clone is complete"。`--bare` は "neither remote-tracking branches nor the related configuration variables are created" | 公式文書 |
+| 46 | `git fetch` は `refs/remotes/origin/HEAD` を動かさない。`git remote set-head origin --auto` がリモートに問い合わせて、`refs/remotes/origin/HEAD` をリモートの既定のブランチに向ける | git-remote: "With -a or --auto, the remote is queried to determine its HEAD, then the symbolic-ref refs/remotes/<name>/HEAD is set to the same branch"。git-fetch には HEAD の更新の記述がない | 公式文書 |
+| 47 | `git worktree list --porcelain` は、worktreeの実体のパスを出す。macOSでは、`/var` の下の一時ディレクトリが `/private/var` で出る | テストで `filepath.EvalSymlinks` と比べた | 実測 |
+| 48 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した。cuminは標準入力をnullデバイスにして起動する | 実測 |
+| 49 | `rate_limit_event` には、`rate_limit_info.unifiedWindows` (1を参照) のほかに、`session_id` と `uuid` があり、`rate_limit_info` には `status`、`resetsAt`、`rateLimitType`、overageの項目がある。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。値は記録していない | 実測 |
+| 50 | Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない (32の続き) | #42 の実機の確認。打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 実測 |
+
