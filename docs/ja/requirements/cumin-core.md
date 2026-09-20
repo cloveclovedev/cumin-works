@@ -31,6 +31,7 @@ cuminの動作ごとのきっかけと、動く前に確かめることは、[Is
 - `risk/medium` と `risk/high` のPull Requestをmergeしない
 - `cumin/type/requirement` と `cumin/status/ready` を付けない。この2つはOwnerの意思表示である。例外として、着手のときに `cumin/status/ready` を外す
 - mainに直接pushしない。強制pushしない。mainへの変更は、Pull Requestのmergeだけで行う
+- Ownerの認証情報と、リポジトリの管理者の権限 (Administration) を使わない。rulesetなどの、管理者の権限が要る準備は、管理者が自分の `gh` でスクリプトを実行して行う
 - Issueを閉じない。実装Issueは、Pull RequestのmergeによってGitHubが閉じる。要求Issueは、Ownerが閉じる
 
 ## 動かし方
@@ -47,6 +48,7 @@ Ownerが使うコマンド:
 | `cumin run` | 常駐して動く。launchdから起動する |
 | `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、利用枠の使用率 |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
+| `cumin setup github-apps` | 導入のときに、Hostで実行する。roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないroleだけを登録する |
 
 ## 利用枠の守り方
 
@@ -151,6 +153,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 - 先頭が `/` の項目、または途中に `/` を含む項目は、リポジトリの直下から数えた位置にだけ当たる
 - 末尾が `/` の項目 (例: `.cumin/`) は、ディレクトリを表し、その下の全てに当たる
 - ワイルドカードは使えない
+- 大文字と小文字は区別しない。Hostの macOS のファイルシステムが区別しないので、`claude.md` という名前のファイルも、Agentには `CLAUDE.md` として読まれるためである
 
 どの階層でも当たるようにするのは、Claude Codeが、サブディレクトリの `CLAUDE.md` も読むためである。リポジトリの直下だけを守ると、Implementerがサブディレクトリに `CLAUDE.md` を足して、あとに続くAgentへの指示を変えられる。
 
