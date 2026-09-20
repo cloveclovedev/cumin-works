@@ -65,6 +65,7 @@ type Settings struct {
 	MaxCheckFixRequests int
 	MergeMethod         MergeMethod
 	Roles               map[Role]RoleSettings
+	Quota               QuotaSettings
 	// GitHubApps maps an organization to the Client ID of each GitHub App.
 	// The inner key is AppCuminCore or a Role. `cumin setup` writes the
 	// table, so it can be empty.
@@ -123,6 +124,7 @@ type file struct {
 		Implementer   fileRole `toml:"implementer"`
 		Reviewer      fileRole `toml:"reviewer"`
 	} `toml:"roles"`
+	Quota      fileQuota                    `toml:"quota"`
 	GitHubApps map[string]map[string]string `toml:"github_apps"`
 }
 
@@ -140,6 +142,7 @@ func defaults() file {
 		MaxReviewRounds:     defaultMaxReviewRounds,
 		MaxCheckFixRequests: defaultMaxCheckFixRequests,
 		MergeMethod:         string(MergeSquash),
+		Quota:               defaultQuota(),
 	}
 	f.Roles.ChiefEngineer, f.Roles.Implementer, f.Roles.Reviewer = role, role, role
 	return f
@@ -262,6 +265,8 @@ func (f file) settings() (*Settings, error) {
 		}
 		s.Roles[r.role] = RoleSettings{TimeLimit: limit, CLI: r.file.CLI, Model: r.file.Model}
 	}
+
+	s.Quota = f.Quota.settings(fail)
 
 	// Sorted, so that the same file always gives the same error text.
 	for _, org := range slices.Sorted(maps.Keys(f.GitHubApps)) {

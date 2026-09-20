@@ -29,17 +29,36 @@ Hostの設定ファイルに書けるキーの一覧。設定の意味と、初�
 | `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
 | `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
 | `roles.<role>.model` | Agentを動かすモデル。空なら、CLIの既定のモデルを使う | 空 | なし |
+| `quota.five_hour.threshold` | 5h枠のしきい値 (%)。どの時間帯にも入らない時刻に使われる | `85` | 1〜100 |
+| `quota.five_hour.reset_near` | 5h枠のリセットが近いとみなす残り時間 | `"30m"` | 0以上、5時間未満 |
+| `quota.weekly.threshold` | weekly枠のしきい値 (%)。どの時間帯にも入らない時刻に使われる | `85` | 1〜100 |
+| `quota.<window>.bands` | 時間帯ごとのしきい値。下の「時間帯」を参照 | なし | 同じ枠の時間帯は、重ねられない |
 | `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps` が書き込む | なし | キーを書くなら、空にできない |
 
 - `<role>` は、`chief-engineer`、`implementer`、`reviewer` のどれかである。
 - `<app>` は、`cumin-core` と、上の3つのroleのどれかである。
 - `<organization>` は、対象のリポジトリの持ち主の名前である。
+- `<window>` は、`five_hour` か `weekly` である。
+
+## 時間帯
+
+`[[quota.<window>.bands]]` を並べると、時間帯ごとにしきい値を変えられる。Ownerが使わない時間帯のしきい値を高くする、という使い方をする。
+
+| キー | 内容 | 制限 |
+|---|---|---|
+| `from` | 時間帯の始まり。この時刻を含む | `"HH:MM"` の形。`"00:00"` から `"23:59"` まで |
+| `to` | 時間帯の終わり。この時刻を含まない | `from` と同じ形。`from` と同じ時刻にはできない |
+| `threshold` | この時間帯のしきい値 (%) | 1〜100。必須 |
+
+- 時刻は、Hostのローカルの時刻である。
+- `to` が `from` より前なら、時間帯は日付をまたぐ。`from = "23:00"`、`to = "06:00"` は、23時から翌朝の6時までを表す。
+- 同じ枠の時間帯どうしは、重ねられない。重なっていると、両方の位置 (`quota.five_hour.bands[1]` など) を示して終わる。位置は、ファイルに書いた順に0から数える。5h枠とweekly枠の時間帯は、別々に調べる。
+- リセットが近いときに5h枠のしきい値を100%にする決まりは、まだ作られていない。今は、値を読み込むだけである。
 
 このファイルで決められない設定:
 
 - 保護されたパスは、対象のリポジトリの `.cumin/config.toml` だけで決める。
 - riskの基準は、TOMLのキーではなく、Markdownのファイルで上書きする。
-- 利用枠のしきい値は、まだ読み込まれない。
 
 ## 例
 
@@ -57,6 +76,19 @@ merge_method = "squash"
 time_limit = "50m"
 cli = "claude-code"
 model = ""
+
+[quota.five_hour]
+threshold = 85
+reset_near = "30m"
+
+# 23時から翌朝の6時までは、5h枠を使い切ってよい。
+[[quota.five_hour.bands]]
+from = "23:00"
+to = "06:00"
+threshold = 100
+
+[quota.weekly]
+threshold = 85
 
 [github_apps.example-org]
 cumin-core = "<Client ID>"
