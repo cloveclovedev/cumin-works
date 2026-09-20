@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -52,11 +51,11 @@ type Registered struct {
 	ClientID string
 }
 
-// callback is what the local page hands to the flow. The code is a secret for
-// one hour: it never goes to Out, to a log, or into an error.
+// callback is what the local page hands to the flow, after the page checked
+// the state. The code is a secret for one hour: it never goes to Out, to a
+// log, or into an error.
 type callback struct {
-	state string
-	code  string
+	code string
 }
 
 // RegisterApps registers every App in Apps for the organization, one by one.
@@ -116,10 +115,6 @@ func (s *Service) registerOne(ctx context.Context, page *localPage, callbacks <-
 	case <-ctx.Done():
 		return Registered{}, ctx.Err()
 	}
-	if got.state != state {
-		return Registered{}, errors.New("the callback has a wrong state. Nothing is stored")
-	}
-
 	registration, err := s.Converter.ConvertManifestCode(ctx, got.code)
 	if err != nil {
 		return Registered{}, err

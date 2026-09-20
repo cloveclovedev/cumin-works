@@ -38,6 +38,19 @@ func (p *localPage) expected() (app, state string) {
 	return p.app, p.state
 }
 
+// take checks the state of a callback and uses the expectation up in one step.
+// So a second callback with the same state (a reload of the tab) finds no
+// expectation, and it cannot wait in line for the next App.
+func (p *localPage) take(state string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.app == "" || state == "" || state != p.state {
+		return false
+	}
+	p.app, p.state = "", ""
+	return true
+}
+
 func (p *localPage) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /start", p.start)
@@ -86,12 +99,14 @@ func (p *localPage) start(w http.ResponseWriter, r *http.Request) {
 func (p *localPage) callback(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	code, state := query.Get("code"), query.Get("state")
-	if app, _ := p.expected(); app == "" || code == "" {
-		http.Error(w, "cumin setup does not wait for a callback now.", http.StatusConflict)
+	// A callback with a wrong state is refused here and does not stop the
+	// flow. Otherwise any local page could end the setup with one request.
+	if code == "" || !p.take(state) {
+		http.Error(w, "This callback does not belong to the App that cumin setup waits for now. Nothing is stored.", http.StatusBadRequest)
 		return
 	}
 	select {
-	case p.callbacks <- callback{state: state, code: code}:
+	case p.callbacks <- callback{code: code}:
 	case <-r.Context().Done():
 		return
 	}

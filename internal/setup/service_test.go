@@ -97,11 +97,22 @@ type fakeBrowser struct {
 	gitHub    *fakeGitHub
 	org       string
 	wrongFor  string // an App name that gets a callback with a wrong state
+	reloadFor string // an App name whose callback tab the person loads again
 	stopAfter int    // when > 0, the browser does nothing after this many Apps
 
 	mu        sync.Mutex
 	manifests []Manifest
 	codes     []string
+	statuses  []int // the status of every callback request
+	pending   sync.WaitGroup
+}
+
+// callbackStatuses waits for every callback request and returns the statuses.
+func (b *fakeBrowser) callbackStatuses() []int {
+	b.pending.Wait()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]int(nil), b.statuses...)
 }
 
 var (
@@ -161,10 +172,21 @@ func (b *fakeBrowser) open(startURL string) error {
 	if manifest.Name == b.wrongFor {
 		state = "a-state-from-another-page"
 	}
+	requests := 1
+	if manifest.Name == b.reloadFor {
+		requests = 2
+	}
+	b.pending.Add(1)
 	go func() {
+		defer b.pending.Done()
 		callbackURL := manifest.RedirectURL + "?code=" + url.QueryEscape(code) + "&state=" + url.QueryEscape(state)
-		if resp, err := http.Get(callbackURL); err == nil {
-			resp.Body.Close()
+		for range requests {
+			if resp, err := http.Get(callbackURL); err == nil {
+				resp.Body.Close()
+				b.mu.Lock()
+				b.statuses = append(b.statuses, resp.StatusCode)
+				b.mu.Unlock()
+			}
 		}
 	}()
 	return nil
@@ -270,16 +292,48 @@ func TestSetupGitHubApps_WrongStateStoresNothing(t *testing.T) {
 	browser := &fakeBrowser{org: "example-org", wrongFor: "cumin-core"}
 	store := &memoryStore{}
 	service := newService(t, browser, store, &out)
+	service.ConfirmTimeout = 500 * time.Millisecond
 
+	// The page refuses the callback, and the flow gets no confirmation.
 	registered, err := service.RegisterApps(context.Background(), "example-org", "")
-	if err == nil || !strings.Contains(err.Error(), "wrong state") {
-		t.Fatalf("err = %v, want a wrong state error", err)
+	if err == nil || !strings.Contains(err.Error(), "no confirmation") {
+		t.Fatalf("err = %v, want an error", err)
+	}
+	if statuses := browser.callbackStatuses(); len(statuses) != 1 || statuses[0] != http.StatusBadRequest {
+		t.Errorf("callback statuses = %v, want one 400", statuses)
 	}
 	if len(registered) != 0 || len(store.items) != 0 {
 		t.Errorf("registered %d Apps and stored %d keys, want none", len(registered), len(store.items))
 	}
 	if len(browser.gitHub.pems) != 0 {
 		t.Error("the flow exchanged the code of a callback with a wrong state")
+	}
+}
+
+// The person loads the callback tab of the first App again. The second request
+// must not wait in line and reach the flow of the next App.
+func TestSetupGitHubApps_ReloadedCallbackDoesNotReachTheNextApp(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org", reloadFor: "cumin-core"}
+	store := &memoryStore{}
+	service := newService(t, browser, store, &out)
+
+	registered, err := service.RegisterApps(context.Background(), "example-org", "")
+	if err != nil {
+		t.Fatalf("RegisterApps: %v", err)
+	}
+	if len(registered) != 4 || len(store.items) != 4 {
+		t.Errorf("registered %d Apps and stored %d keys, want 4 and 4", len(registered), len(store.items))
+	}
+	statuses := browser.callbackStatuses()
+	refused := 0
+	for _, status := range statuses {
+		if status == http.StatusBadRequest {
+			refused++
+		}
+	}
+	if len(statuses) != 5 || refused != 1 {
+		t.Errorf("callback statuses = %v, want five requests with exactly one 400 for the reload", statuses)
 	}
 }
 
