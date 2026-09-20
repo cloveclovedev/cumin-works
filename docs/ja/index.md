@@ -8,6 +8,7 @@
 ## 設計
 
 - [cumin本体の設計メモ](designs/cumin-core.md)
+- [Agentの実行の設計](designs/agent-run.md)
 
 ## 開発の手順
 
