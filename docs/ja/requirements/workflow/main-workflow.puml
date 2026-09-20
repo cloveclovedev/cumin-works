@@ -153,7 +153,11 @@ end
 note over Cumin, Tracker
   開始条件: 要求Issueのsub-issueが全て閉じた。
 end note
-Cumin -> Tracker : 要求Issueのラベルを cumin/status/awaiting-owner-review に替える
+Cumin -> CE : 依頼: 受け入れの確認をする
+CE -> Repo : mainの最新で、要求Issueの Requirements を1項目ずつ確かめる
+CE -> Tracker : 結果と証拠、残っている作業を、要求Issueにコメントする
+CE --> Cumin : 確認完了 (Agentの実行が終わった)
+Cumin -> Tracker : 確認のコメントがあることを確かめ、要求Issueのラベルを cumin/status/awaiting-owner-review に替える
 Cumin -> Owner : 通知: 要求が受け入れ可能になった
 alt 受け入れる
   Owner -> Tracker : 要求Issueを閉じる (= 受け入れ)

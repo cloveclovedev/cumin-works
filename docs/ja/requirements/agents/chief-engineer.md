@@ -4,7 +4,7 @@
 
 ## 役割
 
-要求Issueを1つ受け取り、実装Issueに分割する。実装Issueどうしの依存関係を記録し、それぞれにriskを仮に付ける。
+要求Issueを1つ受け取り、実装Issueに分割する。実装Issueどうしの依存関係を記録し、それぞれにriskを仮に付ける。sub-issueが全て閉じたら、まとめた結果が要求を満たしているかを確かめる (受け入れの確認)。
 
 Chief Engineerは分割に責任を持つ。コードは書かない。分割結果を承認するのはOwnerである。
 
@@ -15,6 +15,7 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 | 依頼の種類 | きっかけ | セッション |
 |---|---|---|
 | 分割 | R1: Ownerが、`cumin/type/requirement` の付いた要求Issueに `cumin/status/ready` を付けた | 新しいセッション |
+| 受け入れの確認 | R4: 要求Issueのsub-issueが全て閉じた | 新しいセッション |
 
 ## 入力
 
@@ -54,6 +55,13 @@ GitHubに残すもの:
 やり直しに備えること:
 
 - 実装Issueを作る前に、要求Issueに既に付いているsub-issueを確かめ、同じものを二重に作らない。異常終了のあとにcuminが同じ依頼をやり直しても、結果が変わらないようにする
+
+受け入れの確認を依頼されたときに、GitHubに残すもの:
+
+- 要求Issueへのコメントを1つ。形式は [acceptance-check.md](../../../../templates/acceptance-check.md) に従う
+- mainの最新の内容で、要求Issueの Requirements と Constraints を1項目ずつ確かめる。項目ごとに、結果 (Pass か Fail)、証拠 (実行したコマンドと結果、または読んだファイル)、対応したPull Requestを書く
+- 残っている作業を一覧にする。要求Issueに付いたフォローアップノートから、重複と、あとのPull Requestで済んだものを除く。Pull Requestの説明の `Follow-up` 以外の場所に書かれた、範囲の外の作業も拾う
+- Failがあっても、直さない。Issueを作らず、変更もしない。どうするかはOwnerが決める
 
 実行の最後にcuminに返すもの:
 
@@ -98,6 +106,8 @@ cuminが `done` を受けて、GitHub上で確かめること:
 
 確かめた結果が合っていれば、cuminは要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに知らせる。
 
+受け入れの確認では、cuminは、最後のsub-issueが閉じたあとに書かれた `## Acceptance check` のコメントが、要求Issueにあることを確かめる。表の結果は読まない。
+
 ## blocked を返すとき
 
 次のどれかに当たったら、推測で分割せずに `blocked` を返す。
@@ -117,3 +127,5 @@ cuminが `done` を受けて、GitHub上で確かめること:
 | 4 | 実装Issueを途中まで作ったところで止め、同じ依頼をやり直す | 同じ実装Issueが二重に作られない |
 | 5 | コードの変更と、Pull Requestの作成を試みる | どちらも権限で拒否される |
 | 6 | 実装Issueが12個を超える見込みの、大きな要求Issueを渡す | 実装Issueは作られない。結果は `blocked` で、要求Issueの分け方の案が理由に書いてある |
+| 7 | sub-issueが全て閉じた要求Issueで、受け入れの確認を依頼する | 要求Issueに `## Acceptance check` のコメントが1つ付く。Requirements の項目ごとに、結果と証拠がある。Issueは作られず、変更もされない。結果は `done` |
+| 8 | Requirements の1つが満たされていない状態で、受け入れの確認を依頼する | その項目が Fail になり、何が足りないかが証拠と一緒に書いてある |

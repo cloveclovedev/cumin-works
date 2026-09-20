@@ -99,7 +99,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 - 対応されなかった指摘とは、`cumin-reviewer` の `(non-blocking)` の指摘のうち、`Fixed` か `Answer` で始まる返答が付いていないものである。ラベルが `praise` と `note` の指摘は拾わない
 - 拾うものが何もなければ、フォローアップノートを書かない
 - フォローアップノートを書くのは、要求Issueが開いている間だけである。閉じた要求Issueには書かない
-- sub-issueが全て閉じたときは、同じ定期確認の中で、フォローアップノートを受け入れの通知 (R4) より先に書く。Ownerが通知を受けて見に来たときには、フォローアップノートがそろっている
+- sub-issueが全て閉じたときは、フォローアップノートを、受け入れの確認の依頼 (R4) より先に書く。Chief Engineerが確認を始めるときにも、Ownerが通知を受けて見に来たときにも、フォローアップノートがそろっている
 - 1つのPull Requestについて、フォローアップノートは1つだけにする。コメントに目印を埋め込み、cuminが再起動しても二重に書かない
 - 形式は [follow-up-note.md](../../../templates/follow-up-note.md) に従う
 - フォローアップノートは記録である。Issueにはしない。Ownerは受け入れのときに一覧を見て、やりたいものを新しい要求Issueに書く。そこからは通常のフローに乗り、Chief Engineerが実装Issueに分割する
@@ -112,9 +112,9 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 |---|---|
 | 分割結果の確認が必要 | R2 |
 | 残りのsub-issueの確認が必要 | R6 |
-| 要求が受け入れ可能になった | R4 |
+| 要求が受け入れ可能になった | R7 |
 | mergeの判断が必要 | I7 |
-| Agentが先に進めない。指摘が残った | I2、I4、I8、I10、R2 |
+| Agentが先に進めない。指摘が残った | I2、I4、I8、I10、R2、R4 |
 | 利用枠がしきい値を超えた、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
 | 進められるIssueがなくなった | Q4 |
 
@@ -177,7 +177,7 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 4 | `risk/medium` で承認され、checkの通ったPull Requestがある | mergeしない。`cumin/status/awaiting-owner-review` に替えて、Ownerに通知する |
 | 5 | Agentが形式に合わない結果を返す | 同じ依頼を1回だけやり直す。それでも合わなければ `cumin/status/awaiting-owner-decision` に替えて通知する |
 | 6 | 使用率がしきい値を超える | 新しい着手を止めて、1回だけ通知する。実行中のIssueは最後まで進める。`cumin quota allow` で再開する。リセット時刻を過ぎたら自動で再開する |
-| 7 | 要求Issueのsub-issueが全て閉じる | 要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに通知する |
+| 7 | 要求Issueのsub-issueが全て閉じる | Chief Engineerに、受け入れの確認が1回だけ依頼される。確認のコメントが付いたあとで、要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに通知する。表にFailがあっても、同じ動作になる |
 | 8 | cuminを止めて、起動し直す | GitHubを確かめ直して動き始める。同じIssueを二重に依頼しない |
 | 9 | 進められるIssueがなくなる | 1回だけ通知する。同じ通知を繰り返さない |
 | 10 | `Follow-up` に文章があり、対応されなかった `(non-blocking)` の指摘が1つあるPull Requestをmergeする | 要求Issueに、決められた形式のフォローアップノートが1つ付く。cuminを再起動しても、同じフォローアップノートは増えない |

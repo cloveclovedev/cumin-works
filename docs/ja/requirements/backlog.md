@@ -13,7 +13,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| Chief Engineerによるフォローアップノートの整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがChief Engineerを起動する。Chief Engineerは、mergeされたPull Requestの `Follow-up` と、対応されなかった `(non-blocking)` の指摘を集め、重複を除き、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Ownerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、cuminがフォローアップノートとして機械的に要求Issueへ転記し、Ownerがやりたいものを新しい要求Issueに書く形で足りる。依頼の種類とトリガーが1つずつ増えるのを避けた | フォローアップノートに転記される作業が多く、Ownerが新しい要求Issueに書き直す手間が目立ってきたとき |
+| Chief Engineerによるフォローアップノートの整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがChief Engineerを起動する。Chief Engineerは、受け入れの確認でまとめた残りの作業のうち、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Ownerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、Chief Engineerは、受け入れの確認のコメントに残りの作業を一覧にするところまでを行う。Issueにはしない。Ownerが、やりたいものを新しい要求Issueに書く形で足りる | フォローアップノートに転記される作業が多く、Ownerが新しい要求Issueに書き直す手間が目立ってきたとき |
 | 次の要求Issueの草案づくり | 進められるIssueがなくなったとき、Agentが要件文書を読んで、次に出すべき要求Issueの草案を作る。Ownerは草案を直して提出するだけになる | v0.1では、待ち状態になったら通知するだけにした。「要求を書くのはOwnerだけ」という前提が変わる | 待ち状態の通知が頻繁に届き、稼働率の目標 (8〜9割) に届かないとき。課題の原因2 (自動のトリガーが成果に結びつかない) への根本の対策である |
 | 差し戻しでChief Engineerを通す | 受け入れでOwnerが差し戻すとき、追加のsub-issueをOwnerが書く代わりに、Chief Engineerに分割させる | v0.1では、Ownerのほうが正しく決められると考え、Ownerが直接sub-issueを足す形にした | 差し戻しのたびにOwnerが実装Issueを書く手間が目立ってきたとき |
 | `risk/medium` の自動merge | `risk/medium` のPull Requestも、cuminがmergeする | 運用しながら、任せてよいかを判断すると決めた | `risk/medium` のPull Requestを、Ownerが続けて直さずにmergeしている実績がたまったとき |
