@@ -51,6 +51,12 @@ func (t InstallationToken) String() string {
 	return "InstallationToken{[redacted], expires " + t.ExpiresAt.Format(time.RFC3339) + "}"
 }
 
+// Format keeps the token out of every fmt verb. Without it, verbs such as %#v
+// and %d print the fields and do not call String.
+func (t InstallationToken) Format(f fmt.State, verb rune) {
+	_, _ = io.WriteString(f, t.String())
+}
+
 // LogValue keeps the token out of structured logs.
 func (t InstallationToken) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("token", "[redacted]"), slog.Time("expires_at", t.ExpiresAt))

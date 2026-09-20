@@ -261,7 +261,7 @@ func TestInstallationToken_DoesNotAppearInOutput(t *testing.T) {
 
 	var logs bytes.Buffer
 	slog.New(slog.NewJSONHandler(&logs, nil)).Info("created", "token", token)
-	formatted := fmt.Sprintf("%v %+v %s", token, token, token)
+	formatted := fmt.Sprintf("%v %+v %#v %s %q %d %x", token, token, token, token, token, token, &token)
 
 	for name, output := range map[string]string{"log": logs.String(), "fmt": formatted} {
 		if strings.Contains(output, testToken) {
