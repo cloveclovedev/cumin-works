@@ -78,6 +78,8 @@ GitHub上では `cumin-chief-engineer` として振る舞う。持っている�
 | `risk/high` | revertで戻せない変更。DBマイグレーション、デプロイやCIの設定、認証や決済、外部サービスへの副作用、公開APIの契約、cumin自身のルール (`.cumin/`) |
 | `risk/medium` | それ以外の全て |
 
+この表は初期値である。Hostかリポジトリに `risk-criteria.md` があれば、cuminはその内容を、表の代わりに指示に入れる (置き場所と優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある)。Reviewerにも、同じ基準が渡る。
+
 迷ったら高いほうを付ける。riskを確定するのはOwnerである。
 
 ## 完了の条件

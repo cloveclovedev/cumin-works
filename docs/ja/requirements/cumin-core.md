@@ -143,7 +143,9 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
-| riskの基準 | Chief Engineerがriskを仮に付けるときの基準 | [Chief Engineerの要件](agents/chief-engineer.md) の表 | できる |
+| riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、Chief EngineerとReviewerへの指示にそのまま入れる | [Chief Engineerの要件](agents/chief-engineer.md) の表 | できる |
+
+riskの基準は、TOMLの値ではなく、Markdownのファイルで上書きする。Hostでは、設定ファイルと同じディレクトリの `risk-criteria.md` に書く。リポジトリでは、`.cumin/risk-criteria.md` に書く。ファイルがあれば、その内容が、それより弱い段の基準を丸ごと置き換える。優先順位は他の設定と同じで、初期値、Hostのファイル、リポジトリのファイルの順に強くなる。
 
 cuminは、リポジトリの `.cumin/` を、Pull Requestのブランチではなくmainから読む。`.cumin/` の変更は常に `risk/high` なので、Ownerがmergeしたものだけが効く。
 
