@@ -200,6 +200,16 @@ func TestRun_CancelIsTimeLimit(t *testing.T) {
 	}
 }
 
+func TestRun_CancelBeforeStartIsTimeLimit(t *testing.T) {
+	path, _ := fakeCLI(t, "done.jsonl", 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := quiet(path).Run(ctx, request(t))
+	if end := abnormalEnd(t, err); end.Kind != EndTimeLimit || end.PID != 0 {
+		t.Errorf("AbnormalEnd = %+v, want the kind %s without a process", end, EndTimeLimit)
+	}
+}
+
 func TestRun_MissingExecutable(t *testing.T) {
 	c := quiet(filepath.Join(t.TempDir(), "no-such-cli"))
 	_, err := c.Run(context.Background(), request(t))

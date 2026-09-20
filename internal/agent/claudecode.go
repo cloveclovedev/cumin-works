@@ -105,6 +105,9 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "open stdout", Err: err})
 	}
 	if err := cmd.Start(); err != nil {
+		if ctx.Err() != nil {
+			return nil, c.fail(log, &AbnormalEnd{Kind: EndTimeLimit, Detail: "the run was stopped before the start", Err: ctx.Err()})
+		}
 		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "start " + c.Path, Err: err})
 	}
 	pid := cmd.Process.Pid
