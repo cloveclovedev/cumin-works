@@ -16,6 +16,7 @@ Claude Code は起動しないので、利用枠は使わない。
   - 4つの GitHub App が登録され、sandbox のリポジトリにインストールされている。
   - Host の設定ファイルに Client ID があり、Keychain に秘密鍵がある。
   - sandbox に `scripts/setup-repo.sh <owner>/<repo> --core-app <slug>` を実行してある。
+- sandbox は、公開のリポジトリである。App の token には Checks の権限がなく、check の結果を読めるのは公開のリポジトリだけだからである。テストは最初に、認証なしでリポジトリを読めることを確かめ、読めなければ止まる。
 - sandbox は、壊れてもよいリポジトリである。テストは Issue、Pull Request、ブランチ、ラベルを作り、main に小さなファイルを1つ merge する。
 
 ## 実行のしかた
@@ -40,7 +41,7 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -run TestLive -v ./
 
 ## 後片付け
 
-テストは、自分が作った Pull Request を閉じ、ブランチを消し、Issue を閉じる。main に merge した小さなファイル (`live/<日時>.md`) は残る。
+テストは、Pull Request、ブランチ、Issue を作った直後に、後片付けを登録する。テストが途中で失敗しても、作ったものは閉じられ、消される。main に merge した小さなファイル (`live/<日時>.md`) は残る。
 
 ## 確かめる内容
 

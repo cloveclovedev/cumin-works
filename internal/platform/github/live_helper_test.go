@@ -74,7 +74,16 @@ func newLive(t *testing.T) *live {
 	if len(clientIDs) == 0 {
 		t.Fatalf("the Host settings have no github_apps table for %s", owner)
 	}
-	return &live{owner: owner, repo: repo, runID: time.Now().UTC().Format("20060102-150405"), clientIDs: clientIDs, tokens: map[string]string{}}
+	l := &live{owner: owner, repo: repo, runID: time.Now().UTC().Format("20060102-150405"), clientIDs: clientIDs, tokens: map[string]string{}}
+
+	// The sandbox must be public. The tokens of the Apps have no Checks
+	// permission, and only a public repository lets them read the check runs.
+	// Rulesets also need a public repository on the free plan. A call without
+	// authentication sees only a public repository.
+	if resp := l.api(t, "", http.MethodGet, "/repos/{repo}", nil); resp.status != http.StatusOK {
+		t.Fatalf("CUMIN_LIVE_REPO must be a public repository: a call without authentication answers %d for %s/%s", resp.status, owner, repo)
+	}
+	return l
 }
 
 // credentials reads the client ID from the Host settings and the private key
