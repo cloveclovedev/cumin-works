@@ -68,6 +68,7 @@ internal/workflow/          rules R*, I*, Q* as pure decisions, and the polling 
 internal/agent/             worktree, token, role instructions, CLI adapter, result validation
 internal/quota/             thresholds, time bands, allowance
 internal/notify/            Owner notifications (Discord webhook)
+internal/setup/             setup commands (GitHub App Manifest flow)
 internal/followup/          follow-up note after a merge
 roles/                      role instructions for agents (English)
 templates/                  templates for text on GitHub (English)
