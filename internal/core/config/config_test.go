@@ -51,7 +51,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 		t.Errorf("MergeMethod = %q, want squash", s.MergeMethod)
 	}
 	for _, role := range []Role{RoleChiefEngineer, RoleImplementer, RoleReviewer} {
-		want := RoleSettings{TimeLimit: 50 * time.Minute, CLI: CLIClaudeCode}
+		want := RoleSettings{TimeLimit: 50 * time.Minute, CLI: CLIClaudeCode, CLIPath: "claude"}
 		if got := s.Roles[role]; got != want {
 			t.Errorf("Roles[%s] = %+v, want %+v", role, got, want)
 		}
@@ -73,6 +73,7 @@ merge_method = "rebase"
 
 [roles.implementer]
 time_limit = "55m"
+cli_path = "/opt/example/bin/claude"
 model = "example-model"
 
 [github_apps.example-org]
@@ -92,7 +93,7 @@ reviewer = "client-id-reviewer"
 		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.MergeMethod != MergeRebase {
 		t.Errorf("top-level settings = %+v", s)
 	}
-	want := RoleSettings{TimeLimit: 55 * time.Minute, CLI: CLIClaudeCode, Model: "example-model"}
+	want := RoleSettings{TimeLimit: 55 * time.Minute, CLI: CLIClaudeCode, CLIPath: "/opt/example/bin/claude", Model: "example-model"}
 	if got := s.Roles[RoleImplementer]; got != want {
 		t.Errorf("Roles[implementer] = %+v, want %+v", got, want)
 	}
@@ -145,6 +146,7 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"time_limit over 55 minutes", required + "[roles.implementer]\n" + `time_limit = "56m"`, "roles.implementer.time_limit:"},
 		{"time_limit zero", required + "[roles.reviewer]\n" + `time_limit = "0s"`, "roles.reviewer.time_limit:"},
 		{"cli not supported", required + "[roles.chief-engineer]\n" + `cli = "codex"`, "roles.chief-engineer.cli:"},
+		{"empty cli_path", required + "[roles.implementer]\n" + `cli_path = ""`, "roles.implementer.cli_path:"},
 		{"empty client ID", required + "[github_apps.example-org]\n" + `implementer = ""`, "github_apps.example-org.implementer:"},
 		{"unknown GitHub App", required + "[github_apps.example-org]\n" + `tester = "client-id"`, "github_apps.example-org.tester:"},
 		{"wrong type", required + `max_review_rounds = "three"`, `"max_review_rounds"`},

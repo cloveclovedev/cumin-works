@@ -46,6 +46,9 @@ const AppCuminCore = "cumin-core"
 // CLIClaudeCode is the only agent CLI that v0.1 supports.
 const CLIClaudeCode = "claude-code"
 
+// defaultCLIPath is the executable of the CLI, found on PATH.
+const defaultCLIPath = "claude"
+
 // MergeMethod is how cumin merges a pull request.
 type MergeMethod string
 
@@ -84,7 +87,10 @@ func (r Repository) String() string { return r.Owner + "/" + r.Name }
 type RoleSettings struct {
 	TimeLimit time.Duration
 	CLI       string
-	Model     string // empty means the default model of the CLI
+	// CLIPath is the executable of the CLI. A relative name is found on
+	// PATH. Tests point it at a fake CLI.
+	CLIPath string
+	Model   string // empty means the default model of the CLI
 }
 
 // DefaultPath returns the default path of the Host settings file.
@@ -131,11 +137,12 @@ type file struct {
 type fileRole struct {
 	TimeLimit duration `toml:"time_limit"`
 	CLI       string   `toml:"cli"`
+	CLIPath   string   `toml:"cli_path"`
 	Model     string   `toml:"model"`
 }
 
 func defaults() file {
-	role := fileRole{TimeLimit: duration(defaultAgentTimeLimit), CLI: CLIClaudeCode}
+	role := fileRole{TimeLimit: duration(defaultAgentTimeLimit), CLI: CLIClaudeCode, CLIPath: defaultCLIPath}
 	f := file{
 		PollInterval:        duration(defaultPollInterval),
 		MaxIssuesInProgress: defaultMaxIssuesInProgress,
@@ -263,7 +270,10 @@ func (f file) settings() (*Settings, error) {
 		if r.file.CLI != CLIClaudeCode {
 			fail(key+".cli", "%q is not supported: use %q", r.file.CLI, CLIClaudeCode)
 		}
-		s.Roles[r.role] = RoleSettings{TimeLimit: limit, CLI: r.file.CLI, Model: r.file.Model}
+		if r.file.CLIPath == "" {
+			fail(key+".cli_path", "must not be empty")
+		}
+		s.Roles[r.role] = RoleSettings{TimeLimit: limit, CLI: r.file.CLI, CLIPath: r.file.CLIPath, Model: r.file.Model}
 	}
 
 	s.Quota = f.Quota.settings(fail)

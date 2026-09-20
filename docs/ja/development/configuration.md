@@ -28,6 +28,7 @@ Hostの設定ファイルに書けるキーの一覧。設定の意味と、初�
 | `merge_method` | cuminがPull Requestをmergeするときの方法 | `"squash"` | `"squash"`、`"merge"`、`"rebase"` のどれか |
 | `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
 | `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
+| `roles.<role>.cli_path` | CLIの実行ファイル。ディレクトリを含まない名前は、`PATH` から探す。受け入れテストは、偽のCLIの実行ファイルを指す | `"claude"` | 空にできない |
 | `roles.<role>.model` | Agentを動かすモデル。空なら、CLIの既定のモデルを使う | 空 | なし |
 | `quota.five_hour.threshold` | 5h枠のしきい値 (%)。どの時間帯にも入らない時刻に使われる | `85` | 1〜100 |
 | `quota.five_hour.reset_near` | 5h枠のリセットが近いとみなす残り時間 | `"30m"` | 0以上、5時間未満 |
@@ -75,6 +76,7 @@ merge_method = "squash"
 [roles.implementer]
 time_limit = "50m"
 cli = "claude-code"
+cli_path = "claude"
 model = ""
 
 [quota.five_hour]
