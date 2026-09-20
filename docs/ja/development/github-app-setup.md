@@ -44,7 +44,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 2. "Private keys" の "Generate a private key" をクリックする。PEM形式のファイルがダウンロードされる。
 3. PEMファイルの中身をHostの macOS のKeychainに登録し、ダウンロードしたファイルは削除する。
 
-秘密鍵の発行は、cuminを動かせるようになってからでよい。Appの登録 (手順1) とインストール (手順3) は、秘密鍵がなくても進められる。Keychainに登録するときの項目の名前と形式は、cuminの実装のときに決めて、ここに書く。
+秘密鍵の発行は、cuminを動かせるようになってからでよい。Appの登録 (手順1) とインストール (手順3) は、秘密鍵がなくても進められる。Keychainに登録するときの項目の名前と形式は、[cumin本体の設計メモ](../designs/cumin-core.md) の「Keychainの項目」にある。
 
 秘密鍵の扱い:
 
