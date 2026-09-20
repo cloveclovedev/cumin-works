@@ -46,11 +46,16 @@ go build -o cumin ./cmd/cumin
 
 ## 今できること
 
-サブコマンドは、まだどれも作られていない。実行すると、作られていないことを表示して、0以外の終了コードで終わる。
+`cumin run` は、Hostの設定ファイルを読み込んで検証する。そこから先は、まだ作られていない。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
 
 ```sh
-go run ./cmd/cumin run
-# cumin run: not built yet
+go run ./cmd/cumin run --config <設定ファイル>
+# 設定が正しいとき:   cumin run: not built yet
+# 設定に問題があるとき: 問題のあるキーの名前が表示される
 ```
+
+どちらの場合も、0以外の終了コードで終わる。`--config` を省くと、`~/.config/cumin/config.toml` を読む。
+
+ほかのサブコマンドは、まだ作られていない。実行すると、作られていないことを表示して、0以外の終了コードで終わる。
 
 サブコマンドを作るたびに、このページを更新する。

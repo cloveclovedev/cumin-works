@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -31,7 +33,6 @@ func TestSubcommandThatIsNotBuiltFails(t *testing.T) {
 		args []string
 		name string
 	}{
-		{[]string{"run"}, "run"},
 		{[]string{"status"}, "status"},
 		{[]string{"quota", "allow"}, "quota allow"},
 		{[]string{"setup"}, "setup"},
@@ -83,5 +84,59 @@ func TestBadUsagePrintsUsageAndFails(t *testing.T) {
 				t.Errorf("stdout = %q, want empty", stdout.String())
 			}
 		})
+	}
+}
+
+func writeConfig(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+const validConfig = `
+repositories = ["example-org/example-repo"]
+work_dir = "/tmp/cumin-work"
+`
+
+func TestRunLoadsSettingsBeforeItStops(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runCLI([]string{"run", "--config", writeConfig(t, validConfig)}, &stdout, &stderr)
+	if code == 0 {
+		t.Errorf("exit code = 0, want non-zero")
+	}
+	if want := "cumin run: not built yet\n"; stderr.String() != want {
+		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+	}
+}
+
+func TestRunWithInvalidSettingsNamesTheKey(t *testing.T) {
+	path := writeConfig(t, validConfig+"[roles.implementer]\ntime_limit = \"56m\"\n")
+	var stdout, stderr bytes.Buffer
+	code := runCLI([]string{"run", "--config", path}, &stdout, &stderr)
+	if code == 0 {
+		t.Errorf("exit code = 0, want non-zero")
+	}
+	if !strings.Contains(stderr.String(), "roles.implementer.time_limit:") {
+		t.Errorf("stderr does not name the key:\n%s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "not built yet") {
+		t.Errorf("run continued after invalid settings:\n%s", stderr.String())
+	}
+}
+
+func TestRunWithoutConfigFlagUsesTheDefaultPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var stdout, stderr bytes.Buffer
+	code := runCLI([]string{"run"}, &stdout, &stderr)
+	if code == 0 {
+		t.Errorf("exit code = 0, want non-zero")
+	}
+	want := filepath.Join(home, ".config", "cumin", "config.toml")
+	if !strings.Contains(stderr.String(), want) {
+		t.Errorf("stderr does not name the default path %s:\n%s", want, stderr.String())
 	}
 }
