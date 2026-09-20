@@ -167,6 +167,7 @@ func TestRun_AbnormalEnds(t *testing.T) {
 		{"is_error", "is-error.jsonl", 0, EndError, "error_during_execution", fixtureSessionID},
 		{"no result event", "no-result.jsonl", 0, EndNoResult, "without a result event", fixtureSessionID},
 		{"exit code 1", "done.jsonl", 1, EndProcessFailed, "exit code 1", fixtureSessionID},
+		{"no session ID", "no-session-id.jsonl", 0, EndInvalidResult, "no session ID", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

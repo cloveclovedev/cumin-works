@@ -176,6 +176,9 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		end.Kind, end.Detail = EndError, "the result event has is_error true, subtype "+s.result.Subtype
 	case len(s.result.StructuredOutput) == 0:
 		end.Kind, end.Detail = EndInvalidResult, "the result event has no structured_output"
+	case s.sessionID == "":
+		// A later request could not continue this session.
+		end.Kind, end.Detail = EndInvalidResult, "the run reported no session ID"
 	default:
 		result, err := ValidateResult(s.result.StructuredOutput)
 		if err != nil {
