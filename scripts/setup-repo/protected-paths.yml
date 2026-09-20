@@ -1,11 +1,14 @@
 # Installed by scripts/setup-repo.sh of cumin-works as
 # .github/workflows/cumin-protected-paths.yml.
 #
-# The job fails when a pull request from the Implementer App changes a
-# protected path. The list of protected paths comes from .cumin/config.toml on
-# the default branch, never from the pull request. The job reads everything
-# through the GitHub API. It does not check out or run code from the pull
-# request.
+# The job fails when a pull request from a bot changes a protected path. It
+# runs for every bot author (a GitHub App is a bot), and it is skipped when a
+# person is the author. The condition names no App: a wrong name would skip the
+# job, and a skipped job passes the required check.
+#
+# The list of protected paths comes from .cumin/config.toml on the default
+# branch, never from the pull request. The job reads everything through the
+# GitHub API. It does not check out or run code from the pull request.
 #
 # The job reads the list when it runs. A change of the list on the default
 # branch does not run the job again for a pull request that is already open.
@@ -26,8 +29,7 @@ jobs:
   cumin-protected-paths:
     # The ruleset requires a check with this name. Do not rename it.
     name: cumin-protected-paths
-    # setup-repo.sh replaces the placeholder with "<implementer app slug>[bot]".
-    if: github.event.pull_request.user.login == '__IMPLEMENTER_LOGIN__'
+    if: github.event.pull_request.user.type == 'Bot'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

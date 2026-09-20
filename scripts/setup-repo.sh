@@ -4,8 +4,8 @@
 # cumin itself never uses administrator permissions, so a person runs this.
 #
 # Usage:
-#   scripts/setup-repo.sh <owner>/<repo> --implementer-app <slug>
-#       [--core-app <slug>] [--required-check <name>]... [--dry-run]
+#   scripts/setup-repo.sh <owner>/<repo> [--core-app <slug>]
+#       [--required-check <name>]... [--dry-run]
 #
 # Running the script again with the same arguments changes nothing.
 # It needs only gh (logged in, with the "workflow" scope) and standard tools.
@@ -28,14 +28,12 @@ die() {
 
 workflow_differs=0
 repo=""
-implementer_app=""
 core_app=""
 extra_checks=""
 dry_run=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --implementer-app) [ $# -ge 2 ] || usage; implementer_app="$2"; shift 2 ;;
     --core-app) [ $# -ge 2 ] || usage; core_app="$2"; shift 2 ;;
     --required-check)
       [ $# -ge 2 ] || usage
@@ -51,11 +49,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$repo" ] && [ -n "$implementer_app" ] || usage
+[ -n "$repo" ] || usage
 echo "$repo" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || die "the repository must be <owner>/<repo>"
-for slug in "$implementer_app" "$core_app"; do
-  [ -z "$slug" ] || echo "$slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || die "an App slug has only lower-case letters, digits, and '-': $slug"
-done
+[ -z "$core_app" ] || echo "$core_app" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || die "an App slug has only lower-case letters, digits, and '-': $core_app"
 # A check name goes into a JSON string as it is.
 if printf '%s' "$extra_checks" | LC_ALL=C grep -q '["\\[:cntrl:]]'; then
   die "a check name must not contain a double quote, a backslash, or a control character"
@@ -86,8 +82,8 @@ trap 'rm -rf "$work"' EXIT
 
 # --- Render everything before any change ------------------------------------------
 
-sed "s/__IMPLEMENTER_LOGIN__/${implementer_app}[bot]/" "$here/protected-paths.yml" >"$work/workflow.yml"
-grep -q "__IMPLEMENTER_LOGIN__" "$work/workflow.yml" && die "the workflow template still holds the placeholder"
+# The workflow names no App, so it goes into the repository as it is.
+cp "$here/protected-paths.yml" "$work/workflow.yml"
 cp "$here/config.toml" "$work/config.toml"
 
 # replace_text <file> <text to find> <replacement>
@@ -144,7 +140,7 @@ put_file() {
     else
       workflow_differs=1
       echo "DIFFERENT  $1 (not overwritten)"
-      echo "           Compare it with the rendered template, and change it with a pull request:"
+      echo "           Compare it with the template, and change it with a pull request:"
       diff "$work/current" "$2" | sed 's/^/           /' || true
     fi
     return 0
@@ -198,6 +194,6 @@ fi
 if [ "$workflow_differs" -eq 1 ]; then
   # The rulesets are applied all the same. A pull request that fixes the
   # workflow runs its own version of the workflow, so it can pass the check.
-  die "$workflow_path differs from the template. The protected-path check may not work for the Implementer App. Fix the file with a pull request, and run the script again."
+  die "$workflow_path differs from the template. The protected-path check may not work. Fix the file with a pull request, and run the script again."
 fi
 echo "done: $repo"

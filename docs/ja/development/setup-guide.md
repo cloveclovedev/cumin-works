@@ -41,13 +41,12 @@ gh auth refresh -h github.com -s workflow
 cumin-works のリポジトリを取得して、その中で実行する。
 
 ```sh
-scripts/setup-repo.sh <owner>/<repo> --implementer-app <ImplementerのAppのslug> \
-  [--core-app <cumin本体のAppのslug>] [--required-check <checkの名前>]... [--dry-run]
+scripts/setup-repo.sh <owner>/<repo> [--core-app <cumin本体のAppのslug>] \
+  [--required-check <checkの名前>]... [--dry-run]
 ```
 
 | 引数 | 内容 |
 |---|---|
-| `--implementer-app` | Implementer の App の slug。保護されたパスのcheckは、作成者が `<slug>[bot]` の Pull Request でだけ動く |
 | `--core-app` | cumin本体の App の slug。mainを守る ruleset の bypass list に入れる。App を登録する前なら省ける。登録したあとに、付けてもう一度実行する |
 | `--required-check` | 必須のcheckに足すcheckの名前。リポジトリのCIのjobの名前を渡す。何度でも書ける |
 | `--dry-run` | 何も変えずに、何をするかと、当てる ruleset の JSON を表示する |
@@ -58,7 +57,7 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 
 1. `gh` のログイン、`workflow` の scope、管理者の権限を確かめる。足りなければ、何も変えずに止まる。
 2. 既定のブランチに、次の2つのファイルを足す。
-   - `.github/workflows/cumin-protected-paths.yml`: 保護されたパスのcheck。
+   - `.github/workflows/cumin-protected-paths.yml`: 保護されたパスのcheck。作成者が bot (GitHub App) の Pull Request で動き、作成者が人の Pull Request では飛ばされる。App の名前は条件に書かない。名前を間違えるとcheckが飛ばされ、飛ばされたcheckは通った扱いになるためである。
    - `.cumin/config.toml`: 保護されたパスの一覧 (`protected_paths`) のひな形。
 3. 次の2つの ruleset を作る。どちらも既定のブランチが対象である。
 
@@ -86,6 +85,16 @@ Owner が Pull Request を merge するとき:
 - workflow のファイルが違う内容で既にあれば、違いを表示して、上書きしない。ruleset は当てたうえで、最後にエラーで終わる。Pull Request で直してから、もう一度実行する。
 - ruleset は名前で探す。あればファイルの内容に合わせ、なければ作る。
 
+## セットアップのあとの確認
+
+セットアップが終わったら、保護が効いていることを1回確かめる。
+
+1. Implementer の App として、保護されたパス (例: `CLAUDE.md`) を変える Pull Request を開く。
+2. `cumin-protected-paths` のcheckが失敗することを見る。失敗のログに、ファイルと、当たった一覧の項目が出る。
+3. Pull Request を閉じる。
+
+checkが飛ばされたり、通ったりしたら、保護は効いていない。workflow のファイルと、必須のcheckの ruleset を確かめる。
+
 ## 保護されたパスの一覧か、workflow を変えたとき
 
 既定のブランチで `.cumin/config.toml` の `protected_paths` か、`cumin-protected-paths.yml` を変えたら、開いている Pull Request のそれぞれで "Update branch" を選び、checkを動かし直す。
@@ -111,5 +120,5 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 | `the gh login has no "workflow" scope` | 前提にある `gh auth refresh` を実行する |
 | `the gh login is not an administrator of ...` | リポジトリの管理者のアカウントで `gh auth login` する |
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
-| `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。Implementer の App の Pull Request で、保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
+| `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
