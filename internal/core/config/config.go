@@ -159,17 +159,17 @@ func Load(path string) (*Settings, error) {
 		// The message of the parser has the line and the full key.
 		return nil, fmt.Errorf("settings file %s: %w", path, err)
 	}
-	if unknown := md.Undecoded(); len(unknown) > 0 {
-		errs := make([]error, 0, len(unknown))
-		for _, key := range unknown {
-			errs = append(errs, fmt.Errorf("%s: unknown key", key))
-		}
-		return nil, fmt.Errorf("settings file %s:\n%w", path, errors.Join(errs...))
+	// Report unknown keys and invalid values together.
+	var errs []error
+	for _, key := range md.Undecoded() {
+		errs = append(errs, fmt.Errorf("%s: unknown key", key))
 	}
-
 	s, err := f.settings()
 	if err != nil {
-		return nil, fmt.Errorf("settings file %s:\n%w", path, err)
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("settings file %s:\n%w", path, errors.Join(errs...))
 	}
 	return s, nil
 }

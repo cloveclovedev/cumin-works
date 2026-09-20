@@ -179,11 +179,12 @@ func TestLoadReportsEveryProblem(t *testing.T) {
 	_, err := Load(writeFile(t, required+`
 poll_interval = "0s"
 merge_method = "fast-forward"
+pol_interval = "60s"
 `))
 	if err == nil {
 		t.Fatal("Load succeeded, want an error")
 	}
-	for _, key := range []string{"poll_interval:", "merge_method:"} {
+	for _, key := range []string{"poll_interval:", "merge_method:", "pol_interval: unknown key"} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error does not name %s:\n%v", key, err)
 		}
