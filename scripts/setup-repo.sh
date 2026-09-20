@@ -26,6 +26,7 @@ die() {
   exit 1
 }
 
+workflow_differs=0
 repo=""
 implementer_app=""
 core_app=""
@@ -111,13 +112,16 @@ else
 fi
 
 checks="{ \"context\": \"$protected_check\", \"integration_id\": $actions_app_id }"
+# Split on line breaks only, and do not expand "*" and "?" in a check name.
 old_ifs="$IFS"
 IFS='
 '
+set -f
 for name in $extra_checks; do
   checks="$checks,
           { \"context\": \"$name\" }"
 done
+set +f
 IFS="$old_ifs"
 replace_text "$here/ruleset-main-required-checks.json" "{ \"context\": \"$protected_check\" }" "$checks" \
   >"$work/required-checks.json" || die "cannot find the protected-path check in ruleset-main-required-checks.json"
@@ -133,6 +137,7 @@ put_file() {
     elif [ "$3" = "keep" ]; then
       echo "kept       $1 (it exists with other content; the script never overwrites it)"
     else
+      workflow_differs=1
       echo "DIFFERENT  $1 (not overwritten)"
       echo "           Compare it with the rendered template, and change it with a pull request:"
       diff "$work/current" "$2" | sed 's/^/           /' || true
@@ -179,5 +184,10 @@ apply_ruleset "$work/required-checks.json"
 
 if [ -z "$core_app" ]; then
   echo "note: no --core-app. Only repository administrators can update $branch. Run the script again with --core-app after the Apps exist."
+fi
+if [ "$workflow_differs" -eq 1 ]; then
+  # The rulesets are applied all the same. A pull request that fixes the
+  # workflow runs its own version of the workflow, so it can pass the check.
+  die "$workflow_path differs from the template. The protected-path check may not work for the Implementer App. Fix the file with a pull request, and run the script again."
 fi
 echo "done: $repo"
