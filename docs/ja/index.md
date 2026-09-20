@@ -15,3 +15,4 @@
 - [設定の一覧](development/configuration.md)
 - [GitHub Appの登録手順](development/github-app-setup.md)
 - [図の描き方](development/diagrams.md)
+- [設計文書の書き方](development/design-documents.md)

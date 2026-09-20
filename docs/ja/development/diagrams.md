@@ -2,6 +2,16 @@
 
 図はPlantUMLで描く。元ファイル (`.puml`) をGitで管理し、SVGに書き出して文書に埋め込む。元ファイルは、その図を使う文書と同じディレクトリに置く。
 
+## 文書への埋め込み
+
+SVGを埋め込んだ直後に、元ファイルへのリンクを必ず書く。人もAgentも、図の元の記述をいつでも開けるようにするためである。
+
+```markdown
+![要求Issueの状態遷移](requirement-issue-states.svg)
+
+図の元ファイル: [requirement-issue-states.puml](requirement-issue-states.puml)
+```
+
 ## SVGの書き出し
 
 リポジトリの直下で次を実行する。`docs/` の下にある全ての `.puml` を、同じディレクトリにSVGとして書き出す。
