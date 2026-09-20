@@ -34,7 +34,7 @@
 - 秘密鍵の項目を Client ID で引くのは、設定ファイルにある値だけで項目が決まり、App の名前や Organization の名前をコードに埋め込まずに済むためである。
 - 秘密鍵の値は、PEMをbase64で1行にしたものにする。改行を含む値を `security` の `-w` で読むと、そのままの形で返らないことがある、という報告があるためである (未確認。7を参照)。
 - 読むときは、`/usr/bin/security find-generic-password -s <service> -a <account> -w` を `os/exec` で呼ぶ (`man security`)。cgoも、追加の依存も要らない。
-- 読むのは、値を使う直前だけにする。値をログ、エラーの文章、手元の状態に入れない。
+- 要件のとおり、`cumin run` の起動時に読み、メモリにだけ持つ。値をログ、エラーの文章、手元の状態に入れない。
 - Keychain に触れるコードは `internal/platform/keychain` に閉じ込める。
 
 ## 3. テストの2層
@@ -79,7 +79,7 @@
 - レビューのラウンドは、実装Issueに最後に `cumin/status/ready` が付いた時刻と、`cumin-reviewer` の最後の `APPROVE` の時刻の、新しいほうよりあとに出たレビューを数える。
 - 同じラベルが何度も付くので、ラベルごとに、いちばん新しい `LabeledEvent` を使う。今付いているかどうかは、`labels` で見る。
 
-I9で使うPull Requestの説明とレビューのコメントは、転記が必要になったPull Requestについてだけ、別に読む。
+I9で使うものは、mergeされたPull Requestについてだけ、別に読む。Pull Requestの説明、レビューのコメント、転記先の要求Issueのコメントである。要求Issueのコメントを読むのは、転記済みの目印を探して、再起動のあとも二重に転記しないためである。
 
 ## 6. 起動前の使用率の確認
 
