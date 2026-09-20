@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"11111111-2222-4333-8444-555555555555"}
+{"type":"result","subtype":"success","is_error":false,"session_id":"11111111-2222-4333-8444-555555555555","num_turns":1,"structured_output":{"result":"finished","summary":"I read the file.","blocked_reason":""}}
