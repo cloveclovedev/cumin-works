@@ -144,6 +144,35 @@ func TestSetGitHubAppClientID_WritesBehindASymbolicLink(t *testing.T) {
 	}
 }
 
+// The link exists, but the file behind it does not yet. A relative link too.
+func TestSetGitHubAppClientID_WritesBehindADanglingSymbolicLink(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "config", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(link), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "dotfiles", "cumin.toml"), link); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SetGitHubAppClientID(link, "example-org", "reviewer", "Iv23liREV"); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link is not a symbolic link any more: %v", err)
+	}
+	target := filepath.Join(dir, "dotfiles", "cumin.toml")
+	if got, want := readFile(t, target), "[github_apps.example-org]\nreviewer = \"Iv23liREV\"\n"; got != want {
+		t.Errorf("the file behind the link is %q, want %q", got, want)
+	}
+	// The command reads the same file through the link.
+	apps, err := ReadGitHubApps(link)
+	if err != nil || apps["example-org"]["reviewer"] != "Iv23liREV" {
+		t.Errorf("apps = %v, err = %v", apps, err)
+	}
+}
+
 func TestSetGitHubAppClientID_CreatesTheFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cumin", "config.toml")
 	if err := SetGitHubAppClientID(path, "example-org", "cumin-core", "Iv23liCORE"); err != nil {

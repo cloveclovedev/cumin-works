@@ -70,9 +70,7 @@ func SetGitHubAppClientID(path, org, app, clientID string) error {
 
 	// A person can keep the settings in another place and link to them. Write
 	// the file behind the link, and keep the link.
-	if target, err := filepath.EvalSymlinks(path); err == nil {
-		path = target
-	}
+	path = followLinks(path)
 
 	mode := fs.FileMode(0o600)
 	old, err := os.ReadFile(path)
@@ -98,6 +96,27 @@ func SetGitHubAppClientID(path, org, app, clientID string) error {
 		return fmt.Errorf("%s: cannot write github_apps.%s.%s safely (%w). Write this line by hand in the table [github_apps.%s]: %s = %q", path, org, app, err, org, app, clientID)
 	}
 	return writeFileAtomically(path, []byte(updated), mode)
+}
+
+// followLinks returns the file that the path names after every symbolic link.
+// It reads each link by itself, so it also works when the file behind the last
+// link does not exist yet. filepath.EvalSymlinks fails in that case.
+func followLinks(path string) string {
+	for range 16 { // a loop of links ends here
+		info, err := os.Lstat(path)
+		if err != nil || info.Mode()&fs.ModeSymlink == 0 {
+			return path
+		}
+		target, err := os.Readlink(path)
+		if err != nil {
+			return path
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = target
+	}
+	return path
 }
 
 // setClientIDLine returns the text with the one line set. It knows only the
