@@ -47,11 +47,16 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 |---|---|---|---|---|
 | R1 | 要求Issueに `cumin/status/planning` を付け、Chief Engineerに分割を依頼する | 定期確認: 開いていて、`cumin/type/requirement` と `cumin/status/ready` が付いた要求Issueがある。sub-issueがあるかどうかは問わない | AIリソースに空きがある | — |
 | R2 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「分割結果の確認が必要」と通知する | 実行終了: Chief Engineerの実行が終わった | sub-issueが1つ以上ある。全てのsub-issueにriskのラベルがちょうど1つ付いている | `cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら、その前に1回だけやり直す |
-| R3 | 要求Issueのラベルを `cumin/status/implementing` に替える | 定期確認: sub-issueのどれかに `cumin/status/ready` が付いた | 要求Issueに状態ラベルがないか、`cumin/status/awaiting-owner-review` が付いている | — |
+| R3 | 要求Issueのラベルを `cumin/status/implementing` に替える | 定期確認: 要求Issueに `cumin/status/awaiting-owner-review` が付いたあとで、sub-issueのどれかに `cumin/status/ready` が付いた。要求Issueに状態ラベルがないときは、sub-issueのどれかに `cumin/status/ready` が付いていればよい | — | — |
 | R4 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「受け入れ可能になった」と通知する | 定期確認: sub-issueが全て閉じた | 要求Issueに `cumin/status/implementing` が付いている。sub-issueが1つ以上ある | — |
 | R5 | (何もしない。完了) | Ownerが要求Issueを閉じた | — | — |
+| R6 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「残りのsub-issueの確認が必要」と通知する | 定期確認: 開いているsub-issueが1つ以上あり、その全てに状態ラベルがない | 要求Issueに `cumin/status/implementing` が付いている | — |
 
 差し戻しのとき、Ownerはsub-issueを追加して `cumin/status/ready` を付ける。これでR3が再び成り立ち、追加分が閉じるとR4が再び成り立つ。
+
+R3が `cumin/status/ready` の付いた時刻を見るのは、要求Issueを見直す場面のためである。前の分割で `cumin/status/ready` が付いたsub-issueは、cuminが着手するまでそのラベルのまま残る。ラベルの有無だけで判定すると、Ownerが新しいsub-issueを確認する前に、要求Issueが `cumin/status/implementing` に替わってしまう。ラベルが付いた時刻は、GitHubがIssueのイベントとして記録している。
+
+Ownerは、分割結果の確認のとき、一部のsub-issueにだけ `cumin/status/ready` を付けてもよい。それらが全て閉じて、状態ラベルのないsub-issueだけが残ると、R6が成り立ち、cuminがもう一度Ownerに確認を求める。Ownerが残りを忘れて、要求Issueが黙って止まることを防ぐ。残りのsub-issueが要らなくなったときは、Ownerがそれを閉じる。全て閉じれば、R4が成り立つ。
 
 Ownerは、要求Issueを書き終えたら `cumin/status/ready` を付ける。これでR1が成り立つ。分割に失敗して `cumin/status/awaiting-owner-decision` になったときも、要求Issueを直してから `cumin/status/ready` を付ける。sub-issueが途中まで作られていても、Chief Engineerは既にあるsub-issueを確かめて、同じものを二重に作らない。`cumin/type/requirement` は要求Issueである印なので、外さずに付けたままにする。Ownerの「進めてよい」の合図を、実装Issueと同じ `cumin/status/ready` に揃えるため、この形にしている。
 

@@ -107,6 +107,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | 知らせるとき | 表の番号 |
 |---|---|
 | 分割結果の確認が必要 | R2 |
+| 残りのsub-issueの確認が必要 | R6 |
 | 要求が受け入れ可能になった | R4 |
 | mergeの判断が必要 | I7 |
 | Agentが先に進めない。指摘が残った | I2、I4、I8、I10、R2 |
@@ -165,3 +166,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 9 | 進められるIssueがなくなる | 1回だけ通知する。同じ通知を繰り返さない |
 | 10 | `Follow-up` に文章があり、対応されなかった `(non-blocking)` の指摘が1つあるPull Requestをmergeする | 要求Issueに、決められた形式のコメントが1つ付く。cuminを再起動しても、同じコメントは増えない |
 | 11 | `Follow-up` が None で、`(non-blocking)` の指摘が全て `Fixed` になったPull Requestをmergeする | 要求Issueにコメントは付かない |
+| 12 | 要求Issueのsub-issueの一部にだけ `cumin/status/ready` を付け、それらが全て閉じる | 要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに1回だけ通知する。残りのsub-issueに `cumin/status/ready` を付けると、要求Issueが `cumin/status/implementing` に戻る |
+| 13 | `cumin/status/ready` のsub-issueが残っている要求Issueを見直し、Chief Engineerが新しいsub-issueを足す | Ownerが新しく `cumin/status/ready` を付けるまで、要求Issueは `cumin/status/awaiting-owner-review` のままである |

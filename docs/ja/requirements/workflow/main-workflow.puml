@@ -72,6 +72,8 @@ note right of Owner
   cumin/status/ready は1つで3つの意味を持つ:
   分割の承認、riskの確定、実装開始の合図。
   riskの判断には必ずOwnerが介在する (まずはここから始める)。
+  一部のsub-issueにだけ付けてもよい。それらが全て閉じて、
+  ラベルのないsub-issueだけが残ったら、cuminがもう一度確認を求める。
 end note
 
 == 4. 実装とレビュー ==
