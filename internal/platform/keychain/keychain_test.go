@@ -24,12 +24,17 @@ const (
 // The tests never touch the login keychain.
 func newTestKeychain(t *testing.T) *Keychain {
 	t.Helper()
+	return newTestKeychainIn(t, t.TempDir())
+}
+
+func newTestKeychainIn(t *testing.T, dir string) *Keychain {
+	t.Helper()
 	if _, err := os.Stat(securityPath); err != nil {
 		t.Skipf("%s does not exist: the Keychain is a macOS feature", securityPath)
 	}
 	before := searchList(t)
 
-	path := filepath.Join(t.TempDir(), "test.keychain-db")
+	path := filepath.Join(dir, "test.keychain-db")
 	// The password protects only this throwaway keychain, so an argument is fine.
 	run(t, "create-keychain", "-p", "test-password", path)
 	t.Cleanup(func() {
@@ -88,6 +93,28 @@ func TestKeychain_StoresAndReadsAPrivateKey(t *testing.T) {
 	}
 	if bytes.ContainsAny(stored, "\n ") || bytes.HasPrefix(stored, []byte("-----BEGIN")) {
 		t.Error("the stored value is not base64 on one line")
+	}
+}
+
+// A home directory can have a name in any language, so the path of the default
+// keychain can hold other characters than ASCII, and a space.
+func TestKeychain_WorksWithANonASCIIPath(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "日本語 ディレクトリ")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	k := newTestKeychainIn(t, dir)
+	ctx := context.Background()
+
+	if err := k.Set(ctx, testService, testAccount, []byte("value")); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	got, err := k.Get(ctx, testService, testAccount)
+	if err != nil || string(got) != "value" {
+		t.Errorf("Get = %q, %v, want value", got, err)
+	}
+	if err := k.Delete(ctx, testService, testAccount); err != nil {
+		t.Errorf("Delete: %v", err)
 	}
 }
 
@@ -232,6 +259,30 @@ func TestSetCommand_KeepsTheSecretOutOfTheArguments(t *testing.T) {
 	want := `add-generic-password -U -s "cumin-works-test" -a "github-app-private-key/Iv23liEXAMPLEclientid" -w c2VjcmV0LXZhbHVl "/tmp/with space/test.keychain-db"` + "\n"
 	if string(stdin) != want {
 		t.Errorf("stdin = %q, want %q", stdin, want)
+	}
+}
+
+func TestSetCommand_WritesANonASCIIPathAsItIs(t *testing.T) {
+	_, stdin, err := Open("/Users/山田 太郎/Library/Keychains/login.keychain-db").setCommand(testService, testAccount, []byte("value"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := ` "/Users/山田 太郎/Library/Keychains/login.keychain-db"` + "\n"; !strings.HasSuffix(string(stdin), want) {
+		t.Errorf("stdin = %q, want the suffix %q", stdin, want)
+	}
+}
+
+func TestSetCommand_RejectsAPathThatTheCommandLineCannotCarry(t *testing.T) {
+	for name, path := range map[string]string{
+		"double quote":  `/tmp/a"b.keychain-db`,
+		"backslash":     `/tmp/a\b.keychain-db`,
+		"line break":    "/tmp/a\nadd-generic-password.keychain-db",
+		"invalid UTF-8": "/tmp/\xff.keychain-db",
+		"empty":         "",
+	} {
+		if _, _, err := Open(path).setCommand(testService, testAccount, []byte("value")); err == nil {
+			t.Errorf("%s: no error", name)
+		}
 	}
 }
 

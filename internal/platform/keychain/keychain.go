@@ -13,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const securityPath = "/usr/bin/security"
@@ -176,10 +178,12 @@ func (k *Keychain) setCommand(service, account string, secret []byte) (args []st
 		}
 	}
 	var line strings.Builder
-	if err := checkName("keychain path", k.path); err != nil {
+	if err := checkPath(k.path); err != nil {
 		return nil, nil, err
 	}
-	fmt.Fprintf(&line, "add-generic-password -U -s %q -a %q -w %s %q\n", service, account, secret, k.path)
+	// The path goes between plain double quotes. %q would escape some runes,
+	// and the security command does not read escapes.
+	fmt.Fprintf(&line, "add-generic-password -U -s %q -a %q -w %s \"%s\"\n", service, account, secret, k.path)
 	return []string{"-i"}, []byte(line.String()), nil
 }
 
@@ -203,6 +207,25 @@ func checkName(what, value string) error {
 	for _, c := range value {
 		if c < ' ' || c > '~' || c == '"' || c == '\\' {
 			return fmt.Errorf("keychain: the %s must be printable ASCII with no double quote and no backslash", what)
+		}
+	}
+	return nil
+}
+
+// checkPath rejects a keychain path that the quoting of the interactive mode
+// cannot carry. The path comes from macOS, so it can hold other characters
+// than ASCII: a home directory can have a name in any language. Observed on
+// macOS: the interactive mode reads a UTF-8 path between double quotes.
+func checkPath(path string) error {
+	if path == "" {
+		return errors.New("keychain: the keychain path is empty")
+	}
+	if !utf8.ValidString(path) {
+		return errors.New("keychain: the keychain path is not valid UTF-8")
+	}
+	for _, c := range path {
+		if !unicode.IsPrint(c) || c == '"' || c == '\\' {
+			return errors.New("keychain: the keychain path must be printable, with no double quote and no backslash")
 		}
 	}
 	return nil
