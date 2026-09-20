@@ -72,6 +72,13 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 - 2つめの ruleset の bypass list が空なので、既定のブランチへの直接の push は、Owner でも通らない。変更は Pull Request で行う。
 - merge の前にブランチが最新であること (strict) は、求めない。
 
+Owner が Pull Request を merge するとき:
+
+- `cumin-protect-main` の「更新の制限」があるので、GitHub は既定のブランチへの merge を、常に「rule に止められている」と表示する (APIでは `mergeable_state` が `blocked`)。bypass list にいる人と App は、それでも merge できる。
+- 画面では、merge のボタンの近くにある、rule を回避して merge する選択肢を選ぶ。`gh` では `gh pr merge --admin` を使う。`--admin` なしの `gh pr merge` は、表示を見て止まる。
+- 必須のcheckの ruleset には bypass がないので、回避できるのは「更新の制限」だけである。必須のcheckが通っていなければ、merge は止まる。
+- 保護されたパスのcheckは、Owner の Pull Request では飛ばされる。飛ばされたcheckは、必須のcheckとして通った扱いになる (2026-09-20に実機で確かめた)。
+
 もう一度実行したとき:
 
 - 同じ引数なら、結果は変わらない。ファイルは足されず、ruleset は同じ内容になる。
