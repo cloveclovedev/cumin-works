@@ -50,9 +50,9 @@ echo "$repo" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || die "the reposito
 for slug in "$implementer_app" "$core_app"; do
   [ -z "$slug" ] || echo "$slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || die "an App slug has only lower-case letters, digits, and '-': $slug"
 done
-# A check name goes into JSON as it is.
-if printf '%s' "$extra_checks" | grep -q '["\\]'; then
-  die "a check name must not contain a double quote or a backslash"
+# A check name goes into a JSON string as it is.
+if printf '%s' "$extra_checks" | LC_ALL=C grep -q '["\\[:cntrl:]]'; then
+  die "a check name must not contain a double quote, a backslash, or a control character"
 fi
 
 # --- Checks before any change -------------------------------------------------
@@ -78,11 +78,51 @@ actions_app_id="$(gh api apps/github-actions --jq '.id')"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-# --- The two files --------------------------------------------------------------
+# --- Render everything before any change ------------------------------------------
 
 sed "s/__IMPLEMENTER_LOGIN__/${implementer_app}[bot]/" "$here/protected-paths.yml" >"$work/workflow.yml"
 grep -q "__IMPLEMENTER_LOGIN__" "$work/workflow.yml" && die "the workflow template still holds the placeholder"
 cp "$here/config.toml" "$work/config.toml"
+
+# replace_text <file> <text to find> <replacement>
+# Replaces the first match on each line by position. sed is not used here,
+# because a check name can hold characters that sed reads as commands ("&", "|").
+replace_text() {
+  NEEDLE="$2" REPLACEMENT="$3" awk '
+    BEGIN { needle = ENVIRON["NEEDLE"]; replacement = ENVIRON["REPLACEMENT"] }
+    {
+      i = index($0, needle)
+      if (i > 0) { $0 = substr($0, 1, i - 1) replacement substr($0, i + length(needle)); found = 1 }
+      print
+    }
+    END { if (!found) exit 3 }
+  ' "$1"
+}
+
+# The JSON files are complete and valid as they are. The script only inserts the
+# cumin-core App, the source of the protected-path check, and more checks.
+if [ -n "$core_app_id" ]; then
+  replace_text "$here/ruleset-protect-main.json" '"bypass_actors": [' \
+    "\"bypass_actors\": [
+    { \"actor_type\": \"Integration\", \"actor_id\": $core_app_id, \"bypass_mode\": \"always\" }," \
+    >"$work/protect-main.json" || die "cannot find the bypass list in ruleset-protect-main.json"
+else
+  cp "$here/ruleset-protect-main.json" "$work/protect-main.json"
+fi
+
+checks="{ \"context\": \"$protected_check\", \"integration_id\": $actions_app_id }"
+old_ifs="$IFS"
+IFS='
+'
+for name in $extra_checks; do
+  checks="$checks,
+          { \"context\": \"$name\" }"
+done
+IFS="$old_ifs"
+replace_text "$here/ruleset-main-required-checks.json" "{ \"context\": \"$protected_check\" }" "$checks" \
+  >"$work/required-checks.json" || die "cannot find the protected-path check in ruleset-main-required-checks.json"
+
+# --- The two files --------------------------------------------------------------
 
 # put_file <path in the repository> <local file> <keep|report>
 # "keep": an existing file is the Owner's. "report": say when it differs.
@@ -115,27 +155,6 @@ put_file "$workflow_path" "$work/workflow.yml" report
 put_file "$config_path" "$work/config.toml" keep
 
 # --- The two rulesets -----------------------------------------------------------
-
-# The JSON files are complete and valid as they are. The script only inserts the
-# cumin-core App, the source of the protected-path check, and more checks.
-if [ -n "$core_app_id" ]; then
-  sed "s/\"bypass_actors\": \[/\"bypass_actors\": [\\
-    { \"actor_type\": \"Integration\", \"actor_id\": $core_app_id, \"bypass_mode\": \"always\" },/" \
-    "$here/ruleset-protect-main.json" >"$work/protect-main.json"
-else
-  cp "$here/ruleset-protect-main.json" "$work/protect-main.json"
-fi
-
-checks="{ \"context\": \"$protected_check\", \"integration_id\": $actions_app_id }"
-old_ifs="$IFS"
-IFS='
-'
-for name in $extra_checks; do
-  checks="$checks, { \"context\": \"$name\" }"
-done
-IFS="$old_ifs"
-sed "s|{ \"context\": \"$protected_check\" }|$checks|" \
-  "$here/ruleset-main-required-checks.json" >"$work/required-checks.json"
 
 # apply_ruleset <local JSON file>
 apply_ruleset() {
