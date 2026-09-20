@@ -42,17 +42,18 @@ type fakeGitHub struct {
 	t *testing.T
 
 	mu        sync.Mutex
-	codes     map[string]string          // code -> App name from the manifest
-	pems      map[string][]byte          // client ID -> PEM that the fake returned
-	keys      map[string]*rsa.PrivateKey // client ID -> key of the App
-	slugs     map[string]string          // client ID -> slug
-	installed map[string]string          // slug -> account that has an installation
-	owner     string                     // the account that owns every App; "example-org" when empty
+	codes     map[string]string            // code -> App name from the manifest
+	pems      map[string][]byte            // client ID -> PEM that the fake returned
+	keys      map[string]*rsa.PrivateKey   // client ID -> key of the App
+	slugs     map[string]string            // client ID -> slug
+	perms     map[string]map[string]string // App name -> permissions from the manifest
+	installed map[string]string            // slug -> account that has an installation
+	owner     string                       // the account that owns every App; "example-org" when empty
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
 	t.Helper()
-	fake := &fakeGitHub{t: t, codes: map[string]string{}, pems: map[string][]byte{}, keys: map[string]*rsa.PrivateKey{}, slugs: map[string]string{}, installed: map[string]string{}}
+	fake := &fakeGitHub{t: t, codes: map[string]string{}, pems: map[string][]byte{}, keys: map[string]*rsa.PrivateKey{}, slugs: map[string]string{}, perms: map[string]map[string]string{}, installed: map[string]string{}}
 	server := httptest.NewServer(http.HandlerFunc(fake.serve))
 	t.Cleanup(server.Close)
 	return fake, server
@@ -126,7 +127,9 @@ func (f *fakeGitHub) serveAsApp(w http.ResponseWriter, r *http.Request) {
 		if owner == "" {
 			owner = "example-org"
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"slug": slug, "html_url": "https://github.example/apps/" + slug, "owner": map[string]any{"login": owner}})
+		permissions := map[string]string{"metadata": "read"} // GitHub adds this one
+		maps.Copy(permissions, f.perms[slug])
+		_ = json.NewEncoder(w).Encode(map[string]any{"slug": slug, "html_url": "https://github.example/apps/" + slug, "owner": map[string]any{"login": owner}, "permissions": permissions})
 		return
 	}
 	installations := []map[string]any{}
@@ -137,9 +140,10 @@ func (f *fakeGitHub) serveAsApp(w http.ResponseWriter, r *http.Request) {
 }
 
 // newCode plays the part of GitHub after the person selects "Create GitHub App".
-func (f *fakeGitHub) newCode(appName string) string {
+func (f *fakeGitHub) newCode(appName string, permissions map[string]string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.perms[appName] = permissions
 	code := fmt.Sprintf("code-%s-%d", appName, len(f.codes)+len(f.pems))
 	f.codes[code] = appName
 	return code
@@ -224,7 +228,7 @@ func (b *fakeBrowser) open(startURL string) error {
 		return nil
 	}
 
-	code := b.gitHub.newCode(manifest.Name)
+	code := b.gitHub.newCode(manifest.Name, manifest.DefaultPermissions)
 	b.mu.Lock()
 	b.manifests = append(b.manifests, manifest)
 	b.codes = append(b.codes, code)
@@ -667,6 +671,32 @@ func TestSetupGitHubApps_SameClientIDForTwoRolesStops(t *testing.T) {
 	}
 	if len(browser.manifests) != 4 {
 		t.Errorf("the second run registered an App: %d manifests", len(browser.manifests))
+	}
+}
+
+// The client IDs of two roles are swapped. Every key is valid, the IDs differ,
+// and the owner is right, but the implementer would act as cumin-core.
+func TestSetupGitHubApps_SwappedClientIDsStop(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	service := newService(t, browser, &memoryStore{}, &out)
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	apps, _ := config.ReadGitHubApps(service.ConfigPath)
+	core, implementer := apps["example-org"]["cumin-core"], apps["example-org"]["implementer"]
+	for app, clientID := range map[string]string{"cumin-core": implementer, "implementer": core} {
+		if err := config.SetGitHubAppClientID(service.ConfigPath, "example-org", app, clientID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := service.Run(context.Background(), "example-org", "")
+	if err == nil || !strings.Contains(err.Error(), `app "cumin-core"`) || !strings.Contains(err.Error(), "belongs to another role") {
+		t.Fatalf("err = %v, want an error about the role of the client ID", err)
+	}
+	if len(browser.manifests) != 4 || len(browser.installed) != 4 {
+		t.Errorf("the second run changed something: %d manifests, %d install pages", len(browser.manifests), len(browser.installed))
 	}
 }
 

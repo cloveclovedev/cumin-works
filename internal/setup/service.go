@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -115,6 +116,13 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 		info, err := s.GitHub.GetApp(ctx, cred)
 		if err != nil {
 			return fmt.Errorf("setup: app %q: GitHub does not accept the private key in the Keychain for the client ID %s. Nothing is changed: %w", app, clientID, err)
+		}
+		// The four Apps have four different sets of permissions, so the
+		// permissions show that the client ID belongs to this role. With the
+		// client IDs of two roles swapped, an agent would act as another App,
+		// for example as the one that may bypass the ruleset.
+		if want, _ := github.AppPermissions(app); !maps.Equal(info.Permissions, want) {
+			return fmt.Errorf("setup: app %q: the App %s with the client ID %s has the permissions %v, and %q needs %v. The client ID belongs to another role, or the permissions of the App changed. Nothing is changed", app, info.Slug, clientID, info.Permissions, app, want)
 		}
 		// A private App can be installed only on the account that owns it.
 		if !strings.EqualFold(info.Owner, org) {

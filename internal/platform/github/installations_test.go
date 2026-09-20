@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +22,11 @@ func appServer(t *testing.T, count int) (*httptest.Server, *[]string) {
 		requests = append(requests, r.URL.RequestURI())
 		switch r.URL.Path {
 		case "/app":
-			writeJSON(w, http.StatusOK, map[string]any{"slug": "acme-cumin-core", "html_url": "https://github.com/apps/acme-cumin-core"})
+			writeJSON(w, http.StatusOK, map[string]any{
+				"slug": "acme-cumin-core", "html_url": "https://github.com/apps/acme-cumin-core",
+				"owner":       map[string]any{"login": "Example-Org"},
+				"permissions": map[string]any{"metadata": "read", "contents": "write", "issues": "write", "pull_requests": "write"},
+			})
 		case "/app/installations":
 			var page int
 			fmt.Sscanf(r.URL.Query().Get("page"), "%d", &page)
@@ -52,6 +57,11 @@ func TestGetApp_ReturnsTheSlugAndTheInstallPage(t *testing.T) {
 	}
 	if info.Slug != "acme-cumin-core" || info.InstallURL() != "https://github.com/apps/acme-cumin-core/installations/new" {
 		t.Errorf("info = %+v, install page = %s", info, info.InstallURL())
+	}
+	// "metadata" is not in the table of cumin, so GetApp drops it.
+	want, _ := AppPermissions("cumin-core")
+	if info.Owner != "Example-Org" || !maps.Equal(info.Permissions, want) {
+		t.Errorf("owner = %q, permissions = %v, want %v", info.Owner, info.Permissions, want)
 	}
 }
 
