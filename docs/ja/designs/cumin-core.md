@@ -4,7 +4,7 @@
 - 要件: [cumin本体の要件](../requirements/cumin-core.md)、[Issueのラベルと状態遷移](../requirements/workflow/issue-states.md)
 - 事実の出どころ: [調査・実測で確定した制約](../requirements/evidence/measured-constraints.md) の行の番号 (「実測 N」と書く) か、公式ドキュメントのページの名前で示す。
 
-上の2つの要件を実装するときに、複数の要求Issueが共有する設計上の決定を書く。v1から持ち込んだ設計はない。
+上の2つの要件を実装するときに、複数の要求Issueが共有する設計上の決定を書く。
 
 ## 範囲
 
