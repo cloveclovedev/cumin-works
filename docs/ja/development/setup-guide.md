@@ -21,7 +21,6 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 - 手順3が当てる内容は、読めるファイル (ruleset の JSON と workflow) である。管理者は、中身を確かめてから、自分の権限で当てられる。画面から手で当てることもできる。
 - 手順1を cumin のコマンドにしているのは、秘密鍵をプロセスの中だけで扱うためと、権限の表を App の登録と token の絞り込みで1つにするためである。
 
-手順1と2は、まだコマンドがない。それまでは [GitHub Appの登録手順](github-app-setup.md) の手順1〜3を使う。
 
 ## 前提
 
@@ -35,6 +34,60 @@ gh auth refresh -h github.com -s workflow
 ```
 
 - ラベルは用意しなくてよい。cumin が起動のときに、足りないラベルを作る。
+- 対象のリポジトリの持ち主は、Organization である。v0.1 の `cumin setup github-apps` は、個人アカウントの GitHub App を登録しない。
+
+個人アカウントのリポジトリから始める場合:
+
+1. 無料の Organization を作る。
+2. リポジトリの Settings のいちばん下の "Danger Zone" で "Transfer" を選び、Organization に移す。Issue、Pull Request、webhook、secrets、release は一緒に移り、古いアドレスは新しい場所に転送される。古い場所に同じ名前のリポジトリを作ると、転送は消える。
+3. そのあとで、下の手順1から進める。GitHub App は Organization の側に登録する。
+
+## 手順1と2: GitHub App の登録とインストール
+
+Host で、Organization の owner がブラウザにログインした状態で実行する。
+
+```sh
+cumin setup github-apps --org <Organizationの名前> [--name-prefix <Appの名前の前に付ける文字>] [--config <Hostの設定ファイル>]
+```
+
+コマンドがすること:
+
+1. 4つの App (`cumin-core`、`chief-engineer`、`implementer`、`reviewer`) のうち、この Host でまだ登録していないものを、1つずつ登録する。App ごとにブラウザで手元のページが開き、ページが manifest を GitHub に送る。GitHub の画面で "Create GitHub App" を押す。
+2. App を1つ登録するたびに、秘密鍵を Keychain に入れ、そのあとで Client ID を Host の設定ファイルの `[github_apps.<Organization>]` に書く。設定ファイルの他の行とコメントは変えない。設定ファイルが symbolic link なら、リンクの先のファイルを書き換え、リンクは残す。
+3. 登録が済んだら、Organization にまだインストールされていない App のインストールのページを開く。アドレスも表示する。
+
+App の名前は `<prefix>cumin-core`、`<prefix>cumin-chief-engineer`、`<prefix>cumin-implementer`、`<prefix>cumin-reviewer` になる。App の名前は GitHub 全体で一意なので、Organization ごとに `--name-prefix` を変える。34文字を超える名前は、ブラウザを開く前にエラーになる。
+
+インストールの画面では:
+
+1. Organization を選ぶ。
+2. "Only select repositories" を選び、cumin に任せるリポジトリだけを選ぶ。
+3. "Install" を押す。
+
+インストールが済んだかどうかは、コマンドをもう一度実行すると分かる。済んでいる App は `installed` と表示され、ページは開かない。
+
+もう一度実行したとき:
+
+- 登録済みの App は飛ばす。登録済みとは、Host の設定に Client ID があり、Keychain にその Client ID の鍵があることである。足りない App だけを登録する。設計の変更で App が増えたときも、同じコマンドで足りる。
+- 登録済みの App は、先に全て確かめる。Keychain の鍵が鍵として読めること、GitHub がその鍵をその Client ID のものとして受け付けること、その App の持ち主がこの Organization であること、App ごとに Client ID が違うこと、App の権限がその role の権限の表と同じであることである。4つの App は権限の組み合わせが全て違うので、Client ID が role の間で入れ替わっていると、ここで分かる。同じ App を2つの role に使うと、Agent が別の role の身元と権限で動いてしまう。1つでも合わなければ、何も登録せずに止まり、その App の名前を表示する。
+- Organization の名前は、大文字と小文字を区別しない。設定ファイルに書いてある綴りの表を使う。大文字と小文字だけが違う表が2つあると、止まる。
+- 設定に Client ID があるのに、Keychain に鍵がない App があると、コマンドは何も登録せずに止まり、その App の名前を表示する。推測では直さない。App が GitHub に残っているなら、[GitHub Appの登録手順](github-app-setup.md) の手順2で鍵を発行し直して、Keychain に入れる。残っていないなら、設定ファイルのその行を消して、もう一度実行する。
+
+途中で止まったとき:
+
+- GitHub が App を登録するのは、"Create GitHub App" を押した時点ではなく、コマンドが code を交換した時点である。その前にやめたなら、GitHub には何も残らない。もう一度実行すればよい。
+- 交換のあと、Client ID を設定に書く前に止まると、GitHub に App があり、Keychain に鍵があり、設定に Client ID がない状態になる。もう一度実行すると、同じ名前の App を登録しようとして、GitHub に「名前が使われている」と断られる。このときは、GitHub の画面でその App を削除してから、もう一度実行する。
+- 設定ファイルが、コマンドの知らない書き方 (`github_apps` の dotted key や inline table) のときは、コマンドは App を登録する前に止まる。ファイルは変えない。`[github_apps.<Organization>]` の表の形に直してから、もう一度実行する。
+
+登録した App は、個人の設定ではなく、Organization の設定にある: `https://github.com/organizations/<Organization>/settings/apps`。
+
+コマンドがしないこと (手作業):
+
+| したいこと | 手順 |
+|---|---|
+| 登録済みの App の権限を変える | Organization の設定で App の "Edit" → "Permissions & events" で権限を変えて保存する。そのあと、Organization の owner が、インストールの画面に出る新しい権限の確認を承認する。コードの権限の表 (`internal/platform/github/roles.go`) と [GitHub Appの登録手順](github-app-setup.md) の表も、同じ Pull Request で変える |
+| App を削除する | Organization の設定で App の "Edit" → "Advanced" → "Delete GitHub App"。Host の設定ファイルからその App の行を消す。Keychain の鍵 (`cumin-works` / `github-app-private-key/<Client ID>`) は、Keychain Access か `security delete-generic-password` で消す |
+| 1つの App だけ登録し直す、鍵を入れ替える | コマンドにはない。App を削除して設定の行を消してから、もう一度実行する。鍵だけなら、手順2で発行し直す |
 
 ## 手順3: リポジトリの準備
 
