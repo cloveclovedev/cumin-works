@@ -139,7 +139,7 @@ replace_text "$here/ruleset-main-required-checks.json" "{ \"context\": \"$protec
 # "keep": an existing file is the Owner's. "report": say when it differs.
 put_file() {
   # gh encodes the branch name as a query parameter. A branch name can hold "#" or "&".
-  if gh api --method GET -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$1" -f ref="$branch" >"$work/current" 2>/dev/null; then
+  if gh api --method GET -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$1" -f ref="$branch" >"$work/current" 2>"$work/read-error"; then
     if cmp -s "$work/current" "$2"; then
       echo "unchanged  $1"
     elif [ "$3" = "keep" ]; then
@@ -152,6 +152,9 @@ put_file() {
     fi
     return 0
   fi
+  # Only a confirmed 404 means that the file does not exist. Any other failure
+  # (network, rate limit, 5xx) must not lead to a second copy or a half setup.
+  grep -q "HTTP 404" "$work/read-error" || die "cannot read $1 from $branch: $(head -n 1 "$work/read-error")"
   if [ "$dry_run" -eq 1 ]; then
     echo "would add  $1"
     return 0
