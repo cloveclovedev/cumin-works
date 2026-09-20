@@ -14,8 +14,7 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 
 | 依頼の種類 | きっかけ | セッション |
 |---|---|---|
-| 分割 | R1: `cumin/type/requirement` の付いた要求Issueが提出された | 新しいセッション |
-| 分割のやり直し | R1: 分割に失敗したあと、Ownerが要求Issueを直して `cumin/status/ready` を付けた | 新しいセッション |
+| 分割 | R1: Ownerが、`cumin/type/requirement` の付いた要求Issueに `cumin/status/ready` を付けた | 新しいセッション |
 
 ## 入力
 
@@ -23,7 +22,7 @@ cuminが依頼のたびに渡すもの:
 
 - 対象のリポジトリと、要求Issueの番号
 - 作業場所。cuminがmainの最新の内容で作業ディレクトリを用意する。Chief Engineerは読むだけで、変更しない
-- roleとしての指示。[実装Issueの分割基準](../policies/issue-sizing.md) と、riskの基準を含む
+- roleとしての指示。[実装Issueの分割基準](../policies/issue-sizing.md)、[要求Issueの分割基準](../policies/requirement-sizing.md) の上限、riskの基準を含む
 
 Chief Engineerが自分で読むもの:
 
@@ -38,6 +37,7 @@ GitHubに残すもの:
 - 実装Issue。要求Issueのsub-issueとして作る。1つの実装Issueが、1つのPull Requestになる
 - 実装Issueどうしの依存関係 (blocked by)
 - それぞれの実装Issueに、`risk/*` のラベルをちょうど1つ
+- 要求Issueにmilestoneが付いていれば、それぞれの実装Issueに同じmilestoneを付ける
 - 要求Issueへのコメントを1つ。分割の全体像を、Ownerが確認しやすい形で書く。形式は [plan-summary.md](../../../../templates/plan-summary.md) に従う
 
 実装Issueの本文は、[implementation-issue.md](../../../../templates/implementation-issue.md) の6つの節で書く。
@@ -103,7 +103,7 @@ cuminが `done` を受けて、GitHub上で確かめること:
 - 要求が曖昧で、完了条件を書けない
 - 要求の中に食い違いがある
 - 意味のある設計案が複数あり、どれを選ぶかで分割が変わる。このときは、選択肢とそれぞれの得失を `blocked_reason` に書く
-- 要求が大きすぎて、sub-issueの上限 (GitHubでは1つのIssueにつき100個) に収まらない
+- 要求が大きすぎる。実装Issueの見込みが、[要求Issueの分割基準](../policies/requirement-sizing.md) の上限 (12個) を超える。このときは、要求Issueの分け方の案を `blocked_reason` に書く
 
 ## 上位要件のテスト
 
@@ -114,3 +114,4 @@ cuminが `done` を受けて、GitHub上で確かめること:
 | 3 | 完了条件を書けないほど曖昧な要求Issueを渡す | 実装Issueは作られない。結果は `blocked` で、何が決まっていないかが理由に書いてある |
 | 4 | 実装Issueを途中まで作ったところで止め、同じ依頼をやり直す | 同じ実装Issueが二重に作られない |
 | 5 | コードの変更と、Pull Requestの作成を試みる | どちらも権限で拒否される |
+| 6 | 実装Issueが12個を超える見込みの、大きな要求Issueを渡す | 実装Issueは作られない。結果は `blocked` で、要求Issueの分け方の案が理由に書いてある |
