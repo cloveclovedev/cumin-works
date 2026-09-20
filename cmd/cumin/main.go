@@ -28,7 +28,7 @@ var commands = []command{
 	{"run", "Run as a resident program. launchd starts this command."},
 	{"status", "Show running agents, issues that wait for the Owner, and the quota usage."},
 	{"quota allow", "Allow cumin to use all of the current 5h quota window."},
-	{"setup", "Prepare the GitHub Apps and a target repository."},
+	{"setup", "Set up cumin on the Host. \"setup github-apps\" registers the GitHub App of each role."},
 }
 
 func main() {
