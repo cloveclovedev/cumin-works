@@ -141,7 +141,7 @@ loop cumin/status/ready が付き依存が解決済みのIssueがあり、AIリ�
     Owner -> Repo : 回答する
     Owner -> Tracker : 実装Issueに cumin/status/ready を付け直す
   end
-  Cumin -> Tracker : mergeされたら、残った宿題 (Follow-upと、対応されなかった提案) を要求Issueに転記する
+  Cumin -> Tracker : mergeされたら、残った作業 (Follow-upと、対応されなかった提案) をフォローアップノートとして要求Issueに転記する
   note over Owner, Cumin
     Owner待ちの間も、cuminは依存関係にない他のIssueを進める。
     Ownerの「進めてよい」の合図は、常に cumin/status/ready を付けること。
@@ -158,7 +158,7 @@ Cumin -> Owner : 通知: 要求が受け入れ可能になった
 alt 受け入れる
   Owner -> Tracker : 要求Issueを閉じる (= 受け入れ)
   note right of Owner
-    転記された宿題のうち、やりたいものは新しい要求Issueに書く。
+    フォローアップノートにある作業のうち、やりたいものは新しい要求Issueに書く。
   end note
 else 差し戻す
   Owner -> Tracker : 要求Issueに追記する、またはsub-issueを追加する

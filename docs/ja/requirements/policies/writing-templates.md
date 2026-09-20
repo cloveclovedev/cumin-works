@@ -16,7 +16,7 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 | [review.md](../../../../templates/review.md) | Reviewer | Implementer、Owner | レビューの指摘と、レビューのまとめを書く |
 | [review-reply.md](../../../../templates/review-reply.md) | Implementer | Reviewer、Owner | レビューの指摘に返答する |
 | [decision-request.md](../../../../templates/decision-request.md) | 全てのAgent | Owner | Ownerに判断を求める。`blocked` のときと、3ラウンドで指摘が残ったとき |
-| [follow-up-note.md](../../../../templates/follow-up-note.md) | cumin (Agentではない) | Owner | mergeのあとに、残った宿題を要求Issueに転記する |
+| [follow-up-note.md](../../../../templates/follow-up-note.md) | cumin (Agentではない) | Owner | mergeのあとに、残った作業をフォローアップノートとして要求Issueに転記する |
 
 ## どのテンプレートにも共通の決まり
 
@@ -77,11 +77,11 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 - 続け方も書く。Ownerは、コメントで答えるかIssueを直してから、実装Issueに `cumin/status/ready` を付ける。
 - Agentが `blocked` を返すときは、この形式の文章を `blocked_reason` に入れる。cuminが、それをIssueのコメントとして投稿する。
 
-### 残った宿題の転記
+### フォローアップノート
 
-- Implementerが `Follow-up` に書いた範囲の外の作業と、対応されなかった `(non-blocking)` の指摘は、mergeされるとPull Requestの中に埋もれる。cuminがこれを要求Issueに集める。
+- Implementerが `Follow-up` に書いた範囲の外の作業と、対応されなかった `(non-blocking)` の指摘は、mergeされるとPull Requestの中に埋もれる。cuminがこれを、フォローアップノートとして要求Issueに転記する。
 - cuminはAIの判断を使わない。機械的に拾えるのは、指摘に必ず `(blocking)` か `(non-blocking)` が付き、返答が `Fixed` などの決まった言葉で始まるからである。テンプレートの形式は、このためにも守らせる。
-- 転記は記録であり、Issueにはしない。Ownerがやりたいものを新しい要求Issueに書けば、通常のフローで実装Issueになる。
+- フォローアップノートは記録であり、Issueにはしない。Ownerがやりたいものを新しい要求Issueに書けば、通常のフローで実装Issueになる。
 
 ## 平易な英語の決まり
 

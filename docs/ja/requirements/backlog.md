@@ -13,12 +13,13 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| Chief Engineerによる宿題の整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがChief Engineerを起動する。Chief Engineerは、mergeされたPull Requestの `Follow-up` と、対応されなかった `(non-blocking)` の指摘を集め、重複を除き、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Ownerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、cuminが機械的に要求Issueへ転記し、Ownerがやりたいものを新しい要求Issueに書く形で足りる。依頼の種類とトリガーが1つずつ増えるのを避けた | 転記される宿題が多く、Ownerが新しい要求Issueに書き直す手間が目立ってきたとき |
+| Chief Engineerによるフォローアップノートの整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがChief Engineerを起動する。Chief Engineerは、mergeされたPull Requestの `Follow-up` と、対応されなかった `(non-blocking)` の指摘を集め、重複を除き、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Ownerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、cuminがフォローアップノートとして機械的に要求Issueへ転記し、Ownerがやりたいものを新しい要求Issueに書く形で足りる。依頼の種類とトリガーが1つずつ増えるのを避けた | フォローアップノートに転記される作業が多く、Ownerが新しい要求Issueに書き直す手間が目立ってきたとき |
 | 次の要求Issueの草案づくり | 進められるIssueがなくなったとき、Agentが要件文書を読んで、次に出すべき要求Issueの草案を作る。Ownerは草案を直して提出するだけになる | v0.1では、待ち状態になったら通知するだけにした。「要求を書くのはOwnerだけ」という前提が変わる | 待ち状態の通知が頻繁に届き、稼働率の目標 (8〜9割) に届かないとき。課題の原因2 (自動のトリガーが成果に結びつかない) への根本の対策である |
 | 差し戻しでChief Engineerを通す | 受け入れでOwnerが差し戻すとき、追加のsub-issueをOwnerが書く代わりに、Chief Engineerに分割させる | v0.1では、Ownerのほうが正しく決められると考え、Ownerが直接sub-issueを足す形にした | 差し戻しのたびにOwnerが実装Issueを書く手間が目立ってきたとき |
 | `risk/medium` の自動merge | `risk/medium` のPull Requestも、cuminがmergeする | 運用しながら、任せてよいかを判断すると決めた | `risk/medium` のPull Requestを、Ownerが続けて直さずにmergeしている実績がたまったとき |
 | mergeの前にmainの最新を取り込む | mergeの前に、mainの最新を取り込んで、必須のcheckをやり直す。GitHubのrulesetの "Require branches to be up to date before merging" を使う案がある | v0.1では、衝突がなく、実装の時点の必須のcheckが通っていればmergeする。問題が起きるのは、並行して進めた独立のIssueの間だけである | 同時に動かすAgentの数を2以上にするとき。mergeのあとでmainのcheckが壊れることが起きたとき |
 | 第三者のコメントの扱い | 公開リポジトリでは、Ownerでもcuminでもない第三者が、IssueやPull Requestにコメントできる。cuminが第三者のコメントを見つけて、無視してよいかをChief Engineerに相談する。または、テンプレートに沿ったコメントなら、Ownerのコメントと同じに扱う | v0.1では、第三者のコメントは無視する | 対象のリポジトリに、第三者のコメントが付くようになったとき |
+| Pull Requestに付けた `cumin/status/ready` を合図として読む | Ownerが差し戻すとき、実装Issueではなく、見ているPull Requestに `cumin/status/ready` を付けても、cuminが合図として扱う | v0.1では、判定に使うのはIssueのラベルだけにした。Pull Requestのラベルは、Issueからコピーしたものであり、cuminは読まない | OwnerがPull Requestの側に `cumin/status/ready` を付けてしまう間違いが続くとき |
 | コメントのスレッドを解決済みにする | Reviewerが、直ったことを確かめた指摘のスレッドを解決済みにする | v0.1では、cuminはレビューの結果だけで判定するので、要らない | Ownerがレビューを読むときに、どの指摘が済んだのかが分かりにくいと感じたとき |
 
 ## Agent
