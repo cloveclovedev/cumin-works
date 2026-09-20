@@ -93,9 +93,11 @@ func TestLive_AgentRun(t *testing.T) {
 		run2.Result.Result, run2.SessionID == run1.SessionID, strings.Contains(run2.Result.Summary, "README"))
 
 	// Run 3: a run over the time limit. No process of its group may stay.
+	// The command creates a marker file first, so that the test knows
+	// that the child ran before the stop.
 	req = base
-	req.Text = "Run the shell command `sleep 600` with the Bash tool, and wait for it to finish. " +
-		"Then finish with the result done."
+	req.Text = "Run exactly this shell command with the Bash tool, and wait for it to finish: " +
+		"`touch started && sleep 600`. Then finish with the result done."
 	req.TimeLimit = 20 * time.Second
 	start := time.Now()
 	_, err = cli.Run(context.Background(), req)
@@ -107,22 +109,46 @@ func TestLive_AgentRun(t *testing.T) {
 	if end.PID == 0 {
 		t.Fatal("run 3: no process ID")
 	}
+	if _, err := os.Stat(filepath.Join(dir, "started")); err != nil {
+		t.Errorf("run 3: the agent did not run the command before the stop: %v", err)
+	}
 	if _, err := syscall.Getpgid(end.PID); err == nil {
 		t.Errorf("run 3: the process group leader is still alive")
 	}
-	out, pgrepErr := exec.Command("pgrep", "-g", itoa(end.PID)).Output()
-	if len(strings.TrimSpace(string(out))) > 0 {
+	// pgrep exits with 1 when no process matches. Any other failure
+	// means that the check did not run.
+	out, pgrepErr := exec.Command("pgrep", "-g", strconv.Itoa(end.PID)).Output()
+	var pgrepExit *exec.ExitError
+	switch {
+	case pgrepErr == nil:
 		t.Errorf("run 3: processes are still in the group of the CLI:\n%s", out)
+	case errors.As(pgrepErr, &pgrepExit) && pgrepExit.ExitCode() == 1:
+		// No process in the group.
+	default:
+		t.Fatalf("run 3: pgrep did not run: %v", pgrepErr)
 	}
-	t.Logf("run 3: kind %s after %s, group empty: %v (pgrep exit: %v)", end.Kind, elapsed.Round(time.Second), len(strings.TrimSpace(string(out))) == 0, pgrepErr)
+	t.Logf("run 3: kind %s after %s, command started: %v, group empty: %v",
+		end.Kind, elapsed.Round(time.Second), fileExists(filepath.Join(dir, "started")), pgrepErr != nil)
 }
 
-func itoa(n int) string { return strconv.Itoa(n) }
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
 
 // testLogger logs at info level into the test log, without the debug
-// lines that hold quota numbers.
+// lines that hold quota numbers. The session ID and the work directory
+// are redacted, so that the log can be copied into a record.
 func testLogger(t *testing.T) *slog.Logger {
-	return slog.New(slog.NewTextHandler(testWriter{t}, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	return slog.New(slog.NewTextHandler(testWriter{t}, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == "session_id" || a.Key == "work_dir" {
+				return slog.String(a.Key, "<redacted>")
+			}
+			return a
+		},
+	}))
 }
 
 type testWriter struct{ t *testing.T }
