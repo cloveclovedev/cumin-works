@@ -26,6 +26,8 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 | `cumin/status/awaiting-owner-decision` | 実装Issue、要求Issue | Agentが先に進めない。Ownerの回答を待っている | cumin |
 | `risk/low`、`risk/medium`、`risk/high` | 実装Issue | mergeのrisk。Chief Engineerが仮に付け、Ownerが確定する | Chief Engineer、Owner |
 
+実装Issueの `cumin/status/*` と `risk/*` は、そのIssueを閉じるPull Requestにも、写しとして付く (原則5)。
+
 実装Issueであることを表すラベルは作らない。`cumin/type/requirement` の付いたIssueのsub-issueが、実装Issueである。
 
 ## 原則
@@ -34,6 +36,8 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 2. Agentの申告では判定しない。GitHub上の事実で判定する。Agentには実行の最後に結果 (`done` か `blocked` か、と理由) を決まった形式で返させるが、`done` は「確かめ始めてよい」という合図でしかない。Pull Requestがあるか、checkが通ったか、レビューが出たかは、cuminがGitHubで確かめる。
 3. 着手は、依頼より先にラベルを付け替えることで表す。同じIssueを二重に依頼しない。
 4. 状態を表すラベルは1つのIssueに常に1つだけで、付け替えは全てcuminが行う。例外は `cumin/status/ready` で、これだけはOwnerが付ける。
+5. 判定に使うのは、Issueのラベルだけである。cuminは、実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestに写す (I11)。写しは、OwnerがPull Requestの一覧で状態とriskを見分けるためだけのもので、cuminは読まない。Pull Requestの側でラベルを変えても、cuminがIssueに合わせて上書きする。Ownerの合図 (`cumin/status/ready`) は、常にIssueに付ける。
+6. cuminは、閉じた要求Issueには何もしない。読まず、ラベルを替えず、コメントも書かない。要求Issueを閉じることが、受け入れの完了 (R5) だからである。
 
 Agentの結果を決まった形式で受け取る手段として、Claude Codeのheadless実行には `--json-schema` がある (公式ドキュメントで確認済み)。
 
@@ -82,6 +86,7 @@ OwnerがChief Engineerを通さずに、自分でsub-issueを書いてもよい�
 | I8 | Reviewerに「何が決まっていないことが原因か」の整理を依頼し、レポートが投稿されたら `cumin/status/awaiting-owner-decision` に替えて通知する | 実行終了: Reviewerの実行が終わった | 最新のレビューが `REQUEST_CHANGES` で、ラウンドが上限に達した | — |
 | I9 | 残った宿題を、要求Issueにコメントとして転記する。実装Issueはこれで完了 | 定期確認: OwnerまたはcuminがPull Requestをmergeし、GitHubが実装Issueを閉じた | このPull Requestについて、まだ転記していない。`Follow-up` に文章があるか、対応されなかった `(non-blocking)` の指摘がある | — |
 | I10 | `blocked_reason` を実装Issueにコメントとして投稿し、ラベルを `cumin/status/awaiting-owner-decision` に替えて通知する。やり直さない | 実行終了: Reviewerの実行が終わり、結果が `blocked` | — | — |
+| I11 | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする | 定期確認: 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | — | — |
 
 I5〜I8は、Reviewerの結果が `done` のときの動作である。結果が `blocked` のときは、I10に従う。
 

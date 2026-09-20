@@ -14,7 +14,7 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 | 受け持つこと | 内容 |
 |---|---|
 | GitHubの定期確認 | 対象のリポジトリのIssue、Pull Request、check、レビューを、決まった間隔で確かめる |
-| 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う |
+| 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う。実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestに写す |
 | Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
 | 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
 | merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする。mergeの方法は設定で選べる (初期値はsquash) |
@@ -98,6 +98,8 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 - 拾うものは2つある。Pull Requestの説明の `Follow-up` の節の文章と、対応されなかった `(non-blocking)` の指摘である
 - 対応されなかった指摘とは、`cumin-reviewer` の `(non-blocking)` の指摘のうち、`Fixed` か `Answer` で始まる返答が付いていないものである。ラベルが `praise` と `note` の指摘は拾わない
 - 拾うものが何もなければ、コメントしない
+- 転記するのは、要求Issueが開いている間だけである。閉じた要求Issueには転記しない
+- sub-issueが全て閉じたときは、同じ定期確認の中で、転記を受け入れの通知 (R4) より先に行う。Ownerが通知を受けて見に来たときには、転記が済んでいる
 - 1つのPull Requestについて、コメントは1回だけにする。コメントに目印を埋め込み、cuminが再起動しても二重に転記しない
 - 形式は [follow-up-note.md](../../../templates/follow-up-note.md) に従う
 - 転記は記録である。Issueにはしない。Ownerは受け入れのときに一覧を見て、やりたいものを新しい要求Issueに書く。そこからは通常のフローに乗り、Chief Engineerが実装Issueに分割する
@@ -182,3 +184,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 11 | `Follow-up` が None で、`(non-blocking)` の指摘が全て `Fixed` になったPull Requestをmergeする | 要求Issueにコメントは付かない |
 | 12 | 要求Issueのsub-issueの一部にだけ `cumin/status/ready` を付け、それらが全て閉じる | 要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに1回だけ通知する。残りのsub-issueに `cumin/status/ready` を付けると、要求Issueが `cumin/status/implementing` に戻る |
 | 13 | `cumin/status/ready` のsub-issueが残っている要求Issueを見直し、Chief Engineerが新しいsub-issueを足す | Ownerが新しく `cumin/status/ready` を付けるまで、要求Issueは `cumin/status/awaiting-owner-review` のままである |
+| 14 | cuminが実装Issueのラベルを付け替える。Ownerが実装Issueのriskを変える。OwnerがPull Requestの側のラベルを変える | どの場合も、次の定期確認のあとで、Pull Requestの `cumin/status/*` と `risk/*` が、実装Issueと同じになる。cuminの判定は、Pull Requestのラベルに左右されない |
+| 15 | cuminを止めている間に、Pull Requestをmergeし、要求Issueを閉じる。そのあとでcuminを起動する | 閉じた要求Issueには、コメントもラベルの変更も行われない |
