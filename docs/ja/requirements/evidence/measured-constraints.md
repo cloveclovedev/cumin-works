@@ -64,3 +64,5 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 39 | GraphQLのAPIは、installation tokenに、1時間あたり5,000ポイントを割り当てる。同じインストールの対象のリポジトリ全てで、この枠を分け合う。1つの問い合わせは1ポイント以上かかる。`first` と `last` に指定できるのは1から100までである | docs.github.com: rate-limits-and-query-limits-for-the-graphql-api | 公式文書 |
 | 40 | GraphQLに、ラベルが付いた時刻と、レビューとcheckの状態を読む項目がある。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`、`statusCheckRollup`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt`。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection (2026-09-20) | 実測 (installation tokenでは未確認) |
 | 41 | macOSの `security find-generic-password -s <service> -a <account> -w` は、項目のパスワードだけを出力する。改行を含む値を読むと形が変わる、という報告があるが、確かめていない | `man security` | 公式文書 (改行を含む値は未確認) |
+| 42 | GitHub Appが作ったPull Requestでは、作成者の種類 (`pull_request.user.type`) が `Bot` になる見込みである。保護されたパスのcheckは、これを条件に使う | 広く観測されている振る舞い。公式文書には、Appが作ったPull Requestについての明記を見つけていない。使い捨てのリポジトリで確かめる | 未確認 |
+| 43 | `GET /apps/{app_slug}` で、privateなGitHub Appを、Organizationの管理者のtokenで読めるかどうか | 公式文書 (rest/apps/apps) に記載がない。保護されたパスのcheckがAppの名前を使わなくなったので、cuminは、この呼び出しに頼らない | 未確認 |
