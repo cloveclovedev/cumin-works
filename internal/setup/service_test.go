@@ -3,9 +3,12 @@ package setup
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -15,13 +18,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
+	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
 )
 
 const (
@@ -34,20 +41,27 @@ const (
 type fakeGitHub struct {
 	t *testing.T
 
-	mu    sync.Mutex
-	codes map[string]string // code -> App name from the manifest
-	pems  map[string][]byte // client ID -> PEM that the fake returned
+	mu        sync.Mutex
+	codes     map[string]string          // code -> App name from the manifest
+	pems      map[string][]byte          // client ID -> PEM that the fake returned
+	keys      map[string]*rsa.PrivateKey // client ID -> key of the App
+	slugs     map[string]string          // client ID -> slug
+	installed map[string]string          // slug -> account that has an installation
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
 	t.Helper()
-	fake := &fakeGitHub{t: t, codes: map[string]string{}, pems: map[string][]byte{}}
+	fake := &fakeGitHub{t: t, codes: map[string]string{}, pems: map[string][]byte{}, keys: map[string]*rsa.PrivateKey{}, slugs: map[string]string{}, installed: map[string]string{}}
 	server := httptest.NewServer(http.HandlerFunc(fake.serve))
 	t.Cleanup(server.Close)
 	return fake, server
 }
 
 func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/app" || r.URL.Path == "/app/installations" {
+		f.serveAsApp(w, r)
+		return
+	}
 	match := regexp.MustCompile(`^/app-manifests/([^/]+)/conversions$`).FindStringSubmatch(r.URL.Path)
 	if r.Method != http.MethodPost || match == nil {
 		http.Error(w, `{"message":"Not Found"}`, http.StatusNotFound)
@@ -72,6 +86,8 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
 	clientID := "Iv23li" + name
 	f.pems[clientID] = pemBytes
+	f.keys[clientID] = key
+	f.slugs[clientID] = name
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{
@@ -79,6 +95,40 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		"html_url": "https://github.com/apps/" + name, "pem": string(pemBytes),
 		"client_secret": fakeClientSecret, "webhook_secret": fakeWebhookSecret,
 	})
+}
+
+// serveAsApp answers the two calls that an App makes with a JWT. It checks the
+// signature with the key that the fake gave to that App.
+func (f *fakeGitHub) serveAsApp(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	jwt, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	parts := strings.Split(jwt, ".")
+	if len(parts) != 3 {
+		http.Error(w, `{"message":"A JSON web token could not be decoded"}`, http.StatusUnauthorized)
+		return
+	}
+	var claims struct{ Iss string }
+	rawClaims, _ := base64.RawURLEncoding.DecodeString(parts[1])
+	_ = json.Unmarshal(rawClaims, &claims)
+	key, ok := f.keys[claims.Iss]
+	signature, _ := base64.RawURLEncoding.DecodeString(parts[2])
+	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+	if !ok || rsa.VerifyPKCS1v15(&key.PublicKey, crypto.SHA256, digest[:], signature) != nil {
+		http.Error(w, `{"message":"A JSON web token could not be decoded"}`, http.StatusUnauthorized)
+		return
+	}
+	slug := f.slugs[claims.Iss]
+	w.Header().Set("Content-Type", "application/json")
+	if r.URL.Path == "/app" {
+		_ = json.NewEncoder(w).Encode(map[string]any{"slug": slug, "html_url": "https://github.example/apps/" + slug})
+		return
+	}
+	installations := []map[string]any{}
+	if account, ok := f.installed[slug]; ok {
+		installations = append(installations, map[string]any{"account": map[string]any{"login": account}})
+	}
+	_ = json.NewEncoder(w).Encode(installations)
 }
 
 // newCode plays the part of GitHub after the person selects "Create GitHub App".
@@ -103,7 +153,8 @@ type fakeBrowser struct {
 	mu        sync.Mutex
 	manifests []Manifest
 	codes     []string
-	statuses  []int // the status of every callback request
+	statuses  []int    // the status of every callback request
+	installed []string // the installation pages that the command opened
 	pending   sync.WaitGroup
 }
 
@@ -121,6 +172,12 @@ var (
 )
 
 func (b *fakeBrowser) open(startURL string) error {
+	if !strings.HasPrefix(startURL, "http://127.0.0.1:") {
+		b.mu.Lock()
+		b.installed = append(b.installed, startURL)
+		b.mu.Unlock()
+		return nil
+	}
 	b.mu.Lock()
 	if b.stopAfter > 0 && len(b.manifests) >= b.stopAfter {
 		b.mu.Unlock()
@@ -208,14 +265,25 @@ func (m *memoryStore) SetBase64(_ context.Context, service, account string, valu
 	return nil
 }
 
+func (m *memoryStore) GetBase64(_ context.Context, service, account string) ([]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	value, ok := m.items[service+" "+account]
+	if !ok {
+		return nil, keychain.ErrNotFound
+	}
+	return bytes.Clone(value), nil
+}
+
 func newService(t *testing.T, browser *fakeBrowser, store *memoryStore, out io.Writer) *Service {
 	t.Helper()
 	fake, api := newFakeGitHub(t)
 	browser.t, browser.gitHub = t, fake
 	return &Service{
 		GitHubURL:      "https://github.example",
-		Converter:      github.NewAppClient(api.URL, api.Client()),
+		GitHub:         github.NewAppClient(api.URL, api.Client()),
 		Secrets:        store,
+		ConfigPath:     filepath.Join(t.TempDir(), "config.toml"),
 		OpenBrowser:    browser.open,
 		Out:            out,
 		ConfirmTimeout: 5 * time.Second,
@@ -228,7 +296,7 @@ func TestSetupGitHubApps_RegistersFourAppsAndStoresTheKeys(t *testing.T) {
 	store := &memoryStore{}
 	service := newService(t, browser, store, &out)
 
-	registered, err := service.RegisterApps(context.Background(), "example-org", "acme-")
+	registered, err := service.RegisterApps(context.Background(), "example-org", "acme-", Apps)
 	if err != nil {
 		t.Fatalf("RegisterApps: %v", err)
 	}
@@ -295,7 +363,7 @@ func TestSetupGitHubApps_WrongStateStoresNothing(t *testing.T) {
 	service.ConfirmTimeout = 500 * time.Millisecond
 
 	// The page refuses the callback, and the flow gets no confirmation.
-	registered, err := service.RegisterApps(context.Background(), "example-org", "")
+	registered, err := service.RegisterApps(context.Background(), "example-org", "", Apps)
 	if err == nil || !strings.Contains(err.Error(), "no confirmation") {
 		t.Fatalf("err = %v, want an error", err)
 	}
@@ -318,7 +386,7 @@ func TestSetupGitHubApps_ReloadedCallbackDoesNotReachTheNextApp(t *testing.T) {
 	store := &memoryStore{}
 	service := newService(t, browser, store, &out)
 
-	registered, err := service.RegisterApps(context.Background(), "example-org", "")
+	registered, err := service.RegisterApps(context.Background(), "example-org", "", Apps)
 	if err != nil {
 		t.Fatalf("RegisterApps: %v", err)
 	}
@@ -344,7 +412,7 @@ func TestSetupGitHubApps_StopsWhenThePersonDoesNotConfirm(t *testing.T) {
 	service := newService(t, browser, store, &out)
 	service.ConfirmTimeout = 300 * time.Millisecond
 
-	registered, err := service.RegisterApps(context.Background(), "example-org", "")
+	registered, err := service.RegisterApps(context.Background(), "example-org", "", Apps)
 	if err == nil || !strings.Contains(err.Error(), "no confirmation") || !strings.Contains(err.Error(), `"implementer"`) {
 		t.Fatalf("err = %v, want a timeout for the third App", err)
 	}
@@ -359,7 +427,7 @@ func TestSetupGitHubApps_OutputHoldsNoSecret(t *testing.T) {
 	store := &memoryStore{}
 	service := newService(t, browser, store, &out)
 
-	registered, err := service.RegisterApps(context.Background(), "example-org", "")
+	registered, err := service.RegisterApps(context.Background(), "example-org", "", Apps)
 	if err != nil {
 		t.Fatalf("RegisterApps: %v", err)
 	}
@@ -403,13 +471,160 @@ func TestSetupGitHubApps_ClosesTheLocalPage(t *testing.T) {
 	browser := &fakeBrowser{org: "example-org"}
 	service := newService(t, browser, &memoryStore{}, &out)
 
-	if _, err := service.RegisterApps(context.Background(), "example-org", ""); err != nil {
+	if _, err := service.RegisterApps(context.Background(), "example-org", "", Apps); err != nil {
 		t.Fatalf("RegisterApps: %v", err)
 	}
 	callbackURL := browser.manifests[0].RedirectURL
 	if resp, err := http.Get(callbackURL); err == nil {
 		resp.Body.Close()
 		t.Errorf("the local page still answers on %s after the command ended", callbackURL)
+	}
+}
+
+const hostSettings = `# Host settings. A person edits this file.
+repositories = ["example-org/example-repo"]  # the target
+work_dir = "/tmp/cumin-work"
+
+[roles.implementer]
+time_limit = "45m"
+`
+
+func TestSetupGitHubApps_WritesTheClientIDsAndKeepsTheOtherSettings(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	store := &memoryStore{}
+	service := newService(t, browser, store, &out)
+	if err := os.WriteFile(service.ConfigPath, []byte(hostSettings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	text, _ := os.ReadFile(service.ConfigPath)
+	if !strings.HasPrefix(string(text), hostSettings) {
+		t.Errorf("the old lines of the settings file changed:\n%s", text)
+	}
+	for _, secret := range []string{"PRIVATE KEY", fakeClientSecret, fakeWebhookSecret} {
+		if strings.Contains(string(text), secret) {
+			t.Errorf("the settings file holds a secret: %q", secret)
+		}
+	}
+	settings, err := config.Load(service.ConfigPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, app := range Apps {
+		clientID := settings.GitHubApps["example-org"][app]
+		if _, ok := browser.gitHub.pems[clientID]; !ok {
+			t.Errorf("%s: the settings hold the client ID %q, which GitHub did not return", app, clientID)
+		}
+	}
+	if got := settings.Roles[config.RoleImplementer].TimeLimit; got != 45*time.Minute {
+		t.Errorf("another setting changed: time limit = %v", got)
+	}
+}
+
+// The run stops after the second App. The next run registers only the rest.
+func TestSetupGitHubApps_SecondRunRegistersOnlyTheMissingApps(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org", stopAfter: 2}
+	store := &memoryStore{}
+	service := newService(t, browser, store, &out)
+	service.ConfirmTimeout = 300 * time.Millisecond
+
+	if err := service.Run(context.Background(), "example-org", ""); err == nil {
+		t.Fatal("the first run gave no error")
+	}
+	apps, _ := config.ReadGitHubApps(service.ConfigPath)
+	if len(apps["example-org"]) != 2 {
+		t.Fatalf("the settings hold %d client IDs after the stopped run, want 2", len(apps["example-org"]))
+	}
+
+	browser.stopAfter = 0
+	service.ConfirmTimeout = 5 * time.Second
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	var names []string
+	for _, manifest := range browser.manifests {
+		names = append(names, manifest.Name)
+	}
+	if want := "cumin-core cumin-chief-engineer cumin-implementer cumin-reviewer"; strings.Join(names, " ") != want {
+		t.Errorf("registered %q over both runs, want each App one time: %q", names, want)
+	}
+	apps, _ = config.ReadGitHubApps(service.ConfigPath)
+	if len(apps["example-org"]) != 4 || len(store.items) != 4 {
+		t.Errorf("after the second run: %d client IDs and %d keys, want 4 and 4", len(apps["example-org"]), len(store.items))
+	}
+}
+
+func TestSetupGitHubApps_RunAfterAFullRunRegistersNothing(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	service := newService(t, browser, &memoryStore{}, &out)
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	out.Reset()
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if len(browser.manifests) != 4 {
+		t.Errorf("the browser saw %d manifests over both runs, want 4", len(browser.manifests))
+	}
+	if got := strings.Count(out.String(), "already registered "); got != 4 {
+		t.Errorf("the second run reports %d registered Apps, want 4:\n%s", got, out.String())
+	}
+}
+
+func TestSetupGitHubApps_ClientIDWithoutKeyStopsBeforeAnyRegistration(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	store := &memoryStore{}
+	service := newService(t, browser, store, &out)
+	settings := "[github_apps.example-org]\nimplementer = \"Iv23liNOKEY\"\n"
+	if err := os.WriteFile(service.ConfigPath, []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := service.Run(context.Background(), "example-org", "")
+	if err == nil || !strings.Contains(err.Error(), `"implementer"`) || !strings.Contains(err.Error(), "Iv23liNOKEY") {
+		t.Fatalf("err = %v, want an error that names the App and the client ID", err)
+	}
+	if len(browser.manifests) != 0 || len(store.items) != 0 {
+		t.Errorf("the run registered %d Apps and stored %d keys, want none", len(browser.manifests), len(store.items))
+	}
+	if text, _ := os.ReadFile(service.ConfigPath); string(text) != settings {
+		t.Errorf("the settings file changed: %s", text)
+	}
+}
+
+func TestSetupGitHubApps_OpensTheInstallPageOnlyForAppsThatAreNotInstalled(t *testing.T) {
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	service := newService(t, browser, &memoryStore{}, &out)
+	// GitHub account names ignore case.
+	browser.gitHub.installed["cumin-core"] = "Example-Org"
+	browser.gitHub.installed["cumin-reviewer"] = "example-org"
+	browser.gitHub.installed["cumin-implementer"] = "another-org"
+
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want := []string{
+		"https://github.example/apps/cumin-chief-engineer/installations/new",
+		"https://github.example/apps/cumin-implementer/installations/new",
+	}
+	if strings.Join(browser.installed, " ") != strings.Join(want, " ") {
+		t.Errorf("opened %q, want %q", browser.installed, want)
+	}
+	for _, address := range want {
+		if !strings.Contains(out.String(), address) {
+			t.Errorf("the output does not show %s", address)
+		}
 	}
 }
 
