@@ -138,7 +138,8 @@ replace_text "$here/ruleset-main-required-checks.json" "{ \"context\": \"$protec
 # put_file <path in the repository> <local file> <keep|report>
 # "keep": an existing file is the Owner's. "report": say when it differs.
 put_file() {
-  if gh api -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$1?ref=$branch" >"$work/current" 2>/dev/null; then
+  # gh encodes the branch name as a query parameter. A branch name can hold "#" or "&".
+  if gh api --method GET -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$1" -f ref="$branch" >"$work/current" 2>/dev/null; then
     if cmp -s "$work/current" "$2"; then
       echo "unchanged  $1"
     elif [ "$3" = "keep" ]; then
