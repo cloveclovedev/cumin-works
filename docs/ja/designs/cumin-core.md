@@ -52,11 +52,14 @@
 
 ## 4. GitHubクライアント
 
+- cuminが使う認証は、GitHub App の installation token だけである。Ownerの認証情報と、リポジトリの管理者の権限 (Administration) は使わない。
 - 標準ライブラリ (`net/http`、`encoding/json`、`crypto/rsa`) だけで書く。SDKは使わない。使うendpointが少なく、依存を増やす理由がない。
 - 読み取りは、定期確認の1回分を、リポジトリごとに1つのGraphQLの問い合わせで読む。Issue、sub-issue、ラベル、blocked by、Pull Request、レビュー、checkは入れ子の関係にあり、RESTだとIssueの数に比例して要求が増えるためである。1回で読めば、判定に使うスナップショットの時点も揃う。
+- 同じ問い合わせを、Agentの実行が終わった直後にも行う。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。
 - 書き込みは、全てRESTで行う。ラベル、コメント、merge、sub-issue、tokenの発行がこれに当たる。GitHub App に要る権限が、RESTのendpointごとに公式ドキュメントに書かれているためである (実測 10、33)。
 - 例外として、必須のcheckの一覧はRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 34)。
-- 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and query limits for the GraphQL API)。60秒ごとの問い合わせは、この上限に対して十分に小さい。1つの接続が100件を超えたら、続きを読む。
+- 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and query limits for the GraphQL API)。1つの接続が100件を超えたら、続きを読む。
+- この上限は、同じinstallation (Organization) にある対象のリポジトリの全てで分け合う。1時間に使うポイントは、リポジトリの数、1時間の問い合わせの回数、1回のコストの積になる。60秒の間隔なら、対象が数個のうちは十分に収まる。cuminは、応答の `rateLimit` の `cost` と `remaining` をログに出す (GraphQLのスキーマで確かめた)。対象が増えて足りなくなったら、複数のリポジトリを1つの問い合わせにまとめる。
 - installation token でGraphQLの項目を読めない場合は、RESTで読む (実測 37)。そのときは、理由をこの文書の Decision log に書く。
 - GitHubの型 (GraphQLの応答、RESTのDTO) は `internal/platform/github` で止める。判定のロジックには、cuminの型のスナップショットだけを渡す。
 
@@ -78,6 +81,8 @@
 - R3は、sub-issueに `cumin/status/ready` が付いた時刻が、要求Issueに `cumin/status/awaiting-owner-review` が付いた時刻よりあとかどうかで判定する。
 - レビューのラウンドは、実装Issueに最後に `cumin/status/ready` が付いた時刻と、`cumin-reviewer` の最後の `APPROVE` の時刻の、新しいほうよりあとに出たレビューを数える。
 - 同じラベルが何度も付くので、ラベルごとに、いちばん新しい `LabeledEvent` を使う。今付いているかどうかは、`labels` で見る。
+
+要求Issueが閉じたあと (R5) は、そのsub-issueを読まない。要求Issueが閉じた時点で転記がまだのPull Requestの扱いは、要件にないので、I9を作る要求Issueで決める。
 
 I9で使うものは、mergeされたPull Requestについてだけ、別に読む。Pull Requestの説明、レビューのコメント、転記先の要求Issueのコメントである。要求Issueのコメントを読むのは、転記済みの目印を探して、再起動のあとも二重に転記しないためである。
 
