@@ -73,9 +73,15 @@ type rateLimitInfo struct {
 	} `json:"unifiedWindows"`
 }
 
+// rateLimitWindow uses pointers, so that a missing or renamed field is
+// told from a zero value.
 type rateLimitWindow struct {
-	Utilization float64 `json:"utilization"`
-	ResetsAt    int64   `json:"resetsAt"` // Unix seconds
+	Utilization *float64 `json:"utilization"`
+	ResetsAt    *int64   `json:"resetsAt"` // Unix seconds
+}
+
+func (w *rateLimitWindow) complete() bool {
+	return w != nil && w.Utilization != nil && w.ResetsAt != nil
 }
 
 // stream is what the reader collected from stdout.
@@ -190,13 +196,14 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte) {
 }
 
 // quotaOf converts the rate limit event. It reports false when a window
-// is missing, so that a changed event format is read as "no usage".
+// or one of its fields is missing, so that a changed event format is
+// read as "no usage" and not as zero usage.
 func quotaOf(info *rateLimitInfo) (QuotaUsage, bool) {
-	if info == nil || info.UnifiedWindows.FiveHour == nil || info.UnifiedWindows.SevenDay == nil {
+	if info == nil || !info.UnifiedWindows.FiveHour.complete() || !info.UnifiedWindows.SevenDay.complete() {
 		return QuotaUsage{}, false
 	}
 	window := func(w *rateLimitWindow) QuotaWindow {
-		return QuotaWindow{Utilization: w.Utilization, ResetsAt: time.Unix(w.ResetsAt, 0)}
+		return QuotaWindow{Utilization: *w.Utilization, ResetsAt: time.Unix(*w.ResetsAt, 0)}
 	}
 	return QuotaUsage{
 		FiveHour: window(info.UnifiedWindows.FiveHour),

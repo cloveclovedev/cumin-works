@@ -139,6 +139,19 @@ func TestRun_NoQuotaIsNotAnAbnormalEnd(t *testing.T) {
 	}
 }
 
+// A rate_limit_event whose window lacks a field is read as "no usage",
+// not as zero usage.
+func TestRun_IncompleteQuotaWindowIsNotRead(t *testing.T) {
+	path, _ := fakeCLI(t, "incomplete-quota.jsonl", 0)
+	run, err := quiet(path).Run(context.Background(), request(t))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if run.QuotaRead {
+		t.Errorf("QuotaRead = true with %+v, want false", run.Quota)
+	}
+}
+
 func TestRun_AbnormalEnds(t *testing.T) {
 	tests := []struct {
 		name          string
