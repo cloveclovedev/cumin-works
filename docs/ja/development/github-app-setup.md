@@ -122,16 +122,21 @@ cuminは、mainに適用されるrulesetに登録された必須のcheckが全�
 
 ## 確認すること
 
-登録が終わったら、使い捨てのリポジトリで次を確かめる。公式ドキュメントに記載がなく、実機でしか分からない点である。
+登録が終わったら、使い捨てのリポジトリで次を確かめる。公式ドキュメントに記載がなく、実機でしか分からない点である。1〜8は [実機の確認 (live test)](live-tests.md) の `TestLiveSetupChecks` が確かめる。9は、管理者が自分の `gh` で確かめる。
 
-| # | 確かめること | 期待する結果 |
-|---|---|---|
-| 1 | `cumin-implementer` のトークンでmainに直接pushする | rulesetに拒否される |
-| 2 | `cumin-implementer` のトークンでPull Requestをmergeする | rulesetに拒否される |
-| 3 | `cumin-core` のトークンでPull Requestをmergeする | 成功する |
-| 4 | `cumin-chief-engineer` のトークンでIssueを作り、ラベル、sub-issue、依存関係 (blocked by) を付ける | 成功する。Issue作成時に渡したラベルが黙って捨てられないことも見る |
-| 5 | `cumin-reviewer` のトークンで、`cumin-implementer` が開いたPull RequestにAPPROVEのレビューを出す | 成功する |
-| 6 | Appの表示名と、コミットの作者の表示 | `<app名>[bot]` と表示される見込み |
+結果の列は、2026-09-20に、公開の使い捨てのリポジトリで確かめたものである。
+
+| # | 確かめること | 期待する結果 | 結果 |
+|---|---|---|---|
+| 1 | Implementer のAppのトークンで、mainに直接pushする | rulesetに拒否される | 拒否された (`GH013: Repository rule violations found`) |
+| 2 | Implementer のAppのトークンで、必須のcheckが通ったPull Requestをmergeする | rulesetに拒否される | 拒否された (405。`Cannot update this protected ref.`) |
+| 3 | cumin本体のAppのトークンで、同じPull Requestをmergeする | 成功する | 成功した (200) |
+| 4 | Chief Engineer のAppのトークンでIssueを作り、ラベル、sub-issue、依存関係 (blocked by) を付ける | 成功する。Issue作成時に渡したラベルが黙って捨てられないことも見る | 成功した。ラベルはIssueに付いた。sub-issueは `parent_issue_id` で作れた。blocked by は201。ラベルそのものは、先にcumin本体のAppが作った |
+| 5 | Reviewer のAppのトークンで、Implementer のAppが開いたPull RequestにAPPROVEのレビューを出す | 成功する | 成功した (200、`APPROVED`) |
+| 6 | Appの表示名と、コミットの作者の表示 | `<slug>[bot]` | Pull Requestの作成者も、コミットの作者も `<slug>[bot]` だった。コミットのメールアドレスを `<botのユーザID>+<slug>[bot]@users.noreply.github.com` にすると、GitHubがbotのユーザに紐づけた |
+| 7 | Implementer のAppのPull Requestで、保護されたパスを変える、変えない | 変えると `cumin-protected-paths` が失敗し、変えないと通る | そのとおりだった (`failure` と `success`) |
+| 8 | Appが作ったPull Requestの作成者の種類 (`user.type`) | `Bot`。保護されたパスのjobが飛ばされずに動く | APIでは `Bot` だった。jobは飛ばされずに動いた |
+| 9 | 管理者の `gh` で、非公開のAppを読む (`gh api apps/<slug>`) | 読める (`scripts/setup-repo.sh --core-app` が使う) | 読めた。認証なしでは404だった |
 
 ## 認証の流れ (cuminの実装向けの要約)
 

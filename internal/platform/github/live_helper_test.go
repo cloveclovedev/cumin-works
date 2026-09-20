@@ -183,6 +183,8 @@ func (l *live) api(t *testing.T, token, method, path string, body any) response 
 func (l *live) record(number, what, expected, actual string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	// An answer of GitHub can have line breaks and "|". Keep one table row.
+	actual = strings.ReplaceAll(strings.Join(strings.Fields(actual), " "), "|", "\\|")
 	l.rows = append(l.rows, resultRow{number, what, expected, actual})
 }
 
