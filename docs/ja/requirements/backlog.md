@@ -26,9 +26,9 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| Chief Engineerが要件文書の変更を下書きする | Ownerが決めた内容を受けて、Chief Engineerが、要件文書の変更をPull Requestにする。Ownerの仕事は、文書を直すことから、読んでmergeすることに変わる。要件文書を変えられるのはOwnerのmergeだけ、という決まりは変えない | v0.1では、要件文書はOwnerが直す。Chief Engineerの権限は、Issueの読み書きとコードの読み取りだけで、ブランチのpushとPull Requestの作成ができない。保護されたパスのcheckも、Implementerが作ったPull Requestだけを見る前提になっている | 要件文書の変更の相談が続き、Ownerが文書を直す手間が目立ってきたとき |
+| Chief Engineerが要件文書の変更を下書きする | Ownerが決めた内容を受けて、Chief Engineerが、要件文書の変更をPull Requestにする。Ownerの仕事は、文書を直すことから、読んでmergeすることに変わる。要件文書を変えられるのはOwnerのmergeだけ、という決まりは変えない | v0.1では、要件文書はOwnerが直す。Chief Engineerの権限は、Issueの読み書きとコードの読み取りだけで、ブランチのpushとPull Requestの作成ができない。保護されたパスのcheckは、Botが作ったPull Requestの全てに掛かるので、Chief Engineerを免除する一覧が要る。免除する相手を名前で指定する形なら、名前を間違えても、checkが動いて失敗する側に倒れる | 要件文書の変更の相談が続き、Ownerが文書を直す手間が目立ってきたとき |
 | roleの中身をリポジトリごとに変える | Implementer、Reviewerという箱はcuminに固定で持つ。その中のより細かいrole (例: FlutterのAndroidのUIを担当するImplementer) と、渡す指示やskillを、対象のリポジトリの `.cumin/` で指定できるようにする | v0.1では、対象のリポジトリにある指示 (`CLAUDE.md`、skillなど) をAgentが読むので、専用の仕組みがなくても足りる見込み | 1つのリポジトリの中で、作業の種類によって渡す指示を変えたくなったとき |
-| roleごとの保護されたパス | 変更させないパスを、roleごとに指定する | v0.1では、コードをpushするのがImplementerだけなので、一覧は1つで足りる | pushできるroleが増えたとき |
+| roleごとの保護されたパス | 変更させないパスを、roleごとに指定する | v0.1では、コードをpushするのがImplementerだけなので、一覧は1つで足りる。checkは、Botが作ったPull Requestの全てに、同じ一覧で掛かる | pushできるroleが増えたとき |
 | セキュリティだけを見るレビュー | 毎回のレビューとは別に、セキュリティだけを見るレビューを足す | v0.1では、毎回のReviewerの6つの問いと、GitHubのcheck (secret scanningなど) で見る | セキュリティを特に重く見るプロダクトを、cuminに任せるとき |
 | Agentの間の引き継ぎ | 次のAgentに引き継ぎたい知識を、CLIの自動メモリではなく、決まった場所 (テンプレートやリポジトリの文書) に残して、永続させる仕組みを作る | v0.1では、自動メモリを切って起動するだけにした。引き継ぐことは、IssueとPull Requestに書く | 同じ調べものや同じ失敗を、Agentが繰り返すのが目立ってきたとき |
 | 1時間を超えるAgentの実行 | Agentの実行の途中で、GitHub Appのtokenを発行し直して渡す | tokenは発行から1時間で失効し、期限を延ばせない。v0.1では、実行時間の上限を55分までにした | 分割基準の大きさの実装Issueが、上限の時間に収まらないことが続くとき |

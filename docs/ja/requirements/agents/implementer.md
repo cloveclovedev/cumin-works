@@ -89,7 +89,8 @@ cuminは、Implementerの `done` という申告ではなく、この事実で�
 
 - 対象のリポジトリに、GitHub Actionsのworkflowを置く。workflowは、Pull Requestの変更ファイルの一覧を、保護されたパスの一覧と突き合わせ、1つでも当たれば失敗する。
 - このcheckを、mainのrulesetで必須のcheckに登録する。
-- checkのjobには、「Pull Requestの作成者が `cumin-implementer` のときだけ実行する」という条件を付ける。作成者がOwnerのときはjobが飛ばされる。GitHubは、条件で飛ばされたjobを成功として扱うので、OwnerのPull Requestはこのcheckで止まらない。
+- checkのjobには、「Pull Requestの作成者がBot (GitHub Appなど) のときだけ実行する」という条件を付ける。作成者が人のときはjobが飛ばされる。GitHubは、条件で飛ばされたjobを成功として扱うので、OwnerのPull Requestはこのcheckで止まらない。
+- 条件に、GitHub Appの名前は使わない。名前で「checkを掛ける相手」を指定すると、名前を間違えたときに、jobが飛ばされて成功の扱いになり、保護が黙って無効になるためである。Botの全てに掛ければ、間違える名前がない。
 - 保護されたパスの一覧は、Pull Requestのブランチではなくmainにあるものを読む。一覧そのもの (`.cumin/`) も保護されたパスに含める。こうしないと、Implementerが同じPull Requestの中で一覧を書き換えて、checkをすり抜けられる。
 - Implementerは `.github/workflows` を変更する権限を持たないので、workflowそのものを書き換えることもできない。
 
