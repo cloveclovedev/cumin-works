@@ -178,6 +178,28 @@ func TestRun_AbnormalEnds(t *testing.T) {
 	}
 }
 
+// A cancelled context ends the run with the kind of the time limit, not
+// as a failure of the CLI.
+func TestRun_CancelIsTimeLimit(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fake-claude")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\"}'\n# The child keeps no pipe open, so the read ends when sh is killed.\n# Children of the real CLI are the subject of #41.\nsleep 60 >/dev/null 2>&1\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	_, err := quiet(path).Run(ctx, request(t))
+	end := abnormalEnd(t, err)
+	if end.Kind != EndTimeLimit {
+		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
+	}
+	if end.SessionID != fixtureSessionID {
+		t.Errorf("SessionID = %q, want the one from the init event", end.SessionID)
+	}
+}
+
 func TestRun_MissingExecutable(t *testing.T) {
 	c := quiet(filepath.Join(t.TempDir(), "no-such-cli"))
 	_, err := c.Run(context.Background(), request(t))

@@ -118,6 +118,10 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	end := &AbnormalEnd{SessionID: s.sessionID, PID: pid}
 	var exitErr *exec.ExitError
 	switch {
+	case ctx.Err() != nil:
+		// The caller stopped the run. The time limit of the role (#41)
+		// uses the same kind.
+		end.Kind, end.Detail, end.Err = EndTimeLimit, "the run was stopped", ctx.Err()
 	case waitErr != nil && errors.As(waitErr, &exitErr):
 		end.Kind, end.Detail = EndProcessFailed, fmt.Sprintf("exit code %d", exitErr.ExitCode())
 	case waitErr != nil:
