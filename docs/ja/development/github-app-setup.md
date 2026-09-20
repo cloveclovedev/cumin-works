@@ -27,24 +27,11 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 - `cumin-implementer` には Workflows の権限を与えない。`.github/workflows` の変更は risk/high であり、Agentに触らせないため。
 - Metadata: Read-only は、他の権限を選ぶと自動で付く。
 
-## コマンドで登録する (手順1と2の代わり)
+## コマンドで登録する (手順1〜3の代わり)
 
-`cumin setup github-apps` は、GitHub App Manifest flow で4つのAppを登録し、秘密鍵をKeychainに入れる。Hostで実行する。
+`cumin setup github-apps` は、GitHub App Manifest flow で4つのAppを登録し、秘密鍵をKeychainに入れ、Client ID をHostの設定ファイルに書き、インストールのページを開く。使い方と、もう一度実行したときの動きは [セットアップの手順](setup-guide.md) にある。
 
-```sh
-cumin setup github-apps --org <Organizationの名前> [--name-prefix <Appの名前の前に付ける文字>]
-```
-
-- Appの名前は `<prefix>cumin-core`、`<prefix>cumin-chief-engineer`、`<prefix>cumin-implementer`、`<prefix>cumin-reviewer` になる。Appの名前はGitHub全体で一意なので、Organizationごとに `--name-prefix` を変える。34文字を超える名前は、ブラウザを開く前にエラーになる。
-- コマンドは、Appごとにブラウザで手元のページ (`http://127.0.0.1:<port>/start`) を開く。ページがmanifestをGitHubに送るので、GitHubの画面で "Create GitHub App" を押す。これを4回繰り返す。portはOSが割り当て、コマンドが動いている間だけ開く。
-- 権限は、コードの権限の表 (`internal/platform/github/roles.go`) から作る。webhookはなく、ユーザーの認可も求めず、Appは非公開 (Only on this account) になる。
-- GitHubがAppを登録するのは、"Create GitHub App" を押した時点ではなく、コマンドがcodeを交換した時点である。途中でやめても、交換の前ならAppは残らない (2026-09-20に実機で確かめた)。
-- 秘密鍵は、GitHubの応答からそのままKeychainに入る。ファイル、ログ、端末には出ない。項目の名前は手順2の表のとおりである。
-- コマンドは、Appごとに slug と Client ID を表示する。Client ID は、Hostの設定ファイルの `[github_apps.<Organization>]` に書く ([設定の一覧](configuration.md))。今は手で書く。
-- 登録したAppは、個人の設定ではなく、Organizationの設定にある: `https://github.com/organizations/<Organization>/settings/apps`。
-- 1回の確認を待つ時間は10分である。過ぎると、コマンドはそのAppで止まる。登録済みのAppと鍵は残る。今のコマンドには、もう一度実行したときに登録済みのAppを飛ばす決まりがまだない。途中で止まったら、登録済みのAppをGitHubの画面で削除してから、やり直す。
-
-インストール (手順3) は、今は画面で行う。
+下の手順1〜3は、コマンドが使えないときの手作業である。
 
 ## 手順1: Appを登録する (4回繰り返す)
 
@@ -114,7 +101,7 @@ mainを更新できるのをOwnerと `cumin-core` だけにする。rulesetは�
 1. リポジトリの "Settings" タブを開く。
 2. 左のサイドバーの "Code and automation" の下で "Rulesets" をクリックする。
 3. "New ruleset"、続けて "New branch ruleset" をクリックする。
-4. "Ruleset name" に名前 (例: `protect-main`) を入れる。
+4. "Ruleset name" に `cumin-protect-main` を入れる。`scripts/setup-repo.sh` が使う名前と同じにしておくと、あとでスクリプトを実行しても ruleset が二重にならない。
 5. "Enforcement status" を "Active" にする。
 6. "Bypass list" の "Add bypass" で、`cumin-core` (GitHub App) と、Ownerが該当するrole (Organization ownerまたはRepository admin) を追加する。
 7. "Target branches" の "Add a target" で "Include default branch" を選ぶ。
@@ -127,7 +114,7 @@ mainを更新できるのをOwnerと `cumin-core` だけにする。rulesetは�
 
 cuminは、mainに適用されるrulesetに登録された必須のcheckが全て通ってから、レビューに進む。登録がなければ、checkを待たない。
 
-1. 手順4と同じ画面で、もう1つ "New branch ruleset" を作る (例: `main-required-checks`)。
+1. 手順4と同じ画面で、もう1つ "New branch ruleset" を作る。名前は `cumin-main-required-checks` にする。
 2. "Enforcement status" を "Active" にし、"Target branches" で "Include default branch" を選ぶ。
 3. "Bypass list" は空のままにする。手順4のrulesetに足さないのは、bypass listにいる `cumin-core` が必須のcheckまで回避できてしまうためである。
 4. ruleとして "Require status checks to pass before merging" を選び、CIのcheckを登録する。
