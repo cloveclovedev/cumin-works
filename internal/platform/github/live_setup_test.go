@@ -38,17 +38,17 @@ func TestLiveSetupChecks(t *testing.T) {
 
 	// Check 1: the Implementer App pushes to main.
 	repo.commitFile(t, "live-"+l.runID+"-main", "live/"+l.runID+"-direct.md", "direct push\n")
-	out, err := repo.run("push", "origin", "HEAD:main")
+	out, err := repo.run("push", "origin", "HEAD:"+l.branch)
 	switch {
 	case err == nil:
-		l.record("1", "The Implementer App pushes to `main` with git", "The ruleset rejects the push", "NOT rejected: the push succeeded")
-		t.Error("check 1: the Implementer App pushed to main")
+		l.record("1", "The Implementer App pushes to the default branch with git", "The ruleset rejects the push", "NOT rejected: the push succeeded")
+		t.Error("check 1: the Implementer App pushed to the default branch")
 	case !strings.Contains(out, "GH013") && !strings.Contains(out, "rule violations"):
 		// Another failure, such as a network error, says nothing about the ruleset.
-		l.record("1", "The Implementer App pushes to `main` with git", "The ruleset rejects the push", "The push failed for another reason: "+firstLineWith(out, "error", "fatal", "rejected"))
+		l.record("1", "The Implementer App pushes to the default branch with git", "The ruleset rejects the push", "The push failed for another reason: "+firstLineWith(out, "error", "fatal", "rejected"))
 		t.Errorf("check 1: the push failed, but not because of the ruleset: %s", out)
 	default:
-		l.record("1", "The Implementer App pushes to `main` with git", "The ruleset rejects the push", "Rejected: "+firstLineWith(out, "GH013", "rule violations"))
+		l.record("1", "The Implementer App pushes to the default branch with git", "The ruleset rejects the push", "Rejected: "+firstLineWith(out, "GH013", "rule violations"))
 	}
 
 	// A pull request from the Implementer App that changes an unprotected file.
@@ -178,12 +178,25 @@ func (i issue) labelNames() []string {
 // Each helper registers its clean-up directly after GitHub created the thing,
 // so a later failure of the test leaves nothing open on the sandbox.
 
+// cleanUp fails the test when a clean-up call did not work, so that a run
+// cannot pass and leave something open on the sandbox.
+func (l *live) cleanUp(t *testing.T, what string, resp response, allowed ...int) {
+	t.Helper()
+	for _, status := range allowed {
+		if resp.status == status {
+			return
+		}
+	}
+	t.Errorf("clean-up: %s: status %d: %s", what, resp.status, resp.message())
+}
+
 // pushBranch pushes the branch and deletes it at the end of the test.
 func (l *live) pushBranch(t *testing.T, repo *gitRepo, token, branch string) {
 	t.Helper()
 	repo.mustRun(t, "push", "--quiet", "origin", branch)
 	t.Cleanup(func() {
-		l.api(t, token, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+branch, nil)
+		// 422: the branch is gone already, for example after a merge that deletes it.
+		l.cleanUp(t, "delete the branch "+branch, l.api(t, token, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+branch, nil), http.StatusNoContent, http.StatusUnprocessableEntity)
 	})
 }
 
@@ -191,14 +204,14 @@ func (l *live) pushBranch(t *testing.T, repo *gitRepo, token, branch string) {
 // close a merged pull request changes nothing.
 func (l *live) openPull(t *testing.T, token, branch, title string) pullRequest {
 	t.Helper()
-	resp := l.api(t, token, http.MethodPost, "/repos/{repo}/pulls", map[string]any{"title": title, "head": branch, "base": "main", "body": "A live check of cumin-works. The test closes it."})
+	resp := l.api(t, token, http.MethodPost, "/repos/{repo}/pulls", map[string]any{"title": title, "head": branch, "base": l.branch, "body": "A live check of cumin-works. The test closes it."})
 	if resp.status != http.StatusCreated {
 		t.Fatalf("open the pull request: status %d: %s", resp.status, resp.message())
 	}
 	var pull pullRequest
 	resp.json(t, &pull)
 	t.Cleanup(func() {
-		l.api(t, token, http.MethodPatch, fmt.Sprintf("/repos/{repo}/pulls/%d", pull.Number), map[string]any{"state": "closed"})
+		l.cleanUp(t, fmt.Sprintf("close the pull request %d", pull.Number), l.api(t, token, http.MethodPatch, fmt.Sprintf("/repos/{repo}/pulls/%d", pull.Number), map[string]any{"state": "closed"}), http.StatusOK)
 	})
 	return pull
 }
@@ -219,7 +232,7 @@ func (l *live) createIssue(t *testing.T, token, title string, labels []string, p
 	var created issue
 	resp.json(t, &created)
 	t.Cleanup(func() {
-		l.api(t, token, http.MethodPatch, fmt.Sprintf("/repos/{repo}/issues/%d", created.Number), map[string]any{"state": "closed"})
+		l.cleanUp(t, fmt.Sprintf("close the issue %d", created.Number), l.api(t, token, http.MethodPatch, fmt.Sprintf("/repos/{repo}/issues/%d", created.Number), map[string]any{"state": "closed"}), http.StatusOK)
 	})
 	return created
 }

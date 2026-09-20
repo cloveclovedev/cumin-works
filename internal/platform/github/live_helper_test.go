@@ -31,6 +31,7 @@ import (
 // live holds what the live checks share.
 type live struct {
 	owner, repo string
+	branch      string // the default branch of the sandbox
 	runID       string // makes branch and issue names unique
 	clientIDs   map[string]string
 
@@ -80,9 +81,19 @@ func newLive(t *testing.T) *live {
 	// permission, and only a public repository lets them read the check runs.
 	// Rulesets also need a public repository on the free plan. A call without
 	// authentication sees only a public repository.
-	if resp := l.api(t, "", http.MethodGet, "/repos/{repo}", nil); resp.status != http.StatusOK {
+	resp := l.api(t, "", http.MethodGet, "/repos/{repo}", nil)
+	if resp.status != http.StatusOK {
 		t.Fatalf("CUMIN_LIVE_REPO must be a public repository: a call without authentication answers %d for %s/%s", resp.status, owner, repo)
 	}
+	// scripts/setup-repo.sh protects the default branch, whatever its name is.
+	var repository struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	resp.json(t, &repository)
+	if repository.DefaultBranch == "" {
+		t.Fatal("the repository has no default branch")
+	}
+	l.branch = repository.DefaultBranch
 	return l
 }
 
@@ -229,7 +240,7 @@ func (l *live) newGitRepo(t *testing.T, token, authorName, authorEmail string) *
 	)}
 	g.mustRun(t, "init", "--quiet")
 	g.mustRun(t, "remote", "add", "origin", "https://github.com/"+l.owner+"/"+l.repo+".git")
-	g.mustRun(t, "fetch", "--quiet", "--depth", "1", "origin", "main")
+	g.mustRun(t, "fetch", "--quiet", "--depth", "1", "origin", l.branch)
 	return g
 }
 
