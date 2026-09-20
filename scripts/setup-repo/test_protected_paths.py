@@ -135,8 +135,10 @@ class WorkflowShape(unittest.TestCase):
     def test_the_trigger_has_no_filter(self):
         self.assertIn("\non:\n  pull_request:\n\n", self.text)
 
-    def test_the_job_runs_only_for_the_implementer_login(self):
-        self.assertIn("if: github.event.pull_request.user.login == '__IMPLEMENTER_LOGIN__'", self.text)
+    def test_the_job_runs_for_every_bot_author_and_names_no_app(self):
+        self.assertIn("    if: github.event.pull_request.user.type == 'Bot'\n", self.text)
+        self.assertNotIn("user.login", self.text)
+        self.assertNotIn("IMPLEMENTER", self.text.upper())
 
     def test_the_permissions_are_read_only(self):
         self.assertIn("\npermissions:\n  contents: read\n  pull-requests: read\n\n", self.text)

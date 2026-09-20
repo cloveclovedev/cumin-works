@@ -6,7 +6,7 @@
 # before the merge is not checked again until it gets a new commit.
 
 # Paths that agents must not change. The cumin-protected-paths check fails when
-# a pull request from the Implementer App adds, changes, renames, or removes a
+# a pull request from a bot (a GitHub App) adds, changes, renames, or removes a
 # matching file. This list replaces the default list. It does not add to it.
 #
 # The matching rules are a subset of the .gitignore rules:
