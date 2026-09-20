@@ -27,6 +27,8 @@ gofmt -l .
 
 テストは、ネットワークも、Claude Codeの利用枠も使わない。
 
+CI (GitHub Actions) も、Pull Requestとmainへのpushのたびに、同じ4つを実行する。
+
 ## 動かす
 
 ```sh
