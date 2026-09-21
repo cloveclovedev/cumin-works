@@ -26,6 +26,7 @@ Hostの設定ファイルに書けるキーの一覧。設定の意味と、初�
 | `max_review_rounds` | レビューのラウンドの上限 | `3` | 1以上 |
 | `max_check_fix_requests` | checkの修正を依頼する回数の上限 | `3` | 1以上 |
 | `merge_method` | cuminがPull Requestをmergeするときの方法 | `"squash"` | `"squash"`、`"merge"`、`"rebase"` のどれか |
+| `request_command` | 着手 (I1) のときに実行する実行ファイル。cuminは、`<owner>/<repo>` とIssueの番号の2つの引数を付けて実行し、終わるのを待つ。Agentの起動を定期確認につなぐまでの仮の設定で、つないだら消える | 空 (何も実行せず、ログに残す) | なし |
 | `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
 | `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
 | `roles.<role>.cli_path` | CLIの実行ファイル。ディレクトリを含まない名前は、`PATH` から探す。受け入れテストは、偽のCLIの実行ファイルを指す | `"claude"` | 空にできない |
@@ -72,6 +73,7 @@ max_issues_in_progress = 1
 max_review_rounds = 3
 max_check_fix_requests = 3
 merge_method = "squash"
+request_command = ""
 
 [roles.implementer]
 time_limit = "50m"

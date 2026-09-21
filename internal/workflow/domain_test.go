@@ -171,3 +171,13 @@ func TestIsStatusLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestLabelsAfterClaim(t *testing.T) {
+	got := LabelsAfterClaim([]string{"cumin/status/awaiting-owner-decision", "risk/low", "cumin/status/ready", "question"})
+	if want := []string{"risk/low", "question", LabelImplementing}; !slices.Equal(got, want) {
+		t.Errorf("LabelsAfterClaim = %v, want %v", got, want)
+	}
+	if got := LabelsAfterClaim(nil); !slices.Equal(got, []string{LabelImplementing}) {
+		t.Errorf("LabelsAfterClaim(nil) = %v", got)
+	}
+}

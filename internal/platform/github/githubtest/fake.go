@@ -60,6 +60,13 @@ type Fake struct {
 	mu           sync.Mutex
 	repositories map[string]*Repository
 	requests     []Request
+	failNext     *failure
+}
+
+// failure is one answer that the fake gives instead of the real one.
+type failure struct {
+	method, path string
+	status       int
 }
 
 // New starts the fake. The server closes when the test ends.
@@ -121,6 +128,15 @@ func (f *Fake) LabelNames(r *Repository) []string {
 	return names
 }
 
+// FailNext makes the fake answer the next request with the method and the
+// path with the status and an error body, once. The request is recorded and
+// changes nothing.
+func (f *Fake) FailNext(method, path string, status int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failNext = &failure{method: method, path: path, status: status}
+}
+
 // Requests returns the requests that the fake received, in order.
 func (f *Fake) Requests() []Request {
 	f.mu.Lock()
@@ -145,7 +161,17 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	body, _ := readBody(r)
 	f.mu.Lock()
 	f.requests = append(f.requests, Request{Method: r.Method, Path: r.URL.Path, Body: body})
+	fail := f.failNext
+	if fail != nil && fail.method == r.Method && fail.path == r.URL.Path {
+		f.failNext = nil
+	} else {
+		fail = nil
+	}
 	f.mu.Unlock()
+	if fail != nil {
+		writeJSON(w, fail.status, map[string]any{"message": "Failure requested by the test"})
+		return
+	}
 
 	if r.Header.Get("Authorization") != "Bearer "+Token {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"message": "Bad credentials"})
