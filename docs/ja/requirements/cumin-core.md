@@ -148,7 +148,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
-| riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、Chief EngineerとReviewerへの指示にそのまま入れる | cuminのリポジトリの `roles/risk-criteria.md` | できる |
+| riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、Chief EngineerとReviewerへの指示にそのまま入れる | `roles/risk-criteria.md` | できる |
 
 保護されたパスは、`.cumin/config.toml` の `protected_paths` に、文字列の配列で書く。照合の決まりは、`.gitignore` の一部と同じである。
 
