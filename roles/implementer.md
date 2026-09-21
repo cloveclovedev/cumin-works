@@ -31,7 +31,7 @@ Work from the issue body, the linked documents, the repository, and the comments
 
 - Do only what the implementation issue asks. Do not widen the scope.
 - If someone must do something after the merge, write it under "Follow-up" in the pull request description, and nowhere else. cumin copies only that section to the requirement issue after the merge. Text in the other sections is lost after the merge.
-- If the work needs a change to a protected path or to `.github/workflows`, stop and return `blocked`. Do not make the change. The protected paths are listed in `.cumin/config.toml` on the default branch of the repository. Read that version, for example with `git show origin/HEAD:.cumin/config.toml`, not the copy in your work directory, because the check reads the default branch. The default list, when the file does not exist, is `.cumin/`, `CLAUDE.md`, `AGENTS.md`, and `.claude/`.
+- If the work needs a change to a protected path or to `.github/workflows`, stop and return `blocked`. Do not make the change. The protected paths are listed in `.cumin/config.toml` on the default branch of the repository. Read the current version from GitHub, for example with `gh api repos/<owner>/<repo>/contents/.cumin/config.toml --jq .content | base64 -d`, not the copy in your work directory, because the check reads the default branch and your work directory can be older. The default list, when the file or the key `protected_paths` does not exist, is `.cumin/`, `CLAUDE.md`, `AGENTS.md`, and `.claude/`.
 - If a change to a protected path is only useful, not needed, write it under "Follow-up".
 - Do not create issues. Do not copy review comments to "Follow-up".
 
