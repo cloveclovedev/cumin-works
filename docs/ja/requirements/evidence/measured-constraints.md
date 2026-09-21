@@ -122,3 +122,14 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 |---|---|---|---|
 | 77 | GraphQLの問い合わせのポイントは、経路に沿った `first` の積を100で割った値で決まる。定期確認の問い合わせ (要求Issueを10件ずつ、sub-issueを30件、ラベルを10件、blocked by のIssueを20件) は、`rateLimit.cost` が6だった | 公式: Rate limits and node limits for the GraphQL API。開いている要求Issueが4つあるリポジトリで実測 | 公式文書 + 実測 |
 | 78 | `PUT /repos/{owner}/{repo}/issues/{n}/labels` に、リポジトリにないラベルの名前を渡すと、そのラベルが既定の色 (`ededed`) で作られ、付け替えは失敗しない | sandboxで `cumin/status/implementing` のラベルを消してから、着手させた | 実測 |
+
+## 7. setupの道具とCIの実装で確かめたこと (2026-09-21)
+
+要求Issue #59 の実装 (#84、#91) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 79 | 公開リポジトリでは、標準のGitHub-hosted runner (macOSを含む) の利用は無料である。Freeプランの同時実行は、全体で20 job、macOSは5 jobまで。`macos-latest` はarm64である | 公式: About billing for GitHub Actions、Usage limits for GitHub Actions、GitHub-hosted runners reference | 公式文書 |
+| 80 | `POST /repos/{owner}/{repo}/rulesets` に、そのリポジトリにある ruleset と同じ名前を渡すと、422 "Name must be unique" が返る。同じリポジトリに、同じ名前の ruleset は2つ作れない | sandboxで実測 | 実測 |
+| 81 | `GET /repos/{owner}/{repo}/rulesets` は、`includes_parents` (初期値 `true`) により、Organizationの ruleset のうちそのリポジトリに当たるものも返す | 公式: Get all repository rulesets | 公式文書 |
+| 82 | Organizationの階層の ruleset は、GitHub Enterprise プランでだけ作れる。Free と Team の Organization では作れないので、Organizationの ruleset とリポジトリの ruleset の名前が重なることは、これらのプランでは起きない | 公式: About rulesets ("For organizations on the GitHub Enterprise plan, you can set up rulesets at the organization level")。Organizationの ruleset の名前の一意性は、公式文書に記載がない | 公式文書 (名前の一意性は未確認) |
