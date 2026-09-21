@@ -47,9 +47,26 @@ type RequirementIssue struct {
 // SubIssue is an implementation issue: a sub-issue of a requirement issue.
 type SubIssue struct {
 	Number    int
+	Title     string
 	Closed    bool
 	Labels    []string
 	BlockedBy []BlockedBy
+	// PullRequests are the pull requests that close the issue (the link
+	// that "Closes #N" makes), open, closed, and merged. I2 finds the pull
+	// request of the Implementer here, not by the branch name.
+	PullRequests []PullRequest
+}
+
+// PullRequest is a pull request that closes a sub-issue.
+type PullRequest struct {
+	Number int
+	// Closed is true for a closed and for a merged pull request.
+	Closed bool
+	Merged bool
+	// HeadCommit is the full SHA of the head of the pull request.
+	HeadCommit string
+	// Author is the login of the author; a GitHub App is "<slug>[bot]".
+	Author string
 }
 
 // BlockedBy is an issue that blocks a sub-issue.

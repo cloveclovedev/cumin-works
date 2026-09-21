@@ -77,7 +77,7 @@
 - 同じ問い合わせを、Agentの実行が終わった直後にも行う。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。
 - 書き込みは、全てRESTで行う。ラベル、コメント、merge、sub-issue、tokenの発行がこれに当たる。GitHub App に要る権限が、RESTのendpointごとに公式ドキュメントに書かれているためである (実測 10、33)。
 - 例外として、必須のcheckの一覧はRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 34)。
-- 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and node limits for the GraphQL API)。1回の問い合わせのポイントは、入れ子になった接続の `first` の積を100で割った値なので、sub-issueごとに読む項目 (ラベル、blocked by) の `first` は小さくする。定期確認の問い合わせは、要求Issueを10件ずつページで読み、sub-issueは30件、ラベルは10件、blocked by のIssueは20件までを1回で読む。1回の問い合わせは約6ポイントである (2026-09-21 に実測)。sub-issue、ラベル、blocked by が上限を超えたIssueがあれば、そのリポジトリの定期確認は、Issueの番号を示すエラーで止まる。分割基準の上限 (12個) の中では起きない。
+- 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and node limits for the GraphQL API)。1回の問い合わせのポイントは、入れ子になった接続の `first` の積を100で割った値なので、sub-issueごとに読む項目 (ラベル、blocked by) の `first` は小さくする。定期確認の問い合わせは、要求Issueを10件ずつページで読み、sub-issueは30件、ラベルは10件、blocked by のIssueは20件、Issueを閉じるPull Requestは5件までを1回で読む。1回の問い合わせは9ポイントである (2026-09-22 に実測。Pull Requestを読む前は6ポイントだった。Pull Requestの件数を3にしても9で変わらない)。sub-issue、ラベル、blocked by、Pull Requestが上限を超えたIssueがあれば、そのリポジトリの定期確認は、Issueの番号を示すエラーで止まる。分割基準の上限 (12個) の中では起きない。
 - 採らなかった案: 全ての接続を100件ずつ読み、超えたら続きを読む。sub-issueの下の接続まで100件にすると、1回の問い合わせが約2,000ポイントになり、1時間の枠が2〜3回で尽きる。
 - この上限は、同じinstallation (Organization) にある対象のリポジトリの全てで分け合う。1時間に使うポイントは、リポジトリの数、1時間の問い合わせの回数、1回のコストの積になる。60秒の間隔なら、対象が数個のうちは十分に収まる。cuminは、応答の `rateLimit` の `cost` と `remaining` をログに出す (GraphQLのスキーマで確かめた)。足りなくなったときの対応は、「後回しにしたこと」にある。
 - installation token でGraphQLの項目を読めない場合は、RESTで読む (実測 37)。そのときは、理由をこの話題に書く。
@@ -90,12 +90,18 @@
 | 読むもの | 項目 | 使う行 |
 |---|---|---|
 | 要求Issueと、そのsub-issue。番号、id、開閉、今のラベル | `Issue.subIssues`、`labels` | R1〜R6、I1 |
+| sub-issueの題。依頼のブランチの名前に使う | `Issue.title` | I1 |
 | 状態ラベルが付いた時刻 | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt` と `label` | R3、レビューのラウンド |
 | blocked by のIssueの開閉 | `Issue.blockedBy` | I1 |
-| Issueを閉じるPull Request。番号、開閉、merge済みか、作成者、先頭のコミット | `Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`author`、`headRefOid`、`merged` | I2、I9 |
+| Issueを閉じるPull Request。番号、開閉、merge済みか、作成者、先頭のコミット | `Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`author { __typename login }`、`headRefOid`、`merged` | I2、I9 |
 | 開いているPull Requestの、今のラベル | `PullRequest.labels` | I11 |
 | レビュー。出した人、結果、対象のコミット、時刻 | `PullRequest.reviews` の `author`、`state`、`commit`、`submittedAt` | I5〜I8、レビューのラウンド |
 | 先頭のコミットのcheckの結果 | `PullRequest.statusCheckRollup` | I3、I4 |
+
+Pull Requestの作成者の読み方:
+
+- GraphQLの `author` は、GitHub Appが作ったPull Requestでは `Bot` 型で、`login` に `[bot]` が付かない (2026-09-22 にsandboxで実測)。RESTの `user.login` と、Agentがコミットに使う身元は `<slug>[bot]` である。GitHubクライアントが `Bot` の `login` に `[bot]` を足して、判定には `<slug>[bot]` の形だけを渡す。
+- 作成者のアカウントが消えていると `author` は null になる。判定には空の作成者として渡す。
 
 ラベルが付いた時刻の使い方:
 
