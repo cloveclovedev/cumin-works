@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -30,6 +31,12 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
 		}
+		return exitBadUsage
+	}
+	// The flag package stops at the first argument that is not a flag. An
+	// extra argument is a mistake; do not start a resident process on it.
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "cumin run: unexpected argument %q\nusage: cumin run [--config <path>]\n", fs.Arg(0))
 		return exitBadUsage
 	}
 
@@ -100,10 +107,17 @@ func cuminCoreClientIDs(settings *config.Settings) (map[string]string, error) {
 			continue
 		}
 		var clientID string
+		var matches []string
 		for org, apps := range settings.GitHubApps {
 			if strings.EqualFold(org, repo.Owner) {
+				matches = append(matches, org)
 				clientID = apps[config.AppCuminCore]
 			}
+		}
+		if len(matches) > 1 {
+			slices.Sort(matches)
+			errs = append(errs, fmt.Errorf("github_apps: the tables %s name the same organization in different cases. Keep one", strings.Join(matches, " and ")))
+			continue
 		}
 		if clientID == "" {
 			errs = append(errs, fmt.Errorf("github_apps.%s.%s: no Client ID for the owner of %s. Run \"cumin setup github-apps --org %s\" first", repo.Owner, config.AppCuminCore, repo, repo.Owner))

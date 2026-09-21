@@ -130,6 +130,31 @@ func TestRunWithoutCuminCoreClientIDNamesTheKey(t *testing.T) {
 	}
 }
 
+func TestRunRejectsAnExtraArgument(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runCLI([]string{"run", "typo", "--config", writeConfig(t, validConfig)}, &stdout, &stderr)
+	if code != exitBadUsage {
+		t.Errorf("exit code = %d, want %d", code, exitBadUsage)
+	}
+	if !strings.Contains(stderr.String(), `unexpected argument "typo"`) {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func TestCuminCoreClientIDsRejectsTwoTablesOfOneOwner(t *testing.T) {
+	settings := &config.Settings{
+		Repositories: []config.Repository{{Owner: "example-org", Name: "one"}},
+		GitHubApps: map[string]map[string]string{
+			"Example-Org": {config.AppCuminCore: "client-id-a"},
+			"example-org": {config.AppCuminCore: "client-id-b"},
+		},
+	}
+	_, err := cuminCoreClientIDs(settings)
+	if err == nil || !strings.Contains(err.Error(), "Example-Org and example-org") {
+		t.Errorf("err = %v, want the two tables", err)
+	}
+}
+
 func TestCuminCoreClientIDsIgnoresTheCaseOfTheOwner(t *testing.T) {
 	settings := &config.Settings{
 		Repositories: []config.Repository{{Owner: "Example-Org", Name: "one"}, {Owner: "example-org", Name: "two"}},
