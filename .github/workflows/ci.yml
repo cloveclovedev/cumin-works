@@ -36,3 +36,24 @@ jobs:
             echo "$files"
             exit 1
           fi
+      # The tests of the script inside the protected-path workflow. They
+      # need Python 3.11 or later, which the runner has.
+      - name: protected-path workflow test
+        run: python3 scripts/setup-repo/test_protected_paths.py
+
+  # The Keychain tests call the security command of macOS, so they skip on
+  # Linux. They create a temporary keychain in a temporary directory and
+  # delete it. They read no item of the login keychain of the runner.
+  # Standard GitHub-hosted runners, macOS included, are free on a public
+  # repository. The Free plan allows 5 concurrent macOS jobs.
+  keychain:
+    name: keychain
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: go test (Keychain)
+        run: go test -race -count=1 -v ./internal/platform/keychain/
