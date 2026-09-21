@@ -34,9 +34,6 @@ func TestLive_AgentRun(t *testing.T) {
 			t.Fatalf("claude is not on PATH: %v (set CUMIN_CLAUDE_PATH)", err)
 		}
 	}
-	// #8 turns auto memory off in the adapter. Until then, by hand.
-	t.Setenv("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1")
-
 	r := newRemote(t)
 	w := Workspace{Root: filepath.Join(t.TempDir(), "work"), Logger: testLogger(t)}
 	c := Checkout{Owner: "example-org", Repo: "example-repo", Issue: 1, Role: config.RoleImplementer, Branch: "cumin/1-live-check"}
@@ -49,7 +46,9 @@ func TestLive_AgentRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	cli := ClaudeCode{Path: path, Logger: testLogger(t)}
-	base := Request{Role: config.RoleImplementer, RoleInstruction: instruction, WorkDir: dir, TimeLimit: 5 * time.Minute}
+	// The agent does not reach GitHub in this check, so the credentials
+	// are placeholders.
+	base := Request{Role: config.RoleImplementer, RoleInstruction: instruction, WorkDir: dir, TimeLimit: 5 * time.Minute, Credentials: testCredentials}
 
 	// Run 1: a new session that reads a file and returns done.
 	req := base

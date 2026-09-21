@@ -22,8 +22,8 @@ import (
 // CLI: a shell script that records its arguments and prints a fixture.
 
 // fakeCLI writes the script and returns its path and the record path.
-// The record holds the arguments, NUL-separated, and the last line of
-// the record's sibling file ".cwd" is the working directory.
+// The record holds the arguments, NUL-separated; the record's sibling
+// file ".cwd" holds the working directory, and ".env" the environment.
 func fakeCLI(t *testing.T, fixture string, exitCode int) (path, record string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -33,7 +33,7 @@ func fakeCLI(t *testing.T, fixture string, exitCode int) (path, record string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := fmt.Sprintf("#!/bin/sh\nfor a in \"$@\"; do printf '%%s\\0' \"$a\"; done > %q\npwd > %q\ncat %q\necho 'fake stderr' >&2\nexit %d\n", record, record+".cwd", abs, exitCode)
+	script := fmt.Sprintf("#!/bin/sh\nfor a in \"$@\"; do printf '%%s\\0' \"$a\"; done > %q\npwd > %q\nenv > %q\ncat %q\necho 'fake stderr' >&2\nexit %d\n", record, record+".cwd", record+".env", abs, exitCode)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,16 @@ func request(t *testing.T) Request {
 		Text:            "Implement issue 12 on branch cumin/12-example.",
 		WorkDir:         t.TempDir(),
 		TimeLimit:       time.Minute,
+		Credentials:     testCredentials,
 	}
+}
+
+// testCredentials are made up. The token is a marker that the tests
+// search for in logs and errors.
+var testCredentials = Credentials{
+	Token:       "ghs_fake_token_marker_0123456789",
+	AuthorName:  "example-implementer[bot]",
+	AuthorEmail: "12345+example-implementer[bot]@users.noreply.github.com",
 }
 
 // quiet is a ClaudeCode whose logs go nowhere.
@@ -351,6 +360,32 @@ func processGone(t *testing.T, pidFile string) bool {
 	}
 	syscall.Kill(pid, syscall.SIGKILL) // do not leave it behind
 	return false
+}
+
+// A command that the agent left in the background, with its stdio
+// redirected, does not survive a normal end. It holds the token.
+func TestRun_NormalEndLeavesNoChild(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fake-claude")
+	childPID := filepath.Join(dir, "child.pid")
+	fixture, err := filepath.Abs(filepath.Join("testdata", "done.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nsleep 300 >/dev/null 2>&1 &\necho $! > " + childPID + "\ncat " + fixture + "\nexit 0\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run, err := quiet(path).Run(context.Background(), request(t))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if run.Result.Result != ResultDone {
+		t.Errorf("Result = %+v", run.Result)
+	}
+	if !processGone(t, childPID) {
+		t.Error("the background child of the fake CLI is still alive after a normal end")
+	}
 }
 
 func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {

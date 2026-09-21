@@ -105,13 +105,21 @@ type stream struct {
 }
 
 // Run starts Claude Code in the work directory of the request, waits for
-// the end, and returns the run. An error is always an *AbnormalEnd.
+// the end, and returns the run. An error is an *AbnormalEnd, except for a
+// request without credentials, which is refused before the start.
+//
+// The environment of the CLI is built from a fixed list (env.go). It
+// holds the token of the request for git and gh, and nothing of the Host
+// user's credentials.
 //
 // The run ends at the time limit of the request: SIGTERM goes to the
 // process group of the CLI, and SIGKILL follows after the grace period.
 // The CLI is in its own process group, so the signals reach the commands
 // that the agent started. A cancelled context ends the run the same way.
 func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
+	if err := req.Credentials.validate(); err != nil {
+		return nil, fmt.Errorf("agent run: %w", err)
+	}
 	log := c.logger().With("role", req.Role, "work_dir", req.WorkDir)
 	if req.SessionID == "" {
 		log.Info("agent start", "session", "new", "time_limit", req.TimeLimit)
@@ -126,8 +134,17 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		defer cancel()
 	}
 
+	// gh keeps its configuration and state in this directory during the
+	// run. It starts empty, so gh uses its defaults.
+	ghConfigDir, err := os.MkdirTemp("", "cumin-gh-")
+	if err != nil {
+		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "create the gh configuration directory", Err: err})
+	}
+	defer os.RemoveAll(ghConfigDir)
+
 	cmd := exec.CommandContext(runCtx, c.Path, c.args(req)...)
 	cmd.Dir = req.WorkDir
+	cmd.Env = environment(req.Credentials, ghConfigDir)
 	// Stdin is nil: the process reads from the null device (os/exec).
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	// When the context is done, Cancel sends SIGTERM to the group. After
@@ -135,7 +152,11 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	// Cmd.Cancel, Cmd.WaitDelay).
 	cmd.Cancel = func() error { return signalGroup(cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = c.grace()
-	reader := &streamReader{c: c, log: log}
+	// The output of the CLI may hold the token (a tool that prints its
+	// environment, an error with the authorization header). It is
+	// redacted before any log.
+	secrets := req.Credentials.secrets()
+	reader := &streamReader{c: c, log: log, secrets: secrets}
 	cmd.Stdout = reader
 	var stderr bytes.Buffer
 	cmd.Stderr = &limitedWriter{w: &stderr, limit: 64 << 10}
@@ -150,12 +171,13 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 
 	waitErr := cmd.Wait()
 	reader.flush()
-	if runCtx.Err() != nil {
-		// The grace period is over. Nothing of the group may stay alive.
-		_ = signalGroup(pid, syscall.SIGKILL)
-	}
+	// Nothing of the group may stay alive after the run, whatever its
+	// end: a command that the agent left in the background would keep
+	// the token in its environment. After a time limit, the grace period
+	// is over at this point.
+	_ = signalGroup(pid, syscall.SIGKILL)
 	if stderr.Len() > 0 {
-		log.Debug("agent stderr", "text", stderr.String())
+		log.Debug("agent stderr", "text", redact(stderr.String(), secrets))
 	}
 
 	s := reader.s
@@ -209,10 +231,11 @@ func signalGroup(pid int, sig syscall.Signal) error {
 // line as the lines arrive, so that a line that is still in the pipe when
 // the process exits is not lost.
 type streamReader struct {
-	c   ClaudeCode
-	log *slog.Logger
-	s   stream
-	buf []byte
+	c       ClaudeCode
+	log     *slog.Logger
+	secrets []string
+	s       stream
+	buf     []byte
 }
 
 func (r *streamReader) Write(p []byte) (int, error) {
@@ -238,13 +261,13 @@ func (r *streamReader) line(line []byte) {
 		return
 	}
 	// A copy, because buf is reused.
-	r.c.readLine(r.log, &r.s, append([]byte(nil), line...))
+	r.c.readLine(r.log, &r.s, append([]byte(nil), line...), r.secrets)
 }
 
-func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte) {
+func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets []string) {
 	var e event
 	if err := json.Unmarshal(line, &e); err != nil {
-		log.Debug("agent output is not JSON", "text", truncate(string(line), 200))
+		log.Debug("agent output is not JSON", "text", truncate(redact(string(line), secrets), 200))
 		return
 	}
 	if e.SessionID != "" {
