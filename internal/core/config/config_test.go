@@ -50,6 +50,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if s.MergeMethod != MergeSquash {
 		t.Errorf("MergeMethod = %q, want squash", s.MergeMethod)
 	}
+	if s.RequestCommand != "" {
+		t.Errorf("RequestCommand = %q, want empty", s.RequestCommand)
+	}
 	for _, role := range []Role{RoleChiefEngineer, RoleImplementer, RoleReviewer} {
 		want := RoleSettings{TimeLimit: 50 * time.Minute, CLI: CLIClaudeCode, CLIPath: "claude"}
 		if got := s.Roles[role]; got != want {
@@ -70,6 +73,7 @@ max_issues_in_progress = 2
 max_review_rounds = 5
 max_check_fix_requests = 4
 merge_method = "rebase"
+request_command = "/opt/example/bin/request"
 
 [roles.implementer]
 time_limit = "55m"
@@ -90,7 +94,8 @@ reviewer = "client-id-reviewer"
 		t.Errorf("Repositories = %v", s.Repositories)
 	}
 	if s.PollInterval != 30*time.Second || s.MaxIssuesInProgress != 2 ||
-		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.MergeMethod != MergeRebase {
+		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.MergeMethod != MergeRebase ||
+		s.RequestCommand != "/opt/example/bin/request" {
 		t.Errorf("top-level settings = %+v", s)
 	}
 	want := RoleSettings{TimeLimit: 55 * time.Minute, CLI: CLIClaudeCode, CLIPath: "/opt/example/bin/claude", Model: "example-model"}

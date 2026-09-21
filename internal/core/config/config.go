@@ -67,8 +67,12 @@ type Settings struct {
 	MaxReviewRounds     int
 	MaxCheckFixRequests int
 	MergeMethod         MergeMethod
-	Roles               map[Role]RoleSettings
-	Quota               QuotaSettings
+	// RequestCommand is the executable that a request runs, with the
+	// repository and the issue number as arguments. Empty runs nothing. It
+	// stands in until the agent start is connected to the poll.
+	RequestCommand string
+	Roles          map[Role]RoleSettings
+	Quota          QuotaSettings
 	// GitHubApps maps an organization to the Client ID of each GitHub App.
 	// The inner key is AppCuminCore or a Role. `cumin setup` writes the
 	// table, so it can be empty.
@@ -125,6 +129,7 @@ type file struct {
 	MaxReviewRounds     int      `toml:"max_review_rounds"`
 	MaxCheckFixRequests int      `toml:"max_check_fix_requests"`
 	MergeMethod         string   `toml:"merge_method"`
+	RequestCommand      string   `toml:"request_command"`
 	Roles               struct {
 		ChiefEngineer fileRole `toml:"chief-engineer"`
 		Implementer   fileRole `toml:"implementer"`
@@ -201,6 +206,7 @@ func (f file) settings() (*Settings, error) {
 		MaxReviewRounds:     f.MaxReviewRounds,
 		MaxCheckFixRequests: f.MaxCheckFixRequests,
 		MergeMethod:         MergeMethod(f.MergeMethod),
+		RequestCommand:      f.RequestCommand,
 		Roles:               map[Role]RoleSettings{},
 		GitHubApps:          f.GitHubApps,
 	}

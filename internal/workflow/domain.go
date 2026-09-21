@@ -132,6 +132,32 @@ func readySubIssues(snapshot Snapshot) []Claim {
 	return claims
 }
 
+// LabelsAfterClaim returns the labels of a sub-issue after I1: every
+// cumin/status/* label is removed, and cumin/status/implementing is added.
+// The other labels (risk/*, ...) stay. cumin removes the old status label at
+// the start (issue-states.md, "cuminは着手のときに、古い状態ラベルを外す").
+func LabelsAfterClaim(labels []string) []string {
+	after := []string{}
+	for _, label := range labels {
+		if !IsStatusLabel(label) {
+			after = append(after, label)
+		}
+	}
+	return append(after, LabelImplementing)
+}
+
+// SubIssue returns the sub-issue with the number, from any requirement issue.
+func (s Snapshot) SubIssue(number int) (SubIssue, bool) {
+	for _, requirement := range s.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Number == number {
+				return sub, true
+			}
+		}
+	}
+	return SubIssue{}, false
+}
+
 func blocked(sub SubIssue) bool {
 	for _, blocker := range sub.BlockedBy {
 		if !blocker.Closed {
