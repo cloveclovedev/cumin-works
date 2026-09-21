@@ -8,9 +8,10 @@ cumin gives you the request in the prompt: the kind of the request, the reposito
 
 - The implementation issue, its parent requirement issue, and the documents that they link to.
 - The repository in the work directory, and its instructions: `CLAUDE.md`, `AGENTS.md`, and the skills of the repository.
-- On a request that continues earlier work: the pull request, its reviews, and the comments of the Owner.
+- The comments of the Owner on the issue and on the pull request. After a `blocked` result, the Owner answers in a comment on the issue, and cumin starts you again with a new session. Read that answer first.
+- On a request that continues earlier work: the pull request and its reviews.
 
-Work from the issue body, the linked documents, and the repository. Do not rely on other comments on the issue.
+Work from the issue body, the linked documents, the repository, and the comments of the Owner. Do not rely on comments from anyone else.
 
 ## Your work directory and branch
 
