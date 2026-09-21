@@ -343,6 +343,10 @@ func TestLive_AgentEnvironment(t *testing.T) {
 		}
 	}
 
+	// The cleanup is registered before anything reaches GitHub, so that a
+	// push or a pull request whose response was lost is still removed.
+	t.Cleanup(func() { api.closePullsFromBranch(branch); api.deleteBranch(branch) })
+
 	// A commit and a push with the token, and a pull request with gh.
 	file := filepath.Join(dir, "live", runID+"-agent-env.md")
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
@@ -360,7 +364,6 @@ func TestLive_AgentEnvironment(t *testing.T) {
 			t.Fatalf("git %s: %v: %s", args[0], err, redactToken(out, token.Token))
 		}
 	}
-	t.Cleanup(func() { api.deleteBranch(branch) })
 	sha, err := tool(t, dir, env, "git", "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +376,6 @@ func TestLive_AgentEnvironment(t *testing.T) {
 		t.Fatalf("gh pr create: %v: %s", err, redactToken(out, token.Token))
 	}
 	number := pullNumber(t, out)
-	t.Cleanup(func() { api.closePull(number) })
 
 	// The facts on GitHub: the pull request and the commit are the bot.
 	var pull struct {
@@ -453,6 +455,17 @@ func (a liveAPI) closePull(number int) {
 	}
 }
 
+// closePullsFromBranch closes every open pull request from the branch.
+func (a liveAPI) closePullsFromBranch(branch string) {
+	var pulls []struct {
+		Number int `json:"number"`
+	}
+	a.get("/pulls?state=open&head="+url.QueryEscape(a.owner+":"+branch), &pulls)
+	for _, pull := range pulls {
+		a.closePull(pull.Number)
+	}
+}
+
 // deleteBranch deletes a branch of the test. A branch that was never
 // pushed answers 422 (the reference does not exist), which leaves
 // nothing behind. Any other failure fails the test.
@@ -529,16 +542,7 @@ func TestLive_AgentRunOnSandbox(t *testing.T) {
 	}
 	api := liveAPI{t: t, base: github.DefaultBaseURL, token: token.Token, owner: sb.owner, repo: sb.repo}
 	base := defaultBranch(t, api)
-	t.Cleanup(func() {
-		var pulls []struct {
-			Number int `json:"number"`
-		}
-		api.get("/pulls?state=open&head="+url.QueryEscape(sb.owner+":"+branch), &pulls)
-		for _, pull := range pulls {
-			api.closePull(pull.Number)
-		}
-		api.deleteBranch(branch)
-	})
+	t.Cleanup(func() { api.closePullsFromBranch(branch); api.deleteBranch(branch) })
 
 	file := "live/" + runID + "-claude.md"
 	text := "You are in a git worktree on the branch " + branch + " of the repository " + sb.owner + "/" + sb.repo + ". " +
