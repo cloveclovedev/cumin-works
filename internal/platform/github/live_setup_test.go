@@ -189,8 +189,7 @@ func (i issue) labelNames() []string {
 // can have its own .cumin/config.toml, and scripts/setup-repo.sh keeps it. With
 // another list, the workflow would be right and the checks would still fail.
 //
-// The test knows only the simple rules: a name with no "/" matches at any
-// depth, and a directory entry protects everything below it.
+// The rules are in protectedPathMatches.
 func (l *live) requireProtectedPathFixtures(t *testing.T, token, unprotected, protected string) {
 	t.Helper()
 	entries := []string{".cumin/", "CLAUDE.md", "AGENTS.md", ".claude/"} // the default list
@@ -219,24 +218,7 @@ func (l *live) requireProtectedPathFixtures(t *testing.T, token, unprotected, pr
 		t.Fatalf("read .cumin/config.toml of the sandbox: status %d: %s", resp.status, resp.message())
 	}
 
-	matches := func(path string) bool {
-		parts := strings.Split(strings.ToLower(path), "/")
-		for _, entry := range entries {
-			name := strings.ToLower(strings.Trim(entry, "/"))
-			directory := strings.HasSuffix(entry, "/")
-			for i, part := range parts {
-				last := i == len(parts)-1
-				if part == name && (!directory || !last) && !strings.Contains(name, "/") {
-					return true
-				}
-			}
-			if strings.Contains(name, "/") && (strings.ToLower(path) == name || strings.HasPrefix(strings.ToLower(path), name+"/")) {
-				return true
-			}
-		}
-		return false
-	}
-	if matches(unprotected) || !matches(protected) {
+	if protectedPathMatches(entries, unprotected) || !protectedPathMatches(entries, protected) {
 		t.Fatalf("the list of protected paths of the sandbox does not fit the live checks: %q must be unprotected and %q must be protected. The list is %q. Keep \"CLAUDE.md\" in protected_paths of .cumin/config.toml, and do not protect \"live/\"", unprotected, protected, entries)
 	}
 }
@@ -258,8 +240,17 @@ func (l *live) pushBranch(t *testing.T, repo *gitRepo, token, branch string) {
 	t.Helper()
 	repo.mustRun(t, "push", "--quiet", "origin", branch)
 	t.Cleanup(func() {
-		// 422: the branch is gone already, for example after a merge that deletes it.
-		l.cleanUp(t, "delete the branch "+branch, l.api(t, token, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+branch, nil), http.StatusNoContent, http.StatusUnprocessableEntity)
+		resp := l.api(t, token, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+branch, nil)
+		// A 422 can mean that the branch is gone already, for example after
+		// a merge that deletes it. A 422 for another reason is a failure, so
+		// the test reads the ref and accepts the 422 only when the ref does
+		// not exist.
+		if resp.status == http.StatusUnprocessableEntity {
+			if ref := l.api(t, token, http.MethodGet, "/repos/{repo}/git/ref/heads/"+branch, nil); ref.status == http.StatusNotFound {
+				return
+			}
+		}
+		l.cleanUp(t, "delete the branch "+branch, resp, http.StatusNoContent)
 	})
 }
 

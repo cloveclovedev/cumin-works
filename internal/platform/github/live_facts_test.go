@@ -20,7 +20,6 @@ const (
 	commitStatusCheck   = "live-commit-status"
 	liveStatusContext   = "cumin-live-status"
 	failMarkerPath      = "live/fail-marker"
-	templateMarker      = "cumin-live-template"
 )
 
 // TestLiveGitHubFacts records facts about GitHub that the later requirements
@@ -192,8 +191,10 @@ func TestLiveGitHubFacts(t *testing.T) {
 		body = fmt.Sprintf("%q", *created.Body)
 	}
 	l.record("9", "A pull request that an App creates through the API with no body, in a repository with `.github/pull_request_template.md` (row 25)", "The template is not used", "The body is "+body)
-	if created.Body != nil && strings.Contains(*created.Body, templateMarker) {
-		t.Error("fact 9: GitHub used the template")
+	// Every body that is not empty fails: a body from an old or changed
+	// template on the sandbox would not hold the marker.
+	if created.Body != nil && *created.Body != "" {
+		t.Errorf("fact 9: the body is not empty: %s", body)
 	}
 
 	// Fact 4: what a token can read of a failed check.
