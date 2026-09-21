@@ -302,6 +302,28 @@ func TestStart_AppsAreKeyedByOwner(t *testing.T) {
 	}
 }
 
+// GitHub account names are case-insensitive: the settings key matches the
+// owner of the request without regard to case, and two keys that differ
+// only by case are refused.
+func TestStart_OwnerMatchesTheSettingsWithoutRegardToCase(t *testing.T) {
+	fake, client := newFakeGitHub(t)
+	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+	s.Apps = map[string]map[config.Role]github.AppCredentials{
+		"Example-Org": s.Apps["example-org"],
+	}
+	if _, err := s.Start(context.Background(), startRequest(t)); err != nil {
+		t.Fatalf("Start with the owner in another case: %v", err)
+	}
+	if n := fake.count("POST /app/installations/7/access_tokens"); n != 1 {
+		t.Errorf("token requests = %d, want 1", n)
+	}
+	s.Apps["example-org"] = s.Apps["Example-Org"]
+	if _, err := s.Start(context.Background(), startRequest(t)); err == nil || !strings.Contains(err.Error(), "different cases") {
+		t.Errorf("err = %v, want the two keys refused", err)
+	}
+}
+
 func TestHostWarnings_EmptyForClaudeCode(t *testing.T) {
 	s := &Service{Roles: map[config.Role]config.RoleSettings{
 		config.RoleChiefEngineer: {CLI: config.CLIClaudeCode},

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,7 +42,8 @@ type Service struct {
 	identities map[appKey]identity
 }
 
-// appKey names one App: the owner of the repository and the role.
+// appKey names one App: the owner of the repository (in lower case, as
+// GitHub account names are case-insensitive) and the role.
 type appKey struct {
 	owner string
 	role  config.Role
@@ -80,9 +82,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	if !ok {
 		return nil, fmt.Errorf("start %s on %s/%s: no settings for the role", req.Role, req.Owner, req.Repo)
 	}
-	cred, ok := s.Apps[req.Owner][req.Role]
-	if !ok {
-		return nil, fmt.Errorf("start %s on %s/%s: no GitHub App for the role and the owner (the setting github_apps.%s.%s)", req.Role, req.Owner, req.Repo, req.Owner, req.Role)
+	cred, err := s.app(req.Owner, req.Role)
+	if err != nil {
+		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
 	}
 	log := s.logger().With("role", req.Role, "repository", req.Owner+"/"+req.Repo)
 	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit}
@@ -102,7 +104,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	log.Info("agent token created", "expires_at", token.ExpiresAt)
 
 	// 3. The identity of the commits of the agent.
-	id, err := s.identity(ctx, appKey{req.Owner, req.Role}, cred, token.Token)
+	id, err := s.identity(ctx, appKey{strings.ToLower(req.Owner), req.Role}, cred, token.Token)
 	if err != nil {
 		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
 	}
@@ -118,6 +120,28 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 		TimeLimit:       settings.TimeLimit,
 		Credentials:     Credentials{Token: token.Token, AuthorName: id.name, AuthorEmail: id.email},
 	})
+}
+
+// app returns the credentials of the App of the role for the owner. GitHub
+// account names are case-insensitive, so the owner matches the settings
+// key without regard to case; two keys that differ only by case are an
+// error, as in the settings of cumin-core.
+func (s *Service) app(owner string, role config.Role) (github.AppCredentials, error) {
+	var found []string
+	for key := range s.Apps {
+		if strings.EqualFold(key, owner) {
+			found = append(found, key)
+		}
+	}
+	if len(found) > 1 {
+		return github.AppCredentials{}, fmt.Errorf("the settings have github_apps for %q more than once, with different cases", owner)
+	}
+	if len(found) == 1 {
+		if cred, ok := s.Apps[found[0]][role]; ok {
+			return cred, nil
+		}
+	}
+	return github.AppCredentials{}, fmt.Errorf("no GitHub App for the role and the owner (the setting github_apps.%s.%s)", owner, role)
 }
 
 // identity returns the bot identity of the role: the slug of the App from
