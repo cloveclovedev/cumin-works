@@ -122,3 +122,31 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 |---|---|---|---|
 | 77 | GraphQLの問い合わせのポイントは、経路に沿った `first` の積を100で割った値で決まる。定期確認の問い合わせ (要求Issueを10件ずつ、sub-issueを30件、ラベルを10件、blocked by のIssueを20件) は、`rateLimit.cost` が6だった | 公式: Rate limits and node limits for the GraphQL API。開いている要求Issueが4つあるリポジトリで実測 | 公式文書 + 実測 |
 | 78 | `PUT /repos/{owner}/{repo}/issues/{n}/labels` に、リポジトリにないラベルの名前を渡すと、そのラベルが既定の色 (`ededed`) で作られ、付け替えは失敗しない | sandboxで `cumin/status/implementing` のラベルを消してから、着手させた | 実測 |
+
+## 7. setupの道具とCIの実装で確かめたこと (2026-09-21)
+
+要求Issue #59 の実装 (#84、#91) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 79 | 公開リポジトリでは、標準のGitHub-hosted runner (macOSを含む) の利用は無料である。Freeプランの同時実行は、全体で20 job、macOSは5 jobまで。`macos-latest` はarm64である | 公式: About billing for GitHub Actions、Usage limits for GitHub Actions、GitHub-hosted runners reference | 公式文書 |
+| 80 | `POST /repos/{owner}/{repo}/rulesets` に、そのリポジトリにある ruleset と同じ名前を渡すと、422 "Name must be unique" が返る。同じリポジトリに、同じ名前の ruleset は2つ作れない | sandboxで実測 | 実測 |
+| 81 | `GET /repos/{owner}/{repo}/rulesets` は、`includes_parents` (初期値 `true`) により、Organizationの ruleset のうちそのリポジトリに当たるものも返す | 公式: Get all repository rulesets | 公式文書 |
+| 82 | Organizationの階層の ruleset は、GitHub Enterprise プランでだけ作れる。Free と Team の Organization では作れないので、Organizationの ruleset とリポジトリの ruleset の名前が重なることは、これらのプランでは起きない | 公式: About rulesets ("For organizations on the GitHub Enterprise plan, you can set up rulesets at the organization level")。Organizationの ruleset の名前の一意性は、公式文書に記載がない | 公式文書 (名前の一意性は未確認) |
+
+## 8. Agentの隔離の実装で確かめたこと (2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0)
+
+要求Issue #8 の実装 (#74、#76、#82、#93) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 83 | `GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` を付けても、`GIT_AUTHOR_*` と `GIT_COMMITTER_*` がなければ、gitはユーザ名とホスト名から推測した作者でコミットに成功する。cuminは、作者を環境変数で渡す | #74 で実測 | 実測 |
+| 84 | `GH_CONFIG_DIR` に存在しないディレクトリを指定し、`GH_TOKEN` を渡すと、ghは既定の設定 (`git_protocol` は `https`) で動き、ディレクトリを作らない | #74 で実測 | 実測 |
+| 85 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` は、Bashツール、hook、MCPサーバの環境から認証情報を取り除く。cuminは使わない。AgentがBashツールでroleのtokenを使うためである | 公式: Environment variables | 公式文書 |
+| 86 | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`init` のイベントに `memory_paths` の項目そのものがない (28は null と書いたが、項目がない)。`init` には、指示のファイルの一覧を返す項目がない。ある項目は `plugins`、`mcp_servers`、`skills`、`agents`、`slash_commands`、`tools` など | #76 で実測。項目の全体は #67 に記録 | 実測 |
+| 87 | `rate_limit_info` の項目は `status`、`resetsAt`、`rateLimitType`、`unifiedWindows`、`isUsingOverage`、`overageStatus`、`overageDisabledReason` である。通常の実行では `status` は `allowed` になる (75の続き) | #76 で実測 | 実測 |
+| 88 | Agent SDKの文書は `SDKRateLimitEvent` を記述しており、`rate_limit_info` の `status`、`utilization`、`resetsAt`、`rateLimitType` (`five_hour`、`seven_day`、`seven_day_opus`、`seven_day_sonnet`、`overage`) がある。イベントは利用枠の状態が変わったときに出る、とある。`unifiedWindows` は記述がない (2の更新) | 公式: Agent SDK のTypeScriptリファレンス (2026-09-21) | 公式文書 |
+| 89 | CLIのサブコマンド、フラグ、hook、statuslineの項目、SDKの呼び出しのどれも、モデルを呼ばずにサブスクリプションの使用率を返さない。`/usage` は文章を返し、文書にないendpointをログインのOAuthのtokenで呼んでいる | 公式文書 (2026-09-21) と公開の報告 | 公式文書 (不在の確認) |
+| 90 | `GET /users/{username}` は、installation tokenを `Authorization: Bearer` で渡しても、botのユーザ (`<slug>[bot]`) の数値の `id` を返す | 公式: Get a user。#70 の実機の確認で実測 | 公式文書 + 実測 |
+| 91 | `--setting-sources project` を付けた `-p` の実行でも、claude.aiのアカウントのコネクタが `init` の `mcp_servers` に現れる。worktreeに `.mcp.json` がなくても同じである。`ENABLE_CLAUDEAI_MCP_SERVERS=false` を付けると消える (27の追記) | #93 で実測 (2026-09-22) | 実測 |
+| 92 | Hostのユーザの設定ファイルを読ませず、設計メモの環境変数だけ (tokenを `extraheader` と `GH_TOKEN` で、botの身元を作者とコミッターで) を渡した環境で、`git push` と `gh pr create` はImplementerのAppの名義で成功し、コミットの作者とコミッターはbotのユーザになる | sandboxで実測 (2026-09-22) | 実測 |
