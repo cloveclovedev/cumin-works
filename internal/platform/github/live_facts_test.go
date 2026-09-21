@@ -248,12 +248,13 @@ func (l *live) recordFailedCheckFact(t *testing.T, token, sha string) {
 	if annotations.status == http.StatusOK {
 		annotations.json(t, &notes)
 	}
-	firstMessage := ""
+	var messages []string
 	for _, note := range notes {
-		if note.Level == "failure" && firstMessage == "" {
-			firstMessage = note.Message
+		if note.Level == "failure" {
+			messages = append(messages, fmt.Sprintf("%s: %s", note.Path, note.Message))
 		}
 	}
+	firstMessage := strings.Join(messages, " / ")
 	// The job ID is the last part of the details address of an Actions check run.
 	jobID := run.DetailsURL[strings.LastIndex(run.DetailsURL, "/")+1:]
 	logs := l.api(t, token, http.MethodGet, "/repos/{repo}/actions/jobs/"+jobID+"/logs", nil)
@@ -263,9 +264,9 @@ func (l *live) recordFailedCheckFact(t *testing.T, token, sha string) {
 		title = *run.Output.Title
 	}
 	l.record("4", "What an installation token of the cumin-core App reads of a failed GitHub Actions check", "Not known",
-		fmt.Sprintf("Check run: conclusion `%s`, output title `%s`, %d annotations. `GET /check-runs/{id}/annotations`: status %d, first failure message: \"%s\". `GET /actions/jobs/{id}/logs`: status %d with the token, status %d without authentication",
+		fmt.Sprintf("Check run: conclusion `%s`, output title `%s`, %d annotations. `GET /check-runs/{id}/annotations`: status %d, failure annotations: \"%s\". `GET /actions/jobs/{id}/logs`: status %d with the token, status %d without authentication",
 			run.Conclusion, title, run.Output.AnnotationsCount, annotations.status, firstMessage, logs.status, anonymousLogs.status))
-	if run.Conclusion != "failure" || annotations.status != http.StatusOK || firstMessage == "" {
+	if run.Conclusion != "failure" || annotations.status != http.StatusOK || !strings.Contains(firstMessage, failMarkerPath) {
 		t.Errorf("fact 4: conclusion %q, annotations status %d, message %q", run.Conclusion, annotations.status, firstMessage)
 	}
 }
@@ -361,19 +362,23 @@ func (l *live) recordNarrowTokenFact(t *testing.T) {
 	}
 	narrow.json(t, &token)
 	read := l.api(t, token.Token, http.MethodGet, "/repos/{repo}/issues?per_page=1", nil)
-	write := l.api(t, token.Token, http.MethodPost, "/repos/{repo}/issues", map[string]any{"title": "test: this issue must not exist " + l.runID})
-	if write.status == http.StatusCreated {
+	// In a public repository every GitHub account can open an issue, so this
+	// call does not need the Issues write permission. A label needs it.
+	target := l.createIssue(t, l.token(t, "chief-engineer"), "test: live facts narrow token "+l.runID, nil, 0)
+	labeled := l.api(t, token.Token, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/labels", target.Number), map[string]any{"labels": []string{"risk/low"}})
+	opened := l.api(t, token.Token, http.MethodPost, "/repos/{repo}/issues", map[string]any{"title": "test: live facts issue from a read-only token " + l.runID})
+	if opened.status == http.StatusCreated {
 		var created issue
-		write.json(t, &created)
-		l.api(t, l.token(t, "chief-engineer"), http.MethodPatch, fmt.Sprintf("/repos/{repo}/issues/%d", created.Number), map[string]any{"state": "closed"})
+		opened.json(t, &created)
+		l.cleanUp(t, fmt.Sprintf("close the issue %d", created.Number), l.api(t, l.token(t, "chief-engineer"), http.MethodPatch, fmt.Sprintf("/repos/{repo}/issues/%d", created.Number), map[string]any{"state": "closed"}), http.StatusOK)
 	}
 	tooMuch := l.api(t, jwt, http.MethodPost, path, map[string]any{"repositories": []string{l.repo}, "permissions": map[string]string{"administration": "read"}})
 
 	l.record("2", "A token of the Implementer App with `permissions: {issues: read}` and one repository, and a request for a permission that the App does not have", "The token is limited. The second request is refused",
-		fmt.Sprintf("Token: permissions `%v`, `repository_selection` `%s`, %d repository. Read issues: status %d. Create an issue: status %d. Request for `administration: read`: status %d (%s)",
-			token.Permissions, token.RepositorySelection, len(token.Repositories), read.status, write.status, tooMuch.status, tooMuch.message()))
-	if read.status != http.StatusOK || write.status == http.StatusCreated || tooMuch.status == http.StatusCreated {
-		t.Errorf("fact 2: read %d, write %d, too much %d", read.status, write.status, tooMuch.status)
+		fmt.Sprintf("Token: permissions `%v`, `repository_selection` `%s`, %d repository. Read issues: status %d. Add a label to an issue: status %d (%s). Open an issue: status %d (in a public repository, an account needs no write permission to open an issue). Request for `administration: read`: status %d (%s)",
+			token.Permissions, token.RepositorySelection, len(token.Repositories), read.status, labeled.status, labeled.message(), opened.status, tooMuch.status, tooMuch.message()))
+	if read.status != http.StatusOK || labeled.status != http.StatusForbidden || tooMuch.status != http.StatusUnprocessableEntity {
+		t.Errorf("fact 2: read %d, add a label %d, too much %d", read.status, labeled.status, tooMuch.status)
 	}
 }
 
