@@ -4,8 +4,8 @@ package agent
 // reports the usage only in a run that calls the model
 // (measured-constraints.md rows 29, 30), so cumin runs the smallest
 // possible request and reads its rate_limit_event. docs/ja/designs/
-// cumin-core.md ("起動前の使用率の確認") records the decision. The rest
-// of cumin gets only QuotaUsage or an error.
+// cumin-core.md (the topic on the quota check before a start) records
+// the decision. The rest of cumin gets only QuotaUsage or an error.
 
 import (
 	"context"
