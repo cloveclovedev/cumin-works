@@ -128,6 +128,24 @@ type QuotaUsage struct {
 	ReadAt time.Time
 }
 
+// QuotaNotRead is the error of ReadQuota: the minimal run did not report
+// the usage. Reason says why, without a number and without output of the
+// CLI. cumin does not start an agent without the usage (Q1).
+type QuotaNotRead struct {
+	Reason string
+	Err    error
+}
+
+func (e *QuotaNotRead) Error() string {
+	msg := "quota usage not read: " + e.Reason
+	if e.Err != nil {
+		msg += ": " + e.Err.Error()
+	}
+	return msg
+}
+
+func (e *QuotaNotRead) Unwrap() error { return e.Err }
+
 // Run is the normal end of a request.
 type Run struct {
 	SessionID string

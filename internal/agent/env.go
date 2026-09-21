@@ -4,8 +4,8 @@ package agent
 // of cumin holds the credentials of the Host user (the gh login, the SSH
 // agent socket, and so on). The agent gets none of them: its environment
 // starts from a fixed list of Host variables and gets only the token of
-// its own GitHub App. docs/ja/designs/agent-run.md ("Agentの環境") records
-// the decision. The variables come from the official documentation of
+// its own GitHub App. docs/ja/designs/agent-run.md (the topic on the agent
+// environment) records the decision. The variables come from the official documentation of
 // git (git(1) "Environment Variables", git-config(1)), gh ("gh help
 // environment"), and Claude Code ("Environment variables").
 

@@ -2,9 +2,10 @@ package agent
 
 // This file prepares the work directory of a request: one clone for each
 // repository under the setting work_dir, and one git worktree for each
-// issue and role. docs/ja/designs/agent-run.md ("作業場所") records the
-// layout and the rules. The git commands come from the official git
-// documentation (git-clone, git-fetch, git-remote, git-worktree, git-branch).
+// issue and role. docs/ja/designs/agent-run.md (the topic on the work
+// directory) records the layout and the rules. The git commands come from
+// the official git documentation (git-clone, git-fetch, git-remote,
+// git-worktree, git-branch).
 
 import (
 	"context"

@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"sort"
 	"syscall"
 	"time"
 )
@@ -33,6 +34,9 @@ type ClaudeCode struct {
 	// Grace is the time that the CLI gets to end after SIGTERM, before
 	// SIGKILL. Zero means defaultGrace. Tests shorten it.
 	Grace time.Duration
+	// QuotaTimeLimit bounds the minimal run of ReadQuota. Zero means
+	// defaultQuotaTimeLimit. Tests shorten it.
+	QuotaTimeLimit time.Duration
 }
 
 func (c ClaudeCode) grace() time.Duration {
@@ -127,13 +131,6 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		log.Info("agent start", "session", "resumed", "session_id", req.SessionID, "time_limit", req.TimeLimit)
 	}
 
-	runCtx := ctx
-	if req.TimeLimit > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(ctx, req.TimeLimit)
-		defer cancel()
-	}
-
 	// gh keeps its configuration and state in this directory during the
 	// run. It starts empty, so gh uses its defaults.
 	ghConfigDir, err := os.MkdirTemp("", "cumin-gh-")
@@ -142,56 +139,35 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	}
 	defer os.RemoveAll(ghConfigDir)
 
-	cmd := exec.CommandContext(runCtx, c.Path, c.args(req)...)
-	cmd.Dir = req.WorkDir
-	cmd.Env = environment(req.Credentials, ghConfigDir)
-	// Stdin is nil: the process reads from the null device (os/exec).
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	// When the context is done, Cancel sends SIGTERM to the group. After
-	// WaitDelay, os/exec kills the CLI and closes the pipes (os/exec:
-	// Cmd.Cancel, Cmd.WaitDelay).
-	cmd.Cancel = func() error { return signalGroup(cmd.Process.Pid, syscall.SIGTERM) }
-	cmd.WaitDelay = c.grace()
 	// The output of the CLI may hold the token (a tool that prints its
 	// environment, an error with the authorization header). It is
 	// redacted before any log.
-	secrets := req.Credentials.secrets()
-	reader := &streamReader{c: c, log: log, secrets: secrets}
-	cmd.Stdout = reader
-	var stderr bytes.Buffer
-	cmd.Stderr = &limitedWriter{w: &stderr, limit: 64 << 10}
-
-	if err := cmd.Start(); err != nil {
-		if runCtx.Err() != nil {
-			return nil, c.fail(log, &AbnormalEnd{Kind: EndTimeLimit, Detail: "the run was stopped before the start", Err: runCtx.Err()})
+	ex := c.execute(ctx, log, execution{
+		dir:     req.WorkDir,
+		env:     environment(req.Credentials, ghConfigDir),
+		args:    c.args(req),
+		limit:   req.TimeLimit,
+		secrets: req.Credentials.secrets(),
+	})
+	if ex.startErr != nil {
+		if ex.limitErr != nil {
+			return nil, c.fail(log, &AbnormalEnd{Kind: EndTimeLimit, Detail: "the run was stopped before the start", Err: ex.limitErr})
 		}
-		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "start " + c.Path, Err: err})
-	}
-	pid := cmd.Process.Pid
-
-	waitErr := cmd.Wait()
-	reader.flush()
-	// Nothing of the group may stay alive after the run, whatever its
-	// end: a command that the agent left in the background would keep
-	// the token in its environment. After a time limit, the grace period
-	// is over at this point.
-	_ = signalGroup(pid, syscall.SIGKILL)
-	if stderr.Len() > 0 {
-		log.Debug("agent stderr", "text", redact(stderr.String(), secrets))
+		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "start " + c.Path, Err: ex.startErr})
 	}
 
-	s := reader.s
-	end := &AbnormalEnd{SessionID: s.sessionID, PID: pid}
+	s := ex.s
+	end := &AbnormalEnd{SessionID: s.sessionID, PID: ex.pid}
 	var exitErr *exec.ExitError
 	switch {
-	case runCtx.Err() != nil && ctx.Err() == nil:
-		end.Kind, end.Detail, end.Err = EndTimeLimit, fmt.Sprintf("the time limit of %s passed", req.TimeLimit), runCtx.Err()
-	case runCtx.Err() != nil:
+	case ex.limitErr != nil && ctx.Err() == nil:
+		end.Kind, end.Detail, end.Err = EndTimeLimit, fmt.Sprintf("the time limit of %s passed", req.TimeLimit), ex.limitErr
+	case ex.limitErr != nil:
 		end.Kind, end.Detail, end.Err = EndTimeLimit, "the run was stopped", ctx.Err()
-	case waitErr != nil && errors.As(waitErr, &exitErr):
+	case ex.waitErr != nil && errors.As(ex.waitErr, &exitErr):
 		end.Kind, end.Detail = EndProcessFailed, fmt.Sprintf("exit code %d", exitErr.ExitCode())
-	case waitErr != nil:
-		end.Kind, end.Detail, end.Err = EndProcessFailed, "wait", waitErr
+	case ex.waitErr != nil:
+		end.Kind, end.Detail, end.Err = EndProcessFailed, "wait", ex.waitErr
 	case s.result == nil:
 		end.Kind, end.Detail = EndNoResult, "the run ended without a result event"
 	case s.result.IsError:
@@ -215,6 +191,72 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		return run, nil
 	}
 	return nil, c.fail(log, end)
+}
+
+// execution is one process of the CLI: what to start, and what it left
+// behind. Run and ReadQuota share it.
+type execution struct {
+	dir     string
+	env     []string
+	args    []string
+	limit   time.Duration
+	secrets []string
+
+	// pid is the process of the CLI. 0 when it did not start.
+	pid int
+	// startErr is set when the CLI did not start.
+	startErr error
+	// limitErr is set when the time limit passed or the context ended.
+	limitErr error
+	// waitErr is the error of Wait: a non-zero exit code, or a failure.
+	waitErr error
+	s       stream
+}
+
+// execute starts the CLI, reads its stream until the end, and kills what
+// stays in its process group. See Run for the stop at the time limit.
+func (c ClaudeCode) execute(ctx context.Context, log *slog.Logger, ex execution) execution {
+	runCtx := ctx
+	if ex.limit > 0 {
+		var cancel context.CancelFunc
+		runCtx, cancel = context.WithTimeout(ctx, ex.limit)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(runCtx, c.Path, ex.args...)
+	cmd.Dir = ex.dir
+	cmd.Env = ex.env
+	// Stdin is nil: the process reads from the null device (os/exec).
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// When the context is done, Cancel sends SIGTERM to the group. After
+	// WaitDelay, os/exec kills the CLI and closes the pipes (os/exec:
+	// Cmd.Cancel, Cmd.WaitDelay).
+	cmd.Cancel = func() error { return signalGroup(cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.WaitDelay = c.grace()
+	reader := &streamReader{c: c, log: log, secrets: ex.secrets}
+	cmd.Stdout = reader
+	var stderr bytes.Buffer
+	cmd.Stderr = &limitedWriter{w: &stderr, limit: 64 << 10}
+
+	if err := cmd.Start(); err != nil {
+		ex.startErr, ex.limitErr = err, runCtx.Err()
+		return ex
+	}
+	ex.pid = cmd.Process.Pid
+
+	ex.waitErr = cmd.Wait()
+	reader.flush()
+	ex.limitErr = runCtx.Err()
+	// Nothing of the group may stay alive after the run, whatever its
+	// end: a command that the agent left in the background would keep
+	// the token in its environment. After a time limit, the grace period
+	// is over at this point.
+	_ = signalGroup(ex.pid, syscall.SIGKILL)
+	if stderr.Len() > 0 {
+		log.Debug("agent stderr", "text", redact(stderr.String(), ex.secrets))
+	}
+	ex.s = reader.s
+	return ex
 }
 
 // signalGroup sends the signal to the process group of pid. A group that
@@ -265,16 +307,41 @@ func (r *streamReader) line(line []byte) {
 }
 
 func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets []string) {
+	// The type first, so that an event that does not decode is still
+	// known by its type.
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(line, &envelope); err != nil {
+		log.Debug("agent output is not JSON", "text", truncate(redact(string(line), secrets), 200))
+		return
+	}
 	var e event
 	if err := json.Unmarshal(line, &e); err != nil {
-		log.Debug("agent output is not JSON", "text", truncate(redact(string(line), secrets), 200))
+		if envelope.Type == "rate_limit_event" {
+			// A rate limit event of a changed shape: no usage, not the
+			// earlier value.
+			s.quota = nil
+		}
+		log.Debug("agent event does not decode", "type", envelope.Type, "err", err.Error())
 		return
 	}
 	if e.SessionID != "" {
 		s.sessionID = e.SessionID
 	}
 	switch e.Type {
+	case "system":
+		if e.Subtype == "init" {
+			// The names of the fields, not the values: the record of a
+			// live run uses them, and a changed shape shows here first.
+			log.Debug("agent init event", "fields", fieldNames(line, ""))
+		}
 	case "rate_limit_event":
+		log.Debug("agent rate limit event", "fields", fieldNames(line, "rate_limit_info"), "status", statusOf(e.RateLimitInfo))
+		// The last event is the usage. An event that cumin cannot read
+		// replaces an earlier one with "no usage", so that a changed
+		// shape is not hidden by an older value.
+		s.quota = nil
 		if q, ok := quotaOf(e.RateLimitInfo); ok {
 			s.quota = &q
 			log.Debug("agent quota usage",
@@ -284,6 +351,35 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 	case "result":
 		s.result = &e
 	}
+}
+
+// fieldNames returns the sorted names of the fields of the JSON object in
+// line, or of its nested object at key when key is not empty.
+func fieldNames(line []byte, key string) []string {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(line, &object); err != nil {
+		return nil
+	}
+	if key != "" {
+		var nested map[string]json.RawMessage
+		if err := json.Unmarshal(object[key], &nested); err != nil {
+			return nil
+		}
+		object = nested
+	}
+	names := make([]string, 0, len(object))
+	for name := range object {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func statusOf(info *rateLimitInfo) string {
+	if info == nil {
+		return ""
+	}
+	return info.Status
 }
 
 // quotaOf converts the rate limit event. It reports false when a window

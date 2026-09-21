@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"22222222-2222-4333-8444-555555555555","cwd":"/example/quota","model":"example-small-model","tools":[],"plugins":[],"mcp_servers":[]}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.3,"resetsAt":1900000000},"seven_day":{"utilization":0.6,"resetsAt":1900300000}}},"uuid":"aaaaaaaa-0000-4000-8000-000000000002","session_id":"22222222-2222-4333-8444-555555555555"}
+{"type":"assistant","session_id":"22222222-2222-4333-8444-555555555555","message":{"role":"assistant","content":[{"type":"text","text":"OK"}]}}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.31,"resetsAt":1900000000},"seven_day":{"utilization":0.61,"resetsAt":1900300000}}},"uuid":"aaaaaaaa-0000-4000-8000-000000000002","session_id":"22222222-2222-4333-8444-555555555555"}
+{"type":"result","subtype":"success","is_error":false,"session_id":"22222222-2222-4333-8444-555555555555","num_turns":1,"stop_reason":"end_turn","terminal_reason":"completed","permission_denials":[],"result":"OK"}
