@@ -1,5 +1,5 @@
 @startuml cumin-core-decide
-' cumin works - 定期確認の判定。スナップショットから動作の列を決める。
+' cumin works - 定期確認の判定。スナップショットから着手リストを決める。
 ' 行の番号 (I1 など) は issue-states.md の表に対応する。
 ' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
 skinparam shadowing false
@@ -11,24 +11,22 @@ partition "定期確認 (リポジトリごと)" {
   (1回のGraphQLの問い合わせ);
 }
 partition "判定 (純粋関数。I/Oなし)" {
-  :進行中のIssueを数える
+  :進行中のIssue数を数える
   - cumin/status/planning の要求Issue
   - implementing、awaiting-checks、reviewing の
     開いているsub-issue;
-  :空き = max_issues_in_progress - 進行中
-  (この定期確認の中だけの数。持ち越さない);
+  :着手可能なIssue数を算出する
+  max_issues_in_progress - 進行中のIssue数;
   :I1の候補を集める
   - 開いているsub-issue
   - cumin/status/ready が付いている
   - blocked by のIssueが全て閉じている;
   :候補をIssueの番号の昇順に並べる;
-  :先頭から、空きの数だけを「着手」の一覧にする
-  (空きが0なら、一覧は空);
-  :「着手」の一覧を返す
-  (同じスナップショットからは、いつも同じ一覧);
+  :先頭から、着手可能なIssue数だけを着手リストに入れる;
+  :着手リストを返す;
 }
 partition "適用" {
-  while (「着手」の一覧が空?) is (いいえ)
+  while (着手リストが空?) is (いいえ)
     :先頭の1つを取り出す;
     :ラベルを cumin/status/implementing に替える;
     if (替えられた?) then (はい)
