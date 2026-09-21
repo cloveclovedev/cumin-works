@@ -80,13 +80,9 @@ GitHub上では `cumin-chief-engineer` として振る舞う。持っている�
 
 ## riskの基準
 
-| risk | 基準 |
-|---|---|
-| `risk/low` | 数行で、影響が自明な変更 |
-| `risk/high` | revertで戻せない変更。DBマイグレーション、デプロイやCIの設定、認証や決済、外部サービスへの副作用、公開APIの契約、cumin自身のルール (`.cumin/`) |
-| `risk/medium` | それ以外の全て |
+riskは `risk/low`、`risk/medium`、`risk/high` の3段階である。段階の違いは、mergeを誰が判断するかに効く。`risk/low` はcuminがmergeし、`risk/medium` と `risk/high` はOwnerがmergeを判断する (I6、I7)。
 
-この表は初期値である。Hostかリポジトリに `risk-criteria.md` があれば、cuminはその内容を、表の代わりに指示に入れる (置き場所と優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある)。Reviewerにも、同じ基準が渡る。
+どの変更をどの段階にするかの基準は、Chief EngineerとReviewerがそのまま受け取る英語の文章である。初期値は、cuminのリポジトリの [roles/risk-criteria.md](../../../../roles/risk-criteria.md) にある。この文書には写さない。Hostかリポジトリに `risk-criteria.md` があれば、cuminはその内容を、初期値の代わりに指示に入れる (置き場所と優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある)。Reviewerにも、同じ基準が渡る。
 
 迷ったら高いほうを付ける。riskを確定するのはOwnerである。
 
