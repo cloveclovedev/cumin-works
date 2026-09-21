@@ -164,6 +164,37 @@ func TestEnv_RequestWithoutCredentialsIsRefusedBeforeTheStart(t *testing.T) {
 	}
 }
 
+// A CLI that prints its environment and the token header, on stdout as a
+// line that is not JSON and on stderr, does not put the token into the
+// debug logs.
+func TestEnv_TokenInTheOutputOfTheCLIIsRedacted(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fake-claude")
+	fixture, err := filepath.Abs(filepath.Join("testdata", "done.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\necho \"token=$GH_TOKEN header=$GIT_CONFIG_VALUE_0\"\necho \"stderr token=$GH_TOKEN header=$GIT_CONFIG_VALUE_0\" >&2\ncat " + fixture + "\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	c := ClaudeCode{Path: path, Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))}
+	if _, err := c.Run(context.Background(), request(t)); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + testCredentials.Token))
+	for _, secret := range []string{testCredentials.Token, basic} {
+		if strings.Contains(logs.String(), secret) {
+			t.Errorf("the debug logs hold the secret %q:\n%s", secret[:8], logs.String())
+		}
+	}
+	// The lines were logged, with the marker in place of the secret.
+	if n := strings.Count(logs.String(), "[redacted]"); n < 4 {
+		t.Errorf("want 4 or more redactions in the logs, got %d:\n%s", n, logs.String())
+	}
+}
+
 func TestEnv_TokenIsNotLogged(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))

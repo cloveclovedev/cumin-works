@@ -152,7 +152,11 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	// Cmd.Cancel, Cmd.WaitDelay).
 	cmd.Cancel = func() error { return signalGroup(cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = c.grace()
-	reader := &streamReader{c: c, log: log}
+	// The output of the CLI may hold the token (a tool that prints its
+	// environment, an error with the authorization header). It is
+	// redacted before any log.
+	secrets := req.Credentials.secrets()
+	reader := &streamReader{c: c, log: log, secrets: secrets}
 	cmd.Stdout = reader
 	var stderr bytes.Buffer
 	cmd.Stderr = &limitedWriter{w: &stderr, limit: 64 << 10}
@@ -172,7 +176,7 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		_ = signalGroup(pid, syscall.SIGKILL)
 	}
 	if stderr.Len() > 0 {
-		log.Debug("agent stderr", "text", stderr.String())
+		log.Debug("agent stderr", "text", redact(stderr.String(), secrets))
 	}
 
 	s := reader.s
@@ -226,10 +230,11 @@ func signalGroup(pid int, sig syscall.Signal) error {
 // line as the lines arrive, so that a line that is still in the pipe when
 // the process exits is not lost.
 type streamReader struct {
-	c   ClaudeCode
-	log *slog.Logger
-	s   stream
-	buf []byte
+	c       ClaudeCode
+	log     *slog.Logger
+	secrets []string
+	s       stream
+	buf     []byte
 }
 
 func (r *streamReader) Write(p []byte) (int, error) {
@@ -255,13 +260,13 @@ func (r *streamReader) line(line []byte) {
 		return
 	}
 	// A copy, because buf is reused.
-	r.c.readLine(r.log, &r.s, append([]byte(nil), line...))
+	r.c.readLine(r.log, &r.s, append([]byte(nil), line...), r.secrets)
 }
 
-func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte) {
+func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets []string) {
 	var e event
 	if err := json.Unmarshal(line, &e); err != nil {
-		log.Debug("agent output is not JSON", "text", truncate(string(line), 200))
+		log.Debug("agent output is not JSON", "text", truncate(redact(string(line), secrets), 200))
 		return
 	}
 	if e.SessionID != "" {

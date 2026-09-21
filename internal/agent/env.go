@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
+	"strings"
 )
 
 // hostVariables are the variables of the Host that the CLI gets, when
@@ -61,11 +62,32 @@ func baseEnvironment() []string {
 	return append(env, "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1")
 }
 
+// basicHeader is the value of the token in GIT_CONFIG_VALUE_0.
+func (c Credentials) basicHeader() string {
+	return base64.StdEncoding.EncodeToString([]byte("x-access-token:" + c.Token))
+}
+
+// secrets are the forms of the token that may appear in the output of
+// the CLI. Run replaces them before it logs that output.
+func (c Credentials) secrets() []string {
+	return []string{c.Token, c.basicHeader()}
+}
+
+// redact replaces every secret in s with a marker.
+func redact(s string, secrets []string) string {
+	for _, secret := range secrets {
+		if secret != "" {
+			s = strings.ReplaceAll(s, secret, "[redacted]")
+		}
+	}
+	return s
+}
+
 // environment is the environment of an agent run: the base, and the
 // credentials for git and gh. ghConfigDir is an empty directory for the
 // configuration of gh, so that gh reads no file of the Host user.
 func environment(cred Credentials, ghConfigDir string) []string {
-	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + cred.Token))
+	basic := cred.basicHeader()
 	return append(baseEnvironment(),
 		// git reads no configuration file of the Host user or of the
 		// system, so no credential helper and no identity of the Owner
