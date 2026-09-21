@@ -76,7 +76,8 @@
 - 同じ問い合わせを、Agentの実行が終わった直後にも行う。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。
 - 書き込みは、全てRESTで行う。ラベル、コメント、merge、sub-issue、tokenの発行がこれに当たる。GitHub App に要る権限が、RESTのendpointごとに公式ドキュメントに書かれているためである (実測 10、33)。
 - 例外として、必須のcheckの一覧はRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 34)。
-- 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and query limits for the GraphQL API)。1つの接続が100件を超えたら、続きを読む。
+- 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and node limits for the GraphQL API)。1回の問い合わせのポイントは、入れ子になった接続の `first` の積を100で割った値なので、sub-issueごとに読む項目 (ラベル、blocked by) の `first` は小さくする。定期確認の問い合わせは、要求Issueを10件ずつページで読み、sub-issueは30件、ラベルは10件、blocked by のIssueは20件までを1回で読む。1回の問い合わせは約6ポイントである (2026-09-21 に実測)。sub-issue、ラベル、blocked by が上限を超えたIssueがあれば、そのリポジトリの定期確認は、Issueの番号を示すエラーで止まる。分割基準の上限 (12個) の中では起きない。
+- 採らなかった案: 全ての接続を100件ずつ読み、超えたら続きを読む。sub-issueの下の接続まで100件にすると、1回の問い合わせが約2,000ポイントになり、1時間の枠が2〜3回で尽きる。
 - この上限は、同じinstallation (Organization) にある対象のリポジトリの全てで分け合う。1時間に使うポイントは、リポジトリの数、1時間の問い合わせの回数、1回のコストの積になる。60秒の間隔なら、対象が数個のうちは十分に収まる。cuminは、応答の `rateLimit` の `cost` と `remaining` をログに出す (GraphQLのスキーマで確かめた)。足りなくなったときの対応は、「後回しにしたこと」にある。
 - installation token でGraphQLの項目を読めない場合は、RESTで読む (実測 37)。そのときは、理由をこの話題に書く。
 - GitHubの型 (GraphQLの応答、RESTのDTO) は `internal/platform/github` で止める。判定のロジックには、cuminの型のスナップショットだけを渡す。
@@ -119,7 +120,6 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 
 | 決める、または確かめること | どこで |
 |---|---|
-| installation token で、「定期確認で読む内容」の GraphQL の項目を読めるか (実測 36) | #6 |
 | 公開リポジトリで、checkの結果を読むのに要る権限 (実測 35) | #5 |
 | 枠の上限に当たったときの、headless実行の終わり方 (実測 6) | 起動前の使用率の確認を作る要求Issue |
 
