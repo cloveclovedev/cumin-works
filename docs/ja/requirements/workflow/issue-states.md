@@ -101,6 +101,7 @@ I5〜I8は、Reviewerの結果が `done` のときの動作である。結果が
 必須のcheckとは、mainに適用されるrulesetの "Require status checks to pass before merging" に登録されたcheckである。cuminは `GET /repos/{owner}/{repo}/rules/branches/{branch}` でその一覧を読む。
 
 - 一覧が空なら、checkを待たずに進む。
+- checkは、結論が `success`、`skipped`、`neutral` のどれかのとき、通ったとみなす。GitHubも、この3つをmergeを止めない結論として扱う。条件で飛ばされたjob (例えば、人が作ったPull Requestでの、保護されたパスのcheck) は、`skipped` になる。
 - 一覧が空でなければ、その全てがPull Requestの先頭のコミットで通るまで待つ。
 - 「今そのコミットに付いているcheckの一覧」で判定しないのは、pushの直後はcheckがまだ1つも現れておらず、「checkがない」のか「これから現れる」のかを区別できないためである。必須のcheckの一覧は、pushの前から決まっている。
 
