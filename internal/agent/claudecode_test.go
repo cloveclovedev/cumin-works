@@ -424,6 +424,39 @@ func TestUserContext_MemoryPathsAgainstTheWorkDirectory(t *testing.T) {
 	if reason := userContext(none, work); reason != "" {
 		t.Errorf("userContext(none) = %q, want none", reason)
 	}
+	// A present value without a path cannot be checked, so it counts.
+	for _, raw := range []string{`true`, `{"auto":1}`, `[1, 2]`} {
+		unknown := event{MemoryPaths: []byte(raw)}
+		if reason := userContext(unknown, work); !strings.Contains(reason, "unknown shape") {
+			t.Errorf("userContext(memory_paths %s) = %q, want unknown shape", raw, reason)
+		}
+	}
+}
+
+// A CLI that prints a result without an init event and then keeps
+// running is stopped at the result, not at the time limit.
+func TestRun_ResultWithoutInitStopsTheRunAtOnce(t *testing.T) {
+	result := `{"type":"result","subtype":"success","is_error":false,"session_id":"` + fixtureSessionID + `","structured_output":{"result":"done","summary":"x","blocked_reason":""}}`
+	path, childPID := neverEndingCLIWithInit(t, "", result)
+	c := quiet(path)
+	c.Grace = time.Second
+	req := request(t)
+	req.TimeLimit = 30 * time.Second
+
+	start := time.Now()
+	_, err := c.Run(context.Background(), req)
+	elapsed := time.Since(start)
+
+	end := abnormalEnd(t, err)
+	if end.Kind != EndUserContext || !strings.Contains(end.Detail, "no init event") {
+		t.Errorf("AbnormalEnd = %+v, want %s without an init event", end, EndUserContext)
+	}
+	if elapsed > c.Grace+3*time.Second {
+		t.Errorf("Run took %v, want a stop well before the time limit", elapsed)
+	}
+	if !processGone(t, childPID) {
+		t.Error("the child of the fake CLI is still alive")
+	}
 }
 
 // A CLI that shows a plugin in its init event and then keeps running is

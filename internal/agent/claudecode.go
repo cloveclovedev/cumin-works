@@ -188,7 +188,7 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	case !s.init:
 		// Without the record of the start, cumin cannot know what the
 		// agent read.
-		end.Kind, end.Detail = EndUserContext, "the run had no init event"
+		end.Kind, end.Detail = EndUserContext, noInitEvent
 	case s.result == nil:
 		end.Kind, end.Detail = EndNoResult, "the run ended without a result event"
 	case s.result.IsError:
@@ -339,15 +339,31 @@ func (r *streamReader) line(line []byte) {
 	}
 	// A copy, because buf is reused.
 	r.c.readLine(r.log, &r.s, append([]byte(nil), line...), r.secrets)
-	if r.stop != nil && r.s.init && r.s.userContext == "" {
-		if reason := userContext(r.s.initEvent, r.workDir); reason != "" {
-			r.s.userContext = reason
-			r.log.Info("agent init event shows user-level context; the run is stopped", "reason", reason)
-			r.stop()
-		}
-		r.stop = nil // checked once
+	if r.stop == nil {
+		return
+	}
+	// The check runs once: at the init event, or at a result that came
+	// without one. Either way the run is stopped at once when it fails.
+	var reason string
+	switch {
+	case r.s.init:
+		reason = userContext(r.s.initEvent, r.workDir)
+	case r.s.result != nil:
+		reason = noInitEvent
+	default:
+		return
+	}
+	stop := r.stop
+	r.stop = nil
+	if reason != "" {
+		r.s.userContext = reason
+		r.log.Info("agent start record shows user-level context; the run is stopped", "reason", reason)
+		stop()
 	}
 }
+
+// noInitEvent is the reason of a run whose record of the start is missing.
+const noInitEvent = "the run had no init event"
 
 func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets []string) {
 	// The type first, so that an event that does not decode is still
@@ -411,7 +427,12 @@ func userContext(e event, workDir string) string {
 		return "the init event lists MCP servers"
 	}
 	if jsonPresent(e.MemoryPaths) {
-		for _, path := range jsonStrings(e.MemoryPaths) {
+		paths := jsonStrings(e.MemoryPaths)
+		if len(paths) == 0 {
+			// A shape without paths cannot be checked. Safe side.
+			return "the init event has memory_paths of an unknown shape"
+		}
+		for _, path := range paths {
 			if !underDir(path, workDir) {
 				return "the init event has memory_paths outside the work directory"
 			}
