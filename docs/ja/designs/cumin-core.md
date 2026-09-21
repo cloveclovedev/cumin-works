@@ -123,10 +123,14 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 
 ### 起動前の使用率の確認
 
-- `claude -p "/usage"` は利用枠を使わないが、人間向けの文章しか返さない。機械可読の使用率は、モデルを呼ぶ実行の `rate_limit_event` にだけ出る (実測 1、29)。
-- そこで、着手 (R1、I1) の直前に、最小の実行を1回行う。`--system-prompt` で短い指示に置き換え、1語だけ答えさせ、`--output-format stream-json --verbose` で `rate_limit_event` を読む (実測 30)。実行は数秒で終わり、使う利用枠は小さい。Agentの起動と同じく、`--setting-sources project` を付ける。
-- 採らなかった案: `/usage` の文章を解析する方法。人間向けの形式は、予告なく変わりうるためである。
-- `rate_limit_event` も公式ドキュメントにない (実測 2)。イベントがない、または形が違うときは「読み取れなかった」として扱い、着手せずにOwnerに通知する (Q1)。安全な側に倒す。
+- `claude -p "/usage"` は利用枠を使わないが、人間向けの文章しか返さない。機械可読の使用率は、モデルを呼ぶ実行の `rate_limit_event` にだけ出る (実測 1、29)。使用率を返すサブコマンドや、非対話で使えるAPIは、公式ドキュメントにない (2026-09-21 に CLI reference、headless、statusline、hooks、Agent SDK の文書を確かめた)。
+- そこで、着手 (R1、I1) の直前に、最小の実行を1回行う。`--system-prompt` で短い指示に置き換え、1語だけ答えさせ、`--output-format stream-json --verbose` で `rate_limit_event` を読む (実測 30)。最後のイベントの値を使用率とする。実行は数秒で終わり、使う利用枠は小さい。
+- 最小の実行のオプション (公式: CLI reference、Model configuration): `--model haiku` (最も小さいモデルの別名)、`--tools ""` (ツールを使わせない)、`--setting-sources project` (Agentの起動と同じ)。`--json-schema` と `--permission-mode` は付けない。
+- 作業ディレクトリは、実行のたびに作る空の一時ディレクトリにする。リポジトリの `CLAUDE.md` を読ませないためである。環境変数は、Agentの環境 ([Agentの実行の設計](agent-run.md) の「Agentの環境」) の土台と同じで、tokenと作者は入れない。時間の上限は60秒で、超えたら打ち切る。
+- モデル、指示、上限は接続部分の定数にする。要件の設定の表にないためである。
+- 採らなかった案: `/usage` の文章を解析する方法。人間向けの形式は、予告なく変わりうる。使用率を返す内部の endpoint は、この文章を出すときにも呼ばれていて、上限に当たる報告がある。
+- 採らなかった案: Claude Codeが `/usage` のために呼ぶ endpoint を、cuminが直接呼ぶ方法。公式ドキュメントになく、OwnerのOAuthのtokenをKeychainから読む必要がある。cuminはOwnerの認証情報を使わない。
+- `rate_limit_event` の項目の一部は Agent SDK の文書にある (`status`、`utilization`、`resetsAt`、`rateLimitType`)。cuminが読む `unifiedWindows` は文書にない (実測 2)。イベントがない、または形が違うときは「読み取れなかった」として、理由を付けたエラーを返す。cuminのほかの部分は、着手せずにOwnerに通知する (Q1)。安全な側に倒す。
 - この確認は Claude Code に固有なので、Claude Code の接続部分 (`internal/agent`) に置く。`internal/quota` が受け取るのは、枠ごとの使用率とリセット時刻だけである。
 
 ## まだ決めていないこと

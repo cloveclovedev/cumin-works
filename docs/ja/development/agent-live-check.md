@@ -12,18 +12,26 @@
 | 2 | 1回目のセッションを続けて、さっき読んだファイルの名前を答える | セッションの番号が1回目と同じ。要約に `README.md` がある |
 | 3 | `sleep 600` を実行させ、上限を20秒にする | 異常終了 (種類は「実行時間の上限」)。CLIのプロセスグループに、プロセスが残っていない |
 
+テスト `TestLive_ReadQuota` は、着手前の使用率の確認 (`ReadQuota`) を、本物のClaude Codeで1回だけ行う。
+
+| 確かめること |
+|---|
+| 使用率が読めて、2つの枠のリセット時刻が未来で、使用率が0から1の間にある。ログに `init` のイベントと `rate_limit_info` の項目の名前と、`status` の値が出る (数値は出ない) |
+
 ## 動かし方
 
 利用枠を使うので、Ownerが同意したときだけ動かす。
 
 ```sh
 CUMIN_LIVE=1 go test -race -count=1 -run TestLive -v ./internal/agent/
+# 使用率の確認だけ
+CUMIN_LIVE=1 go test -race -count=1 -run TestLive_ReadQuota -v ./internal/agent/
 ```
 
 - `claude` は `PATH` から探す。別の実行ファイルを使うときは、環境変数 `CUMIN_CLAUDE_PATH` にパスを書く。
 - CLIの環境変数は、接続部分が決まった一覧から組み立てる (設計メモの「Agentの環境」)。テストのプロセスの環境は、`PATH` や `HOME` などの一覧にあるものしか届かない。tokenと作者は、GitHubに触れないので、仮の値である。
 - `CUMIN_LIVE` がなければ、テストは飛ばされる。CIでも飛ばされる。
-- 3回の実行で、1回目と2回目は数十秒、3回目は上限の20秒と猶予の10秒で終わる。
+- `TestLive_AgentRun` の3回の実行で、1回目と2回目は数十秒、3回目は上限の20秒と猶予の10秒で終わる。`TestLive_ReadQuota` は数秒で終わる。
 
 ## 記録の決まり
 

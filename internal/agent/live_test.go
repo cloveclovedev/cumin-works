@@ -130,6 +130,57 @@ func TestLive_AgentRun(t *testing.T) {
 		end.Kind, elapsed.Round(time.Second), fileExists(filepath.Join(dir, "started")), pgrepErr != nil)
 }
 
+// TestLive_ReadQuota is the live check of #67: one real minimal run reads
+// the quota usage. It runs only with CUMIN_LIVE=1, because it uses a
+// small amount of quota. The log holds the field names of the init event
+// and of rate_limit_info, and the value of status, but no number.
+func TestLive_ReadQuota(t *testing.T) {
+	if os.Getenv("CUMIN_LIVE") != "1" {
+		t.Skip("set CUMIN_LIVE=1 to run the live check; it uses quota")
+	}
+	path := os.Getenv("CUMIN_CLAUDE_PATH")
+	if path == "" {
+		var err error
+		if path, err = exec.LookPath("claude"); err != nil {
+			t.Fatalf("claude is not on PATH: %v (set CUMIN_CLAUDE_PATH)", err)
+		}
+	}
+	cli := ClaudeCode{Path: path, Logger: recordLogger(t)}
+	start := time.Now()
+	usage, err := cli.ReadQuota(context.Background())
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("ReadQuota: %v", err)
+	}
+	now := time.Now()
+	if !usage.FiveHour.ResetsAt.After(now) || !usage.Weekly.ResetsAt.After(now) {
+		t.Error("a reset time is not in the future")
+	}
+	if usage.FiveHour.Utilization < 0 || usage.FiveHour.Utilization > 1 || usage.Weekly.Utilization < 0 || usage.Weekly.Utilization > 1 {
+		t.Error("a utilization is outside 0 to 1")
+	}
+	t.Logf("quota read: %v, reset times in the future: %v, utilizations in 0 to 1: %v, took %s",
+		err == nil, usage.FiveHour.ResetsAt.After(now) && usage.Weekly.ResetsAt.After(now),
+		usage.FiveHour.Utilization >= 0 && usage.FiveHour.Utilization <= 1 && usage.Weekly.Utilization >= 0 && usage.Weekly.Utilization <= 1,
+		elapsed.Round(time.Second))
+}
+
+// recordLogger logs at debug level into the test log, so that the field
+// names of the events appear, but replaces every value that is a number
+// or an output of the CLI, so that the log can be copied into a record.
+func recordLogger(t *testing.T) *slog.Logger {
+	omitted := map[string]bool{"five_hour": true, "weekly": true, "five_hour_resets_at": true, "weekly_resets_at": true, "text": true, "session_id": true, "work_dir": true}
+	return slog.New(slog.NewTextHandler(testWriter{t}, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if omitted[a.Key] {
+				return slog.String(a.Key, "<omitted>")
+			}
+			return a
+		},
+	}))
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
