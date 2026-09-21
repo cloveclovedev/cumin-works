@@ -130,8 +130,8 @@ func newService(t *testing.T, cliPath string, client *github.AppClient, logs *by
 		Roles: map[config.Role]config.RoleSettings{
 			config.RoleImplementer: {TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: cliPath, Model: "example-model"},
 		},
-		Apps: map[config.Role]github.AppCredentials{
-			config.RoleImplementer: {ClientID: "Iv23liEXAMPLE", PrivateKey: serviceKey()},
+		Apps: map[string]map[config.Role]github.AppCredentials{
+			"example-org": {config.RoleImplementer: {ClientID: "Iv23liEXAMPLE", PrivateKey: serviceKey()}},
 		},
 		GitHub: client,
 		Logger: slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: level})),
@@ -276,6 +276,29 @@ func TestStart_UnknownRoleIsRefused(t *testing.T) {
 	req.Role = config.RoleReviewer
 	if _, err := s.Start(context.Background(), req); err == nil || !strings.Contains(err.Error(), "no settings for the role") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// The App of a role belongs to one owner. A repository of another owner
+// needs its own App, and its identity is cached apart.
+func TestStart_AppsAreKeyedByOwner(t *testing.T) {
+	fake, client := newFakeGitHub(t)
+	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+	req := startRequest(t)
+	req.Owner = "other-org"
+	_, err := s.Start(context.Background(), req)
+	if err == nil || !strings.Contains(err.Error(), "github_apps.other-org.implementer") {
+		t.Errorf("err = %v, want the missing setting named", err)
+	}
+	if n := fake.count("GET /repos/other-org/example-repo/installation"); n != 0 {
+		t.Errorf("GitHub was called for the other owner %d times", n)
+	}
+	if _, err := s.Start(context.Background(), startRequest(t)); err != nil {
+		t.Fatalf("Start for the configured owner: %v", err)
+	}
+	if _, ok := s.identities[appKey{"example-org", config.RoleImplementer}]; !ok {
+		t.Errorf("identities = %v, want the key of the owner and the role", s.identities)
 	}
 }
 

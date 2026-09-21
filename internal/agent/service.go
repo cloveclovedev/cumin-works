@@ -24,8 +24,10 @@ type Service struct {
 	// Roles are the settings of each role: the CLI, its path, the model,
 	// and the time limit.
 	Roles map[config.Role]config.RoleSettings
-	// Apps are the credentials of the GitHub App of each role.
-	Apps map[config.Role]github.AppCredentials
+	// Apps are the credentials of the GitHub App of each role, for each
+	// owner of a target repository: the setting github_apps.<owner>.<role>.
+	// The outer key is the owner (an organization or a user).
+	Apps map[string]map[config.Role]github.AppCredentials
 	// GitHub creates the tokens and reads the bot users.
 	GitHub *github.AppClient
 	// Logger may be nil. Then the default logger is used.
@@ -36,7 +38,13 @@ type Service struct {
 	QuotaTimeLimit time.Duration
 
 	mu         sync.Mutex
-	identities map[config.Role]identity
+	identities map[appKey]identity
+}
+
+// appKey names one App: the owner of the repository and the role.
+type appKey struct {
+	owner string
+	role  config.Role
 }
 
 // identity is the bot user of the App of a role, as the author of its
@@ -72,9 +80,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	if !ok {
 		return nil, fmt.Errorf("start %s on %s/%s: no settings for the role", req.Role, req.Owner, req.Repo)
 	}
-	cred, ok := s.Apps[req.Role]
+	cred, ok := s.Apps[req.Owner][req.Role]
 	if !ok {
-		return nil, fmt.Errorf("start %s on %s/%s: no GitHub App for the role", req.Role, req.Owner, req.Repo)
+		return nil, fmt.Errorf("start %s on %s/%s: no GitHub App for the role and the owner (the setting github_apps.%s.%s)", req.Role, req.Owner, req.Repo, req.Owner, req.Role)
 	}
 	log := s.logger().With("role", req.Role, "repository", req.Owner+"/"+req.Repo)
 	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit}
@@ -94,7 +102,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	log.Info("agent token created", "expires_at", token.ExpiresAt)
 
 	// 3. The identity of the commits of the agent.
-	id, err := s.identity(ctx, req.Role, cred, token.Token)
+	id, err := s.identity(ctx, appKey{req.Owner, req.Role}, cred, token.Token)
 	if err != nil {
 		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
 	}
@@ -116,11 +124,12 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 // GET /app, and the id of the bot user from GET /users/<slug>[bot]. The
 // name is "<slug>[bot]" and the email is
 // "<id>+<slug>[bot]@users.noreply.github.com", the form that GitHub links
-// to the bot (measured-constraints.md row 49).
-func (s *Service) identity(ctx context.Context, role config.Role, cred github.AppCredentials, token string) (identity, error) {
+// to the bot (measured-constraints.md row 49). One App serves one owner
+// and one role, so the cache is keyed by both.
+func (s *Service) identity(ctx context.Context, key appKey, cred github.AppCredentials, token string) (identity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if id, ok := s.identities[role]; ok {
+	if id, ok := s.identities[key]; ok {
 		return id, nil
 	}
 	app, err := s.GitHub.GetApp(ctx, cred)
@@ -134,10 +143,10 @@ func (s *Service) identity(ctx context.Context, role config.Role, cred github.Ap
 	}
 	id := identity{name: user.Login, email: fmt.Sprintf("%d+%s@users.noreply.github.com", user.ID, user.Login)}
 	if s.identities == nil {
-		s.identities = map[config.Role]identity{}
+		s.identities = map[appKey]identity{}
 	}
-	s.identities[role] = id
-	s.logger().Info("agent identity read", "role", role, "login", user.Login)
+	s.identities[key] = id
+	s.logger().Info("agent identity read", "role", key.role, "owner", key.owner, "login", user.Login)
 	return id, nil
 }
 
