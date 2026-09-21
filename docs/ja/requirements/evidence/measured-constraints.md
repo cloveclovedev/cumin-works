@@ -113,3 +113,12 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 74 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した。cuminは標準入力をnullデバイスにして起動する | 実測 |
 | 75 | `rate_limit_event` には、`rate_limit_info.unifiedWindows` (1を参照) のほかに、`session_id` と `uuid` があり、`rate_limit_info` には `status`、`resetsAt`、`rateLimitType`、overageの項目がある。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。値は記録していない | 実測 |
 | 76 | Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない (32の続き) | #42 の実機の確認。打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 実測 |
+
+## 6. 定期確認の実装で確かめたこと (2026-09-21)
+
+要求Issue #6 の実装 (#71、#75、#77、#78) と、sandboxでの組み込んだバイナリの確認で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 77 | GraphQLの問い合わせのポイントは、経路に沿った `first` の積を100で割った値で決まる。定期確認の問い合わせ (要求Issueを10件ずつ、sub-issueを30件、ラベルを10件、blocked by のIssueを20件) は、`rateLimit.cost` が6だった | 公式: Rate limits and node limits for the GraphQL API。開いている要求Issueが4つあるリポジトリで実測 | 公式文書 + 実測 |
+| 78 | `PUT /repos/{owner}/{repo}/issues/{n}/labels` に、リポジトリにないラベルの名前を渡すと、そのラベルが既定の色 (`ededed`) で作られ、付け替えは失敗しない | sandboxで `cumin/status/implementing` のラベルを消してから、着手させた | 実測 |

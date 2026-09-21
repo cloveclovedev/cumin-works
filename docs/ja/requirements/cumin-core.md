@@ -136,7 +136,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 |---|---|---|---|
 | 対象のリポジトリ | cuminが確かめるリポジトリの一覧 | なし | できない |
 | 定期確認の間隔 | GitHubを確かめる間隔 | 60秒 | できない |
-| リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` にあるIssueの数の上限。Ownerの対応を待っているIssueは数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
+| リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、同時に進めるIssueの数の上限。数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。Ownerの対応を待っているIssueも数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
 | 利用枠のしきい値 | 5h枠とweekly枠のそれぞれに、時間帯ごとに指定できる | 85% | できない |
 | リセットが近いとみなす残り時間 | 5h枠の残り時間がこれを切ったら、5h枠のしきい値を100%にする | 30分 | できない |
 | 作業場所 | `git worktree` を置くディレクトリ | なし | できない |
