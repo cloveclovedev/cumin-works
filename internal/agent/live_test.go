@@ -445,15 +445,21 @@ func (a liveAPI) get(path string, out any) {
 	}
 }
 
+// closePull closes a pull request of the test. A failure fails the test:
+// the sandbox must hold nothing of the test after the run.
 func (a liveAPI) closePull(number int) {
 	if status, _ := a.do(http.MethodPatch, fmt.Sprintf("/pulls/%d", number), map[string]any{"state": "closed"}); status != http.StatusOK {
-		a.t.Logf("cleanup: close pull request %d: status %d", number, status)
+		a.t.Errorf("cleanup: close pull request %d: status %d; close it by hand", number, status)
 	}
 }
 
+// deleteBranch deletes a branch of the test. A branch that was never
+// pushed answers 422 (the reference does not exist), which leaves
+// nothing behind. Any other failure fails the test.
 func (a liveAPI) deleteBranch(branch string) {
-	if status, _ := a.do(http.MethodDelete, "/git/refs/heads/"+branch, nil); status != http.StatusNoContent {
-		a.t.Logf("cleanup: delete branch %s: status %d", branch, status)
+	status, _ := a.do(http.MethodDelete, "/git/refs/heads/"+branch, nil)
+	if status != http.StatusNoContent && status != http.StatusUnprocessableEntity {
+		a.t.Errorf("cleanup: delete branch %s: status %d; delete it by hand", branch, status)
 	}
 }
 
