@@ -71,6 +71,7 @@
 
 - cuminは、GitHub App としてだけ認証する。GitHubへの操作には installation token を使う。installation token の発行にだけ、Appの秘密鍵で署名したJWTを使う (公式: Generating an installation access token for a GitHub App)。Ownerの認証情報と、リポジトリの管理者の権限 (Administration) は使わない。
 - 標準ライブラリ (`net/http`、`encoding/json`、`crypto/rsa`) だけで書く。
+- installation token は、期限 (発行から1時間) の5分前まで使い回す。定期確認は60秒ごとなので、1つのtokenで50回以上の定期確認をまかなえる。発行のたびにJWTの署名と2回の要求が要るので、毎回発行すると無駄が大きい。5分の余裕は、定期確認1回分と時計のずれを見込んだ値で、設定にはしない。Agentに渡すtokenは、実行が55分まで続くので、依頼のたびに発行する。
 - 採らなかった案: SDK。使うendpointが少なく、依存を増やす理由がない。
 - 読み取りは、定期確認の1回分を、リポジトリごとに1つのGraphQLの問い合わせで読む。Issue、sub-issue、ラベル、blocked by、Pull Request、レビュー、checkは入れ子の関係にあり、RESTだとIssueの数に比例して要求が増えるためである。1回で読めば、判定に使うスナップショットの時点も揃う。
 - 同じ問い合わせを、Agentの実行が終わった直後にも行う。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。

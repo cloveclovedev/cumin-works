@@ -48,6 +48,13 @@ type fakeGitHub struct {
 	mu        sync.Mutex
 	jwts      []string
 	tokenBody map[string]any
+	// tokens counts the tokens that the fake created. Each token is
+	// testToken followed by its count, so that a test can tell them apart.
+	tokens int
+	// expiresAt is the expiry of every token. Zero means a fixed date.
+	expiresAt time.Time
+	// failNextToken makes the next token request answer 500 once.
+	failNextToken bool
 }
 
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
@@ -75,7 +82,17 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&f.tokenBody); err != nil {
 			f.t.Errorf("token request body: %v", err)
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"token": testToken, "expires_at": "2026-09-20T10:00:00Z"})
+		if f.failNextToken {
+			f.failNextToken = false
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": "Server Error"})
+			return
+		}
+		f.tokens++
+		expiresAt := "2026-09-20T10:00:00Z"
+		if !f.expiresAt.IsZero() {
+			expiresAt = f.expiresAt.UTC().Format(time.RFC3339)
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"token": fmt.Sprintf("%s%d", testToken, f.tokens), "expires_at": expiresAt})
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
@@ -163,7 +180,7 @@ func TestAppToken_IsLimitedToOneRepositoryAndToThePermissionsOfTheApp(t *testing
 			if err != nil {
 				t.Fatalf("CreateInstallationToken: %v", err)
 			}
-			if token.Token != testToken {
+			if token.Token != testToken+"1" {
 				t.Errorf("Token = %q", token.Token)
 			}
 			if want := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC); !token.ExpiresAt.Equal(want) {
