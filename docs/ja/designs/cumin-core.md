@@ -128,6 +128,7 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 - 最小の実行のオプション (公式: CLI reference、Model configuration): `--model haiku` (最も小さいモデルの別名)、`--tools ""` (ツールを使わせない)、`--setting-sources project` (Agentの起動と同じ)、`--no-session-persistence` (使い捨ての実行なので、セッションの記録をHostに残さない)。`--json-schema` と `--permission-mode` は付けない。
 - 作業ディレクトリは、実行のたびに作る空の一時ディレクトリにする。リポジトリの `CLAUDE.md` を読ませないためである。環境変数は、Agentの環境 ([Agentの実行の設計](agent-run.md) の「Agentの環境」) の土台と同じで、tokenと作者は入れない。時間の上限は60秒で、超えたら打ち切る。
 - モデル、指示、上限は接続部分の定数にする。要件の設定の表にないためである。
+- 採らなかった案: `--bare` で、設定も指示も一切読まずに実行する方法。bare modeはサブスクリプションのログインを使わず、Keychainの認証情報も読まないので、`ANTHROPIC_API_KEY` が要る (公式: headless の "Start faster with bare mode"、実測 6a)。`CLAUDE_CODE_OAUTH_TOKEN` (長寿命のOAuthのtoken) で動くかは文書になく未確認で、動いてもOwnerの秘密が1つ増える。空の一時ディレクトリと `--setting-sources project` で、リポジトリの設定、MCPサーバ、skill、ユーザの設定は読まれないので、この実行では同じ結果になる。`--bare` が `-p` の既定になったとき (実測 6b) に見直す。
 - 採らなかった案: `/usage` の文章を解析する方法。人間向けの形式は、予告なく変わりうる。使用率を返す内部の endpoint は、この文章を出すときにも呼ばれていて、上限に当たる報告がある。
 - 採らなかった案: Claude Codeが `/usage` のために呼ぶ endpoint を、cuminが直接呼ぶ方法。公式ドキュメントになく、OwnerのOAuthのtokenをKeychainから読む必要がある。cuminはOwnerの認証情報を使わない。
 - `rate_limit_event` の項目の一部は Agent SDK の文書にある (`status`、`utilization`、`resetsAt`、`rateLimitType`)。cuminが読む `unifiedWindows` は文書にない (実測 2)。イベントがない、または形が違うときは「読み取れなかった」として、理由を付けたエラーを返す。cuminのほかの部分は、着手せずにOwnerに通知する (Q1)。安全な側に倒す。
