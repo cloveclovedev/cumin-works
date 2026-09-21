@@ -136,7 +136,7 @@ Owner が Pull Request を merge するとき:
 - 同じ引数なら、結果は変わらない。ファイルは足されず、ruleset は同じ内容になる。
 - `.cumin/config.toml` が既にあれば、内容が違っていても上書きしない。そのリポジトリの設定だからである。
 - workflow のファイルが違う内容で既にあれば、違いを表示して、上書きしない。ruleset は当てたうえで、最後にエラーで終わる。Pull Request で直してから、もう一度実行する。
-- ruleset は名前で探す。あればファイルの内容に合わせ、なければ作る。
+- ruleset は名前で探す。あればファイルの内容に合わせ、なければ作る。同じ名前の ruleset が2つ以上あると、どれが cumin のものか分からないので、何も変えずに止まる。
 
 ## セットアップのあとの確認
 
@@ -175,3 +175,4 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
 | `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
+| `more than one ruleset is named ...` | 同じ名前の ruleset が2つ以上ある。表示された id を、リポジトリの Settings の Rules → Rulesets で見比べて、余分なものを消してから、もう一度実行する。スクリプトは ruleset を消さない |

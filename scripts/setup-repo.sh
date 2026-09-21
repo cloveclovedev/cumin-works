@@ -83,6 +83,28 @@ fi
 # Only GitHub Actions may report the protected-path check.
 actions_app_id="$(gh api apps/github-actions --jq '.id')"
 
+# ruleset_name <JSON file>: the name of the ruleset in the file.
+ruleset_name() {
+  sed -n 's/^  "name": "\(.*\)",$/\1/p' "$1"
+}
+
+# ruleset_ids <name>: the ids of the rulesets of the repository with that
+# name, one for each line. Fails when gh fails.
+ruleset_ids() {
+  gh api --paginate "repos/$repo/rulesets" --jq ".[] | select(.name == \"$1\") | .id"
+}
+
+# The script finds a ruleset by its name. With two rulesets of one name, it
+# cannot tell which one is cumin's, so it stops here, before any change.
+for file in "$here/ruleset-protect-main.json" "$here/ruleset-main-required-checks.json"; do
+  name="$(ruleset_name "$file")"
+  ids="$(ruleset_ids "$name")" || die "cannot list the rulesets of $repo"
+  case "$ids" in
+    *"
+"*) die "more than one ruleset is named $name in $repo (ids: $(printf '%s' "$ids" | tr '\n' ' ')). Delete the extra rulesets in the repository settings (Rules, then Rulesets), and run the script again" ;;
+  esac
+done
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -174,13 +196,11 @@ put_file "$config_path" "$work/config.toml" keep
 
 # apply_ruleset <local JSON file>
 apply_ruleset() {
-  name="$(sed -n 's/^  "name": "\(.*\)",$/\1/p' "$1")"
+  name="$(ruleset_name "$1")"
   # No pipe here: a pipe would hide a failure of gh, and the script would then
-  # create a second ruleset with the same name.
-  ids="$(gh api --paginate "repos/$repo/rulesets" --jq ".[] | select(.name == \"$name\") | .id")" ||
-    die "cannot list the rulesets of $repo"
-  id="${ids%%
-*}"
+  # create a second ruleset with the same name. The check before any change
+  # found at most one ruleset with this name.
+  id="$(ruleset_ids "$name")" || die "cannot list the rulesets of $repo"
   if [ "$dry_run" -eq 1 ]; then
     if [ -n "$id" ]; then echo "would update the ruleset $name"; else echo "would create the ruleset $name"; fi
     sed 's/^/           /' "$1"
