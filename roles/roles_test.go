@@ -1,6 +1,8 @@
 package roles
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,20 +33,24 @@ func TestInstructionRejectsUnknownRole(t *testing.T) {
 	}
 }
 
-// The Implementer instruction holds its templates, read from templates/,
-// and the statements that the requirement of the Implementer asks for.
-func TestInstruction_ImplementerHoldsItsTemplatesAndRules(t *testing.T) {
+// The Implementer instruction holds the writing rules, read from
+// templates/, names its three skills, and says what the requirement of
+// the Implementer asks for.
+func TestInstruction_ImplementerHoldsTheWritingRulesAndNamesItsSkills(t *testing.T) {
 	text, err := Instruction(config.RoleImplementer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"writing-rules.md", "pull-request.md", "review-reply.md", "decision-request.md"} {
-		want, err := templates.Read(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(text, want) {
-			t.Errorf("the Implementer instruction does not hold the template %s as it is", name)
+	rules, err := templates.Read("writing-rules.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, rules) {
+		t.Error("the Implementer instruction does not hold the writing rules as they are")
+	}
+	for _, skill := range Skills() {
+		if !strings.Contains(text, "`"+skill.Name+"`") {
+			t.Errorf("the Implementer instruction does not name the skill %s", skill.Name)
 		}
 	}
 	for _, want := range []string{
@@ -60,8 +66,8 @@ func TestInstruction_ImplementerHoldsItsTemplatesAndRules(t *testing.T) {
 			t.Errorf("the Implementer instruction does not say: %s", want)
 		}
 	}
-	if strings.Count(text, "# Templates\n") != 1 {
-		t.Error("the Implementer instruction must have one heading \"# Templates\"")
+	if strings.Contains(text, "# Template:") {
+		t.Error("the Implementer instruction holds a template of one action; those are skills")
 	}
 }
 
@@ -72,8 +78,48 @@ func TestInstruction_OtherRolesHaveNoTemplates(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(text, "# Templates") || strings.Contains(text, "# Template:") {
+		if strings.Contains(text, "---") {
 			t.Errorf("Instruction(%s) holds templates, want none", role)
+		}
+	}
+}
+
+// WriteSkills writes one SKILL.md for each skill, with a frontmatter and
+// the template as the body, and overwrites an older file.
+func TestWriteSkills_WritesEachTemplateAsASkill(t *testing.T) {
+	dir := t.TempDir()
+	stale := SkillPath(dir, "cumin-pull-request")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteSkills(dir); err != nil {
+		t.Fatal(err)
+	}
+	if len(Skills()) != 3 {
+		t.Errorf("%d skills, want 3", len(Skills()))
+	}
+	for _, skill := range Skills() {
+		data, err := os.ReadFile(SkillPath(dir, skill.Name))
+		if err != nil {
+			t.Errorf("skill %s: %v", skill.Name, err)
+			continue
+		}
+		text := string(data)
+		body, err := templates.Read(skill.Template)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(text, "---\nname: "+skill.Name+"\ndescription: "+skill.Description+"\n---\n") {
+			t.Errorf("skill %s has no frontmatter with its name and description:\n%s", skill.Name, text[:min(len(text), 200)])
+		}
+		if !strings.HasSuffix(text, body) {
+			t.Errorf("skill %s does not end with the template %s", skill.Name, skill.Template)
+		}
+		if strings.Contains(text, "**") {
+			t.Errorf("skill %s uses bold text", skill.Name)
 		}
 	}
 }

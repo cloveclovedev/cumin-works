@@ -69,6 +69,13 @@ func (c ClaudeCode) args(req Request) []string {
 	if req.SessionID != "" {
 		args = append(args, "--resume", req.SessionID)
 	}
+	if req.SkillsDir != "" {
+		// The skills of cumin: Claude Code loads the skills under
+		// .claude/skills/ of a directory passed with --add-dir (official:
+		// Skills, "Where skills are discovered"). The directory holds only
+		// the skills, so the file access that the flag grants is harmless.
+		args = append(args, "--add-dir", req.SkillsDir)
+	}
 	return args
 }
 

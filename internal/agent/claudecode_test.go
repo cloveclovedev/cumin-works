@@ -284,7 +284,7 @@ func TestRun_CommandLine(t *testing.T) {
 	if !slices.Contains(args, "--verbose") {
 		t.Errorf("args have no --verbose: %q", args)
 	}
-	for _, absent := range []string{"--resume", "--model", "--bare", "--allowedTools", "--dangerously-skip-permissions"} {
+	for _, absent := range []string{"--resume", "--model", "--add-dir", "--bare", "--allowedTools", "--dangerously-skip-permissions"} {
 		if slices.Contains(args, absent) {
 			t.Errorf("args have %s: %q", absent, args)
 		}
@@ -604,5 +604,20 @@ func TestRun_ExitOnTermEndsBeforeTheGracePeriod(t *testing.T) {
 	}
 	if !processGone(t, childPID) {
 		t.Error("the child of the fake CLI is still alive")
+	}
+}
+
+// A request with a skills directory passes it with --add-dir.
+func TestRun_SkillsDirIsPassedWithAddDir(t *testing.T) {
+	path, record := fakeCLI(t, "done.jsonl", 0)
+	req := request(t)
+	req.SkillsDir = t.TempDir()
+	if _, err := quiet(path).Run(context.Background(), req); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	args := recordedArgs(t, record)
+	i := slices.Index(args, "--add-dir")
+	if i < 0 || i+1 >= len(args) || args[i+1] != req.SkillsDir {
+		t.Errorf("args have no --add-dir %s: %q", req.SkillsDir, args)
 	}
 }
