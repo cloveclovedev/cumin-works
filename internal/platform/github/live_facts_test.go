@@ -2,6 +2,7 @@ package github_test
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -69,10 +70,18 @@ func TestLiveGitHubFacts(t *testing.T) {
 	if combined.status == http.StatusOK {
 		combined.json(t, &status)
 	}
+	var found []string
+	fixtureStatus := ""
+	for _, s := range status.Statuses {
+		found = append(found, s.Context+"="+s.State)
+		if s.Context == liveStatusContext {
+			fixtureStatus = s.State
+		}
+	}
 	l.record("1", "The cumin-core App (no Checks and no Commit statuses permission) reads the check runs and the commit statuses of a commit in a public repository (row 35)", "Not known",
-		fmt.Sprintf("`GET .../check-runs`: status %d. `GET .../status`: status %d, with %d commit status (`%s`)", checkRuns.status, combined.status, len(status.Statuses), liveStatusContext))
-	if checkRuns.status != http.StatusOK || combined.status != http.StatusOK || len(status.Statuses) == 0 {
-		t.Errorf("fact 1: cumin-core cannot read the checks: check runs %d, status %d, %d statuses. A permission is missing: stop and ask the Owner", checkRuns.status, combined.status, len(status.Statuses))
+		fmt.Sprintf("`GET .../check-runs`: status %d. `GET .../status`: status %d, with the commit statuses `%s`", checkRuns.status, combined.status, strings.Join(found, "`, `")))
+	if checkRuns.status != http.StatusOK || combined.status != http.StatusOK || fixtureStatus != "success" {
+		t.Errorf("fact 1: check runs %d, status %d, the status %s of the fixture is %q (want success). If a call is refused, a permission is missing: stop and ask the Owner", checkRuns.status, combined.status, liveStatusContext, fixtureStatus)
 	}
 
 	// Fact 8: the rules of the default branch.
@@ -256,6 +265,11 @@ func (l *live) recordFailedCheckFact(t *testing.T, token, sha string) {
 	if run.Conclusion != "failure" || annotations.status != http.StatusOK || !strings.Contains(firstMessage, failMarkerPath) {
 		t.Errorf("fact 4: conclusion %q, annotations status %d, message %q", run.Conclusion, annotations.status, firstMessage)
 	}
+	// The recorded fact: the token reads the job log, and a call without
+	// authentication does not. A change of either one is news for cumin.
+	if logs.status != http.StatusOK || anonymousLogs.status != http.StatusForbidden {
+		t.Errorf("fact 4: job log: status %d with the token (want 200), status %d without authentication (want 403)", logs.status, anonymousLogs.status)
+	}
 }
 
 func (l *live) recordGraphQLFact(t *testing.T, token string, parentNumber, issueNumber, pullNumber int) {
@@ -315,7 +329,7 @@ func (l *live) recordGraphQLFact(t *testing.T, token string, parentNumber, issue
 	l.record("7", "An installation token of the cumin-core App reads the GraphQL fields of the design note (row 36)", "Every field is readable",
 		fmt.Sprintf("Status %d, errors: [%s]. `closedByPullRequestsReferences`: %d, `blockedBy`: %d, `parent`: %v, `subIssuesSummary` of the parent: %s, `closingIssuesReferences`: %d, `statusCheckRollup.state`: `%s`",
 			resp.status, strings.Join(errs, "; "), len(issue.ClosedBy.Nodes), len(issue.BlockedBy.Nodes), issue.Parent != nil, summary, len(pull.Closing.Nodes), rollup))
-	if resp.status != http.StatusOK || len(errs) > 0 || len(issue.ClosedBy.Nodes) != 1 || len(issue.BlockedBy.Nodes) != 1 || issue.Parent == nil || summary == "null" || len(pull.Closing.Nodes) != 1 {
+	if resp.status != http.StatusOK || len(errs) > 0 || len(issue.ClosedBy.Nodes) != 1 || len(issue.BlockedBy.Nodes) != 1 || issue.Parent == nil || summary == "null" || len(pull.Closing.Nodes) != 1 || pull.Rollup == nil || pull.Rollup.State == "" {
 		t.Errorf("fact 7: status %d, errors %v, issue %+v, pull %+v", resp.status, errs, issue, pull)
 	}
 }
@@ -366,6 +380,12 @@ func (l *live) recordNarrowTokenFact(t *testing.T) {
 			token.Permissions, token.RepositorySelection, len(token.Repositories), read.status, labeled.status, labeled.message(), opened.status, tooMuch.status, tooMuch.message()))
 	if read.status != http.StatusOK || labeled.status != http.StatusForbidden || tooMuch.status != http.StatusUnprocessableEntity {
 		t.Errorf("fact 2: read %d, add a label %d, too much %d", read.status, labeled.status, tooMuch.status)
+	}
+	// The token itself must say that it is limited: only the asked permission
+	// (GitHub adds metadata), and only the one repository.
+	wantPermissions := map[string]string{"issues": "read", "metadata": "read"}
+	if !maps.Equal(token.Permissions, wantPermissions) || token.RepositorySelection != "selected" || len(token.Repositories) != 1 || !strings.EqualFold(token.Repositories[0].Name, l.repo) {
+		t.Errorf("fact 2: the token has the permissions %v, the selection %q, and the repositories %v, want %v, selected, and only %s", token.Permissions, token.RepositorySelection, token.Repositories, wantPermissions, l.repo)
 	}
 }
 
