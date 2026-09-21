@@ -27,7 +27,7 @@ gofmt -l .
 
 テストは、ネットワークも、Claude Codeの利用枠も使わない。
 
-CI (GitHub Actions) も、Pull Requestとmainへのpushのたびに、同じ4つを実行する。
+CI (GitHub Actions) も、Pull Requestとmainへのpushのたびに、同じ4つを実行する。CIはさらに、保護されたパスのworkflowのテスト (`python3 scripts/setup-repo/test_protected_paths.py`) を実行し、macOSのrunnerで `internal/platform/keychain` のテストを実行する。Keychainのテストは、macOSの `security` コマンドを使うので、Linuxでは飛ばされる。
 
 ## 動かす
 
