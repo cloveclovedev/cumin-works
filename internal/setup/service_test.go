@@ -824,3 +824,28 @@ func TestCheckNames(t *testing.T) {
 		t.Errorf("a name of exactly 34 characters: %v", err)
 	}
 }
+
+// The command cannot write the Client ID into a settings directory that is
+// not writable. It must find that out before GitHub registers an App.
+func TestSetupGitHubApps_SettingsDirectoryThatCannotBeWrittenStopsBeforeAnyRegistration(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the permission bits of a directory")
+	}
+	var out bytes.Buffer
+	browser := &fakeBrowser{org: "example-org"}
+	store := &memoryStore{}
+	service := newService(t, browser, store, &out)
+	dir := filepath.Dir(service.ConfigPath)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+
+	err := service.Run(context.Background(), "example-org", "")
+	if err == nil || !strings.Contains(err.Error(), "nothing is changed") || !strings.Contains(err.Error(), dir) {
+		t.Fatalf("err = %v, want an error before any change that names the directory", err)
+	}
+	if len(browser.manifests) != 0 || len(store.items) != 0 {
+		t.Errorf("the run registered %d Apps and stored %d keys, want none", len(browser.manifests), len(store.items))
+	}
+}

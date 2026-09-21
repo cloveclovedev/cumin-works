@@ -243,6 +243,51 @@ func TestCheckGitHubAppClientIDWritable(t *testing.T) {
 	}
 }
 
+// The check tries a real write in the settings directory, because GitHub
+// registers an App for good and the write of the Client ID comes after.
+func TestCheckGitHubAppClientIDWritable_ProbesTheDirectory(t *testing.T) {
+	// A missing directory is created, as the write would create it, and the
+	// probe leaves nothing in it.
+	dir := filepath.Join(t.TempDir(), "cumin")
+	if err := CheckGitHubAppClientIDWritable(filepath.Join(dir, "config.toml"), "example-org", "reviewer"); err != nil {
+		t.Errorf("a missing directory: %v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("the directory was not created: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("the probe left %d entries in the directory", len(entries))
+	}
+
+	// A directory with a settings file: the probe leaves only that file.
+	content := "[github_apps.example-org]\ncumin-core = \"Iv23liCORE\"\n"
+	path := writeFile(t, content)
+	if err := CheckGitHubAppClientIDWritable(path, "example-org", "reviewer"); err != nil {
+		t.Errorf("a writable directory: %v", err)
+	}
+	if entries, _ := os.ReadDir(filepath.Dir(path)); len(entries) != 1 {
+		t.Errorf("the probe left %d entries next to the settings file, want 1", len(entries))
+	}
+
+	// A directory that cannot be written: the check fails, and names it.
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the permission bits of a directory")
+	}
+	readOnly := filepath.Dir(path)
+	if err := os.Chmod(readOnly, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(readOnly, 0o700) })
+	err = CheckGitHubAppClientIDWritable(path, "example-org", "reviewer")
+	if err == nil || !strings.Contains(err.Error(), readOnly) {
+		t.Errorf("a read-only directory: err = %v, want an error that names %s", err, readOnly)
+	}
+	if got := readFile(t, path); got != content {
+		t.Errorf("the check changed the file: %q", got)
+	}
+}
+
 func TestSetGitHubAppClientID_CreatesTheFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cumin", "config.toml")
 	if err := SetGitHubAppClientID(path, "example-org", "cumin-core", "Iv23liCORE"); err != nil {

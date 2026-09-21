@@ -66,10 +66,39 @@ func SetGitHubAppClientID(path, org, app, clientID string) error {
 // CheckGitHubAppClientIDWritable reports if SetGitHubAppClientID can write a
 // Client ID for the App, without a change to the file. The setup command calls
 // it before it registers an App on GitHub, so that a settings file in a form
-// that the command does not know stops the run before any change.
+// that the command does not know, or a settings directory that cannot be
+// written, stops the run before any change.
 func CheckGitHubAppClientIDWritable(path, org, app string) error {
-	_, _, _, err := prepareClientIDWrite(path, org, app, "Iv00placeholder")
-	return err
+	file, _, _, err := prepareClientIDWrite(path, org, app, "Iv00placeholder")
+	if err != nil {
+		return err
+	}
+	return probeWrite(file)
+}
+
+// probeWrite tries what writeFileAtomically will do, without the rename: it
+// creates the directory when it is missing, and creates and removes a
+// temporary file in it. The settings file itself is not opened for writing.
+// A check on the text alone is not enough: GitHub registers an App for good,
+// and a directory that cannot be written would be found only afterwards.
+func probeWrite(path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("cannot create the settings directory %s: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".config-*.toml")
+	if err != nil {
+		return fmt.Errorf("cannot write in the settings directory %s: %w", dir, err)
+	}
+	name := tmp.Name()
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return fmt.Errorf("cannot write in the settings directory %s: %w", dir, err)
+	}
+	if err := os.Remove(name); err != nil {
+		return fmt.Errorf("cannot remove a file in the settings directory %s: %w", dir, err)
+	}
+	return nil
 }
 
 // prepareClientIDWrite returns the file to write (after symbolic links), its
