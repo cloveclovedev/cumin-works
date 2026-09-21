@@ -25,7 +25,9 @@ func TestEnsureLabels_CreatesOnlyTheMissingLabels(t *testing.T) {
 	client := github.NewAppClient(server.URL, server.Client())
 	ctx := context.Background()
 
-	created, err := client.EnsureLabels(ctx, githubtest.Token, "example-org", "example-repo", testLabels)
+	// The list names one label twice, in two cases. It is created once.
+	labels := append(slices.Clone(testLabels), github.Label{Name: "Risk/Low", Color: "C2E0C6"})
+	created, err := client.EnsureLabels(ctx, githubtest.Token, "example-org", "example-repo", labels)
 	if err != nil {
 		t.Fatalf("EnsureLabels: %v", err)
 	}

@@ -60,6 +60,8 @@ func (c *AppClient) EnsureLabels(ctx context.Context, token, owner, repo string,
 			return created, fmt.Errorf("github: create the label %q in %s/%s: %w", label.Name, owner, repo, err)
 		}
 		created = append(created, label.Name)
+		// A name that the list holds twice is created once.
+		existing[strings.ToLower(label.Name)] = true
 	}
 	return created, nil
 }
