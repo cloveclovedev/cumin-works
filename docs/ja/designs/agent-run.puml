@@ -3,11 +3,22 @@ skinparam shadowing false
 skinparam defaultFontName sans-serif
 
 participant "cumin\n(internal/agent)" as cumin
+participant "GitHub" as github
 participant "Claude Code\n(claude -p)" as claude
 
-cumin -> claude : 起動 (worktree で)\nroleの指示、依頼文、スキーマ、\n新しいセッションか --resume
+cumin -> claude : 最小の実行 (空の一時ディレクトリで)\n使用率を読む
+claude --> cumin : rate_limit_event
+note right of cumin : 読めなければ、ここで止める
+
+cumin -> github : roleのAppのtokenを発行\n(対象のリポジトリだけ)
+github --> cumin : installation token
+cumin -> github : botの身元 (roleごとに初回だけ)\nGET /app、GET /users/<slug>[bot]
+github --> cumin : slug、user id
+
+cumin -> claude : 起動 (worktree で、tokenと作者を環境変数で)\nroleの指示、依頼文、スキーマ、\n新しいセッションか --resume
 activate claude
-claude --> cumin : system / init\n(セッションの番号)
+claude --> cumin : system / init\n(セッションの番号、plugins、mcp_servers、memory_paths)
+cumin -> cumin : 起動の記録を確かめる\n(作業場所の外の文脈なら、その場で止める)
 claude --> cumin : rate_limit_event\n(使用率とリセット時刻)
 claude --> cumin : assistant, user, ...\n(読み飛ばす)
 claude --> cumin : result\n(structured_output, is_error)
