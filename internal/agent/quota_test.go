@@ -26,8 +26,8 @@ func quotaNotRead(t *testing.T, err error) *QuotaNotRead {
 
 func TestReadQuota_ReadsTheLastEvent(t *testing.T) {
 	path, record := fakeCLI(t, "quota-run.jsonl", 0)
-	var logs bytes.Buffer
-	c := ClaudeCode{Path: path, Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))}
+	logger, logs := newTestLogger()
+	c := ClaudeCode{Path: path, Logger: logger}
 
 	usage, err := c.ReadQuota(context.Background())
 	if err != nil {
@@ -82,13 +82,12 @@ func TestReadQuota_ReadsTheLastEvent(t *testing.T) {
 		t.Error("the environment of the minimal run does not turn auto memory off")
 	}
 
-	for _, forbidden := range []string{"0.31", "0.61", "utilization", "fake stderr"} {
-		if strings.Contains(logs.String(), forbidden) {
-			t.Errorf("info logs hold %q:\n%s", forbidden, logs.String())
-		}
-	}
-	if !strings.Contains(logs.String(), "quota usage read") {
-		t.Errorf("info logs do not say that the usage was read:\n%s", logs.String())
+	// The utilization is not logged at info level. The check reads the
+	// attributes of the records, not the text of the lines: the time can
+	// hold the same digits.
+	logs.requireNoText(t, "0.31", "0.61", "utilization", "fake stderr")
+	if !logs.hasMessage("quota usage read") {
+		t.Errorf("info logs do not say that the usage was read: %+v", logs.records)
 	}
 }
 

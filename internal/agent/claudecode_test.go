@@ -87,8 +87,8 @@ const fixtureSessionID = "11111111-2222-4333-8444-555555555555"
 
 func TestRun_ValidDone(t *testing.T) {
 	path, _ := fakeCLI(t, "done.jsonl", 0)
-	var logs bytes.Buffer
-	c := ClaudeCode{Path: path, Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))}
+	logger, logs := newTestLogger()
+	c := ClaudeCode{Path: path, Logger: logger}
 
 	run, err := c.Run(context.Background(), request(t))
 	if err != nil {
@@ -113,14 +113,12 @@ func TestRun_ValidDone(t *testing.T) {
 	if run.Quota.ReadAt.IsZero() {
 		t.Error("ReadAt is zero")
 	}
-	// The utilization is not logged at info level.
-	for _, forbidden := range []string{"0.26", "0.51", "utilization", "fake stderr"} {
-		if strings.Contains(logs.String(), forbidden) {
-			t.Errorf("info logs hold %q:\n%s", forbidden, logs.String())
-		}
-	}
-	if !strings.Contains(logs.String(), "session_id="+fixtureSessionID) || !strings.Contains(logs.String(), "result=done") {
-		t.Errorf("info logs do not name the session and the result:\n%s", logs.String())
+	// The utilization is not logged at info level. The check reads the
+	// attributes of the records, not the text of the lines: the time can
+	// hold the same digits.
+	logs.requireNoText(t, "0.26", "0.51", "utilization", "fake stderr")
+	if !logs.hasAttr("session_id", fixtureSessionID) || !logs.hasAttr("result", "done") {
+		t.Errorf("info logs do not name the session and the result: %+v", logs.records)
 	}
 }
 

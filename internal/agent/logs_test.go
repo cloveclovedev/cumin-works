@@ -1,0 +1,190 @@
+package agent
+
+import (
+	"context"
+	"log/slog"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// This file holds a slog.Handler for tests. The tests use it to assert what
+// a log must not hold. A check on the text of a log line is wrong for a
+// short value: the time attribute can hold the same digits (the CI of #80
+// on 2026-09-21). The recorder keeps the message and the attributes of each
+// record, and not the time.
+
+// logRecord is one record without its time. Attribute keys carry the group
+// as a prefix ("group.key"), and the values are their text.
+type logRecord struct {
+	Level   slog.Level
+	Message string
+	Attrs   map[string]string
+}
+
+// logRecorder collects the records of a test logger.
+type logRecorder struct {
+	mu      sync.Mutex
+	records []logRecord
+}
+
+// newTestLogger returns a logger that records every record at info level
+// and above, and the recorder.
+func newTestLogger() (*slog.Logger, *logRecorder) {
+	rec := &logRecorder{}
+	return slog.New(&recorderHandler{rec: rec, level: slog.LevelInfo}), rec
+}
+
+// find returns where the text appears in the records: in a message, in an
+// attribute key, or in an attribute value. The time is not part of a record.
+func (r *logRecorder) find(text string) (where string, found bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, record := range r.records {
+		if strings.Contains(record.Message, text) {
+			return "the message " + record.Message, true
+		}
+		for key, value := range record.Attrs {
+			if strings.Contains(key, text) || strings.Contains(value, text) {
+				return "the attribute " + key + " of the message " + record.Message, true
+			}
+		}
+	}
+	return "", false
+}
+
+// requireNoText fails the test when a message, an attribute key, or an
+// attribute value holds one of the texts.
+func (r *logRecorder) requireNoText(t *testing.T, forbidden ...string) {
+	t.Helper()
+	for _, text := range forbidden {
+		if where, found := r.find(text); found {
+			t.Errorf("the logs hold %q in %s", text, where)
+		}
+	}
+}
+
+// hasMessage reports if a record has this message.
+func (r *logRecorder) hasMessage(message string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, record := range r.records {
+		if record.Message == message {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAttr reports if a record has an attribute with this key and this text.
+func (r *logRecorder) hasAttr(key, value string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, record := range r.records {
+		if record.Attrs[key] == value {
+			return true
+		}
+	}
+	return false
+}
+
+// recorderHandler is the slog.Handler behind newTestLogger. WithAttrs and
+// WithGroup return a handler with the same recorder.
+type recorderHandler struct {
+	rec    *logRecorder
+	level  slog.Level
+	prefix string            // the open groups, as "a.b."
+	attrs  map[string]string // the attributes of WithAttrs, with their prefix
+}
+
+func (h *recorderHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= h.level
+}
+
+func (h *recorderHandler) Handle(_ context.Context, r slog.Record) error {
+	attrs := make(map[string]string, len(h.attrs)+r.NumAttrs())
+	for key, value := range h.attrs {
+		attrs[key] = value
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		flattenAttr(attrs, h.prefix, a)
+		return true
+	})
+	h.rec.mu.Lock()
+	defer h.rec.mu.Unlock()
+	h.rec.records = append(h.rec.records, logRecord{Level: r.Level, Message: r.Message, Attrs: attrs})
+	return nil
+}
+
+func (h *recorderHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	next := &recorderHandler{rec: h.rec, level: h.level, prefix: h.prefix, attrs: make(map[string]string, len(h.attrs)+len(attrs))}
+	for key, value := range h.attrs {
+		next.attrs[key] = value
+	}
+	for _, a := range attrs {
+		flattenAttr(next.attrs, h.prefix, a)
+	}
+	return next
+}
+
+func (h *recorderHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
+	return &recorderHandler{rec: h.rec, level: h.level, prefix: h.prefix + name + ".", attrs: h.attrs}
+}
+
+// flattenAttr puts the attribute into the map. A group becomes one entry
+// for each of its members, with the group name in the key.
+func flattenAttr(into map[string]string, prefix string, a slog.Attr) {
+	value := a.Value.Resolve()
+	if value.Kind() != slog.KindGroup {
+		into[prefix+a.Key] = value.String()
+		return
+	}
+	groupPrefix := prefix
+	if a.Key != "" {
+		groupPrefix += a.Key + "."
+	}
+	for _, member := range value.Group() {
+		flattenAttr(into, groupPrefix, member)
+	}
+}
+
+// The recorder finds a forbidden value in an attribute, in a group, and in
+// a message, and it does not see the time of a record.
+func TestLogRecorder_FindsValuesAndIgnoresTheTime(t *testing.T) {
+	logger, rec := newTestLogger()
+	logger.Info("usage", "five_hour", slog.GroupValue(slog.Float64("utilization", 0.31)))
+	logger.With("session_id", "abc").WithGroup("run").Info("agent end", "result", "done")
+	logger.Debug("not recorded", "secret", "0.61")
+
+	for _, text := range []string{"0.31", "utilization", "five_hour.utilization", "agent end", "abc"} {
+		if _, found := rec.find(text); !found {
+			t.Errorf("find(%q) = false, want true", text)
+		}
+	}
+	if _, found := rec.find("0.61"); found {
+		t.Error("a debug record was recorded")
+	}
+	if !rec.hasMessage("usage") || !rec.hasAttr("session_id", "abc") || !rec.hasAttr("run.result", "done") {
+		t.Errorf("records = %+v", rec.records)
+	}
+
+	// A record whose time holds the digits of a forbidden value, and nothing else.
+	_, timed := newTestLogger()
+	handler := &recorderHandler{rec: timed, level: slog.LevelInfo}
+	at := time.Date(2026, 9, 21, 10, 31, 0, 310000000, time.UTC)
+	if err := handler.Handle(context.Background(), slog.NewRecord(at, slog.LevelInfo, "quota usage read", 0)); err != nil {
+		t.Fatal(err)
+	}
+	if !timed.hasMessage("quota usage read") {
+		t.Fatal("the record was not recorded")
+	}
+	for _, text := range []string{"10:31", "0.31", ".31"} {
+		if where, found := timed.find(text); found {
+			t.Errorf("find(%q) = true in %s, want the time to be ignored", text, where)
+		}
+	}
+}
