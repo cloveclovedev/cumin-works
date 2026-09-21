@@ -216,16 +216,18 @@ func (w testWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// TestLive_AgentEnvironment is the live check of #70 on the sandbox
-// repository: a push and a pull request from the environment that cumin
-// builds for an agent appear under the Implementer App, not under the
-// Owner. It runs the real git and gh in that environment, without Claude
-// Code and without quota. It runs only with CUMIN_LIVE=1 and
-// CUMIN_LIVE_REPO=<owner>/<repo>. docs/ja/development/live-tests.md says
-// how to run it.
-//
-// The log holds no token, no absolute path of the Host, and no App name.
-func TestLive_AgentEnvironment(t *testing.T) {
+// sandbox holds what the live checks on the sandbox repository share.
+type sandbox struct {
+	owner, repo string
+	role        config.Role
+	service     *Service
+}
+
+// newSandbox skips the test without CUMIN_LIVE=1, reads the sandbox from
+// CUMIN_LIVE_REPO, and builds a Service with the Implementer App: the
+// client ID from the Host settings, the private key from the Keychain.
+func newSandbox(t *testing.T, cliPath string) *sandbox {
+	t.Helper()
 	if os.Getenv("CUMIN_LIVE") != "1" {
 		t.Skip("set CUMIN_LIVE=1 to run the live check")
 	}
@@ -234,11 +236,7 @@ func TestLive_AgentEnvironment(t *testing.T) {
 		t.Fatal("set CUMIN_LIVE_REPO to <owner>/<repo> of the sandbox repository")
 	}
 	ctx := context.Background()
-	runID := time.Now().UTC().Format("20060102-150405")
 	role := config.RoleImplementer
-
-	// The credentials of the Implementer App: the client ID from the Host
-	// settings, the private key from the Keychain.
 	path := os.Getenv("CUMIN_CONFIG")
 	if path == "" {
 		var err error
@@ -271,22 +269,46 @@ func TestLive_AgentEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Service{
-		Roles:  map[config.Role]config.RoleSettings{role: {CLI: config.CLIClaudeCode, CLIPath: "claude", TimeLimit: time.Minute}},
+	return &sandbox{owner: owner, repo: repo, role: role, service: &Service{
+		Roles:  map[config.Role]config.RoleSettings{role: {CLI: config.CLIClaudeCode, CLIPath: cliPath, TimeLimit: 5 * time.Minute}},
 		Apps:   map[string]map[config.Role]github.AppCredentials{owner: {role: {ClientID: clientID, PrivateKey: key}}},
 		GitHub: github.NewAppClient(github.DefaultBaseURL, nil),
 		Logger: testLogger(t),
-	}
+	}}
+}
 
-	// The worktree of the sandbox, as for an agent.
+// worktree prepares a worktree of the sandbox on branch, and removes it
+// at the end of the test.
+func (sb *sandbox) worktree(t *testing.T, branch string) string {
+	t.Helper()
 	w := Workspace{Root: filepath.Join(t.TempDir(), "work"), Logger: testLogger(t)}
-	branch := "cumin/live-" + runID
-	c := Checkout{Owner: owner, Repo: repo, Issue: 1, Role: role, Branch: branch}
-	dir, err := w.Prepare(ctx, "https://github.com/"+owner+"/"+repo+".git", c)
+	c := Checkout{Owner: sb.owner, Repo: sb.repo, Issue: 1, Role: sb.role, Branch: branch}
+	dir, err := w.Prepare(context.Background(), "https://github.com/"+sb.owner+"/"+sb.repo+".git", c)
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
 	t.Cleanup(func() { _ = w.Remove(context.Background(), c) })
+	return dir
+}
+
+// TestLive_AgentEnvironment is the live check of #70 on the sandbox
+// repository: a push and a pull request from the environment that cumin
+// builds for an agent appear under the Implementer App, not under the
+// Owner. It runs the real git and gh in that environment, without Claude
+// Code and without quota. It runs only with CUMIN_LIVE=1 and
+// CUMIN_LIVE_REPO=<owner>/<repo>. docs/ja/development/live-tests.md says
+// how to run it.
+//
+// The log holds no token, no absolute path of the Host, and no App name.
+func TestLive_AgentEnvironment(t *testing.T) {
+	sb := newSandbox(t, "claude")
+	owner, repo, role, s := sb.owner, sb.repo, sb.role, sb.service
+	ctx := context.Background()
+	runID := time.Now().UTC().Format("20060102-150405")
+
+	// The worktree of the sandbox, as for an agent.
+	branch := "cumin/live-" + runID
+	dir := sb.worktree(t, branch)
 
 	// The same steps as Service.Start, without the CLI: the token, the
 	// identity, the environment.
@@ -311,7 +333,7 @@ func TestLive_AgentEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("git config: %v: %s", err, redactToken(out, token.Token))
 	}
-	workRoot := resolvePath(w.Root)
+	workRoot := resolvePath(filepath.Dir(filepath.Dir(filepath.Dir(dir))))
 	hostFileRead := false
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		origin, _, _ := strings.Cut(line, "\t")
@@ -463,4 +485,108 @@ func pullNumber(t *testing.T, out string) int {
 
 func redactToken(s, token string) string {
 	return strings.ReplaceAll(s, token, "[redacted]")
+}
+
+// TestLive_AgentRunOnSandbox is the optional second form of the live
+// check of #70: a real Claude Code run through Service.Start commits one
+// file, pushes, and opens a pull request on the sandbox, and both appear
+// under the Implementer App. It uses quota (the minimal quota run and one
+// agent run), so it runs only with CUMIN_LIVE=1 and after the Owner
+// agrees. It also exercises the check of the init event with a real run.
+func TestLive_AgentRunOnSandbox(t *testing.T) {
+	path := os.Getenv("CUMIN_CLAUDE_PATH")
+	if path == "" && os.Getenv("CUMIN_LIVE") == "1" {
+		var err error
+		if path, err = exec.LookPath("claude"); err != nil {
+			t.Fatalf("claude is not on PATH: %v (set CUMIN_CLAUDE_PATH)", err)
+		}
+	}
+	sb := newSandbox(t, path)
+	ctx := context.Background()
+	runID := time.Now().UTC().Format("20060102-150405")
+	branch := "cumin/live-" + runID + "-agent"
+	dir := sb.worktree(t, branch)
+	instruction, err := roles.Instruction(sb.role)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Cleanup by branch name, with a token of the test: the pull request
+	// that the agent opens is found through the branch.
+	cred, err := sb.service.app(sb.owner, sb.role)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := sb.service.GitHub.CreateInstallationToken(ctx, cred, string(sb.role), sb.owner, sb.repo)
+	if err != nil {
+		t.Fatalf("token: %v", err)
+	}
+	api := liveAPI{t: t, base: github.DefaultBaseURL, token: token.Token, owner: sb.owner, repo: sb.repo}
+	base := defaultBranch(t, api)
+	t.Cleanup(func() {
+		var pulls []struct {
+			Number int `json:"number"`
+		}
+		api.get("/pulls?state=open&head="+url.QueryEscape(sb.owner+":"+branch), &pulls)
+		for _, pull := range pulls {
+			api.closePull(pull.Number)
+		}
+		api.deleteBranch(branch)
+	})
+
+	file := "live/" + runID + "-claude.md"
+	text := "You are in a git worktree on the branch " + branch + " of the repository " + sb.owner + "/" + sb.repo + ". " +
+		"Do exactly the following, with the Bash tool, and nothing else. " +
+		"1. Create the file " + file + " with the one line: A live check of cumin-works: a commit by an agent. " +
+		"2. Run: git add " + file + " && git commit -m 'test: live agent run " + runID + "'. " +
+		"3. Run: git push -u origin " + branch + ". " +
+		"4. Run: gh pr create --base " + base + " --head " + branch + " --title 'test: live agent run " + runID + "' --body 'A live check of cumin-works: a pull request by an agent. The test closes it.'. " +
+		"Do not change any other file. Do not merge. Then finish with the result done and a summary of one sentence that holds the address of the pull request."
+	start := time.Now()
+	run, err := sb.service.Start(ctx, StartRequest{
+		Owner: sb.owner, Repo: sb.repo, Role: sb.role,
+		RoleInstruction: instruction, Text: text, WorkDir: dir,
+	})
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if run.Result.Result != ResultDone {
+		t.Fatalf("result = %+v, want done", run.Result)
+	}
+
+	var pulls []struct {
+		Number int `json:"number"`
+		User   struct {
+			Login string `json:"login"`
+			Type  string `json:"type"`
+		} `json:"user"`
+		Head struct {
+			SHA string `json:"sha"`
+		} `json:"head"`
+	}
+	api.get("/pulls?state=open&head="+url.QueryEscape(sb.owner+":"+branch), &pulls)
+	if len(pulls) != 1 {
+		t.Fatalf("pull requests from the branch of the agent: %d, want 1", len(pulls))
+	}
+	pull := pulls[0]
+	var commit struct {
+		Author    *struct{ Login string } `json:"author"`
+		Committer *struct{ Login string } `json:"committer"`
+	}
+	api.get("/commits/"+pull.Head.SHA, &commit)
+	id, err := sb.service.identity(ctx, appKey{strings.ToLower(sb.owner), sb.role}, cred, token.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pullIsBot := pull.User.Login == id.name && pull.User.Type == "Bot"
+	commitIsBot := commit.Author != nil && commit.Committer != nil && commit.Author.Login == id.name && commit.Committer.Login == id.name
+	if !pullIsBot {
+		t.Errorf("the pull request author is not the bot of the Implementer App (type %s)", pull.User.Type)
+	}
+	if !commitIsBot {
+		t.Error("the commit author or committer is not the bot of the Implementer App")
+	}
+	t.Logf("result %s after %s; quota read before the start: true; session ID read: %v; pull request by the agent found: true; author is the Implementer bot: %v; commit author and committer are the bot: %v",
+		run.Result.Result, elapsed.Round(time.Second), run.SessionID != "", pullIsBot, commitIsBot)
 }

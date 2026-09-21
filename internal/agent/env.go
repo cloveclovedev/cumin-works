@@ -56,10 +56,17 @@ func baseEnvironment() []string {
 			env = append(env, name+"="+value)
 		}
 	}
-	// --setting-sources project does not stop auto memory. The variable
-	// does (measured-constraints.md row 28; Claude Code "Environment
-	// variables").
-	return append(env, "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1")
+	return append(env,
+		// --setting-sources project does not stop auto memory. The
+		// variable does (measured-constraints.md row 28; Claude Code
+		// "Environment variables").
+		"CLAUDE_CODE_DISABLE_AUTO_MEMORY=1",
+		// The MCP servers of the claude.ai account (connectors) are
+		// fetched for every logged-in user, whatever the setting sources.
+		// They are user-level context (Claude Code "Environment
+		// variables"; seen in the init event of a live run on 2026-09-22).
+		"ENABLE_CLAUDEAI_MCP_SERVERS=false",
+	)
 }
 
 // basicHeader is the value of the token in GIT_CONFIG_VALUE_0.

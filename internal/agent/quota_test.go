@@ -78,8 +78,8 @@ func TestReadQuota_ReadsTheLastEvent(t *testing.T) {
 			t.Errorf("the environment of the minimal run has %s", absent)
 		}
 	}
-	if env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] != "1" {
-		t.Error("the environment of the minimal run does not turn auto memory off")
+	if env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] != "1" || env["ENABLE_CLAUDEAI_MCP_SERVERS"] != "false" {
+		t.Error("the environment of the minimal run does not turn auto memory and the claude.ai MCP servers off")
 	}
 
 	// The utilization is not logged at info level. The check reads the
