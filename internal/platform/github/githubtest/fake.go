@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -34,10 +35,16 @@ type Issue struct {
 	BlockedBy []int
 }
 
+// Label is one label of a repository.
+type Label struct {
+	Name, Color, Description string
+}
+
 // Repository is one repository of the fake.
 type Repository struct {
 	Owner, Name string
 	Issues      map[int]*Issue
+	Labels      []Label
 }
 
 // Request is one request that the fake received.
@@ -95,6 +102,25 @@ func (f *Fake) Issue(r *Repository, number int) *Issue {
 	return &copied
 }
 
+// AddLabel adds a label to the repository.
+func (f *Fake) AddLabel(r *Repository, label Label) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r.Labels = append(r.Labels, label)
+}
+
+// LabelNames returns the names of the labels of the repository, in the
+// order of creation.
+func (f *Fake) LabelNames(r *Repository) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var names []string
+	for _, label := range r.Labels {
+		names = append(names, label.Name)
+	}
+	return names
+}
+
 // Requests returns the requests that the fake received, in order.
 func (f *Fake) Requests() []Request {
 	f.mu.Lock()
@@ -125,12 +151,117 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"message": "Bad credentials"})
 		return
 	}
+	labels := repoLabelsPath.FindStringSubmatch(r.URL.Path)
+	issueLabels := issueLabelsPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/graphql":
 		f.serveGraphQL(w, body)
+	case r.Method == http.MethodGet && labels != nil:
+		f.serveListLabels(w, r, labels[1], labels[2])
+	case r.Method == http.MethodPost && labels != nil:
+		f.serveCreateLabel(w, body, labels[1], labels[2])
+	case r.Method == http.MethodPut && issueLabels != nil:
+		number, _ := strconv.Atoi(issueLabels[3])
+		f.serveSetIssueLabels(w, body, issueLabels[1], issueLabels[2], number)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
+}
+
+var (
+	repoLabelsPath  = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/labels$`)
+	issueLabelsPath = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)/labels$`)
+)
+
+// repository returns the repository, or answers 404.
+func (f *Fake) repository(w http.ResponseWriter, owner, name string) (*Repository, bool) {
+	repo, ok := f.repositories[key(owner, name)]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+	}
+	return repo, ok
+}
+
+// serveListLabels answers GET /repos/{owner}/{repo}/labels with the page
+// that per_page and page select. Official: "List labels for a repository".
+func (f *Fake) serveListLabels(w http.ResponseWriter, r *http.Request, owner, name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if perPage < 1 || perPage > 100 {
+		perPage = 30
+	}
+	if page < 1 {
+		page = 1
+	}
+	labels := []map[string]any{}
+	for i := (page - 1) * perPage; i < page*perPage && i < len(repo.Labels); i++ {
+		labels = append(labels, labelJSON(repo.Labels[i]))
+	}
+	writeJSON(w, http.StatusOK, labels)
+}
+
+// serveCreateLabel answers POST /repos/{owner}/{repo}/labels. A name that
+// exists (without case) answers 422, as GitHub does. Official: "Create a
+// label".
+func (f *Fake) serveCreateLabel(w http.ResponseWriter, body []byte, owner, name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	var label Label
+	if err := json.Unmarshal(body, &label); err != nil || label.Name == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	for _, existing := range repo.Labels {
+		if strings.EqualFold(existing.Name, label.Name) {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed: already_exists"})
+			return
+		}
+	}
+	repo.Labels = append(repo.Labels, label)
+	writeJSON(w, http.StatusCreated, labelJSON(label))
+}
+
+// serveSetIssueLabels answers PUT /repos/{owner}/{repo}/issues/{n}/labels:
+// it replaces every label of the issue. Official: "Set labels for an issue".
+func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	issue, ok := repo.Issues[number]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	var request struct {
+		Labels *[]string `json:"labels"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || request.Labels == nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	issue.Labels = slices.Clone(*request.Labels)
+	labels := []map[string]any{}
+	for _, labelName := range issue.Labels {
+		labels = append(labels, map[string]any{"name": labelName})
+	}
+	writeJSON(w, http.StatusOK, labels)
+}
+
+func labelJSON(label Label) map[string]any {
+	return map[string]any{"name": label.Name, "color": label.Color, "description": label.Description}
 }
 
 // serveGraphQL answers the snapshot query of the client. It does not parse
