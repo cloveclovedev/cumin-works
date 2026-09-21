@@ -67,20 +67,6 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 42 | GitHub Appが作ったPull Requestでは、作成者の種類 (`pull_request.user.type`) が `Bot` になる見込みである。保護されたパスのcheckは、これを条件に使う | 広く観測されている振る舞い。公式文書には、Appが作ったPull Requestについての明記を見つけていない。使い捨てのリポジトリで確かめる | 未確認。4節の48で実測した |
 | 43 | `GET /apps/{app_slug}` で、privateなGitHub Appを、Organizationの管理者のtokenで読めるかどうか | 公式文書 (rest/apps/apps) に記載がない。保護されたパスのcheckがAppの名前を使わなくなったので、cuminは、この呼び出しに頼らない | 未確認。4節の47で実測した |
 
-## 4. Agentの起動の実装で確かめたこと (2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1)
-
-要求Issue #7 の実装 (#45、#49、#51) で確かめた事実。
-
-| # | 制約 | 根拠 | 確度 |
-|---|---|---|---|
-| 44 | `git worktree add <path> <branch>` は、`<branch>` がローカルになく、ちょうど1つのリモートにあれば、`git worktree add --track -b <branch> <path> <remote>/<branch>` と同じに扱われる | git-worktree: "If <commit-ish> is a branch name ... and is not found ... but there does exist a tracking branch in exactly one remote ... treat as equivalent to: git worktree add --track -b <branch> <path> <remote>/<branch>" | 公式文書 |
-| 45 | `git clone --no-checkout` は、remote-tracking branch と `remote.origin.fetch` を作る。`--bare` はどちらも作らない | git-clone: `--no-checkout` は "Do not checkout HEAD after the clone is complete"。`--bare` は "neither remote-tracking branches nor the related configuration variables are created" | 公式文書 |
-| 46 | `git fetch` は `refs/remotes/origin/HEAD` を動かさない。`git remote set-head origin --auto` がリモートに問い合わせて、`refs/remotes/origin/HEAD` をリモートの既定のブランチに向ける | git-remote: "With -a or --auto, the remote is queried to determine its HEAD, then the symbolic-ref refs/remotes/<name>/HEAD is set to the same branch"。git-fetch には HEAD の更新の記述がない | 公式文書 |
-| 47 | `git worktree list --porcelain` は、worktreeの実体のパスを出す。macOSでは、`/var` の下の一時ディレクトリが `/private/var` で出る | テストで `filepath.EvalSymlinks` と比べた | 実測 |
-| 48 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した。cuminは標準入力をnullデバイスにして起動する | 実測 |
-| 49 | `rate_limit_event` には、`rate_limit_info.unifiedWindows` (1を参照) のほかに、`session_id` と `uuid` があり、`rate_limit_info` には `status`、`resetsAt`、`rateLimitType`、overageの項目がある。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。値は記録していない | 実測 |
-| 50 | Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない (32の続き) | #42 の実機の確認。打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 実測 |
-
 ## 4. 使い捨てのリポジトリと、Hostで確かめたこと (2026-09-20、2026-09-21)
 
 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。確度は、断りのない限り実測である。「答えた行」は、この文書の前の節で未確認だった行である。
@@ -93,7 +79,7 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 47 | Organizationのownerは、自分のtokenで、privateなAppを `GET /apps/{slug}` で読める。認証なしでは404が返る | 43 |
 | 48 | Appが作ったPull Requestの作成者は、`user.type` が `Bot` になる。APIでも、workflowの中の `github.event.pull_request.user.type` でも同じである | 42 |
 | 49 | Appのloginは `<slug>[bot]` である。メールアドレスが `<botのuser id>+<slug>[bot]@users.noreply.github.com` のコミットは、そのbotのユーザに結び付く | 18 |
-| 50 | Appが、人を@メンションするコメントを投稿できる (201)。通知が届くことは、Ownerが目で確かめる | 19 |
+| 50 | Appが、人を@メンションするコメントを投稿できる (201)。通知が届くことを、Ownerが2026-09-21に確かめた | 19 |
 | 51 | `if` の条件で飛ばされたjobのcheck runは、`status: completed`、`conclusion: skipped` になる。必須のcheckであっても、mergeを止めない。cuminは、必須のcheckの `skipped` を、通ったものとして数える必要がある | 20 |
 | 52 | AppがAPIで作ったPull Requestには、`.github/pull_request_template.md` が使われない。本文を渡さなければ、本文は空になる | 25 |
 | 53 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べて、必須のcheckの一覧が返る | 34 |
@@ -113,3 +99,26 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 67 | launchdが起動したプロセス (ログイン中のユーザのLaunchAgent) は、`security` が作ったKeychainの項目を、確認のダイアログなしで `security` から読める | — |
 | 68 | rulesetのbypassの相手の種類 `RepositoryRole` で、`actor_id: 5` は `admin` のroleである。同じ内容でrulesetを `PUT` しても、履歴の版は増えない。OAuthのtoken (`gh`) でworkflowのファイルをpushするには、`workflow` のscopeが要る。既定のブランチのworkflowを変えたあと、開いているPull Requestを閉じて開き直しても、古いworkflowが動く。"Update branch" か新しいコミットで、新しいworkflowが動く | — |
 | 69 | リポジトリをOrganizationに移しても、Issue、Pull Request、webhook、secret、releaseは保たれ、古いアドレスは転送される | — (公式文書。実測していない) |
+
+## 5. Agentの起動の実装で確かめたこと (2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1)
+
+要求Issue #7 の実装 (#45、#49、#51) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 70 | `git worktree add <path> <branch>` は、`<branch>` がローカルになく、ちょうど1つのリモートにあれば、`git worktree add --track -b <branch> <path> <remote>/<branch>` と同じに扱われる | git-worktree: "If <commit-ish> is a branch name ... and is not found ... but there does exist a tracking branch in exactly one remote ... treat as equivalent to: git worktree add --track -b <branch> <path> <remote>/<branch>" | 公式文書 |
+| 71 | `git clone --no-checkout` は、remote-tracking branch と `remote.origin.fetch` を作る。`--bare` はどちらも作らない | git-clone: `--no-checkout` は "Do not checkout HEAD after the clone is complete"。`--bare` は "neither remote-tracking branches nor the related configuration variables are created" | 公式文書 |
+| 72 | `git fetch` は `refs/remotes/origin/HEAD` を動かさない。`git remote set-head origin --auto` がリモートに問い合わせて、`refs/remotes/origin/HEAD` をリモートの既定のブランチに向ける | git-remote: "With -a or --auto, the remote is queried to determine its HEAD, then the symbolic-ref refs/remotes/<name>/HEAD is set to the same branch"。git-fetch には HEAD の更新の記述がない | 公式文書 |
+| 73 | `git worktree list --porcelain` は、worktreeの実体のパスを出す。macOSでは、`/var` の下の一時ディレクトリが `/private/var` で出る | テストで `filepath.EvalSymlinks` と比べた | 実測 |
+| 74 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した。cuminは標準入力をnullデバイスにして起動する | 実測 |
+| 75 | `rate_limit_event` には、`rate_limit_info.unifiedWindows` (1を参照) のほかに、`session_id` と `uuid` があり、`rate_limit_info` には `status`、`resetsAt`、`rateLimitType`、overageの項目がある。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。値は記録していない | 実測 |
+| 76 | Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない (32の続き) | #42 の実機の確認。打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 実測 |
+
+## 6. 定期確認の実装で確かめたこと (2026-09-21)
+
+要求Issue #6 の実装 (#71、#75、#77、#78) と、sandboxでの組み込んだバイナリの確認で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 77 | GraphQLの問い合わせのポイントは、経路に沿った `first` の積を100で割った値で決まる。定期確認の問い合わせ (要求Issueを10件ずつ、sub-issueを30件、ラベルを10件、blocked by のIssueを20件) は、`rateLimit.cost` が6だった | 公式: Rate limits and node limits for the GraphQL API。開いている要求Issueが4つあるリポジトリで実測 | 公式文書 + 実測 |
+| 78 | `PUT /repos/{owner}/{repo}/issues/{n}/labels` に、リポジトリにないラベルの名前を渡すと、そのラベルが既定の色 (`ededed`) で作られ、付け替えは失敗しない | sandboxで `cumin/status/implementing` のラベルを消してから、着手させた | 実測 |

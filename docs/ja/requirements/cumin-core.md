@@ -117,6 +117,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | Agentが先に進めない。指摘が残った | I2、I4、I8、I10、R2、R4 |
 | 利用枠がしきい値を超えた、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
 | 進められるIssueがなくなった | Q4 |
+| 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
 
 通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
 
@@ -136,7 +137,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 |---|---|---|---|
 | 対象のリポジトリ | cuminが確かめるリポジトリの一覧 | なし | できない |
 | 定期確認の間隔 | GitHubを確かめる間隔 | 60秒 | できない |
-| リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` にあるIssueの数の上限。Ownerの対応を待っているIssueは数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
+| リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、同時に進めるIssueの数の上限。数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。Ownerの対応を待っているIssueも数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
 | 利用枠のしきい値 | 5h枠とweekly枠のそれぞれに、時間帯ごとに指定できる | 85% | できない |
 | リセットが近いとみなす残り時間 | 5h枠の残り時間がこれを切ったら、5h枠のしきい値を100%にする | 30分 | できない |
 | 作業場所 | `git worktree` を置くディレクトリ | なし | できない |
