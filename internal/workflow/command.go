@@ -13,8 +13,9 @@ import (
 // hostVariables are the variables of the Host that the request command
 // gets, when they are set. Nothing else of the environment of cumin reaches
 // the command: the credentials of the Host user (GH_TOKEN, SSH_AUTH_SOCK,
-// ...) stay out, as for an agent (internal/agent, "Agentの環境" in
-// docs/ja/designs/agent-run.md). The list is the same as the agent's.
+// ...) stay out, as for an agent (internal/agent; the topic "Agent
+// environment" in docs/ja/designs/agent-run.md). The list is the same as
+// the agent's.
 var hostVariables = []string{"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "SHELL", "USER", "LOGNAME"}
 
 // commandEnvironment builds the environment of the request command from

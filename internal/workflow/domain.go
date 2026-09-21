@@ -134,8 +134,8 @@ func readySubIssues(snapshot Snapshot) []Claim {
 
 // LabelsAfterClaim returns the labels of a sub-issue after I1: every
 // cumin/status/* label is removed, and cumin/status/implementing is added.
-// The other labels (risk/*, ...) stay. cumin removes the old status label at
-// the start (issue-states.md, "cuminは着手のときに、古い状態ラベルを外す").
+// The other labels (risk/*, ...) stay. issue-states.md says that cumin
+// removes the old status label when it starts the work.
 func LabelsAfterClaim(labels []string) []string {
 	after := []string{}
 	for _, label := range labels {
