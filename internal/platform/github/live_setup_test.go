@@ -70,7 +70,7 @@ func TestLiveSetupChecks(t *testing.T) {
 			Type  string `json:"type"`
 		} `json:"author"`
 	}
-	l.api(t, implementer, http.MethodGet, "/repos/{repo}/commits/"+sha, nil).json(t, &commit)
+	l.api(t, implementer, http.MethodGet, "/repos/{repo}/commits/"+sha, nil).mustJSON(t, http.StatusOK, &commit)
 	l.record("6", "The display name of the App, and the author of a commit that the Implementer App pushes", "`<slug>[bot]`",
 		fmt.Sprintf("Pull request author `%s`. Commit author `%s`. The commit used the email `<bot user id>+<slug>[bot]@users.noreply.github.com`", pull.User.Login, commit.Author.Login))
 	if pull.User.Login != bot.Login || commit.Author.Login != bot.Login {
@@ -145,7 +145,7 @@ func TestLiveSetupChecks(t *testing.T) {
 	var subIssues []struct {
 		Number int `json:"number"`
 	}
-	l.api(t, chief, http.MethodGet, fmt.Sprintf("/repos/{repo}/issues/%d/sub_issues", parent.Number), nil).json(t, &subIssues)
+	l.api(t, chief, http.MethodGet, fmt.Sprintf("/repos/{repo}/issues/%d/sub_issues", parent.Number), nil).mustJSON(t, http.StatusOK, &subIssues)
 	labels := strings.Join(child.labelNames(), ", ")
 	l.record("4", "The Chief Engineer App creates an issue with a label, as a sub-issue (`parent_issue_id`), and adds a \"blocked by\" relationship", "Success, and the label is on the issue",
 		fmt.Sprintf("Issue created by `%s` with the labels [%s]. Sub-issues of the parent: %d. \"blocked by\": status %d", child.User.Login, labels, len(subIssues), dependency.status))

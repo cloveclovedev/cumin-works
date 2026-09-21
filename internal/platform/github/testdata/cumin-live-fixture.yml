@@ -1,0 +1,58 @@
+# Fixture for the live tests of cumin-works (docs/ja/development/live-tests.md).
+# It belongs in a sandbox repository only, as
+# .github/workflows/cumin-live-fixture.yml. A repository administrator adds it
+# with a pull request. It reads everything through the GitHub API and does not
+# check out or run code from the pull request.
+name: cumin-live-fixture
+
+on:
+  pull_request:
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  # Fails when the pull request adds or changes the marker file. The live test
+  # reads what an installation token can see of a failed check.
+  live-fail-on-marker:
+    name: live-fail-on-marker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail when the marker file is in the pull request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FILES_URL: ${{ github.api_url }}/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files?per_page=100
+        run: |
+          if curl --silent --show-error --fail -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$FILES_URL" | grep -q '"filename": *"live/fail-marker"'; then
+            echo "::error file=live/fail-marker,line=1::The marker file is in this pull request. The live test expects this failure."
+            exit 1
+          fi
+          echo "No marker file."
+
+  # Skipped for every pull request of a bot (a GitHub App). The sandbox makes
+  # this job a required check, so the live test can see that a required check
+  # that an `if` condition skips does not stop the merge.
+  live-skipped-for-bots:
+    name: live-skipped-for-bots
+    if: github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: "true"
+
+  # Creates a commit status, so the live test can read one. A check run is not
+  # a commit status: they are two APIs with two permissions.
+  live-commit-status:
+    name: live-commit-status
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create a commit status on the head of the pull request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          STATUS_URL: ${{ github.api_url }}/repos/${{ github.repository }}/statuses/${{ github.event.pull_request.head.sha }}
+        run: |
+          curl --silent --show-error --fail -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$STATUS_URL" \
+            -d '{"state":"success","context":"cumin-live-status","description":"Created by the live fixture"}' >/dev/null
