@@ -35,14 +35,14 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 15 | ラベルを条件にしたruleは、ruleの一覧に存在しない (「risk/mediumならOwnerの承認が必須」をGitHubだけでは書けない) | docs.github.com: available-rules-for-rulesets に記載なし | 公式文書 (不在の確認) |
 | 16 | REST APIの上限は、installation tokenがインストールごとに毎時5,000以上、個人のtokenはユーザーごとに毎時5,000 (全token共有)。内容を作る操作には毎分80・毎時500の二次制限がある | docs.github.com: rate-limits-for-the-rest-api | 公式文書 |
 | 17 | GitHub Appのapproveが「必須承認数」に数えられるか | 公式文書に記載なし。コミュニティでは「数えられる」との報告がある | 未確認 |
-| 18 | Appの表示名が `<slug>[bot]` になること、コミットのメールアドレスが `<bot-user-id>+<slug>[bot]@users.noreply.github.com` であること | 広く観測されている慣習。公式文書には記載なし | 未確認 |
-| 19 | AppのコメントでOwnerを@メンションすると、Ownerに通知が届くこと | 一般の@メンションの規則からの推論 | 未確認 |
-| 20 | 必須のcheckになっているGitHub Actionsのjobが、`if` の条件で飛ばされたときは、成功として扱われ、mergeを止めない。workflow全体が飛ばされたとき (パスやブランチの絞り込みなど) は、checkが保留のまま残り、mergeを止める | docs.github.com: troubleshooting-required-status-checks | 公式文書 |
+| 18 | Appの表示名が `<slug>[bot]` になること、コミットのメールアドレスが `<bot-user-id>+<slug>[bot]@users.noreply.github.com` であること | 広く観測されている慣習。公式文書には記載なし | 未確認。4節の49で実測した |
+| 19 | AppのコメントでOwnerを@メンションすると、Ownerに通知が届くこと | 一般の@メンションの規則からの推論 | 未確認。4節の50で実測した |
+| 20 | 必須のcheckになっているGitHub Actionsのjobが、`if` の条件で飛ばされたときは、成功として扱われ、mergeを止めない。workflow全体が飛ばされたとき (パスやブランチの絞り込みなど) は、checkが保留のまま残り、mergeを止める | docs.github.com: troubleshooting-required-status-checks | 公式文書。4節の51で実測した |
 | 21 | ファイルのパスを制限するrule (push ruleset) は、Teamプランの非公開または内部リポジトリでしか使えない。Freeプランの公開リポジトリでは使えない | docs.github.com: about-rulesets | 公式文書 |
 | 22 | Issueを作るREST APIには `parent_issue_id` があり、sub-issueを1回の呼び出しで作れる。テンプレートや入力フォームを指定する項目はない。Issueのテンプレートと入力フォームは、画面でIssueを作るときだけ働く | docs.github.com: rest/issues/issues、syntax-for-issue-forms | 公式文書 |
 | 23 | レビューを出すREST APIの `event` は `APPROVE`、`REQUEST_CHANGES`、`COMMENT` のどれかで、`REQUEST_CHANGES` と `COMMENT` には本文が要る。レビューのコメントへの返答は、スレッドの最初のコメントに対してだけできる | docs.github.com: rest/pulls/reviews、rest/pulls/comments | 公式文書 |
 | 24 | secret scanning、push protection、code scanning、dependency reviewは、公開リポジトリでは無料で使える。Dependabotは全てのプランで使える | docs.github.com: code-security/getting-started/github-security-features | 公式文書 |
-| 25 | AgentがAPIで作ったPull Requestに、`.github/pull_request_template.md` が自動で使われるか | 公式文書に記載なし | 未確認 |
+| 25 | AgentがAPIで作ったPull Requestに、`.github/pull_request_template.md` が自動で使われるか | 公式文書に記載なし | 未確認。4節の52で実測した |
 
 ## 3. 実装の前に確かめたこと (2026-09-20、Claude Code 2.1.267)
 
@@ -56,16 +56,16 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 31 | `-p` でも `--resume <session_id>` でセッションを再開できる。2.1.223以降は、別のディレクトリからでも再開できる | https://code.claude.com/docs/en/sessions.md | 公式文書 |
 | 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限は、起動する側で持つ必要がある。`-p` の実行は、SIGTERMを受けると終了コード143で終わる | https://code.claude.com/docs/en/headless.md、手元の `--help` | 公式文書 |
 | 33 | installation access tokenの期限は、発行から1時間で固定である。発行のAPIで指定できるのは `repositories`、`repository_ids`、`permissions` だけで、期限を変える項目はない | docs.github.com: rest/apps/apps | 公式文書 |
-| 34 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べる。要る権限は Metadata: Read-only である | docs.github.com: permissions-required-for-github-apps | 公式文書 |
-| 35 | check runの一覧を読むには Checks: Read-only、commit statusを読むには Commit statuses: Read-only が要る、と書かれている。公開リポジトリなら権限なしで読めるかは、確かめていない | 同上 | 公式文書 (公開リポジトリでの要否は未確認) |
-| 36 | GraphQLに、IssueとPull Requestの紐づけを読む項目がある。`Issue.closedByPullRequestsReferences` (既定は開いているPull Requestだけ。`includeClosedPrs` でmerge済みも含む) と、`PullRequest.closingIssuesReferences` である。`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary` もある。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection | 実測 (installation tokenでは未確認) |
+| 34 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べる。要る権限は Metadata: Read-only である | docs.github.com: permissions-required-for-github-apps | 公式文書。4節の53で実測した |
+| 35 | check runの一覧を読むには Checks: Read-only、commit statusを読むには Commit statuses: Read-only が要る、と書かれている。公開リポジトリなら権限なしで読めるかは、確かめていない | 同上 | 公式文書 (公開リポジトリでの要否は未確認)。4節の54で実測した |
+| 36 | GraphQLに、IssueとPull Requestの紐づけを読む項目がある。`Issue.closedByPullRequestsReferences` (既定は開いているPull Requestだけ。`includeClosedPrs` でmerge済みも含む) と、`PullRequest.closingIssuesReferences` である。`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary` もある。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection | 実測 (installation tokenでは未確認)。4節の55で実測した |
 | 37 | sub-issueの一覧と、blocked by の一覧は、Issueのオブジェクト (ラベルと状態を含む) を返す。親のIssueを返す `GET /repos/{owner}/{repo}/issues/{issue_number}/parent` もある | docs.github.com: rest/issues/sub-issues、rest/issues/issue-dependencies | 公式文書 |
-| 38 | GitHub Appは、manifestから登録できる (GitHub App Manifest flow)。名前や権限を書いたmanifestを `https://github.com/organizations/<org>/settings/apps/new` に渡し、人が "Create GitHub App" を押すと、`redirect_url` にcodeが戻る。1時間以内に `POST /app-manifests/{code}/conversions` を呼ぶと、`id` や `pem` (秘密鍵) が返る。`redirect_url` に手元のアドレスを使えるかは、文書に記載がない | docs.github.com: registering-a-github-app-from-a-manifest | 公式文書 (手元のアドレスへのredirectは未確認) |
+| 38 | GitHub Appは、manifestから登録できる (GitHub App Manifest flow)。名前や権限を書いたmanifestを `https://github.com/organizations/<org>/settings/apps/new` に渡し、人が "Create GitHub App" を押すと、`redirect_url` にcodeが戻る。1時間以内に `POST /app-manifests/{code}/conversions` を呼ぶと、`id` や `pem` (秘密鍵) が返る。`redirect_url` に手元のアドレスを使えるかは、文書に記載がない | docs.github.com: registering-a-github-app-from-a-manifest | 公式文書 (手元のアドレスへのredirectは未確認)。4節の44で実測した |
 | 39 | GraphQLのAPIは、installation tokenに、1時間あたり5,000ポイントを割り当てる。同じインストールの対象のリポジトリ全てで、この枠を分け合う。1つの問い合わせは1ポイント以上かかる。`first` と `last` に指定できるのは1から100までである | docs.github.com: rate-limits-and-query-limits-for-the-graphql-api | 公式文書 |
-| 40 | GraphQLに、ラベルが付いた時刻と、レビューとcheckの状態を読む項目がある。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`、`statusCheckRollup`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt`。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection (2026-09-20) | 実測 (installation tokenでは未確認) |
-| 41 | macOSの `security find-generic-password -s <service> -a <account> -w` は、項目のパスワードだけを出力する。改行を含む値を読むと形が変わる、という報告があるが、確かめていない | `man security` | 公式文書 (改行を含む値は未確認) |
-| 42 | GitHub Appが作ったPull Requestでは、作成者の種類 (`pull_request.user.type`) が `Bot` になる見込みである。保護されたパスのcheckは、これを条件に使う | 広く観測されている振る舞い。公式文書には、Appが作ったPull Requestについての明記を見つけていない。使い捨てのリポジトリで確かめる | 未確認 |
-| 43 | `GET /apps/{app_slug}` で、privateなGitHub Appを、Organizationの管理者のtokenで読めるかどうか | 公式文書 (rest/apps/apps) に記載がない。保護されたパスのcheckがAppの名前を使わなくなったので、cuminは、この呼び出しに頼らない | 未確認 |
+| 40 | GraphQLに、ラベルが付いた時刻と、レビューとcheckの状態を読む項目がある。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`、`statusCheckRollup`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt`。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection (2026-09-20) | 実測 (installation tokenでは未確認)。4節の55で実測した |
+| 41 | macOSの `security find-generic-password -s <service> -a <account> -w` は、項目のパスワードだけを出力する。改行を含む値を読むと形が変わる、という報告があるが、確かめていない | `man security` | 公式文書 (改行を含む値は未確認)。4節の63で実測した |
+| 42 | GitHub Appが作ったPull Requestでは、作成者の種類 (`pull_request.user.type`) が `Bot` になる見込みである。保護されたパスのcheckは、これを条件に使う | 広く観測されている振る舞い。公式文書には、Appが作ったPull Requestについての明記を見つけていない。使い捨てのリポジトリで確かめる | 未確認。4節の48で実測した |
+| 43 | `GET /apps/{app_slug}` で、privateなGitHub Appを、Organizationの管理者のtokenで読めるかどうか | 公式文書 (rest/apps/apps) に記載がない。保護されたパスのcheckがAppの名前を使わなくなったので、cuminは、この呼び出しに頼らない | 未確認。4節の47で実測した |
 
 ## 4. Agentの起動の実装で確かめたこと (2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1)
 
@@ -81,3 +81,35 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 49 | `rate_limit_event` には、`rate_limit_info.unifiedWindows` (1を参照) のほかに、`session_id` と `uuid` があり、`rate_limit_info` には `status`、`resetsAt`、`rateLimitType`、overageの項目がある。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。値は記録していない | 実測 |
 | 50 | Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない (32の続き) | #42 の実機の確認。打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 実測 |
 
+## 4. 使い捨てのリポジトリと、Hostで確かめたこと (2026-09-20、2026-09-21)
+
+公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。確度は、断りのない限り実測である。「答えた行」は、この文書の前の節で未確認だった行である。
+
+| # | 制約 | 答えた行 |
+|---|---|---|
+| 44 | GitHub App Manifest flowは、`redirect_url` に `http://127.0.0.1:<port>` を受け付ける。`hook_attributes` のないmanifestも受け付ける | 38 |
+| 45 | Manifest flowでAppが登録されるのは、人が "Create GitHub App" を押したときではなく、codeを交換したとき (`POST /app-manifests/{code}/conversions`) である。交換の前に止まった流れは、Appを残さない | — |
+| 46 | 登録されたAppの権限は、manifestに書いた権限に、GitHubが自分で足す `metadata: read` を加えたものになる | — |
+| 47 | Organizationのownerは、自分のtokenで、privateなAppを `GET /apps/{slug}` で読める。認証なしでは404が返る | 43 |
+| 48 | Appが作ったPull Requestの作成者は、`user.type` が `Bot` になる。APIでも、workflowの中の `github.event.pull_request.user.type` でも同じである | 42 |
+| 49 | Appのloginは `<slug>[bot]` である。メールアドレスが `<botのuser id>+<slug>[bot]@users.noreply.github.com` のコミットは、そのbotのユーザに結び付く | 18 |
+| 50 | Appが、人を@メンションするコメントを投稿できる (201)。通知が届くことは、Ownerが目で確かめる | 19 |
+| 51 | `if` の条件で飛ばされたjobのcheck runは、`status: completed`、`conclusion: skipped` になる。必須のcheckであっても、mergeを止めない。cuminは、必須のcheckの `skipped` を、通ったものとして数える必要がある | 20 |
+| 52 | AppがAPIで作ったPull Requestには、`.github/pull_request_template.md` が使われない。本文を渡さなければ、本文は空になる | 25 |
+| 53 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べて、必須のcheckの一覧が返る | 34 |
+| 54 | 公開リポジトリでは、installation tokenは、Checks、Commit statuses、Actions の権限がなくても、check run、commit status、check runのannotation、jobのログを読める。jobのログは、認証なしでは読めない (403)。jobのIDは、check runの `details_url` の最後の部分である。失敗したGitHub Actionsのcheck runは、`output.title` が空で、内容はannotationに入る | 35 |
+| 55 | installation tokenで、設計メモが使うGraphQLの項目を全て読める。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup` | 36、40 |
+| 56 | `POST /repos/{owner}/{repo}/issues` に `parent_issue_id` を渡すと、Appのtokenでも、1回の呼び出しでsub-issueを作れる。blocked by の追加は201を返す | 11、22 |
+| 57 | Appより狭い権限で発行したtokenは、その外の操作を拒否される (403)。Appが持っていない権限を求めると、発行が422で失敗する | 9、33 |
+| 58 | 公開リポジトリでは、Issuesが読み取りだけのtokenでも、Issueを作り、コメントを書ける (201)。GitHubのアカウントなら誰でもできる操作だからである。Issuesの権限で止められるのは、ラベルの付け替え、本文の編集、Issueを閉じることなどである | — |
+| 59 | レビューの一覧 (`GET /pulls/{n}/reviews`) では、`REQUEST_CHANGES` と `APPROVE` のレビューの `state` が、`CHANGES_REQUESTED` と `APPROVED` になる。`commit_id` は、レビューしたコミットの完全なSHAである | 23 |
+| 60 | Appが作った、本文に `Closes #N` のあるPull Requestを、別のAppがmergeすると、sub-issueである #N が数秒で閉じる | — |
+| 61 | cumin-coreのAppは、今の権限のままで、ImplementerのAppが作ったPull Requestにラベルを付け、外せる | — |
+| 62 | "Restrict updates" のruleがあるブランチへのPull Requestは、mergeの状態が常に `blocked` になる (`mergeable_state`、GraphQLでは `BLOCKED`)。bypass listにいる相手から見ても、必須のcheckが全て通っていても、同じである。それでも、bypass listにいる相手のmergeの呼び出しは成功する (200)。bypass listにいないAppは、405 (`Repository rule violations found`) を受け取る。`gh pr merge` には `--admin` が要る。cuminは、`clean` になるのを待ってはいけない | 14 |
+| 63 | `security find-generic-password -w` は、改行を含む値を16進で返す。1行の値は、そのまま返す | 41 |
+| 64 | `security -i` は、コマンドを標準入力から読む。秘密の値を、引数に出さずに渡せる。失敗したコマンドの終了コードを返す。項目がないときの終了コードは44である。保存に失敗しても、値を出力しない | — |
+| 65 | `security add-generic-password` に、存在しないkeychainのファイルのパスを渡すと、成功を報告して、既定のkeychainに書く | — |
+| 66 | keychainを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧にある全てのkeychainを探す。`security default-keychain` は、既定のkeychainのパスを出力する | — |
+| 67 | launchdが起動したプロセス (ログイン中のユーザのLaunchAgent) は、`security` が作ったKeychainの項目を、確認のダイアログなしで `security` から読める | — |
+| 68 | rulesetのbypassの相手の種類 `RepositoryRole` で、`actor_id: 5` は `admin` のroleである。同じ内容でrulesetを `PUT` しても、履歴の版は増えない。OAuthのtoken (`gh`) でworkflowのファイルをpushするには、`workflow` のscopeが要る。既定のブランチのworkflowを変えたあと、開いているPull Requestを閉じて開き直しても、古いworkflowが動く。"Update branch" か新しいコミットで、新しいworkflowが動く | — |
+| 69 | リポジトリをOrganizationに移しても、Issue、Pull Request、webhook、secret、releaseは保たれ、古いアドレスは転送される | — (公式文書。実測していない) |
