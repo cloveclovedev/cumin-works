@@ -61,8 +61,10 @@ func TestReadQuota_ReadsTheLastEvent(t *testing.T) {
 			t.Errorf("%s = %q, want %q", flag, args[i+1], want)
 		}
 	}
-	if !slices.Contains(args, "--verbose") {
-		t.Errorf("args have no --verbose: %q", args)
+	for _, present := range []string{"--verbose", "--no-session-persistence"} {
+		if !slices.Contains(args, present) {
+			t.Errorf("args have no %s: %q", present, args)
+		}
 	}
 	for _, absent := range []string{"--json-schema", "--permission-mode", "--append-system-prompt", "--resume", "--bare"} {
 		if slices.Contains(args, absent) {

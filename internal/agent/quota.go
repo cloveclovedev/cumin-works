@@ -44,6 +44,9 @@ func (c ClaudeCode) quotaArgs() []string {
 		"--tools", "",
 		// No user-level settings, as in every run (row 6e).
 		"--setting-sources", "project",
+		// No session record on the Host for this throwaway run (CLI
+		// reference: --no-session-persistence).
+		"--no-session-persistence",
 		"--output-format", "stream-json",
 		"--verbose",
 	}
