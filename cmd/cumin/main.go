@@ -8,8 +8,6 @@ import (
 	"io"
 	"os"
 	"strings"
-
-	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
 
 // Exit codes.
@@ -77,33 +75,6 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 func notBuilt(name string, stderr io.Writer) int {
 	fmt.Fprintf(stderr, "cumin %s: not built yet\n", name)
 	return exitFailure
-}
-
-// runRun is `cumin run`. For now it loads the Host settings and stops.
-func runRun(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("cumin run", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	configPath := fs.String("config", "", "path of the Host settings file (default ~/.config/cumin/config.toml)")
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return exitOK
-		}
-		return exitBadUsage
-	}
-
-	path := *configPath
-	if path == "" {
-		var err error
-		if path, err = config.DefaultPath(); err != nil {
-			fmt.Fprintf(stderr, "cumin run: %v\n", err)
-			return exitFailure
-		}
-	}
-	if _, err := config.Load(path); err != nil {
-		fmt.Fprintf(stderr, "cumin run: %v\n", err)
-		return exitFailure
-	}
-	return notBuilt("run", stderr)
 }
 
 // findCommand matches the start of args against the command names.

@@ -46,16 +46,25 @@ go build -o cumin ./cmd/cumin
 
 ## 今できること
 
-`cumin run` は、Hostの設定ファイルを読み込んで検証する。そこから先は、まだ作られていない。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
+`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1) までである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
 
 ```sh
 go run ./cmd/cumin run --config <設定ファイル>
-# 設定が正しいとき:   cumin run: not built yet
-# 設定に問題があるとき: 問題のあるキーの名前が表示される
 ```
 
-どちらの場合も、0以外の終了コードで終わる。`--config` を省くと、`~/.config/cumin/config.toml` を読む。
+起動すると、次の順に動く。
 
-ほかのサブコマンドは、まだ作られていない。実行すると、作られていないことを表示して、0以外の終了コードで終わる。
+1. 設定ファイルを読み込んで検証する。問題があれば、キーの名前を表示して、0以外の終了コードで終わる。
+2. 対象のリポジトリの持ち主ごとに、`github_apps.<owner>.cumin-core` の Client ID を確かめ、Keychain から秘密鍵を読む。Client ID か秘密鍵がなければ、キーの名前を表示して終わる。
+3. 対象のリポジトリごとに、足りないラベル (`cumin/type/requirement`、`cumin/status/*`、`risk/*`) を作る。
+4. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`request_command` を実行する。`request_command` が空なら、依頼をログに残すだけである。
+
+ログは、JSONで標準出力に出る。1回の定期確認ごとに1行 (リポジトリ、GraphQLの `cost` と `remaining`)、着手と依頼のたびに1行が出る。token や鍵は出ない。
+
+止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。動いている定期確認が終わってから、終了コード0で終わる。
+
+`--config` を省くと、`~/.config/cumin/config.toml` を読む。cumin を止めたときに `cumin/status/implementing` のまま残ったIssueは、自動では回収されない。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す ([Issueのラベルと状態遷移](requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
+
+ほかのサブコマンド (`status`、`quota allow`) は、まだ作られていない。実行すると、作られていないことを表示して、0以外の終了コードで終わる。
 
 サブコマンドを作るたびに、このページを更新する。

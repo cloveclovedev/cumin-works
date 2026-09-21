@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -256,5 +257,69 @@ func TestPoll_OneFailedRepositoryDoesNotStopTheOthers(t *testing.T) {
 	}
 	if got := recorded(t, sc.record); !slices.Equal(got, []string{"example-org/example-repo 10"}) {
 		t.Errorf("the command ran with %q, want once for the good repository", got)
+	}
+}
+
+func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
+	sc := newScene(t, 0)
+	service := sc.service()
+	service.PollInterval = 10 * time.Millisecond
+	service.Labels = workflow.RepositoryLabels()
+	// The fake answers the first snapshot read with 500: a failed poll does
+	// not stop the loop.
+	sc.fake.FailNext(http.MethodPost, "/graphql", http.StatusInternalServerError)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- service.Run(ctx) }()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for sc.fake.CountRequests(http.MethodPost, "/graphql") < 3 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Run: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not return within one second after the cancel")
+	}
+
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n < 3 {
+		t.Errorf("%d snapshot reads, want 3 or more", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 11 {
+		t.Errorf("%d labels created, want 11", n)
+	}
+	if got := sc.fake.LabelNames(sc.repo); len(got) != 11 || !slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of the repository = %v", got)
+	}
+	if got := recorded(t, sc.record); !slices.Equal(got, []string{"example-org/example-repo 10"}) {
+		t.Errorf("the command ran with %q, want once", got)
+	}
+	for _, want := range []string{`"msg":"created the label"`, `"msg":"poll failed"`, `"msg":"stopped"`} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
+
+	// A second start creates nothing: every label exists.
+	ctx, cancel = context.WithCancel(context.Background())
+	cancel()
+	second := sc.service()
+	second.PollInterval, second.Labels = service.PollInterval, service.Labels
+	if err := second.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 11 {
+		t.Errorf("%d labels created after the second start, want 11 still", n)
+	}
+}
+
+func TestRun_RejectsAnIntervalOfZero(t *testing.T) {
+	service := newScene(t, 0).service()
+	if err := service.Run(context.Background()); err == nil {
+		t.Error("Run with no interval returned nil")
 	}
 }
