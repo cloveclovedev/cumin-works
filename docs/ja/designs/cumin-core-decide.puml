@@ -22,22 +22,21 @@ partition "判定 (純粋関数。I/Oなし)" {
   - cumin/status/ready が付いている
   - blocked by のIssueが全て閉じている;
   :候補をIssueの番号の昇順に並べる;
-  while (候補が残っていて、空きがある?) is (はい)
-    :先頭の候補を「着手」の一覧に足す;
-    :空きを1減らす;
-  endwhile (いいえ)
+  :先頭から、空きの数だけを「着手」の一覧にする
+  (空きが0なら、一覧は空);
   :「着手」の一覧を返す
   (同じスナップショットからは、いつも同じ一覧);
 }
 partition "適用" {
-  while (まだ適用していない「着手」が一覧にある?) is (はい)
+  while (「着手」の一覧が空?) is (いいえ)
+    :先頭の1つを取り出す;
     :ラベルを cumin/status/implementing に替える;
     if (替えられた?) then (はい)
       :依頼する;
     else (いいえ)
       :ログに残す。次の定期確認でやり直す;
     endif
-  endwhile (いいえ)
+  endwhile (はい)
 }
 stop
 @enduml
