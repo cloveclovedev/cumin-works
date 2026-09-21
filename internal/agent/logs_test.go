@@ -16,11 +16,17 @@ import (
 // record, and not the time.
 
 // logRecord is one record without its time. Attribute keys carry the group
-// as a prefix ("group.key"), and the values are their text.
+// as a prefix ("group.key"), and the values are their text. The attributes
+// are a list, not a map: a record can hold one key more than once, and
+// every value must be seen.
 type logRecord struct {
 	Level   slog.Level
 	Message string
-	Attrs   map[string]string
+	Attrs   []logAttr
+}
+
+type logAttr struct {
+	Key, Value string
 }
 
 // logRecorder collects the records of a test logger.
@@ -45,9 +51,9 @@ func (r *logRecorder) find(text string) (where string, found bool) {
 		if strings.Contains(record.Message, text) {
 			return "the message " + record.Message, true
 		}
-		for key, value := range record.Attrs {
-			if strings.Contains(key, text) || strings.Contains(value, text) {
-				return "the attribute " + key + " of the message " + record.Message, true
+		for _, a := range record.Attrs {
+			if strings.Contains(a.Key, text) || strings.Contains(a.Value, text) {
+				return "the attribute " + a.Key + " of the message " + record.Message, true
 			}
 		}
 	}
@@ -82,8 +88,10 @@ func (r *logRecorder) hasAttr(key, value string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, record := range r.records {
-		if record.Attrs[key] == value {
-			return true
+		for _, a := range record.Attrs {
+			if a.Key == key && a.Value == value {
+				return true
+			}
 		}
 	}
 	return false
@@ -94,8 +102,8 @@ func (r *logRecorder) hasAttr(key, value string) bool {
 type recorderHandler struct {
 	rec    *logRecorder
 	level  slog.Level
-	prefix string            // the open groups, as "a.b."
-	attrs  map[string]string // the attributes of WithAttrs, with their prefix
+	prefix string    // the open groups, as "a.b."
+	attrs  []logAttr // the attributes of WithAttrs, with their prefix
 }
 
 func (h *recorderHandler) Enabled(_ context.Context, level slog.Level) bool {
@@ -103,12 +111,9 @@ func (h *recorderHandler) Enabled(_ context.Context, level slog.Level) bool {
 }
 
 func (h *recorderHandler) Handle(_ context.Context, r slog.Record) error {
-	attrs := make(map[string]string, len(h.attrs)+r.NumAttrs())
-	for key, value := range h.attrs {
-		attrs[key] = value
-	}
+	attrs := append([]logAttr(nil), h.attrs...)
 	r.Attrs(func(a slog.Attr) bool {
-		flattenAttr(attrs, h.prefix, a)
+		attrs = flattenAttr(attrs, h.prefix, a)
 		return true
 	})
 	h.rec.mu.Lock()
@@ -118,12 +123,9 @@ func (h *recorderHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 func (h *recorderHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	next := &recorderHandler{rec: h.rec, level: h.level, prefix: h.prefix, attrs: make(map[string]string, len(h.attrs)+len(attrs))}
-	for key, value := range h.attrs {
-		next.attrs[key] = value
-	}
+	next := &recorderHandler{rec: h.rec, level: h.level, prefix: h.prefix, attrs: append([]logAttr(nil), h.attrs...)}
 	for _, a := range attrs {
-		flattenAttr(next.attrs, h.prefix, a)
+		next.attrs = flattenAttr(next.attrs, h.prefix, a)
 	}
 	return next
 }
@@ -135,21 +137,21 @@ func (h *recorderHandler) WithGroup(name string) slog.Handler {
 	return &recorderHandler{rec: h.rec, level: h.level, prefix: h.prefix + name + ".", attrs: h.attrs}
 }
 
-// flattenAttr puts the attribute into the map. A group becomes one entry
+// flattenAttr appends the attribute to the list. A group becomes one entry
 // for each of its members, with the group name in the key.
-func flattenAttr(into map[string]string, prefix string, a slog.Attr) {
+func flattenAttr(into []logAttr, prefix string, a slog.Attr) []logAttr {
 	value := a.Value.Resolve()
 	if value.Kind() != slog.KindGroup {
-		into[prefix+a.Key] = value.String()
-		return
+		return append(into, logAttr{Key: prefix + a.Key, Value: value.String()})
 	}
 	groupPrefix := prefix
 	if a.Key != "" {
 		groupPrefix += a.Key + "."
 	}
 	for _, member := range value.Group() {
-		flattenAttr(into, groupPrefix, member)
+		into = flattenAttr(into, groupPrefix, member)
 	}
+	return into
 }
 
 // The recorder finds a forbidden value in an attribute, in a group, and in
@@ -159,8 +161,10 @@ func TestLogRecorder_FindsValuesAndIgnoresTheTime(t *testing.T) {
 	logger.Info("usage", "five_hour", slog.GroupValue(slog.Float64("utilization", 0.31)))
 	logger.With("session_id", "abc").WithGroup("run").Info("agent end", "result", "done")
 	logger.Debug("not recorded", "secret", "0.61")
+	// The same key two times: both values are kept.
+	logger.Info("twice", "value", "0.77", "value", "redacted")
 
-	for _, text := range []string{"0.31", "utilization", "five_hour.utilization", "agent end", "abc"} {
+	for _, text := range []string{"0.31", "utilization", "five_hour.utilization", "agent end", "abc", "0.77"} {
 		if _, found := rec.find(text); !found {
 			t.Errorf("find(%q) = false, want true", text)
 		}
