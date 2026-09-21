@@ -12,7 +12,7 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
 
-// The four calls of an agent start (agent-run.md, "1回の依頼の手順") go
+// The four calls of an agent start (agent-run.md, topic "Steps of one request") go
 // through the real client to the fake: the installation, the token, the
 // App, and the bot user.
 func TestFake_ServesTheEndpointsOfAnAgentStart(t *testing.T) {
