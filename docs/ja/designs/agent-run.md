@@ -46,6 +46,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - 依頼のたびに、worktreeを作業ディレクトリにして `claude -p` を起動する。標準入力はnullデバイスにつなぐ。標準入力が開いたまま何も届かないと、CLIは3秒待ってから先に進むためである (実測。Claude Code 2.1.267)。プロセスは、依頼が終わったら終了する。
 - オプション (公式: Run Claude Code programmatically、CLI reference):
   - `--append-system-prompt <roleの指示>`: roleの指示はシステムプロンプトの末尾に足す。Claude Code既定のシステムプロンプト (ツールの使い方、リポジトリの `CLAUDE.md`) はそのまま活かす。
+    - roleの指示は、`roles/<role>.md` に、そのroleがGitHubに書く文章のテンプレートを連結したものである。テンプレートの文面は `templates/` にだけ置き、`roles` パッケージがそこから読む (roleごとの一覧は `roles/roles.go`)。続きの依頼でも同じ指示を渡すので、依頼の種類に依存することは、指示ではなく依頼文に書く。
   - `-p <依頼文>`: 依頼文はプロンプトの引数で渡す。
   - `--setting-sources project`: ユーザアカウントの設定と `CLAUDE.md` を読ませない (実測 6e、27)。
   - `--permission-mode bypassPermissions`: 全てのツールを許可する。headlessの実行では、許可を求められても答える人がいない。`--dangerously-skip-permissions` と同じ意味である (CLI reference)。
