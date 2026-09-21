@@ -345,7 +345,10 @@ func TestLive_AgentEnvironment(t *testing.T) {
 
 	// The cleanup is registered before anything reaches GitHub, so that a
 	// push or a pull request whose response was lost is still removed.
-	t.Cleanup(func() { api.closePullsFromBranch(branch); api.deleteBranch(branch) })
+	// Two cleanups, so that the branch is deleted even when the lookup of
+	// the pull requests fails. Cleanups run last in, first out.
+	t.Cleanup(func() { api.deleteBranch(branch) })
+	t.Cleanup(func() { api.closePullsFromBranch(branch) })
 
 	// A commit and a push with the token, and a pull request with gh.
 	file := filepath.Join(dir, "live", runID+"-agent-env.md")
@@ -542,7 +545,10 @@ func TestLive_AgentRunOnSandbox(t *testing.T) {
 	}
 	api := liveAPI{t: t, base: github.DefaultBaseURL, token: token.Token, owner: sb.owner, repo: sb.repo}
 	base := defaultBranch(t, api)
-	t.Cleanup(func() { api.closePullsFromBranch(branch); api.deleteBranch(branch) })
+	// Two cleanups, so that the branch is deleted even when the lookup of
+	// the pull requests fails. Cleanups run last in, first out.
+	t.Cleanup(func() { api.deleteBranch(branch) })
+	t.Cleanup(func() { api.closePullsFromBranch(branch) })
 
 	file := "live/" + runID + "-claude.md"
 	text := "You are in a git worktree on the branch " + branch + " of the repository " + sb.owner + "/" + sb.repo + ". " +
