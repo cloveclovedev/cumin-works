@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
 
 func TestHelpListsSubcommands(t *testing.T) {
@@ -99,14 +101,71 @@ repositories = ["example-org/example-repo"]
 work_dir = "/tmp/cumin-work"
 `
 
-func TestRunLoadsSettingsBeforeItStops(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	code := runCLI([]string{"run", "--config", writeConfig(t, validConfig)}, &stdout, &stderr)
-	if code == 0 {
-		t.Errorf("exit code = 0, want non-zero")
+// The settings load first. Without the Client ID of the cumin-core App for
+// the owner of a target repository, run stops with the key name, before
+// it touches the Keychain or GitHub.
+func TestRunWithoutCuminCoreClientIDNamesTheKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		config string
+	}{
+		{"no github_apps table", validConfig},
+		{"table without cumin-core", validConfig + "[github_apps.example-org]\nimplementer = \"client-id-implementer\"\n"},
+		{"table of another organization", validConfig + "[github_apps.other-org]\ncumin-core = \"client-id-core\"\n"},
 	}
-	if want := "cumin run: not built yet\n"; stderr.String() != want {
-		t.Errorf("stderr = %q, want %q", stderr.String(), want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := runCLI([]string{"run", "--config", writeConfig(t, tt.config)}, &stdout, &stderr)
+			if code != exitFailure {
+				t.Errorf("exit code = %d, want %d", code, exitFailure)
+			}
+			if !strings.Contains(stderr.String(), "github_apps.example-org.cumin-core") {
+				t.Errorf("stderr does not name the key:\n%s", stderr.String())
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("stdout = %q, want no log line", stdout.String())
+			}
+		})
+	}
+}
+
+func TestRunRejectsAnExtraArgument(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runCLI([]string{"run", "typo", "--config", writeConfig(t, validConfig)}, &stdout, &stderr)
+	if code != exitBadUsage {
+		t.Errorf("exit code = %d, want %d", code, exitBadUsage)
+	}
+	if !strings.Contains(stderr.String(), `unexpected argument "typo"`) {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+func TestCuminCoreClientIDsRejectsTwoTablesOfOneOwner(t *testing.T) {
+	settings := &config.Settings{
+		Repositories: []config.Repository{{Owner: "example-org", Name: "one"}},
+		GitHubApps: map[string]map[string]string{
+			"Example-Org": {config.AppCuminCore: "client-id-a"},
+			"example-org": {config.AppCuminCore: "client-id-b"},
+		},
+	}
+	_, err := cuminCoreClientIDs(settings)
+	if err == nil || !strings.Contains(err.Error(), "Example-Org and example-org") {
+		t.Errorf("err = %v, want the two tables", err)
+	}
+}
+
+func TestCuminCoreClientIDsIgnoresTheCaseOfTheOwner(t *testing.T) {
+	settings := &config.Settings{
+		Repositories: []config.Repository{{Owner: "Example-Org", Name: "one"}, {Owner: "example-org", Name: "two"}},
+		GitHubApps:   map[string]map[string]string{"example-org": {config.AppCuminCore: "client-id-core"}},
+	}
+	ids, err := cuminCoreClientIDs(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids["example-org"] != "client-id-core" {
+		t.Errorf("ids = %v", ids)
 	}
 }
 
@@ -120,7 +179,7 @@ func TestRunWithInvalidSettingsNamesTheKey(t *testing.T) {
 	if !strings.Contains(stderr.String(), "roles.implementer.time_limit:") {
 		t.Errorf("stderr does not name the key:\n%s", stderr.String())
 	}
-	if strings.Contains(stderr.String(), "not built yet") {
+	if strings.Contains(stderr.String(), "github_apps") {
 		t.Errorf("run continued after invalid settings:\n%s", stderr.String())
 	}
 }

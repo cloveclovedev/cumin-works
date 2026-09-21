@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -28,7 +29,55 @@ type Service struct {
 	// RequestCommand is the setting request_command: the executable that a
 	// request runs. Empty runs nothing.
 	RequestCommand string
-	Logger         *slog.Logger
+	// PollInterval is the setting poll_interval.
+	PollInterval time.Duration
+	// Labels are the labels that Run creates in each target repository when
+	// they are missing. RepositoryLabels gives the list of cumin.
+	Labels []github.Label
+	Logger *slog.Logger
+}
+
+// Run creates the missing labels in each target repository, then polls at
+// once and after every PollInterval, until ctx ends. A failed poll is logged,
+// and the loop continues. Run returns nil when ctx ends.
+func (s *Service) Run(ctx context.Context) error {
+	if s.PollInterval <= 0 {
+		return errors.New("workflow: the poll interval must be more than 0")
+	}
+	s.ensureLabels(ctx)
+	ticker := time.NewTicker(s.PollInterval)
+	defer ticker.Stop()
+	for {
+		// Poll logs its own failures. Run keeps the loop.
+		_ = s.Poll(ctx)
+		select {
+		case <-ctx.Done():
+			s.logger().Info("stopped", "reason", context.Cause(ctx).Error())
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+// ensureLabels creates the missing labels of each target repository. A
+// failure is logged; the poll still runs, so that a repository without the
+// labels does not stop the others.
+func (s *Service) ensureLabels(ctx context.Context) {
+	for _, target := range s.Targets {
+		log := s.logger().With("repository", target.Repository.String())
+		token, err := target.Token(ctx)
+		if err != nil {
+			log.Error("create the missing labels: no token", "error", err.Error())
+			continue
+		}
+		created, err := s.GitHub.EnsureLabels(ctx, token, target.Repository.Owner, target.Repository.Name, s.Labels)
+		for _, name := range created {
+			log.Info("created the label", "label", name)
+		}
+		if err != nil {
+			log.Error("create the missing labels failed", "error", err.Error())
+		}
+	}
 }
 
 // Poll does one poll of every target repository: read the snapshot, decide,
