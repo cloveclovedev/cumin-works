@@ -17,7 +17,7 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 - どの条件でAgentを起動するか。[Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) にある。
 - 着手の直前に使用率を読むこと。[cumin本体の設計メモ](cumin-core.md) の「起動前の使用率の確認」にある。
 - roleごとの指示の内容。各roleの要件文書と `roles/` にある。
-- GitHub Appのtokenと、Agentの環境の隔離。要求Issue #8 が、この文書に話題を足す。
+- GitHub Appのtokenの発行と、1回の依頼の手順 (使用率の確認、tokenの発行、起動)。要求Issue #8 の #69 が、この文書に話題を足す。
 
 ## 設計
 
@@ -70,6 +70,19 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 - 異常終了は、種類を付けて返す。プロセスの失敗 (起動できない、終了コードが0でない)、`result` がない、`is_error` が真、結果がスキーマに合わない、実行時間の上限。やり直すかどうかは、cuminのほかの部分が種類で決める。
 - 使用率の数値は、debugのログにだけ出す。infoのログには、セッションの番号、結果、異常終了の種類を出す。標準エラー出力は、debugのログに出す。
 - `rate_limit_event` の形は公式ドキュメントにない (実測 2)。形が変わったら、使用率は「読めなかった」になる。2026-09-20 に、最小の実機実行で、3つのイベントの項目名と `result` の `subtype: "success"` を確かめた。
+
+### Agentの環境
+
+- CLIのプロセスの環境変数は、cuminの環境を引き継がずに、決まった一覧から組み立てる。Hostから渡すのは `PATH`、`HOME`、`TMPDIR`、`LANG`、`LC_ALL`、`LC_CTYPE`、`SHELL`、`USER`、`LOGNAME` だけである。Hostのユーザの `SSH_AUTH_SOCK`、`GH_TOKEN`、`GITHUB_TOKEN`、`ANTHROPIC_API_KEY` は、この一覧にないので届かない。`HOME` を残すのは、Claude Codeがサブスクリプションのログインとセッションの記録を `~/.claude` の下で探すためである。
+- 自動メモリは、環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` で切る。`--setting-sources project` では止まらない (実測 28、公式: Environment variables)。
+- gitには、Hostのユーザとシステムの設定ファイルを読ませない。`GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` で、credential helperとOwnerの作者の設定が見えなくなる (公式: git の環境変数)。`GIT_TERMINAL_PROMPT=0` で、パスワードの入力待ちにしない。`GIT_SSH_COMMAND=false` で、SSHの接続を必ず失敗させる。worktreeのremoteはHTTPSなので、Hostの鍵を使う道がない。
+- roleのtokenは、`GIT_CONFIG_COUNT=1`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>` で渡す (公式: git-config の環境変数)。ファイルにも引数にも書かない。
+- コミットの作者は、roleのAppのbotのユーザにする。`GIT_AUTHOR_NAME` と `GIT_COMMITTER_NAME` は `<slug>[bot]`、`GIT_AUTHOR_EMAIL` と `GIT_COMMITTER_EMAIL` は `<botのuser id>+<slug>[bot]@users.noreply.github.com` である。この形なら、GitHubがコミットをbotのユーザに結び付ける (実測 49)。作者を渡さないと、gitはHostのユーザ名とホスト名から作者を推測してコミットする (2026-09-21に実機で確かめた。Apple Git 2.50.1)。
+- ghには、`GH_TOKEN` でroleのtokenを渡す。ghは、保存されたログインより `GH_TOKEN` を優先する。`GH_CONFIG_DIR` は、依頼のたびに作る空のディレクトリにして、Hostのユーザの設定を読ませない。ghは空のディレクトリで既定の設定 (`git_protocol` は `https`) を使う (2026-09-21に実機で確かめた。gh 2.101.0)。`GH_PROMPT_DISABLED=1` と `GH_NO_UPDATE_NOTIFIER=1` で、入力待ちと更新の通知を止める (公式: gh help environment)。ディレクトリは、依頼が終わったら消す。
+- この環境は、うっかり使うことを防ぐだけである。Agentのプロセスは `HOME` を持つので、意図して `~/.ssh` や `~/.claude` のファイルを読むAgentは止められない。roleごとの制限は、GitHub Appの権限とrulesetで行う。
+- 採らなかった案: `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`。Bashツールの環境から認証情報を取り除く機能だが、Agentはそこでroleのtokenを使う。
+- 採らなかった案: cuminの環境を引き継いで、危ない変数だけを外す。外し忘れた変数がそのまま届く。
+- 採らなかった案: Agent用の別のOSユーザ。要求のbacklogにある。
 
 ### 実行時間の上限
 

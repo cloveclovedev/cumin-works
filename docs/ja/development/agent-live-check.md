@@ -21,7 +21,7 @@ CUMIN_LIVE=1 go test -race -count=1 -run TestLive -v ./internal/agent/
 ```
 
 - `claude` は `PATH` から探す。別の実行ファイルを使うときは、環境変数 `CUMIN_CLAUDE_PATH` にパスを書く。
-- テストは、環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を自分で付ける。自動メモリを切るのは要求Issue #8 の仕事で、それまでの間の手当てである。
+- CLIの環境変数は、接続部分が決まった一覧から組み立てる (設計メモの「Agentの環境」)。テストのプロセスの環境は、`PATH` や `HOME` などの一覧にあるものしか届かない。tokenと作者は、GitHubに触れないので、仮の値である。
 - `CUMIN_LIVE` がなければ、テストは飛ばされる。CIでも飛ばされる。
 - 3回の実行で、1回目と2回目は数十秒、3回目は上限の20秒と猶予の10秒で終わる。
 

@@ -105,13 +105,21 @@ type stream struct {
 }
 
 // Run starts Claude Code in the work directory of the request, waits for
-// the end, and returns the run. An error is always an *AbnormalEnd.
+// the end, and returns the run. An error is an *AbnormalEnd, except for a
+// request without credentials, which is refused before the start.
+//
+// The environment of the CLI is built from a fixed list (env.go). It
+// holds the token of the request for git and gh, and nothing of the Host
+// user's credentials.
 //
 // The run ends at the time limit of the request: SIGTERM goes to the
 // process group of the CLI, and SIGKILL follows after the grace period.
 // The CLI is in its own process group, so the signals reach the commands
 // that the agent started. A cancelled context ends the run the same way.
 func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
+	if err := req.Credentials.validate(); err != nil {
+		return nil, fmt.Errorf("agent run: %w", err)
+	}
 	log := c.logger().With("role", req.Role, "work_dir", req.WorkDir)
 	if req.SessionID == "" {
 		log.Info("agent start", "session", "new", "time_limit", req.TimeLimit)
@@ -126,8 +134,17 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		defer cancel()
 	}
 
+	// gh keeps its configuration and state in this directory during the
+	// run. It starts empty, so gh uses its defaults.
+	ghConfigDir, err := os.MkdirTemp("", "cumin-gh-")
+	if err != nil {
+		return nil, c.fail(log, &AbnormalEnd{Kind: EndProcessFailed, Detail: "create the gh configuration directory", Err: err})
+	}
+	defer os.RemoveAll(ghConfigDir)
+
 	cmd := exec.CommandContext(runCtx, c.Path, c.args(req)...)
 	cmd.Dir = req.WorkDir
+	cmd.Env = environment(req.Credentials, ghConfigDir)
 	// Stdin is nil: the process reads from the null device (os/exec).
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	// When the context is done, Cancel sends SIGTERM to the group. After

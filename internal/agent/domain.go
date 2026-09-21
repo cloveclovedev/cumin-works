@@ -31,6 +31,9 @@ type Request struct {
 	Model string
 	// TimeLimit is the run time limit of the role.
 	TimeLimit time.Duration
+	// Credentials are the token and the commit identity of the role. Run
+	// refuses a request without them.
+	Credentials Credentials
 }
 
 // Result values.
