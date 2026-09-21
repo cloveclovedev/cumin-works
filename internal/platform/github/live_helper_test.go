@@ -160,6 +160,17 @@ func (r response) json(t *testing.T, out any) {
 	}
 }
 
+// mustJSON decodes the answer only when the status is the expected one. An
+// error answer of GitHub is JSON too, so a decode with no status check would
+// read an error as an empty result.
+func (r response) mustJSON(t *testing.T, want int, out any) {
+	t.Helper()
+	if r.status != want {
+		t.Fatalf("status %d, want %d: %s", r.status, want, r.message())
+	}
+	r.json(t, out)
+}
+
 // message returns the "message" field of an error answer of GitHub.
 func (r response) message() string {
 	var body struct {

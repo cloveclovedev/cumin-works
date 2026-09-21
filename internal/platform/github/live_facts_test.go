@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -121,7 +122,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 			Login string `json:"login"`
 		} `json:"user"`
 	}
-	l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/pulls/%d/reviews", pullA.Number), nil).json(t, &reviews)
+	l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/pulls/%d/reviews", pullA.Number), nil).mustJSON(t, http.StatusOK, &reviews)
 	var states []string
 	sameCommit := true
 	for _, review := range reviews {
@@ -160,7 +161,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 		var current struct {
 			State string `json:"state"`
 		}
-		l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/issues/%d", child.Number), nil).json(t, &current)
+		l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/issues/%d", child.Number), nil).mustJSON(t, http.StatusOK, &current)
 		if closed = current.State == "closed"; closed {
 			break
 		}
@@ -184,7 +185,8 @@ func TestLiveGitHubFacts(t *testing.T) {
 	var created struct {
 		Body *string `json:"body"`
 	}
-	l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/pulls/%d", pullB.Number), nil).json(t, &created)
+	// Only a successful read shows the body. An error answer has no body field either.
+	l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/pulls/%d", pullB.Number), nil).mustJSON(t, http.StatusOK, &created)
 	body := "null"
 	if created.Body != nil {
 		body = fmt.Sprintf("%q", *created.Body)
@@ -222,7 +224,7 @@ func (l *live) checkRun(t *testing.T, token, sha, name string) checkRun {
 	var runs struct {
 		CheckRuns []checkRun `json:"check_runs"`
 	}
-	l.api(t, token, http.MethodGet, "/repos/{repo}/commits/"+sha+"/check-runs", nil).json(t, &runs)
+	l.api(t, token, http.MethodGet, "/repos/{repo}/commits/"+sha+"/check-runs", nil).mustJSON(t, http.StatusOK, &runs)
 	for _, run := range runs.CheckRuns {
 		if run.Name == name {
 			return run
@@ -346,7 +348,7 @@ func (l *live) recordNarrowTokenFact(t *testing.T) {
 	var installation struct {
 		ID int64 `json:"id"`
 	}
-	l.api(t, jwt, http.MethodGet, "/repos/{repo}/installation", nil).json(t, &installation)
+	l.api(t, jwt, http.MethodGet, "/repos/{repo}/installation", nil).mustJSON(t, http.StatusOK, &installation)
 	path := fmt.Sprintf("/app/installations/%d/access_tokens", installation.ID)
 
 	narrow := l.api(t, jwt, http.MethodPost, path, map[string]any{"repositories": []string{l.repo}, "permissions": map[string]string{"issues": "read"}})
@@ -396,7 +398,7 @@ func (l *live) recordNarrowTokenFact(t *testing.T) {
 func (l *live) requireFactFixtures(t *testing.T, token string) {
 	t.Helper()
 	for _, path := range []string{".github/workflows/cumin-live-fixture.yml", ".github/pull_request_template.md"} {
-		if resp := l.api(t, token, http.MethodGet, "/repos/{repo}/contents/"+path+"?ref="+l.branch, nil); resp.status != http.StatusOK {
+		if resp := l.api(t, token, http.MethodGet, "/repos/{repo}/contents/"+path+"?ref="+url.QueryEscape(l.branch), nil); resp.status != http.StatusOK {
 			t.Fatalf("the sandbox has no %s on its default branch (status %d). docs/ja/development/live-tests.md says how to add it", path, resp.status)
 		}
 	}
@@ -411,7 +413,7 @@ func (l *live) requireFactFixtures(t *testing.T, token string) {
 // requiredChecks reads the required checks of the default branch.
 func (l *live) requiredChecks(t *testing.T, token string) (int, []string) {
 	t.Helper()
-	resp := l.api(t, token, http.MethodGet, "/repos/{repo}/rules/branches/"+l.branch, nil)
+	resp := l.api(t, token, http.MethodGet, "/repos/{repo}/rules/branches/"+url.PathEscape(l.branch), nil)
 	if resp.status != http.StatusOK {
 		return resp.status, nil
 	}
