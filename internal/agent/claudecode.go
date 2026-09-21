@@ -417,9 +417,18 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 // work directory, or "" when it shows none. Checked: plugins and MCP
 // servers (empty with --setting-sources project, row 27), and
 // memory_paths (absent when auto memory is off, row 28; the live record
-// of #67). The init event lists no instruction files, so instructions
-// cannot be checked here. The reason names the field, not the paths.
+// of #67). plugins and mcp_servers must be present: a record without
+// them cannot confirm that nothing was loaded. The init event lists no
+// instruction files, so instructions cannot be checked here. The reason
+// names the field, not the paths.
 func userContext(e event, workDir string) string {
+	// A missing field cannot confirm that nothing was loaded. Safe side.
+	if e.Plugins == nil {
+		return "the init event has no plugins field"
+	}
+	if e.MCPServers == nil {
+		return "the init event has no mcp_servers field"
+	}
 	if jsonPresent(e.Plugins) {
 		return "the init event lists plugins"
 	}

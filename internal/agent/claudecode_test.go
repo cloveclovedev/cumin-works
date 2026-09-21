@@ -211,7 +211,7 @@ func TestRun_CancelIsTimeLimit(t *testing.T) {
 	// The script prints the init event, then marks that it started. The
 	// child keeps no pipe open, so the read ends when sh is killed.
 	// Children of the real CLI are the subject of #41.
-	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\"}'\n: > " + started + "\nsleep 60 >/dev/null 2>&1\n"
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\",\"plugins\":[],\"mcp_servers\":[]}'\n: > " + started + "\nsleep 60 >/dev/null 2>&1\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -412,11 +412,16 @@ func TestRun_UserContext(t *testing.T) {
 // name a work directory that exists on every machine.
 func TestUserContext_MemoryPathsAgainstTheWorkDirectory(t *testing.T) {
 	work := t.TempDir()
-	inside := event{MemoryPaths: []byte(`{"auto":"` + filepath.Join(work, ".claude", "memory") + `"}`)}
+	// clean is an init event with empty plugins and MCP servers, as a
+	// real one with --setting-sources project.
+	clean := func(memoryPaths string) event {
+		return event{Plugins: []byte(`[]`), MCPServers: []byte(`[]`), MemoryPaths: []byte(memoryPaths)}
+	}
+	inside := clean(`{"auto":"` + filepath.Join(work, ".claude", "memory") + `"}`)
 	if reason := userContext(inside, work); reason != "" {
 		t.Errorf("userContext(inside) = %q, want none", reason)
 	}
-	outside := event{MemoryPaths: []byte(`{"auto":"` + filepath.Join(t.TempDir(), "memory") + `"}`)}
+	outside := clean(`{"auto":"` + filepath.Join(t.TempDir(), "memory") + `"}`)
 	if reason := userContext(outside, work); !strings.Contains(reason, "memory_paths") {
 		t.Errorf("userContext(outside) = %q, want memory_paths", reason)
 	}
@@ -424,9 +429,16 @@ func TestUserContext_MemoryPathsAgainstTheWorkDirectory(t *testing.T) {
 	if reason := userContext(none, work); reason != "" {
 		t.Errorf("userContext(none) = %q, want none", reason)
 	}
+	// A record without the fields cannot confirm that nothing was loaded.
+	if reason := userContext(event{MCPServers: []byte(`[]`)}, work); !strings.Contains(reason, "no plugins field") {
+		t.Errorf("userContext(no plugins field) = %q", reason)
+	}
+	if reason := userContext(event{Plugins: []byte(`[]`)}, work); !strings.Contains(reason, "no mcp_servers field") {
+		t.Errorf("userContext(no mcp_servers field) = %q", reason)
+	}
 	// A present value without a path cannot be checked, so it counts.
 	for _, raw := range []string{`true`, `{"auto":1}`, `[1, 2]`} {
-		unknown := event{MemoryPaths: []byte(raw)}
+		unknown := clean(raw)
 		if reason := userContext(unknown, work); !strings.Contains(reason, "unknown shape") {
 			t.Errorf("userContext(memory_paths %s) = %q, want unknown shape", raw, reason)
 		}

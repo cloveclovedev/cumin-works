@@ -1,3 +1,3 @@
-{"type":"system","subtype":"init","session_id":"11111111-2222-4333-8444-555555555555"}
+{"type":"system","subtype":"init","session_id":"11111111-2222-4333-8444-555555555555","plugins":[],"mcp_servers":[]}
 {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":0.25,"resetsAt":1900000000},"seven_day":{"used":0.5,"resetsAt":null}}},"uuid":"aaaaaaaa-0000-4000-8000-000000000002","session_id":"11111111-2222-4333-8444-555555555555"}
 {"type":"result","subtype":"success","is_error":false,"session_id":"11111111-2222-4333-8444-555555555555","num_turns":1,"structured_output":{"result":"done","summary":"I read the file.","blocked_reason":""}}
