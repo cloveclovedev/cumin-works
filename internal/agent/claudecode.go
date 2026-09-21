@@ -324,6 +324,10 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 		}
 	case "rate_limit_event":
 		log.Debug("agent rate limit event", "fields", fieldNames(line, "rate_limit_info"), "status", statusOf(e.RateLimitInfo))
+		// The last event is the usage. An event that cumin cannot read
+		// replaces an earlier one with "no usage", so that a changed
+		// shape is not hidden by an older value.
+		s.quota = nil
 		if q, ok := quotaOf(e.RateLimitInfo); ok {
 			s.quota = &q
 			log.Debug("agent quota usage",

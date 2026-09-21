@@ -129,6 +129,7 @@ func TestReadQuota_NotRead(t *testing.T) {
 	}{
 		{"no rate_limit_event", "no-quota.jsonl", 0, "no usage"},
 		{"incomplete window", "incomplete-quota.jsonl", 0, "no usage"},
+		{"a complete event, then an unreadable one", "quota-last-unreadable.jsonl", 0, "no usage"},
 		{"exit code 1", "quota-run.jsonl", 1, "exit code 1"},
 	}
 	for _, tt := range tests {
