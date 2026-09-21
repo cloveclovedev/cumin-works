@@ -28,6 +28,10 @@ Claude Code は起動しないので、利用枠は使わない。
 
 ```sh
 CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -run TestLive -v ./internal/platform/github/
+# Agent の環境の確認 (internal/agent。Claude Code は起動しない)
+CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive_AgentEnvironment -v ./internal/agent/
+# 本物の Claude Code に commit、push、Pull Request をさせる確認 (利用枠を使う。Owner が同意したときだけ)
+CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive_AgentRunOnSandbox -v ./internal/agent/
 ```
 
 | 環境変数 | 内容 |
@@ -56,6 +60,8 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | テスト | 内容 |
 |---|---|
 | `TestLiveSetupChecks` | [GitHub Appの登録手順](github-app-setup.md) の「確認すること」。main への push と merge の拒否、cumin-core による merge、Issue と sub-issue と blocked by、approve、表示名、保護されたパスのcheck、作成者の種類 |
+| `TestLive_AgentEnvironment` (`internal/agent`) | cumin が Agent のために組み立てる環境 ([Agentの実行の設計](../designs/agent-run.md) の「Agentの環境」) で、本物の git と gh を動かす。Implementer App の token と bot の身元を `Service` と同じ手順で用意し、sandbox の worktree で `git config --show-origin` に Host のファイルが出ないこと、commit と push と `gh pr create` が通ること、Pull Request の作成者と commit の作者が Implementer App の bot であることを確かめる。Claude Code は起動せず、利用枠を使わない。Pull Request は閉じ、ブランチと worktree は消す |
+| `TestLive_AgentRunOnSandbox` (`internal/agent`) | 本物の Claude Code を `Service.Start` で起動し (使用率の最小実行と Implementer の実行の 2 回、利用枠を使う)、sandbox の worktree でファイルを 1 つ commit して push し、`gh pr create` で Pull Request を開かせる。Pull Request の作成者と commit の作者が Implementer App の bot であることを確かめる。起動の記録の確認 (`init` イベント) も本物の実行で通る。Pull Request は閉じ、ブランチと worktree は消す |
 | `TestLiveGitHubFacts` | cumin の実装が前提にする GitHub の事実。check run と commit status の読み取り、token の絞り込み、飛ばされた必須のcheckと merge、失敗したcheckについて読める範囲、レビューの `state` と `commit_id`、`Closes #N` で sub-issue が閉じること、GraphQL の項目、`rules/branches`、@メンション、Pull Request へのラベル |
 
 ## `cumin run` を sandbox で動かすとき

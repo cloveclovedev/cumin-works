@@ -54,7 +54,7 @@ func TestEnv_OnlyTheFixedListAndTheCredentials(t *testing.T) {
 		}
 	}
 	want = append(want,
-		"CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+		"CLAUDE_CODE_DISABLE_AUTO_MEMORY", "ENABLE_CLAUDEAI_MCP_SERVERS",
 		"GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT", "GIT_SSH_COMMAND",
 		"GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0",
 		"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
@@ -100,6 +100,7 @@ func TestEnv_OnlyTheFixedListAndTheCredentials(t *testing.T) {
 		"GH_PROMPT_DISABLED":              "1",
 		"GH_NO_UPDATE_NOTIFIER":           "1",
 		"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+		"ENABLE_CLAUDEAI_MCP_SERVERS":     "false",
 		"LANG":                            "en_US.UTF-8",
 	} {
 		if env[name] != want {

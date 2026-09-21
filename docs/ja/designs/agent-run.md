@@ -74,6 +74,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 - CLIプロセスの環境変数は、cuminの環境を引き継がず、決まった一覧から組み立てる。Hostから引き継ぐのは `PATH`、`HOME`、`TMPDIR`、`LANG`、`LC_ALL`、`LC_CTYPE`、`SHELL`、`USER`、`LOGNAME` だけである。Hostのユーザが持つ `SSH_AUTH_SOCK`、`GH_TOKEN`、`GITHUB_TOKEN`、`ANTHROPIC_API_KEY` は一覧にないので、Agentには届かない。`HOME` を残すのは、Claude Codeがサブスクリプションのログインとセッションの記録を `~/.claude` の下に探しに行くからである。
 - 自動メモリは、環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` で切る。`--setting-sources project` だけでは止まらない (実測 28、公式: Environment variables)。
+- claude.aiアカウントのコネクタ (アカウントに結び付いたMCPサーバ) は、環境変数 `ENABLE_CLAUDEAI_MCP_SERVERS=false` で切る。ログインしているユーザには既定で読み込まれ、`--setting-sources project` では止まらない (公式: Environment variables)。2026-09-22 のsandboxでの実機実行で、このコネクタが `init` の `mcp_servers` に現れ、起動の記録の確認が実行を止めた。
 - gitには、Hostのユーザとシステムの設定ファイルを読ませない。`GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` を付けると、credential helperとOwnerの作者設定が見えなくなる (公式: git の環境変数)。`GIT_TERMINAL_PROMPT=0` でパスワードの入力待ちを防ぎ、`GIT_SSH_COMMAND=false` でSSH接続を必ず失敗させる。worktreeのremoteはHTTPSなので、Hostの鍵を使う経路はない。
 - roleのtokenは、`GIT_CONFIG_COUNT=1`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>` の3つで渡す (公式: git-config の環境変数)。ファイルにも引数にも書かない。
 - コミットの作者は、roleのAppのbotユーザにする。`GIT_AUTHOR_NAME` と `GIT_COMMITTER_NAME` は `<slug>[bot]`、`GIT_AUTHOR_EMAIL` と `GIT_COMMITTER_EMAIL` は `<botのuser id>+<slug>[bot]@users.noreply.github.com` とする。この形にすると、GitHubがコミットをbotユーザに結び付ける (実測 49)。作者を渡さない場合、gitはHostのユーザ名とホスト名から作者を推測してコミットしてしまう (2026-09-21に実機で確認。Apple Git 2.50.1)。
@@ -90,6 +91,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - `result` のイベントが来るまでに `init` のイベントがなければ、同じ種類の異常終了にする。起動の記録がないと、Agentが何を読んだのか分からない。
 - 確かめられないこと: `init` のイベントには、読み込んだ指示ファイル (`CLAUDE.md`) の一覧がない (2026-09-21 の実機実行で確かめた項目名は `agents`、`mcp_servers`、`plugins`、`skills`、`slash_commands`、`tools` など)。作業場所の外の指示については、`--setting-sources project` に頼る (実測 6e)。`skills` は、組み込みのものとリポジトリのものを名前では区別できないので、確かめない。
 - 使用率を読む最小の実行では、この確認を行わない。作業ディレクトリが空で、結果も使わないからである。
+- 実機で確かめたこと (2026-09-22、Claude Code 2.1.267): sandboxのworktreeで本物のClaude Codeを起動したところ、claude.aiアカウントのコネクタが `mcp_servers` に載り、この確認が起動の直後に実行を止めた。コネクタを環境変数で切ったあとの実行は、「Agentの環境」を参照。
 - 採らなかった案: 異常を見つけても実行を最後まで待ち、それから異常終了にする。利用枠を無駄にするうえ、追えない指示のもとでの作業がGitHubに残りかねない。
 
 ### 実行時間の上限
