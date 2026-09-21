@@ -172,6 +172,10 @@ const (
 	// EndInvalidResult: the result does not match ResultSchema, or is
 	// "blocked" without a reason.
 	EndInvalidResult
+	// EndUserContext: the init event showed context from outside the
+	// work directory (plugins, MCP servers, memory), or there was no init
+	// event. cumin stopped the run before the agent worked.
+	EndUserContext
 )
 
 func (k EndKind) String() string {
@@ -186,6 +190,8 @@ func (k EndKind) String() string {
 		return "error reported by the CLI"
 	case EndInvalidResult:
 		return "invalid result"
+	case EndUserContext:
+		return "user-level context"
 	}
 	return fmt.Sprintf("EndKind(%d)", int(k))
 }

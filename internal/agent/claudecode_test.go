@@ -325,13 +325,21 @@ func TestRun_ResumeAndModel(t *testing.T) {
 // prologue is shell text that runs first (for example a trap).
 func neverEndingCLI(t *testing.T, prologue string) (path, childPID string) {
 	t.Helper()
+	return neverEndingCLIWithInit(t, prologue, `{"type":"system","subtype":"init","session_id":"`+fixtureSessionID+`","plugins":[],"mcp_servers":[]}`)
+}
+
+// neverEndingCLIWithInit is neverEndingCLI with the given init line.
+func neverEndingCLIWithInit(t *testing.T, prologue, initLine string) (path, childPID string) {
+	t.Helper()
 	dir := t.TempDir()
 	path = filepath.Join(dir, "fake-claude")
 	childPID = filepath.Join(dir, "child.pid")
+	// The child starts before the init line, so that a run that is
+	// stopped at the init event has a recorded child to check.
 	script := "#!/bin/sh\n" + prologue + "\n" +
-		"printf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\"}'\n" +
 		"sleep 300 &\n" +
 		"echo $! > " + childPID + "\n" +
+		"printf '%s\\n' '" + initLine + "'\n" +
 		"wait\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -360,6 +368,91 @@ func processGone(t *testing.T, pidFile string) bool {
 	}
 	syscall.Kill(pid, syscall.SIGKILL) // do not leave it behind
 	return false
+}
+
+// The tests below cover the check of the init event (#68): user-level
+// context ends the run at once, with the kind "user-level context".
+
+func TestRun_UserContext(t *testing.T) {
+	tests := []struct {
+		name       string
+		fixture    string
+		wantDetail string
+	}{
+		{"a user-level plugin", "init-plugin.jsonl", "plugins"},
+		{"a user-level MCP server", "init-mcp.jsonl", "MCP servers"},
+		{"an auto memory path", "init-memory.jsonl", "memory_paths"},
+		{"no init event", "no-init.jsonl", "no init event"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, _ := fakeCLI(t, tt.fixture, 0)
+			var logs bytes.Buffer
+			c := ClaudeCode{Path: path, Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))}
+			run, err := c.Run(context.Background(), request(t))
+			if err == nil {
+				t.Fatalf("Run = %+v, want an abnormal end", run)
+			}
+			end := abnormalEnd(t, err)
+			if end.Kind != EndUserContext {
+				t.Errorf("Kind = %s, want %s", end.Kind, EndUserContext)
+			}
+			if !strings.Contains(end.Detail, tt.wantDetail) {
+				t.Errorf("Detail = %q, want it to contain %q", end.Detail, tt.wantDetail)
+			}
+			if strings.Contains(end.Detail, "/example/home") || strings.Contains(logs.String(), "/example/home") {
+				t.Errorf("the detail or the log names a path:\n%s", logs.String())
+			}
+		})
+	}
+}
+
+// memory_paths inside the work directory is not user-level context;
+// outside it is. The rule is checked directly, because a fixture cannot
+// name a work directory that exists on every machine.
+func TestUserContext_MemoryPathsAgainstTheWorkDirectory(t *testing.T) {
+	work := t.TempDir()
+	inside := event{MemoryPaths: []byte(`{"auto":"` + filepath.Join(work, ".claude", "memory") + `"}`)}
+	if reason := userContext(inside, work); reason != "" {
+		t.Errorf("userContext(inside) = %q, want none", reason)
+	}
+	outside := event{MemoryPaths: []byte(`{"auto":"` + filepath.Join(t.TempDir(), "memory") + `"}`)}
+	if reason := userContext(outside, work); !strings.Contains(reason, "memory_paths") {
+		t.Errorf("userContext(outside) = %q, want memory_paths", reason)
+	}
+	none := event{Plugins: []byte(`[]`), MCPServers: []byte(`[]`), MemoryPaths: []byte(`null`)}
+	if reason := userContext(none, work); reason != "" {
+		t.Errorf("userContext(none) = %q, want none", reason)
+	}
+}
+
+// A CLI that shows a plugin in its init event and then keeps running is
+// stopped at once, and its child is gone.
+func TestRun_UserContextStopsTheRunAtOnce(t *testing.T) {
+	init := `{"type":"system","subtype":"init","session_id":"` + fixtureSessionID + `","plugins":[{"name":"example-plugin"}],"mcp_servers":[]}`
+	path, childPID := neverEndingCLIWithInit(t, "", init)
+	c := quiet(path)
+	c.Grace = time.Second
+	req := request(t)
+	req.TimeLimit = 30 * time.Second
+
+	start := time.Now()
+	_, err := c.Run(context.Background(), req)
+	elapsed := time.Since(start)
+
+	end := abnormalEnd(t, err)
+	if end.Kind != EndUserContext || !strings.Contains(end.Detail, "plugins") {
+		t.Errorf("AbnormalEnd = %+v, want %s about plugins", end, EndUserContext)
+	}
+	if end.SessionID != fixtureSessionID {
+		t.Errorf("SessionID = %q, want the one from the init event", end.SessionID)
+	}
+	if elapsed > c.Grace+3*time.Second {
+		t.Errorf("Run took %v, want a stop well before the time limit", elapsed)
+	}
+	if !processGone(t, childPID) {
+		t.Error("the child of the fake CLI is still alive")
+	}
 }
 
 // A command that the agent left in the background, with its stdio
