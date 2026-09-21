@@ -307,9 +307,23 @@ func (r *streamReader) line(line []byte) {
 }
 
 func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets []string) {
+	// The type first, so that an event that does not decode is still
+	// known by its type.
+	var envelope struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(line, &envelope); err != nil {
+		log.Debug("agent output is not JSON", "text", truncate(redact(string(line), secrets), 200))
+		return
+	}
 	var e event
 	if err := json.Unmarshal(line, &e); err != nil {
-		log.Debug("agent output is not JSON", "text", truncate(redact(string(line), secrets), 200))
+		if envelope.Type == "rate_limit_event" {
+			// A rate limit event of a changed shape: no usage, not the
+			// earlier value.
+			s.quota = nil
+		}
+		log.Debug("agent event does not decode", "type", envelope.Type, "err", err.Error())
 		return
 	}
 	if e.SessionID != "" {
