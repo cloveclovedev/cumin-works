@@ -57,10 +57,13 @@ func SkillPath(dir, name string) string {
 	return filepath.Join(dir, ".claude", "skills", name, "SKILL.md")
 }
 
-// WriteSkills writes every skill under dir, and overwrites the files that
-// exist, so that they always match the binary. dir is the directory to
-// pass with --add-dir.
+// WriteSkills removes the skills under dir and writes the current ones,
+// so that the directory always matches the binary, also after a skill was
+// renamed or removed. dir is the directory to pass with --add-dir.
 func WriteSkills(dir string) error {
+	if err := os.RemoveAll(filepath.Join(dir, ".claude", "skills")); err != nil {
+		return fmt.Errorf("write the skills: %w", err)
+	}
 	for _, skill := range skills {
 		body, err := templates.Read(skill.Template)
 		if err != nil {
