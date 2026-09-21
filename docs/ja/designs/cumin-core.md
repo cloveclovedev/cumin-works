@@ -131,6 +131,7 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 - 採らなかった案: `/usage` の文章を解析する方法。人間向けの形式は、予告なく変わりうる。使用率を返す内部の endpoint は、この文章を出すときにも呼ばれていて、上限に当たる報告がある。
 - 採らなかった案: Claude Codeが `/usage` のために呼ぶ endpoint を、cuminが直接呼ぶ方法。公式ドキュメントになく、OwnerのOAuthのtokenをKeychainから読む必要がある。cuminはOwnerの認証情報を使わない。
 - `rate_limit_event` の項目の一部は Agent SDK の文書にある (`status`、`utilization`、`resetsAt`、`rateLimitType`)。cuminが読む `unifiedWindows` は文書にない (実測 2)。イベントがない、または形が違うときは「読み取れなかった」として、理由を付けたエラーを返す。cuminのほかの部分は、着手せずにOwnerに通知する (Q1)。安全な側に倒す。
+- 2026-09-21 の最小の実機実行 (Claude Code 2.1.267) では、`rate_limit_info` に `status`、`resetsAt`、`rateLimitType`、`unifiedWindows` と overage の3項目があり、`status` は `allowed` だった。枠の上限に当たったときの値は、意図して当てられないので未確認である (「まだ決めていないこと」)。
 - この確認は Claude Code に固有なので、Claude Code の接続部分 (`internal/agent`) に置く。`internal/quota` が受け取るのは、枠ごとの使用率とリセット時刻だけである。
 
 ## まだ決めていないこと
@@ -138,7 +139,7 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 | 決める、または確かめること | どこで |
 |---|---|
 | 公開リポジトリで、checkの結果を読むのに要る権限 (実測 35) | #5 |
-| 枠の上限に当たったときの、headless実行の終わり方 (実測 6) | 起動前の使用率の確認を作る要求Issue |
+| 枠の上限に当たったときの、headless実行の終わり方と `rate_limit_info.status` の値 (実測 6)。意図して上限に当てられないので、実際に当たったときの記録で埋める | 上限に当たった実行の記録が残ったとき |
 
 ## 後回しにしたこと
 
