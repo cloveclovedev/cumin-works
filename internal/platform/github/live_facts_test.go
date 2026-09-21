@@ -76,28 +76,11 @@ func TestLiveGitHubFacts(t *testing.T) {
 	}
 
 	// Fact 8: the rules of the default branch.
-	rules := l.api(t, core, http.MethodGet, "/repos/{repo}/rules/branches/"+l.branch, nil)
-	var branchRules []struct {
-		Type       string `json:"type"`
-		Parameters struct {
-			RequiredStatusChecks []struct {
-				Context string `json:"context"`
-			} `json:"required_status_checks"`
-		} `json:"parameters"`
-	}
-	var required []string
-	if rules.status == http.StatusOK {
-		rules.json(t, &branchRules)
-		for _, rule := range branchRules {
-			for _, check := range rule.Parameters.RequiredStatusChecks {
-				required = append(required, check.Context)
-			}
-		}
-	}
+	rulesStatus, required := l.requiredChecks(t, core)
 	l.record("8", "An installation token calls `GET /repos/{owner}/{repo}/rules/branches/{branch}` (row 34)", "Status 200 with the required checks",
-		fmt.Sprintf("Status %d. Required checks: `%s`", rules.status, strings.Join(required, "`, `")))
-	if rules.status != http.StatusOK || !contains(required, protectedPathsCheck) || !contains(required, skippedForBotsCheck) {
-		t.Errorf("fact 8: status %d, required checks %v", rules.status, required)
+		fmt.Sprintf("Status %d. Required checks: `%s`", rulesStatus, strings.Join(required, "`, `")))
+	if rulesStatus != http.StatusOK || !contains(required, protectedPathsCheck) || !contains(required, skippedForBotsCheck) {
+		t.Errorf("fact 8: status %d, required checks %v", rulesStatus, required)
 	}
 
 	// Fact 11: the cumin-core App labels a pull request of the Implementer App.
@@ -145,6 +128,10 @@ func TestLiveGitHubFacts(t *testing.T) {
 	// Fact 10: a mention by an App. The Owner looks at the notifications.
 	if login := os.Getenv("CUMIN_LIVE_MENTION"); login != "" {
 		resp := l.api(t, core, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/comments", pullA.Number), map[string]any{"body": "@" + login + " a live check of cumin-works: does this mention send a notification?"})
+		if resp.status != http.StatusCreated {
+			// With no comment there is no notification to confirm.
+			t.Errorf("fact 10: the comment was not created: status %d: %s", resp.status, resp.message())
+		}
 		l.record("10", "A comment of the cumin-core App that mentions a person (row 19)", "The person gets a notification", fmt.Sprintf("Comment posted: status %d. The Owner confirms the notification by hand", resp.status))
 	} else {
 		l.record("10", "A comment of the cumin-core App that mentions a person (row 19)", "The person gets a notification", "Not run: `CUMIN_LIVE_MENTION` is not set")
@@ -382,8 +369,10 @@ func (l *live) recordNarrowTokenFact(t *testing.T) {
 	}
 }
 
-// requireFactFixtures stops the test when the sandbox does not have the
-// fixture workflow, the template, or the required check.
+// requireFactFixtures stops the test, before it creates anything, when the
+// sandbox does not have the fixture workflow, the template, or the required
+// checks. Without the required check, fact 3 would record a merge that says
+// nothing about a required check.
 func (l *live) requireFactFixtures(t *testing.T, token string) {
 	t.Helper()
 	for _, path := range []string{".github/workflows/cumin-live-fixture.yml", ".github/pull_request_template.md"} {
@@ -391,6 +380,36 @@ func (l *live) requireFactFixtures(t *testing.T, token string) {
 			t.Fatalf("the sandbox has no %s on its default branch (status %d). docs/ja/development/live-tests.md says how to add it", path, resp.status)
 		}
 	}
+	status, required := l.requiredChecks(t, token)
+	for _, check := range []string{protectedPathsCheck, skippedForBotsCheck} {
+		if status != http.StatusOK || !contains(required, check) {
+			t.Fatalf("the default branch of the sandbox does not require the check %s (status %d, required checks %v). Run scripts/setup-repo.sh with --required-check %s", check, status, required, skippedForBotsCheck)
+		}
+	}
+}
+
+// requiredChecks reads the required checks of the default branch.
+func (l *live) requiredChecks(t *testing.T, token string) (int, []string) {
+	t.Helper()
+	resp := l.api(t, token, http.MethodGet, "/repos/{repo}/rules/branches/"+l.branch, nil)
+	if resp.status != http.StatusOK {
+		return resp.status, nil
+	}
+	var rules []struct {
+		Parameters struct {
+			RequiredStatusChecks []struct {
+				Context string `json:"context"`
+			} `json:"required_status_checks"`
+		} `json:"parameters"`
+	}
+	resp.json(t, &rules)
+	var required []string
+	for _, rule := range rules {
+		for _, check := range rule.Parameters.RequiredStatusChecks {
+			required = append(required, check.Context)
+		}
+	}
+	return resp.status, required
 }
 
 func (l *live) openPullWithBody(t *testing.T, token, branch, title, body string) pullRequest {
