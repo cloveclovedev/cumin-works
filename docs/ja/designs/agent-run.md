@@ -62,7 +62,7 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 ### 出力の読み取り
 
 - 標準出力の1行を1つのJSONとして読み、`type` で見分ける。読むのは3種類だけで、ほかは飛ばす。
-  - `system` の `init`: セッションの番号 (`session_id`)。
+  - `system` の `init`: セッションの番号 (`session_id`) と、起動の記録の確認に使う項目 (「起動の記録の確認」)。
   - `rate_limit_event`: `rate_limit_info.unifiedWindows` の `five_hour` と `seven_day` の、`utilization` (0から1) と `resetsAt` (Unix秒) (実測 1)。1回の実行に複数回出るので、最後のものを使用率とする。
   - `result`: `session_id`、`subtype`、`is_error`、`structured_output` (実測 26)。
 - 正常終了は、終了コードが0で、`result` があり、`is_error` が偽で、`structured_output` がスキーマに合い、`blocked` なら理由が空でないときである。cuminのほかの部分には、セッションの番号、結果、使用率を返す。
@@ -83,6 +83,15 @@ Agentを1回起動して、結果を受け取るまでの、Hostの側の設計�
 - 採らなかった案: `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`。Bashツールの環境から認証情報を取り除く機能だが、Agentはそこでroleのtokenを使う。
 - 採らなかった案: cuminの環境を引き継いで、危ない変数だけを外す。外し忘れた変数がそのまま届く。
 - 採らなかった案: Agent用の別のOSユーザ。要求のbacklogにある。
+
+### 起動の記録の確認
+
+- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことを確かめる。確かめる項目は、`plugins` と `mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (あって、作業場所の外のパスを指すか、パスを読み取れない形なら異常) である。項目がないことを異常にするのは、Claude Codeが項目の名前を変えたときに、確かめずに通さないためである。`--setting-sources project` を付けると `plugins` と `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 28。2026-09-21 の最小の実機実行でも同じ)。
+- 当たったら、実行時間の上限と同じ打ち切り (プロセスグループにSIGTERM、猶予のあとSIGKILL) で、その場で止める。Agentが、追えない指示のもとで作業を始めないためである。異常終了の種類は「user-level context」で、理由には項目の名前だけを書き、パスは書かない。
+- `result` のイベントまでに `init` のイベントがなければ、同じ種類の異常終了にする。起動の記録がないと、Agentが何を読んだのか分からない。
+- 確かめられないこと: `init` のイベントには、読み込んだ指示のファイル (`CLAUDE.md`) の一覧がない (2026-09-21 の実機実行の項目名: `agents`、`mcp_servers`、`plugins`、`skills`、`slash_commands`、`tools` など)。作業場所の外の指示は、`--setting-sources project` に頼る (実測 6e)。`skills` は組み込みのものとリポジトリのものを名前で区別できないので、確かめない。
+- 使用率を読む最小の実行では、この確認をしない。作業ディレクトリが空で、結果も使わないためである。
+- 採らなかった案: 異常を見つけても、実行を最後まで待ってから異常終了にする。利用枠を無駄にし、追えない指示のもとでの作業がGitHubに残りうる。
 
 ### 実行時間の上限
 

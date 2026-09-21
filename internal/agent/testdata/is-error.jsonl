@@ -1,2 +1,2 @@
-{"type":"system","subtype":"init","session_id":"11111111-2222-4333-8444-555555555555"}
+{"type":"system","subtype":"init","session_id":"11111111-2222-4333-8444-555555555555","plugins":[],"mcp_servers":[]}
 {"type":"result","subtype":"error_during_execution","is_error":true,"session_id":"11111111-2222-4333-8444-555555555555","num_turns":1,"errors":["example error"]}

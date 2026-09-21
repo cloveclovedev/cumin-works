@@ -17,7 +17,9 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -80,6 +82,11 @@ type event struct {
 	StructuredOutput json.RawMessage `json:"structured_output"`
 	// Field of the rate_limit_event.
 	RateLimitInfo *rateLimitInfo `json:"rate_limit_info"`
+	// Fields of the init event that show user-level context
+	// (measured-constraints.md rows 27, 28; the live record of #67).
+	Plugins     json.RawMessage `json:"plugins"`
+	MCPServers  json.RawMessage `json:"mcp_servers"`
+	MemoryPaths json.RawMessage `json:"memory_paths"`
 }
 
 type rateLimitInfo struct {
@@ -106,6 +113,12 @@ type stream struct {
 	sessionID string
 	result    *event
 	quota     *QuotaUsage
+	// init is true after the init event.
+	init bool
+	// userContext is the reason when the init event showed user-level
+	// context. The run is then stopped at once.
+	userContext string
+	initEvent   event
 }
 
 // Run starts Claude Code in the work directory of the request, waits for
@@ -143,11 +156,12 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	// environment, an error with the authorization header). It is
 	// redacted before any log.
 	ex := c.execute(ctx, log, execution{
-		dir:     req.WorkDir,
-		env:     environment(req.Credentials, ghConfigDir),
-		args:    c.args(req),
-		limit:   req.TimeLimit,
-		secrets: req.Credentials.secrets(),
+		dir:       req.WorkDir,
+		env:       environment(req.Credentials, ghConfigDir),
+		args:      c.args(req),
+		limit:     req.TimeLimit,
+		secrets:   req.Credentials.secrets(),
+		checkInit: true,
 	})
 	if ex.startErr != nil {
 		if ex.limitErr != nil {
@@ -160,6 +174,9 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	end := &AbnormalEnd{SessionID: s.sessionID, PID: ex.pid}
 	var exitErr *exec.ExitError
 	switch {
+	case s.userContext != "":
+		// The run was stopped by the reader, before the agent worked.
+		end.Kind, end.Detail = EndUserContext, s.userContext
 	case ex.limitErr != nil && ctx.Err() == nil:
 		end.Kind, end.Detail, end.Err = EndTimeLimit, fmt.Sprintf("the time limit of %s passed", req.TimeLimit), ex.limitErr
 	case ex.limitErr != nil:
@@ -168,6 +185,10 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 		end.Kind, end.Detail = EndProcessFailed, fmt.Sprintf("exit code %d", exitErr.ExitCode())
 	case ex.waitErr != nil:
 		end.Kind, end.Detail, end.Err = EndProcessFailed, "wait", ex.waitErr
+	case !s.init:
+		// Without the record of the start, cumin cannot know what the
+		// agent read.
+		end.Kind, end.Detail = EndUserContext, noInitEvent
 	case s.result == nil:
 		end.Kind, end.Detail = EndNoResult, "the run ended without a result event"
 	case s.result.IsError:
@@ -201,6 +222,9 @@ type execution struct {
 	args    []string
 	limit   time.Duration
 	secrets []string
+	// checkInit stops the run when the init event shows user-level
+	// context: plugins, MCP servers, or memory outside dir.
+	checkInit bool
 
 	// pid is the process of the CLI. 0 when it did not start.
 	pid int
@@ -222,6 +246,10 @@ func (c ClaudeCode) execute(ctx context.Context, log *slog.Logger, ex execution)
 		runCtx, cancel = context.WithTimeout(ctx, ex.limit)
 		defer cancel()
 	}
+	// The reader stops the run through this cancel, with the same
+	// signals as the time limit.
+	runCtx, stop := context.WithCancel(runCtx)
+	defer stop()
 
 	cmd := exec.CommandContext(runCtx, c.Path, ex.args...)
 	cmd.Dir = ex.dir
@@ -234,6 +262,9 @@ func (c ClaudeCode) execute(ctx context.Context, log *slog.Logger, ex execution)
 	cmd.Cancel = func() error { return signalGroup(cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = c.grace()
 	reader := &streamReader{c: c, log: log, secrets: ex.secrets}
+	if ex.checkInit {
+		reader.workDir, reader.stop = ex.dir, stop
+	}
 	cmd.Stdout = reader
 	var stderr bytes.Buffer
 	cmd.Stderr = &limitedWriter{w: &stderr, limit: 64 << 10}
@@ -276,6 +307,10 @@ type streamReader struct {
 	c       ClaudeCode
 	log     *slog.Logger
 	secrets []string
+	// workDir and stop are set when the init event is checked. stop ends
+	// the run when the event shows user-level context.
+	workDir string
+	stop    context.CancelFunc
 	s       stream
 	buf     []byte
 }
@@ -304,7 +339,31 @@ func (r *streamReader) line(line []byte) {
 	}
 	// A copy, because buf is reused.
 	r.c.readLine(r.log, &r.s, append([]byte(nil), line...), r.secrets)
+	if r.stop == nil {
+		return
+	}
+	// The check runs once: at the init event, or at a result that came
+	// without one. Either way the run is stopped at once when it fails.
+	var reason string
+	switch {
+	case r.s.init:
+		reason = userContext(r.s.initEvent, r.workDir)
+	case r.s.result != nil:
+		reason = noInitEvent
+	default:
+		return
+	}
+	stop := r.stop
+	r.stop = nil
+	if reason != "" {
+		r.s.userContext = reason
+		r.log.Info("agent start record shows user-level context; the run is stopped", "reason", reason)
+		stop()
+	}
 }
+
+// noInitEvent is the reason of a run whose record of the start is missing.
+const noInitEvent = "the run had no init event"
 
 func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets []string) {
 	// The type first, so that an event that does not decode is still
@@ -335,6 +394,7 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 			// The names of the fields, not the values: the record of a
 			// live run uses them, and a changed shape shows here first.
 			log.Debug("agent init event", "fields", fieldNames(line, ""))
+			s.init, s.initEvent = true, e
 		}
 	case "rate_limit_event":
 		log.Debug("agent rate limit event", "fields", fieldNames(line, "rate_limit_info"), "status", statusOf(e.RateLimitInfo))
@@ -350,6 +410,119 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 		}
 	case "result":
 		s.result = &e
+	}
+}
+
+// userContext reports why the init event shows context from outside the
+// work directory, or "" when it shows none. Checked: plugins and MCP
+// servers (empty with --setting-sources project, row 27), and
+// memory_paths (absent when auto memory is off, row 28; the live record
+// of #67). plugins and mcp_servers must be present: a record without
+// them cannot confirm that nothing was loaded. The init event lists no
+// instruction files, so instructions cannot be checked here. The reason
+// names the field, not the paths.
+func userContext(e event, workDir string) string {
+	// A missing field cannot confirm that nothing was loaded. Safe side.
+	if e.Plugins == nil {
+		return "the init event has no plugins field"
+	}
+	if e.MCPServers == nil {
+		return "the init event has no mcp_servers field"
+	}
+	if jsonPresent(e.Plugins) {
+		return "the init event lists plugins"
+	}
+	if jsonPresent(e.MCPServers) {
+		return "the init event lists MCP servers"
+	}
+	if jsonPresent(e.MemoryPaths) {
+		paths := jsonStrings(e.MemoryPaths)
+		if len(paths) == 0 {
+			// A shape without paths cannot be checked. Safe side.
+			return "the init event has memory_paths of an unknown shape"
+		}
+		for _, path := range paths {
+			if !underDir(path, workDir) {
+				return "the init event has memory_paths outside the work directory"
+			}
+		}
+	}
+	return ""
+}
+
+// jsonPresent reports whether raw is a JSON value other than null, an
+// empty array, or an empty object. A value of an unknown shape counts as
+// present, on the safe side.
+func jsonPresent(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return false
+	}
+	var array []json.RawMessage
+	if err := json.Unmarshal(trimmed, &array); err == nil {
+		return len(array) > 0
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &object); err == nil {
+		return len(object) > 0
+	}
+	return true
+}
+
+// jsonStrings collects every string in raw, at any depth.
+func jsonStrings(raw json.RawMessage) []string {
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	var out []string
+	var walk func(v any)
+	walk = func(v any) {
+		switch v := v.(type) {
+		case string:
+			out = append(out, v)
+		case []any:
+			for _, item := range v {
+				walk(item)
+			}
+		case map[string]any:
+			for _, item := range v {
+				walk(item)
+			}
+		}
+	}
+	walk(value)
+	return out
+}
+
+// underDir reports whether path is dir or inside dir, after symbolic
+// links are resolved.
+func underDir(path, dir string) bool {
+	path, dir = resolvePath(path), resolvePath(dir)
+	return path == dir || strings.HasPrefix(path, dir+string(filepath.Separator))
+}
+
+// resolvePath makes p absolute and resolves the symbolic links of its
+// longest existing ancestor. A path that does not exist yet (a memory
+// directory that is not created) is resolved through its parents, so that
+// it compares with an existing directory on a system where a temporary
+// directory is behind a link.
+func resolvePath(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	p = filepath.Clean(p)
+	rest := ""
+	for cur := p; ; {
+		if real, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(real, rest)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
 	}
 }
 

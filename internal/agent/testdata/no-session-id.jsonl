@@ -1,2 +1,2 @@
-{"type":"system","subtype":"init"}
+{"type":"system","subtype":"init","plugins":[],"mcp_servers":[]}
 {"type":"result","subtype":"success","is_error":false,"num_turns":1,"structured_output":{"result":"done","summary":"I read the file.","blocked_reason":""}}
