@@ -15,21 +15,22 @@ partition "判定 (純粋関数。I/Oなし)" {
   - cumin/status/planning の要求Issue
   - implementing、awaiting-checks、reviewing の
     開いているsub-issue;
-  :空き = max_issues_in_progress - 進行中;
+  :空き = max_issues_in_progress - 進行中
+  (この定期確認の中だけの数。持ち越さない);
   :I1の候補を集める
   - 開いているsub-issue
   - cumin/status/ready が付いている
   - blocked by のIssueが全て閉じている;
   :候補をIssueの番号の昇順に並べる;
   while (候補が残っていて、空きがある?) is (はい)
-    :動作「着手」を列に足す;
+    :先頭の候補を「着手」の一覧に足す;
     :空きを1減らす;
   endwhile (いいえ)
-  :動作の列を返す
-  (同じスナップショットからは、いつも同じ列);
+  :「着手」の一覧を返す
+  (同じスナップショットからは、いつも同じ一覧);
 }
 partition "適用" {
-  while (動作が残っている?) is (はい)
+  while (まだ適用していない「着手」が一覧にある?) is (はい)
     :ラベルを cumin/status/implementing に替える;
     if (替えられた?) then (はい)
       :依頼する;
