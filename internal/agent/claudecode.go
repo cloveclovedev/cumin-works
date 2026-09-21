@@ -171,10 +171,11 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 
 	waitErr := cmd.Wait()
 	reader.flush()
-	if runCtx.Err() != nil {
-		// The grace period is over. Nothing of the group may stay alive.
-		_ = signalGroup(pid, syscall.SIGKILL)
-	}
+	// Nothing of the group may stay alive after the run, whatever its
+	// end: a command that the agent left in the background would keep
+	// the token in its environment. After a time limit, the grace period
+	// is over at this point.
+	_ = signalGroup(pid, syscall.SIGKILL)
 	if stderr.Len() > 0 {
 		log.Debug("agent stderr", "text", redact(stderr.String(), secrets))
 	}

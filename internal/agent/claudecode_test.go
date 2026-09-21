@@ -362,6 +362,32 @@ func processGone(t *testing.T, pidFile string) bool {
 	return false
 }
 
+// A command that the agent left in the background, with its stdio
+// redirected, does not survive a normal end. It holds the token.
+func TestRun_NormalEndLeavesNoChild(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fake-claude")
+	childPID := filepath.Join(dir, "child.pid")
+	fixture, err := filepath.Abs(filepath.Join("testdata", "done.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nsleep 300 >/dev/null 2>&1 &\necho $! > " + childPID + "\ncat " + fixture + "\nexit 0\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run, err := quiet(path).Run(context.Background(), request(t))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if run.Result.Result != ResultDone {
+		t.Errorf("Result = %+v", run.Result)
+	}
+	if !processGone(t, childPID) {
+		t.Error("the background child of the fake CLI is still alive after a normal end")
+	}
+}
+
 func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
 	path, childPID := neverEndingCLI(t, "")
 	c := quiet(path)
