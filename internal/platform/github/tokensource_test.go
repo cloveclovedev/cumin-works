@@ -91,7 +91,7 @@ func TestTokenSource_DoesNotAppearInOutput(t *testing.T) {
 	if _, err := source.Token(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	formatted := fmt.Sprintf("%v %+v %s", source, source, source)
+	formatted := fmt.Sprintf("%v %+v %#v %s %q %d %x", source, source, source, source, source, source, source)
 	if strings.Contains(formatted, testToken) {
 		t.Errorf("the output holds the token: %s", formatted)
 	}

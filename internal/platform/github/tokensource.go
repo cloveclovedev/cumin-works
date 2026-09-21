@@ -2,6 +2,8 @@ package github
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"sync"
 	"time"
 )
@@ -57,4 +59,10 @@ func (s *TokenSource) Token(ctx context.Context) (string, error) {
 // String keeps the token out of formatted output.
 func (s *TokenSource) String() string {
 	return "TokenSource{" + s.app + " on " + s.owner + "/" + s.repo + "}"
+}
+
+// Format keeps the token out of every fmt verb. Without it, verbs such as
+// %#v print the fields and do not call String.
+func (s *TokenSource) Format(f fmt.State, verb rune) {
+	_, _ = io.WriteString(f, s.String())
 }
