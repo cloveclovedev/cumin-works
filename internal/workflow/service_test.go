@@ -25,7 +25,9 @@ func fakeCommand(t *testing.T, exitCode int) (path, record string) {
 	dir := t.TempDir()
 	path = filepath.Join(dir, "fake-request")
 	record = filepath.Join(dir, "record")
-	script := "#!/bin/sh\necho \"$*\" >> " + record + "\nexit " + strconv.Itoa(exitCode) + "\n"
+	// The script also records its environment, so a test can check what
+	// reaches the command.
+	script := "#!/bin/sh\necho \"$*\" >> " + record + "\nenv > " + record + ".env\nexit " + strconv.Itoa(exitCode) + "\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -187,6 +189,35 @@ func TestPoll_FailedCommandIsLoggedAndNotRunAgain(t *testing.T) {
 	}
 	if got := recorded(t, sc.record); len(got) != 1 {
 		t.Errorf("the command ran %d times, want 1", len(got))
+	}
+}
+
+func TestPoll_CommandGetsNoCredentialOfTheHost(t *testing.T) {
+	sc := newScene(t, 0)
+	// Credentials in the environment of cumin, and one variable of the list.
+	for name, value := range map[string]string{"GH_TOKEN": "gho_hostToken", "GITHUB_TOKEN": "ghp_hostToken", "ANTHROPIC_API_KEY": "sk-host", "SSH_AUTH_SOCK": "/tmp/agent.sock", "LANG": "en_US.UTF-8"} {
+		t.Setenv(name, value)
+	}
+
+	if err := sc.service().Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	env, err := os.ReadFile(sc.record + ".env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY", "SSH_AUTH_SOCK"} {
+		if strings.Contains(string(env), name+"=") {
+			t.Errorf("the command got %s", name)
+		}
+	}
+	for _, want := range []string{"PATH=", "LANG=en_US.UTF-8"} {
+		if !strings.Contains(string(env), want) {
+			t.Errorf("the command did not get %s", want)
+		}
+	}
+	if strings.Contains(sc.logs.String(), "hostToken") {
+		t.Error("the log holds a credential of the Host")
 	}
 }
 
