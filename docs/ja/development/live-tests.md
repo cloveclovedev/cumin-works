@@ -18,8 +18,8 @@ Claude Code は起動しないので、利用枠は使わない。
   - sandbox に `scripts/setup-repo.sh <owner>/<repo> --core-app <slug>` を実行してある。
 - sandbox は、公開のリポジトリである。App の token には Checks の権限がなく、check の結果を読めるのは公開のリポジトリだけだからである。テストは最初に、認証なしでリポジトリを読めることを確かめ、読めなければ止まる。
 - sandbox の保護されたパスの一覧 (`.cumin/config.toml` の `protected_paths`) に `CLAUDE.md` があり、`live/` を守っていない。テストは `live/CLAUDE.md` (保護されている) と `live/<日時>.md` (保護されていない) を使う。ファイルがなければ、初期値の一覧が使われるので、そのままでよい。合っていなければ、テストは Pull Request を作る前に止まる。
-- `TestLiveGitHubFacts` には、sandbox に次の3つが要る。リポジトリの管理者が用意する。
-  - `internal/platform/github/testdata/cumin-live-fixture.yml` を `.github/workflows/cumin-live-fixture.yml` として、`internal/platform/github/testdata/pull_request_template.md` を `.github/pull_request_template.md` として、既定のブランチに置く。main は保護されているので、Pull Request で入れる。
+- `TestLiveGitHubFacts` には、sandbox に次の2つが要る。リポジトリの管理者が用意する。
+  - `internal/platform/github/testdata/cumin-live-fixture.yml` を `.github/workflows/cumin-live-fixture.yml` として、既定のブランチに置く。main は保護されているので、Pull Request で入れる。
   - `scripts/setup-repo.sh <owner>/<repo> --core-app <slug> --required-check live-skipped-for-bots` を実行して、fixture の job を必須のcheckにする。
   - 足りなければ、テストは最初に止まって、足りないものを表示する。
 - sandbox は、壊れてもよいリポジトリである。テストは Issue、Pull Request、ブランチ、ラベルを作り、main に小さなファイルを1つ merge する。
@@ -56,7 +56,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | テスト | 内容 |
 |---|---|
 | `TestLiveSetupChecks` | [GitHub Appの登録手順](github-app-setup.md) の「確認すること」。main への push と merge の拒否、cumin-core による merge、Issue と sub-issue と blocked by、approve、表示名、保護されたパスのcheck、作成者の種類 |
-| `TestLiveGitHubFacts` | cumin の実装が前提にする GitHub の事実。check run と commit status の読み取り、token の絞り込み、飛ばされた必須のcheckと merge、失敗したcheckについて読める範囲、レビューの `state` と `commit_id`、`Closes #N` で sub-issue が閉じること、GraphQL の項目、`rules/branches`、Pull Request のテンプレート、@メンション、Pull Request へのラベル |
+| `TestLiveGitHubFacts` | cumin の実装が前提にする GitHub の事実。check run と commit status の読み取り、token の絞り込み、飛ばされた必須のcheckと merge、失敗したcheckについて読める範囲、レビューの `state` と `commit_id`、`Closes #N` で sub-issue が閉じること、GraphQL の項目、`rules/branches`、@メンション、Pull Request へのラベル |
 
 ## `cumin run` を sandbox で動かすとき
 

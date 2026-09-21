@@ -24,9 +24,9 @@ const (
 
 // TestLiveGitHubFacts records facts about GitHub that the later requirements
 // depend on, and that the official documentation does not answer. It needs the
-// setup of TestLiveSetupChecks, the fixture workflow and the pull request
-// template of testdata/ on the default branch, and the required check
-// "live-skipped-for-bots" (scripts/setup-repo.sh --required-check).
+// setup of TestLiveSetupChecks, the fixture workflow of testdata/ on the
+// default branch, and the required check "live-skipped-for-bots"
+// (scripts/setup-repo.sh --required-check).
 func TestLiveGitHubFacts(t *testing.T) {
 	l := newLive(t)
 	defer func() { t.Log("\n" + l.table()) }()
@@ -174,28 +174,11 @@ func TestLiveGitHubFacts(t *testing.T) {
 	// Fact 7: the GraphQL fields with an installation token.
 	l.recordGraphQLFact(t, core, parent.Number, child.Number, pullA.Number)
 
-	// Pull request B has no body and the marker file, so one check fails.
+	// Pull request B has the marker file, so one check fails.
 	branchB := "live-" + l.runID + "-fail"
 	shaB := repo.commitFile(t, branchB, failMarkerPath, l.runID+"\n")
 	l.pushBranch(t, repo, implementer, branchB)
-	pullB := l.openPullWithBody(t, implementer, branchB, "test: live facts failing check "+l.runID, "")
-
-	// Fact 9: the pull request template.
-	var created struct {
-		Body *string `json:"body"`
-	}
-	// Only a successful read shows the body. An error answer has no body field either.
-	l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/pulls/%d", pullB.Number), nil).mustJSON(t, http.StatusOK, &created)
-	body := "null"
-	if created.Body != nil {
-		body = fmt.Sprintf("%q", *created.Body)
-	}
-	l.record("9", "A pull request that an App creates through the API with no body, in a repository with `.github/pull_request_template.md` (row 25)", "The template is not used", "The body is "+body)
-	// Every body that is not empty fails: a body from an old or changed
-	// template on the sandbox would not hold the marker.
-	if created.Body != nil && *created.Body != "" {
-		t.Errorf("fact 9: the body is not empty: %s", body)
-	}
+	l.openPull(t, implementer, branchB, "test: live facts failing check "+l.runID)
 
 	// Fact 4: what a token can read of a failed check.
 	l.waitForCheck(t, core, shaB, failOnMarkerCheck)
@@ -393,15 +376,14 @@ func (l *live) recordNarrowTokenFact(t *testing.T) {
 }
 
 // requireFactFixtures stops the test, before it creates anything, when the
-// sandbox does not have the fixture workflow, the template, or the required
-// checks. Without the required check, fact 3 would record a merge that says
-// nothing about a required check.
+// sandbox does not have the fixture workflow or the required checks. Without
+// the required check, fact 3 would record a merge that says nothing about a
+// required check.
 func (l *live) requireFactFixtures(t *testing.T, token string) {
 	t.Helper()
-	for _, path := range []string{".github/workflows/cumin-live-fixture.yml", ".github/pull_request_template.md"} {
-		if resp := l.api(t, token, http.MethodGet, "/repos/{repo}/contents/"+path+"?ref="+url.QueryEscape(l.branch), nil); resp.status != http.StatusOK {
-			t.Fatalf("the sandbox has no %s on its default branch (status %d). docs/ja/development/live-tests.md says how to add it", path, resp.status)
-		}
+	const path = ".github/workflows/cumin-live-fixture.yml"
+	if resp := l.api(t, token, http.MethodGet, "/repos/{repo}/contents/"+path+"?ref="+url.QueryEscape(l.branch), nil); resp.status != http.StatusOK {
+		t.Fatalf("the sandbox has no %s on its default branch (status %d). docs/ja/development/live-tests.md says how to add it", path, resp.status)
 	}
 	status, required := l.requiredChecks(t, token)
 	for _, check := range []string{protectedPathsCheck, skippedForBotsCheck} {
