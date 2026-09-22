@@ -73,12 +73,16 @@ type Service struct {
 }
 
 // DefaultStopGrace is how long Run waits for the requests that are running
-// after the stop signal. It is the grace of the agent adapter
-// (docs/ja/designs/agent-run.md, the topic on the time limit of a run): the
-// CLI gets SIGTERM, and SIGKILL after that time. The ExitTimeOut of the
-// LaunchAgent is longer than this (docs/ja/designs/cumin-core.md, the topic
-// on launchd).
-const DefaultStopGrace = 10 * time.Second
+// after the stop signal, when there is no agent service to ask. It must be
+// longer than the grace of the agent adapter, because that grace is only
+// the time between SIGTERM and SIGKILL; the adapter still has to end the
+// CLI and to kill its process group afterwards. Ending the wait too early
+// would leave a CLI alive with the token of its role, and launchd does not
+// reach it: the CLI runs in its own process group.
+//
+// The ExitTimeOut of the LaunchAgent is longer than this
+// (docs/ja/designs/cumin-core.md, the topic on launchd).
+const DefaultStopGrace = 15 * time.Second
 
 // inProgressKey is one issue whose agent is running.
 type inProgressKey struct {
@@ -130,10 +134,7 @@ func (s *Service) Wait() { s.running.Wait() }
 // most the grace, and logs one line with the issues that were in progress.
 func (s *Service) stop(reason string) {
 	issues := s.inProgressIssues()
-	grace := s.StopGrace
-	if grace <= 0 {
-		grace = DefaultStopGrace
-	}
+	grace := s.stopGrace()
 	ended := make(chan struct{})
 	// The goroutine outlives stop when a request does not end inside the
 	// grace. The process is on its way out, so nothing waits for it.
@@ -151,6 +152,20 @@ func (s *Service) stop(reason string) {
 	}
 	s.logger().Info("stopped", "reason", reason,
 		"in_progress", issues, "ended_within_grace", endedInGrace, "grace", grace.String())
+}
+
+// stopGrace is how long the stop waits for the requests that are running.
+// The value of the agent service is the one to use, because it knows the
+// grace of its adapter and what it needs after it.
+func (s *Service) stopGrace() time.Duration {
+	switch {
+	case s.StopGrace > 0:
+		return s.StopGrace
+	case s.Agents != nil:
+		return s.Agents.StopBudget()
+	default:
+		return DefaultStopGrace
+	}
 }
 
 // inProgressIssues returns the issues whose agent is running, as

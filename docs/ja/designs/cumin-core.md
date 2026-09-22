@@ -84,7 +84,8 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 
 - 合図を受けると、contextが終わる。新しい着手はしない。定期確認の途中なら、残りのリポジトリには進まない。
 - 実行中の依頼は、同じcontextで動いているので、取り消しが届く。Agentの接続部分が、CLIのプロセスグループにSIGTERMを送り、猶予 (10秒) のあとにSIGKILLを送る ([Agentの実行の設計](agent-run.md) の「実行時間の上限」)。依頼が何であっても同じに動く。
-- `cumin run` は、実行中の依頼を猶予 (`DefaultStopGrace`、10秒。Agentの猶予と同じ値) だけ待つ。終わりを待ち切れなくても、そこで終わる。プロセスが終わるところなので、残った待ちは捨てる。
+- `cumin run` が待つ時間は、Agentの猶予そのものではなく、それに余裕を足した値である (`agent.Service.StopBudget`)。Agentの猶予は、SIGTERMからSIGKILLまでの時間でしかなく、そのあとに `os/exec` がCLIを終わらせ、cuminがプロセスグループにSIGKILLを送る手順が残るためである。同じ値にすると、CLIがまだ生きているうちにcuminが終わりうる。CLIは自分のプロセスグループで動くので、launchdの後始末も届かず、roleのtokenを持ったプロセスが残る。
+- 待ち切れなくても、そこで終わる。プロセスが終わるところなので、残った待ちは捨てる。
 - 終わるときに、`stopped` のログを1行出す。入れるのは、止まった理由、進行中だったIssueの一覧 (`<owner>/<repo>#<番号>`)、猶予の中で終わったかどうかである。
 - 終了コードは0である。LaunchAgentの `KeepAlive` は `SuccessfulExit = false` なので、手で止めたcuminは起動し直されない。
 - ラベルは変えない。進行中だったIssueは `cumin/status/implementing` のまま残り、Ownerが `cumin/status/ready` を付け直して再開する (Issueのラベルと状態遷移の「v0.1では実装しないこと」)。作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。

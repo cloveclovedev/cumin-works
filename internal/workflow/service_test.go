@@ -1049,3 +1049,30 @@ func TestPoll_StartsNothingAfterTheStopSignal(t *testing.T) {
 		t.Errorf("labels of #10 = %v, want the ready label untouched", got)
 	}
 }
+
+// The stop must not end before the adapter has killed the process group of
+// the CLI, or a run would stay alive with the token of its role. The wait
+// of the stop is therefore longer than the grace of the adapter.
+func TestStopGrace_IsLongerThanTheGraceOfTheAdapter(t *testing.T) {
+	const grace = 2 * time.Second
+	agents := &agent.Service{Grace: grace}
+	if budget := agents.StopBudget(); budget <= grace {
+		t.Errorf("the budget of one run is %s, want more than the grace (%s)", budget, grace)
+	}
+	// The service takes the value of the agent service when it has one.
+	sc := newScene(t)
+	service := sc.service()
+	service.Agents.Grace = grace
+	if got := workflow.StopGraceOf(service); got != agents.StopBudget() {
+		t.Errorf("the stop waits %s, want the budget of one run (%s)", got, agents.StopBudget())
+	}
+	// Without an agent service, the default is longer than the default
+	// grace of the adapter.
+	empty := &workflow.Service{}
+	if got := workflow.StopGraceOf(empty); got != workflow.DefaultStopGrace {
+		t.Errorf("the stop waits %s, want the default (%s)", got, workflow.DefaultStopGrace)
+	}
+	if workflow.DefaultStopGrace <= (&agent.Service{}).StopBudget()-time.Second {
+		t.Errorf("the default stop grace (%s) is not longer than the grace of the adapter", workflow.DefaultStopGrace)
+	}
+}
