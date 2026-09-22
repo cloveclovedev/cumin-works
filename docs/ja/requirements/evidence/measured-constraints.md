@@ -162,3 +162,14 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 95 | 定期確認の問い合わせに `closedByPullRequestsReferences(first: 5)` を足すと、`rateLimit.cost` は6から9になる。`first` を3にしても、`includeClosedPrs: true` を付けても9で変わらない。77の積の式どおりには増えない | sandboxで実測 | 実測 |
 | 96 | contextを取り消した `git clone` は、"signal: killed" で失敗する。cuminの停止による取り消しは、Agentの異常終了ではなく、作業場所の用意の失敗として記録される | `TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval` で観測 | 実測 |
 | 97 | `--setting-sources project` と `--add-dir <ディレクトリ>` を付けた `-p` の実行で、Agentに見えるskillは、そのディレクトリのskillと、CLIに組み込みのskillだけである。Hostのユーザの `~/.claude/skills/` のskillは見えない | live scenario Impl-1 (#101) の記録 | 実測 |
+
+## 10. launchdとリポジトリの設定の実装で確かめたこと (2026-09-22)
+
+要求Issue #102 の実装 (#114、#119、#131) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 98 | GraphQLの `Repository.object(expression: "HEAD:<path>")` は、ファイルがなければ `null` を返す。`HEAD:` はそのリポジトリの既定のブランチを指す。`Blob` には `oid`、`text`、`byteSize`、`isBinary`、`isTruncated` があり、1MiBを超えるファイルは `isTruncated` になる。接続 (connection) でない項目 (`object`、`defaultBranchRef`) は、問い合わせのポイントを変えない (足す前も足したあとも `cost` は6) | GraphQLのスキーマのintrospectionと、sandboxでの実測 | 実測 |
+| 99 | `GET /repos/{owner}/{repo}/contents/{path}` を installation token で呼ぶには、Contents の read が要る | 公式: Permissions required for GitHub Apps | 公式文書 |
+| 100 | `man launchd.plist`: `KeepAlive` の `SuccessfulExit` は、終了コードが0かどうかの逆の条件で起動し直す意味で、`KeepAlive` は `RunAtLoad` を含意する。`ProcessType` の `Standard` は書かないのと同じで、`Background` はCPUとI/Oを絞る。`ExitTimeOut` はSIGTERMからSIGKILLまでの時間で、初期値はシステムが決める。launchdはjobのプロセスグループに残ったプロセスを止めるが、CLIは自分のプロセスグループで動くので届かない | `man launchd.plist` | 公式文書 |
+| 101 | ログイン中のユーザの LaunchAgent は `gui/<uid>` の domain にある。Appleが求めるのは一意な `Label` だけで、逆ドメインの形は例の慣習である。launchdから起動したcuminは、Keychainの項目を確認の画面なしで読み、`kill -9` のあと11秒で起動し直され、`launchctl kill SIGTERM` で終了コード0で止まった | `man launchctl`。Hostでの実測 (#112 の記録) | 公式文書 + 実測 |
