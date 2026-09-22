@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloveclovedev/cumin-works/disciplines"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/templates"
 )
@@ -75,17 +76,82 @@ func TestInstruction_ImplementerHoldsTheWritingRulesAndNamesItsSkills(t *testing
 	}
 }
 
-// The other roles have no templates yet; their instruction is the file.
-func TestInstruction_OtherRolesHaveNoTemplates(t *testing.T) {
-	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleReviewer} {
+// The instruction of every role ends with the writing rules, whether or
+// not the discipline of the role has a file.
+func TestInstruction_EveryRoleEndsWithTheWritingRules(t *testing.T) {
+	rules, err := templates.Read(writingRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
 		text, err := Instruction(role)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(text, "---") {
-			t.Errorf("Instruction(%s) holds templates, want none", role)
+		if !strings.HasSuffix(text, partSeparator+rules) {
+			t.Errorf("Instruction(%s) does not end with the writing rules", role)
 		}
 	}
+}
+
+// A role whose discipline has no file gets the role file and the writing
+// rules, and no error. The instruction is those two parts and nothing
+// else.
+func TestInstruction_ARoleWithoutADisciplineFileIsTheRoleAndTheRules(t *testing.T) {
+	rules, err := templates.Read(writingRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+		if _, ok, err := disciplines.Role(string(role)); err != nil {
+			t.Fatal(err)
+		} else if ok {
+			continue // A discipline file of this role is tested below.
+		}
+		text, err := Instruction(role)
+		if err != nil {
+			t.Fatalf("Instruction(%s): %v", role, err)
+		}
+		file, err := files.ReadFile(string(role) + ".md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := string(file) + partSeparator + rules; text != want {
+			t.Errorf("Instruction(%s) is not the role file and the writing rules", role)
+		}
+	}
+}
+
+// A role whose discipline has a file gets the role file, then that file,
+// then the writing rules, in that order.
+func TestInstruction_ADisciplineFileStandsBetweenTheRoleAndTheRules(t *testing.T) {
+	rules, err := templates.Read(writingRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tested int
+	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+		discipline, ok, err := disciplines.Role(string(role))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			continue
+		}
+		tested++
+		text, err := Instruction(role)
+		if err != nil {
+			t.Fatalf("Instruction(%s): %v", role, err)
+		}
+		file, err := files.ReadFile(string(role) + ".md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := string(file) + partSeparator + discipline + partSeparator + rules; text != want {
+			t.Errorf("Instruction(%s) is not the role file, the discipline file, and the writing rules", role)
+		}
+	}
+	t.Logf("%d of the three roles have a discipline file", tested)
 }
 
 // WriteSkills writes one SKILL.md for each skill, with a frontmatter and

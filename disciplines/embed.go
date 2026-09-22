@@ -10,8 +10,11 @@ package disciplines
 
 import (
 	"embed"
+	"errors"
 	"fmt"
+	"io/fs"
 	"path"
+	"strings"
 )
 
 // Default is the discipline that every role works in. This is the one
@@ -41,4 +44,31 @@ func RiskCriteria() (string, error) {
 		return "", fmt.Errorf("read the built-in risk criteria of %s: %w", Default, err)
 	}
 	return string(data), nil
+}
+
+// Role returns the file of the role in the default discipline: the
+// standards of the craft that the instruction of that role carries after
+// the contract with cumin (package roles). The second value is false when
+// the discipline has no file for the role. A discipline need not have one
+// for every role, and a role without one keeps the contract and the
+// writing rules.
+func Role(role string) (string, bool, error) {
+	return roleFile(files, Default, role)
+}
+
+// roleFile reads the file of the role in one discipline. It takes the file
+// system, so that a test covers both a discipline that has a file for the
+// role and one that has none, while only one discipline ships with cumin.
+func roleFile(fsys fs.FS, discipline, role string) (string, bool, error) {
+	if role == "" || strings.ContainsAny(role, `/\`) || strings.Contains(role, "..") {
+		return "", false, fmt.Errorf("not a role name: %q", role)
+	}
+	data, err := fs.ReadFile(fsys, path.Join(discipline, role+".md"))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "", false, nil
+	case err != nil:
+		return "", false, fmt.Errorf("read the %s file of %s: %w", role, discipline, err)
+	}
+	return string(data), true, nil
 }
