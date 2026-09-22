@@ -219,6 +219,43 @@ func indexOf(list []string, s string) int {
 	return -1
 }
 
+// Every line of a start names the role, and none names it twice. The
+// quota run logs through the same logger, so it is named too.
+func TestStart_EveryLogLineNamesTheRoleOnce(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	var logs bytes.Buffer
+	s := newService(t, path, client, &logs)
+
+	if _, err := s.Start(context.Background(), startRequest(t)); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	want := "role=" + string(config.RoleImplementer)
+	seen := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		if n := strings.Count(line, "role="); n != 1 {
+			t.Errorf("the line has %d role fields, want 1:\n%s", n, line)
+		}
+		if !strings.Contains(line, want) {
+			t.Errorf("the line does not name the role:\n%s", line)
+		}
+		for _, msg := range []string{"quota usage read", "agent start", "agent end"} {
+			if strings.Contains(line, `msg="`+msg+`"`) || strings.Contains(line, "msg="+msg) {
+				seen[msg] = true
+			}
+		}
+	}
+	for _, msg := range []string{"quota usage read", "agent start", "agent end"} {
+		if !seen[msg] {
+			t.Errorf("the logs have no line %q:\n%s", msg, logs.String())
+		}
+	}
+}
+
 func TestStart_IdentityIsReadOnceAndTokenEveryTime(t *testing.T) {
 	fake, client := newFakeGitHub(t)
 	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")

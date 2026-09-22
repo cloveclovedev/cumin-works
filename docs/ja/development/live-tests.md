@@ -75,3 +75,84 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 - sandbox に、`cumin/status/ready` の付いた sub-issue が、確かめたいものだけある。ほかに ready の sub-issue があると、そちらにも着手する。
 
 止めるときは SIGTERM を送る。動いている Implementer の実行が終わるまで待つので、すぐには終わらない。実行を待たずに終わらせたいときは、もう一度 SIGTERM を送らずに、実行の時間の上限 (`roles.implementer.time_limit`) を短くした設定で動かし直す。
+
+## 実機の場面 Impl-1
+
+`cumin/status/ready` の付いた実装Issueから、Pull Request が開いて `cumin/status/awaiting-checks` に移るまでを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。Owner が同意したときだけ行う。
+
+### 準備
+
+1. `go build -o cumin ./cmd/cumin` でバイナリを作る。
+2. この場面だけの設定ファイルを1つ作る。Host の設定ファイルとは別にして、対象を sandbox だけにする。`work_dir` は捨ててよい一時ディレクトリにする。`github_apps` の表は Host の設定ファイルから写す。
+
+   ```toml
+   repositories = ["<owner>/<repo>"]
+   work_dir = "<捨ててよい一時ディレクトリ>"
+   poll_interval = "20s"
+
+   [roles.implementer]
+   time_limit = "20m"
+
+   [github_apps.<owner>]
+   cumin-core = "<Client ID>"
+   chief-engineer = "<Client ID>"
+   implementer = "<Client ID>"
+   reviewer = "<Client ID>"
+   ```
+
+3. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。付けると R1 が成り立ち、Chief Engineer の分割まで走ってしまう。
+4. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。数分で終わる内容にする。保護されたパスを触らせない (例: `live/` の下にファイルを1つ作って1行書く)。題はブランチの名前になるので、短い英語にする。
+5. sandbox に `cumin/status/ready` の付いた他の sub-issue がないことを確かめる。あると、そちらにも着手する。
+
+### 実行
+
+6. `./cumin run --config <設定ファイル>` を起動する。起動時のログは `skills written`、`cumin run starts`、`poll` の順に出る。足りないラベルがあれば、`cumin run starts` と `poll` の間に `created the label` が出る。
+7. 実装Issueに `cumin/status/ready` を付ける。
+8. 次の定期確認から、ログがこの順に出る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+   | `clone created`、`worktree created` | 作業場所を用意した |
+   | `I1: requested the work` | ブランチの名前を決めて、Implementer を起動した |
+   | `quota usage read` | 使用率の最小の実行が終わった |
+   | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
+   | `agent start`、`agent end` | Claude Code の実行の始まりと終わり |
+   | `the agent run ended` | 結果 (`done` か `blocked`) とセッションの番号 |
+   | `I2: verified the pull request` | 検証が通り、ラベルを `cumin/status/awaiting-checks` に替えた |
+
+9. `I2: verified the pull request` が出たら、SIGTERM で止める。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/awaiting-checks` に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 2 | Pull Request がちょうど1つ開いている。ブランチは `cumin/<Issue番号>-<短い説明>` で、`I1: requested the work` の `branch` と同じ | Pull Request |
+| 3 | Pull Request の本文に `Closes #<Issue番号>` があり、`pull-request.md` の見出しに従っている | Pull Request |
+| 4 | Pull Request の作成者が Implementer の App の bot である。GraphQL の `author` の型が `Bot` である | GraphQL の `closedByPullRequestsReferences` |
+| 5 | Pull Request の先頭のコミットが、worktree の先頭のコミットと同じである | `git -C <work_dir>/<owner>/<repo>/<Issue番号>-implementer rev-parse HEAD` と `headRefOid` |
+| 6 | コミットの作者とコミッターが、Implementer の bot のユーザである | コミットの作者 |
+| 7 | 起動の記録の確認が通った。異常終了「user-level context」が出ていない | cumin のログ |
+| 8 | Agent に渡された skill の一覧に、cumin の3つの skill (`cumin-pull-request`、`cumin-review-reply`、`cumin-decision-request`) が載っている。Host のユーザの `~/.claude/skills/` の skill は載っていない | Claude Code のセッションの記録 (`~/.claude/projects/` の下の、worktree に対応するディレクトリ) の、"The following skills are available for use with the Skill tool" で始まる system-reminder |
+| 9 | Implementer が、Pull Request を作る前に `cumin-pull-request` の skill を呼び、skill がエラーにならずに開いた | 同じ記録の `Skill` のツールの呼び出しと、その直後の `gh pr create` |
+| 10 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+
+8と9を cumin のログで確かめられない理由:
+
+- `init` のイベントは `skills` を持つ (実測 86) が、cuminはそれを読まない。イベントを読む構造体が持つのは `plugins`、`mcp_servers`、`memory_paths` などで、`skills` は捨てている。生の行は、項目の名前だけを debug のログに出すのに1度使う ([Agentの実行の設計](../designs/agent-run.md) の「出力の読み取り」)。値は残らない。
+- Claude Code のセッションの記録には `init` のイベントそのものが入らない。残るのは、やりとりと、文脈に入った文章 (attachment) である。
+- そのかわり、Agent に実際に渡った skill の一覧は、文脈に入る system-reminder として記録に残る。組み込みの skill も同じ一覧に並ぶので、cuminの3つがあることと、Hostのユーザの skill がないことを見る。
+
+セッションの記録には token が載りうるので、記録の全体を画面やIssueに写さない。探すのは skill の名前と呼び出しの順だけにする。
+
+### 後片付け
+
+- Pull Request を閉じ、そのブランチを消す。
+- 実装Issueと要求Issueを閉じる。
+- `work_dir` の一時ディレクトリを消す。
+- sandbox に残るのは、閉じたIssueと閉じたPull Requestだけになる。
+
+### 記録
+
+結果は #101 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。

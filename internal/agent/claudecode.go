@@ -144,7 +144,10 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	if err := req.Credentials.validate(); err != nil {
 		return nil, fmt.Errorf("agent run: %w", err)
 	}
-	log := c.logger().With("role", req.Role, "work_dir", req.WorkDir)
+	// The role is not added here: the caller gives a logger that names it
+	// (Service.Start), and adding it again gave one line two "role"
+	// fields in the live scenario Impl-1.
+	log := c.logger().With("work_dir", req.WorkDir)
 	if req.SessionID == "" {
 		log.Info("agent start", "session", "new", "time_limit", req.TimeLimit)
 	} else {
