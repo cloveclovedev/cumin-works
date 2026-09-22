@@ -135,7 +135,7 @@ riskの基準は、このファイルではなく、同じディレクトリの 
 
 | 段 | 場所 |
 |---|---|
-| 初期値 | cuminに同梱の `roles/risk-criteria.md` |
+| 初期値 | cuminに同梱の `disciplines/software-engineering/risk-criteria.md` |
 | Host | Hostの設定ファイルと同じディレクトリの `risk-criteria.md` |
 | リポジトリ | 対象のリポジトリの既定のブランチの `.cumin/risk-criteria.md` |
 

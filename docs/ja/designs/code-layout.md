@@ -21,7 +21,7 @@
 
 ### 依存の向き
 
-- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/notify`、`internal/platform/github`、`internal/core/config`、`roles` を使う。`internal/agent` は `internal/platform/github` と `internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`roles` は `templates` と `internal/core/config` を使う。
+- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/notify`、`internal/platform/github`、`internal/core/config`、`roles` を使う。`internal/agent` は `internal/platform/github` と `internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`roles` は `templates`、`disciplines`、`internal/core/config` を使う。`disciplines` は標準ライブラリだけを使う。
 - `internal/notify` は標準ライブラリだけを使う。通知の手段は、文章を受け取る `Sender` として外から差す。`internal/platform/discord` はその実装で、`internal/notify` をimportしない。`cmd/cumin` が2つをつなぐ ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
 - 純粋なファイル (`domain.go`、`request.go`) は標準ライブラリだけを読む。HTTPのクライアント、`os/exec`、GitHubの型を持ち込まない。判定の表形式のテストが、I/Oなしで書けるようにするためである。
 - GitHubの型 (RESTの本文、GraphQLの応答) は `internal/platform/github` で止める。他のパッケージには、cuminの型 (`RepositorySnapshot`、`Label`、`User` など) だけを渡す。
@@ -68,9 +68,10 @@
 | | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立て、書き出しと削除、`launchctl` のコマンドの表示 |
 | `roles` | `roles.go` | roleの指示 (`<role>.md` に平易な英語の決まりを連結したもの) |
 | | `skills.go` | テンプレートをskillとして書き出す |
-| | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める |
-| | `risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
+| | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
 | | `<role>.md` | roleごとの指示の本文 |
+| `disciplines` | `embed.go` | disciplineのファイルの読み出し。既定のdisciplineの名前を書く、コードで唯一の場所 |
+| | `software-engineering/risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
 | `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。Agentが書くものは `roles` が読んで渡す。cuminが自分で書くもの (`follow-up-note.md`、`stop-note.md`) は、Agentには渡らず、テストが文面との一致を確かめる |
 | `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
 | | `setup-repo.sh`、`setup-repo/` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) |
