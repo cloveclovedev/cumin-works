@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,10 @@ type Service struct {
 	SettingsDir string
 	// PollInterval is the setting poll_interval.
 	PollInterval time.Duration
+	// StopGrace is how long Run waits for the requests that are running,
+	// after SIGINT or SIGTERM ended the context. Zero means
+	// DefaultStopGrace. Tests shorten it.
+	StopGrace time.Duration
 	// Labels are the labels that Run creates in each target repository when
 	// they are missing. RepositoryLabels gives the list of cumin.
 	Labels []github.Label
@@ -55,6 +60,10 @@ type Service struct {
 	// running counts the agent runs that the polls started. Each run has
 	// its own goroutine, so that the poll goes on while an agent works.
 	running sync.WaitGroup
+	// inProgress holds the issues whose agent is running, for the log of
+	// the stop.
+	progressMu sync.Mutex
+	inProgress map[inProgressKey]bool
 
 	// repositorySettings keeps what each repository's .cumin/ decided,
 	// until a blob of those files changes. Poll reads and writes it, and a
@@ -63,11 +72,34 @@ type Service struct {
 	repositorySettings map[string]*RepositorySettings
 }
 
+// DefaultStopGrace is how long Run waits for the requests that are running
+// after the stop signal. It is the grace of the agent adapter
+// (docs/ja/designs/agent-run.md, the topic on the time limit of a run): the
+// CLI gets SIGTERM, and SIGKILL after that time. The ExitTimeOut of the
+// LaunchAgent is longer than this (docs/ja/designs/cumin-core.md, the topic
+// on launchd).
+const DefaultStopGrace = 10 * time.Second
+
+// inProgressKey is one issue whose agent is running.
+type inProgressKey struct {
+	repository string
+	issue      int
+}
+
 // Run creates the missing labels in each target repository, then polls at
 // once and after every PollInterval, until ctx ends. A failed poll is logged,
-// and the loop continues. When ctx ends, Run waits for the running agents
-// before it returns nil. The runs use ctx, so the end of ctx ends them as an
-// abnormal end of the kind "time limit".
+// and the loop continues.
+//
+// When ctx ends (SIGINT or SIGTERM), Run starts no new work, and the runs
+// that are going on end because they use ctx: the adapter sends SIGTERM to
+// the process group of the CLI and SIGKILL after the grace. Run waits for
+// them for StopGrace, logs the issues that were in progress, and returns
+// nil, so that `cumin run` exits with 0 and launchd leaves it stopped.
+//
+// No label is changed on the way out. An issue that was in progress keeps
+// cumin/status/implementing, and the Owner restarts it with
+// cumin/status/ready (issue-states.md, the section on what v0.1 does not
+// build).
 func (s *Service) Run(ctx context.Context) error {
 	if s.PollInterval <= 0 {
 		return errors.New("workflow: the poll interval must be more than 0")
@@ -83,18 +115,73 @@ func (s *Service) Run(ctx context.Context) error {
 		_ = s.Poll(ctx)
 		select {
 		case <-ctx.Done():
-			reason := context.Cause(ctx).Error()
-			s.Wait()
-			s.logger().Info("stopped", "reason", reason)
+			s.stop(context.Cause(ctx).Error())
 			return nil
 		case <-ticker.C:
 		}
 	}
 }
 
-// Wait waits for the agent runs that the polls started. Run calls it when
-// ctx ends; a test calls it after a poll, to read what the run did.
+// Wait waits for the agent runs that the polls started. A test calls it
+// after a poll, to read what the run did.
 func (s *Service) Wait() { s.running.Wait() }
+
+// stop ends the run: it waits for the requests that are going on, for at
+// most the grace, and logs one line with the issues that were in progress.
+func (s *Service) stop(reason string) {
+	issues := s.inProgressIssues()
+	grace := s.StopGrace
+	if grace <= 0 {
+		grace = DefaultStopGrace
+	}
+	ended := make(chan struct{})
+	// The goroutine outlives stop when a request does not end inside the
+	// grace. The process is on its way out, so nothing waits for it.
+	go func() {
+		s.running.Wait()
+		close(ended)
+	}()
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	endedInGrace := true
+	select {
+	case <-ended:
+	case <-timer.C:
+		endedInGrace = false
+	}
+	s.logger().Info("stopped", "reason", reason,
+		"in_progress", issues, "ended_within_grace", endedInGrace, "grace", grace.String())
+}
+
+// inProgressIssues returns the issues whose agent is running, as
+// "<owner>/<repo>#<number>", in a fixed order.
+func (s *Service) inProgressIssues() []string {
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+	issues := make([]string, 0, len(s.inProgress))
+	for key := range s.inProgress {
+		issues = append(issues, fmt.Sprintf("%s#%d", key.repository, key.issue))
+	}
+	slices.Sort(issues)
+	return issues
+}
+
+// markInProgress records that the agent of an issue is running, and
+// returns the function that removes it when the run ends.
+func (s *Service) markInProgress(repository string, issue int) func() {
+	key := inProgressKey{repository: repository, issue: issue}
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+	if s.inProgress == nil {
+		s.inProgress = map[inProgressKey]bool{}
+	}
+	s.inProgress[key] = true
+	return func() {
+		s.progressMu.Lock()
+		defer s.progressMu.Unlock()
+		delete(s.inProgress, key)
+	}
+}
 
 // ensureLabels creates the missing labels of each target repository. A
 // failure is logged; the poll still runs, so that a repository without the
@@ -123,6 +210,11 @@ func (s *Service) ensureLabels(ctx context.Context) {
 func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
 	for _, target := range s.Targets {
+		// The stop signal came while this poll was running. Start nothing
+		// more: the requests that are going on are the ones to wait for.
+		if ctx.Err() != nil {
+			break
+		}
 		if err := s.pollRepository(ctx, target); err != nil {
 			s.logger().Error("poll failed", "repository", target.Repository.String(), "error", err.Error())
 			errs = append(errs, err)
@@ -213,9 +305,11 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 	}
 	branch := BranchName(sub.Number, sub.Title)
 	role := settings.Settings.Roles[config.RoleImplementer]
+	done := s.markInProgress(target.Repository.String(), sub.Number)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
+		defer done()
 		s.runImplementer(ctx, target, sub.Number, branch, instruction, role)
 	}()
 	return nil

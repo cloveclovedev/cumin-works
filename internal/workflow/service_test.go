@@ -104,6 +104,13 @@ type cliOptions struct {
 	// commit makes the agent run add one commit in the work directory and
 	// not push it, as an Implementer that forgot to push.
 	commit bool
+	// sleeps makes the agent run wait instead of ending, so that a test can
+	// stop cumin while a request is going on.
+	sleeps bool
+	// ignoresTerm makes the sleeping agent run ignore SIGTERM, as a CLI
+	// that does not end by itself. The adapter then sends SIGKILL after its
+	// grace.
+	ignoresTerm bool
 }
 
 // service returns a new Service on the scene, as after a restart of cumin.
@@ -118,6 +125,9 @@ func (sc *scene) service() *workflow.Service {
 		},
 		GitHub: sc.client,
 		Logger: logger,
+		// The stop sends SIGTERM to the process group of the CLI and
+		// SIGKILL after this grace. The tests must not wait ten seconds.
+		Grace: 200 * time.Millisecond,
 	}
 	return &workflow.Service{
 		GitHub:    sc.client,
@@ -224,6 +234,15 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 			"git commit --quiet -m \"a local commit that is not pushed\" 1>&2\n" +
 			"fi\n"
 	}
+	// A run that sleeps ends with SIGKILL, so it prints its events first.
+	sleep := ""
+	if o.sleeps {
+		trap := ""
+		if o.ignoresTerm {
+			trap = "trap '' TERM\n"
+		}
+		sleep = "if [ $n = agent ]; then\n" + trap + "sleep 600\nfi\n"
+	}
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
@@ -232,7 +251,8 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		"env > " + filepath.Join(dir, "$n.env") + "\n" +
 		"pwd > " + filepath.Join(dir, "$n.cwd") + "\n" +
 		commit +
-		"cat $f\n"
+		"cat $f\n" +
+		sleep
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -911,5 +931,121 @@ func TestPoll_LogsWhereTheRiskCriteriaCameFrom(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// waitForAgentRun waits until the fake CLI of the agent has started.
+func waitForAgentRun(t *testing.T, sc *scene) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if sc.agentRuns(t) > 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("the agent run did not start:\n%s", sc.logs.String())
+}
+
+// The stop of cumin: SIGINT or SIGTERM ends the context, the request that
+// is going on is cancelled, Run waits only for the grace, logs the issues
+// that were in progress, and returns nil so that the command exits with 0.
+// The labels stay as they are; the Owner restarts an issue with
+// cumin/status/ready.
+func TestCore_StopCancelsTheRunningRequestAndLogsTheIssue(t *testing.T) {
+	// A CLI that ignores SIGTERM: the adapter sends SIGKILL after its
+	// grace, which is 200 ms in the scene.
+	sc := newScene(t, cliOptions{sleeps: true, ignoresTerm: true})
+	service := sc.service()
+	service.PollInterval = 10 * time.Millisecond
+	service.StopGrace = 3 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	returned := make(chan error, 1)
+	go func() { returned <- service.Run(ctx) }()
+	waitForAgentRun(t, sc)
+
+	start := time.Now()
+	cancel()
+	select {
+	case err := <-returned:
+		if err != nil {
+			t.Fatalf("Run returned %v, want nil so that the command exits with 0", err)
+		}
+		if elapsed := time.Since(start); elapsed > service.StopGrace {
+			t.Errorf("Run returned after %s, want less than the grace (%s)", elapsed, service.StopGrace)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("Run did not return after the stop:\n%s", sc.logs.String())
+	}
+
+	logs := sc.logs.String()
+	for _, want := range []string{
+		`"msg":"stopped"`,
+		`"in_progress":["example-org/example-repo#10"]`,
+		`"ended_within_grace":true`,
+	} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the stop log does not hold %s:\n%s", want, logs)
+		}
+	}
+	// The issue keeps the label of the claim. cumin changes no label on
+	// the way out.
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/implementing"}) {
+		t.Errorf("labels of #10 = %v, want the labels of the claim", got)
+	}
+}
+
+// A request that ends on SIGTERM does not make the stop wait for the whole
+// grace.
+func TestRun_StopReturnsAsSoonAsTheRequestEnds(t *testing.T) {
+	sc := newScene(t, cliOptions{sleeps: true})
+	service := sc.service()
+	service.PollInterval = 10 * time.Millisecond
+	service.StopGrace = 30 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	returned := make(chan error, 1)
+	go func() { returned <- service.Run(ctx) }()
+	waitForAgentRun(t, sc)
+
+	start := time.Now()
+	cancel()
+	select {
+	case err := <-returned:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		if elapsed := time.Since(start); elapsed > 10*time.Second {
+			t.Errorf("Run returned after %s, want as soon as the request ended", elapsed)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatalf("Run did not return after the stop:\n%s", sc.logs.String())
+	}
+	if !strings.Contains(sc.logs.String(), `"ended_within_grace":true`) {
+		t.Errorf("the stop log does not say that the request ended:\n%s", sc.logs.String())
+	}
+}
+
+// After the stop signal, a poll that is still running starts no new work.
+func TestPoll_StartsNothingAfterTheStopSignal(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := service.Poll(ctx); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none after the signal", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 0 {
+		t.Errorf("%d label changes, want none after the signal", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of #10 = %v, want the ready label untouched", got)
 	}
 }
