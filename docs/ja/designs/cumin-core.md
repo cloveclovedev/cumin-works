@@ -137,6 +137,16 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 - `isBinary` が真、`text` が `null`、`isTruncated` が真のいずれかなら、そのリポジトリの読み取りをパスの名前を添えたエラーにする。ルールが、ファイルの一部だけを見て動くことを防ぐ。1MiB を超えるファイルは `isTruncated` になる。
 - 採らなかった案: REST の `GET /repos/{owner}/{repo}/contents/{path}?ref=<既定のブランチ>`。どちらも `Contents` の read で呼べる (公式: Permissions required for GitHub Apps) が、RESTだとリポジトリごとに1回の定期確認で2回の要求が増え、Issueの事実とファイルの時点がずれる。
 
+### riskの基準の受け渡し
+
+riskの基準は、Chief EngineerとReviewerがそのまま受け取る文章である。cuminは中身を読まない。
+
+- 初期値の文章は、cuminのバイナリに埋め込む。置き場所は `roles/risk-criteria.md` で、Agentに渡す他の指示と同じディレクトリである。Agentが受け取る文章は、Pull Requestでレビューされるべきものなので、要件文書ではなくリポジトリに置く (#102 の決定)。
+- 強い順に、リポジトリの `.cumin/risk-criteria.md`、Hostの設定ファイルと同じディレクトリの `risk-criteria.md`、埋め込みの初期値である。ある段のファイルは、弱い段の文章を丸ごと置き換える。
+- 解決する関数は、文章と、どの段から来たか (リポジトリ、Host、初期値) を返す。定期確認は、どの段から来たかだけをログに出す。文章はログに出さない。
+- ファイルがあって、中身が空白だけなら、パスを示すエラーにする。空の指示がAgentに渡ると、riskの判断の基準がなくなる。
+- 関数は `roles` パッケージに置く。`roles` は `internal/core/config` を role の名前のために import しているので、逆向きに置くと循環する。
+
 ### 定期確認の判定
 
 ![定期確認の判定](cumin-core-decide.svg)

@@ -128,7 +128,17 @@ reviewer = "<Client ID>"
   - 制限を外れた値
 - `roles.<role>.cli_path` と `roles.<role>.time_limit` がHostのものなのは、前者がHostのパスであり、後者がGitHub Appのtokenの寿命から決まるためである。
 
-riskの基準は、このファイルではなく、同じディレクトリの `.cumin/risk-criteria.md` で上書きする。優先順位は設定と同じで、初期値、Hostの `risk-criteria.md`、リポジトリの `.cumin/risk-criteria.md` の順に強くなる。
+riskの基準は、このファイルではなく、同じディレクトリの `.cumin/risk-criteria.md` で上書きする。優先順位は設定と同じで、次の順に強くなる。
+
+| 段 | 場所 |
+|---|---|
+| 初期値 | cuminに同梱の `roles/risk-criteria.md` |
+| Host | Hostの設定ファイルと同じディレクトリの `risk-criteria.md` |
+| リポジトリ | 対象のリポジトリの既定のブランチの `.cumin/risk-criteria.md` |
+
+- あるファイルの内容は、それより弱い段の文章を丸ごと置き換える。足すのではない。
+- cuminは中身を読まない。Chief EngineerとReviewerへの指示に、そのまま入れる。
+- ファイルがあって、中身が空白だけのときは、そのリポジトリのエラーになる。空の指示がAgentに渡るのを防ぐためである。
 
 例:
 
