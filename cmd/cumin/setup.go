@@ -22,8 +22,8 @@ import (
 // launchctlPath is the tool that loads and unloads a job on macOS.
 const launchctlPath = "/bin/launchctl"
 
-// runSetup is `cumin setup`. It has two subcommands: github-apps and
-// launchd.
+// runSetup is `cumin setup`. It has three subcommands: github-apps,
+// launchd, and notify.
 func runSetup(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, setupUsage)
@@ -34,6 +34,8 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 		return runSetupGitHubApps(args, stdout, stderr)
 	case "launchd":
 		return runSetupLaunchd(args[1:], stdout, stderr)
+	case "notify":
+		return runSetupNotify(args[1:], stdout, stderr)
 	}
 	fmt.Fprintln(stderr, setupUsage)
 	return exitBadUsage
@@ -41,7 +43,8 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 
 const setupUsage = `usage: cumin setup github-apps --org <organization> [--name-prefix <prefix>] [--config <path>]
        cumin setup launchd [--config <path>] [--dry-run] [--force]
-       cumin setup launchd --remove [--dry-run] [--force]`
+       cumin setup launchd --remove [--dry-run] [--force]
+       cumin setup notify --discord-webhook`
 
 // runSetupGitHubApps registers the GitHub App of each role.
 func runSetupGitHubApps(args []string, stdout, stderr io.Writer) int {
@@ -96,6 +99,67 @@ func runSetupGitHubApps(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	return exitOK
+}
+
+// runSetupNotify is `cumin setup notify`: it puts the address of one
+// notification channel into the Keychain. The channel is a flag, because
+// the Discord webhook is one way of notifying and others may follow.
+//
+// The address is read from standard input, so that it stays out of the
+// process list and out of the shell history. On a terminal the command
+// asks for it; with a pipe it reads one line, so that a script can give
+// it.
+func runSetupNotify(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("cumin setup notify", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	chosen := map[string]*bool{}
+	for _, channel := range setup.Channels() {
+		chosen[channel.Flag] = fs.Bool(channel.Flag, false, "store the "+channel.What)
+	}
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
+		return exitBadUsage
+	}
+	var channels []setup.Channel
+	for _, channel := range setup.Channels() {
+		if *chosen[channel.Flag] {
+			channels = append(channels, channel)
+		}
+	}
+	// One channel for each run: the command reads one address, so two
+	// flags would ask for one address and store it twice.
+	if len(channels) != 1 || fs.NArg() > 0 {
+		fmt.Fprintln(stderr, setupUsage)
+		return exitBadUsage
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	secrets, err := keychain.Default(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
+		return exitFailure
+	}
+	address, err := setup.ReadAddress(os.Stdin, stdout, channels[0], isTerminal(os.Stdin))
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
+		return exitFailure
+	}
+	if err := setup.StoreNotifyAddress(ctx, secrets, channels[0], address, stdout); err != nil {
+		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
+		return exitFailure
+	}
+	return exitOK
+}
+
+// isTerminal reports whether the file is a terminal, so that the command
+// asks for the address only when a person is there to paste it.
+func isTerminal(f *os.File) bool {
+	info, err := f.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 // runSetupLaunchd writes the LaunchAgent of the current user, so that
