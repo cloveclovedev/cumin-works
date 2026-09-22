@@ -139,12 +139,20 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "cumin setup launchd: find the path of cumin: %v\n", err)
 		return exitFailure
 	}
-	if resolved, err := filepath.EvalSymlinks(program); err == nil {
-		program = resolved
-	}
+	// The plist keeps the path as it is. A symbolic link such as
+	// /usr/local/bin/cumin is the stable name: after an upgrade it points at
+	// the new binary, while the path it resolves to today may be gone. The
+	// resolved path is checked as well, so that a link into a temporary
+	// build is still refused.
 	if err := setup.CheckProgram(program); err != nil {
 		fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
 		return exitFailure
+	}
+	if resolved, err := filepath.EvalSymlinks(program); err == nil {
+		if err := setup.CheckProgram(resolved); err != nil {
+			fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
+			return exitFailure
+		}
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
