@@ -89,17 +89,11 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
 	}
-	repository := req.Owner + "/" + req.Repo
-	log := s.logger().With("role", req.Role, "repository", repository)
-	// The CLI adapter names the role on its own lines, so its logger
-	// carries the repository only. Both would give one line two "role"
-	// fields (seen in the live scenario Impl-1).
-	cli := ClaudeCode{
-		Path:           settings.CLIPath,
-		Logger:         s.logger().With("repository", repository),
-		Grace:          s.Grace,
-		QuotaTimeLimit: s.QuotaTimeLimit,
-	}
+	// The logger names the role and the repository. The CLI adapter adds
+	// nothing of its own to it, so that no line carries the role twice
+	// and every line of the adapter, the quota run included, names it.
+	log := s.logger().With("role", req.Role, "repository", req.Owner+"/"+req.Repo)
+	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit}
 
 	// 1. The quota usage. The decision on thresholds (Q1) is a later
 	// requirement; here an unreadable usage stops the start.
