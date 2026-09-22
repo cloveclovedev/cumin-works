@@ -178,12 +178,46 @@ func InstallLaunchAgent(a LaunchAgent, force bool) (string, error) {
 	return "written", nil
 }
 
+// RemoveLaunchAgentFile removes the plist of the job.
+//
+// It reports what happened: "removed", "absent" when there is no file, or
+// "kept" when the file at that path does not hold this job and force is
+// false. Only the plist goes: the logs, the state, and the binary stay,
+// because a person put them there and may want them.
+//
+// The check is the label, not the whole file. The plist holds the PATH of
+// the shell that wrote it, so two files of the same job can differ without
+// meaning anything. A file at this path that does not name the job is
+// somebody else's, and cumin does not remove it by itself.
+func RemoveLaunchAgentFile(a LaunchAgent, force bool) (string, error) {
+	data, err := os.ReadFile(a.PlistPath)
+	switch {
+	case os.IsNotExist(err):
+		return "absent", nil
+	case err != nil:
+		return "", fmt.Errorf("read %s: %w", a.PlistPath, err)
+	}
+	if !force && !strings.Contains(string(data), "<string>"+a.Label+"</string>") {
+		return "kept", fmt.Errorf("%s does not hold the job %s. Look at the file, then run again with --force to remove it anyway", a.PlistPath, a.Label)
+	}
+	if err := os.Remove(a.PlistPath); err != nil {
+		return "", fmt.Errorf("remove %s: %w", a.PlistPath, err)
+	}
+	return "removed", nil
+}
+
+// ServiceTarget is the job in the domain of the user, as launchctl wants
+// it (`man launchctl`).
+func (a LaunchAgent) ServiceTarget(uid int) string {
+	return fmt.Sprintf("gui/%d/%s", uid, a.Label)
+}
+
 // LaunchctlCommands returns the commands that start, stop, restart, and
 // remove the job, in the order of the setup guide. uid is the user id of
 // the Owner (`man launchctl`: a LaunchAgent of a logged-in user lives in
 // the gui domain).
 func (a LaunchAgent) LaunchctlCommands(uid int) []string {
-	target := fmt.Sprintf("gui/%d/%s", uid, a.Label)
+	target := a.ServiceTarget(uid)
 	return []string{
 		fmt.Sprintf("launchctl bootstrap gui/%d %s", uid, shellQuote(a.PlistPath)),
 		fmt.Sprintf("launchctl kill SIGTERM %s", target),

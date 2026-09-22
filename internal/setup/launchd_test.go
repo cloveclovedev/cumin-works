@@ -248,3 +248,75 @@ func TestPlist_PassesPlutilLint(t *testing.T) {
 		t.Errorf("plutil -lint said: %s", output)
 	}
 }
+
+func TestRemoveLaunchAgentFile(t *testing.T) {
+	t.Run("a plist of this job goes", func(t *testing.T) {
+		agent := testAgent(t)
+		if _, err := InstallLaunchAgent(agent, false); err != nil {
+			t.Fatal(err)
+		}
+		result, err := RemoveLaunchAgentFile(agent, false)
+		if err != nil || result != "removed" {
+			t.Fatalf("RemoveLaunchAgentFile = %q, %v", result, err)
+		}
+		if _, err := os.Stat(agent.PlistPath); !os.IsNotExist(err) {
+			t.Errorf("the plist is still there (err = %v)", err)
+		}
+		// The logs and the state stay: a person put them there.
+		if info, err := os.Stat(agent.StateDir); err != nil || !info.IsDir() {
+			t.Errorf("the state directory went with the plist: %v", err)
+		}
+	})
+
+	t.Run("no plist is not an error", func(t *testing.T) {
+		result, err := RemoveLaunchAgentFile(testAgent(t), false)
+		if err != nil || result != "absent" {
+			t.Errorf("RemoveLaunchAgentFile = %q, %v, want absent", result, err)
+		}
+	})
+
+	t.Run("a file of somebody else stays", func(t *testing.T) {
+		agent := testAgent(t)
+		if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		const other = "<?xml version=\"1.0\"?>\n<plist><dict><key>Label</key><string>com.example.other</string></dict></plist>\n"
+		if err := os.WriteFile(agent.PlistPath, []byte(other), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := RemoveLaunchAgentFile(agent, false)
+		if err == nil {
+			t.Fatal("RemoveLaunchAgentFile removed a file of another job")
+		}
+		if result != "kept" || !strings.Contains(err.Error(), "--force") {
+			t.Errorf("result = %q, err = %v", result, err)
+		}
+		if current, _ := os.ReadFile(agent.PlistPath); string(current) != other {
+			t.Error("the file changed")
+		}
+
+		if result, err := RemoveLaunchAgentFile(agent, true); err != nil || result != "removed" {
+			t.Errorf("with --force = %q, %v, want removed", result, err)
+		}
+	})
+
+	// The plist holds the PATH of the shell that wrote it, so a file of
+	// this job that differs in PATH is still this job.
+	t.Run("another PATH is still this job", func(t *testing.T) {
+		agent := testAgent(t)
+		if _, err := InstallLaunchAgent(agent, false); err != nil {
+			t.Fatal(err)
+		}
+		agent.PathEnv = "/opt/another/bin:" + agent.PathEnv
+		if result, err := RemoveLaunchAgentFile(agent, false); err != nil || result != "removed" {
+			t.Errorf("RemoveLaunchAgentFile = %q, %v, want removed", result, err)
+		}
+	})
+}
+
+func TestServiceTarget_IsTheJobInTheDomainOfTheUser(t *testing.T) {
+	if got := testAgent(t).ServiceTarget(501); got != "gui/501/"+LaunchAgentLabel {
+		t.Errorf("ServiceTarget = %q", got)
+	}
+}

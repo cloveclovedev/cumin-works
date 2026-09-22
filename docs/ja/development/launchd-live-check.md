@@ -23,7 +23,7 @@ Agent は起動しないので、利用枠は使わない。対象は sandbox �
 | 5 | ファイルを元に戻し、`.cumin/risk-criteria.md` を足して merge する | エラーが止まり、`risk_criteria` が `repository` になる。ファイルには文章を入れる。空白だけのファイルはエラーになり、そのリポジトリは飛ばされたままになる |
 | 6 | `kill -9 <pid>` | launchd が起動し直す。`runs` が増え、ログに起動の行が増える |
 | 7 | `launchctl kill SIGTERM` | `stopped` の行が出て、job が `state = not running` になる。`last exit code = 0` で、起動し直されない |
-| 8 | `launchctl bootout` と plist の削除、sandbox の `.cumin/` を元に戻す | Host と sandbox が元の状態に戻る |
+| 8 | `cumin setup launchd --remove` と、sandbox の `.cumin/` を元に戻す | job が消え、plist が消える。ログと実行ファイルは残る。Host と sandbox が元の状態に戻る |
 
 ## 動かし方
 
@@ -42,10 +42,11 @@ tail -f ~/.local/state/cumin/cumin.log
 止めるときと外すとき:
 
 ```sh
-launchctl kill SIGTERM gui/$(id -u)/dev.cumin-works.cumin
-launchctl bootout gui/$(id -u)/dev.cumin-works.cumin
-rm ~/Library/LaunchAgents/dev.cumin-works.cumin.plist
+launchctl kill SIGTERM gui/$(id -u)/dev.cumin-works.cumin   # 止める
+~/.local/bin/cumin setup launchd --remove                   # 止めて、plist を消す
 ```
+
+`--remove` が消すのは plist だけである。ログ (`~/.local/state/cumin/`) と実行ファイルは残るので、確認のあとに要らなければ手で消す。
 
 `poll_interval` が長いと、3から5の確認に時間がかかる。確認の間だけ `"15s"` にしてもよい。設定を読むのは起動のときだけなので、`launchctl bootstrap` の前に変える。あとから変えたときは、`launchctl kickstart -k gui/$(id -u)/dev.cumin-works.cumin` で読み直させる。確認が終わったら元に戻す。
 

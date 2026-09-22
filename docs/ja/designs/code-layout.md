@@ -59,7 +59,7 @@
 | | `quota.go` | 使用率を読む最小の実行 |
 | | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け、先頭のコミットの読み取り |
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
-| | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立てと書き出し、`launchctl` のコマンドの表示 |
+| | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立て、書き出しと削除、`launchctl` のコマンドの表示 |
 | `roles` | `roles.go` | roleの指示 (`<role>.md` に平易な英語の決まりを連結したもの) |
 | | `skills.go` | テンプレートをskillとして書き出す |
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める |
