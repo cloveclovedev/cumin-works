@@ -1,6 +1,8 @@
 # 設定の一覧
 
-Hostの設定ファイルに書けるキーの一覧。設定の意味と、初期値や制限の理由は、[cumin本体の要件](../requirements/cumin-core.md) の「設定」にある。ここには、キーの名前と書き方だけを書く。
+Hostの設定ファイルと、対象のリポジトリの設定ファイルに書けるキーの一覧。設定の意味と、初期値や制限の理由は、[cumin本体の要件](../requirements/cumin-core.md) の「設定」にある。ここには、キーの名前と書き方だけを書く。
+
+この文書のはじめの節は、Hostの設定ファイルについて書く。リポジトリの設定ファイルは、最後の節にある。
 
 ## 設定ファイルの場所
 
@@ -59,7 +61,7 @@ Hostの設定ファイルに書けるキーの一覧。設定の意味と、初�
 
 このファイルで決められない設定:
 
-- 保護されたパスは、対象のリポジトリの `.cumin/config.toml` だけで決める。
+- 保護されたパスは、対象のリポジトリの `.cumin/config.toml` だけで決める。下の「リポジトリの設定ファイル」を参照。
 - riskの基準は、TOMLのキーではなく、Markdownのファイルで上書きする。
 
 ## 例
@@ -99,4 +101,50 @@ cumin-core = "<Client ID>"
 chief-engineer = "<Client ID>"
 implementer = "<Client ID>"
 reviewer = "<Client ID>"
+```
+
+## リポジトリの設定ファイル
+
+対象のリポジトリは、一部の設定を自分で決められる。場所は、そのリポジトリの既定のブランチの `.cumin/config.toml` である。cuminは既定のブランチからだけ読む。Pull Requestのブランチの内容は効かない。
+
+書けるキーは、上の表で「リポジトリで上書き」ができるものと、`protected_paths` だけである。
+
+| キー | 内容 |
+|---|---|
+| `max_review_rounds` | Hostの設定と同じ |
+| `max_check_fix_requests` | Hostの設定と同じ |
+| `merge_method` | Hostの設定と同じ |
+| `roles.<role>.cli` | Hostの設定と同じ |
+| `roles.<role>.model` | Hostの設定と同じ |
+| `protected_paths` | Agentに変更させないパスの一覧。cuminは読まない。使うのはGitHub Actionsのcheckと、Implementerへの指示である |
+
+読み込みの決まり:
+
+- 書かないキーには、Hostの設定ファイルの値が残る。優先順位は、初期値、Hostの設定ファイル、リポジトリの設定ファイルの順に強くなる。
+- 値の制限と、制限を外れたときの文章は、Hostの設定ファイルと同じである。
+- 次のものは、そのリポジトリのエラーになる。cuminはキーの名前をログに出して、そのリポジトリの定期確認を飛ばす。他のリポジトリの定期確認は続く。Ownerが直したものをmergeすると、次の定期確認から元に戻る。
+  - Hostに属するキー (`repositories`、`work_dir`、`poll_interval`、`max_issues_in_progress`、`request_command`、`quota` の表、`github_apps` の表、`roles.<role>.cli_path`、`roles.<role>.time_limit`)
+  - 知らないキーと、知らないroleの名前
+  - 制限を外れた値
+- `roles.<role>.cli_path` と `roles.<role>.time_limit` がHostのものなのは、前者がHostのパスであり、後者がGitHub Appのtokenの寿命から決まるためである。
+
+riskの基準は、このファイルではなく、同じディレクトリの `.cumin/risk-criteria.md` で上書きする。優先順位は設定と同じで、初期値、Hostの `risk-criteria.md`、リポジトリの `.cumin/risk-criteria.md` の順に強くなる。
+
+例:
+
+```toml
+# レビューのラウンドを2回までにし、mergeはrebaseにする。
+max_review_rounds = 2
+merge_method = "rebase"
+
+protected_paths = [
+  ".cumin/",
+  "CLAUDE.md",
+  "AGENTS.md",
+  ".claude/",
+]
+
+# 表の外のキーは、表より前に書く。表のあとに書くと、その表のキーになる。
+[roles.implementer]
+model = "sonnet"
 ```

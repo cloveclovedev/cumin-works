@@ -39,6 +39,17 @@ const (
 	RoleReviewer      Role = "reviewer"
 )
 
+// allRoles are the agent roles, in the order of the settings file.
+var allRoles = []Role{RoleChiefEngineer, RoleImplementer, RoleReviewer}
+
+// Messages of the limits that both the Host settings file and the file of a
+// target repository check, so that the same value gives the same error.
+const (
+	limitAtLeastOne  = "must be 1 or more"
+	limitMergeMethod = "%q must be one of squash, merge, rebase"
+	limitCLI         = "%q is not supported: use %q"
+)
+
 // AppCuminCore is the name of the GitHub App of cumin itself in the
 // github_apps table. The other names are the agent roles.
 const AppCuminCore = "cumin-core"
@@ -247,18 +258,18 @@ func (f file) settings() (*Settings, error) {
 		fail("poll_interval", "must be more than 0")
 	}
 	if s.MaxIssuesInProgress < 1 {
-		fail("max_issues_in_progress", "must be 1 or more")
+		fail("max_issues_in_progress", limitAtLeastOne)
 	}
 	if s.MaxReviewRounds < 1 {
-		fail("max_review_rounds", "must be 1 or more")
+		fail("max_review_rounds", limitAtLeastOne)
 	}
 	if s.MaxCheckFixRequests < 1 {
-		fail("max_check_fix_requests", "must be 1 or more")
+		fail("max_check_fix_requests", limitAtLeastOne)
 	}
 	switch s.MergeMethod {
 	case MergeSquash, MergeMerge, MergeRebase:
 	default:
-		fail("merge_method", "%q must be one of squash, merge, rebase", f.MergeMethod)
+		fail("merge_method", limitMergeMethod, f.MergeMethod)
 	}
 
 	workDir, err := expandHome(f.WorkDir)
@@ -285,7 +296,7 @@ func (f file) settings() (*Settings, error) {
 			fail(key+".time_limit", "must be more than 0, and %d minutes or less", int(maxAgentTimeLimit.Minutes()))
 		}
 		if r.file.CLI != CLIClaudeCode {
-			fail(key+".cli", "%q is not supported: use %q", r.file.CLI, CLIClaudeCode)
+			fail(key+".cli", limitCLI, r.file.CLI, CLIClaudeCode)
 		}
 		if r.file.CLIPath == "" {
 			fail(key+".cli_path", "must not be empty")
