@@ -1,9 +1,15 @@
 // Package roles holds the instructions that cumin passes to an agent for
-// each role. The files are English Markdown, embedded in the binary. The
-// instruction of a role is its file, followed by the writing rules
-// (package templates). The other templates reach the agent as skills
-// (skills.go). docs/ja/designs/agent-run.md, the topic on the start of
-// Claude Code, records this composition.
+// each role. The files are English Markdown, embedded in the binary. A
+// role file holds the contract between cumin and the agent.
+//
+// The instruction of a role is its file, then the file of that role in the
+// default discipline (package disciplines), then the writing rules
+// (package templates). The discipline holds the standards of the field of
+// work, and a role whose discipline has no file gets the other two parts.
+// The other templates reach the agent as skills (skills.go).
+// docs/ja/requirements/agents/common.md, the topic on the composition of
+// the instruction, and docs/ja/designs/agent-run.md, the topic on the
+// start of Claude Code, record this composition.
 //
 // The files of the Chief Engineer and the Reviewer are placeholders until
 // the requirement of each role writes the full instruction.
@@ -14,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloveclovedev/cumin-works/disciplines"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/templates"
 )
@@ -21,16 +28,17 @@ import (
 //go:embed *.md
 var files embed.FS
 
-// roleTemplates names the templates that follow the role file, in order.
-// Only the writing rules go here: they apply to every text that the agent
-// writes. The templates of one action are skills (skills.go). A role
-// without an entry gets none.
-var roleTemplates = map[config.Role][]string{
-	config.RoleImplementer: {"writing-rules.md"},
-}
+// writingRules is the last part of every instruction. The rules apply to
+// every text that the agent writes, so they go into the instruction
+// itself. The templates of one action are skills instead (skills.go).
+const writingRules = "writing-rules.md"
+
+// partSeparator stands between the parts of an instruction.
+const partSeparator = "\n---\n\n"
 
 // Instruction returns the instruction of the role: the role file, then
-// the templates of the role.
+// the file of the role in the default discipline when that discipline has
+// one, then the writing rules.
 //
 // The role is matched against the three agent roles before the file is
 // read, so that a name which is not a role, and a name which holds a path,
@@ -45,15 +53,18 @@ func Instruction(role config.Role) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("no role instruction for %q", role)
 	}
-	var b strings.Builder
-	b.Write(data)
-	for _, name := range roleTemplates[role] {
-		text, err := templates.Read(name)
-		if err != nil {
-			return "", fmt.Errorf("instruction for %s: %w", role, err)
-		}
-		b.WriteString("\n---\n\n")
-		b.WriteString(text)
+	parts := []string{string(data)}
+	discipline, ok, err := disciplines.Role(string(role))
+	if err != nil {
+		return "", fmt.Errorf("instruction for %s: %w", role, err)
 	}
-	return b.String(), nil
+	if ok {
+		parts = append(parts, discipline)
+	}
+	rules, err := templates.Read(writingRules)
+	if err != nil {
+		return "", fmt.Errorf("instruction for %s: %w", role, err)
+	}
+	parts = append(parts, rules)
+	return strings.Join(parts, partSeparator), nil
 }

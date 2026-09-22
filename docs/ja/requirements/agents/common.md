@@ -56,6 +56,22 @@ JSON Schema:
 - Claude Codeの自動メモリ (Agentが自分で書き残し、次のセッションで読み込まれるメモ) は、このオプションでは止まらない。cuminは、自動メモリも切って起動する。次のAgentに引き継ぐべきことは、GitHubに書く。
 - 同じことができないCLIを使うときは、cumin user accountにグローバルな指示や設定を置かない、という運用で守る。cuminは起動時に、グローバルな指示のファイルがあるかを確かめ、あれば警告する。
 
+## 指示の合成
+
+roleとしての指示は、3つの部分をこの順につないだ1つの文章である。
+
+| 順 | 部分 | 置き場所 | 内容 |
+|---|---|---|---|
+| 1 | roleのファイル | `roles/<role>.md` | cuminとAgentの約束。roleの身元と境目、読むもの、作業場所とブランチ、GitHubに残すもの、範囲と保護されたパス、返す結果、cuminの事情による `blocked` の条件、テンプレートに従う義務 |
+| 2 | disciplineのファイル | `disciplines/<discipline>/<role>.md` | 分野の基準。仕事が終わったことの確かめ方、コミットメッセージの決まり、そのroleにとっての良い仕事、分野の事情による `blocked` の条件 |
+| 3 | 平易な英語の決まり | `templates/writing-rules.md` | Agentが書く全ての文章に効くので、指示の本文に入れる |
+
+- disciplineとは、roleが扱う分野のことである。roleはcuminが動かす箱で、disciplineはその箱を満たす分野である。
+- disciplineはroleに足すだけで、roleの決まりを緩めない。食い違ったらroleが勝つ。この決まりは、roleのファイルに書く。
+- disciplineのファイルがないroleは、1と3だけを受け取る。エラーにはしない。
+- v0.1が持つdisciplineは、ソフトウェア開発の1つだけである。どのroleも同じdisciplineで動き、選ぶ仕組みはない。分野を選ぶ仕組みは [backlog](../backlog.md) の「roleとdisciplineの分離」にある。
+- 1つの行動のためのテンプレートは、指示ではなくskillとして渡す ([GitHubに残す文章のテンプレート](../policies/writing-templates.md) の「置き場所」)。
+
 ## GitHubに残す文章
 
 - Issue、Pull Request、レビュー、コメント、コミットメッセージは、英語で書く。
