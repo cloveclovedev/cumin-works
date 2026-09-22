@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -373,6 +374,9 @@ func git(t *testing.T, dir string, args ...string) string {
 // one request to the Implementer.
 func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	sc := newScene(t)
+	// The pull request that the Implementer opens, so that the run ends on
+	// the success path of I2 and the issue is not stopped for the Owner.
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
 	ctx := context.Background()
 
@@ -386,17 +390,19 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/implementing"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/implementing", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
 	}
-	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
-		t.Errorf("%d label changes, want 1", n)
+	// Two label changes: the claim (I1) and the end of the run (I2).
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
+		t.Errorf("%d label changes, want 2", n)
 	}
-	// Three polls, and one read again at the end of the run (I2). The
-	// verification fails here, because the scene has no pull request; the
-	// label of #10 therefore stays cumin/status/implementing.
+	// Three polls, and one read again at the end of the run (I2).
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 4 {
 		t.Errorf("%d snapshot reads, want 4", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none on the success path", n)
 	}
 
 	// The CLI ran in the worktree of the issue and the role, on the branch
@@ -520,23 +526,23 @@ func TestI2_DoneChecksThePullRequestWithTheHighestNumber(t *testing.T) {
 	}
 }
 
-func TestI2_DoneWithoutAPullRequestLeavesTheLabel(t *testing.T) {
+func TestI2_DoneWithoutAPullRequestStopsTheIssue(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
 
-	assertVerificationFailed(t, sc, "no open pull request closes the issue")
+	assertVerificationFailed(t, sc, "no open pull request closes the issue", workflow.FailureNoOpenPullRequest, 0)
 }
 
-func TestI2_DoneWithAPullRequestOfAnotherAuthorLeavesTheLabel(t *testing.T) {
+func TestI2_DoneWithAPullRequestOfAnotherAuthorStopsTheIssue(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, "another-person", false)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
 
-	assertVerificationFailed(t, sc, "the author of the pull request is not the Implementer App")
+	assertVerificationFailed(t, sc, "the author of the pull request is not the Implementer App", workflow.FailureAuthorMismatch, 21)
 	if !strings.Contains(sc.logs.String(), `"pull_request":21`) {
 		t.Errorf("the log does not name the pull request that was checked:\n%s", sc.logs.String())
 	}
@@ -544,14 +550,14 @@ func TestI2_DoneWithAPullRequestOfAnotherAuthorLeavesTheLabel(t *testing.T) {
 
 // The agent commits in the worktree and does not push. The head of the pull
 // request is then behind the head of the worktree.
-func TestI2_DoneWithACommitThatIsNotPushedLeavesTheLabel(t *testing.T) {
+func TestI2_DoneWithACommitThatIsNotPushedStopsTheIssue(t *testing.T) {
 	sc := newScene(t, cliOptions{commit: true})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
 
-	assertVerificationFailed(t, sc, "the head commit of the worktree is not pushed")
+	assertVerificationFailed(t, sc, "the head commit of the worktree is not pushed", workflow.FailureHeadNotPushed, 21)
 }
 
 // A blocked result is logged with the question of blocked_reason. The label
@@ -669,20 +675,55 @@ func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 
 // assertVerificationFailed checks that the label of #10 stayed at
 // cumin/status/implementing and that the log names the failure.
-func assertVerificationFailed(t *testing.T, sc *scene, failure string) {
+// assertVerificationFailed checks the whole failed path of I2: the log
+// names the check that failed, the issue holds one comment in the form of
+// templates/stop-note.md with the sentence of that check, the label is
+// cumin/status/awaiting-owner-decision, and exactly one notification went
+// out with the same sentence. pullRequest is the number that the comment
+// must name, or 0 for "None".
+func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind workflow.VerificationFailure, pullRequest int) {
 	t.Helper()
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/implementing"}) {
-		t.Errorf("labels of #10 = %v, want cumin/status/implementing still", got)
-	}
-	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
-		t.Errorf("%d label changes, want 1 (the claim only)", n)
-	}
 	logs := sc.logs.String()
 	if !strings.Contains(logs, `"msg":"I2: the verification failed"`) {
 		t.Errorf("the log does not say that the verification failed:\n%s", logs)
 	}
 	if !strings.Contains(logs, `"failure":"`+failure+`"`) {
 		t.Errorf("the log does not name the failure %q:\n%s", failure, logs)
+	}
+
+	reason := workflow.VerificationReason(kind)
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
+	}
+	body := comments[0].Body
+	want := []string{"## Stopped for the Owner", "Row: I2", "Reason: " + reason, "Retried: no", "cumin/status/ready"}
+	if pullRequest > 0 {
+		want = append(want, fmt.Sprintf("Pull request: #%d", pullRequest))
+	} else {
+		want = append(want, "Pull request: None")
+	}
+	for _, line := range want {
+		if !strings.Contains(body, line) {
+			t.Errorf("the comment has no %q:\n%s", line, body)
+		}
+	}
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-owner-decision"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
+		t.Errorf("%d label changes, want 2 (the claim and the stop)", n)
+	}
+
+	messages := sc.webhook.messagesSent()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, line := range []string{"I2", reason, "example-org/example-repo", "issue #10"} {
+		if !strings.Contains(messages[0], line) {
+			t.Errorf("the notification has no %q:\n%s", line, messages[0])
+		}
 	}
 }
 

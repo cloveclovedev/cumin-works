@@ -1,6 +1,6 @@
 @startuml poll-verify
-' cumin works - 実行終了の判定 (I2)。Implementerの実行が done で終わったあとの確認。
-' 対応する文書: poll.md の「実行終了の判定」。
+' cumin works - 実行終了の判定 (I2)。Implementerの実行が終わったあとの確認と、うまくいかなかったときの道。
+' 対応する文書: poll.md の「実行終了の判定」と「うまくいかなかったときに、Ownerに戻す道」。
 ' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
 skinparam shadowing false
 skinparam defaultFontName sans-serif
@@ -27,12 +27,29 @@ if (結果は?) then (done)
   }
   if (通った?) then (はい)
     :ラベルを cumin/status/awaiting-checks に替える;
+    stop
   else (いいえ)
-    :どの確認で落ちたかをログに出す
-    (付け替え、コメント、通知は #81);
+    :コメントの文章を組み立てる
+    (stop-note.md。落ちた確認の1文);
   endif
-else (blocked、異常終了)
-  :ログに出す (扱いは #81);
+elseif (blocked) then
+  :コメントの文章は blocked_reason
+  (Agentが書いた decision-request.md);
+else (異常終了)
+  :やり直しと、そのあとのOwnerへの引き渡し
+  (この要求の次の実装Issue);
+  stop
 endif
+
+partition "Ownerに戻す (行の番号を引数で受け取る)" {
+  :実装Issueにコメントを書く;
+  :ラベルを cumin/status/awaiting-owner-decision に替える;
+  :Ownerに通知する
+  (リンクは書いたコメント。設定で出さないこともある);
+}
+note right
+  途中で1つ失敗しても、次を止めない。
+  巻き戻さない。失敗はログに出す。
+end note
 stop
 @enduml
