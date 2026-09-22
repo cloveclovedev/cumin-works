@@ -8,6 +8,7 @@ Agent は起動しないので、利用枠は使わない。対象は sandbox �
 
 - Host の設定ファイル (`~/.config/cumin/config.toml`) に、対象が sandbox だけの `repositories` と、`work_dir` がある。
 - 対象のリポジトリの持ち主の4つの App (`cumin-core` と3つの role) の Client ID が設定にあり、Keychain にそれぞれの秘密鍵がある ([セットアップの手順](setup-guide.md) の手順1)。1つでも欠けると、`cumin run` は起動せずにキーの名前を表示して終わる。
+- その4つの App が、sandbox のリポジトリを選んでインストールしてある (同じ手順書の手順2)。インストールが無いと、cumin は起動はするが、token を発行できずに定期確認が毎回失敗する。
 - 対象のリポジトリに `cumin/status/ready` の付いた Issue がない。あると Agent が起動して、利用枠を使う。
 - 確認の間は、Owner がログインしている。launchd の LaunchAgent は、ログイン中のユーザの下でだけ動く。
 
