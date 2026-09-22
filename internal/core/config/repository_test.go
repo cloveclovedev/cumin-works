@@ -60,6 +60,37 @@ func TestWithRepository_SetsTheOtherOverridableKeys(t *testing.T) {
 	}
 }
 
+// A repository chooses whether cumin notifies about its issues. The
+// address of the webhook stays a value of the Host.
+func TestWithRepository_SetsWhetherToNotify(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		file string
+		want bool
+	}{
+		{"the default", "", "", true},
+		{"the Host file", "\n[notify.discord]\nenabled = false\n", "", false},
+		{"the repository file over the Host file", "\n[notify.discord]\nenabled = false\n", "\n[notify.discord]\nenabled = true\n", true},
+		{"the repository file over the default", "", "\n[notify.discord]\nenabled = false\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := withRepository(t, hostSettings(t, tt.host), tt.file)
+			if s.Notify.DiscordEnabled != tt.want {
+				t.Errorf("Notify.DiscordEnabled = %v, want %v", s.Notify.DiscordEnabled, tt.want)
+			}
+		})
+	}
+}
+
+func TestWithRepository_AnUnknownNotifyKeyIsAnError(t *testing.T) {
+	_, err := hostSettings(t, "").WithRepository([]byte("\n[notify.discord]\nchannel = \"general\"\n"))
+	if err == nil || !strings.Contains(err.Error(), "notify.discord.channel: unknown key") {
+		t.Errorf("WithRepository = %v, want an error that names the key", err)
+	}
+}
+
 func TestWithRepository_SetsTheCLIAndTheModelOfOneRole(t *testing.T) {
 	host := hostSettings(t, "[roles.implementer]\ncli_path = \"/opt/claude\"\ntime_limit = \"40m\"\nmodel = \"opus\"\n")
 	s := withRepository(t, host, "[roles.implementer]\nmodel = \"sonnet\"\n")
