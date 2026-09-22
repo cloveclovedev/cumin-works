@@ -43,6 +43,7 @@
 | | `manifest.go` | GitHub App Manifest flowの応答 |
 | | `users.go` | botのユーザの読み取り (`GET /users/{login}`) |
 | | `labels.go` | ラベルの一覧、作成、Issueのラベルの付け替え |
+| | `comments.go` | Issueへのコメントの投稿 |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
