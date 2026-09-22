@@ -33,9 +33,8 @@ var roleTemplates = map[config.Role][]string{
 // the templates of the role.
 //
 // The role is matched against the three agent roles before the file is
-// read. The embedded directory holds other Markdown as well (the built-in
-// risk criteria), and a name that is not a role must never come back as an
-// instruction.
+// read, so that a name which is not a role, and a name which holds a path,
+// never come back as an instruction.
 func Instruction(role config.Role) (string, error) {
 	switch role {
 	case config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer:

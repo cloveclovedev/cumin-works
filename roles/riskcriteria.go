@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/cloveclovedev/cumin-works/disciplines"
 )
 
 // RiskCriteriaFile is the name of the file that replaces the text that
@@ -68,13 +70,10 @@ func RiskCriteria(repository *string, hostDir string) (string, RiskCriteriaSourc
 	return text, RiskCriteriaFromDefault, nil
 }
 
-// DefaultRiskCriteria returns the text that ships with cumin: the file
-// roles/risk-criteria.md, which the requirement of the Chief Engineer
-// names as the built-in value.
+// DefaultRiskCriteria returns the text that ships with cumin, which the
+// requirement of the Chief Engineer names as the built-in value. The text
+// belongs to the discipline, because a risk criterion is the judgment of
+// one field of work.
 func DefaultRiskCriteria() (string, error) {
-	data, err := files.ReadFile(RiskCriteriaFile)
-	if err != nil {
-		return "", fmt.Errorf("read the built-in risk criteria: %w", err)
-	}
-	return string(data), nil
+	return disciplines.RiskCriteria()
 }
