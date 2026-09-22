@@ -7,7 +7,7 @@ Agent は起動しないので、利用枠は使わない。対象は sandbox �
 ## 前提
 
 - Host の設定ファイル (`~/.config/cumin/config.toml`) に、対象が sandbox だけの `repositories` と、`work_dir` がある。
-- 対象のリポジトリの持ち主の `cumin-core` の Client ID が設定にあり、Keychain に秘密鍵がある ([セットアップの手順](setup-guide.md) の手順1)。
+- 対象のリポジトリの持ち主の4つの App (`cumin-core` と3つの role) の Client ID が設定にあり、Keychain にそれぞれの秘密鍵がある ([セットアップの手順](setup-guide.md) の手順1)。1つでも欠けると、`cumin run` は起動せずにキーの名前を表示して終わる。
 - 対象のリポジトリに `cumin/status/ready` の付いた Issue がない。あると Agent が起動して、利用枠を使う。
 - 確認の間は、Owner がログインしている。launchd の LaunchAgent は、ログイン中のユーザの下でだけ動く。
 
@@ -44,7 +44,7 @@ launchctl bootout gui/$(id -u)/dev.cumin-works.cumin
 rm ~/Library/LaunchAgents/dev.cumin-works.cumin.plist
 ```
 
-`poll_interval` が長いと、3から5の確認に時間がかかる。確認の間だけ `"15s"` にしてもよい。
+`poll_interval` が長いと、3から5の確認に時間がかかる。確認の間だけ `"15s"` にしてもよい。設定を読むのは起動のときだけなので、`launchctl bootstrap` の前に変える。あとから変えたときは、`launchctl kickstart -k gui/$(id -u)/dev.cumin-works.cumin` で読み直させる。確認が終わったら元に戻す。
 
 ## 記録の決まり
 
