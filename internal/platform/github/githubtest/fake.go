@@ -75,6 +75,12 @@ type Label struct {
 	Name, Color, Description string
 }
 
+// Comment is one comment that the fake stored for an issue.
+type Comment struct {
+	ID   int64
+	Body string
+}
+
 // Repository is one repository of the fake.
 type Repository struct {
 	Owner, Name  string
@@ -87,6 +93,9 @@ type Repository struct {
 	// Files are the files of the default branch, by path. SetFile writes
 	// them; the snapshot reads the files of .cumin/.
 	Files map[string]File
+	// comments holds the comments of each issue, by issue number, in the
+	// order in which they were created.
+	comments map[int][]Comment
 	// installationID is the id of the installation of the App on the
 	// repository, from the order of creation.
 	installationID int64
@@ -117,6 +126,8 @@ type Fake struct {
 	users        map[string]int64
 	requests     []Request
 	failNext     *failure
+	// lastCommentID is the id of the comment that was created last.
+	lastCommentID int64
 }
 
 // failure is one answer that the fake gives instead of the real one.
@@ -139,7 +150,8 @@ func (f *Fake) AddRepository(owner, name string) *Repository {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r := &Repository{Owner: owner, Name: name, Issues: map[int]*Issue{}, PullRequests: map[int]*PullRequest{},
-		DefaultBranch: "main", Files: map[string]File{}, installationID: int64(len(f.repositories) + 1)}
+		DefaultBranch: "main", Files: map[string]File{}, comments: map[int][]Comment{},
+		installationID: int64(len(f.repositories) + 1)}
 	f.repositories[key(owner, name)] = r
 	return r
 }
@@ -258,6 +270,14 @@ func (f *Fake) LabelNames(r *Repository) []string {
 	return names
 }
 
+// Comments returns the comments of one issue, in the order in which they
+// were created.
+func (f *Fake) Comments(r *Repository, number int) []Comment {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(r.comments[number])
+}
+
 // FailNext makes the fake answer the next request with the method and the
 // path with the status and an error body, once. The request is recorded and
 // changes nothing.
@@ -317,6 +337,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	labels := repoLabelsPath.FindStringSubmatch(r.URL.Path)
 	issueLabels := issueLabelsPath.FindStringSubmatch(r.URL.Path)
+	issueComments := issueCommentsPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -336,17 +357,21 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPut && issueLabels != nil:
 		number, _ := strconv.Atoi(issueLabels[3])
 		f.serveSetIssueLabels(w, body, issueLabels[1], issueLabels[2], number)
+	case r.Method == http.MethodPost && issueComments != nil:
+		number, _ := strconv.Atoi(issueComments[3])
+		f.serveCreateIssueComment(w, body, issueComments[1], issueComments[2], number)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
 }
 
 var (
-	repoLabelsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/labels$`)
-	issueLabelsPath  = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)/labels$`)
-	installationPath = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/installation$`)
-	accessTokensPath = regexp.MustCompile(`^/app/installations/(\d+)/access_tokens$`)
-	userPath         = regexp.MustCompile(`^/users/([^/]+)$`)
+	repoLabelsPath    = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/labels$`)
+	issueLabelsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)/labels$`)
+	issueCommentsPath = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)/comments$`)
+	installationPath  = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/installation$`)
+	accessTokensPath  = regexp.MustCompile(`^/app/installations/(\d+)/access_tokens$`)
+	userPath          = regexp.MustCompile(`^/users/([^/]+)$`)
 )
 
 // serveApp answers GET /app with the registered App. Official: "Get the
@@ -503,6 +528,39 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 		labels = append(labels, map[string]any{"name": labelName})
 	}
 	writeJSON(w, http.StatusOK, labels)
+}
+
+// serveCreateIssueComment answers
+// POST /repos/{owner}/{repo}/issues/{n}/comments: it stores the comment and
+// answers with it. Official: "Create an issue comment".
+func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	if _, ok := repo.Issues[number]; !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	var request struct {
+		Body *string `json:"body"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || request.Body == nil || *request.Body == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	// The ids grow over the whole fake, as they do on GitHub.
+	f.lastCommentID++
+	comment := Comment{ID: f.lastCommentID, Body: *request.Body}
+	repo.comments[number] = append(repo.comments[number], comment)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":   comment.ID,
+		"body": comment.Body,
+		"html_url": fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d",
+			repo.Owner, repo.Name, number, comment.ID),
+	})
 }
 
 func labelJSON(label Label) map[string]any {
