@@ -31,6 +31,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - 書き込みを行うrole (Implementer) のworktreeは、cuminが名前を決めたブランチに置く。`origin/<ブランチ>` が既にあればそこから始め (続きの依頼)、なければ `origin/HEAD` から新しく作る。読むだけのrole (Chief Engineer) のworktreeは、`origin/HEAD` をdetachedで開く。
 - worktreeが既にあるときは、fetchもせずにそのまま返す。異常終了後のやり直しは、同じ作業場所で続ける。再利用するのは、gitがworktreeとして認識するディレクトリだけである。用意が途中で止まって残った空のディレクトリは作り直し、ディレクトリだけが消えている場合は `git worktree prune` で登録を消してから作り直す。
 - 用意と片付けは、プロセスの中で直列に実行する。同じリポジトリの2つのIssueに同時に着手しても、cloneが2つ作られることはない。
+- worktreeの先頭のコミットは `git rev-parse HEAD` で読む。実行が終わったあとに、Pull Requestの先頭のコミットと比べて、最後のコミットがpushされたかを判定するためである ([cumin本体の設計メモ](cumin-core.md) の「実行終了の判定」)。
 - Issueが閉じたら、`git worktree remove --force` でworktreeを消し、ローカルのブランチも消す。この片付けは、定期確認の処理が行う。
 - gitは `os/exec` で呼ぶ。認証の入力待ちで止まらないように `GIT_TERMINAL_PROMPT=0` を付ける (公式: git の環境変数)。gitの出力はエラーの文章にだけ含め、infoのログには出さない。
 - 採らなかった案: Issueごとにcloneする。毎回リポジトリ全体を取り直すことになり、遅いうえにディスクも使う。
@@ -114,6 +115,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
   2. roleのAppのinstallation tokenを、対象のリポジトリ1つに絞って発行する。tokenは依頼のたびに新しく発行し、使い回さない。実行は最長55分続くのに対し、tokenは発行から1時間で失効するからである (cumin-coreのtokenの使い回しとは別の話である)。
   3. botの身元を読む。`GET /app` でAppのslugを、`GET /users/<slug>[bot]` でbotユーザのidを読み、作者の名前とメールアドレスを組み立てる (「Agentの環境」)。読むのはroleごとに1回だけで、以後はメモリに持つ。変わらない値なので、失っても読み直せばよい。
   4. worktreeでCLIを起動する (「Claude Codeの起動」)。tokenと身元は実行の環境変数にだけ入れ、ログにも戻り値にも手元の状態にも入れない。
+- 入口は、結果と一緒に、roleのAppのbotのlogin (`<slug>[bot]`) を返す。呼び出し処理が、Pull Requestの作成者と比べるためである (I2)。3で読んだ身元をそのまま返すので、読み取りは増えない。
 - しきい値の判定 (Q1) は、1と2の間に入る。利用枠の要求Issueが足す。
 - roleごとの設定 (CLI、実行ファイル、モデル、時間の上限) と、リポジトリの持ち主とroleの組ごとのAppの認証情報 (設定 `github_apps.<organization>.<role>`) は、起動時に入口へ渡す。設定を読むのは `cmd/cumin` の役目である。身元も、持ち主とroleの組ごとに持つ。
 - CLIが無視できないグローバルな指示ファイルへの備え: 入口は、roleのCLIごとに「そのCLIが読んでしまうユーザアカウントの指示ファイル」の一覧を持ち、実際にあるものを警告として返す。`cumin run` が起動時にこれをログに出す。Claude Codeでは一覧は空である (`--setting-sources project` と自動メモリの環境変数で、全て無視できる。実測 6e、28)。別のCLIを足すときに、そのCLIの一覧を書く。

@@ -112,8 +112,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
 	}
 
-	// 4. The run.
-	return cli.Run(ctx, Request{
+	// 4. The run. The login of the bot goes with the result, so that the
+	// caller can compare it with the author of a pull request (I2).
+	run, err := cli.Run(ctx, Request{
 		Role:            req.Role,
 		RoleInstruction: req.RoleInstruction,
 		Text:            req.Text,
@@ -124,6 +125,11 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 		TimeLimit:       settings.TimeLimit,
 		Credentials:     Credentials{Token: token.Token, AuthorName: id.name, AuthorEmail: id.email},
 	})
+	if err != nil {
+		return nil, err
+	}
+	run.BotLogin = id.name
+	return run, nil
 }
 
 // app returns the credentials of the App of the role for the owner. GitHub

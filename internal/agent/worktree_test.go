@@ -386,6 +386,45 @@ func TestWorktree_PrepareWithRelativeWorkDir(t *testing.T) {
 	}
 }
 
+// Head is what I2 compares with the head commit of the pull request.
+func TestWorktree_HeadReadsTheCommitOfTheWorktree(t *testing.T) {
+	r := newRemote(t)
+	var logs bytes.Buffer
+	w := newWorkspace(t, &logs)
+	c := checkout(12, config.RoleImplementer, "cumin/12-example")
+	dir, err := w.Prepare(context.Background(), r.path, c)
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+
+	head, err := w.Head(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Head: %v", err)
+	}
+	if want := gitCmd(t, r.work, "rev-parse", "main"); head != want {
+		t.Errorf("Head = %q, want the commit of main %q", head, want)
+	}
+
+	// A new commit in the worktree changes what Head returns, which is how
+	// I2 sees a commit that is not pushed.
+	if err := os.WriteFile(filepath.Join(dir, "local.txt"), []byte("change\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd(t, dir, "add", "local.txt")
+	gitCmd(t, dir, "commit", "--quiet", "-m", "a local commit")
+	after, err := w.Head(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Head after the commit: %v", err)
+	}
+	if after == head {
+		t.Errorf("Head = %q after a commit, want a new commit", after)
+	}
+
+	if _, err := w.Head(context.Background(), filepath.Join(w.Root, "no-such-directory")); err == nil {
+		t.Error("Head of a directory that does not exist returned no error")
+	}
+}
+
 func TestWorktree_RejectsInvalidCheckout(t *testing.T) {
 	w := newWorkspace(t, &bytes.Buffer{})
 	tests := []struct {
