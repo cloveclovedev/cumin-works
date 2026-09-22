@@ -225,6 +225,17 @@ func (w Workspace) Remove(ctx context.Context, c Checkout) error {
 	return nil
 }
 
+// Head returns the full SHA of the head commit of the worktree dir. I2
+// compares it with the head commit of the pull request, to see that the
+// last commit of the agent is pushed.
+func (w Workspace) Head(ctx context.Context, dir string) (string, error) {
+	out, err := w.git(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("read the head commit of %s: %w", dir, err)
+	}
+	return out, nil
+}
+
 // isWorktree reports whether dir is a working tree that git knows.
 func (w Workspace) isWorktree(ctx context.Context, dir string) bool {
 	out, err := w.git(ctx, dir, "rev-parse", "--is-inside-work-tree")

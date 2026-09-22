@@ -212,7 +212,8 @@ riskの基準は、Chief EngineerとReviewerがそのまま受け取る文章で
 - Implementerの実行が `done` で終わったら、cuminはそのリポジトリのスナップショットを読み直し (「GitHubクライアント」)、実行したIssueについてI2の3つの確認を、この順で行う。そのIssueを閉じる開いているPull Requestがあること。そのPull Requestの作成者が、ImplementerのAppのbot (`<slug>[bot]`) であること。Pull Requestの先頭のコミット (`headRefOid`) が、worktreeの先頭のコミットと同じであること (最後のコミットがpushされている)。
 - Pull Requestは、IssueとPull Requestの紐づけ (`closedByPullRequestsReferences`) で見つける。ブランチの名前では探さない。開いているPull Requestが2つ以上あれば、番号の大きいものを確かめる。
 - 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号である。通れば、ラベルを `cumin/status/awaiting-checks` に替える。落ちたときの付け替え、コメント、通知は、失敗の道の要求Issue (#81) がこの値を読んで作る。それまでは、種類をログに出すだけである。
-- `blocked` の結果と異常終了は、この判定に入らない。同じ要求Issue (#81) が扱う。
+- 判定に渡す2つの値は、Agentの実行の側から来る。ImplementerのAppのbotのlogin (`<slug>[bot]`) は実行の結果に付いて返り、worktreeの先頭のコミットは `git rev-parse HEAD` で読む ([Agentの実行の設計](agent-run.md) の「作業場所」と「1回の依頼の手順」)。
+- `blocked` の結果と異常終了は、この判定に入らない。Issueの番号と、`blocked_reason` の1行目 (Ownerに決めてほしいこと) か異常終了の種類をログに出すだけで、ラベルは替えない。同じ要求Issue (#81) が扱う。
 
 ### 起動前の使用率の確認
 

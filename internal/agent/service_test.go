@@ -159,6 +159,10 @@ func TestStart_QuotaThenTokenThenIdentityThenRun(t *testing.T) {
 	if run.Result.Result != ResultDone || run.SessionID != fixtureSessionID {
 		t.Errorf("run = %+v", run)
 	}
+	// The login of the bot goes with the result, for the check of I2.
+	if run.BotLogin != serviceSlug+"[bot]" {
+		t.Errorf("run.BotLogin = %q, want %s[bot]", run.BotLogin, serviceSlug)
+	}
 
 	order, err := os.ReadFile(filepath.Join(dir, "order"))
 	if err != nil {
