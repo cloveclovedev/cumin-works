@@ -186,7 +186,7 @@ func TestInstallLaunchAgent_KeepsADifferentFileWithoutForce(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	const other = "<?xml version=\"1.0\"?>\n<plist><dict><key>Label</key><string>dev.cumin-works.cumin</string></dict></plist>\n"
+	other := "<?xml version=\"1.0\"?>\n<plist><dict><key>Label</key><string>" + LaunchAgentLabel + "</string></dict></plist>\n"
 	if err := os.WriteFile(agent.PlistPath, []byte(other), 0o644); err != nil {
 		t.Fatal(err)
 	}

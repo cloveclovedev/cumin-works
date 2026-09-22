@@ -29,7 +29,7 @@
 | 手元の状態 | `~/.local/state/cumin/state.json` | `cumin run` だけ |
 | 使い切りの許可 | `~/.local/state/cumin/quota-allowance.json` | `cumin quota allow` だけ |
 | ログ | `~/.local/state/cumin/cumin.log` (標準出力) と `cumin.err.log` (標準エラー出力) | launchd |
-| LaunchAgent | `~/Library/LaunchAgents/dev.cumin-works.cumin.plist` | `cumin setup launchd` |
+| LaunchAgent | `~/Library/LaunchAgents/dev.cloveclove.cumin.plist` | `cumin setup launchd` |
 | Agentのskill | `~/.local/state/cumin/skills/.claude/skills/<名前>/SKILL.md`。起動時に毎回上書きする ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」) | `cumin run` だけ |
 
 - 人が編集するファイルは `~/.config`、cuminが書くファイルは `~/.local/state` に分ける。
@@ -65,7 +65,7 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 
 | キー | 値 | 理由 |
 |---|---|---|
-| `Label` | `dev.cumin-works.cumin` | plistの名前と、`launchctl` のサービスの指定 (`gui/<uid>/<Label>`) に使う |
+| `Label` | `dev.cloveclove.cumin` | plistの名前と、`launchctl` のサービスの指定 (`gui/<uid>/<Label>`) に使う |
 | `ProgramArguments` | 実行中のcuminの絶対パス、`run`、`--config`、設定ファイル | `Program` は絶対パスでなければならない (`man launchd.plist`) |
 | `RunAtLoad` | true | ログインで起動する。`KeepAlive` が含意するが、読む人のために書く |
 | `KeepAlive` | `{ SuccessfulExit = false }` | 0以外で終わったときだけ起動し直す。`launchctl kill SIGTERM` で止めたcuminは0で終わるので、止めたままになる。`true` にすると、手で止めても戻ってしまう |

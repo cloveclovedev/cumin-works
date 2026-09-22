@@ -24,7 +24,7 @@ import (
 // LaunchAgentLabel identifies the job in launchd. It is also the name of
 // the plist and the last part of a service target
 // (gui/<uid>/<LaunchAgentLabel>).
-const LaunchAgentLabel = "dev.cumin-works.cumin"
+const LaunchAgentLabel = "dev.cloveclove.cumin"
 
 // Names of the log files under the state directory.
 const (

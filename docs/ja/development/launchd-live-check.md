@@ -30,8 +30,8 @@ Agent は起動しないので、利用枠は使わない。対象は sandbox �
 ```sh
 scripts/install.sh                     # ~/.local/bin/cumin に置く
 ~/.local/bin/cumin setup launchd       # plist を書き、launchctl のコマンドを表示する
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cumin-works.cumin.plist
-launchctl print gui/$(id -u)/dev.cumin-works.cumin | grep -E "state|pid|last exit code|runs ="
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cloveclove.cumin.plist
+launchctl print gui/$(id -u)/dev.cloveclove.cumin | grep -E "state|pid|last exit code|runs ="
 tail -f ~/.local/state/cumin/cumin.log
 ```
 
@@ -42,13 +42,13 @@ tail -f ~/.local/state/cumin/cumin.log
 止めるときと外すとき:
 
 ```sh
-launchctl kill SIGTERM gui/$(id -u)/dev.cumin-works.cumin   # 止める
+launchctl kill SIGTERM gui/$(id -u)/dev.cloveclove.cumin   # 止める
 ~/.local/bin/cumin setup launchd --remove                   # 止めて、plist を消す
 ```
 
 `--remove` が消すのは plist だけである。ログ (`~/.local/state/cumin/`) と実行ファイルは残るので、確認のあとに要らなければ手で消す。
 
-`poll_interval` が長いと、3から5の確認に時間がかかる。確認の間だけ `"15s"` にしてもよい。設定を読むのは起動のときだけなので、`launchctl bootstrap` の前に変える。あとから変えたときは、`launchctl kickstart -k gui/$(id -u)/dev.cumin-works.cumin` で読み直させる。確認が終わったら元に戻す。
+`poll_interval` が長いと、3から5の確認に時間がかかる。確認の間だけ `"15s"` にしてもよい。設定を読むのは起動のときだけなので、`launchctl bootstrap` の前に変える。あとから変えたときは、`launchctl kickstart -k gui/$(id -u)/dev.cloveclove.cumin` で読み直させる。確認が終わったら元に戻す。
 
 ## 記録の決まり
 

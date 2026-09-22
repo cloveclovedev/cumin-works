@@ -10,7 +10,7 @@
 # path of cumin as it is, so it does not have to be written again.
 set -eu
 
-label="dev.cumin-works.cumin"
+label="dev.cloveclove.cumin"
 prefix="${HOME}/.local/bin"
 restart=0
 
