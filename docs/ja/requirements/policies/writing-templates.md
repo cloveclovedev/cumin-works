@@ -101,8 +101,8 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 | テンプレート | 置き場所 |
 |---|---|
 | 要求Issue | 対象のリポジトリの `.github/ISSUE_TEMPLATE/` に置くと、OwnerがGitHubの画面でIssueを作るときに使える |
-| Pull Requestの説明 | 対象のリポジトリの `.github/pull_request_template.md` に置いてもよい。ただし、AgentがAPIでPull Requestを作るときには自動では使われない見込みなので、cuminが指示として渡す |
-| それ以外 | cuminが、roleとしての指示の一部として、依頼のたびにAgentに渡す |
+| Pull Requestの説明 | 対象のリポジトリの `.github/pull_request_template.md` に置いてもよい。ただし、AgentがAPIでPull Requestを作るときには使われない (実測 52) ので、cuminがskillとして渡す |
+| それ以外 | cuminが、依頼のたびに、roleとしての指示と一緒にskillとして渡す。テンプレートごとに1つのskillにし、Agentはその文章を書く直前にskillを読む。平易な英語の決まりだけは、全ての文章に当てはまるので、指示の本文に入れる |
 
 GitHubのIssueのテンプレートと入力フォームは、画面でIssueを作るときだけ働く。AgentがAPIでIssueを作るときには働かないので、Agentは自分で見出しを書く。
 

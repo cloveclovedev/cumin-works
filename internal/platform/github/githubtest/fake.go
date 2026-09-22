@@ -6,8 +6,12 @@
 package githubtest
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -59,9 +63,24 @@ type Repository struct {
 	Owner, Name string
 	Issues      map[int]*Issue
 	Labels      []Label
+	// DefaultBranch is the name that the snapshot reads. Empty means that
+	// the repository has no commit, as a new repository on GitHub.
+	DefaultBranch string
+	// Files are the files of the default branch, by path. SetFile writes
+	// them; the snapshot reads the files of .cumin/.
+	Files map[string]File
 	// installationID is the id of the installation of the App on the
 	// repository, from the order of creation.
 	installationID int64
+}
+
+// File is one file of the default branch of a fake repository. Binary and
+// Truncated make the fake answer as GitHub answers for a file that cumin
+// cannot read as a whole.
+type File struct {
+	Content   string
+	Binary    bool
+	Truncated bool
 }
 
 // Request is one request that the fake received.
@@ -101,7 +120,8 @@ func New(t *testing.T) (*Fake, *httptest.Server) {
 func (f *Fake) AddRepository(owner, name string) *Repository {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	r := &Repository{Owner: owner, Name: name, Issues: map[int]*Issue{}, installationID: int64(len(f.repositories) + 1)}
+	r := &Repository{Owner: owner, Name: name, Issues: map[int]*Issue{}, DefaultBranch: "main", Files: map[string]File{},
+		installationID: int64(len(f.repositories) + 1)}
 	f.repositories[key(owner, name)] = r
 	return r
 }
@@ -165,6 +185,20 @@ func (f *Fake) Issue(r *Repository, number int) *Issue {
 	copied.Labels = slices.Clone(issue.Labels)
 	copied.BlockedBy = slices.Clone(issue.BlockedBy)
 	return &copied
+}
+
+// SetFile puts a file on the default branch of the repository.
+func (f *Fake) SetFile(r *Repository, path string, file File) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r.Files[path] = file
+}
+
+// RemoveFile removes a file from the default branch of the repository.
+func (f *Fake) RemoveFile(r *Repository, path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(r.Files, path)
 }
 
 // AddLabel adds a label to the repository.
@@ -451,6 +485,9 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			SubIssues int     `json:"subIssues"`
 			Labels    int     `json:"labels"`
 			BlockedBy int     `json:"blockedBy"`
+			// RepositoryFiles asks for the default branch and the files of
+			// .cumin/. The client asks for them on the first page only.
+			RepositoryFiles bool `json:"repositoryFiles"`
 		} `json:"variables"`
 	}
 	if err := json.Unmarshal(body, &request); err != nil || !strings.Contains(request.Query, "rateLimit") {
@@ -490,16 +527,19 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	if len(page) > 0 {
 		endCursor = strconv.Itoa(page[len(page)-1]["number"].(int))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"data": map[string]any{
-			"repository": map[string]any{
-				"issues": map[string]any{
-					"pageInfo": map[string]any{"hasNextPage": hasNextPage, "endCursor": endCursor},
-					"nodes":    page,
-				},
-			},
-			"rateLimit": rateLimit(len(page)),
+	repository := map[string]any{
+		"issues": map[string]any{
+			"pageInfo": map[string]any{"hasNextPage": hasNextPage, "endCursor": endCursor},
+			"nodes":    page,
 		},
+	}
+	if v.RepositoryFiles {
+		repository["defaultBranchRef"] = defaultBranchRefJSON(repo)
+		repository["cuminConfig"] = blobJSON(repo, ".cumin/config.toml")
+		repository["cuminRiskCriteria"] = blobJSON(repo, ".cumin/risk-criteria.md")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"repository": repository, "rateLimit": rateLimit(len(page))},
 	})
 }
 
@@ -526,6 +566,45 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		return map[string]any{"number": number, "state": state(closed)}
 	})
 	return node
+}
+
+// defaultBranchRefJSON answers the default branch and the commit at its
+// head. The head changes when a file changes, as a commit does.
+func defaultBranchRefJSON(repo *Repository) any {
+	if repo.DefaultBranch == "" {
+		return nil
+	}
+	paths := slices.Sorted(maps.Keys(repo.Files))
+	head := sha1.New()
+	for _, path := range paths {
+		file := repo.Files[path]
+		fmt.Fprintf(head, "%s\x00%s\x00", path, file.Content)
+	}
+	return map[string]any{
+		"name":   repo.DefaultBranch,
+		"target": map[string]any{"oid": hex.EncodeToString(head.Sum(nil))},
+	}
+}
+
+// blobJSON answers one file, or nil when the repository does not have it.
+// The oid is the blob hash of git, so that it changes with the content.
+func blobJSON(repo *Repository, path string) any {
+	file, ok := repo.Files[path]
+	if !ok {
+		return nil
+	}
+	sum := sha1.Sum([]byte(fmt.Sprintf("blob %d\x00%s", len(file.Content), file.Content)))
+	blob := map[string]any{
+		"oid":         hex.EncodeToString(sum[:]),
+		"byteSize":    len(file.Content),
+		"isBinary":    file.Binary,
+		"isTruncated": file.Truncated,
+		"text":        any(file.Content),
+	}
+	if file.Binary {
+		blob["text"] = nil
+	}
+	return blob
 }
 
 // connection builds one GraphQL connection with at most first nodes.

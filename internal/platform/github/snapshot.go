@@ -24,12 +24,37 @@ const (
 	snapshotBlockedBy = 20
 )
 
+// Paths of the files that a target repository keeps on its default branch.
+// cumin reads them with the poll query, never from a pull request branch
+// (cumin-core.md, the topic on settings).
+const (
+	CuminConfigPath       = ".cumin/config.toml"
+	CuminRiskCriteriaPath = ".cumin/risk-criteria.md"
+)
+
 // RepositorySnapshot is what one poll reads of one repository: the open
 // requirement issues with their sub-issues, and the rate limit of the call.
 // docs/ja/designs/cumin-core.md, topic "What one poll reads".
 type RepositorySnapshot struct {
+	// DefaultBranch is the name of the default branch, and DefaultBranchOID
+	// is the commit at its head. A repository without a commit has neither.
+	DefaultBranch    string
+	DefaultBranchOID string
+	// CuminConfig and CuminRiskCriteria are the files of .cumin/ on the
+	// default branch. A file that does not exist is nil.
+	CuminConfig       *RepositoryFile
+	CuminRiskCriteria *RepositoryFile
 	RequirementIssues []Issue
 	RateLimit         RateLimit
+}
+
+// RepositoryFile is one text file of the default branch. OID is the blob of
+// git: it changes when the content changes, so the caller can parse the file
+// again only after a change.
+type RepositoryFile struct {
+	Path string
+	OID  string
+	Text string
 }
 
 // Issue is one issue as the snapshot sees it. A requirement issue has
@@ -57,11 +82,20 @@ type RateLimit struct {
 }
 
 // snapshotQuery reads the open issues with the requirement label, their
-// sub-issues, and the state of the blocked-by issues. The field names come
-// from the design note and measured-constraints.md row 55, and were checked
-// against the schema by introspection on 2026-09-21.
-const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!) {
+// sub-issues, the state of the blocked-by issues, and the files of .cumin/
+// on the default branch. The field names come from the design note and
+// measured-constraints.md row 55, and were checked against the schema by
+// introspection on 2026-09-21 and on 2026-09-22 (Repository.object and Blob).
+//
+// "HEAD:" is the default branch of the repository, so the files never come
+// from a pull request branch. The files are not a connection, so they do not
+// change the cost of the query; $repositoryFiles asks for them on the first
+// page only, because one poll reads them once.
+const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $repositoryFiles: Boolean!) {
   repository(owner: $owner, name: $name) {
+    defaultBranchRef @include(if: $repositoryFiles) { name target { oid } }
+    cuminConfig: object(expression: "HEAD:` + CuminConfigPath + `") @include(if: $repositoryFiles) { ...cuminFile }
+    cuminRiskCriteria: object(expression: "HEAD:` + CuminRiskCriteriaPath + `") @include(if: $repositoryFiles) { ...cuminFile }
     issues(states: [OPEN], labels: ["cumin/type/requirement"], first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes {
@@ -81,13 +115,25 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
     }
   }
   rateLimit { cost remaining }
+}
+
+fragment cuminFile on GitObject {
+  ... on Blob { oid text byteSize isBinary isTruncated }
 }`
 
 // The GraphQL response. It stops in this package.
 type snapshotResponse struct {
 	Data struct {
 		Repository *struct {
-			Issues struct {
+			DefaultBranchRef *struct {
+				Name   string `json:"name"`
+				Target *struct {
+					OID string `json:"oid"`
+				} `json:"target"`
+			} `json:"defaultBranchRef"`
+			CuminConfig       *blobNode `json:"cuminConfig"`
+			CuminRiskCriteria *blobNode `json:"cuminRiskCriteria"`
+			Issues            struct {
 				PageInfo pageInfo    `json:"pageInfo"`
 				Nodes    []issueNode `json:"nodes"`
 			} `json:"issues"`
@@ -100,6 +146,33 @@ type snapshotResponse struct {
 	Errors []struct {
 		Message string `json:"message"`
 	} `json:"errors"`
+}
+
+// blobNode is one file of the query. An object that is not a blob (a
+// directory, for example) answers the fragment with no field.
+type blobNode struct {
+	OID         string  `json:"oid"`
+	Text        *string `json:"text"`
+	ByteSize    int     `json:"byteSize"`
+	IsBinary    bool    `json:"isBinary"`
+	IsTruncated bool    `json:"isTruncated"`
+}
+
+// file converts the node. A file that cumin cannot read as a whole is an
+// error: a rule must never run on a part of a file.
+func (n *blobNode) file(path string) (*RepositoryFile, error) {
+	if n == nil {
+		return nil, nil
+	}
+	switch {
+	case n.OID == "":
+		return nil, fmt.Errorf("%s is not a file", path)
+	case n.IsBinary || n.Text == nil:
+		return nil, fmt.Errorf("%s is not text", path)
+	case n.IsTruncated:
+		return nil, fmt.Errorf("%s is too large to read in one call (%d bytes)", path, n.ByteSize)
+	}
+	return &RepositoryFile{Path: path, OID: n.OID, Text: *n.Text}, nil
 }
 
 type pageInfo struct {
@@ -136,9 +209,11 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 	var snapshot RepositorySnapshot
 	var after *string
 	for {
+		firstPage := after == nil
 		variables := map[string]any{
 			"owner": owner, "name": repo, "first": snapshotIssuePage, "after": after,
 			"subIssues": snapshotSubIssues, "labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
+			"repositoryFiles": firstPage,
 		}
 		var resp snapshotResponse
 		request := map[string]any{"query": snapshotQuery, "variables": variables}
@@ -159,6 +234,11 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 		// sum the cost, and keep the remaining points of the last call.
 		snapshot.RateLimit.Cost += resp.Data.RateLimit.Cost
 		snapshot.RateLimit.Remaining = resp.Data.RateLimit.Remaining
+		if firstPage {
+			if err := snapshot.readRepositoryFiles(resp); err != nil {
+				return RepositorySnapshot{}, fmt.Errorf("github: read the snapshot of %s/%s: %w", owner, repo, err)
+			}
+		}
 		for _, node := range resp.Data.Repository.Issues.Nodes {
 			issue, err := node.issue()
 			if err != nil {
@@ -173,6 +253,25 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 		cursor := page.EndCursor
 		after = &cursor
 	}
+}
+
+// readRepositoryFiles takes the default branch and the files of .cumin/
+// from the answer of the first page.
+func (s *RepositorySnapshot) readRepositoryFiles(resp snapshotResponse) error {
+	repository := resp.Data.Repository
+	if ref := repository.DefaultBranchRef; ref != nil {
+		s.DefaultBranch = ref.Name
+		if ref.Target != nil {
+			s.DefaultBranchOID = ref.Target.OID
+		}
+	}
+	config, configErr := repository.CuminConfig.file(CuminConfigPath)
+	criteria, criteriaErr := repository.CuminRiskCriteria.file(CuminRiskCriteriaPath)
+	if err := errors.Join(configErr, criteriaErr); err != nil {
+		return err
+	}
+	s.CuminConfig, s.CuminRiskCriteria = config, criteria
+	return nil
 }
 
 // issue converts one node. A connection with more nodes than the page size
