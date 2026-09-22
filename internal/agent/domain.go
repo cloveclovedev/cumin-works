@@ -154,6 +154,11 @@ func (e *QuotaNotRead) Unwrap() error { return e.Err }
 type Run struct {
 	SessionID string
 	Result    Result
+	// BotLogin is the login of the bot user of the App of the role,
+	// "<slug>[bot]". Service.Start sets it from the identity that it read;
+	// the CLI adapter leaves it empty, because it knows no App. I2
+	// compares it with the author of the pull request.
+	BotLogin string
 	// Quota is the quota usage that the run reported. QuotaRead is false
 	// when the run reported none; then Quota is empty.
 	Quota     QuotaUsage

@@ -48,7 +48,7 @@ Hostに置いて使うときは、`scripts/install.sh` を使う。ビルドし�
 
 ## 今できること
 
-`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1) と、Implementerを起動して実行の終わりを待つところまでである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
+`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1) と、Implementerの実行、そして実行のあとのPull Requestの検証 (I2) までである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
 
 ```sh
 go run ./cmd/cumin run --config <設定ファイル>
@@ -61,6 +61,7 @@ go run ./cmd/cumin run --config <設定ファイル>
 3. Agentに渡すskillを、状態のディレクトリの下に書き出す。
 4. 対象のリポジトリごとに、足りないラベル (`cumin/type/requirement`、`cumin/status/*`、`risk/*`) を作る。
 5. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`work_dir` の下に worktree を用意して、Implementer を起動する。実行は定期確認とは別に進むので、定期確認は止まらない。実行が終わると、結果 (`done` か `blocked`) とセッションの番号、または異常終了の種類がログに出る。
+6. 結果が `done` なら、そのリポジトリを読み直して、Issueを閉じる開いているPull Requestがあること、その作成者が Implementer の App であること、worktree の先頭のコミットがpushされていることを確かめる (I2)。通れば、ラベルを `cumin/status/awaiting-checks` に替える。通らなければ、どの確認で落ちたかをログに出すだけで、ラベルは替えない。
 
 Implementer の実行は、本物の Claude Code を起動し、利用枠を使う。
 

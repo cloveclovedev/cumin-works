@@ -50,14 +50,14 @@
 | `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1)、実行終了の判定 (I2) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
-| | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用し、Implementerを起動する (I/O) |
+| | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用し、Implementerを起動し、実行終了を判定する (I/O) |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `service.go` | 1回の依頼の入口 `Start` (使用率、token、身元、実行) と、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |
 | | `quota.go` | 使用率を読む最小の実行 |
-| | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け |
+| | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け、先頭のコミットの読み取り |
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
 | | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立てと書き出し、`launchctl` のコマンドの表示 |
 | `roles` | `roles.go` | roleの指示 (`<role>.md` に平易な英語の決まりを連結したもの) |

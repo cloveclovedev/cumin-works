@@ -43,7 +43,6 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
 | Chief Engineerが要件文書の変更を下書きする | Ownerが決めた内容を受けて、Chief Engineerが、要件文書の変更をPull Requestにする。Ownerの仕事は、文書を直すことから、読んでmergeすることに変わる。要件文書を変えられるのはOwnerのmergeだけ、という決まりは変えない | v0.1では、要件文書はOwnerが直す。Chief Engineerの権限は、Issueの読み書きとコードの読み取りだけで、ブランチのpushとPull Requestの作成ができない。保護されたパスのcheckは、Botが作ったPull Requestの全てに掛かるので、Chief Engineerを免除する一覧が要る。免除する相手を名前で指定する形なら、名前を間違えても、checkが動いて失敗する側に倒れる | 要件文書の変更の相談が続き、Ownerが文書を直す手間が目立ってきたとき |
-| roleの中身をリポジトリごとに変える | Implementer、Reviewerという箱はcuminに固定で持つ。その中のより細かいrole (例: FlutterのAndroidのUIを担当するImplementer) と、渡す指示やskillを、対象のリポジトリの `.cumin/` で指定できるようにする | v0.1では、対象のリポジトリにある指示 (`CLAUDE.md`、skillなど) をAgentが読むので、専用の仕組みがなくても足りる見込み | 1つのリポジトリの中で、作業の種類によって渡す指示を変えたくなったとき |
 | roleごとの保護されたパス | 変更させないパスを、roleごとに指定する | v0.1では、コードをpushするのがImplementerだけなので、一覧は1つで足りる。checkは、Botが作ったPull Requestの全てに、同じ一覧で掛かる | pushできるroleが増えたとき |
 | AgentにMCPサーバを使わせる | 起動の記録の確認は、`mcp_servers` が空でなければ異常終了にするので、Agentはどの MCP サーバも使えない。使わせるなら、worktreeの `.mcp.json` (project scope) に書かれた名前だけを許し、`.mcp.json` を保護されたパスの初期値に足す。そうしないと、ブランチがサーバを足して、そのブランチのAgentがつなぐ | v0.1では、Agentが MCP サーバを使う必要がない。claude.aiのコネクタは `ENABLE_CLAUDEAI_MCP_SERVERS=false` で消す | Agentに MCP サーバを使わせたくなったとき。保護されたパスの初期値は要件文書なので、そのときに変える |
 | セキュリティだけを見るレビュー | 毎回のレビューとは別に、セキュリティだけを見るレビューを足す | v0.1では、毎回のReviewerの6つの問いと、GitHubのcheck (secret scanningなど) で見る | セキュリティを特に重く見るプロダクトを、cuminに任せるとき |
@@ -198,7 +197,7 @@ cumin本体の役割を、次のように絞る。
 |---|---|---|
 | cumin本体 | OSS として public | ワークフローの基盤。GitHubの定期確認、状態の管理、Agentの起動、事実の確認、merge、通知、利用枠の管理 |
 | 要件管理の道具 | private | 要件文書と要求Issueのトレーサビリティ (上の項目)。対象のリポジトリに入れる workflow と、Agentに渡す指示 |
-| roleの拡張 | private | 広報、秘書、動画の編集者などのrole。GitHub App の権限は、既存のrole (例: Implementer) を使い回せる見込み。中身は、注入する指示と、cuminと協調するための skill の組 |
+| disciplineの拡張 | private | 広報、秘書、動画の編集者などのdiscipline。GitHub App の権限は、既存のrole (例: Implementer) を使い回せる見込み。中身は、roleに足す指示と、cuminと協調するための skill の組 |
 
 private の部品は private リポジトリに置く。GitHubのプランによって、private リポジトリでは ruleset などの機能に制約がある。着手するときに、GitHubの文書で確かめる。
 
@@ -207,14 +206,14 @@ private の部品は private リポジトリに置く。GitHubのプランによ
 本体に足すかどうかの基準は、「AIの資源と権限の制御に関わるか」である。
 
 - GitHub上の成果物 (Issue、コメント、check、Pull Request) で分かれるものは、本体に拡張点は要らない。要件管理の道具の構造的な検査がこれに当たる。
-- 外の道具がAgentを使いたいときは、本体に1つの汎用の入口が要る。案は、役割を指定した作業Issue (例: `cumin/type/task`) である。作業Issueが置かれたら、cuminがその役割のAgentを起動し、Issueの本文を指示として渡し、結果をコメントで返す。道具はIssueを書くだけで、Agentの起動、token、権限、利用枠の管理は本体に残る。要件管理の意味的な検査も、roleの拡張も、この入口を使える。
-- roleの中身を差し替える仕組みは、Agentの表の「roleの中身をリポジトリごとに変える」で扱う。roleの拡張は、その仕組みの利用者になる。
+- 外の道具がAgentを使いたいときは、本体に1つの汎用の入口が要る。案は、役割を指定した作業Issue (例: `cumin/type/task`) である。作業Issueが置かれたら、cuminがその役割のAgentを起動し、Issueの本文を指示として渡し、結果をコメントで返す。道具はIssueを書くだけで、Agentの起動、token、権限、利用枠の管理は本体に残る。要件管理の意味的な検査も、disciplineの拡張も、この入口を使える。
+- roleの中身を差し替える仕組みは、[roleとdisciplineの分離](#roleとdisciplineの分離) で扱う。disciplineの拡張は、その仕組みの利用者になる。
 
 #### 事業の像
 
 - cumin本体を public にして、技術に詳しい早期の利用者を集める
 - 収益は、導入がうまくいかない人への支援、追加の機能、保守で得る
-- private の部品 (要件管理の道具、roleの拡張) は、追加の機能として提供する
+- private の部品 (要件管理の道具、disciplineの拡張) は、追加の機能として提供する
 
 #### 後回しにした理由
 
@@ -223,13 +222,75 @@ v0.1 の目標は、cumin本体で peppercheck の再構築を動かすことで
 #### 見直すきっかけ
 
 - v0.1 が動き、外の人に見せる段階になったとき。文書の表の「英語版の文書と、文書のサイト」と同じ時期になる
-- roleの拡張の、最初の具体例が要るとき
+- disciplineの拡張の、最初の具体例が要るとき
 - 外の道具がAgentを使う必要が出たとき。作業Issueの案を、`issue-states.md` の行として書く
 - 着手するときは、事業の像を `overview.md` (Ownerが書く) に、本体の範囲を `cumin-core.md` の「受け持つこと」と「受け持たないこと」に書く
 
 #### 関連
 
-- Agentの表: roleの中身をリポジトリごとに変える
+- [roleとdisciplineの分離](#roleとdisciplineの分離)
 - 文書の表: 英語版の文書と、文書のサイト
 - [要求仕様書](overview.md) の目的と登場人物
 - [cumin本体の要件](cumin-core.md) の受け持つことと受け持たないこと
+
+### roleとdisciplineの分離
+
+#### 背景
+
+cuminのroleの指示は、性質の違う2つのことを1つのファイルに持っている。1つはcuminとAgentの約束 (1つの実装Issueを1つのPull Requestにする、`cumin/*` のラベルを変えない、決まった形式で結果を返す) で、扱う仕事が何であっても変わらない。もう1つはソフトウェア開発という分野の基準 (テスト、ビルド、lintが通ることを完了の条件にする、Conventional Commits、riskの基準、実装Issueの分割の目安) で、分野が変われば変わる。
+
+広報の仕事をcuminに乗せられるか、という検討から出てきた。分野が変わっても、Issueの状態遷移、Agentの起動、利用枠と権限の管理は同じでよい。変わるのは、何をもって良い仕事とするかである。
+
+後ろの部分をdiscipline (専門領域) と呼ぶ。roleはcuminが動かす箱で、disciplineはその箱を満たす分野である。同じroleに、software-engineering、communicationsのように差し替える。
+
+指示の文面を2枚に割るところまでは、要求Issue #125 でv0.1に入れる。この項目が扱うのは、その先の機構である。
+
+#### 課題
+
+- 分野の基準を差し替える手段がない。対象のリポジトリの `CLAUDE.md` とskillに置けるのは、そのリポジトリ固有の事情である。分野の基準はリポジトリをまたいで同じなので、置くとリポジトリの数だけ書き写すことになる。
+- 1つのリポジトリの中で、仕事の種類によって指示を変えられない。開発と広報が同じリポジトリにあると、どちらの基準も全ての依頼に効く。
+- 同じroleの中の、より細かい専門 (例: FlutterのAndroidのUIを担当するImplementer) も、同じ手段がないと足せない。
+
+#### 検討した選択肢
+
+| 案 | 内容 | 良い点 | 悪い点 |
+|---|---|---|---|
+| A. リポジトリの指示だけで済ませる | 分野の基準も、対象のリポジトリの `CLAUDE.md` とskillに書く | 本体に足すものがない。v0.1はこれ | 同じ基準を、リポジトリの数だけ書き写す。1つのリポジトリで仕事の種類を分けられない |
+| B. リポジトリの設定で1つ選ぶ | `.cumin/config.toml` にdisciplineを1つ書く | 単純。保護されたパスなので、変更にOwnerの承認が要る | 1つのリポジトリに1つの分野しか置けない |
+| C. Issueのラベルで選び、なければリポジトリの既定 | `cumin/discipline/<名前>` を見て、なければBの既定を使う | 1つのリポジトリで分野を混ぜられる。判定に使うのはIssueのラベルだけ、という原則5に沿う | 解決の順序と、決まらないときの扱いを決める必要がある |
+| D. roleを増やす | 広報のroleをcuminに足す | 仕組みを足さなくてよい | GitHub App、Keychainの鍵、設定、cumin本体の要件に波及する。状態遷移は同じなのに、箱だけ増える |
+
+結論は、Cを軸にして、その既定としてBを持つことである。Dは採らない。
+
+#### 方針の案
+
+- 名前は職業名ではなく分野の名前にする (`software-engineering`、`communications`)。roleとdisciplineは別の語として使い分ける。
+- 指示の合成は、roleの指示、disciplineの指示、平易な英語の決まりの順である。disciplineはroleに足すだけで、roleの禁止事項を緩めない。食い違ったらroleが勝つ、とroleの側に書く。実際の強制は指示ではなく、GitHub Appの権限、rulesetと保護されたパスで行う。指示は権限ではない。
+- riskは2つに分ける。ラベルの意味 (誰がmergeを決めるか) は本体に残す。何をhighとするかの基準は、分野の判断なのでdisciplineが持つ。基準には既に3段の上書き (初期値、Host、リポジトリ) があるので、disciplineは初期値の段を差し替える形にし、段は増やさない。
+- 選び方は、実装Issueのラベル `cumin/discipline/<名前>`、親の要求Issueのラベル、リポジトリの `.cumin/config.toml` の既定、の順に解決する。
+- ラベルは、riskと同じ扱いにする。Chief Engineerが実装Issueを作るときに仮に付け、Ownerが分割結果の確認で確定する。Agentが `cumin/*` のラベルを付けないという決まりの例外が、`risk/*` に続いて2つ目になるので、[Agentに共通の要件](agents/common.md) に書く。
+- 解決できないとき (知らない名前、または1つのIssueに2つ以上付いている) は、Agentを起動せず、`cumin/status/awaiting-owner-decision` に替えてOwnerに通知する。ラベルが1つも付いていないのはエラーではなく、既定を使う。黙って既定に落とすのは、名前が付いていないときだけにする。間違った名前を既定で埋めると、違う基準のまま作業が進む。
+- まずは、1つのroleに1つのdisciplineだけにする。複数を載せる案は、その次に考える。載せるときは、連結の順序を設定の並び順で決める。GitHubのラベルは集合であり順序を持たないので、ラベルに順序を求めると、同じ状態から同じ指示が組み立てられなくなる。
+- 本体はdisciplineの名前を1つも知らない。`software-engineering` も、追加のdisciplineとまったく同じ経路で読み込む。特別扱いを1つ作ると、同梱のdisciplineが通らない経路を、追加のdisciplineだけが通ることになる。
+- 追加のdisciplineが依存してよいもの (roleが定める見出し、`cumin-*` skillの存在、結果の形式) を契約として決め、cuminにその版を1つ持たせる。roleの指示を変えたときに、外のdisciplineが黙って壊れないようにする。
+- 追加のdisciplineはHostのディレクトリに置き、skillは `--add-dir` で渡す。起動の記録の確認が見るのは `plugins` と `mcp_servers` なので、skillとして渡す限り引っかからない。
+- 外部サービスへの投稿 (SNSなど) は、disciplineの仕事にしない。成果物はリポジトリのファイルとして残し、mergeされたものをGitHub Actionsが投稿する。cuminの完了の判定はGitHubの事実のままで、公開の認証情報もcuminの権限の範囲に入らない。
+
+#### 後回しにした理由
+
+v0.1の目標は、cumin本体でpeppercheckの再構築を動かすことである。分野が1つの間は、対象のリポジトリの `CLAUDE.md` とskillで足りる。指示の文面さえ割っておけば (#125)、機構を足すときの作業は、文章の書き直しではなく、読み込み口を外に開くことだけになる。
+
+#### 見直すきっかけ
+
+- 2つ目の分野を実際に回したくなったとき。
+- 1つのリポジトリの中で、仕事の種類によって指示を変えたくなったとき。
+- 追加のdisciplineを人に渡す段になったとき。契約と版が要る。
+- 着手するときは、指示の構成を `agents/common.md` に、ラベルと解決の順序を `issue-states.md` のラベルの一覧とR1、I1の確かめることに、設定を `cumin-core.md` に書く。
+
+#### 関連
+
+- 要求Issue #125。v0.1で、指示の文面をroleとdisciplineに割る
+- [本体と拡張の分け方、事業の考え方](#本体と拡張の分け方事業の考え方) のdisciplineの拡張と、役割を指定した作業Issue (`cumin/type/task`)
+- Agentの表: roleごとの保護されたパス。pushするroleが増えるときに、一緒に考える
+- 対象を広げるの表: SNSの運用
+- [cumin本体の要件](cumin-core.md) の設定 (riskの基準の3段)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -221,8 +222,9 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 }
 
 // runImplementer prepares the worktree and runs one Implementer request to
-// its end. The end of the run is the trigger of the rules that follow (I2);
-// this requirement logs it.
+// its end. The end of the run is the trigger of I2 (verifyDone) for a done
+// result. A blocked result and an abnormal end are logged only; #81 builds
+// the label change, the comment, and the notification for them.
 func (s *Service) runImplementer(ctx context.Context, target Target, number int, branch, instruction string, role config.RoleSettings) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
@@ -255,7 +257,67 @@ func (s *Service) runImplementer(ctx context.Context, target Target, number int,
 		log.Error("the agent was not started", "error", err.Error())
 	default:
 		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+		if run.Result.Result != agent.ResultDone {
+			// blocked. The first line of blocked_reason is the question
+			// (decision-request.md). The label stays.
+			log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
+			return
+		}
+		s.verifyDone(ctx, log, target, number, workDir, run.BotLogin)
 	}
+}
+
+// verifyDone applies I2 after a done result. It reads the snapshot of the
+// repository again, because a rule that the end of a run triggers judges on
+// the facts of that moment, not on those of the last poll (cumin-core.md,
+// the topic on the GitHub client). It then reads the head commit of the
+// worktree and runs the pure check.
+//
+// On a pass the status label becomes cumin/status/awaiting-checks. A failed
+// check is logged with its kind and the label stays; #81 reads the same
+// value to change the label, comment, and notify. Nothing here is retried:
+// the next poll reads the facts again.
+func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, number int, workDir, botLogin string) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error("I2: no token", "error", err.Error())
+		return
+	}
+	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	if err != nil {
+		log.Error("I2: the snapshot was not read again", "error", err.Error())
+		return
+	}
+	sub, ok := toSnapshot(read).SubIssue(number)
+	if !ok {
+		log.Error("I2: the issue is not in the snapshot")
+		return
+	}
+	head, err := s.Workspace.Head(ctx, workDir)
+	if err != nil {
+		log.Error("I2: the head commit of the work directory was not read", "error", err.Error())
+		return
+	}
+	verification := VerifyDone(sub, botLogin, head)
+	if !verification.Passed {
+		log.Warn("I2: the verification failed", "failure", verification.Failure.String(),
+			"pull_request", verification.PullRequest)
+		return
+	}
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingChecks)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
+		log.Error("I2: the label was not changed", "error", err.Error())
+		return
+	}
+	log.Info("I2: verified the pull request", "pull_request", verification.PullRequest, "labels", labels)
+}
+
+// firstLine is the first line of s, for one log field. The first line of a
+// blocked_reason is the question that the Owner must answer.
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return line
 }
 
 // toSnapshot converts what the GitHub client read to the snapshot of the
