@@ -31,7 +31,7 @@
 |---|---|---|
 | `cmd/cumin` | `main.go` | サブコマンドの一覧と振り分け。終了コード |
 | | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、`agent.Service` と `workflow.Service` を組み立てて動かす |
-| | `setup.go` | `cumin setup github-apps` の引数と起動 |
+| | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
 | `internal/core/config` | `config.go` | Hostの設定ファイル (TOML) の読み込み、初期値、制限、既定のパス |
 | | `repository.go` | 対象のリポジトリの `.cumin/config.toml` を、Hostの設定に重ねる |
 | | `githubapps.go` | `github_apps` の表の読み書き (`cumin setup` が書く) |
@@ -43,7 +43,7 @@
 | | `manifest.go` | GitHub App Manifest flowの応答 |
 | | `users.go` | botのユーザの読み取り (`GET /users/{login}`) |
 | | `labels.go` | ラベルの一覧、作成、Issueのラベルの付け替え |
-| | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型 |
+| | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
 | | `items.go` | cuminが使うKeychainの項目の名前 |
@@ -51,6 +51,7 @@
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
 | | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用し、Implementerを起動する (I/O) |
+| | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `service.go` | 1回の依頼の入口 `Start` (使用率、token、身元、実行) と、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
@@ -58,13 +59,16 @@
 | | `quota.go` | 使用率を読む最小の実行 |
 | | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け |
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
+| | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立てと書き出し、`launchctl` のコマンドの表示 |
 | `roles` | `roles.go` | roleの指示 (`<role>.md` に平易な英語の決まりを連結したもの) |
 | | `skills.go` | テンプレートをskillとして書き出す |
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める |
-| | `*.md` | roleごとの指示の本文 |
+| | `risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
+| | `<role>.md` | roleごとの指示の本文 |
 | `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。`roles` が読む |
 | `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
 | | `setup-repo.sh`、`setup-repo/` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) |
+| | `install.sh` | cuminをビルドしてHostに置き、LaunchAgentを新しいバイナリに入れ替える |
 
 ## まだ決めていないこと
 
