@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -225,5 +226,40 @@ func TestSetupChecksTheArgumentsBeforeItOpensAnything(t *testing.T) {
 				t.Errorf("stdout = %q, want empty", stdout.String())
 			}
 		})
+	}
+}
+
+// `cumin setup launchd` takes the path of the running binary. A test binary
+// is a temporary build, which launchd could never find again, so the
+// command refuses it before it writes anything.
+func TestSetupLaunchdChecksTheArgumentsAndTheBinary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	var stdout, stderr bytes.Buffer
+	if code := runCLI([]string{"setup", "launchd", "extra"}, &stdout, &stderr); code != exitBadUsage {
+		t.Errorf("with an extra argument: exit code = %d, want %d", code, exitBadUsage)
+	}
+	if !strings.Contains(stderr.String(), "usage: cumin setup github-apps") || !strings.Contains(stderr.String(), "cumin setup launchd") {
+		t.Errorf("the usage does not list both subcommands:\n%s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := runCLI([]string{"setup", "launchd"}, &stdout, &stderr); code != exitFailure {
+		t.Errorf("exit code = %d, want %d", code, exitFailure)
+	}
+	want := "temporary build"
+	if runtime.GOOS != "darwin" {
+		want = "macOS only"
+	}
+	if !strings.Contains(stderr.String(), want) {
+		t.Errorf("stderr does not say %q:\n%s", want, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents")); !os.IsNotExist(err) {
+		t.Errorf("the command wrote into the home directory (err = %v)", err)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty", stdout.String())
 	}
 }
