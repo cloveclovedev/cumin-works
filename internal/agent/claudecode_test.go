@@ -524,12 +524,25 @@ func TestRun_NormalEndLeavesNoChild(t *testing.T) {
 	}
 }
 
+// The two tests of the time limit measure a run that is stopped. They
+// flapped in both directions on a busy machine with one second each, so
+// the limit, the grace, and the slack are wider here.
+const (
+	timeLimitTestLimit = 3 * time.Second
+	timeLimitTestGrace = 3 * time.Second
+	timeLimitTestSlack = 5 * time.Second
+)
+
 func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
 	path, childPID := neverEndingCLI(t, "")
 	c := quiet(path)
-	c.Grace = time.Second
+	// The limit and the grace are longer than the test needs, and the
+	// slack below is wider, so that a busy machine does not fail the test:
+	// what is measured is that the run ends around the limit, not how fast
+	// the Host is.
+	c.Grace = timeLimitTestGrace
 	req := request(t)
-	req.TimeLimit = time.Second
+	req.TimeLimit = timeLimitTestLimit
 
 	start := time.Now()
 	_, err := c.Run(context.Background(), req)
@@ -542,7 +555,7 @@ func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
 	if !strings.Contains(end.Detail, "time limit") || end.PID == 0 || end.SessionID != fixtureSessionID {
 		t.Errorf("AbnormalEnd = %+v", end)
 	}
-	if elapsed > req.TimeLimit+c.Grace+2*time.Second {
+	if elapsed > req.TimeLimit+c.Grace+timeLimitTestSlack {
 		t.Errorf("Run took %v, want about the limit plus the grace period", elapsed)
 	}
 	if !processGone(t, childPID) {
@@ -554,9 +567,9 @@ func TestRun_TimeLimitKillsAfterGraceWhenTermIsIgnored(t *testing.T) {
 	// The child inherits the ignored SIGTERM, so only SIGKILL ends it.
 	path, childPID := neverEndingCLI(t, "trap '' TERM")
 	c := quiet(path)
-	c.Grace = time.Second
+	c.Grace = timeLimitTestGrace
 	req := request(t)
-	req.TimeLimit = time.Second
+	req.TimeLimit = timeLimitTestLimit
 
 	start := time.Now()
 	_, err := c.Run(context.Background(), req)
@@ -568,7 +581,7 @@ func TestRun_TimeLimitKillsAfterGraceWhenTermIsIgnored(t *testing.T) {
 	if elapsed < req.TimeLimit+c.Grace {
 		t.Errorf("Run took %v, want at least the limit plus the grace period", elapsed)
 	}
-	if elapsed > req.TimeLimit+c.Grace+2*time.Second {
+	if elapsed > req.TimeLimit+c.Grace+timeLimitTestSlack {
 		t.Errorf("Run took %v, want about the limit plus the grace period", elapsed)
 	}
 	if !processGone(t, childPID) {

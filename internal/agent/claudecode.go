@@ -146,8 +146,11 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	}
 	// The role is not added here: the caller gives a logger that names it
 	// (Service.Start), and adding it again gave one line two "role"
-	// fields in the live scenario Impl-1.
-	log := c.logger().With("work_dir", req.WorkDir)
+	// fields in the live scenario Impl-1. The work directory is an
+	// absolute path of the Host, so it goes to one debug line, as
+	// Workspace does with the path of a worktree.
+	log := c.logger()
+	log.Debug("agent work directory", "work_dir", req.WorkDir)
 	if req.SessionID == "" {
 		log.Info("agent start", "session", "new", "time_limit", req.TimeLimit)
 	} else {

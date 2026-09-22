@@ -6,12 +6,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,16 +19,22 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
+	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
 
 // The tests cover the start of one request (#69) with a fake GitHub and
 // a fake CLI that serves both the quota run and the agent run.
 
 const (
-	serviceToken = "ghs_service_fake_token_0123456789"
 	serviceSlug  = "example-implementer"
 	serviceBotID = 424242
+	// serviceInstallation is the installation of the App on the first
+	// repository of the fake, which numbers them from 1.
+	serviceTokenPath = "/app/installations/1/access_tokens"
 )
+
+// serviceToken is the installation token that the fake GitHub creates.
+const serviceToken = githubtest.Token
 
 var serviceKey = sync.OnceValue(func() *rsa.PrivateKey {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -40,55 +44,15 @@ var serviceKey = sync.OnceValue(func() *rsa.PrivateKey {
 	return key
 })
 
-// fakeGitHub answers the four endpoints of a start and counts each.
-type fakeGitHub struct {
-	mu        sync.Mutex
-	counts    map[string]int
-	tokenBody map[string]any
-	// tokenStatus is the status of the token endpoint. 0 means 201.
-	tokenStatus int
-}
-
-func newFakeGitHub(t *testing.T) (*fakeGitHub, *github.AppClient) {
+// newFakeGitHub starts the fake GitHub of the acceptance tests with the
+// App of the Implementer and one repository, and returns the real client
+// pointed at it.
+func newFakeGitHub(t *testing.T) (*githubtest.Fake, *github.AppClient) {
 	t.Helper()
-	f := &fakeGitHub{counts: map[string]int{}}
-	server := httptest.NewServer(http.HandlerFunc(f.serve))
-	t.Cleanup(server.Close)
-	return f, github.NewAppClient(server.URL, nil)
-}
-
-func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	key := r.Method + " " + r.URL.Path
-	f.counts[key]++
-	write := func(status int, body any) {
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(body)
-	}
-	switch key {
-	case "GET /repos/example-org/example-repo/installation":
-		write(http.StatusOK, map[string]any{"id": 7})
-	case "POST /app/installations/7/access_tokens":
-		_ = json.NewDecoder(r.Body).Decode(&f.tokenBody)
-		if f.tokenStatus != 0 {
-			write(f.tokenStatus, map[string]any{"message": "Validation Failed"})
-			return
-		}
-		write(http.StatusCreated, map[string]any{"token": serviceToken, "expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)})
-	case "GET /app":
-		write(http.StatusOK, map[string]any{"slug": serviceSlug, "html_url": "https://github.com/apps/" + serviceSlug, "owner": map[string]any{"login": "example-org"}, "permissions": map[string]any{"contents": "write"}})
-	case "GET /users/" + serviceSlug + "[bot]", "GET /users/" + serviceSlug + "%5Bbot%5D":
-		write(http.StatusOK, map[string]any{"id": serviceBotID, "login": serviceSlug + "[bot]", "type": "Bot"})
-	default:
-		write(http.StatusNotFound, map[string]any{"message": "Not Found: " + key})
-	}
-}
-
-func (f *fakeGitHub) count(key string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.counts[key]
+	fake, server := githubtest.New(t)
+	fake.AddRepository("example-org", "example-repo")
+	fake.AddApp(githubtest.App{Slug: serviceSlug, Owner: "example-org", BotID: serviceBotID})
+	return fake, github.NewAppClient(server.URL, server.Client())
 }
 
 // serviceCLI is a fake CLI for both runs of a start. The quota run is
@@ -194,11 +158,15 @@ func TestStart_QuotaThenTokenThenIdentityThenRun(t *testing.T) {
 
 	// The token is limited to the repository and to the permissions of
 	// the App of the role.
-	if repos, _ := fake.tokenBody["repositories"].([]any); len(repos) != 1 || repos[0] != "example-repo" {
-		t.Errorf("token repositories = %v", fake.tokenBody["repositories"])
+	requests := fake.TokenRequests()
+	if len(requests) != 1 {
+		t.Fatalf("%d token requests, want 1", len(requests))
 	}
-	if perms, _ := fake.tokenBody["permissions"].(map[string]any); perms["contents"] != "write" || perms["issues"] != "read" {
-		t.Errorf("token permissions = %v, want the Implementer table", fake.tokenBody["permissions"])
+	if repos := requests[0].Repositories; len(repos) != 1 || repos[0] != "example-repo" {
+		t.Errorf("token repositories = %v", repos)
+	}
+	if perms := requests[0].Permissions; perms["contents"] != "write" || perms["issues"] != "read" {
+		t.Errorf("token permissions = %v, want the Implementer table", perms)
 	}
 	if strings.Contains(logs.String(), serviceToken) {
 		t.Errorf("the info logs hold the token:\n%s", logs.String())
@@ -265,13 +233,13 @@ func TestStart_IdentityIsReadOnceAndTokenEveryTime(t *testing.T) {
 			t.Fatalf("Start %d: %v", i+1, err)
 		}
 	}
-	if n := fake.count("GET /app"); n != 1 {
+	if n := fake.CountRequests(http.MethodGet, "/app"); n != 1 {
 		t.Errorf("GET /app = %d, want 1", n)
 	}
-	if n := fake.count("GET /users/"+serviceSlug+"[bot]") + fake.count("GET /users/"+serviceSlug+"%5Bbot%5D"); n != 1 {
+	if n := fake.CountRequests(http.MethodGet, "/users/"+serviceSlug+"[bot]"); n != 1 {
 		t.Errorf("GET /users = %d, want 1", n)
 	}
-	if n := fake.count("POST /app/installations/7/access_tokens"); n != 2 {
+	if n := fake.CountRequests(http.MethodPost, serviceTokenPath); n != 2 {
 		t.Errorf("token requests = %d, want 2", n)
 	}
 }
@@ -286,7 +254,7 @@ func TestStart_UnreadableQuotaStopsBeforeTheToken(t *testing.T) {
 	if !errors.As(err, &q) {
 		t.Fatalf("err = %v, want *QuotaNotRead", err)
 	}
-	if n := fake.count("POST /app/installations/7/access_tokens"); n != 0 {
+	if n := fake.CountRequests(http.MethodPost, serviceTokenPath); n != 0 {
 		t.Errorf("token requests = %d, want 0", n)
 	}
 	if _, statErr := os.Stat(filepath.Join(dir, "agent.args")); statErr == nil {
@@ -296,7 +264,7 @@ func TestStart_UnreadableQuotaStopsBeforeTheToken(t *testing.T) {
 
 func TestStart_TokenErrorStopsBeforeTheRun(t *testing.T) {
 	fake, client := newFakeGitHub(t)
-	fake.tokenStatus = http.StatusUnprocessableEntity
+	fake.FailNext(http.MethodPost, serviceTokenPath, http.StatusUnprocessableEntity)
 	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
 	s := newService(t, path, client, nil)
 
@@ -332,7 +300,7 @@ func TestStart_AppsAreKeyedByOwner(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "github_apps.other-org.implementer") {
 		t.Errorf("err = %v, want the missing setting named", err)
 	}
-	if n := fake.count("GET /repos/other-org/example-repo/installation"); n != 0 {
+	if n := fake.CountRequests(http.MethodGet, "/repos/other-org/example-repo/installation"); n != 0 {
 		t.Errorf("GitHub was called for the other owner %d times", n)
 	}
 	if _, err := s.Start(context.Background(), startRequest(t)); err != nil {
@@ -356,7 +324,7 @@ func TestStart_OwnerMatchesTheSettingsWithoutRegardToCase(t *testing.T) {
 	if _, err := s.Start(context.Background(), startRequest(t)); err != nil {
 		t.Fatalf("Start with the owner in another case: %v", err)
 	}
-	if n := fake.count("POST /app/installations/7/access_tokens"); n != 1 {
+	if n := fake.CountRequests(http.MethodPost, serviceTokenPath); n != 1 {
 		t.Errorf("token requests = %d, want 1", n)
 	}
 	s.Apps["example-org"] = s.Apps["Example-Org"]
