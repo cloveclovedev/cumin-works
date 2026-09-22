@@ -385,6 +385,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		Settings:        &role,
 	}
 
+	var firstKind agent.EndKind
 	for attempt := 1; attempt <= agentAttempts; attempt++ {
 		run, err := s.Agents.Start(ctx, request)
 		var abnormal *agent.AbnormalEnd
@@ -398,10 +399,11 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				return
 			}
 			if attempt < agentAttempts {
+				firstKind = abnormal.Kind
 				log.Info("I2: the same request runs again in the same work directory", "attempt", attempt+1)
 				continue
 			}
-			s.stopAfterAbnormalEnd(ctx, log, target, settings, number, abnormal)
+			s.stopAfterAbnormalEnd(ctx, log, target, settings, number, firstKind, abnormal.Kind)
 			return
 		case err != nil:
 			log.Error("the agent was not started", "error", err.Error())
@@ -418,11 +420,13 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	}
 }
 
-// stopAfterAbnormalEnd applies I2 after the second abnormal end of the same
-// request: the comment names the kind of the end and says that cumin ran
-// the request again, and the issue goes to the Owner.
-func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, end *agent.AbnormalEnd) {
-	reason := fmt.Sprintf("The Implementer run ended abnormally (%s), and it ended the same way when cumin ran the same request again.", end.Kind)
+// stopAfterAbnormalEnd applies I2 after the second abnormal end of the
+// same request: the comment names both kinds and says that cumin ran the
+// request again, and the issue goes to the Owner. The two runs can end in
+// different ways, and the Owner needs the kind of each one to know where
+// to look.
+func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, first, second agent.EndKind) {
+	reason := fmt.Sprintf("The Implementer run ended abnormally (%s). cumin ran the same request again, and it ended abnormally too (%s).", first, second)
 	sub, _ := s.subIssueNow(ctx, log, target, number)
 	pullRequest := 0
 	if pr, ok := sub.LatestPullRequest(); ok {

@@ -780,6 +780,25 @@ func TestI2_ARetryThatEndsWellIsVerified(t *testing.T) {
 	}
 }
 
+// The two runs can end in different ways. The comment names both kinds,
+// so that the Owner knows where to look.
+func TestI2_TheStopNoteNamesTheKindOfEachAbnormalEnd(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "no-result.jsonl", secondFixture: "invalid-result.jsonl"})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1", len(comments))
+	}
+	for _, want := range []string{"no result", "invalid result", "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+}
+
 // The stop note names the pull request that the agent left behind, so that
 // the Owner knows whether the work reached GitHub.
 func TestI2_TheStopNoteOfAnAbnormalEndNamesThePullRequest(t *testing.T) {
