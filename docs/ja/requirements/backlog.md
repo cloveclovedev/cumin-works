@@ -77,6 +77,9 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | セットアップの確認コマンド | 登録済みのGitHub Appの権限を、権限の表と比べる。インストール先、ruleset、workflowも確かめて、ずれを報告する。直すのは人が行う | v0.1は、使い捨てのリポジトリでの確認と、手順書で足りる | 権限の表を変えたとき。他の組織に導入して、検収が要るとき |
 | 1つのroleだけの登録し直しと、鍵の入れ替え | roleを指定して、GitHub Appを登録し直す。新しい鍵を発行して、Keychainの鍵を入れ替える | v0.1は、画面での手作業と、手順書で足りる | 鍵が漏れた疑いが出たとき。roleの設計を変えたとき |
 | 秘密の値をSecrets Managerに移す | macOSのKeychainから、Bitwarden Secrets Managerなどに移す | 1つのHostからしか使わないので、Keychainで足りる | 複数のHostから、同じ秘密の値を使うようになったとき |
+| ログの入れ替え (rotation) | `~/.local/state/cumin/cumin.log` は、launchdが標準出力を向ける先で、増え続ける。1つのリポジトリで60秒ごとの定期確認では、25分で35行だった。`newsyslog` の設定か、cuminの中で日ごとに切り替える | v0.1では、Hostが開発機で、ファイルの大きさが問題にならない | Mac miniで常時動かすようになったとき |
+| 別のHostへの移行の手順 | GitHub Appとそのインストールは使い回せるが、Keychainの項目とLaunchAgentは1台のものである。手順は、バイナリの組み込み、設定ファイルのコピー、Appごとの秘密鍵の発行とKeychainへの登録、`cumin setup launchd` になる。setup-guide.md に節を書く | まだ移す先がない | Mac miniに移すとき |
+| `scripts/install.sh` の弱点 | `--restart` は、ディスクのplistと入れたバイナリを突き合わせるが、`launchctl kickstart` はlaunchdが読み込み済みの定義を起動する。plistを書き換えて読み込み直していないと、別のパスのバイナリを起動して成功と報告しうる。スクリプトのテストもない (偽の `go` と `launchctl` が要る) | 差し替えは手順書のとおり `bootout` と `bootstrap` で行えば起きない | 差し替えで失敗したとき。他のHostに導入するとき |
 | Linuxへの対応 | HostとしてLinuxを使えるようにする | Hostは Mac mini を想定している | Linuxのマシンで動かしたくなったとき |
 
 ## 対象を広げる
