@@ -137,13 +137,14 @@ riskの基準は、このファイルではなく、同じディレクトリの 
 max_review_rounds = 2
 merge_method = "rebase"
 
-[roles.implementer]
-model = "sonnet"
-
 protected_paths = [
   ".cumin/",
   "CLAUDE.md",
   "AGENTS.md",
   ".claude/",
 ]
+
+# 表の外のキーは、表より前に書く。表のあとに書くと、その表のキーになる。
+[roles.implementer]
+model = "sonnet"
 ```

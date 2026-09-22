@@ -93,6 +93,30 @@ func TestWithRepository_ProtectedPathsChangesNothing(t *testing.T) {
 	}
 }
 
+// The example of docs/ja/development/configuration.md, section on the
+// repository settings file. A key of the root that stands after a table
+// belongs to that table in TOML, so the example is checked here.
+func TestWithRepository_TheExampleOfTheDocumentation(t *testing.T) {
+	const example = `
+max_review_rounds = 2
+merge_method = "rebase"
+
+protected_paths = [
+  ".cumin/",
+  "CLAUDE.md",
+  "AGENTS.md",
+  ".claude/",
+]
+
+[roles.implementer]
+model = "sonnet"
+`
+	s := withRepository(t, hostSettings(t, ""), example)
+	if s.MaxReviewRounds != 2 || s.MergeMethod != MergeRebase || s.Roles[RoleImplementer].Model != "sonnet" {
+		t.Errorf("settings = %+v", s)
+	}
+}
+
 func TestWithRepository_EmptyFileKeepsTheHostSettings(t *testing.T) {
 	host := hostSettings(t, "max_review_rounds = 5\nmerge_method = \"merge\"\n")
 	s := withRepository(t, host, "# nothing but a comment\n")
