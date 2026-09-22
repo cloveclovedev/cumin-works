@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -178,12 +179,133 @@ func InstallLaunchAgent(a LaunchAgent, force bool) (string, error) {
 	return "written", nil
 }
 
+// PlistState says what stands at the path of the plist.
+type PlistState string
+
+const (
+	// PlistAbsent: there is no file.
+	PlistAbsent PlistState = "absent"
+	// PlistOfThisJob: the file declares this job.
+	PlistOfThisJob PlistState = "this job"
+	// PlistOfAnotherJob: the file declares another job, or no job at all.
+	PlistOfAnotherJob PlistState = "another job"
+)
+
+// PlistState reads the file at the path of the plist and says whose job it
+// is. The check is the Label, not the whole file: a plist holds the PATH of
+// the shell that wrote it, so two files of the same job can differ without
+// meaning anything.
+func (a LaunchAgent) PlistState() (PlistState, error) {
+	data, err := os.ReadFile(a.PlistPath)
+	switch {
+	case os.IsNotExist(err):
+		return PlistAbsent, nil
+	case err != nil:
+		return "", fmt.Errorf("read %s: %w", a.PlistPath, err)
+	}
+	label, err := plistLabel(data)
+	if err != nil {
+		return "", fmt.Errorf("read the job of %s: %w", a.PlistPath, err)
+	}
+	if label != a.Label {
+		return PlistOfAnotherJob, nil
+	}
+	return PlistOfThisJob, nil
+}
+
+// plistLabel returns the value of the Label key of the job, or an empty
+// string when the file has none. The plist of a job is a dict of keys and
+// values, so the value of a key is the element that follows it.
+//
+// Only the dict of the job counts. A dict or an array that stands inside
+// it (EnvironmentVariables, for example) can hold a key named Label of its
+// own, and that key names nothing.
+func plistLabel(data []byte) (string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	depth := 0 // the dict of the job is depth 1
+	afterLabelKey := false
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return "", nil
+		}
+		if err != nil {
+			return "", err
+		}
+		switch element := token.(type) {
+		case xml.StartElement:
+			var text string
+			switch element.Name.Local {
+			case "dict", "array":
+				depth++
+				afterLabelKey = false
+			case "key":
+				if err := decoder.DecodeElement(&text, &element); err != nil {
+					return "", err
+				}
+				// The key is compared as it stands. " Label " is a key of
+				// its own, and it is not the one of the job.
+				afterLabelKey = depth == 1 && text == "Label"
+			case "string":
+				if err := decoder.DecodeElement(&text, &element); err != nil {
+					return "", err
+				}
+				if afterLabelKey {
+					return text, nil
+				}
+			default:
+				afterLabelKey = false
+			}
+		case xml.EndElement:
+			if element.Name.Local == "dict" || element.Name.Local == "array" {
+				depth--
+				afterLabelKey = false
+			}
+		}
+	}
+}
+
+// RemoveLaunchAgentFile removes the plist of the job.
+//
+// It reports what happened: "removed", "absent" when there is no file, or
+// "kept" when the file at that path holds another job and force is false.
+// Only the plist goes: the logs, the state, and the binary stay, because a
+// person put them there and may want them.
+func RemoveLaunchAgentFile(a LaunchAgent, force bool) (string, error) {
+	// force removes whatever stands at that path, without reading it. A
+	// file that does not parse is one of the reasons to give --force.
+	if !force {
+		state, err := a.PlistState()
+		switch {
+		case err != nil:
+			return "", err
+		case state == PlistAbsent:
+			return "absent", nil
+		case state == PlistOfAnotherJob:
+			return "kept", fmt.Errorf("%s does not hold the job %s. Look at the file, then run again with --force to remove it anyway", a.PlistPath, a.Label)
+		}
+	}
+	switch err := os.Remove(a.PlistPath); {
+	case os.IsNotExist(err):
+		return "absent", nil
+	case err != nil:
+		return "", fmt.Errorf("remove %s: %w", a.PlistPath, err)
+	}
+	return "removed", nil
+}
+
+// ServiceTarget is the job in the domain of the user, as launchctl wants
+// it (`man launchctl`).
+func (a LaunchAgent) ServiceTarget(uid int) string {
+	return fmt.Sprintf("gui/%d/%s", uid, a.Label)
+}
+
 // LaunchctlCommands returns the commands that start, stop, restart, and
 // remove the job, in the order of the setup guide. uid is the user id of
 // the Owner (`man launchctl`: a LaunchAgent of a logged-in user lives in
 // the gui domain).
 func (a LaunchAgent) LaunchctlCommands(uid int) []string {
-	target := fmt.Sprintf("gui/%d/%s", uid, a.Label)
+	target := a.ServiceTarget(uid)
 	return []string{
 		fmt.Sprintf("launchctl bootstrap gui/%d %s", uid, shellQuote(a.PlistPath)),
 		fmt.Sprintf("launchctl kill SIGTERM %s", target),

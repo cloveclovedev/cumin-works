@@ -11,12 +11,16 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
 	"github.com/cloveclovedev/cumin-works/internal/setup"
 )
+
+// launchctlPath is the tool that loads and unloads a job on macOS.
+const launchctlPath = "/bin/launchctl"
 
 // runSetup is `cumin setup`. It has two subcommands: github-apps and
 // launchd.
@@ -36,7 +40,8 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 }
 
 const setupUsage = `usage: cumin setup github-apps --org <organization> [--name-prefix <prefix>] [--config <path>]
-       cumin setup launchd [--config <path>] [--dry-run] [--force]`
+       cumin setup launchd [--config <path>] [--dry-run] [--force]
+       cumin setup launchd --remove [--dry-run] [--force]`
 
 // runSetupGitHubApps registers the GitHub App of each role.
 func runSetupGitHubApps(args []string, stdout, stderr io.Writer) int {
@@ -101,8 +106,9 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cumin setup launchd", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path of the Host settings file (default ~/.config/cumin/config.toml)")
-	dryRun := fs.Bool("dry-run", false, "print the plist and write nothing")
-	force := fs.Bool("force", false, "replace a plist of this job that holds different contents")
+	dryRun := fs.Bool("dry-run", false, "print what would happen and change nothing")
+	force := fs.Bool("force", false, "act on a plist of this path that does not hold this job")
+	remove := fs.Bool("remove", false, "stop the job and remove its plist")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitOK
@@ -113,9 +119,23 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, setupUsage)
 		return exitBadUsage
 	}
+	// The settings file has no part in removing the job.
+	if *remove && *configPath != "" {
+		fmt.Fprintln(stderr, "cumin setup launchd: --remove takes no --config")
+		fmt.Fprintln(stderr, setupUsage)
+		return exitBadUsage
+	}
 	if runtime.GOOS != "darwin" {
 		fmt.Fprintln(stderr, "cumin setup launchd: launchd is macOS only")
 		return exitFailure
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin setup launchd: find the home directory: %v\n", err)
+		return exitFailure
+	}
+	if *remove {
+		return removeLaunchd(setup.NewLaunchAgent(home, "", "", ""), *dryRun, *force, stdout, stderr)
 	}
 
 	path := *configPath
@@ -154,12 +174,6 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 			return exitFailure
 		}
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(stderr, "cumin setup launchd: find the home directory: %v\n", err)
-		return exitFailure
-	}
-
 	agent := setup.NewLaunchAgent(home, program, path, os.Getenv("PATH"))
 	if *dryRun {
 		plist, err := agent.Plist()
@@ -189,6 +203,73 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "%-33s %s\n", line.what+":", line.command)
 	}
 	return exitOK
+}
+
+// removeLaunchd is `cumin setup launchd --remove`: it stops the job when
+// it is loaded and removes its plist. Nothing else goes: the logs, the
+// state, and the binary stay, and the command says where they are.
+func removeLaunchd(agent setup.LaunchAgent, dryRun, force bool, stdout, stderr io.Writer) int {
+	target := agent.ServiceTarget(os.Getuid())
+	loaded := exec.Command(launchctlPath, "print", target).Run() == nil
+
+	if dryRun {
+		if loaded {
+			fmt.Fprintf(stdout, "would stop the job: launchctl bootout %s\n", target)
+		} else {
+			fmt.Fprintf(stdout, "the job %s is not loaded\n", target)
+		}
+		// The same check as the removal, so that the preview is right in
+		// the case that the check is there for. With --force the file is
+		// not read, there as here.
+		state := setup.PlistOfThisJob
+		if !force {
+			var err error
+			if state, err = agent.PlistState(); err != nil {
+				fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
+				return exitFailure
+			}
+		} else if _, err := os.Stat(agent.PlistPath); os.IsNotExist(err) {
+			state = setup.PlistAbsent
+		}
+		switch state {
+		case setup.PlistAbsent:
+			fmt.Fprintf(stdout, "no plist at: %s\n", agent.PlistPath)
+		case setup.PlistOfAnotherJob:
+			fmt.Fprintf(stdout, "would keep: %s holds another job. Run again with --force to remove it anyway\n", agent.PlistPath)
+		default:
+			fmt.Fprintf(stdout, "would remove: %s\n", agent.PlistPath)
+		}
+		printWhatStays(stdout, agent)
+		return exitOK
+	}
+
+	if loaded {
+		if out, err := exec.Command(launchctlPath, "bootout", target).CombinedOutput(); err != nil {
+			fmt.Fprintf(stderr, "cumin setup launchd: stop the job %s: %v %s\n", target, err, strings.TrimSpace(string(out)))
+			return exitFailure
+		}
+		fmt.Fprintf(stdout, "stopped: %s\n", target)
+	} else {
+		fmt.Fprintf(stdout, "the job %s was not loaded\n", target)
+	}
+
+	result, err := setup.RemoveLaunchAgentFile(agent, force)
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
+		return exitFailure
+	}
+	fmt.Fprintf(stdout, "%s: %s\n", result, agent.PlistPath)
+	printWhatStays(stdout, agent)
+	return exitOK
+}
+
+// printWhatStays names the files that the removal leaves on the Host.
+func printWhatStays(w io.Writer, agent setup.LaunchAgent) {
+	out, errorLog := agent.LogPaths()
+	fmt.Fprintf(w, "\nthese stay. Remove them by hand when you want them gone:\n")
+	fmt.Fprintf(w, "  logs and state:  %s (%s, %s)\n", agent.StateDir, filepath.Base(out), filepath.Base(errorLog))
+	fmt.Fprintf(w, "  the binary:      the cumin that you installed, for example ~/.local/bin/cumin\n")
+	fmt.Fprintf(w, "  the settings:    ~/.config/cumin/, the work directory, and the Keychain items\n")
 }
 
 // openBrowser opens the address in the default browser of macOS.

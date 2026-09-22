@@ -184,7 +184,7 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 | 登録して起動する (以後はログインで起動する) | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cumin-works.cumin.plist` |
 | 止める | `launchctl kill SIGTERM gui/$(id -u)/dev.cumin-works.cumin` |
 | 再起動する | `launchctl kickstart -k gui/$(id -u)/dev.cumin-works.cumin` |
-| 外す (ログインでも起動しなくなる) | `launchctl bootout gui/$(id -u)/dev.cumin-works.cumin` |
+| 外す (ログインでも起動しなくなる) | `cumin setup launchd --remove` |
 | 動いているか見る | `launchctl print gui/$(id -u)/dev.cumin-works.cumin` |
 | ログを見る | `tail -f ~/.local/state/cumin/cumin.log` |
 
@@ -192,6 +192,10 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 - Host が再起動したあとは、Owner がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
 - ログのファイルは入れ替わらない。大きくなったら、止めてから消す。
 - plist を書き直したら、`launchctl bootout` してから `launchctl bootstrap` し直す。
+- `cumin setup launchd --remove` は、job が読み込まれていれば止めて、plist を消す。消すのは plist だけで、ログ、設定ファイル、作業ディレクトリ、Keychain の項目、実行ファイルは残る。何が残るかはコマンドが表示する。`--dry-run` を付けると、何をするかだけを表示する。
+- そのパスに cumin のものでない plist があるときは、消さずに止まる。中身を見て、それでも消すなら `--force` を付ける。
+- cumin の実行ファイルを先に消してしまったときは、`launchctl bootout gui/$(id -u)/dev.cumin-works.cumin` と plist の `rm` で同じことができる。
+- macOS には、LaunchAgent を出し入れする純正の画面はない。システム設定の「ログイン項目と機能拡張」で止めることはできるが、plist のファイルは残る。
 
 cumin を新しくするときは、ビルドして置いて、動いている job を入れ替える。次の1コマンドで済む。
 

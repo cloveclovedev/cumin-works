@@ -280,3 +280,35 @@ func TestSetupLaunchdChecksTheArgumentsAndTheBinary(t *testing.T) {
 		t.Errorf("stdout = %q, want empty", stdout.String())
 	}
 }
+
+// `cumin setup launchd --remove` takes no settings file, and it says what
+// it would do without changing anything under --dry-run.
+func TestSetupLaunchdRemove(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	var stdout, stderr bytes.Buffer
+	if code := runCLI([]string{"setup", "launchd", "--remove", "--config", "/tmp/whatever.toml"}, &stdout, &stderr); code != exitBadUsage {
+		t.Errorf("with --config: exit code = %d, want %d", code, exitBadUsage)
+	}
+	if !strings.Contains(stderr.String(), "--remove takes no --config") {
+		t.Errorf("stderr does not say why:\n%s", stderr.String())
+	}
+
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runCLI([]string{"setup", "launchd", "--remove", "--dry-run"}, &stdout, &stderr); code != exitOK {
+		t.Errorf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr.String())
+	}
+	for _, want := range []string{"no plist at:", "these stay", ".local/state/cumin"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("the dry run does not say %q:\n%s", want, stdout.String())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents")); !os.IsNotExist(err) {
+		t.Errorf("the dry run wrote into the home directory (err = %v)", err)
+	}
+}

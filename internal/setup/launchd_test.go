@@ -248,3 +248,166 @@ func TestPlist_PassesPlutilLint(t *testing.T) {
 		t.Errorf("plutil -lint said: %s", output)
 	}
 }
+
+func TestRemoveLaunchAgentFile(t *testing.T) {
+	t.Run("a plist of this job goes", func(t *testing.T) {
+		agent := testAgent(t)
+		if _, err := InstallLaunchAgent(agent, false); err != nil {
+			t.Fatal(err)
+		}
+		result, err := RemoveLaunchAgentFile(agent, false)
+		if err != nil || result != "removed" {
+			t.Fatalf("RemoveLaunchAgentFile = %q, %v", result, err)
+		}
+		if _, err := os.Stat(agent.PlistPath); !os.IsNotExist(err) {
+			t.Errorf("the plist is still there (err = %v)", err)
+		}
+		// The logs and the state stay: a person put them there.
+		if info, err := os.Stat(agent.StateDir); err != nil || !info.IsDir() {
+			t.Errorf("the state directory went with the plist: %v", err)
+		}
+	})
+
+	t.Run("no plist is not an error", func(t *testing.T) {
+		result, err := RemoveLaunchAgentFile(testAgent(t), false)
+		if err != nil || result != "absent" {
+			t.Errorf("RemoveLaunchAgentFile = %q, %v, want absent", result, err)
+		}
+	})
+
+	t.Run("a file of somebody else stays", func(t *testing.T) {
+		agent := testAgent(t)
+		if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		const other = "<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict><key>Label</key><string>com.example.other</string></dict></plist>\n"
+		if err := os.WriteFile(agent.PlistPath, []byte(other), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := RemoveLaunchAgentFile(agent, false)
+		if err == nil {
+			t.Fatal("RemoveLaunchAgentFile removed a file of another job")
+		}
+		if result != "kept" || !strings.Contains(err.Error(), "--force") {
+			t.Errorf("result = %q, err = %v", result, err)
+		}
+		if current, _ := os.ReadFile(agent.PlistPath); string(current) != other {
+			t.Error("the file changed")
+		}
+
+		if result, err := RemoveLaunchAgentFile(agent, true); err != nil || result != "removed" {
+			t.Errorf("with --force = %q, %v, want removed", result, err)
+		}
+	})
+
+	// The plist holds the PATH of the shell that wrote it, so a file of
+	// this job that differs in PATH is still this job.
+	t.Run("another PATH is still this job", func(t *testing.T) {
+		agent := testAgent(t)
+		if _, err := InstallLaunchAgent(agent, false); err != nil {
+			t.Fatal(err)
+		}
+		agent.PathEnv = "/opt/another/bin:" + agent.PathEnv
+		if result, err := RemoveLaunchAgentFile(agent, false); err != nil || result != "removed" {
+			t.Errorf("RemoveLaunchAgentFile = %q, %v, want removed", result, err)
+		}
+	})
+}
+
+// The Label decides, and only the value of the Label key. A file that
+// names this job somewhere else (in its arguments, for example) is not
+// this job.
+func TestPlistState_ReadsTheLabelKey(t *testing.T) {
+	agent := testAgent(t)
+	if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name  string
+		plist string
+		want  PlistState
+	}{
+		{"this job", "", PlistOfThisJob},
+		{
+			"another job that names this one in its arguments",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict>\n<key>Label</key><string>com.example.other</string>\n" +
+				"<key>ProgramArguments</key><array><string>/bin/echo</string><string>" + LaunchAgentLabel + "</string></array>\n</dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+		{
+			"another job with a nested key named Label",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict>\n" +
+				"<key>EnvironmentVariables</key><dict><key>Label</key><string>" + LaunchAgentLabel + "</string></dict>\n" +
+				"<key>Label</key><string>com.example.other</string>\n</dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+		{
+			"another job with a key that only looks like Label",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict>\n" +
+				"<key> Label </key><string>" + LaunchAgentLabel + "</string>\n" +
+				"<key>Label</key><string>com.example.other</string>\n</dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+		{
+			"a plist with no label",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict><key>RunAtLoad</key><true/></dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plist := tt.plist
+			if plist == "" {
+				var err error
+				if plist, err = agent.Plist(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(agent.PlistPath, []byte(plist), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			state, err := agent.PlistState()
+			if err != nil || state != tt.want {
+				t.Errorf("PlistState = %q, %v, want %q", state, err, tt.want)
+			}
+		})
+	}
+	if err := os.Remove(agent.PlistPath); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := agent.PlistState(); err != nil || state != PlistAbsent {
+		t.Errorf("PlistState = %q, %v, want absent", state, err)
+	}
+}
+
+// A file that does not parse cannot be read, and --force is the way out.
+func TestRemoveLaunchAgentFile_ForceRemovesAFileThatDoesNotParse(t *testing.T) {
+	agent := testAgent(t)
+	if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agent.PlistPath, []byte("this is not a plist at all\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := RemoveLaunchAgentFile(agent, false); err == nil {
+		t.Error("RemoveLaunchAgentFile removed a file that it could not read")
+	}
+	if result, err := RemoveLaunchAgentFile(agent, true); err != nil || result != "removed" {
+		t.Errorf("with --force = %q, %v, want removed", result, err)
+	}
+	if _, err := os.Stat(agent.PlistPath); !os.IsNotExist(err) {
+		t.Errorf("the file is still there (err = %v)", err)
+	}
+	// --force on a path with no file is not an error.
+	if result, err := RemoveLaunchAgentFile(agent, true); err != nil || result != "absent" {
+		t.Errorf("with --force and no file = %q, %v, want absent", result, err)
+	}
+}
+
+func TestServiceTarget_IsTheJobInTheDomainOfTheUser(t *testing.T) {
+	if got := testAgent(t).ServiceTarget(501); got != "gui/501/"+LaunchAgentLabel {
+		t.Errorf("ServiceTarget = %q", got)
+	}
+}
