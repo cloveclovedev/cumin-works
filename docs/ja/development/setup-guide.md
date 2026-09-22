@@ -159,15 +159,20 @@ security add-generic-password -U -s cumin-works -a discord-webhook-url -w
 
    `-w` のうしろに keychain のパスを書かない。`-w` は次の引数を値として取るので、パスがアドレスとして保存され、コマンドは成功したように見える (2026-09-22 に実機で確かめた)。
 
-3. 入っていることだけを確かめる。アドレスそのものは表示しない。
+3. 入っていることだけを確かめる。アドレスそのものは表示しない。cumin は既定の keychain だけを読むので、確かめるときも keychain を指定する。指定しないと、検索リストにある別の keychain の同じ名前の項目に当たり、cumin が見つけられない値を「ある」と答えてしまう。
 
 ```sh
-security find-generic-password -s cumin-works -a discord-webhook-url >/dev/null && echo stored
+KEYCHAIN=$(security default-keychain | tr -d ' "')
+security find-generic-password -s cumin-works -a discord-webhook-url "$KEYCHAIN" >/dev/null && echo stored
 ```
 
 - 項目がなくても `cumin run` は起動する。起動のログに、項目の名前と設定のキーを示す警告が出て、通知だけが届かない。
 - Discord を使わない Host は、設定ファイルに `notify.discord.enabled = false` を書く ([設定の一覧](configuration.md))。対象のリポジトリが `.cumin/config.toml` で入れ直すこともできるので、その場合はアドレスを入れておく。
-- 入れ替えるときは、同じコマンドをもう一度実行する。消すときは `security delete-generic-password -s cumin-works -a discord-webhook-url` を実行する。
+- 入れ替えるときは、同じコマンドをもう一度実行する。消すときは、上と同じ理由で keychain を指定する。
+
+```sh
+security delete-generic-password -s cumin-works -a discord-webhook-url "$KEYCHAIN"
+```
 
 ### 実行ファイルを置く
 
