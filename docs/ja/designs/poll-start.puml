@@ -1,6 +1,6 @@
-@startuml cumin-core-start
+@startuml poll-start
 ' cumin works - 着手 (I1) と、Agentの実行の並行化。
-' 対応する文書: cumin-core.md の「Agentの実行の並行化」。
+' 対応する文書: poll.md の「Agentの実行の並行化」。
 ' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
 skinparam shadowing false
 skinparam defaultFontName sans-serif

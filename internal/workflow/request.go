@@ -2,7 +2,7 @@ package workflow
 
 // This file is pure, like domain.go: the branch name of an implementation
 // issue and the request text of the kind "implement". docs/ja/designs/
-// cumin-core.md, the topic on the request to the Implementer, records the
+// poll.md, the topic on the request to the Implementer, records the
 // rules.
 
 import (

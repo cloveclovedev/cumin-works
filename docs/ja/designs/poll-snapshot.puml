@@ -1,6 +1,6 @@
-@startuml cumin-core-snapshot
+@startuml poll-snapshot
 ' cumin works - 定期確認の1回の問い合わせで読むもの。入れ子の接続と、その件数の上限。
-' 対応する文書: cumin-core.md の「定期確認で読む内容」。
+' 対応する文書: poll.md の「定期確認で読む内容」。
 ' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
 skinparam shadowing false
 skinparam defaultFontName sans-serif

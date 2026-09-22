@@ -9,6 +9,7 @@
 
 - [コードの構成の設計](designs/code-layout.md)
 - [cumin本体の設計メモ](designs/cumin-core.md)
+- [定期確認の設計](designs/poll.md)
 - [Agentの実行の設計](designs/agent-run.md)
 
 ## 開発の手順
