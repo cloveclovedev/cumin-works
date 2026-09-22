@@ -45,12 +45,29 @@ const RequirementLabel = "cumin/type/requirement"
 // Issue is one issue of the fake repository.
 type Issue struct {
 	Number int
+	Title  string
 	Closed bool
 	Labels []string
 	// Parent is the number of the parent issue, or 0.
 	Parent int
 	// BlockedBy holds the numbers of the issues that block this one.
 	BlockedBy []int
+}
+
+// PullRequest is one pull request of the fake repository.
+type PullRequest struct {
+	Number int
+	// Closed is true for a closed and for a merged pull request.
+	Closed bool
+	Merged bool
+	// HeadCommit is the SHA of the head of the pull request.
+	HeadCommit string
+	// Author is the login. For a GitHub App it is the slug without "[bot]",
+	// as GraphQL returns it, with AuthorIsBot true. Empty means no author.
+	Author      string
+	AuthorIsBot bool
+	// Closes holds the numbers of the issues that the pull request closes.
+	Closes []int
 }
 
 // Label is one label of a repository.
@@ -60,9 +77,10 @@ type Label struct {
 
 // Repository is one repository of the fake.
 type Repository struct {
-	Owner, Name string
-	Issues      map[int]*Issue
-	Labels      []Label
+	Owner, Name  string
+	Issues       map[int]*Issue
+	PullRequests map[int]*PullRequest
+	Labels       []Label
 	// DefaultBranch is the name that the snapshot reads. Empty means that
 	// the repository has no commit, as a new repository on GitHub.
 	DefaultBranch string
@@ -120,8 +138,8 @@ func New(t *testing.T) (*Fake, *httptest.Server) {
 func (f *Fake) AddRepository(owner, name string) *Repository {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	r := &Repository{Owner: owner, Name: name, Issues: map[int]*Issue{}, DefaultBranch: "main", Files: map[string]File{},
-		installationID: int64(len(f.repositories) + 1)}
+	r := &Repository{Owner: owner, Name: name, Issues: map[int]*Issue{}, PullRequests: map[int]*PullRequest{},
+		DefaultBranch: "main", Files: map[string]File{}, installationID: int64(len(f.repositories) + 1)}
 	f.repositories[key(owner, name)] = r
 	return r
 }
@@ -171,6 +189,26 @@ func (f *Fake) AddIssue(r *Repository, issue *Issue) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r.Issues[issue.Number] = issue
+}
+
+// AddPullRequest adds a pull request to the repository. The fake keeps the
+// pointer, so a test can change the pull request later.
+func (f *Fake) AddPullRequest(r *Repository, pr *PullRequest) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r.PullRequests[pr.Number] = pr
+}
+
+// ClosePullRequest closes one pull request of the repository.
+func (f *Fake) ClosePullRequest(r *Repository, number int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	pr, ok := r.PullRequests[number]
+	if !ok {
+		return fmt.Errorf("no pull request #%d", number)
+	}
+	pr.Closed = true
+	return nil
 }
 
 // Issue returns a copy of one issue, or nil.
@@ -478,13 +516,14 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	var request struct {
 		Query     string `json:"query"`
 		Variables struct {
-			Owner     string  `json:"owner"`
-			Name      string  `json:"name"`
-			First     int     `json:"first"`
-			After     *string `json:"after"`
-			SubIssues int     `json:"subIssues"`
-			Labels    int     `json:"labels"`
-			BlockedBy int     `json:"blockedBy"`
+			Owner        string  `json:"owner"`
+			Name         string  `json:"name"`
+			First        int     `json:"first"`
+			After        *string `json:"after"`
+			SubIssues    int     `json:"subIssues"`
+			Labels       int     `json:"labels"`
+			BlockedBy    int     `json:"blockedBy"`
+			PullRequests int     `json:"pullRequests"`
 			// RepositoryFiles asks for the default branch and the files of
 			// .cumin/. The client asks for them on the first page only.
 			RepositoryFiles bool `json:"repositoryFiles"`
@@ -521,7 +560,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			hasNextPage = true
 			break
 		}
-		page = append(page, f.issueNode(repo, issue, v.Labels, v.SubIssues, v.BlockedBy))
+		page = append(page, f.issueNode(repo, issue, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests))
 	}
 	endCursor := any(nil)
 	if len(page) > 0 {
@@ -543,9 +582,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	})
 }
 
-func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, blockedBy int) map[string]any {
+func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, blockedBy, pullRequests int) map[string]any {
 	node := map[string]any{
 		"number": issue.Number,
+		"title":  issue.Title,
 		"state":  state(issue.Closed),
 		"labels": connection(issue.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
 	}
@@ -556,7 +596,7 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 	}
 	node["subIssues"] = connection(subs, subIssues, func(sub *Issue) any {
-		return f.issueNode(repo, sub, labels, subIssues, blockedBy)
+		return f.issueNode(repo, sub, labels, subIssues, blockedBy, pullRequests)
 	})
 	node["blockedBy"] = connection(issue.BlockedBy, blockedBy, func(number int) any {
 		closed := false
@@ -565,7 +605,40 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 		return map[string]any{"number": number, "state": state(closed)}
 	})
+	// Without includeClosedPrs, GitHub lists the open pull requests only.
+	var closing []*PullRequest
+	for _, pr := range sortedPullRequests(repo) {
+		if !pr.Closed && slices.Contains(pr.Closes, issue.Number) {
+			closing = append(closing, pr)
+		}
+	}
+	node["closedByPullRequestsReferences"] = connection(closing, pullRequests, func(pr *PullRequest) any {
+		return pullRequestNode(pr)
+	})
 	return node
+}
+
+// pullRequestNode is one pull request as GraphQL returns it: the author
+// of an App is a Bot whose login has no "[bot]".
+func pullRequestNode(pr *PullRequest) map[string]any {
+	node := map[string]any{"number": pr.Number, "headRefOid": pr.HeadCommit, "author": nil}
+	if pr.Author != "" {
+		typeName := "User"
+		if pr.AuthorIsBot {
+			typeName = "Bot"
+		}
+		node["author"] = map[string]any{"__typename": typeName, "login": pr.Author}
+	}
+	return node
+}
+
+func sortedPullRequests(repo *Repository) []*PullRequest {
+	pulls := make([]*PullRequest, 0, len(repo.PullRequests))
+	for _, pr := range repo.PullRequests {
+		pulls = append(pulls, pr)
+	}
+	slices.SortFunc(pulls, func(a, b *PullRequest) int { return a.Number - b.Number })
+	return pulls
 }
 
 // defaultBranchRefJSON answers the default branch and the commit at its

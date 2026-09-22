@@ -151,9 +151,12 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 	for _, issue := range read.RequirementIssues {
 		requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
 		for _, sub := range issue.SubIssues {
-			subIssue := SubIssue{Number: sub.Number, Closed: sub.Closed, Labels: sub.Labels}
+			subIssue := SubIssue{Number: sub.Number, Title: sub.Title, Closed: sub.Closed, Labels: sub.Labels}
 			for _, blocker := range sub.BlockedBy {
 				subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
+			}
+			for _, pr := range sub.PullRequests {
+				subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{Number: pr.Number, HeadCommit: pr.HeadCommit, Author: pr.Author})
 			}
 			requirement.SubIssues = append(requirement.SubIssues, subIssue)
 		}

@@ -8,20 +8,22 @@ import (
 	"strings"
 )
 
-// Page sizes of the snapshot query. GitHub scores a query by the product of
-// the `first` arguments along each path, divided by 100 (official: Rate
-// limits and node limits for the GraphQL API). With these sizes one page
-// costs 1 + 10 + 10 + 300 + 300 = 621 requests, about 6 points, against 5,000
+// Page sizes of the snapshot query. GitHub scores a query by the `first`
+// arguments along each path (official: Rate limits and node limits for the
+// GraphQL API). With these sizes one page cost 9 points on the sandbox on
+// 2026-09-22 (6 points before the pull requests were read), against 5,000
 // points per hour for one installation. The sizes are wide enough for the
 // limits of the sizing policies (12 sub-issues for one requirement issue).
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
-	// Sub-issues, labels, and blocked-by issues are read once, up to this
-	// many for one issue. More is an error.
-	snapshotSubIssues = 30
-	snapshotLabels    = 10
-	snapshotBlockedBy = 20
+	// Sub-issues, labels, blocked-by issues, and open closing pull requests
+	// are read once, up to this many for one issue. More is an error. An
+	// issue has one open closing pull request in normal use.
+	snapshotSubIssues    = 30
+	snapshotLabels       = 10
+	snapshotBlockedBy    = 20
+	snapshotPullRequests = 5
 )
 
 // Paths of the files that a target repository keeps on its default branch.
@@ -58,13 +60,36 @@ type RepositoryFile struct {
 }
 
 // Issue is one issue as the snapshot sees it. A requirement issue has
-// SubIssues. A sub-issue has BlockedBy.
+// SubIssues. A sub-issue has Title, BlockedBy, and PullRequests.
 type Issue struct {
 	Number    int
 	Closed    bool
 	Labels    []string
 	SubIssues []Issue
+	// Title is read for sub-issues only; the branch name of a request is
+	// made from it.
+	Title     string
 	BlockedBy []IssueRef
+	// PullRequests are the open pull requests that close the sub-issue (the
+	// link that "Closes #N" makes). Closed and merged pull requests are not
+	// read: no rule of the poll needs them, and old pull requests of a
+	// waiting or closed issue must not reach the page limit. The follow-up
+	// note (I9) reads the merged pull request of a closed issue separately.
+	PullRequests []PullRequest
+}
+
+// PullRequest is an open pull request that closes an issue, as much of it
+// as the rules need.
+type PullRequest struct {
+	Number int
+	// HeadCommit is the full SHA of the head of the pull request.
+	HeadCommit string
+	// Author is the login of the author as the REST API shows it: a GitHub
+	// App is "<slug>[bot]", the form of the identity that an agent commits
+	// with. GraphQL gives the login of a Bot without "[bot]" (measured on
+	// the sandbox on 2026-09-22), so it is added here. Empty when the
+	// author is gone (a deleted account).
+	Author string
 }
 
 // IssueRef is an issue that another issue points to: only its number and
@@ -82,16 +107,18 @@ type RateLimit struct {
 }
 
 // snapshotQuery reads the open issues with the requirement label, their
-// sub-issues, the state of the blocked-by issues, and the files of .cumin/
-// on the default branch. The field names come from the design note and
+// sub-issues with the title, the state of the blocked-by issues, the open
+// pull requests that close each sub-issue, and the files of .cumin/ on the
+// default branch. The field names come from the design note and
 // measured-constraints.md row 55, and were checked against the schema by
-// introspection on 2026-09-21 and on 2026-09-22 (Repository.object and Blob).
+// introspection on 2026-09-21 and on the sandbox on 2026-09-22
+// (closedByPullRequestsReferences, Repository.object, and Blob).
 //
 // "HEAD:" is the default branch of the repository, so the files never come
 // from a pull request branch. The files are not a connection, so they do not
 // change the cost of the query; $repositoryFiles asks for them on the first
 // page only, because one poll reads them once.
-const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $repositoryFiles: Boolean!) {
+const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $repositoryFiles: Boolean!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef @include(if: $repositoryFiles) { name target { oid } }
     cuminConfig: object(expression: "HEAD:` + CuminConfigPath + `") @include(if: $repositoryFiles) { ...cuminFile }
@@ -106,9 +133,14 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
           pageInfo { hasNextPage }
           nodes {
             number
+            title
             state
             labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
             blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
+            closedByPullRequestsReferences(first: $pullRequests) {
+              pageInfo { hasNextPage }
+              nodes { number headRefOid author { __typename login } }
+            }
           }
         }
       }
@@ -182,6 +214,7 @@ type pageInfo struct {
 
 type issueNode struct {
 	Number int    `json:"number"`
+	Title  string `json:"title"`
 	State  string `json:"state"`
 	Labels struct {
 		PageInfo pageInfo `json:"pageInfo"`
@@ -200,6 +233,32 @@ type issueNode struct {
 			State  string `json:"state"`
 		} `json:"nodes"`
 	} `json:"blockedBy"`
+	PullRequests struct {
+		PageInfo pageInfo          `json:"pageInfo"`
+		Nodes    []pullRequestNode `json:"nodes"`
+	} `json:"closedByPullRequestsReferences"`
+}
+
+type pullRequestNode struct {
+	Number     int    `json:"number"`
+	HeadRefOid string `json:"headRefOid"`
+	Author     *struct {
+		TypeName string `json:"__typename"`
+		Login    string `json:"login"`
+	} `json:"author"`
+}
+
+// pullRequest converts one node. Without includeClosedPrs, the connection
+// holds open pull requests only (the schema: closedByPullRequestsReferences).
+func (n pullRequestNode) pullRequest() PullRequest {
+	pr := PullRequest{Number: n.Number, HeadCommit: n.HeadRefOid}
+	if n.Author != nil {
+		pr.Author = n.Author.Login
+		if n.Author.TypeName == "Bot" {
+			pr.Author += "[bot]"
+		}
+	}
+	return pr
 }
 
 // ReadSnapshot reads the snapshot of one repository with the installation
@@ -213,6 +272,7 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 		variables := map[string]any{
 			"owner": owner, "name": repo, "first": snapshotIssuePage, "after": after,
 			"subIssues": snapshotSubIssues, "labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
+			"pullRequests":    snapshotPullRequests,
 			"repositoryFiles": firstPage,
 		}
 		var resp snapshotResponse
@@ -286,7 +346,10 @@ func (n issueNode) issue() (Issue, error) {
 	if n.BlockedBy.PageInfo.HasNextPage {
 		return Issue{}, fmt.Errorf("issue #%d has more than %d blocked-by issues", n.Number, snapshotBlockedBy)
 	}
-	issue := Issue{Number: n.Number, Closed: n.State == "CLOSED"}
+	if n.PullRequests.PageInfo.HasNextPage {
+		return Issue{}, fmt.Errorf("issue #%d has more than %d open closing pull requests", n.Number, snapshotPullRequests)
+	}
+	issue := Issue{Number: n.Number, Title: n.Title, Closed: n.State == "CLOSED"}
 	if n.State != "OPEN" && n.State != "CLOSED" {
 		return Issue{}, fmt.Errorf("issue #%d has the unknown state %q", n.Number, n.State)
 	}
@@ -304,6 +367,9 @@ func (n issueNode) issue() (Issue, error) {
 	}
 	for _, blocker := range n.BlockedBy.Nodes {
 		issue.BlockedBy = append(issue.BlockedBy, IssueRef{Number: blocker.Number, Closed: blocker.State == "CLOSED"})
+	}
+	for _, node := range n.PullRequests.Nodes {
+		issue.PullRequests = append(issue.PullRequests, node.pullRequest())
 	}
 	return issue, errors.Join(errs...)
 }
