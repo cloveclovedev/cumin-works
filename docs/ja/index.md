@@ -21,4 +21,5 @@
 - [実機の確認 (live test)](development/live-tests.md)
 - [図の描き方](development/diagrams.md)
 - [Agentの実機の確認](development/agent-live-check.md)
+- [launchdでの実機の確認](development/launchd-live-check.md)
 - [設計文書の書き方](development/design-documents.md)
