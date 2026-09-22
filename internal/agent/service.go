@@ -196,6 +196,28 @@ func (s *Service) identity(ctx context.Context, key appKey, cred github.AppCrede
 	return id, nil
 }
 
+// stopMargin is the time that a run needs after the grace, to let os/exec
+// end the CLI, to read what is left of its output, and to send SIGKILL to
+// the process group. The steps take milliseconds; the value is generous,
+// because a caller uses it to decide when to give up waiting.
+const stopMargin = 5 * time.Second
+
+// StopBudget is the longest time that one run takes to end after its
+// context is cancelled: SIGTERM to the process group of the CLI, SIGKILL
+// after the grace of the adapter, and the clean-up that follows
+// (docs/ja/designs/agent-run.md, the topic on the time limit of a run).
+//
+// A caller that waits for the runs of a stop must wait at least this long.
+// A shorter wait can end cumin while a CLI of an agent is still alive with
+// the token of its role in its environment.
+func (s *Service) StopBudget() time.Duration {
+	grace := s.Grace
+	if grace <= 0 {
+		grace = defaultGrace
+	}
+	return grace + stopMargin
+}
+
 // HostWarnings returns one warning for each global instruction file that
 // the CLI of a role reads and cannot ignore. cumin run logs them at its
 // start. For Claude Code the list is empty: --setting-sources project

@@ -67,7 +67,7 @@ Implementer の実行は、本物の Claude Code を起動し、利用枠を使�
 
 ログは、JSONで標準出力に出る。1回の定期確認ごとに1行 (リポジトリ、GraphQLの `cost` と `remaining`)、着手と依頼、実行の終わりのたびに1行が出る。token や鍵は出ない。
 
-止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。動いている定期確認と、動いている Agent の実行が終わってから、終了コード0で終わる。
+止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。cumin は新しい着手をやめ、実行中の依頼を取り消し、猶予の間だけ終わるのを待つ。猶予は、Agent の猶予 (10秒) に、そのあとの後始末の分 (5秒) を足した値である。最後に `stopped` のログを1行出して、終了コード0で終わる。ログには、進行中だったIssueの一覧が入る。ラベルは変わらないので、途中で止まったIssueは `cumin/status/implementing` のまま残る。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す。
 
 `--config` を省くと、`~/.config/cumin/config.toml` を読む。cumin を止めたときに `cumin/status/implementing` のまま残ったIssueは、自動では回収されない。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す ([Issueのラベルと状態遷移](requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
 

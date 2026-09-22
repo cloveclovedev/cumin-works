@@ -79,6 +79,19 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 - 既にある plist が違う内容なら、差分を見せて上書きしない。`--force` で置き換える。
 - Keychain は、ログイン中のユーザの LaunchAgent から、確認の画面なしで読める (実測 67)。ログインしていない間は動かないので、Hostが再起動したあとはOwnerのログインが起動のきっかけになる。
 
+### 止め方
+
+`cumin run` は、SIGINT と SIGTERM で止まる。launchd から止めるとき (`launchctl kill SIGTERM`、`bootout`、ログアウト) も同じ経路である。
+
+- 合図を受けると、contextが終わる。新しい着手はしない。定期確認の途中なら、残りのリポジトリには進まない。
+- 実行中の依頼は、同じcontextで動いているので、取り消しが届く。Agentの接続部分が、CLIのプロセスグループにSIGTERMを送り、猶予 (10秒) のあとにSIGKILLを送る ([Agentの実行の設計](agent-run.md) の「実行時間の上限」)。依頼が何であっても同じに動く。
+- `cumin run` が待つ時間は、Agentの猶予そのものではなく、それに余裕を足した値である (`agent.Service.StopBudget`)。Agentの猶予は、SIGTERMからSIGKILLまでの時間でしかなく、そのあとに `os/exec` がCLIを終わらせ、cuminがプロセスグループにSIGKILLを送る手順が残るためである。同じ値にすると、CLIがまだ生きているうちにcuminが終わりうる。CLIは自分のプロセスグループで動くので、launchdの後始末も届かず、roleのtokenを持ったプロセスが残る。
+- 待ち切れなくても、そこで終わる。プロセスが終わるところなので、残った待ちは捨てる。
+- 終わるときに、`stopped` のログを1行出す。入れるのは、止まった理由、進行中だったIssueの一覧 (`<owner>/<repo>#<番号>`)、猶予の中で終わったかどうかである。
+- 終了コードは0である。LaunchAgentの `KeepAlive` は `SuccessfulExit = false` なので、手で止めたcuminは起動し直されない。
+- ラベルは変えない。進行中だったIssueは `cumin/status/implementing` のまま残り、Ownerが `cumin/status/ready` を付け直して再開する (Issueのラベルと状態遷移の「v0.1では実装しないこと」)。作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。
+- LaunchAgentの `ExitTimeOut` (60秒) は、この猶予より長くしてある。launchdがSIGKILLを送る前に、cuminが自分で終われる。
+
 ### テストの2層
 
 | 層 | 走らせ方 | 使うもの |
