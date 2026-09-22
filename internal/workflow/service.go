@@ -36,8 +36,14 @@ type Service struct {
 	// Workspace holds the clone and the worktrees of each repository, under
 	// the setting work_dir.
 	Workspace agent.Workspace
-	// MaxIssuesInProgress is the setting max_issues_in_progress.
-	MaxIssuesInProgress int
+	// Settings are the Host settings. Each poll applies the
+	// .cumin/config.toml of a repository over them, for the keys that a
+	// repository may set.
+	Settings *config.Settings
+	// SettingsDir is the directory of the Host settings file. The optional
+	// risk-criteria.md of the Host stands next to it. An empty value skips
+	// that level.
+	SettingsDir string
 	// PollInterval is the setting poll_interval.
 	PollInterval time.Duration
 	// Labels are the labels that Run creates in each target repository when
@@ -48,6 +54,12 @@ type Service struct {
 	// running counts the agent runs that the polls started. Each run has
 	// its own goroutine, so that the poll goes on while an agent works.
 	running sync.WaitGroup
+
+	// repositorySettings keeps what each repository's .cumin/ decided,
+	// until a blob of those files changes. Poll reads and writes it, and a
+	// test may poll from more than one goroutine.
+	settingsMu         sync.Mutex
+	repositorySettings map[string]*RepositorySettings
 }
 
 // Run creates the missing labels in each target repository, then polls at
@@ -58,6 +70,9 @@ type Service struct {
 func (s *Service) Run(ctx context.Context) error {
 	if s.PollInterval <= 0 {
 		return errors.New("workflow: the poll interval must be more than 0")
+	}
+	if s.Settings == nil {
+		return errors.New("workflow: no Host settings are configured")
 	}
 	s.ensureLabels(ctx)
 	ticker := time.NewTicker(s.PollInterval)
@@ -126,15 +141,28 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 		return err
 	}
 	snapshot := toSnapshot(read)
-	s.logger().Info("poll", "repository", target.Repository.String(),
+	log := s.logger().With("repository", target.Repository.String())
+
+	// The settings of this repository. A wrong file skips this repository
+	// and this poll; the other repositories are polled by the caller.
+	settings, readAgain, err := s.settingsFor(target.Repository, read)
+	if err != nil {
+		return err
+	}
+	if readAgain {
+		log.Info("the settings of the repository were read",
+			"from_repository", settings.FromRepository, "risk_criteria", settings.RiskCriteriaSource)
+	}
+	log.Info("poll",
 		"requirement_issues", len(snapshot.RequirementIssues),
+		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
 	var errs []error
-	for _, action := range Decide(snapshot, s.MaxIssuesInProgress) {
+	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress) {
 		switch a := action.(type) {
 		case Claim:
-			if err := s.claim(ctx, token, target, snapshot, a); err != nil {
+			if err := s.claim(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		default:
@@ -147,7 +175,7 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 // claim applies I1: replace the status label of the sub-issue with
 // cumin/status/implementing, and only then request the work. When the label
 // change fails, nothing is requested; the next poll decides again.
-func (s *Service) claim(ctx context.Context, token string, target Target, snapshot Snapshot, c Claim) error {
+func (s *Service) claim(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, c Claim) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	sub, ok := snapshot.SubIssue(c.Number)
 	if !ok {
@@ -159,7 +187,7 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	}
 	s.logger().Info("I1: claimed the issue", "repository", target.Repository.String(),
 		"issue", c.Number, "requirement_issue", c.RequirementIssue, "labels", labels)
-	if err := s.startImplementer(ctx, target, sub); err != nil {
+	if err := s.startImplementer(ctx, target, settings, sub); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
@@ -174,7 +202,7 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 // the run) is only logged: the label stays cumin/status/implementing,
 // because no rule of v0.1 takes it back (issue-states.md, the section on
 // what v0.1 does not build).
-func (s *Service) startImplementer(ctx context.Context, target Target, sub SubIssue) error {
+func (s *Service) startImplementer(ctx context.Context, target Target, settings *RepositorySettings, sub SubIssue) error {
 	if s.Agents == nil {
 		return errors.New("no agent service is configured")
 	}
@@ -183,10 +211,11 @@ func (s *Service) startImplementer(ctx context.Context, target Target, sub SubIs
 		return err
 	}
 	branch := BranchName(sub.Number, sub.Title)
+	role := settings.Settings.Roles[config.RoleImplementer]
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
-		s.runImplementer(ctx, target, sub.Number, branch, instruction)
+		s.runImplementer(ctx, target, sub.Number, branch, instruction, role)
 	}()
 	return nil
 }
@@ -194,7 +223,7 @@ func (s *Service) startImplementer(ctx context.Context, target Target, sub SubIs
 // runImplementer prepares the worktree and runs one Implementer request to
 // its end. The end of the run is the trigger of the rules that follow (I2);
 // this requirement logs it.
-func (s *Service) runImplementer(ctx context.Context, target Target, number int, branch, instruction string) {
+func (s *Service) runImplementer(ctx context.Context, target Target, number int, branch, instruction string, role config.RoleSettings) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
 		Owner:  target.Repository.Owner,
@@ -215,6 +244,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, number int,
 		RoleInstruction: instruction,
 		Text:            ImplementRequestText(target.Repository.String(), number, branch, workDir),
 		WorkDir:         workDir,
+		Settings:        &role,
 	})
 	var abnormal *agent.AbnormalEnd
 	switch {
@@ -247,6 +277,14 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 		snapshot.RequirementIssues = append(snapshot.RequirementIssues, requirement)
 	}
 	return snapshot
+}
+
+// settingsSource names where the settings of a poll came from, for the log.
+func settingsSource(fromRepository bool) string {
+	if fromRepository {
+		return "repository"
+	}
+	return "host"
 }
 
 func (s *Service) logger() *slog.Logger {

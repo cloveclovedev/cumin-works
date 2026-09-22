@@ -64,6 +64,9 @@ type scene struct {
 	// workRoot is the setting work_dir.
 	workRoot string
 	cliPath  string
+	// settingsDir is the directory of the Host settings file. A test puts a
+	// risk-criteria.md of the Host in it.
+	settingsDir string
 }
 
 func newScene(t *testing.T) *scene {
@@ -83,6 +86,7 @@ func newScene(t *testing.T) *scene {
 	return &scene{
 		fake: fake, client: github.NewAppClient(server.URL, server.Client()), repo: repo,
 		logs: &bytes.Buffer{}, remote: newRemote(t), cliDir: cliDir, workRoot: t.TempDir(), cliPath: cliPath,
+		settingsDir: t.TempDir(),
 	}
 }
 
@@ -108,8 +112,29 @@ func (sc *scene) service() *workflow.Service {
 			RemoteURL:  sc.remote,
 			Token:      func(context.Context) (string, error) { return githubtest.Token, nil },
 		}},
+		Settings:    sc.settings(),
+		SettingsDir: sc.settingsDir,
+		Logger:      logger,
+	}
+}
+
+// settings are the Host settings of the scene: the defaults, with the fake
+// CLI as the executable of every role.
+func (sc *scene) settings() *config.Settings {
+	roleSettings := config.RoleSettings{TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: sc.cliPath}
+	return &config.Settings{
+		Repositories:        []config.Repository{{Owner: "example-org", Name: "example-repo"}},
+		PollInterval:        time.Minute,
 		MaxIssuesInProgress: 1,
-		Logger:              logger,
+		WorkDir:             sc.workRoot,
+		MaxReviewRounds:     3,
+		MaxCheckFixRequests: 3,
+		MergeMethod:         config.MergeSquash,
+		Roles: map[config.Role]config.RoleSettings{
+			config.RoleChiefEngineer: roleSettings,
+			config.RoleImplementer:   roleSettings,
+			config.RoleReviewer:      roleSettings,
+		},
 	}
 }
 
@@ -528,4 +553,177 @@ func realPath(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return real
+}
+
+// A repository decides a few settings in .cumin/config.toml on its default
+// branch. The poll applies them over the Host settings, and the settings of
+// the role reach the agent run.
+func TestPoll_AppliesTheSettingsOfTheRepository(t *testing.T) {
+	sc := newScene(t)
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{
+		Content: "max_review_rounds = 2\nmerge_method = \"rebase\"\nprotected_paths = [\".cumin/\"]\n\n[roles.implementer]\nmodel = \"sonnet\"\n",
+	})
+	service := sc.service()
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1", n)
+	}
+	// The model of the repository reached the CLI of the agent. The
+	// arguments are separated by NUL.
+	if args := sc.record(t, "agent.args"); !strings.Contains(args, "--model\x00sonnet\x00") {
+		t.Errorf("the agent did not run with the model of the repository:\n%q", args)
+	}
+	logs := sc.logs.String()
+	for _, want := range []string{`"settings":"repository"`, `"risk_criteria":"default"`} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the poll log does not hold %s:\n%s", want, logs)
+		}
+	}
+}
+
+// A repository that has no .cumin/config.toml runs with the Host settings.
+func TestPoll_WithoutTheFileUsesTheHostSettings(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	service.Wait()
+
+	if args := sc.record(t, "agent.args"); strings.Contains(args, "--model\x00") {
+		t.Errorf("the agent ran with a model, want the Host settings (none):\n%q", args)
+	}
+	if logs := sc.logs.String(); !strings.Contains(logs, `"settings":"host"`) {
+		t.Errorf("the poll log does not say that the settings are the Host ones:\n%s", logs)
+	}
+}
+
+// A key that a repository may not set is an error of that repository: it is
+// logged with the key name and nothing is claimed there, while the other
+// repositories go on.
+func TestPoll_AWrongRepositoryFileSkipsOnlyThatRepository(t *testing.T) {
+	sc := newScene(t)
+	// A second repository with a ready sub-issue, whose file names a key of
+	// the Host.
+	other := sc.fake.AddRepository("example-org", "other-repo")
+	sc.fake.AddIssue(other, &githubtest.Issue{Number: 1, Labels: []string{githubtest.RequirementLabel}})
+	sc.fake.AddIssue(other, &githubtest.Issue{Number: 2, Parent: 1, Title: subIssueTitle, Labels: []string{"cumin/status/ready", "risk/low"}})
+	sc.fake.SetFile(other, ".cumin/config.toml", githubtest.File{Content: "work_dir = \"/tmp/elsewhere\"\nmax_review_rounds = 2\n"})
+
+	service := sc.service()
+	service.Targets = append([]workflow.Target{{
+		Repository: config.Repository{Owner: "example-org", Name: "other-repo"},
+		RemoteURL:  sc.remote,
+		Token:      func(context.Context) (string, error) { return githubtest.Token, nil },
+	}}, service.Targets...)
+
+	err := service.Poll(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "work_dir") || !strings.Contains(err.Error(), ".cumin/config.toml") {
+		t.Fatalf("err = %v, want the file and the key", err)
+	}
+	service.Wait()
+
+	// The good repository claimed its issue; the wrong one claimed nothing.
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 for the repository whose file is right", n)
+	}
+	if got := sc.fake.Issue(other, 2).Labels; !slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of the sub-issue of the wrong repository = %v, want the ready label untouched", got)
+	}
+	logs := sc.logs.String()
+	if !strings.Contains(logs, "other-repo") || !strings.Contains(logs, "work_dir") {
+		t.Errorf("the log does not name the repository and the key:\n%s", logs)
+	}
+
+	// The file is read again on every poll, so a merged fix takes effect by
+	// itself.
+	sc.fake.SetFile(other, ".cumin/config.toml", githubtest.File{Content: "max_review_rounds = 2\n"})
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("the poll after the fix: %v", err)
+	}
+	service.Wait()
+	if got := sc.fake.Issue(other, 2).Labels; slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of the sub-issue = %v, want the claim after the fix", got)
+	}
+}
+
+// The files are parsed again only when a blob changed.
+func TestPoll_ReadsTheRepositoryFilesAgainOnlyAfterAChange(t *testing.T) {
+	sc := newScene(t)
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "max_review_rounds = 2\n"})
+	service := sc.service()
+	ctx := context.Background()
+
+	for i := range 3 {
+		if err := service.Poll(ctx); err != nil {
+			t.Fatalf("poll %d: %v", i+1, err)
+		}
+	}
+	service.Wait()
+	const read = "the settings of the repository were read"
+	if n := strings.Count(sc.logs.String(), read); n != 1 {
+		t.Errorf("the files were read %d times over three polls, want 1", n)
+	}
+
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "max_review_rounds = 3\n"})
+	if err := service.Poll(ctx); err != nil {
+		t.Fatalf("the poll after the change: %v", err)
+	}
+	service.Wait()
+	if n := strings.Count(sc.logs.String(), read); n != 2 {
+		t.Errorf("the files were read %d times, want 2 after the change", n)
+	}
+}
+
+// The risk criteria comes from the strongest file that exists. The poll
+// logs where it came from, never the text.
+func TestPoll_LogsWhereTheRiskCriteriaCameFrom(t *testing.T) {
+	const repositoryCriteria = "# Risk criteria of the repository\n"
+	const hostCriteria = "# Risk criteria of the Host\n"
+	tests := []struct {
+		name       string
+		repository string
+		host       string
+		want       string
+	}{
+		{"the default", "", "", "default"},
+		{"the file of the Host", "", hostCriteria, "host"},
+		{"the file of the repository", repositoryCriteria, hostCriteria, "repository"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := newScene(t)
+			if tt.repository != "" {
+				sc.fake.SetFile(sc.repo, ".cumin/risk-criteria.md", githubtest.File{Content: tt.repository})
+			}
+			if tt.host != "" {
+				if err := os.WriteFile(filepath.Join(sc.settingsDir, "risk-criteria.md"), []byte(tt.host), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			service := sc.service()
+
+			if err := service.Poll(context.Background()); err != nil {
+				t.Fatalf("poll: %v", err)
+			}
+			service.Wait()
+
+			logs := sc.logs.String()
+			if !strings.Contains(logs, `"risk_criteria":"`+tt.want+`"`) {
+				t.Errorf("the poll log does not say %q:\n%s", tt.want, logs)
+			}
+			// The text of the criteria never reaches a log.
+			for _, text := range []string{"Risk criteria of the repository", "Risk criteria of the Host", "risk/medium"} {
+				if strings.Contains(logs, text) {
+					t.Errorf("the log holds the text of the risk criteria (%q):\n%s", text, logs)
+				}
+			}
+		})
+	}
 }
