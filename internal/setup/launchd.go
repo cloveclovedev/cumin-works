@@ -68,6 +68,11 @@ func NewLaunchAgent(home, program, configPath, pathEnv string) LaunchAgent {
 	}
 }
 
+// goBuildDir matches the directory that `go run` and `go test` create for
+// a build: go-build followed by digits. A directory that a person named
+// (go-builds, for example) does not match.
+var goBuildDir = regexp.MustCompile(`(^|/)go-build[0-9]+(/|$)`)
+
 // CheckProgram reports why the executable cannot be the program of a
 // LaunchAgent. A binary that `go run` built lives in a temporary directory
 // and is removed when the command ends, so launchd would never find it
@@ -76,11 +81,30 @@ func CheckProgram(program string) error {
 	if !filepath.IsAbs(program) {
 		return fmt.Errorf("the path of cumin (%s) is not absolute", program)
 	}
-	temporary := filepath.Clean(os.TempDir()) + string(filepath.Separator)
-	if strings.HasPrefix(program, temporary) || strings.Contains(program, "/go-build") {
+	temporary := goBuildDir.MatchString(program)
+	for _, dir := range temporaryDirs() {
+		temporary = temporary || strings.HasPrefix(program, dir)
+	}
+	if temporary {
 		return fmt.Errorf("%s is a temporary build: build the command first (go build -o cumin ./cmd/cumin) and run that binary", program)
 	}
 	return nil
+}
+
+// temporaryDirs returns the temporary directory of the Host, both as the
+// environment gives it and with its symbolic links resolved. On macOS the
+// two differ (/var/folders/... and /private/var/folders/...), and
+// os.Executable can give either.
+func temporaryDirs() []string {
+	separator := string(filepath.Separator)
+	temporary := filepath.Clean(os.TempDir()) + separator
+	dirs := []string{temporary}
+	if resolved, err := filepath.EvalSymlinks(os.TempDir()); err == nil {
+		if cleaned := filepath.Clean(resolved) + separator; cleaned != temporary {
+			dirs = append(dirs, cleaned)
+		}
+	}
+	return dirs
 }
 
 // LogPaths returns the files that the job writes: the standard output of

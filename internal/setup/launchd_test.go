@@ -127,7 +127,10 @@ func TestCheckProgram_RefusesATemporaryBuild(t *testing.T) {
 		wantErr bool
 	}{
 		{"a built binary", "/usr/local/bin/cumin", false},
+		{"a directory that a person named", "/Users/alice/go-builds/cumin", false},
 		{"a go run binary", filepath.Join(os.TempDir(), "go-build123", "b001", "exe", "cumin"), true},
+		{"a go run binary under the resolved temporary directory", resolvedTemp(t, "go-build456", "b001", "exe", "cumin"), true},
+		{"a build directory of go outside the temporary directory", "/opt/go-build123/cumin", true},
 		{"a relative path", "cumin", true},
 	}
 	for _, tt := range tests {
@@ -138,6 +141,17 @@ func TestCheckProgram_RefusesATemporaryBuild(t *testing.T) {
 			}
 		})
 	}
+}
+
+// resolvedTemp builds a path under the temporary directory with its
+// symbolic links resolved. On macOS os.Executable can give either form.
+func resolvedTemp(t *testing.T, parts ...string) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		t.Skipf("resolve the temporary directory: %v", err)
+	}
+	return filepath.Join(append([]string{dir}, parts...)...)
 }
 
 func TestInstallLaunchAgent_WritesThePlistAndCreatesTheStateDirectory(t *testing.T) {
