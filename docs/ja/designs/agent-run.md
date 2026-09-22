@@ -4,7 +4,7 @@
 - 要件: [cumin本体の要件](../requirements/cumin-core.md) の「Agentの起動」、[Agentに共通の要件](../requirements/agents/common.md) の「指示の渡し方」と「プロセスとセッション」
 - 事実の出どころ: [調査・実測で確定した制約](../requirements/evidence/measured-constraints.md) の行の番号 (「実測 N」と書く) か、公式ドキュメントのページの名前 (git、Claude Code) で示す。
 
-Agentを1回起動して結果を受け取るまでの、Host側の設計をまとめる。作業場所の用意と片付け、CLIの起動、出力の読み取り、実行時間の上限が対象である。Agentの実行を必要とする処理 (定期確認と判定の `internal/workflow`、利用枠の `internal/quota`、組み立ての `cmd/cumin`。以下、呼び出し処理と書く) は、この設計で決めた入口を通してだけAgentに触れる。
+Agentを1回起動して結果を受け取るまでの、Host側の設計をまとめる。作業場所の用意と片付け、CLIの起動、出力の読み取り、実行時間の上限が対象である。Agentの実行を必要とする処理 (定期確認と判定の `internal/workflow`、利用枠の `internal/quota`、組み立ての `cmd/cumin`。以下、呼び出し処理と書く) は、この設計で決めた入口を通してだけAgentに触れる。 パッケージとファイルの受け持ちは [コードの構成の設計](code-layout.md) にある。
 
 ## 範囲
 

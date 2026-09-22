@@ -7,6 +7,7 @@
 
 ## 設計
 
+- [コードの構成の設計](designs/code-layout.md)
 - [cumin本体の設計メモ](designs/cumin-core.md)
 - [Agentの実行の設計](designs/agent-run.md)
 
