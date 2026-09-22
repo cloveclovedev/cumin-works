@@ -280,7 +280,7 @@ func TestRemoveLaunchAgentFile(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		const other = "<?xml version=\"1.0\"?>\n<plist><dict><key>Label</key><string>com.example.other</string></dict></plist>\n"
+		const other = "<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict><key>Label</key><string>com.example.other</string></dict></plist>\n"
 		if err := os.WriteFile(agent.PlistPath, []byte(other), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -313,6 +313,58 @@ func TestRemoveLaunchAgentFile(t *testing.T) {
 			t.Errorf("RemoveLaunchAgentFile = %q, %v, want removed", result, err)
 		}
 	})
+}
+
+// The Label decides, and only the value of the Label key. A file that
+// names this job somewhere else (in its arguments, for example) is not
+// this job.
+func TestPlistState_ReadsTheLabelKey(t *testing.T) {
+	agent := testAgent(t)
+	if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name  string
+		plist string
+		want  PlistState
+	}{
+		{"this job", "", PlistOfThisJob},
+		{
+			"another job that names this one in its arguments",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict>\n<key>Label</key><string>com.example.other</string>\n" +
+				"<key>ProgramArguments</key><array><string>/bin/echo</string><string>" + LaunchAgentLabel + "</string></array>\n</dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+		{
+			"a plist with no label",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict><key>RunAtLoad</key><true/></dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plist := tt.plist
+			if plist == "" {
+				var err error
+				if plist, err = agent.Plist(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(agent.PlistPath, []byte(plist), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			state, err := agent.PlistState()
+			if err != nil || state != tt.want {
+				t.Errorf("PlistState = %q, %v, want %q", state, err, tt.want)
+			}
+		})
+	}
+	if err := os.Remove(agent.PlistPath); err != nil {
+		t.Fatal(err)
+	}
+	if state, err := agent.PlistState(); err != nil || state != PlistAbsent {
+		t.Errorf("PlistState = %q, %v, want absent", state, err)
+	}
 }
 
 func TestServiceTarget_IsTheJobInTheDomainOfTheUser(t *testing.T) {

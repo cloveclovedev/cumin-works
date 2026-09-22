@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -178,26 +179,90 @@ func InstallLaunchAgent(a LaunchAgent, force bool) (string, error) {
 	return "written", nil
 }
 
-// RemoveLaunchAgentFile removes the plist of the job.
-//
-// It reports what happened: "removed", "absent" when there is no file, or
-// "kept" when the file at that path does not hold this job and force is
-// false. Only the plist goes: the logs, the state, and the binary stay,
-// because a person put them there and may want them.
-//
-// The check is the label, not the whole file. The plist holds the PATH of
+// PlistState says what stands at the path of the plist.
+type PlistState string
+
+const (
+	// PlistAbsent: there is no file.
+	PlistAbsent PlistState = "absent"
+	// PlistOfThisJob: the file declares this job.
+	PlistOfThisJob PlistState = "this job"
+	// PlistOfAnotherJob: the file declares another job, or no job at all.
+	PlistOfAnotherJob PlistState = "another job"
+)
+
+// PlistState reads the file at the path of the plist and says whose job it
+// is. The check is the Label, not the whole file: a plist holds the PATH of
 // the shell that wrote it, so two files of the same job can differ without
-// meaning anything. A file at this path that does not name the job is
-// somebody else's, and cumin does not remove it by itself.
-func RemoveLaunchAgentFile(a LaunchAgent, force bool) (string, error) {
+// meaning anything.
+func (a LaunchAgent) PlistState() (PlistState, error) {
 	data, err := os.ReadFile(a.PlistPath)
 	switch {
 	case os.IsNotExist(err):
-		return "absent", nil
+		return PlistAbsent, nil
 	case err != nil:
 		return "", fmt.Errorf("read %s: %w", a.PlistPath, err)
 	}
-	if !force && !strings.Contains(string(data), "<string>"+a.Label+"</string>") {
+	label, err := plistLabel(data)
+	if err != nil {
+		return "", fmt.Errorf("read the job of %s: %w", a.PlistPath, err)
+	}
+	if label != a.Label {
+		return PlistOfAnotherJob, nil
+	}
+	return PlistOfThisJob, nil
+}
+
+// plistLabel returns the value of the Label key of the plist, or an empty
+// string when the file has none. The plist of a job is a dict of keys and
+// values, so the value of a key is the element that follows it.
+func plistLabel(data []byte) (string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	afterLabelKey := false
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return "", nil
+		}
+		if err != nil {
+			return "", err
+		}
+		element, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		var text string
+		switch element.Name.Local {
+		case "key":
+			if err := decoder.DecodeElement(&text, &element); err != nil {
+				return "", err
+			}
+			afterLabelKey = strings.TrimSpace(text) == "Label"
+		case "string":
+			if err := decoder.DecodeElement(&text, &element); err != nil {
+				return "", err
+			}
+			if afterLabelKey {
+				return strings.TrimSpace(text), nil
+			}
+		}
+	}
+}
+
+// RemoveLaunchAgentFile removes the plist of the job.
+//
+// It reports what happened: "removed", "absent" when there is no file, or
+// "kept" when the file at that path holds another job and force is false.
+// Only the plist goes: the logs, the state, and the binary stay, because a
+// person put them there and may want them.
+func RemoveLaunchAgentFile(a LaunchAgent, force bool) (string, error) {
+	state, err := a.PlistState()
+	switch {
+	case err != nil:
+		return "", err
+	case state == PlistAbsent:
+		return "absent", nil
+	case state == PlistOfAnotherJob && !force:
 		return "kept", fmt.Errorf("%s does not hold the job %s. Look at the file, then run again with --force to remove it anyway", a.PlistPath, a.Label)
 	}
 	if err := os.Remove(a.PlistPath); err != nil {

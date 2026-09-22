@@ -218,10 +218,19 @@ func removeLaunchd(agent setup.LaunchAgent, dryRun, force bool, stdout, stderr i
 		} else {
 			fmt.Fprintf(stdout, "the job %s is not loaded\n", target)
 		}
-		if _, err := os.Stat(agent.PlistPath); err == nil {
-			fmt.Fprintf(stdout, "would remove: %s\n", agent.PlistPath)
-		} else {
+		// The same check as the removal, so that the preview is right in
+		// the case that the check is there for.
+		state, err := agent.PlistState()
+		switch {
+		case err != nil:
+			fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
+			return exitFailure
+		case state == setup.PlistAbsent:
 			fmt.Fprintf(stdout, "no plist at: %s\n", agent.PlistPath)
+		case state == setup.PlistOfAnotherJob && !force:
+			fmt.Fprintf(stdout, "would keep: %s holds another job. Run again with --force to remove it anyway\n", agent.PlistPath)
+		default:
+			fmt.Fprintf(stdout, "would remove: %s\n", agent.PlistPath)
 		}
 		printWhatStays(stdout, agent)
 		return exitOK
