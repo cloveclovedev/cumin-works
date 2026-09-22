@@ -120,3 +120,45 @@ func (s *Service) issueLabels(ctx context.Context, log *slog.Logger, target Targ
 	}
 	return sub.Labels
 }
+
+// StopNote is the comment that cumin writes when the reason is its own: a
+// check of cumin failed, or a run ended abnormally. The form is
+// templates/stop-note.md; a test keeps the two equal. When an agent
+// returns blocked, cumin posts the blocked_reason of the agent instead.
+//
+// pullRequest is 0 when there is none. retried says whether the same
+// request had been run again before cumin gave up.
+func StopNote(row, reason string, pullRequest int, retried bool) string {
+	pr := "None"
+	if pullRequest > 0 {
+		pr = fmt.Sprintf("#%d", pullRequest)
+	}
+	tried := "no"
+	if retried {
+		tried = "once"
+	}
+	return fmt.Sprintf(`## Stopped for the Owner
+
+Row: %s
+Reason: %s
+Pull request: %s
+Retried: %s
+
+To continue: read the reason, fix what it names, and say in a comment how to go on. Then add the label `+"`cumin/status/ready`"+` to this issue.
+`, row, reason, pr, tried)
+}
+
+// VerificationReason is the sentence of one failed check of I2. It goes
+// into the comment on the issue and into the notification, so that the
+// Owner reads the same words in both places.
+func VerificationReason(failure VerificationFailure) string {
+	switch failure {
+	case FailureNoOpenPullRequest:
+		return "The Implementer reported done, but no open pull request closes this issue."
+	case FailureAuthorMismatch:
+		return "The Implementer reported done, but the pull request that closes this issue was not opened by the Implementer App."
+	case FailureHeadNotPushed:
+		return "The Implementer reported done, but the last commit of the work directory is not the head of the pull request, so it was not pushed."
+	}
+	return "The verification of the pull request failed."
+}

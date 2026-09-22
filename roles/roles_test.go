@@ -134,3 +134,30 @@ func TestWriteSkills_WritesEachTemplateAsASkill(t *testing.T) {
 		}
 	}
 }
+
+// The templates that cumin writes itself (the follow-up note and the stop
+// note) must reach no agent: they are the form of a comment of cumin, not
+// of an agent, and an agent that read them could imitate them on GitHub.
+func TestTemplatesOfCumin_ReachNoAgent(t *testing.T) {
+	cuminOnly := []string{"follow-up-note.md", "stop-note.md"}
+	for _, name := range cuminOnly {
+		text, err := templates.Read(name)
+		if err != nil {
+			t.Fatalf("Read(%s): %v", name, err)
+		}
+		for _, skill := range Skills() {
+			if skill.Template == name {
+				t.Errorf("the skill %s carries %s", skill.Name, name)
+			}
+		}
+		for _, role := range config.AllRoles() {
+			instruction, err := Instruction(role)
+			if err != nil {
+				t.Fatalf("Instruction(%s): %v", role, err)
+			}
+			if strings.Contains(instruction, text) {
+				t.Errorf("the instruction of %s holds %s", role, name)
+			}
+		}
+	}
+}

@@ -385,7 +385,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			s.stopAfterBlocked(ctx, log, target, settings, number, run.Result.BlockedReason)
 			return
 		}
-		s.verifyDone(ctx, log, target, number, workDir, run.BotLogin)
+		s.verifyDone(ctx, log, target, settings, number, workDir, run.BotLogin)
 	}
 }
 
@@ -414,10 +414,10 @@ func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target
 // worktree and runs the pure check.
 //
 // On a pass the status label becomes cumin/status/awaiting-checks. A failed
-// check is logged with its kind and the label stays; #81 reads the same
-// value to change the label, comment, and notify. Nothing here is retried:
-// the next poll reads the facts again.
-func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, number int, workDir, botLogin string) {
+// check hands the issue back to the Owner through the stop step, with the
+// sentence of that check. Nothing here is retried: the Owner decides what
+// to do next.
+func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, workDir, botLogin string) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -443,6 +443,14 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 	if !verification.Passed {
 		log.Warn("I2: the verification failed", "failure", verification.Failure.String(),
 			"pull_request", verification.PullRequest)
+		reason := VerificationReason(verification.Failure)
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row:     RowI2,
+			issue:   number,
+			labels:  sub.Labels,
+			reason:  reason,
+			comment: StopNote(RowI2, reason, verification.PullRequest, false),
+		})
 		return
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingChecks)

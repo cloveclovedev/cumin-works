@@ -71,7 +71,7 @@
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める |
 | | `risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
 | | `<role>.md` | roleごとの指示の本文 |
-| `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。`roles` が読む |
+| `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。Agentが書くものは `roles` が読んで渡す。cuminが自分で書くもの (`follow-up-note.md`、`stop-note.md`) は、Agentには渡らず、テストが文面との一致を確かめる |
 | `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
 | | `setup-repo.sh`、`setup-repo/` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) |
 | | `install.sh` | cuminをビルドしてHostに置き、LaunchAgentを新しいバイナリに入れ替える |
