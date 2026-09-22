@@ -3,6 +3,7 @@ package workflow
 import (
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -179,5 +180,53 @@ func TestLabelsAfterClaim(t *testing.T) {
 	}
 	if got := LabelsAfterClaim(nil); !slices.Equal(got, []string{LabelImplementing}) {
 		t.Errorf("LabelsAfterClaim(nil) = %v", got)
+	}
+}
+
+func TestReplaceStatusLabel(t *testing.T) {
+	got := ReplaceStatusLabel([]string{"cumin/status/implementing", "risk/low", "question"}, LabelAwaitingChecks)
+	if want := []string{"risk/low", "question", LabelAwaitingChecks}; !slices.Equal(got, want) {
+		t.Errorf("ReplaceStatusLabel = %v, want %v", got, want)
+	}
+}
+
+// I2 (issue-states.md): after done, an open pull request closes the
+// issue, its author is the Implementer App, and the head of the worktree
+// is pushed.
+func TestVerifyDone_I2(t *testing.T) {
+	const bot = "example-implementer[bot]"
+	const head = "2222222222222222222222222222222222222222"
+	pr := func(number int, author, headCommit string) PullRequest {
+		return PullRequest{Number: number, Author: author, HeadCommit: headCommit}
+	}
+	tests := []struct {
+		name      string
+		pulls     []PullRequest
+		localHead string
+		want      Verification
+	}{
+		{"the pull request of the bot at the pushed head passes", []PullRequest{pr(21, bot, head)}, head, Verification{Passed: true, PullRequest: 21}},
+		{"no pull request", nil, head, Verification{Failure: FailureNoOpenPullRequest}},
+		{"another author", []PullRequest{pr(21, "octocat", head)}, head, Verification{Failure: FailureAuthorMismatch, PullRequest: 21}},
+		{"an author without an account never matches", []PullRequest{pr(21, "", head)}, head, Verification{Failure: FailureAuthorMismatch, PullRequest: 21}},
+		{"a local commit that is not pushed", []PullRequest{pr(21, bot, head)}, "3333333333333333333333333333333333333333", Verification{Failure: FailureHeadNotPushed, PullRequest: 21}},
+		{"an unknown local head never matches", []PullRequest{pr(21, bot, head)}, "", Verification{Failure: FailureHeadNotPushed, PullRequest: 21}},
+		{"two open pull requests: the highest number is checked", []PullRequest{pr(21, bot, head), pr(25, "octocat", head)}, head, Verification{Failure: FailureAuthorMismatch, PullRequest: 25}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := VerifyDone(SubIssue{Number: 10, PullRequests: tt.pulls}, bot, tt.localHead)
+			if got != tt.want {
+				t.Errorf("VerifyDone = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+	if got := VerifyDone(SubIssue{PullRequests: []PullRequest{pr(21, "", head)}}, "", head); got.Passed {
+		t.Error("an empty implementer login matched an empty author")
+	}
+	for _, f := range []VerificationFailure{FailureNone, FailureNoOpenPullRequest, FailureAuthorMismatch, FailureHeadNotPushed} {
+		if s := f.String(); s == "" || strings.HasPrefix(s, "VerificationFailure(") {
+			t.Errorf("%d has no name", int(f))
+		}
 	}
 }

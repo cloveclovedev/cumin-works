@@ -1,0 +1,38 @@
+@startuml cumin-core-verify
+' cumin works - 実行終了の判定 (I2)。Implementerの実行が done で終わったあとの確認。
+' 対応する文書: cumin-core.md の「実行終了の判定」。
+' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:Implementerの実行が終わる;
+if (結果は?) then (done)
+  :スナップショットを読み直す
+  (実行が終わった直後の事実);
+  :worktreeの先頭のコミットを読む;
+  partition "判定 (純粋関数。I/Oなし)" {
+    if (Issueを閉じる、開いている
+    Pull Requestがある?) then (いいえ)
+      :落ちた: 開いているPull Requestがない;
+    elseif (作成者が ImplementerのAppの
+    bot (<slug>[bot]) ?) then (いいえ)
+      :落ちた: 作成者が違う;
+    elseif (Pull Requestの先頭のコミットが
+    worktreeの先頭と同じ?) then (いいえ)
+      :落ちた: 先頭のコミットがpushされていない;
+    else (はい)
+      :通った;
+    endif
+  }
+  if (通った?) then (はい)
+    :ラベルを cumin/status/awaiting-checks に替える;
+  else (いいえ)
+    :どの確認で落ちたかをログに出す
+    (付け替え、コメント、通知は #81);
+  endif
+else (blocked、異常終了)
+  :ログに出す (扱いは #81);
+endif
+stop
+@enduml

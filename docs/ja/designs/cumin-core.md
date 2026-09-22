@@ -159,6 +159,24 @@ riskの基準は、Chief EngineerとReviewerがそのまま受け取る文章で
 - 今の判定はI1だけである。あとの行 (R1〜R7、I2〜I11) は、同じ関数に分岐を足す。
 - 採らなかった案: 定期確認の中で、GitHubを読みながら判定する。判定の途中で事実が変わりうるうえ、表形式のテストができない。
 
+### Implementerへの依頼
+
+- ブランチの名前は `cumin/<Issue番号>-<短い説明>` で、cuminが決めて渡す (Implementerの要件の「入力」)。短い説明は、実装Issueの題から作る。小文字にし、`a`〜`z` と `0`〜`9` 以外の文字の連続を1つの `-` にし、先頭と末尾の `-` を除き、40文字以内に収まる単語の並びを先頭から残す (先頭の単語だけで40文字を超えるときは、その単語を40文字で切る)。何も残らなければ `issue` にする。例: 題が "Add the login screen" のIssue #10 は `cumin/10-add-the-login-screen` になる。
+- 名前を題から作るのは、最初の依頼のときである。そのIssueを閉じる開いているPull Requestが既にあれば、そのPull Requestのブランチを使う (続きの依頼を作る要求Issueが適用する)。題が変わっても、既にあるPull Requestのブランチは変わらない。
+- 依頼文は `internal/workflow` の純粋関数が組み立てる。「実装」の依頼文に入れるのは、依頼の種類、リポジトリ、実装Issueの番号、ブランチ、作業場所と、1つのPull Requestを開く短い指示 (説明を書く前にskill `cumin-pull-request` を呼ぶこと、`Closes #<番号>` を書くこと) である。依頼の種類によらないことは、roleの指示にあり、依頼文には書かない。
+- 採らなかった案: 短い説明をAgentに決めさせる。名前がGitHubの事実になる前にcuminが知っている必要があり、続きの依頼でも同じ名前を渡すためである。
+
+### 実行終了の判定
+
+![I2の判定](cumin-core-verify.svg)
+
+図の元ファイル: [cumin-core-verify.puml](cumin-core-verify.puml)
+
+- Implementerの実行が `done` で終わったら、cuminはそのリポジトリのスナップショットを読み直し (「GitHubクライアント」)、実行したIssueについてI2の3つの確認を、この順で行う。そのIssueを閉じる開いているPull Requestがあること。そのPull Requestの作成者が、ImplementerのAppのbot (`<slug>[bot]`) であること。Pull Requestの先頭のコミット (`headRefOid`) が、worktreeの先頭のコミットと同じであること (最後のコミットがpushされている)。
+- Pull Requestは、IssueとPull Requestの紐づけ (`closedByPullRequestsReferences`) で見つける。ブランチの名前では探さない。開いているPull Requestが2つ以上あれば、番号の大きいものを確かめる。
+- 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号である。通れば、ラベルを `cumin/status/awaiting-checks` に替える。落ちたときの付け替え、コメント、通知は、失敗の道の要求Issue (#81) がこの値を読んで作る。それまでは、種類をログに出すだけである。
+- `blocked` の結果と異常終了は、この判定に入らない。同じ要求Issue (#81) が扱う。
+
 ### 起動前の使用率の確認
 
 - `claude -p "/usage"` は利用枠を使わないが、人間向けの文章しか返さない。機械可読の使用率は、モデルを呼ぶ実行の `rate_limit_event` にだけ出る (実測 1、29)。使用率を返すサブコマンドや、非対話で使えるAPIは、公式ドキュメントにない (2026-09-21 に CLI reference、headless、statusline、hooks、Agent SDK の文書を確かめた)。
