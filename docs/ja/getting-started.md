@@ -46,7 +46,7 @@ go build -o cumin ./cmd/cumin
 
 ## 今できること
 
-`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1) までである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
+`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1) と、Implementerを起動して実行の終わりを待つところまでである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
 
 ```sh
 go run ./cmd/cumin run --config <設定ファイル>
@@ -55,13 +55,16 @@ go run ./cmd/cumin run --config <設定ファイル>
 起動すると、次の順に動く。
 
 1. 設定ファイルを読み込んで検証する。問題があれば、キーの名前を表示して、0以外の終了コードで終わる。
-2. 対象のリポジトリの持ち主ごとに、`github_apps.<owner>.cumin-core` の Client ID を確かめ、Keychain から秘密鍵を読む。Client ID か秘密鍵がなければ、キーの名前を表示して終わる。
-3. 対象のリポジトリごとに、足りないラベル (`cumin/type/requirement`、`cumin/status/*`、`risk/*`) を作る。
-4. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`request_command` を実行する。`request_command` が空なら、依頼をログに残すだけである。
+2. 対象のリポジトリの持ち主ごとに、`github_apps.<owner>.<app>` の Client ID を4つの App (`cumin-core` と3つのrole) について確かめ、Keychain から秘密鍵を読む。Client ID か秘密鍵がなければ、キーの名前を表示して終わる。
+3. Agentに渡すskillを、状態のディレクトリの下に書き出す。
+4. 対象のリポジトリごとに、足りないラベル (`cumin/type/requirement`、`cumin/status/*`、`risk/*`) を作る。
+5. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`work_dir` の下に worktree を用意して、Implementer を起動する。実行は定期確認とは別に進むので、定期確認は止まらない。実行が終わると、結果 (`done` か `blocked`) とセッションの番号、または異常終了の種類がログに出る。
 
-ログは、JSONで標準出力に出る。1回の定期確認ごとに1行 (リポジトリ、GraphQLの `cost` と `remaining`)、着手と依頼のたびに1行が出る。token や鍵は出ない。
+Implementer の実行は、本物の Claude Code を起動し、利用枠を使う。
 
-止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。動いている定期確認が終わってから、終了コード0で終わる。
+ログは、JSONで標準出力に出る。1回の定期確認ごとに1行 (リポジトリ、GraphQLの `cost` と `remaining`)、着手と依頼、実行の終わりのたびに1行が出る。token や鍵は出ない。
+
+止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。動いている定期確認と、動いている Agent の実行が終わってから、終了コード0で終わる。
 
 `--config` を省くと、`~/.config/cumin/config.toml` を読む。cumin を止めたときに `cumin/status/implementing` のまま残ったIssueは、自動では回収されない。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す ([Issueのラベルと状態遷移](requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
 

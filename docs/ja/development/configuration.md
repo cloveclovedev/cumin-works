@@ -28,7 +28,6 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `max_review_rounds` | レビューのラウンドの上限 | `3` | 1以上 |
 | `max_check_fix_requests` | checkの修正を依頼する回数の上限 | `3` | 1以上 |
 | `merge_method` | cuminがPull Requestをmergeするときの方法 | `"squash"` | `"squash"`、`"merge"`、`"rebase"` のどれか |
-| `request_command` | 着手 (I1) のときに実行する実行ファイル。cuminは、`<owner>/<repo>` とIssueの番号の2つの引数を付けて実行し、終わるのを待つ。Agentの起動を定期確認につなぐまでの仮の設定で、つないだら消える | 空 (何も実行せず、ログに残す) | なし |
 | `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
 | `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
 | `roles.<role>.cli_path` | CLIの実行ファイル。ディレクトリを含まない名前は、`PATH` から探す。受け入れテストは、偽のCLIの実行ファイルを指す | `"claude"` | 空にできない |
@@ -75,7 +74,6 @@ max_issues_in_progress = 1
 max_review_rounds = 3
 max_check_fix_requests = 3
 merge_method = "squash"
-request_command = ""
 
 [roles.implementer]
 time_limit = "50m"
@@ -123,7 +121,7 @@ reviewer = "<Client ID>"
 - 書かないキーには、Hostの設定ファイルの値が残る。優先順位は、初期値、Hostの設定ファイル、リポジトリの設定ファイルの順に強くなる。
 - 値の制限と、制限を外れたときの文章は、Hostの設定ファイルと同じである。
 - 次のものは、そのリポジトリのエラーになる。cuminはキーの名前をログに出して、そのリポジトリの定期確認を飛ばす。他のリポジトリの定期確認は続く。Ownerが直したものをmergeすると、次の定期確認から元に戻る。
-  - Hostに属するキー (`repositories`、`work_dir`、`poll_interval`、`max_issues_in_progress`、`request_command`、`quota` の表、`github_apps` の表、`roles.<role>.cli_path`、`roles.<role>.time_limit`)
+  - Hostに属するキー (`repositories`、`work_dir`、`poll_interval`、`max_issues_in_progress`、`quota` の表、`github_apps` の表、`roles.<role>.cli_path`、`roles.<role>.time_limit`)
   - 知らないキーと、知らないroleの名前
   - 制限を外れた値
 - `roles.<role>.cli_path` と `roles.<role>.time_limit` がHostのものなのは、前者がHostのパスであり、後者がGitHub Appのtokenの寿命から決まるためである。

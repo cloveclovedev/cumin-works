@@ -8,7 +8,7 @@
 - ある Organization に cumin-works を導入した直後に、セットアップが正しいことを確かめるために実行する。
 - GitHub の振る舞いが変わった疑いがあるときに、実行し直す。
 
-Claude Code は起動しないので、利用枠は使わない。
+ほとんどのテストは Claude Code を起動しないので、利用枠を使わない。起動するものには、下の表と「実行のしかた」で断りを書く。
 
 ## 前提
 
@@ -67,3 +67,11 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 ## `cumin run` を sandbox で動かすとき
 
 定期確認や着手を sandbox で確かめるときは、`go build -o cumin ./cmd/cumin` で組み込んだバイナリを動かす。`go run` で動かすと、親のプロセスに送った SIGTERM が `cumin` の子プロセスに届かず、止め方の確認にならない (2026-09-21 に確かめた)。launchd は組み込んだバイナリを起動するので、Host の運用には関係しない。
+
+`cumin run` は、`cumin/status/ready` の付いた sub-issue を見つけると、本物の Implementer を起動する。利用枠を使う (使用率の最小の実行と Implementer の実行で2回)。Owner が同意したときだけ動かす。動かす前に確かめること。
+
+- Host の設定ファイルに、sandbox のリポジトリと、4つの App (`cumin-core` と3つの role) の Client ID がある。秘密鍵が Keychain にある。
+- `work_dir` が、捨ててよいディレクトリを指している。cumin はその下に clone と worktree を作る。
+- sandbox に、`cumin/status/ready` の付いた sub-issue が、確かめたいものだけある。ほかに ready の sub-issue があると、そちらにも着手する。
+
+止めるときは SIGTERM を送る。動いている Implementer の実行が終わるまで待つので、すぐには終わらない。実行を待たずに終わらせたいときは、もう一度 SIGTERM を送らずに、実行の時間の上限 (`roles.implementer.time_limit`) を短くした設定で動かし直す。

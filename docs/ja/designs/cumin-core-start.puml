@@ -1,0 +1,44 @@
+@startuml cumin-core-start
+' cumin works - 着手 (I1) と、Agentの実行の背景化。
+' 対応する文書: cumin-core.md の「Agentの実行の背景化」。
+' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+participant "定期確認のループ" as poll
+participant "着手の処理 (I1)" as claim
+participant "GitHub" as gh
+participant "Workspace\n(cloneとworktree)" as ws
+participant "agent.Service" as agents
+participant "Claude Code" as cli
+
+poll -> gh: スナップショットを読む
+poll -> claim: 着手リストを渡す
+claim -> gh: ラベルを cumin/status/implementing に替える
+note right of claim
+  ラベルを替えられなければ
+  依頼しない (原則3)
+end note
+claim -> claim: ブランチの名前と依頼文を決める
+claim ->> agents: 実行を始める (別のgoroutine)
+claim --> poll: 戻る
+poll -> poll: 次の定期確認へ (実行を待たない)
+
+group 別のgoroutine (Issueごとに1つ)
+  agents -> ws: worktreeを用意する
+  agents -> gh: roleのtokenを発行する
+  agents -> cli: 依頼文とroleの指示で起動する
+  cli --> agents: 結果、セッションの番号、使用率
+  agents -> agents: 結果をログに出す
+  note right of agents
+    ここが実行終了のきっかけになる。
+    判定は「実行終了の判定」(I2)
+  end note
+end
+
+note over poll, cli
+  cuminが止まるときは、動いている実行を待つ。
+  実行のcontextは定期確認のcontextなので、
+  止めると異常終了 (種類は実行時間の上限) になる。
+end note
+@enduml

@@ -50,9 +50,6 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if s.MergeMethod != MergeSquash {
 		t.Errorf("MergeMethod = %q, want squash", s.MergeMethod)
 	}
-	if s.RequestCommand != "" {
-		t.Errorf("RequestCommand = %q, want empty", s.RequestCommand)
-	}
 	for _, role := range []Role{RoleChiefEngineer, RoleImplementer, RoleReviewer} {
 		want := RoleSettings{TimeLimit: 50 * time.Minute, CLI: CLIClaudeCode, CLIPath: "claude"}
 		if got := s.Roles[role]; got != want {
@@ -73,7 +70,6 @@ max_issues_in_progress = 2
 max_review_rounds = 5
 max_check_fix_requests = 4
 merge_method = "rebase"
-request_command = "/opt/example/bin/request"
 
 [roles.implementer]
 time_limit = "55m"
@@ -94,8 +90,7 @@ reviewer = "client-id-reviewer"
 		t.Errorf("Repositories = %v", s.Repositories)
 	}
 	if s.PollInterval != 30*time.Second || s.MaxIssuesInProgress != 2 ||
-		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.MergeMethod != MergeRebase ||
-		s.RequestCommand != "/opt/example/bin/request" {
+		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.MergeMethod != MergeRebase {
 		t.Errorf("top-level settings = %+v", s)
 	}
 	want := RoleSettings{TimeLimit: 55 * time.Minute, CLI: CLIClaudeCode, CLIPath: "/opt/example/bin/claude", Model: "example-model"}
@@ -158,6 +153,9 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"wrong type in a table", required + "[roles.implementer]\n" + `model = 5`, `"roles.implementer.model"`},
 		{"unknown key", required + `pol_interval = "60s"`, "pol_interval: unknown key"},
 		{"unknown role", required + "[roles.tester]\n" + `cli = "claude-code"`, "roles.tester: unknown key"},
+		// request_command was the temporary setting of the poll before the
+		// agent start was connected to it. A file that still has it fails.
+		{"setting that was removed", required + `request_command = "/bin/echo"`, "request_command: unknown key"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

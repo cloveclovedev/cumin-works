@@ -5,15 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
+	"github.com/cloveclovedev/cumin-works/roles"
 )
 
 // Target is one target repository with the token of cumin-core for it.
 type Target struct {
 	Repository config.Repository
+	// RemoteURL is the address that the clone of the work directory uses.
+	// cumin run passes https://github.com/<owner>/<repo>.git; a test passes
+	// a local bare repository.
+	RemoteURL string
 	// Token returns an installation token for the repository. cumin run
 	// passes the Token method of a github.TokenSource. Tests pass a function
 	// that returns the token of the fake.
@@ -24,22 +31,30 @@ type Target struct {
 type Service struct {
 	GitHub  *github.AppClient
 	Targets []Target
+	// Agents starts the agents. A claim without it is an error.
+	Agents *agent.Service
+	// Workspace holds the clone and the worktrees of each repository, under
+	// the setting work_dir.
+	Workspace agent.Workspace
 	// MaxIssuesInProgress is the setting max_issues_in_progress.
 	MaxIssuesInProgress int
-	// RequestCommand is the setting request_command: the executable that a
-	// request runs. Empty runs nothing.
-	RequestCommand string
 	// PollInterval is the setting poll_interval.
 	PollInterval time.Duration
 	// Labels are the labels that Run creates in each target repository when
 	// they are missing. RepositoryLabels gives the list of cumin.
 	Labels []github.Label
 	Logger *slog.Logger
+
+	// running counts the agent runs that the polls started. Each run has
+	// its own goroutine, so that the poll goes on while an agent works.
+	running sync.WaitGroup
 }
 
 // Run creates the missing labels in each target repository, then polls at
 // once and after every PollInterval, until ctx ends. A failed poll is logged,
-// and the loop continues. Run returns nil when ctx ends.
+// and the loop continues. When ctx ends, Run waits for the running agents
+// before it returns nil. The runs use ctx, so the end of ctx ends them as an
+// abnormal end of the kind "time limit".
 func (s *Service) Run(ctx context.Context) error {
 	if s.PollInterval <= 0 {
 		return errors.New("workflow: the poll interval must be more than 0")
@@ -52,12 +67,18 @@ func (s *Service) Run(ctx context.Context) error {
 		_ = s.Poll(ctx)
 		select {
 		case <-ctx.Done():
-			s.logger().Info("stopped", "reason", context.Cause(ctx).Error())
+			reason := context.Cause(ctx).Error()
+			s.Wait()
+			s.logger().Info("stopped", "reason", reason)
 			return nil
 		case <-ticker.C:
 		}
 	}
 }
+
+// Wait waits for the agent runs that the polls started. Run calls it when
+// ctx ends; a test calls it after a poll, to read what the run did.
+func (s *Service) Wait() { s.running.Wait() }
 
 // ensureLabels creates the missing labels of each target repository. A
 // failure is logged; the poll still runs, so that a repository without the
@@ -138,10 +159,73 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	}
 	s.logger().Info("I1: claimed the issue", "repository", target.Repository.String(),
 		"issue", c.Number, "requirement_issue", c.RequirementIssue, "labels", labels)
-	if err := s.request(ctx, target.Repository, c.Number); err != nil {
+	if err := s.startImplementer(ctx, target, sub); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
+}
+
+// startImplementer requests the work of I1 from the Implementer. The
+// request kind is always "implement": the continuation request, which uses
+// the branch of an existing pull request, is a later requirement.
+//
+// The work runs in its own goroutine, so that the poll goes on while the
+// agent works. What the goroutine does (the worktree, the start, the end of
+// the run) is only logged: the label stays cumin/status/implementing,
+// because no rule of v0.1 takes it back (issue-states.md, the section on
+// what v0.1 does not build).
+func (s *Service) startImplementer(ctx context.Context, target Target, sub SubIssue) error {
+	if s.Agents == nil {
+		return errors.New("no agent service is configured")
+	}
+	instruction, err := roles.Instruction(config.RoleImplementer)
+	if err != nil {
+		return err
+	}
+	branch := BranchName(sub.Number, sub.Title)
+	s.running.Add(1)
+	go func() {
+		defer s.running.Done()
+		s.runImplementer(ctx, target, sub.Number, branch, instruction)
+	}()
+	return nil
+}
+
+// runImplementer prepares the worktree and runs one Implementer request to
+// its end. The end of the run is the trigger of the rules that follow (I2);
+// this requirement logs it.
+func (s *Service) runImplementer(ctx context.Context, target Target, number int, branch, instruction string) {
+	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
+	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
+		Owner:  target.Repository.Owner,
+		Repo:   target.Repository.Name,
+		Issue:  number,
+		Role:   config.RoleImplementer,
+		Branch: branch,
+	})
+	if err != nil {
+		log.Error("I1: the work directory was not prepared", "error", err.Error())
+		return
+	}
+	log.Info("I1: requested the work", "branch", branch)
+	run, err := s.Agents.Start(ctx, agent.StartRequest{
+		Owner:           target.Repository.Owner,
+		Repo:            target.Repository.Name,
+		Role:            config.RoleImplementer,
+		RoleInstruction: instruction,
+		Text:            ImplementRequestText(target.Repository.String(), number, branch, workDir),
+		WorkDir:         workDir,
+	})
+	var abnormal *agent.AbnormalEnd
+	switch {
+	case errors.As(err, &abnormal):
+		log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
+			"session_id", abnormal.SessionID, "detail", abnormal.Detail)
+	case err != nil:
+		log.Error("the agent was not started", "error", err.Error())
+	default:
+		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+	}
 }
 
 // toSnapshot converts what the GitHub client read to the snapshot of the
