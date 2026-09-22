@@ -8,6 +8,7 @@
 package workflow
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -146,18 +147,93 @@ func readySubIssues(snapshot Snapshot) []Claim {
 	return claims
 }
 
-// LabelsAfterClaim returns the labels of a sub-issue after I1: every
-// cumin/status/* label is removed, and cumin/status/implementing is added.
-// The other labels (risk/*, ...) stay. issue-states.md says that cumin
-// removes the old status label when it starts the work.
-func LabelsAfterClaim(labels []string) []string {
+// ReplaceStatusLabel returns the labels of an issue with every
+// cumin/status/* label removed and status added. The other labels
+// (risk/*, ...) stay. A status label is always exactly one
+// (issue-states.md, principle 4).
+func ReplaceStatusLabel(labels []string, status string) []string {
 	after := []string{}
 	for _, label := range labels {
 		if !IsStatusLabel(label) {
 			after = append(after, label)
 		}
 	}
-	return append(after, LabelImplementing)
+	return append(after, status)
+}
+
+// LabelsAfterClaim returns the labels of a sub-issue after I1:
+// cumin/status/implementing in place of the old status label.
+// issue-states.md says that cumin removes the old status label when it
+// starts the work.
+func LabelsAfterClaim(labels []string) []string {
+	return ReplaceStatusLabel(labels, LabelImplementing)
+}
+
+// VerificationFailure says which check of I2 failed.
+type VerificationFailure int
+
+const (
+	// FailureNone: the verification passed.
+	FailureNone VerificationFailure = iota
+	// FailureNoOpenPullRequest: no open pull request closes the issue.
+	FailureNoOpenPullRequest
+	// FailureAuthorMismatch: the author of the pull request is not the
+	// Implementer App.
+	FailureAuthorMismatch
+	// FailureHeadNotPushed: the head commit of the worktree is not the
+	// head of the pull request.
+	FailureHeadNotPushed
+)
+
+func (f VerificationFailure) String() string {
+	switch f {
+	case FailureNone:
+		return "none"
+	case FailureNoOpenPullRequest:
+		return "no open pull request closes the issue"
+	case FailureAuthorMismatch:
+		return "the author of the pull request is not the Implementer App"
+	case FailureHeadNotPushed:
+		return "the head commit of the worktree is not pushed"
+	}
+	return fmt.Sprintf("VerificationFailure(%d)", int(f))
+}
+
+// Verification is the result of I2 after done. Passed is true when every
+// check held; otherwise Failure names the first check that failed. The
+// failure paths (label, comment, notification) read Failure; this
+// requirement only logs it. PullRequest is the pull request that was
+// checked, or 0 when there is none.
+type Verification struct {
+	Passed      bool
+	Failure     VerificationFailure
+	PullRequest int
+}
+
+// VerifyDone applies the checks of I2 (issue-states.md) to a sub-issue
+// after the Implementer returned done: an open pull request closes the
+// issue; its author is implementer (the login "<slug>[bot]" of the
+// Implementer App); its head commit is localHead, the head of the worktree
+// (so the last commit is pushed). The snapshot holds open pull requests
+// only; when two or more close the issue, the one with the highest number
+// is checked. An empty implementer or an empty localHead never matches.
+func VerifyDone(sub SubIssue, implementer, localHead string) Verification {
+	var pr *PullRequest
+	for i := range sub.PullRequests {
+		if pr == nil || sub.PullRequests[i].Number > pr.Number {
+			pr = &sub.PullRequests[i]
+		}
+	}
+	if pr == nil {
+		return Verification{Failure: FailureNoOpenPullRequest}
+	}
+	if implementer == "" || pr.Author != implementer {
+		return Verification{Failure: FailureAuthorMismatch, PullRequest: pr.Number}
+	}
+	if localHead == "" || pr.HeadCommit != localHead {
+		return Verification{Failure: FailureHeadNotPushed, PullRequest: pr.Number}
+	}
+	return Verification{Passed: true, PullRequest: pr.Number}
 }
 
 // SubIssue returns the sub-issue with the number, from any requirement issue.
