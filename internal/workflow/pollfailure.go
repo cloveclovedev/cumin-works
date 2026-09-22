@@ -36,8 +36,10 @@ type repeatedFailure struct {
 	reason string
 	// count is how many polls in a row failed with that reason.
 	count int
-	// told is true after the Owner was told about this run of failures.
-	// It goes back to false when a poll of the repository succeeds.
+	// told is true after the Owner was told that the polls of this
+	// repository keep failing. It goes back to false only when a poll of
+	// the repository succeeds, so a new reason does not bring a second
+	// notification before then.
 	told bool
 }
 
@@ -52,7 +54,8 @@ func (s *Service) pollSucceeded(repository config.Repository) {
 // pollFailed counts one failed poll and tells the Owner on the third
 // failure with the same reason. A different reason starts the count again,
 // because it is another problem. After the Owner was told, nothing more is
-// sent until a poll of that repository succeeds.
+// sent about this repository until one of its polls succeeds, whatever the
+// reason (cumin-core.md, the last line of the table of notifications).
 func (s *Service) pollFailed(ctx context.Context, repository config.Repository, err error) {
 	reason := err.Error()
 	s.failureMu.Lock()
@@ -60,9 +63,15 @@ func (s *Service) pollFailed(ctx context.Context, repository config.Repository, 
 		s.pollFailures = map[string]*repeatedFailure{}
 	}
 	failure, ok := s.pollFailures[repositoryKey(repository)]
-	if !ok || failure.reason != reason {
+	if !ok {
 		failure = &repeatedFailure{reason: reason}
 		s.pollFailures[repositoryKey(repository)] = failure
+	}
+	if failure.reason != reason {
+		// Another problem: the count starts again. Whether the Owner was
+		// already told stays, because the requirement says that the next
+		// notification comes after a poll of this repository succeeds.
+		failure.reason, failure.count = reason, 0
 	}
 	failure.count++
 	tell := failure.count >= pollFailuresBeforeNotice && !failure.told
@@ -77,26 +86,15 @@ func (s *Service) pollFailed(ctx context.Context, repository config.Repository, 
 	log.Warn("the poll of the repository keeps failing", "failures", count)
 	// No row of issue-states.md covers this line of the table of
 	// notifications, so the notification carries no row number.
-	s.notifyOwner(ctx, log, s.notifyEnabled(repository), notify.Notification{
+	// The Host setting decides here, not the setting of the repository:
+	// the poll that failed may be the one that could not read the file of
+	// the repository, and a repository must not silence a failure that it
+	// caused.
+	s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
 		Reason:     fmt.Sprintf("The poll of this repository failed %d times in a row with the same reason: %s", count, oneLine(reason)),
 		Repository: repository.String(),
 		Link:       github.RepositoryURL(repository.Owner, repository.Name),
 	})
-}
-
-// notifyEnabled says whether cumin notifies about one repository. The
-// settings that a poll kept decide. Before the first poll read them, and
-// when the file of the repository is the reason of the failure, the Host
-// settings decide, so that a repository cannot silence a failure that it
-// caused.
-func (s *Service) notifyEnabled(repository config.Repository) bool {
-	s.settingsMu.Lock()
-	kept, ok := s.repositorySettings[repositoryKey(repository)]
-	s.settingsMu.Unlock()
-	if ok {
-		return kept.Settings.Notify.DiscordEnabled
-	}
-	return s.Settings != nil && s.Settings.Notify.DiscordEnabled
 }
 
 // repositoryKey names one repository in the maps of the service. GitHub

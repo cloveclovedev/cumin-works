@@ -101,6 +101,37 @@ func TestPoll_ASuccessfulPollLetsTheNextRunOfFailuresNotifyAgain(t *testing.T) {
 	}
 }
 
+// After the Owner was told, a new reason brings no second notification
+// before a poll of the repository succeeds. The requirement says that the
+// next one comes after a successful poll, whatever the reason.
+func TestPoll_ANewReasonAfterANotificationIsSilentUntilASuccess(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", wrongFile(`work_dir = "/tmp/elsewhere"`))
+	service := sc.service()
+
+	pollTimes(t, service, 3, true)
+	if n := len(sc.webhook.messagesSent()); n != 1 {
+		t.Fatalf("%d notifications, want 1", n)
+	}
+
+	// Another key is wrong now, and the polls keep failing.
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", wrongFile(`poll_interval = "10s"`))
+	pollTimes(t, service, 4, true)
+	if n := len(sc.webhook.messagesSent()); n != 1 {
+		t.Errorf("%d notifications for the new reason, want 1 in all", n)
+	}
+
+	// A successful poll lets the next run of failures be told again.
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "max_review_rounds = 2\n"})
+	pollTimes(t, service, 1, false)
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", wrongFile(`poll_interval = "10s"`))
+	pollTimes(t, service, 3, true)
+	if n := len(sc.webhook.messagesSent()); n != 2 {
+		t.Errorf("%d notifications after the successful poll, want 2", n)
+	}
+}
+
 // A failure with another reason is another problem: the count starts
 // again, so the notification comes on the third failure with that reason.
 func TestPoll_AnotherReasonStartsTheCountAgain(t *testing.T) {
@@ -155,9 +186,27 @@ func TestPoll_TheCountOfOneRepositoryIsItsOwn(t *testing.T) {
 	}
 }
 
-// A repository that turns the notifications off is not told about its own
-// failed polls either.
-func TestPoll_FailuresOfARepositoryWithNotificationsOffAreOnlyLogged(t *testing.T) {
+// The Host setting decides for a failed poll. A repository that turns the
+// notifications off in its own file cannot silence a failure that its file
+// caused, and cumin may not even be able to read that file.
+func TestPoll_AFailedPollFollowsTheHostSetting(t *testing.T) {
+	sc := newScene(t)
+	// The file turns the notifications off and names a key of the Host, so
+	// the poll fails and the setting of the repository never takes effect.
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{
+		Content: "work_dir = \"/tmp/elsewhere\"\n\n[notify.discord]\nenabled = false\n",
+	})
+	service := sc.service()
+
+	pollTimes(t, service, 3, true)
+
+	if n := len(sc.webhook.messagesSent()); n != 1 {
+		t.Errorf("%d notifications, want 1: the Host setting decides", n)
+	}
+}
+
+// With the notifications off on the Host, a failed poll is only logged.
+func TestPoll_FailuresWithTheNotificationsOffAreOnlyLogged(t *testing.T) {
 	sc := newScene(t)
 	sc.notifications = false
 	sc.fake.SetFile(sc.repo, ".cumin/config.toml", wrongFile(`work_dir = "/tmp/elsewhere"`))
