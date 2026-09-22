@@ -468,6 +468,16 @@ func (sc *scene) addPullRequest(number int, head, author string, isBot bool) {
 	})
 }
 
+// target is one more target repository of the fake, for a test that polls
+// more than one.
+func target(sc *scene, name string) workflow.Target {
+	return workflow.Target{
+		Repository: config.Repository{Owner: "example-org", Name: name},
+		RemoteURL:  sc.remote,
+		Token:      func(context.Context) (string, error) { return githubtest.Token, nil },
+	}
+}
+
 // pollAndWait does one poll and waits for the agent run that it started.
 func (sc *scene) pollAndWait(t *testing.T, service *workflow.Service) {
 	t.Helper()

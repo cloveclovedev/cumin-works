@@ -50,3 +50,9 @@ const webHost = "https://github.com"
 func IssueURL(owner, repo string, number int) string {
 	return fmt.Sprintf("%s/%s/%s/issues/%d", webHost, url.PathEscape(owner), url.PathEscape(repo), number)
 }
+
+// RepositoryURL is the address of one repository on GitHub, for a
+// notification that is about the repository and not about one issue.
+func RepositoryURL(owner, repo string) string {
+	return fmt.Sprintf("%s/%s/%s", webHost, url.PathEscape(owner), url.PathEscape(repo))
+}

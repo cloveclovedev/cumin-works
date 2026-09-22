@@ -75,6 +75,12 @@ type Service struct {
 	// test may poll from more than one goroutine.
 	settingsMu         sync.Mutex
 	repositorySettings map[string]*RepositorySettings
+
+	// pollFailures counts the consecutive failed polls of each repository,
+	// so that a failure that repeats reaches the Owner once
+	// (pollfailure.go).
+	failureMu    sync.Mutex
+	pollFailures map[string]*repeatedFailure
 }
 
 // DefaultStopGrace is how long Run waits for the requests that are running
@@ -235,7 +241,8 @@ func (s *Service) ensureLabels(ctx context.Context) {
 
 // Poll does one poll of every target repository: read the snapshot, decide,
 // and apply the actions. A failure in one repository does not stop the
-// others. The returned error joins the failures.
+// others, and a failure that repeats tells the Owner (pollFailed). The
+// returned error joins the failures.
 func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
 	for _, target := range s.Targets {
@@ -244,10 +251,14 @@ func (s *Service) Poll(ctx context.Context) error {
 		if ctx.Err() != nil {
 			break
 		}
-		if err := s.pollRepository(ctx, target); err != nil {
-			s.logger().Error("poll failed", "repository", target.Repository.String(), "error", err.Error())
-			errs = append(errs, err)
+		err := s.pollRepository(ctx, target)
+		if err == nil {
+			s.pollSucceeded(target.Repository)
+			continue
 		}
+		s.logger().Error("poll failed", "repository", target.Repository.String(), "error", err.Error())
+		errs = append(errs, err)
+		s.pollFailed(ctx, target.Repository, err)
 	}
 	return errors.Join(errs...)
 }
