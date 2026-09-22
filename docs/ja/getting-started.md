@@ -44,6 +44,8 @@ go build -o cumin ./cmd/cumin
 ./cumin --help
 ```
 
+Hostに置いて使うときは、`scripts/install.sh` を使う。ビルドして `~/.local/bin/cumin` に置く (`--prefix` で場所を変えられる)。`--restart` を付けると、launchd で動いている cumin を新しいバイナリに入れ替える。
+
 ## 今できること
 
 `cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1) と、Implementerを起動して実行の終わりを待つところまでである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。

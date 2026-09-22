@@ -144,12 +144,23 @@ Owner が Pull Request を merge するとき:
 
 Host で、Owner 自身のアカウントで実行する。設定ファイルと Keychain の鍵がそろってから行う。
 
-まず、実行ファイルを作る。`go run` が作る一時的なバイナリは launchd から使えないので、コマンドはそれを拒否する。
+まず、実行ファイルを作って置く。`go run` が作る一時的なバイナリは launchd から使えないので、`cumin setup launchd` はそれを拒否する。
 
 ```sh
-go build -o cumin ./cmd/cumin
-sudo cp cumin /usr/local/bin/cumin      # 置き場所は任意。動かさない場所にする
+scripts/install.sh
 ```
+
+スクリプトは、cumin をビルドして `~/.local/bin/cumin` に置く。Owner 自身のユーザのディレクトリなので、`sudo` は要らない。別の場所に置くなら `--prefix <ディレクトリ>` を付ける。
+
+置いた先が `PATH` に入っていないと、スクリプトが警告を出す。そのときは、先に `PATH` に足すか、これ以降の `cumin` をフルパスで実行する。
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"     # ログインシェルの設定にも足す
+# または
+~/.local/bin/cumin setup launchd
+```
+
+`PATH` は、plist にも書き込まれる。cumin が起動する Agent の CLI (`claude`)、`git`、`gh` は、ここに入っている必要がある。
 
 次に、LaunchAgent を書き出す。
 
@@ -181,6 +192,17 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 - Host が再起動したあとは、Owner がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
 - ログのファイルは入れ替わらない。大きくなったら、止めてから消す。
 - plist を書き直したら、`launchctl bootout` してから `launchctl bootstrap` し直す。
+
+cumin を新しくするときは、ビルドして置いて、動いている job を入れ替える。次の1コマンドで済む。
+
+```sh
+scripts/install.sh --restart
+```
+
+- plist には cumin のパスがそのまま入っているので、同じ場所に置き直すなら plist を書き直さなくてよい。
+- `--restart` は、job が読み込まれているときだけ `launchctl kickstart -k` を実行する。読み込まれていなければ、その旨を表示して何もしない。
+- `--restart` を付けないと、動いている cumin は古いバイナリのままである。スクリプトがそう表示する。
+- ビルドが失敗したときは、置いてあるバイナリをそのまま残して止まる。
 
 ## セットアップのあとの確認
 
@@ -219,6 +241,6 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
 | `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
-| `... is a temporary build` | `go run` で実行している。`go build -o cumin ./cmd/cumin` で作ったバイナリから実行する |
+| `... is a temporary build` | `go run` で実行している。`scripts/install.sh` で置いたバイナリから実行する |
 | `... holds a different job` | 同じ名前の plist が、違う内容で既にある。表示された差分を見て、置き換えてよければ `--force` を付ける |
 | launchd の job が動かない | `launchctl print gui/$(id -u)/dev.cumin-works.cumin` で最後の終了コードを見る。`~/.local/state/cumin/cumin.err.log` に設定の誤りが出る |
