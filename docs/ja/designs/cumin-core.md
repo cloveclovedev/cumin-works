@@ -160,6 +160,14 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 - `isBinary` が真、`text` が `null`、`isTruncated` が真のいずれかなら、そのリポジトリの読み取りをパスの名前を添えたエラーにする。ルールが、ファイルの一部だけを見て動くことを防ぐ。1MiB を超えるファイルは `isTruncated` になる。
 - 採らなかった案: REST の `GET /repos/{owner}/{repo}/contents/{path}?ref=<既定のブランチ>`。どちらも `Contents` の read で呼べる (公式: Permissions required for GitHub Apps) が、RESTだとリポジトリごとに1回の定期確認で2回の要求が増え、Issueの事実とファイルの時点がずれる。
 
+読んだあとの扱い:
+
+- 定期確認は、リポジトリごとに「Hostの設定に `.cumin/config.toml` を重ねた設定」と「riskの基準の文章と、その出どころ」を持つ。持ち回すのは `internal/workflow` で、GitHubの型は入らない。
+- 解析するのは、`Blob` の `oid` が変わったときだけである。変わらない間は、前の結果を使う。
+- ファイルが誤っていたら、そのリポジトリの定期確認をやめる。エラーにはファイルの名前とキーの名前が入る。他のリポジトリの定期確認は続く。誤りの結果は持たないので、次の定期確認で読み直し、Ownerがmergeで直せば自動で戻る。同じ理由で続けて失敗したときにOwnerに知らせるのは、あとの要求 (#81) で作る。
+- Agentの起動には、そのリポジトリのroleの設定 (`cli`、`model`) を渡す。Agentの接続部分は、依頼に設定が付いていればそれを使い、なければHostの設定を使う。
+- ログに出すのは、設定の出どころ (`host` か `repository`) と、riskの基準の出どころ (`default`、`host`、`repository`) だけである。riskの基準の文章はログに出さない。
+
 ### riskの基準の受け渡し
 
 riskの基準は、Chief EngineerとReviewerがそのまま受け取る文章である。cuminは中身を読まない。

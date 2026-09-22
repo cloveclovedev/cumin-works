@@ -70,6 +70,12 @@ type StartRequest struct {
 	Text string
 	// WorkDir is the worktree that the agent runs in.
 	WorkDir string
+	// Settings replace the settings of the role for this request. The poll
+	// passes the settings of the target repository, because its
+	// .cumin/config.toml may set the CLI and the model of a role
+	// (cumin-core.md, the topic on settings). Nil uses the settings of the
+	// Service, which are the ones of the Host.
+	Settings *config.RoleSettings
 	// SessionID continues an earlier session. Empty starts a new session.
 	SessionID string
 }
@@ -84,6 +90,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	settings, ok := s.Roles[req.Role]
 	if !ok {
 		return nil, fmt.Errorf("start %s on %s/%s: no settings for the role", req.Role, req.Owner, req.Repo)
+	}
+	if req.Settings != nil {
+		settings = *req.Settings
 	}
 	cred, err := s.app(req.Owner, req.Role)
 	if err != nil {

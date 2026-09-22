@@ -98,13 +98,14 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		logger.Warn("global instruction file on the Host", "warning", warning)
 	}
 	service := &workflow.Service{
-		GitHub:              client,
-		Agents:              agents,
-		Workspace:           agent.Workspace{Root: settings.WorkDir, Logger: logger},
-		MaxIssuesInProgress: settings.MaxIssuesInProgress,
-		PollInterval:        settings.PollInterval,
-		Labels:              workflow.RepositoryLabels(),
-		Logger:              logger,
+		GitHub:       client,
+		Agents:       agents,
+		Workspace:    agent.Workspace{Root: settings.WorkDir, Logger: logger},
+		Settings:     settings,
+		SettingsDir:  filepath.Dir(path),
+		PollInterval: settings.PollInterval,
+		Labels:       workflow.RepositoryLabels(),
+		Logger:       logger,
 	}
 	var names []string
 	for _, repo := range settings.Repositories {

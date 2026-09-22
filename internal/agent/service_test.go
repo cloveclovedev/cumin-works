@@ -338,3 +338,29 @@ func TestHostWarnings_EmptyForClaudeCode(t *testing.T) {
 		t.Errorf("HostWarnings = %q, want none", warnings)
 	}
 }
+
+// The settings of a request replace the settings of the role. The poll
+// passes the settings of the target repository, whose .cumin/config.toml
+// may set the CLI and the model of a role.
+func TestStart_TheSettingsOfTheRequestReplaceTheOnesOfTheRole(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+
+	settings := s.Roles[config.RoleImplementer]
+	settings.Model = "model-of-the-repository"
+	request := startRequest(t)
+	request.Settings = &settings
+
+	if _, err := s.Start(context.Background(), request); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	args := recordedArgs(t, filepath.Join(dir, "agent.args"))
+	if i := indexOf(args, "--model"); i < 0 || args[i+1] != "model-of-the-repository" {
+		t.Errorf("the agent run does not use the model of the request: %q", args)
+	}
+	// The settings of the Service are not changed by a request.
+	if s.Roles[config.RoleImplementer].Model != "example-model" {
+		t.Errorf("the settings of the role changed: %+v", s.Roles[config.RoleImplementer])
+	}
+}
