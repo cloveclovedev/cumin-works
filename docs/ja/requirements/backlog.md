@@ -267,9 +267,10 @@ cuminのroleの指示は、性質の違う2つのことを1つのファイルに
 - 名前は職業名ではなく分野の名前にする (`software-engineering`、`communications`)。roleとdisciplineは別の語として使い分ける。
 - 指示の合成は、roleの指示、disciplineの指示、平易な英語の決まりの順である。disciplineはroleに足すだけで、roleの禁止事項を緩めない。食い違ったらroleが勝つ、とroleの側に書く。実際の強制は指示ではなく、GitHub Appの権限、rulesetと保護されたパスで行う。指示は権限ではない。
 - riskは2つに分ける。ラベルの意味 (誰がmergeを決めるか) は本体に残す。何をhighとするかの基準は、分野の判断なのでdisciplineが持つ。基準には既に3段の上書き (初期値、Host、リポジトリ) があるので、disciplineは初期値の段を差し替える形にし、段は増やさない。
-- 選び方は、実装Issueのラベル `cumin/discipline/<名前>`、親の要求Issueのラベル、リポジトリの `.cumin/config.toml` の既定、の順に解決する。sub-issueにはラベルを付けない運用で始めれば、Chief Engineerに `cumin/*` のラベルを付ける権限を与えずに済む。
-- 解決できないとき (知らない名前、または順序の決まらない複数の名前) は、Agentを起動せず、`cumin/status/awaiting-owner-decision` に替えてOwnerに通知する。黙って既定で動くと、間違った基準のまま作業が進む。
-- 1つのroleに複数のdisciplineを載せる場合、連結の順序は設定の並び順で決める。GitHubのラベルは集合であり順序を持たないので、ラベルに順序を求めると、同じ状態から同じ指示が組み立てられなくなる。
+- 選び方は、実装Issueのラベル `cumin/discipline/<名前>`、親の要求Issueのラベル、リポジトリの `.cumin/config.toml` の既定、の順に解決する。
+- ラベルは、riskと同じ扱いにする。Chief Engineerが実装Issueを作るときに仮に付け、Ownerが分割結果の確認で確定する。Agentが `cumin/*` のラベルを付けないという決まりの例外が、`risk/*` に続いて2つ目になるので、[Agentに共通の要件](agents/common.md) に書く。
+- 解決できないとき (知らない名前、または1つのIssueに2つ以上付いている) は、Agentを起動せず、`cumin/status/awaiting-owner-decision` に替えてOwnerに通知する。ラベルが1つも付いていないのはエラーではなく、既定を使う。黙って既定に落とすのは、名前が付いていないときだけにする。間違った名前を既定で埋めると、違う基準のまま作業が進む。
+- まずは、1つのroleに1つのdisciplineだけにする。複数を載せる案は、その次に考える。載せるときは、連結の順序を設定の並び順で決める。GitHubのラベルは集合であり順序を持たないので、ラベルに順序を求めると、同じ状態から同じ指示が組み立てられなくなる。
 - 本体はdisciplineの名前を1つも知らない。`software-engineering` も、追加のdisciplineとまったく同じ経路で読み込む。特別扱いを1つ作ると、同梱のdisciplineが通らない経路を、追加のdisciplineだけが通ることになる。
 - 追加のdisciplineが依存してよいもの (roleが定める見出し、`cumin-*` skillの存在、結果の形式) を契約として決め、cuminにその版を1つ持たせる。roleの指示を変えたときに、外のdisciplineが黙って壊れないようにする。
 - 追加のdisciplineはHostのディレクトリに置き、skillは `--add-dir` で渡す。起動の記録の確認が見るのは `plugins` と `mcp_servers` なので、skillとして渡す限り引っかからない。
