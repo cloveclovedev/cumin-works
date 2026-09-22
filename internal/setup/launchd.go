@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 )
@@ -89,7 +90,18 @@ func (a LaunchAgent) LogPaths() (out, err string) {
 }
 
 // Plist returns the contents of the plist.
+//
+// Both paths must be absolute. launchd gives a job no working directory of
+// its own, so a relative path would be resolved somewhere else, `cumin run`
+// would not find its settings, and KeepAlive would start it again and
+// again.
 func (a LaunchAgent) Plist() (string, error) {
+	if err := CheckProgram(a.Program); err != nil {
+		return "", err
+	}
+	if !filepath.IsAbs(a.ConfigPath) {
+		return "", fmt.Errorf("the path of the settings file (%s) is not absolute: launchd gives the job no working directory", a.ConfigPath)
+	}
 	out, errorLog := a.LogPaths()
 	data := struct {
 		Label, StandardOutPath, StandardErrorPath, PathEnv string
@@ -149,11 +161,24 @@ func InstallLaunchAgent(a LaunchAgent, force bool) (string, error) {
 func (a LaunchAgent) LaunchctlCommands(uid int) []string {
 	target := fmt.Sprintf("gui/%d/%s", uid, a.Label)
 	return []string{
-		fmt.Sprintf("launchctl bootstrap gui/%d %s", uid, a.PlistPath),
+		fmt.Sprintf("launchctl bootstrap gui/%d %s", uid, shellQuote(a.PlistPath)),
 		fmt.Sprintf("launchctl kill SIGTERM %s", target),
 		fmt.Sprintf("launchctl kickstart -k %s", target),
 		fmt.Sprintf("launchctl bootout %s", target),
 	}
+}
+
+// safeForShell matches the characters that a shell passes through as they
+// are. Anything else is quoted, because the commands are printed to be
+// copied into a shell and a home directory may hold a space.
+var safeForShell = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
+
+// shellQuote returns the path as one argument of a shell command.
+func shellQuote(value string) string {
+	if value != "" && safeForShell.MatchString(value) {
+		return value
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 // difference lists the lines that differ, by position. The two files are

@@ -90,6 +90,36 @@ func TestPlist_EscapesAValueForXML(t *testing.T) {
 	}
 }
 
+// launchd gives the job no working directory, so a relative path in the
+// plist would send cumin looking for its settings somewhere else, and
+// KeepAlive would start it again and again.
+func TestPlist_RefusesAPathThatIsNotAbsolute(t *testing.T) {
+	home := t.TempDir()
+	if _, err := NewLaunchAgent(home, "/usr/local/bin/cumin", "config.toml", "/usr/bin").Plist(); err == nil ||
+		!strings.Contains(err.Error(), "not absolute") {
+		t.Errorf("err = %v, want an error about the settings file", err)
+	}
+	if _, err := NewLaunchAgent(home, "cumin", "/c/config.toml", "/usr/bin").Plist(); err == nil ||
+		!strings.Contains(err.Error(), "not absolute") {
+		t.Errorf("err = %v, want an error about the path of cumin", err)
+	}
+}
+
+// The commands are printed to be copied into a shell, and a home directory
+// may hold a space.
+func TestLaunchctlCommands_QuoteAPathWithASpace(t *testing.T) {
+	agent := NewLaunchAgent("/Users/first last", "/usr/local/bin/cumin", "/c/config.toml", "/usr/bin")
+	commands := agent.LaunchctlCommands(501)
+	if !strings.Contains(commands[0], "'/Users/first last/Library/LaunchAgents/"+LaunchAgentLabel+".plist'") {
+		t.Errorf("the bootstrap command does not quote the path: %s", commands[0])
+	}
+	// A path without a space stays as it is, so that the line reads well.
+	plain := testAgent(t).LaunchctlCommands(501)
+	if strings.Contains(plain[0], "'") {
+		t.Errorf("a plain path was quoted: %s", plain[0])
+	}
+}
+
 func TestCheckProgram_RefusesATemporaryBuild(t *testing.T) {
 	tests := []struct {
 		name    string
