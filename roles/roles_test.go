@@ -154,6 +154,45 @@ func TestInstruction_ADisciplineFileStandsBetweenTheRoleAndTheRules(t *testing.T
 	t.Logf("%d of the three roles have a discipline file", tested)
 }
 
+// The craft of software engineering reaches the Implementer through the
+// file of its discipline. These sentences stood in roles/implementer.md
+// before the split, and the composed instruction still holds them.
+func TestInstruction_ImplementerHoldsTheCraftOfItsDiscipline(t *testing.T) {
+	text, err := Instruction(config.RoleImplementer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"The tests, the build, and the lint of the repository pass in the work directory",
+		`Run the commands under "How to verify" in the issue`,
+		"Write commit messages in the Conventional Commits form",
+		"Write the title of the pull request in the Conventional Commits form",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the Implementer instruction does not say: %s", want)
+		}
+	}
+}
+
+// Every role file says that a discipline only adds to it, so that a
+// discipline cannot weaken a rule of the contract with cumin.
+func TestRoleFiles_SayThatTheRoleWinsOverItsDiscipline(t *testing.T) {
+	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+		data, err := files.ReadFile(string(role) + ".md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{
+			"A discipline adds to this file and never weakens a rule of it",
+			"If the two disagree, this file wins",
+		} {
+			if !strings.Contains(string(data), want) {
+				t.Errorf("%s.md does not say: %s", role, want)
+			}
+		}
+	}
+}
+
 // WriteSkills writes one SKILL.md for each skill, with a frontmatter and
 // the template as the body, overwrites an older file, and removes a skill
 // that the binary no longer has.

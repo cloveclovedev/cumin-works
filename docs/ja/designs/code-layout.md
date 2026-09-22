@@ -69,8 +69,9 @@
 | `roles` | `roles.go` | roleの指示の合成 (`<role>.md`、そのroleのdisciplineのファイル、平易な英語の決まりの順) |
 | | `skills.go` | テンプレートをskillとして書き出す |
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
-| | `<role>.md` | roleごとの指示の本文 |
+| | `<role>.md` | roleごとの指示の本文。cuminとAgentの約束 |
 | `disciplines` | `embed.go` | disciplineのファイルの読み出し (roleのファイル、riskの基準)。既定のdisciplineの名前を書く、コードで唯一の場所 |
+| | `software-engineering/<role>.md` | roleごとの、ソフトウェア開発の基準。roleのファイルの次に指示に入る |
 | | `software-engineering/risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
 | `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。Agentが書くものは `roles` が読んで渡す。cuminが自分で書くもの (`follow-up-note.md`、`stop-note.md`) は、Agentには渡らず、テストが文面との一致を確かめる |
 | `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
