@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
+	"github.com/cloveclovedev/cumin-works/roles"
 )
 
 // runRun is `cumin run`: the resident program. It loads the Host settings,
@@ -72,6 +74,15 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 
 	// Logs are JSON on stdout (cumin-core.md, "How cumin runs").
 	logger := slog.New(slog.NewJSONHandler(stdout, nil))
+
+	// The skills of the agents, written once so that they match this
+	// binary. The agent start passes the directory with --add-dir.
+	skillsDir, err := writeSkills()
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin run: %v\n", err)
+		return exitFailure
+	}
+	logger.Info("skills written", "dir", skillsDir)
 	client := github.NewAppClient(github.DefaultBaseURL, nil)
 	service := &workflow.Service{
 		GitHub:              client,
@@ -93,6 +104,20 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	return exitOK
+}
+
+// writeSkills writes the skills of the agents under the state directory
+// and returns the directory to pass with --add-dir.
+func writeSkills() (string, error) {
+	state, err := config.DefaultStateDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(state, "skills")
+	if err := roles.WriteSkills(dir); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 // cuminCoreClientIDs returns the Client ID of the cumin-core App for the

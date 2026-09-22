@@ -31,6 +31,9 @@ type Service struct {
 	Apps map[string]map[config.Role]github.AppCredentials
 	// GitHub creates the tokens and reads the bot users.
 	GitHub *github.AppClient
+	// SkillsDir is the directory whose .claude/skills/ holds the skills
+	// that cumin run wrote at start (roles.WriteSkills). Every run gets it.
+	SkillsDir string
 	// Logger may be nil. Then the default logger is used.
 	Logger *slog.Logger
 	// Grace and QuotaTimeLimit are passed to the CLI adapter. Zero means
@@ -116,6 +119,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 		Text:            req.Text,
 		WorkDir:         req.WorkDir,
 		SessionID:       req.SessionID,
+		SkillsDir:       s.SkillsDir,
 		Model:           settings.Model,
 		TimeLimit:       settings.TimeLimit,
 		Credentials:     Credentials{Token: token.Token, AuthorName: id.name, AuthorEmail: id.email},

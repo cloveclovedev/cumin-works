@@ -106,6 +106,17 @@ func DefaultPath() (string, error) {
 	return filepath.Join(home, ".config", "cumin", "config.toml"), nil
 }
 
+// DefaultStateDir returns the directory of the files that cumin run
+// writes on the Host: ~/.local/state/cumin (docs/ja/designs/cumin-core.md,
+// the topic on the files of the Host).
+func DefaultStateDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("find the home directory: %w", err)
+	}
+	return filepath.Join(home, ".local", "state", "cumin"), nil
+}
+
 // duration accepts only a string such as "60s". A bare TOML integer is an
 // error, because it has no unit.
 type duration time.Duration
