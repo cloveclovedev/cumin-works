@@ -75,13 +75,31 @@ func CheckNotifyAddress(address string) error {
 	return nil
 }
 
-// ReadAddress reads one address from in. When ask is true, it prints a
-// prompt first; the caller passes true when standard input is a terminal.
-// The address is not echoed by this code, and it is trimmed of spaces.
-func ReadAddress(in io.Reader, out io.Writer, channel Channel, ask bool) (string, error) {
+// Prompt says whether to ask for the address, and what to promise about
+// the echo of the terminal. The caller knows: it holds the terminal.
+type Prompt int
+
+const (
+	// NoPrompt reads the address without a word. Standard input is a pipe.
+	NoPrompt Prompt = iota
+	// PromptHidden asks for the address on a terminal whose echo is off.
+	PromptHidden
+	// PromptVisible asks on a terminal whose echo could not be turned off.
+	// The address will appear on the screen, and the prompt says so.
+	PromptVisible
+)
+
+// ReadAddress reads one address from in, with the prompt that the caller
+// chose. The address is trimmed of spaces. Nothing here echoes it.
+func ReadAddress(in io.Reader, out io.Writer, channel Channel, prompt Prompt) (string, error) {
+	ask := prompt != NoPrompt
 	if ask {
 		fmt.Fprintf(out, "Paste the %s, then press Enter.\n", channel.What)
-		fmt.Fprint(out, "It is not shown, and it is never written to a file or to a log.\n> ")
+		if prompt == PromptHidden {
+			fmt.Fprint(out, "It is not shown while you type, and it is never written to a file or to a log.\n> ")
+		} else {
+			fmt.Fprint(out, "This terminal shows what you paste. It is never written to a file or to a log.\n> ")
+		}
 	}
 	scanner := bufio.NewScanner(in)
 	// A webhook address is one line and far below this; the limit stops a

@@ -143,7 +143,15 @@ func runSetupNotify(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
 		return exitFailure
 	}
-	address, err := setup.ReadAddress(os.Stdin, stdout, channels[0], isTerminal(os.Stdin))
+	prompt := setup.NoPrompt
+	if isTerminal(os.Stdin) {
+		prompt = setup.PromptVisible
+		if restore, ok := hideInput(); ok {
+			prompt = setup.PromptHidden
+			defer restore()
+		}
+	}
+	address, err := setup.ReadAddress(os.Stdin, stdout, channels[0], prompt)
 	if err != nil {
 		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
 		return exitFailure
@@ -160,6 +168,28 @@ func runSetupNotify(args []string, stdout, stderr io.Writer) int {
 func isTerminal(f *os.File) bool {
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// sttyPath turns the echo of a terminal on and off. The standard library
+// cannot do it, and cumin adds no dependency for it, so the command of the
+// Host does the work, as the security command does for the Keychain.
+const sttyPath = "/bin/stty"
+
+// hideInput turns the echo of the terminal off, so that a pasted secret
+// does not stay on the screen or in a recording of the session. It returns
+// the function that turns the echo back on, and whether it worked. A Host
+// without the command, or a terminal that refuses, leaves the echo on; the
+// prompt then says so instead of promising something else.
+func hideInput() (restore func(), ok bool) {
+	stty := func(arg string) error {
+		cmd := exec.Command(sttyPath, arg)
+		cmd.Stdin = os.Stdin
+		return cmd.Run()
+	}
+	if err := stty("-echo"); err != nil {
+		return func() {}, false
+	}
+	return func() { _ = stty("echo") }, true
 }
 
 // runSetupLaunchd writes the LaunchAgent of the current user, so that

@@ -55,7 +55,7 @@ func TestCheckNotifyAddress(t *testing.T) {
 func TestReadAddress_ReadsOneLine(t *testing.T) {
 	t.Parallel()
 	var out bytes.Buffer
-	got, err := ReadAddress(strings.NewReader("  "+theAddress+"  \nsomething else\n"), &out, DiscordWebhook, false)
+	got, err := ReadAddress(strings.NewReader("  "+theAddress+"  \nsomething else\n"), &out, DiscordWebhook, NoPrompt)
 	if err != nil {
 		t.Fatalf("ReadAddress: %v", err)
 	}
@@ -69,18 +69,29 @@ func TestReadAddress_ReadsOneLine(t *testing.T) {
 
 func TestReadAddress_AsksOnATerminalAndReportsAnEmptyInput(t *testing.T) {
 	t.Parallel()
-	var out bytes.Buffer
-	if _, err := ReadAddress(strings.NewReader(theAddress+"\n"), &out, DiscordWebhook, true); err != nil {
-		t.Fatalf("ReadAddress: %v", err)
+	// The prompt promises only what the terminal does: nothing is said
+	// about hiding when the echo could not be turned off.
+	prompts := map[Prompt]string{
+		PromptHidden:  "not shown while you type",
+		PromptVisible: "This terminal shows what you paste",
 	}
-	if !strings.Contains(out.String(), DiscordWebhook.What) {
-		t.Errorf("the prompt does not name the address:\n%s", out.String())
-	}
-	if strings.Contains(out.String(), theAddress) {
-		t.Errorf("the prompt echoes the address:\n%s", out.String())
+	for prompt, want := range prompts {
+		var out bytes.Buffer
+		if _, err := ReadAddress(strings.NewReader(theAddress+"\n"), &out, DiscordWebhook, prompt); err != nil {
+			t.Fatalf("ReadAddress: %v", err)
+		}
+		if !strings.Contains(out.String(), DiscordWebhook.What) {
+			t.Errorf("the prompt does not name the address:\n%s", out.String())
+		}
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the prompt does not say %q:\n%s", want, out.String())
+		}
+		if strings.Contains(out.String(), theAddress) {
+			t.Errorf("the prompt echoes the address:\n%s", out.String())
+		}
 	}
 
-	if _, err := ReadAddress(strings.NewReader(""), &bytes.Buffer{}, DiscordWebhook, false); err == nil {
+	if _, err := ReadAddress(strings.NewReader(""), &bytes.Buffer{}, DiscordWebhook, NoPrompt); err == nil {
 		t.Error("ReadAddress with no input = nil, want an error")
 	}
 }
