@@ -150,3 +150,15 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 90 | `GET /users/{username}` は、installation tokenを `Authorization: Bearer` で渡しても、botのユーザ (`<slug>[bot]`) の数値の `id` を返す | 公式: Get a user。#70 の実機の確認で実測 | 公式文書 + 実測 |
 | 91 | `--setting-sources project` を付けた `-p` の実行でも、claude.aiのアカウントのコネクタが `init` の `mcp_servers` に現れる。worktreeに `.mcp.json` がなくても同じである。`ENABLE_CLAUDEAI_MCP_SERVERS=false` を付けると消える (27の追記) | #93 で実測 (2026-09-22) | 実測 |
 | 92 | Hostのユーザの設定ファイルを読ませず、設計メモの環境変数だけ (tokenを `extraheader` と `GH_TOKEN` で、botの身元を作者とコミッターで) を渡した環境で、`git push` と `gh pr create` はImplementerのAppの名義で成功し、コミットの作者とコミッターはbotのユーザになる | sandboxで実測 (2026-09-22) | 実測 |
+
+## 9. 定期確認とI2の実装で確かめたこと (2026-09-22、Claude Code 2.1.267)
+
+要求Issue #9 の実装 (#103、#104、#120、#127) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 93 | `POST /repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by` の応答は、依存する側 (パスの `{n}`) のIssueであり、依存先のIssueではない | #9 のsub-issueに blocked by を張ったときに観測 | 実測 |
+| 94 | GitHub Appが作ったPull Requestの GraphQL の `author` は `Bot` 型で、`login` に `[bot]` が付かない。RESTの `user.login` には付く (49を参照) | sandboxで実測 | 実測 |
+| 95 | 定期確認の問い合わせに `closedByPullRequestsReferences(first: 5)` を足すと、`rateLimit.cost` は6から9になる。`first` を3にしても、`includeClosedPrs: true` を付けても9で変わらない。77の積の式どおりには増えない | sandboxで実測 | 実測 |
+| 96 | contextを取り消した `git clone` は、"signal: killed" で失敗する。cuminの停止による取り消しは、Agentの異常終了ではなく、作業場所の用意の失敗として記録される | `TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval` で観測 | 実測 |
+| 97 | `--setting-sources project` と `--add-dir <ディレクトリ>` を付けた `-p` の実行で、Agentに見えるskillは、そのディレクトリのskillと、CLIに組み込みのskillだけである。Hostのユーザの `~/.claude/skills/` のskillは見えない | live scenario Impl-1 (#101) の記録 | 実測 |
