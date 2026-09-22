@@ -106,7 +106,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 ### 実行
 
-6. `./cumin run --config <設定ファイル>` を起動する。起動時のログは `skills written`、`cumin run starts`、`poll` の順に出る。足りないラベルがあれば、`cumin run starts` と `poll` の間に `created the label` が出る。
+6. `./cumin run --config <設定ファイル>` を起動する。起動時のログは `skills written`、`cumin run starts`、`poll` の順に出る。足りないラベルがあれば、`cumin run starts` と `poll` の間に `created the label` が出る。Keychain に webhook のアドレスがなければ、`cumin run starts` の前に警告が1行出て、`notifications` は `none` になる ([セットアップの手順](setup-guide.md) の「通知のアドレスを Keychain に入れる」)。
 7. 実装Issueに `cumin/status/ready` を付ける。
 8. 次の定期確認から、ログがこの順に出る。
 

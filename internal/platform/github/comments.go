@@ -40,3 +40,13 @@ func (c *AppClient) CreateIssueComment(ctx context.Context, token, owner, repo s
 	}
 	return IssueComment{ID: created.ID, URL: created.HTMLURL}, nil
 }
+
+// webHost is the address of GitHub for a person, as against the API. A
+// link in a notification or in a log opens there.
+const webHost = "https://github.com"
+
+// IssueURL is the address of one issue on GitHub. cumin uses it for the
+// link of a notification when it has no address of its own to point at.
+func IssueURL(owner, repo string, number int) string {
+	return fmt.Sprintf("%s/%s/%s/issues/%d", webHost, url.PathEscape(owner), url.PathEscape(repo), number)
+}

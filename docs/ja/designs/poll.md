@@ -122,9 +122,20 @@ Pull Requestのラベルは、I11でIssueのラベルと比べるためだけに
 
 - Implementerの実行が `done` で終わったら、cuminはそのリポジトリのスナップショットを読み直し ([cumin本体の設計メモ](cumin-core.md) の「GitHubクライアント」)、実行したIssueについてI2の3つの確認を、この順で行う。そのIssueを閉じる開いているPull Requestがあること。そのPull Requestの作成者が、ImplementerのAppのbot (`<slug>[bot]`) であること。Pull Requestの先頭のコミット (`headRefOid`) が、worktreeの先頭のコミットと同じであること (最後のコミットがpushされている)。
 - Pull Requestは、IssueとPull Requestの紐づけ (`closedByPullRequestsReferences`) で見つける。ブランチの名前では探さない。開いているPull Requestが2つ以上あれば、番号の大きいものを確かめる。
-- 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号である。通れば、ラベルを `cumin/status/awaiting-checks` に替える。落ちたときの付け替え、コメント、通知は、失敗の道の要求Issue (#81) がこの値を読んで作る。それまでは、種類をログに出すだけである。
+- 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号である。通れば、ラベルを `cumin/status/awaiting-checks` に替える。落ちたときは、次の話題の手順でOwnerに戻す。
 - 判定に渡す2つの値は、Agentの実行の側から来る。ImplementerのAppのbotのlogin (`<slug>[bot]`) は実行の結果に付いて返り、worktreeの先頭のコミットは `git rev-parse HEAD` で読む ([Agentの実行の設計](agent-run.md) の「作業場所」と「1回の依頼の手順」)。
-- `blocked` の結果と異常終了は、この判定に入らない。Issueの番号と、`blocked_reason` の1行目 (Ownerに決めてほしいこと) か異常終了の種類をログに出すだけで、ラベルは替えない。同じ要求Issue (#81) が扱う。
+- `blocked` の結果と異常終了は、この判定に入らない。`blocked` は次の話題の手順でOwnerに戻す。異常終了は、種類をログに出すだけで、やり直しとその先は次の実装Issueが足す。
+
+### うまくいかなかったときに、Ownerに戻す道
+
+- 先に進めないときは、1か所の手順でOwnerに戻す。行の番号 (I2 など) を引数で受け取り、順に、実装Issueにコメントを書き、状態ラベルを `cumin/status/awaiting-owner-decision` に替え、Ownerに通知する。あとの行 (I4、I8、I10) は、同じ手順を自分の行の番号で呼ぶ。
+- 順番に意味がある。理由がGitHubに残ってからラベルが替わり、最後に「見に来てほしい」と伝える。
+- 途中で1つ失敗しても、次を止めない。コメントを書けなくてもラベルは替え、ラベルを替えられなくても通知は出す。巻き戻しもしない。止まったIssueがあることは、どれか1つが落ちても伝わるほうがよい。失敗はログに出す。
+- 通知のリンクは、書いたコメントのアドレスにする。理由の全文がそこにあるためである。コメントを書けなかったときは、Issueのアドレスにする。
+- `blocked` のときのコメントは、Agentが返した `blocked_reason` をそのまま載せる。Agentが [decision-request.md](../../../templates/decision-request.md) の形式で書いているためである。通知には、その1行目 (Ownerに決めてほしいこと) を入れる。やり直さない (Issueのラベルと状態遷移の、Implementerが `blocked` を返したときの決まり)。
+- ラベルを替えるには、そのIssueの今のラベルが要る。`blocked` の道では、実行終了のあとにスナップショットを読み直して取る。読み取れなければ、ラベルを替えずにログに出す。状態ラベルだけを書き込むと、riskのラベルが消えるためである。
+- 通知を出すかどうかは、そのリポジトリの設定 `notify.discord.enabled` で決まる。通知の失敗は error のログに出すだけである ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
+- 検証が落ちたときの道と、異常終了のやり直しは、この手順を使う。どちらも、この要求の次の実装Issueが足す。
 
 ## まだ決めていないこと
 

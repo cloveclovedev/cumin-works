@@ -17,6 +17,8 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/notify"
+	"github.com/cloveclovedev/cumin-works/internal/platform/discord"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
@@ -97,9 +99,16 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 	for _, warning := range agents.HostWarnings() {
 		logger.Warn("global instruction file on the Host", "warning", warning)
 	}
+
+	// The notifications to the Owner. The address of the webhook is read
+	// once here and stays in memory (designs/cumin-core.md, the topic on
+	// notifications to the Owner).
+	notifier, destination := readNotifier(ctx, logger)
+
 	service := &workflow.Service{
 		GitHub:       client,
 		Agents:       agents,
+		Notify:       notifier,
 		Workspace:    agent.Workspace{Root: settings.WorkDir, Logger: logger},
 		Settings:     settings,
 		SettingsDir:  filepath.Dir(path),
@@ -119,12 +128,45 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		names = append(names, repo.String())
 	}
 	logger.Info("cumin run starts", "repositories", names, "poll_interval", settings.PollInterval.String(),
-		"work_dir", settings.WorkDir)
+		"work_dir", settings.WorkDir, "notifications", destination)
 	if err := service.Run(ctx); err != nil {
 		fmt.Fprintf(stderr, "cumin run: %v\n", err)
 		return exitFailure
 	}
 	return exitOK
+}
+
+// readNotifier builds the notifier of the run from the webhook URL in the
+// Keychain, and says where notifications go, for the start log.
+//
+// A missing item does not stop the run: a target repository can turn the
+// notifications on in its .cumin/config.toml, so the item may be needed
+// later, and a Host that does not use Discord must still be able to run.
+// The warning names the item and the setting; a notification that cannot
+// be sent is logged again, at error level, when it happens.
+func readNotifier(ctx context.Context, logger *slog.Logger) (*notify.Notifier, string) {
+	store, err := keychain.Default(ctx)
+	if err == nil {
+		var url []byte
+		url, err = store.Get(ctx, keychain.Service, keychain.DiscordWebhookAccount)
+		if err == nil {
+			return notify.New(discord.Webhook{URL: strings.TrimSpace(string(url))}), "discord"
+		}
+	}
+	logger.Warn("no Discord webhook URL on the Host; notifications will fail",
+		"keychain_service", keychain.Service, "keychain_account", keychain.DiscordWebhookAccount,
+		"setting", "notify.discord.enabled", "error", err.Error())
+	return notify.New(missingWebhook{}), "none"
+}
+
+// missingWebhook reports the missing Keychain item every time cumin has
+// something to tell the Owner. The poll logs the error and goes on; the
+// comment and the label on GitHub are written either way.
+type missingWebhook struct{}
+
+func (missingWebhook) Send(context.Context, string) error {
+	return fmt.Errorf("no Discord webhook URL: the Keychain item %s/%s is missing. Store it (docs/ja/development/setup-guide.md) or set notify.discord.enabled = false",
+		keychain.Service, keychain.DiscordWebhookAccount)
 }
 
 // remoteURL is the address that the clone of a target repository uses. v0.1
