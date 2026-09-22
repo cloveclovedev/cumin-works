@@ -20,7 +20,7 @@ Agent は起動しないので、利用枠は使わない。対象は sandbox �
 | 2 | ログのファイルを読む | 起動と定期確認の行が出ている。確認の画面なしで Keychain を読めている (読めなければ定期確認が失敗する) |
 | 3 | リポジトリの `.cumin/config.toml` に、上書きできるキーを足して merge する | 次の定期確認で「設定を読んだ」の行が出る。その前の定期確認では出ない (blob が変わったときだけ読む) |
 | 4 | Host のキー (`work_dir` など) を足して merge する | 定期確認が、ファイルの名前とキーの名前を添えたエラーで飛ばされる |
-| 5 | ファイルを元に戻し、`.cumin/risk-criteria.md` を足して merge する | エラーが止まり、`risk_criteria` が `repository` になる |
+| 5 | ファイルを元に戻し、`.cumin/risk-criteria.md` を足して merge する | エラーが止まり、`risk_criteria` が `repository` になる。ファイルには文章を入れる。空白だけのファイルはエラーになり、そのリポジトリは飛ばされたままになる |
 | 6 | `kill -9 <pid>` | launchd が起動し直す。`runs` が増え、ログに起動の行が増える |
 | 7 | `launchctl kill SIGTERM` | `stopped` の行が出て、job が `state = not running` になる。`last exit code = 0` で、起動し直されない |
 | 8 | `launchctl bootout` と plist の削除、sandbox の `.cumin/` を元に戻す | Host と sandbox が元の状態に戻る |
@@ -29,11 +29,13 @@ Agent は起動しないので、利用枠は使わない。対象は sandbox �
 
 ```sh
 scripts/install.sh                     # ~/.local/bin/cumin に置く
-cumin setup launchd                    # plist を書き、launchctl のコマンドを表示する
+~/.local/bin/cumin setup launchd       # plist を書き、launchctl のコマンドを表示する
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cumin-works.cumin.plist
 launchctl print gui/$(id -u)/dev.cumin-works.cumin | grep -E "state|pid|last exit code|runs ="
 tail -f ~/.local/state/cumin/cumin.log
 ```
+
+`~/.local/bin` が `PATH` に入っていれば、`cumin setup launchd` と短く書ける。`scripts/install.sh` は、入っていなければ警告を出すが、実行中のシェルの `PATH` は変えない。上のようにフルパスで書けば、どちらでも動く。
 
 リポジトリの設定を変えるときは、Pull Request にして merge する。cumin は既定のブランチからしか読まない。`.cumin/` は保護されたパスなので、Bot の Pull Request では check が失敗する。人の Pull Request では飛ばされる。
 
