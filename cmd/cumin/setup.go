@@ -151,7 +151,10 @@ func runSetupNotify(args []string, stdout, stderr io.Writer) int {
 			defer restore()
 		}
 	}
-	address, err := setup.ReadAddress(os.Stdin, stdout, channels[0], prompt)
+	// The prompt goes to standard error, which stays on the terminal when
+	// standard output is redirected. Otherwise the command would wait for
+	// an address with the echo off and no visible question.
+	address, err := readAddress(ctx, channels[0], prompt, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
 		return exitFailure
@@ -161,6 +164,29 @@ func runSetupNotify(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	return exitOK
+}
+
+// readAddress reads one address, and gives up when ctx ends. Ctrl-C at the
+// prompt ends the context, and the caller can then turn the echo of the
+// terminal back on before it returns; a read that blocks in the scanner
+// would leave the terminal without an echo. The goroutine stays behind on
+// that path, which is fine: the process is on its way out.
+func readAddress(ctx context.Context, channel setup.Channel, prompt setup.Prompt, ask io.Writer) (string, error) {
+	type result struct {
+		address string
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		address, err := setup.ReadAddress(os.Stdin, ask, channel, prompt)
+		done <- result{address, err}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", errors.New("stopped before the address was given")
+	case r := <-done:
+		return r.address, r.err
+	}
 }
 
 // isTerminal reports whether the file is a terminal, so that the command
