@@ -6,8 +6,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +21,8 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/notify"
+	"github.com/cloveclovedev/cumin-works/internal/platform/discord"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
@@ -68,6 +72,67 @@ type scene struct {
 	// settingsDir is the directory of the Host settings file. A test puts a
 	// risk-criteria.md of the Host in it.
 	settingsDir string
+	// webhook is the fake Discord that the notifier of the scene sends to.
+	webhook *fakeWebhook
+	// notifier is what the service of the scene uses. A test may replace
+	// it, for example with a notifier without a channel.
+	notifier *notify.Notifier
+	// notifications is the Host setting notify.discord.enabled.
+	notifications bool
+}
+
+// fakeWebhook is the Discord of the tests: it records the messages and can
+// answer with a failure. The real client of internal/platform/discord
+// sends to it, so the tests cover the request as well.
+type fakeWebhook struct {
+	server *httptest.Server
+	mu     sync.Mutex
+	// status is the answer of the webhook. 0 means 204.
+	status   int
+	messages []string
+}
+
+func newFakeWebhook(t *testing.T) *fakeWebhook {
+	t.Helper()
+	f := &fakeWebhook{}
+	// TLS, because the client refuses an address that is not https.
+	f.server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Content string `json:"content"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		f.messages = append(f.messages, body.Content)
+		status := f.status
+		f.mu.Unlock()
+		if status == 0 {
+			status = http.StatusNoContent
+		}
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(f.server.Close)
+	return f
+}
+
+// messagesSent returns the messages that the webhook received.
+func (f *fakeWebhook) messagesSent() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.messages)
+}
+
+// fails makes the webhook answer with status from now on.
+func (f *fakeWebhook) fails(status int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.status = status
+}
+
+func (f *fakeWebhook) notifier() *notify.Notifier {
+	return notify.New(discord.Webhook{
+		URL:        f.server.URL + "/api/webhooks/1/fake-token",
+		HTTPClient: f.server.Client(),
+	})
 }
 
 func newScene(t *testing.T, opts ...cliOptions) *scene {
@@ -89,10 +154,12 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	}
 	cliPath, cliDir := fakeCLI(t, options)
 	remote, head := newRemote(t)
+	webhook := newFakeWebhook(t)
 	return &scene{
 		fake: fake, client: github.NewAppClient(server.URL, server.Client()), repo: repo,
 		logs: &bytes.Buffer{}, remote: remote, remoteHead: head, cliDir: cliDir,
 		workRoot: t.TempDir(), cliPath: cliPath, settingsDir: t.TempDir(),
+		webhook: webhook, notifier: webhook.notifier(), notifications: true,
 	}
 }
 
@@ -132,6 +199,7 @@ func (sc *scene) service() *workflow.Service {
 	return &workflow.Service{
 		GitHub:    sc.client,
 		Agents:    agents,
+		Notify:    sc.notifier,
 		Workspace: agent.Workspace{Root: sc.workRoot, Logger: logger},
 		Targets: []workflow.Target{{
 			Repository: config.Repository{Owner: "example-org", Name: "example-repo"},
@@ -161,6 +229,7 @@ func (sc *scene) settings() *config.Settings {
 			config.RoleImplementer:   roleSettings,
 			config.RoleReviewer:      roleSettings,
 		},
+		Notify: config.NotifySettings{DiscordEnabled: sc.notifications},
 	}
 }
 
@@ -487,29 +556,114 @@ func TestI2_DoneWithACommitThatIsNotPushedLeavesTheLabel(t *testing.T) {
 
 // A blocked result is logged with the question of blocked_reason. The label
 // stays; #81 posts the comment and asks the Owner.
-func TestI2_BlockedLeavesTheLabelAndLogsTheQuestion(t *testing.T) {
+// I2 with a blocked result (issue-states.md): cumin posts the
+// blocked_reason on the issue, replaces the label with
+// cumin/status/awaiting-owner-decision, and notifies the Owner once. It
+// does not retry.
+func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/implementing") {
-		t.Errorf("labels of #10 = %v, want cumin/status/implementing", got)
+	const question = "## Decision needed: which sign-in method does the login screen use?"
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 || comments[0].Body != question {
+		t.Fatalf("the comments of #10 = %+v, want one with the blocked reason", comments)
 	}
-	// No verification runs, so the snapshot is not read again.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 1 {
-		t.Errorf("%d snapshot reads, want 1", n)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-owner-decision"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+
+	messages := sc.webhook.messagesSent()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, want := range []string{"I2", question, "example-org/example-repo", "issue #10", "issuecomment-"} {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("the notification has no %q:\n%s", want, messages[0])
+		}
+	}
+
+	// A blocked result is never retried.
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"the agent returned blocked"`, "## Decision needed:", `"result":"blocked"`} {
+	for _, want := range []string{`"msg":"the agent returned blocked"`, `"msg":"I2: wrote the reason on the issue"`,
+		`"msg":"I2: the issue waits for the Owner"`, `"msg":"the Owner was notified"`, `"row":"I2"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
 	}
-	// Only the first line of blocked_reason reaches the log field.
-	if strings.Contains(logs, `"msg":"I2`) {
-		t.Errorf("I2 ran on a blocked result:\n%s", logs)
+}
+
+// A webhook that fails changes nothing on GitHub: the comment and the
+// label stay, and the failure is logged at error level.
+func TestI2_BlockedWithAFailedWebhookKeepsTheCommentAndTheLabel(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
+	sc.webhook.fails(http.StatusInternalServerError)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
+		t.Errorf("%d comments on #10, want 1", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	}
+	logs := sc.logs.String()
+	if !strings.Contains(logs, `"level":"ERROR","msg":"the Owner was not notified"`) {
+		t.Errorf("the log does not report the failed notification at error level:\n%s", logs)
+	}
+	if !strings.Contains(logs, "500") {
+		t.Errorf("the log does not name the status of the webhook:\n%s", logs)
+	}
+	// The address of the webhook never reaches a log.
+	if strings.Contains(logs, "fake-token") {
+		t.Errorf("the log holds a part of the webhook address:\n%s", logs)
+	}
+}
+
+// A repository that turns the notifications off still gets the comment and
+// the label; nothing is sent.
+func TestI2_BlockedWithNotificationsOffWritesOnlyOnGitHub(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
+	sc.notifications = false
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
+		t.Errorf("%d comments on #10, want 1", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	}
+	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
+		t.Errorf("%d notifications, want none: %v", len(messages), messages)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"the notification is off for this repository"`) {
+		t.Errorf("the log does not say that the notifications are off:\n%s", sc.logs.String())
+	}
+}
+
+// Without a channel (no webhook URL on the Host), the stop still happens on
+// GitHub and the missing channel is logged at error level.
+func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
+	sc.notifier = notify.New(nil)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	}
+	if !strings.Contains(sc.logs.String(), `"level":"ERROR","msg":"the Owner was not notified"`) {
+		t.Errorf("the log does not report the missing channel at error level:\n%s", sc.logs.String())
 	}
 }
 

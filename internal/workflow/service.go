@@ -12,6 +12,7 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/roles"
 )
@@ -38,6 +39,10 @@ type Service struct {
 	// Workspace holds the clone and the worktrees of each repository, under
 	// the setting work_dir.
 	Workspace agent.Workspace
+	// Notify tells the Owner that an issue needs an answer. cmd/cumin
+	// builds it from the webhook URL in the Keychain. A nil notifier
+	// reports that no channel is configured, which is logged.
+	Notify *notify.Notifier
 	// Settings are the Host settings. Each poll applies the
 	// .cumin/config.toml of a repository over them, for the keys that a
 	// repository may set.
@@ -328,23 +333,24 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 		return err
 	}
 	branch := BranchName(sub.Number, sub.Title)
-	role := settings.Settings.Roles[config.RoleImplementer]
 	done := s.markInProgress(ctx, target.Repository.String(), sub.Number)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
 		defer done()
-		s.runImplementer(ctx, target, sub.Number, branch, instruction, role)
+		s.runImplementer(ctx, target, settings, sub.Number, branch, instruction)
 	}()
 	return nil
 }
 
 // runImplementer prepares the worktree and runs one Implementer request to
-// its end. The end of the run is the trigger of I2 (verifyDone) for a done
-// result. A blocked result and an abnormal end are logged only; #81 builds
-// the label change, the comment, and the notification for them.
-func (s *Service) runImplementer(ctx context.Context, target Target, number int, branch, instruction string, role config.RoleSettings) {
+// its end. The end of the run is the trigger of I2: a done result goes to
+// verifyDone, and a blocked result stops the issue for the Owner. An
+// abnormal end is logged only; the retry and the stop after it are a later
+// requirement.
+func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, branch, instruction string) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
+	role := settings.Settings.Roles[config.RoleImplementer]
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
 		Owner:  target.Repository.Owner,
 		Repo:   target.Repository.Name,
@@ -376,13 +382,29 @@ func (s *Service) runImplementer(ctx context.Context, target Target, number int,
 	default:
 		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 		if run.Result.Result != agent.ResultDone {
-			// blocked. The first line of blocked_reason is the question
-			// (decision-request.md). The label stays.
-			log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
+			s.stopAfterBlocked(ctx, log, target, settings, number, run.Result.BlockedReason)
 			return
 		}
 		s.verifyDone(ctx, log, target, number, workDir, run.BotLogin)
 	}
+}
+
+// stopAfterBlocked applies I2 for a blocked result: the blocked_reason of
+// the agent becomes the comment, because the agent already wrote it in the
+// form of templates/decision-request.md, and its first line is the
+// question for the Owner. Nothing is retried: a blocked result usually
+// means that a requirement is missing, so the Owner answers first
+// (issue-states.md, the paragraph on a blocked result of the Implementer).
+func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, reason string) {
+	question := firstLine(reason)
+	log.Warn("the agent returned blocked", "reason", question)
+	s.stopForOwner(ctx, log, target, settings, stop{
+		row:     RowI2,
+		issue:   number,
+		labels:  s.issueLabels(ctx, log, target, number),
+		reason:  "the Implementer returned blocked: " + question,
+		comment: reason,
+	})
 }
 
 // verifyDone applies I2 after a done result. It reads the snapshot of the
