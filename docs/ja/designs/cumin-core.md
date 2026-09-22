@@ -140,7 +140,7 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 
 riskの基準は、Chief EngineerとReviewerがそのまま受け取る文章である。cuminは中身を読まない。
 
-- 初期値の文章は、cuminのバイナリに埋め込む。置き場所は `roles/risk-criteria.md` で、Agentに渡す他の指示と同じディレクトリである。Agentが受け取る文章は、Pull Requestでレビューされるべきものなので、要件文書ではなくリポジトリに置く (#102 の決定)。
+- 初期値の文章は、cuminのバイナリに埋め込む。置き場所は `disciplines/software-engineering/risk-criteria.md` である。どの変更をriskが高いとするかは分野の判断なので、roleではなくdisciplineが持つ。Agentが受け取る文章は、Pull Requestでレビューされるべきものなので、要件文書ではなくリポジトリに置く (#102 の決定)。
 - 強い順に、リポジトリの `.cumin/risk-criteria.md`、Hostの設定ファイルと同じディレクトリの `risk-criteria.md`、埋め込みの初期値である。ある段のファイルは、弱い段の文章を丸ごと置き換える。
 - 解決する関数は、文章と、どの段から来たか (リポジトリ、Host、初期値) を返す。定期確認は、どの段から来たかだけをログに出す。文章はログに出さない。
 - ファイルがあって、中身が空白だけなら、パスを示すエラーにする。空の指示がAgentに渡ると、riskの判断の基準がなくなる。
