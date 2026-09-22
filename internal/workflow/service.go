@@ -183,7 +183,13 @@ func (s *Service) inProgressIssues() []string {
 
 // markInProgress records that the agent of an issue is running, and
 // returns the function that removes it when the run ends.
-func (s *Service) markInProgress(repository string, issue int) func() {
+//
+// After the stop signal the entry stays, even when the run ends at once
+// because its CLI follows SIGTERM. The issue keeps
+// cumin/status/implementing in that case, so the Owner has to restart it,
+// and the line of the stop must name it. Nothing removes entries after the
+// signal; the process is on its way out.
+func (s *Service) markInProgress(ctx context.Context, repository string, issue int) func() {
 	key := inProgressKey{repository: repository, issue: issue}
 	s.progressMu.Lock()
 	defer s.progressMu.Unlock()
@@ -194,6 +200,9 @@ func (s *Service) markInProgress(repository string, issue int) func() {
 	return func() {
 		s.progressMu.Lock()
 		defer s.progressMu.Unlock()
+		if ctx.Err() != nil {
+			return
+		}
 		delete(s.inProgress, key)
 	}
 }
@@ -320,7 +329,7 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 	}
 	branch := BranchName(sub.Number, sub.Title)
 	role := settings.Settings.Roles[config.RoleImplementer]
-	done := s.markInProgress(target.Repository.String(), sub.Number)
+	done := s.markInProgress(ctx, target.Repository.String(), sub.Number)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()

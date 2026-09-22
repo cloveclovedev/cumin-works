@@ -1022,8 +1022,18 @@ func TestRun_StopReturnsAsSoonAsTheRequestEnds(t *testing.T) {
 	case <-time.After(20 * time.Second):
 		t.Fatalf("Run did not return after the stop:\n%s", sc.logs.String())
 	}
-	if !strings.Contains(sc.logs.String(), `"ended_within_grace":true`) {
-		t.Errorf("the stop log does not say that the request ended:\n%s", sc.logs.String())
+	logs := sc.logs.String()
+	if !strings.Contains(logs, `"ended_within_grace":true`) {
+		t.Errorf("the stop log does not say that the request ended:\n%s", logs)
+	}
+	// The issue was in progress when the signal came, so the line names it
+	// even though its run ended at once. The issue keeps
+	// cumin/status/implementing, and the Owner has to restart it.
+	if !strings.Contains(logs, `"in_progress":["example-org/example-repo#10"]`) {
+		t.Errorf("the stop log does not name the issue that was in progress:\n%s", logs)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/implementing") {
+		t.Errorf("labels of #10 = %v, want cumin/status/implementing", got)
 	}
 }
 
