@@ -213,11 +213,16 @@ func (a LaunchAgent) PlistState() (PlistState, error) {
 	return PlistOfThisJob, nil
 }
 
-// plistLabel returns the value of the Label key of the plist, or an empty
+// plistLabel returns the value of the Label key of the job, or an empty
 // string when the file has none. The plist of a job is a dict of keys and
 // values, so the value of a key is the element that follows it.
+//
+// Only the dict of the job counts. A dict or an array that stands inside
+// it (EnvironmentVariables, for example) can hold a key named Label of its
+// own, and that key names nothing.
 func plistLabel(data []byte) (string, error) {
 	decoder := xml.NewDecoder(bytes.NewReader(data))
+	depth := 0 // the dict of the job is depth 1
 	afterLabelKey := false
 	for {
 		token, err := decoder.Token()
@@ -227,23 +232,32 @@ func plistLabel(data []byte) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		element, ok := token.(xml.StartElement)
-		if !ok {
-			continue
-		}
-		var text string
-		switch element.Name.Local {
-		case "key":
-			if err := decoder.DecodeElement(&text, &element); err != nil {
-				return "", err
+		switch element := token.(type) {
+		case xml.StartElement:
+			var text string
+			switch element.Name.Local {
+			case "dict", "array":
+				depth++
+				afterLabelKey = false
+			case "key":
+				if err := decoder.DecodeElement(&text, &element); err != nil {
+					return "", err
+				}
+				afterLabelKey = depth == 1 && strings.TrimSpace(text) == "Label"
+			case "string":
+				if err := decoder.DecodeElement(&text, &element); err != nil {
+					return "", err
+				}
+				if afterLabelKey {
+					return strings.TrimSpace(text), nil
+				}
+			default:
+				afterLabelKey = false
 			}
-			afterLabelKey = strings.TrimSpace(text) == "Label"
-		case "string":
-			if err := decoder.DecodeElement(&text, &element); err != nil {
-				return "", err
-			}
-			if afterLabelKey {
-				return strings.TrimSpace(text), nil
+		case xml.EndElement:
+			if element.Name.Local == "dict" || element.Name.Local == "array" {
+				depth--
+				afterLabelKey = false
 			}
 		}
 	}
@@ -256,16 +270,23 @@ func plistLabel(data []byte) (string, error) {
 // Only the plist goes: the logs, the state, and the binary stay, because a
 // person put them there and may want them.
 func RemoveLaunchAgentFile(a LaunchAgent, force bool) (string, error) {
-	state, err := a.PlistState()
-	switch {
-	case err != nil:
-		return "", err
-	case state == PlistAbsent:
-		return "absent", nil
-	case state == PlistOfAnotherJob && !force:
-		return "kept", fmt.Errorf("%s does not hold the job %s. Look at the file, then run again with --force to remove it anyway", a.PlistPath, a.Label)
+	// force removes whatever stands at that path, without reading it. A
+	// file that does not parse is one of the reasons to give --force.
+	if !force {
+		state, err := a.PlistState()
+		switch {
+		case err != nil:
+			return "", err
+		case state == PlistAbsent:
+			return "absent", nil
+		case state == PlistOfAnotherJob:
+			return "kept", fmt.Errorf("%s does not hold the job %s. Look at the file, then run again with --force to remove it anyway", a.PlistPath, a.Label)
+		}
 	}
-	if err := os.Remove(a.PlistPath); err != nil {
+	switch err := os.Remove(a.PlistPath); {
+	case os.IsNotExist(err):
+		return "absent", nil
+	case err != nil:
 		return "", fmt.Errorf("remove %s: %w", a.PlistPath, err)
 	}
 	return "removed", nil

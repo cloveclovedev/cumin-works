@@ -336,6 +336,13 @@ func TestPlistState_ReadsTheLabelKey(t *testing.T) {
 			PlistOfAnotherJob,
 		},
 		{
+			"another job with a nested key named Label",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict>\n" +
+				"<key>EnvironmentVariables</key><dict><key>Label</key><string>" + LaunchAgentLabel + "</string></dict>\n" +
+				"<key>Label</key><string>com.example.other</string>\n</dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+		{
 			"a plist with no label",
 			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict><key>RunAtLoad</key><true/></dict></plist>\n",
 			PlistOfAnotherJob,
@@ -364,6 +371,31 @@ func TestPlistState_ReadsTheLabelKey(t *testing.T) {
 	}
 	if state, err := agent.PlistState(); err != nil || state != PlistAbsent {
 		t.Errorf("PlistState = %q, %v, want absent", state, err)
+	}
+}
+
+// A file that does not parse cannot be read, and --force is the way out.
+func TestRemoveLaunchAgentFile_ForceRemovesAFileThatDoesNotParse(t *testing.T) {
+	agent := testAgent(t)
+	if err := os.MkdirAll(filepath.Dir(agent.PlistPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agent.PlistPath, []byte("this is not a plist at all\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := RemoveLaunchAgentFile(agent, false); err == nil {
+		t.Error("RemoveLaunchAgentFile removed a file that it could not read")
+	}
+	if result, err := RemoveLaunchAgentFile(agent, true); err != nil || result != "removed" {
+		t.Errorf("with --force = %q, %v, want removed", result, err)
+	}
+	if _, err := os.Stat(agent.PlistPath); !os.IsNotExist(err) {
+		t.Errorf("the file is still there (err = %v)", err)
+	}
+	// --force on a path with no file is not an error.
+	if result, err := RemoveLaunchAgentFile(agent, true); err != nil || result != "absent" {
+		t.Errorf("with --force and no file = %q, %v, want absent", result, err)
 	}
 }
 
