@@ -17,8 +17,9 @@ import (
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
-	// Sub-issues, labels, blocked-by issues, and closing pull requests are
-	// read once, up to this many for one issue. More is an error.
+	// Sub-issues, labels, blocked-by issues, and open closing pull requests
+	// are read once, up to this many for one issue. More is an error. An
+	// issue has one open closing pull request in normal use.
 	snapshotSubIssues    = 30
 	snapshotLabels       = 10
 	snapshotBlockedBy    = 20
@@ -44,18 +45,18 @@ type Issue struct {
 	// made from it.
 	Title     string
 	BlockedBy []IssueRef
-	// PullRequests are the pull requests that close the sub-issue (the
-	// link that "Closes #N" makes), open, closed, and merged.
+	// PullRequests are the open pull requests that close the sub-issue (the
+	// link that "Closes #N" makes). Closed and merged pull requests are not
+	// read: no rule of the poll needs them, and old pull requests of a
+	// waiting or closed issue must not reach the page limit. The follow-up
+	// note (I9) reads the merged pull request of a closed issue separately.
 	PullRequests []PullRequest
 }
 
-// PullRequest is a pull request that closes an issue, as much of it as the
-// rules need.
+// PullRequest is an open pull request that closes an issue, as much of it
+// as the rules need.
 type PullRequest struct {
 	Number int
-	// Closed is true for a closed and for a merged pull request.
-	Closed bool
-	Merged bool
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
 	// Author is the login of the author as the REST API shows it: a GitHub
@@ -82,7 +83,7 @@ type RateLimit struct {
 
 // snapshotQuery reads the open issues with the requirement label, their
 // sub-issues with the title, the state of the blocked-by issues, and the
-// pull requests that close each sub-issue. The field names come from the
+// open pull requests that close each sub-issue. The field names come from the
 // design note and measured-constraints.md row 55, and were checked against
 // the schema by introspection on 2026-09-21 and on the sandbox on
 // 2026-09-22.
@@ -102,9 +103,9 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
             state
             labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
             blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
-            closedByPullRequestsReferences(includeClosedPrs: true, first: $pullRequests) {
+            closedByPullRequestsReferences(first: $pullRequests) {
               pageInfo { hasNextPage }
-              nodes { number state merged headRefOid author { __typename login } }
+              nodes { number headRefOid author { __typename login } }
             }
           }
         }
@@ -167,8 +168,6 @@ type issueNode struct {
 
 type pullRequestNode struct {
 	Number     int    `json:"number"`
-	State      string `json:"state"`
-	Merged     bool   `json:"merged"`
 	HeadRefOid string `json:"headRefOid"`
 	Author     *struct {
 		TypeName string `json:"__typename"`
@@ -176,20 +175,17 @@ type pullRequestNode struct {
 	} `json:"author"`
 }
 
-// pullRequest converts one node. GitHub gives the state OPEN, CLOSED, or
-// MERGED (the schema: PullRequestState).
-func (n pullRequestNode) pullRequest() (PullRequest, error) {
-	if n.State != "OPEN" && n.State != "CLOSED" && n.State != "MERGED" {
-		return PullRequest{}, fmt.Errorf("pull request #%d has the unknown state %q", n.Number, n.State)
-	}
-	pr := PullRequest{Number: n.Number, Closed: n.State != "OPEN", Merged: n.Merged, HeadCommit: n.HeadRefOid}
+// pullRequest converts one node. Without includeClosedPrs, the connection
+// holds open pull requests only (the schema: closedByPullRequestsReferences).
+func (n pullRequestNode) pullRequest() PullRequest {
+	pr := PullRequest{Number: n.Number, HeadCommit: n.HeadRefOid}
 	if n.Author != nil {
 		pr.Author = n.Author.Login
 		if n.Author.TypeName == "Bot" {
 			pr.Author += "[bot]"
 		}
 	}
-	return pr, nil
+	return pr
 }
 
 // ReadSnapshot reads the snapshot of one repository with the installation
@@ -252,7 +248,7 @@ func (n issueNode) issue() (Issue, error) {
 		return Issue{}, fmt.Errorf("issue #%d has more than %d blocked-by issues", n.Number, snapshotBlockedBy)
 	}
 	if n.PullRequests.PageInfo.HasNextPage {
-		return Issue{}, fmt.Errorf("issue #%d has more than %d closing pull requests", n.Number, snapshotPullRequests)
+		return Issue{}, fmt.Errorf("issue #%d has more than %d open closing pull requests", n.Number, snapshotPullRequests)
 	}
 	issue := Issue{Number: n.Number, Title: n.Title, Closed: n.State == "CLOSED"}
 	if n.State != "OPEN" && n.State != "CLOSED" {
@@ -274,12 +270,7 @@ func (n issueNode) issue() (Issue, error) {
 		issue.BlockedBy = append(issue.BlockedBy, IssueRef{Number: blocker.Number, Closed: blocker.State == "CLOSED"})
 	}
 	for _, node := range n.PullRequests.Nodes {
-		pr, err := node.pullRequest()
-		if err != nil {
-			errs = append(errs, fmt.Errorf("issue #%d: %w", n.Number, err))
-			continue
-		}
-		issue.PullRequests = append(issue.PullRequests, pr)
+		issue.PullRequests = append(issue.PullRequests, node.pullRequest())
 	}
 	return issue, errors.Join(errs...)
 }

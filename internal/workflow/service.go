@@ -156,9 +156,7 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 				subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 			}
 			for _, pr := range sub.PullRequests {
-				subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{
-					Number: pr.Number, Closed: pr.Closed, Merged: pr.Merged, HeadCommit: pr.HeadCommit, Author: pr.Author,
-				})
+				subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{Number: pr.Number, HeadCommit: pr.HeadCommit, Author: pr.Author})
 			}
 			requirement.SubIssues = append(requirement.SubIssues, subIssue)
 		}

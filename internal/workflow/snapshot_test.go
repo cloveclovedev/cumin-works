@@ -16,7 +16,6 @@ func TestToSnapshot_CopiesTitleBlockedByAndPullRequests(t *testing.T) {
 			Number: 10, Title: "Add the login screen", Labels: []string{"cumin/status/implementing", "risk/low"},
 			BlockedBy: []github.IssueRef{{Number: 9, Closed: true}},
 			PullRequests: []github.PullRequest{
-				{Number: 20, Closed: true, Merged: true, HeadCommit: "1111", Author: "octocat"},
 				{Number: 21, HeadCommit: "2222", Author: "example-implementer[bot]"},
 			},
 		}},
@@ -28,7 +27,6 @@ func TestToSnapshot_CopiesTitleBlockedByAndPullRequests(t *testing.T) {
 			Number: 10, Title: "Add the login screen", Labels: []string{"cumin/status/implementing", "risk/low"},
 			BlockedBy: []BlockedBy{{Number: 9, Closed: true}},
 			PullRequests: []PullRequest{
-				{Number: 20, Closed: true, Merged: true, HeadCommit: "1111", Author: "octocat"},
 				{Number: 21, HeadCommit: "2222", Author: "example-implementer[bot]"},
 			},
 		}},

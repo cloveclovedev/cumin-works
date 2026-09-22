@@ -51,18 +51,15 @@ type SubIssue struct {
 	Closed    bool
 	Labels    []string
 	BlockedBy []BlockedBy
-	// PullRequests are the pull requests that close the issue (the link
-	// that "Closes #N" makes), open, closed, and merged. I2 finds the pull
-	// request of the Implementer here, not by the branch name.
+	// PullRequests are the open pull requests that close the issue (the
+	// link that "Closes #N" makes). I2 finds the pull request of the
+	// Implementer here, not by the branch name.
 	PullRequests []PullRequest
 }
 
-// PullRequest is a pull request that closes a sub-issue.
+// PullRequest is an open pull request that closes a sub-issue.
 type PullRequest struct {
 	Number int
-	// Closed is true for a closed and for a merged pull request.
-	Closed bool
-	Merged bool
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
 	// Author is the login of the author; a GitHub App is "<slug>[bot]".

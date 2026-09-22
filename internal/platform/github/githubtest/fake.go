@@ -7,6 +7,7 @@ package githubtest
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -119,6 +120,18 @@ func (f *Fake) AddPullRequest(r *Repository, pr *PullRequest) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r.PullRequests[pr.Number] = pr
+}
+
+// ClosePullRequest closes one pull request of the repository.
+func (f *Fake) ClosePullRequest(r *Repository, number int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	pr, ok := r.PullRequests[number]
+	if !ok {
+		return fmt.Errorf("no pull request #%d", number)
+	}
+	pr.Closed = true
+	return nil
 }
 
 // Issue returns a copy of one issue, or nil.
@@ -406,9 +419,10 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 		return map[string]any{"number": number, "state": state(closed)}
 	})
+	// Without includeClosedPrs, GitHub lists the open pull requests only.
 	var closing []*PullRequest
 	for _, pr := range sortedPullRequests(repo) {
-		if slices.Contains(pr.Closes, issue.Number) {
+		if !pr.Closed && slices.Contains(pr.Closes, issue.Number) {
 			closing = append(closing, pr)
 		}
 	}
@@ -418,18 +432,10 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 	return node
 }
 
-// pullRequestNode is one pull request as GraphQL returns it: the state is
-// OPEN, CLOSED, or MERGED, and the author of an App is a Bot whose login
-// has no "[bot]".
+// pullRequestNode is one pull request as GraphQL returns it: the author
+// of an App is a Bot whose login has no "[bot]".
 func pullRequestNode(pr *PullRequest) map[string]any {
-	prState := "OPEN"
-	switch {
-	case pr.Merged:
-		prState = "MERGED"
-	case pr.Closed:
-		prState = "CLOSED"
-	}
-	node := map[string]any{"number": pr.Number, "state": prState, "merged": pr.Merged, "headRefOid": pr.HeadCommit, "author": nil}
+	node := map[string]any{"number": pr.Number, "headRefOid": pr.HeadCommit, "author": nil}
 	if pr.Author != "" {
 		typeName := "User"
 		if pr.AuthorIsBot {
