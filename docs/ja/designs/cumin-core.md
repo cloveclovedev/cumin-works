@@ -65,7 +65,7 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 
 | キー | 値 | 理由 |
 |---|---|---|
-| `Label` | `dev.cloveclove.cumin` | plistの名前と、`launchctl` のサービスの指定 (`gui/<uid>/<Label>`) に使う。launchdが求めるのは一意な文字列だけである (`man launchd.plist`)。逆順のドメインは、Appleの例とシステムのjobが示す慣習で、使うのはソフトウェアのドメインであり、Hostの持ち主のものではない。`com.apple.*` や `com.docker.*` と同じで、どのHostで動いても同じ名前になる |
+| `Label` | `dev.cloveclove.cumin` | plistの名前と、`launchctl` のサービスの指定 (`gui/<uid>/<Label>`) に使う |
 | `ProgramArguments` | 実行中のcuminの絶対パス、`run`、`--config`、設定ファイル | `Program` は絶対パスでなければならない (`man launchd.plist`) |
 | `RunAtLoad` | true | ログインで起動する。`KeepAlive` が含意するが、読む人のために書く |
 | `KeepAlive` | `{ SuccessfulExit = false }` | 0以外で終わったときだけ起動し直す。`launchctl kill SIGTERM` で止めたcuminは0で終わるので、止めたままになる。`true` にすると、手で止めても戻ってしまう |

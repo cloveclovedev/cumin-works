@@ -24,12 +24,6 @@ import (
 // LaunchAgentLabel identifies the job in launchd. It is also the name of
 // the plist and the last part of a service target
 // (gui/<uid>/<LaunchAgentLabel>).
-//
-// launchd asks only for a unique string (`man launchd.plist`). The reverse
-// of a domain name is the convention of the examples of Apple and of the
-// jobs of the system, and the domain is the one of the software, not of
-// the Host: a job of cumin carries this label on every Host that runs it,
-// as com.apple.* and com.docker.* do.
 const LaunchAgentLabel = "dev.cloveclove.cumin"
 
 // Names of the log files under the state directory.
