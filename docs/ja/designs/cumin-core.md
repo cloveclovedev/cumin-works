@@ -27,6 +27,8 @@
 | riskの基準 (任意) | 設定ファイルと同じディレクトリの `risk-criteria.md`。決まりは cumin本体の要件にある | Owner |
 | 手元の状態 | `~/.local/state/cumin/state.json` | `cumin run` だけ |
 | 使い切りの許可 | `~/.local/state/cumin/quota-allowance.json` | `cumin quota allow` だけ |
+| ログ | `~/.local/state/cumin/cumin.log` (標準出力) と `cumin.err.log` (標準エラー出力) | launchd |
+| LaunchAgent | `~/Library/LaunchAgents/dev.cumin-works.cumin.plist` | `cumin setup launchd` |
 | Agentのskill | `~/.local/state/cumin/skills/.claude/skills/<名前>/SKILL.md`。起動時に毎回上書きする ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」) | `cumin run` だけ |
 
 - 人が編集するファイルは `~/.config`、cuminが書くファイルは `~/.local/state` に分ける。
@@ -35,6 +37,7 @@
 - 1つのファイルを書くプロセスは1つだけにする。`cumin quota allow` と `cumin status` は `cumin run` とは別のプロセスなので、ファイルを介してやりとりする。書く人を分ければ、ロックが要らない。`cumin run` は、定期確認のたびに許可のファイルを読む。
 - ファイルを失っても、作業は失われない。セッションは新しく始まり、回数は0に戻り、使用率は次の着手の前に読み直す。使い切りの許可は、Ownerがもう一度出す。読めないファイルは、ないものとして扱い、警告をログに出す。
 - 採らなかった案: データベース。持つものが少なく、失ってもよいためである。
+- ログのファイルは、cuminが開くのではなく、launchdが標準出力と標準エラー出力を向ける先である。cuminは、要件のとおり標準出力にJSONを出すだけで、ターミナルから動かしたときの見え方は変わらない。入れ替え (ローテーション) は行わないので、ファイルは増え続ける。
 
 ### Keychainの項目
 
@@ -54,6 +57,26 @@
 - 読むときは、`/usr/bin/security find-generic-password -s <service> -a <account> -w` を `os/exec` で呼ぶ (`man security`)。cgoも、追加の依存も要らない。
 - 要件のとおり、`cumin run` の起動時に読み、メモリにだけ持つ。値をログ、エラーの文章、手元の状態に入れない。
 - Keychain に触れるコードは `internal/platform/keychain` に閉じ込める。
+
+### launchd
+
+cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHostのものなので、リポジトリには置かない。`cumin setup launchd` が、実行中のプロセスから値を取って書き出す。
+
+| キー | 値 | 理由 |
+|---|---|---|
+| `Label` | `dev.cumin-works.cumin` | plistの名前と、`launchctl` のサービスの指定 (`gui/<uid>/<Label>`) に使う |
+| `ProgramArguments` | 実行中のcuminの絶対パス、`run`、`--config`、設定ファイル | `Program` は絶対パスでなければならない (`man launchd.plist`) |
+| `RunAtLoad` | true | ログインで起動する。`KeepAlive` が含意するが、読む人のために書く |
+| `KeepAlive` | `{ SuccessfulExit = false }` | 0以外で終わったときだけ起動し直す。`launchctl kill SIGTERM` で止めたcuminは0で終わるので、止めたままになる。`true` にすると、手で止めても戻ってしまう |
+| `StandardOutPath`、`StandardErrorPath` | state ディレクトリの `cumin.log` と `cumin.err.log` | launchdの job には端末がない。この2つのキーが、出力を残す方法である |
+| `EnvironmentVariables.PATH` | コマンドを実行したシェルの `PATH` | launchdの job のPATHは小さいので、これがないと `claude`、`git`、`gh` が見つからない |
+| `ExitTimeOut` | 60 | SIGTERMからSIGKILLまでの待ち時間 (`man launchd.plist`)。`cumin run` の停止の猶予より長くする |
+| `ProcessType` | `Standard` | `Standard` は `ProcessType` を書かないのと同じである。`Background` はCPUとI/Oを絞るので、cuminが起動するAgentにも効いてしまう |
+
+- 採らなかった案: 置き換える場所を持つテンプレートをリポジトリに置く。手で置き換える値が3つあり、さらにテンプレートに書けない値が1つある (上の `PATH`)。間違えても launchd は静かに失敗する。サブコマンドなら、4つとも実行中のプロセスから取れる。
+- `go run` が作った一時的なバイナリは、`Program` にできない。コマンドは、実行ファイルのパスが一時ディレクトリの下にあれば、何も書かずに止まる。
+- 既にある plist が違う内容なら、差分を見せて上書きしない。`--force` で置き換える。
+- Keychain は、ログイン中のユーザの LaunchAgent から、確認の画面なしで読める (実測 67)。ログインしていない間は動かないので、Hostが再起動したあとはOwnerのログインが起動のきっかけになる。
 
 ### テストの2層
 

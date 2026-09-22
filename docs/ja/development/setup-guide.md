@@ -13,6 +13,7 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 | 1. GitHub App の登録と、秘密鍵の保存 | Organization の owner のブラウザと、Host の Keychain | Host | `cumin setup github-apps` |
 | 2. GitHub App のインストール | Organization の owner のブラウザ | どこでも | ブラウザ |
 | 3. リポジトリの準備 | リポジトリの管理者の `gh` | どのマシンでも | `scripts/setup-repo.sh` |
+| 4. cumin の常駐 | Host のユーザ | Host | `cumin setup launchd` と `launchctl` |
 
 分けた理由:
 
@@ -139,6 +140,48 @@ Owner が Pull Request を merge するとき:
 - workflow のファイルが違う内容で既にあれば、違いを表示して、上書きしない。ruleset は当てたうえで、最後にエラーで終わる。Pull Request で直してから、もう一度実行する。
 - ruleset は名前で探す。あればファイルの内容に合わせ、なければ作る。
 
+## 手順4: cumin を常駐させる (launchd)
+
+Host で、Owner 自身のアカウントで実行する。設定ファイルと Keychain の鍵がそろってから行う。
+
+まず、実行ファイルを作る。`go run` が作る一時的なバイナリは launchd から使えないので、コマンドはそれを拒否する。
+
+```sh
+go build -o cumin ./cmd/cumin
+sudo cp cumin /usr/local/bin/cumin      # 置き場所は任意。動かさない場所にする
+```
+
+次に、LaunchAgent を書き出す。
+
+```sh
+cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
+```
+
+コマンドがすること:
+
+1. 実行中の cumin の絶対パス、設定ファイル、ホームディレクトリ、`PATH` を読み取る。
+2. `~/.local/state/cumin/` を作る。ログはこの下に出る。
+3. `~/Library/LaunchAgents/dev.cumin-works.cumin.plist` を書く。中身と各キーの理由は [cumin本体の設計メモ](../designs/cumin-core.md) の「launchd」にある。
+4. 起動、停止、再起動、削除の `launchctl` のコマンドを表示する。
+
+`--dry-run` は、plist を表示するだけで何も書かない。既に違う内容の plist があるときは、差分を表示して上書きせずに止まる。置き換えるなら `--force` を付ける。
+
+書き出したら、起動する。
+
+| したいこと | コマンド |
+|---|---|
+| 登録して起動する (以後はログインで起動する) | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cumin-works.cumin.plist` |
+| 止める | `launchctl kill SIGTERM gui/$(id -u)/dev.cumin-works.cumin` |
+| 再起動する | `launchctl kickstart -k gui/$(id -u)/dev.cumin-works.cumin` |
+| 外す (ログインでも起動しなくなる) | `launchctl bootout gui/$(id -u)/dev.cumin-works.cumin` |
+| 動いているか見る | `launchctl print gui/$(id -u)/dev.cumin-works.cumin` |
+| ログを見る | `tail -f ~/.local/state/cumin/cumin.log` |
+
+- 0以外の終了コードで終わったときだけ、launchd が起動し直す。`launchctl kill SIGTERM` で止めた cumin は 0 で終わるので、止めたままになる。
+- Host が再起動したあとは、Owner がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
+- ログのファイルは入れ替わらない。大きくなったら、止めてから消す。
+- plist を書き直したら、`launchctl bootout` してから `launchctl bootstrap` し直す。
+
 ## セットアップのあとの確認
 
 セットアップが終わったら、保護が効いていることを1回確かめる。
@@ -176,3 +219,6 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
 | `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
+| `... is a temporary build` | `go run` で実行している。`go build -o cumin ./cmd/cumin` で作ったバイナリから実行する |
+| `... holds a different job` | 同じ名前の plist が、違う内容で既にある。表示された差分を見て、置き換えてよければ `--force` を付ける |
+| launchd の job が動かない | `launchctl print gui/$(id -u)/dev.cumin-works.cumin` で最後の終了コードを見る。`~/.local/state/cumin/cumin.err.log` に設定の誤りが出る |

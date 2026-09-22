@@ -35,7 +35,7 @@ CI (GitHub Actions) も、Pull Requestとmainへのpushのたびに、同じ4つ
 go run ./cmd/cumin --help
 ```
 
-サブコマンドの一覧 (`run`、`status`、`quota allow`、`setup`) が表示される。それぞれの役割は [cumin本体の要件](requirements/cumin-core.md) の「動かし方」にある。
+サブコマンドの一覧 (`run`、`status`、`quota allow`、`setup`) が表示される。`setup` には `github-apps` と `launchd` がある。それぞれの役割は [cumin本体の要件](requirements/cumin-core.md) の「動かし方」にある。
 
 実行ファイルを作るときは、次のようにする。リポジトリの直下にできる `cumin` は、gitの管理から外してある。
 
@@ -64,6 +64,8 @@ go run ./cmd/cumin run --config <設定ファイル>
 止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。動いている定期確認が終わってから、終了コード0で終わる。
 
 `--config` を省くと、`~/.config/cumin/config.toml` を読む。cumin を止めたときに `cumin/status/implementing` のまま残ったIssueは、自動では回収されない。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す ([Issueのラベルと状態遷移](requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
+
+常駐させるときは、ターミナルではなく launchd から起動する。`cumin setup launchd` が、今のユーザの LaunchAgent を書き出し、`launchctl` のコマンドを表示する。手順は [セットアップの手順](development/setup-guide.md) の手順4にある。launchd から動かすと、ログは標準出力ではなく `~/.local/state/cumin/cumin.log` に出る。
 
 ほかのサブコマンド (`status`、`quota allow`) は、まだ作られていない。実行すると、作られていないことを表示して、0以外の終了コードで終わる。
 
