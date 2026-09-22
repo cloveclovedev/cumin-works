@@ -102,17 +102,19 @@ repositories = ["example-org/example-repo"]
 work_dir = "/tmp/cumin-work"
 `
 
-// The settings load first. Without the Client ID of the cumin-core App for
-// the owner of a target repository, run stops with the key name, before
+// The settings load first. Without the Client ID of one of the four Apps
+// for the owner of a target repository, run stops with the key name, before
 // it touches the Keychain or GitHub.
-func TestRunWithoutCuminCoreClientIDNamesTheKey(t *testing.T) {
+func TestRunWithoutAClientIDNamesTheKey(t *testing.T) {
 	tests := []struct {
 		name   string
 		config string
+		want   string
 	}{
-		{"no github_apps table", validConfig},
-		{"table without cumin-core", validConfig + "[github_apps.example-org]\nimplementer = \"client-id-implementer\"\n"},
-		{"table of another organization", validConfig + "[github_apps.other-org]\ncumin-core = \"client-id-core\"\n"},
+		{"no github_apps table", validConfig, "github_apps.example-org.cumin-core"},
+		{"table without cumin-core", validConfig + "[github_apps.example-org]\nimplementer = \"client-id-implementer\"\n", "github_apps.example-org.cumin-core"},
+		{"table without the Implementer", validConfig + "[github_apps.example-org]\ncumin-core = \"client-id-core\"\nchief-engineer = \"client-id-chief\"\nreviewer = \"client-id-reviewer\"\n", "github_apps.example-org.implementer"},
+		{"table of another organization", validConfig + "[github_apps.other-org]\ncumin-core = \"client-id-core\"\n", "github_apps.example-org.cumin-core"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -121,8 +123,8 @@ func TestRunWithoutCuminCoreClientIDNamesTheKey(t *testing.T) {
 			if code != exitFailure {
 				t.Errorf("exit code = %d, want %d", code, exitFailure)
 			}
-			if !strings.Contains(stderr.String(), "github_apps.example-org.cumin-core") {
-				t.Errorf("stderr does not name the key:\n%s", stderr.String())
+			if !strings.Contains(stderr.String(), tt.want) {
+				t.Errorf("stderr does not name the key %s:\n%s", tt.want, stderr.String())
 			}
 			if stdout.Len() != 0 {
 				t.Errorf("stdout = %q, want no log line", stdout.String())
@@ -142,7 +144,7 @@ func TestRunRejectsAnExtraArgument(t *testing.T) {
 	}
 }
 
-func TestCuminCoreClientIDsRejectsTwoTablesOfOneOwner(t *testing.T) {
+func TestAppClientIDsRejectsTwoTablesOfOneOwner(t *testing.T) {
 	settings := &config.Settings{
 		Repositories: []config.Repository{{Owner: "example-org", Name: "one"}},
 		GitHubApps: map[string]map[string]string{
@@ -150,23 +152,38 @@ func TestCuminCoreClientIDsRejectsTwoTablesOfOneOwner(t *testing.T) {
 			"example-org": {config.AppCuminCore: "client-id-b"},
 		},
 	}
-	_, err := cuminCoreClientIDs(settings)
+	_, err := appClientIDs(settings)
 	if err == nil || !strings.Contains(err.Error(), "Example-Org and example-org") {
 		t.Errorf("err = %v, want the two tables", err)
 	}
 }
 
-func TestCuminCoreClientIDsIgnoresTheCaseOfTheOwner(t *testing.T) {
+func TestAppClientIDsReadsEveryAppAndIgnoresTheCaseOfTheOwner(t *testing.T) {
+	apps := map[string]string{config.AppCuminCore: "client-id-core"}
+	for _, role := range config.AllRoles() {
+		apps[string(role)] = "client-id-" + string(role)
+	}
 	settings := &config.Settings{
 		Repositories: []config.Repository{{Owner: "Example-Org", Name: "one"}, {Owner: "example-org", Name: "two"}},
-		GitHubApps:   map[string]map[string]string{"example-org": {config.AppCuminCore: "client-id-core"}},
+		GitHubApps:   map[string]map[string]string{"example-org": apps},
 	}
-	ids, err := cuminCoreClientIDs(settings)
+	ids, err := appClientIDs(settings)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ids) != 1 || ids["example-org"] != "client-id-core" {
-		t.Errorf("ids = %v", ids)
+	if len(ids) != 1 {
+		t.Fatalf("ids = %v, want one owner", ids)
+	}
+	if got := ids["example-org"]; len(got) != len(config.AllApps()) || got[config.AppCuminCore] != "client-id-core" ||
+		got[string(config.RoleImplementer)] != "client-id-implementer" {
+		t.Errorf("ids[example-org] = %v", got)
+	}
+}
+
+func TestRemoteURLIsTheHTTPSAddressOfTheRepository(t *testing.T) {
+	want := "https://github.com/example-org/example-repo.git"
+	if got := remoteURL(config.Repository{Owner: "example-org", Name: "example-repo"}); got != want {
+		t.Errorf("remoteURL = %q, want %q", got, want)
 	}
 }
 

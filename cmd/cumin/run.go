@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
@@ -22,9 +24,9 @@ import (
 )
 
 // runRun is `cumin run`: the resident program. It loads the Host settings,
-// reads the private key of the cumin-core App of each target repository
-// owner from the Keychain, creates the missing labels, and polls until
-// SIGINT or SIGTERM. launchd starts and restarts it.
+// reads the private key of every GitHub App of each target repository owner
+// from the Keychain, creates the missing labels, and polls until SIGINT or
+// SIGTERM. launchd starts and restarts it.
 func runRun(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cumin run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -55,9 +57,10 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "cumin run: %v\n", err)
 		return exitFailure
 	}
-	// Every owner needs a Client ID before anything touches the Keychain or
-	// GitHub, so that a settings problem stops the run with the key name.
-	clientIDs, err := cuminCoreClientIDs(settings)
+	// Every owner needs a Client ID for every App before anything touches
+	// the Keychain or GitHub, so that a settings problem stops the run with
+	// the key name.
+	clientIDs, err := appClientIDs(settings)
 	if err != nil {
 		fmt.Fprintf(stderr, "cumin run: %v\n", err)
 		return exitFailure
@@ -84,26 +87,50 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 	}
 	logger.Info("skills written", "dir", skillsDir)
 	client := github.NewAppClient(github.DefaultBaseURL, nil)
+	agents := &agent.Service{
+		Roles:     settings.Roles,
+		Apps:      roleCredentials(credentials),
+		GitHub:    client,
+		SkillsDir: skillsDir,
+		Logger:    logger,
+	}
+	for _, warning := range agents.HostWarnings() {
+		logger.Warn("global instruction file on the Host", "warning", warning)
+	}
 	service := &workflow.Service{
 		GitHub:              client,
+		Agents:              agents,
+		Workspace:           agent.Workspace{Root: settings.WorkDir, Logger: logger},
 		MaxIssuesInProgress: settings.MaxIssuesInProgress,
-		RequestCommand:      settings.RequestCommand,
 		PollInterval:        settings.PollInterval,
 		Labels:              workflow.RepositoryLabels(),
 		Logger:              logger,
 	}
 	var names []string
 	for _, repo := range settings.Repositories {
-		source := github.NewTokenSource(client, credentials[strings.ToLower(repo.Owner)], config.AppCuminCore, repo.Owner, repo.Name)
-		service.Targets = append(service.Targets, workflow.Target{Repository: repo, Token: source.Token})
+		owner := strings.ToLower(repo.Owner)
+		source := github.NewTokenSource(client, credentials[owner][config.AppCuminCore], config.AppCuminCore, repo.Owner, repo.Name)
+		service.Targets = append(service.Targets, workflow.Target{
+			Repository: repo,
+			RemoteURL:  remoteURL(repo),
+			Token:      source.Token,
+		})
 		names = append(names, repo.String())
 	}
-	logger.Info("cumin run starts", "repositories", names, "poll_interval", settings.PollInterval.String())
+	logger.Info("cumin run starts", "repositories", names, "poll_interval", settings.PollInterval.String(),
+		"work_dir", settings.WorkDir)
 	if err := service.Run(ctx); err != nil {
 		fmt.Fprintf(stderr, "cumin run: %v\n", err)
 		return exitFailure
 	}
 	return exitOK
+}
+
+// remoteURL is the address that the clone of a target repository uses. v0.1
+// clones over HTTPS without credentials, so only public repositories are
+// supported (agent-run.md, the section on deferred work).
+func remoteURL(repo config.Repository) string {
+	return "https://github.com/" + repo.Owner + "/" + repo.Name + ".git"
 }
 
 // writeSkills writes the skills of the agents under the state directory
@@ -120,23 +147,24 @@ func writeSkills() (string, error) {
 	return dir, nil
 }
 
-// cuminCoreClientIDs returns the Client ID of the cumin-core App for the
-// owner of each target repository, keyed by the owner in lower case. GitHub
-// account names ignore case, and so does the lookup in github_apps.
-func cuminCoreClientIDs(settings *config.Settings) (map[string]string, error) {
-	ids := map[string]string{}
+// appClientIDs returns the Client ID of every GitHub App of cumin
+// (config.AllApps: cumin-core and the three roles) for the owner of each
+// target repository, keyed by the owner in lower case and then by the App.
+// GitHub account names ignore case, and so does the lookup in github_apps.
+func appClientIDs(settings *config.Settings) (map[string]map[string]string, error) {
+	ids := map[string]map[string]string{}
 	var errs []error
 	for _, repo := range settings.Repositories {
 		owner := strings.ToLower(repo.Owner)
 		if _, done := ids[owner]; done {
 			continue
 		}
-		var clientID string
+		var apps map[string]string
 		var matches []string
-		for org, apps := range settings.GitHubApps {
+		for org, table := range settings.GitHubApps {
 			if strings.EqualFold(org, repo.Owner) {
 				matches = append(matches, org)
-				clientID = apps[config.AppCuminCore]
+				apps = table
 			}
 		}
 		if len(matches) > 1 {
@@ -144,33 +172,58 @@ func cuminCoreClientIDs(settings *config.Settings) (map[string]string, error) {
 			errs = append(errs, fmt.Errorf("github_apps: the tables %s name the same organization in different cases. Keep one", strings.Join(matches, " and ")))
 			continue
 		}
-		if clientID == "" {
-			errs = append(errs, fmt.Errorf("github_apps.%s.%s: no Client ID for the owner of %s. Run \"cumin setup github-apps --org %s\" first", repo.Owner, config.AppCuminCore, repo, repo.Owner))
-			continue
+		found := map[string]string{}
+		for _, app := range config.AllApps() {
+			clientID := apps[app]
+			if clientID == "" {
+				errs = append(errs, fmt.Errorf("github_apps.%s.%s: no Client ID for the owner of %s. Run \"cumin setup github-apps --org %s\" first", repo.Owner, app, repo, repo.Owner))
+				continue
+			}
+			found[app] = clientID
 		}
-		ids[owner] = clientID
+		if len(found) == len(config.AllApps()) {
+			ids[owner] = found
+		}
 	}
 	return ids, errors.Join(errs...)
 }
 
 // readCredentials reads the private key of each App from the Keychain. The
 // key stays in memory; it never reaches a log or an error.
-func readCredentials(ctx context.Context, clientIDs map[string]string) (map[string]github.AppCredentials, error) {
+func readCredentials(ctx context.Context, clientIDs map[string]map[string]string) (map[string]map[string]github.AppCredentials, error) {
 	store, err := keychain.Default(ctx)
 	if err != nil {
 		return nil, err
 	}
-	credentials := map[string]github.AppCredentials{}
-	for owner, clientID := range clientIDs {
-		pemBytes, err := store.GetBase64(ctx, keychain.Service, keychain.PrivateKeyAccount(clientID))
-		if err != nil {
-			return nil, fmt.Errorf("read the private key of the %s App of %s from the Keychain: %w", config.AppCuminCore, owner, err)
+	credentials := map[string]map[string]github.AppCredentials{}
+	for _, owner := range slices.Sorted(maps.Keys(clientIDs)) {
+		credentials[owner] = map[string]github.AppCredentials{}
+		for _, app := range config.AllApps() {
+			clientID := clientIDs[owner][app]
+			pemBytes, err := store.GetBase64(ctx, keychain.Service, keychain.PrivateKeyAccount(clientID))
+			if err != nil {
+				return nil, fmt.Errorf("read the private key of the %s App of %s from the Keychain: %w", app, owner, err)
+			}
+			key, err := github.ParsePrivateKey(pemBytes)
+			if err != nil {
+				return nil, fmt.Errorf("the private key of the %s App of %s: %w", app, owner, err)
+			}
+			credentials[owner][app] = github.AppCredentials{ClientID: clientID, PrivateKey: key}
 		}
-		key, err := github.ParsePrivateKey(pemBytes)
-		if err != nil {
-			return nil, fmt.Errorf("the private key of the %s App of %s: %w", config.AppCuminCore, owner, err)
-		}
-		credentials[owner] = github.AppCredentials{ClientID: clientID, PrivateKey: key}
 	}
 	return credentials, nil
+}
+
+// roleCredentials keeps only the Apps of the agent roles, in the shape that
+// agent.Service takes. The App of cumin-core is not an agent.
+func roleCredentials(credentials map[string]map[string]github.AppCredentials) map[string]map[config.Role]github.AppCredentials {
+	apps := map[string]map[config.Role]github.AppCredentials{}
+	for owner, table := range credentials {
+		byRole := map[config.Role]github.AppCredentials{}
+		for _, role := range config.AllRoles() {
+			byRole[role] = table[string(role)]
+		}
+		apps[owner] = byRole
+	}
+	return apps
 }

@@ -23,7 +23,7 @@ import (
 // its whole table.
 var hostOnlySettings = []string{
 	"repositories", "work_dir", "poll_interval", "max_issues_in_progress",
-	"request_command", "quota", "github_apps",
+	"quota", "github_apps",
 }
 
 // Keys of a role that a repository cannot set: the executable is a path of

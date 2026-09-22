@@ -42,6 +42,20 @@ const (
 // allRoles are the agent roles, in the order of the settings file.
 var allRoles = []Role{RoleChiefEngineer, RoleImplementer, RoleReviewer}
 
+// AllRoles returns the agent roles, in the order of the settings file.
+func AllRoles() []Role { return slices.Clone(allRoles) }
+
+// AllApps returns the names of the GitHub Apps that cumin needs for one
+// owner: cumin-core and the three agent roles. cumin run reads a Client ID
+// and a private key for each of them.
+func AllApps() []string {
+	apps := []string{AppCuminCore}
+	for _, role := range allRoles {
+		apps = append(apps, string(role))
+	}
+	return apps
+}
+
 // Messages of the limits that both the Host settings file and the file of a
 // target repository check, so that the same value gives the same error.
 const (
@@ -78,12 +92,8 @@ type Settings struct {
 	MaxReviewRounds     int
 	MaxCheckFixRequests int
 	MergeMethod         MergeMethod
-	// RequestCommand is the executable that a request runs, with the
-	// repository and the issue number as arguments. Empty runs nothing. It
-	// stands in until the agent start is connected to the poll.
-	RequestCommand string
-	Roles          map[Role]RoleSettings
-	Quota          QuotaSettings
+	Roles               map[Role]RoleSettings
+	Quota               QuotaSettings
 	// GitHubApps maps an organization to the Client ID of each GitHub App.
 	// The inner key is AppCuminCore or a Role. `cumin setup` writes the
 	// table, so it can be empty.
@@ -151,7 +161,6 @@ type file struct {
 	MaxReviewRounds     int      `toml:"max_review_rounds"`
 	MaxCheckFixRequests int      `toml:"max_check_fix_requests"`
 	MergeMethod         string   `toml:"merge_method"`
-	RequestCommand      string   `toml:"request_command"`
 	Roles               struct {
 		ChiefEngineer fileRole `toml:"chief-engineer"`
 		Implementer   fileRole `toml:"implementer"`
@@ -228,7 +237,6 @@ func (f file) settings() (*Settings, error) {
 		MaxReviewRounds:     f.MaxReviewRounds,
 		MaxCheckFixRequests: f.MaxCheckFixRequests,
 		MergeMethod:         MergeMethod(f.MergeMethod),
-		RequestCommand:      f.RequestCommand,
 		Roles:               map[Role]RoleSettings{},
 		GitHubApps:          f.GitHubApps,
 	}

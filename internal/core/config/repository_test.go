@@ -134,7 +134,6 @@ func TestWithRepository_AKeyOfTheHostIsAnError(t *testing.T) {
 		{"work_dir = \"/tmp/other\"\n", "work_dir: " + reasonHostOnly},
 		{"poll_interval = \"5s\"\n", "poll_interval: " + reasonHostOnly},
 		{"max_issues_in_progress = 4\n", "max_issues_in_progress: " + reasonHostOnly},
-		{"request_command = \"/bin/echo\"\n", "request_command: " + reasonHostOnly},
 		{"[quota.five_hour]\nthreshold = 100\n", "quota: " + reasonHostOnly},
 		{"[github_apps.example-org]\ncumin-core = \"client-id\"\n", "github_apps: " + reasonHostOnly},
 		{"[roles.implementer]\ncli_path = \"/tmp/claude\"\n", "roles.implementer.cli_path: " + reasonHostOnly},

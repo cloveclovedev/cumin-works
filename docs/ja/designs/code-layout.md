@@ -30,7 +30,7 @@
 | パッケージ | ファイル | 受け持ち |
 |---|---|---|
 | `cmd/cumin` | `main.go` | サブコマンドの一覧と振り分け。終了コード |
-| | `run.go` | `cumin run`。設定と鍵を読み、skillを書き、`workflow.Service` を組み立てて動かす |
+| | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、`agent.Service` と `workflow.Service` を組み立てて動かす |
 | | `setup.go` | `cumin setup github-apps` の引数と起動 |
 | `internal/core/config` | `config.go` | Hostの設定ファイル (TOML) の読み込み、初期値、制限、既定のパス |
 | | `repository.go` | 対象のリポジトリの `.cumin/config.toml` を、Hostの設定に重ねる |
@@ -50,8 +50,7 @@
 | `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1)、実行終了の判定 (I2) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
-| | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用する (I/O) |
-| | `command.go` | 仮の設定 `request_command` の実行。Agentの起動につないだら消える |
+| | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用し、Implementerを起動する (I/O) |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `service.go` | 1回の依頼の入口 `Start` (使用率、token、身元、実行) と、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
