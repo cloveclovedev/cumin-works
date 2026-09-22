@@ -69,12 +69,21 @@ fi
 command -v launchctl >/dev/null 2>&1 || die "launchctl is not on PATH: --restart works on macOS only"
 command -v plutil >/dev/null 2>&1 || die "plutil is not on PATH: --restart works on macOS only"
 
+plist="${HOME}/Library/LaunchAgents/${label}.plist"
+target="gui/$(id -u)/$label"
+
+# A Host where cumin was never set up has nothing to restart. Say so and
+# finish: the binary is installed, which is what the caller asked for.
+if ! launchctl print "$target" >/dev/null 2>&1; then
+  echo "the LaunchAgent is not loaded, so there was nothing to restart. Load it with \"launchctl bootstrap gui/\$(id -u) $plist\". See docs/ja/development/setup-guide.md"
+  exit 0
+fi
+
 # A restart starts the path that the job already holds, so a job that runs
 # another binary would come back on the old one while this script reported
 # success. The path is read from the plist, not from "launchctl print",
 # whose output is not an interface (man launchctl).
-plist="${HOME}/Library/LaunchAgents/${label}.plist"
-[ -f "$plist" ] || die "$plist does not exist: write it with \"cumin setup launchd\" first. See docs/ja/development/setup-guide.md"
+[ -f "$plist" ] || die "the job $label is loaded, but $plist is missing, so the binary that it runs cannot be checked. Write the plist again with \"cumin setup launchd\", then reload the job"
 program="$(plutil -extract ProgramArguments.0 raw -o - "$plist")" ||
   die "cannot read the path of cumin from $plist"
 # The plist may hold a symbolic link that points at the installed file, so
@@ -83,10 +92,5 @@ if [ "$program" != "$prefix/cumin" ] && { [ ! -e "$program" ] || [ ! "$program" 
   die "the LaunchAgent runs $program, not $prefix/cumin. Install to that path (--prefix $(dirname "$program")), or write the plist again with \"cumin setup launchd --force\" and reload it"
 fi
 
-target="gui/$(id -u)/$label"
-if launchctl print "$target" >/dev/null 2>&1; then
-  launchctl kickstart -k "$target" || die "cannot restart $target"
-  echo "restarted: $target ($program)"
-else
-  echo "the LaunchAgent is not loaded, so there was nothing to restart. Load it with \"launchctl bootstrap gui/\$(id -u) $plist\". See docs/ja/development/setup-guide.md"
-fi
+launchctl kickstart -k "$target" || die "cannot restart $target"
+echo "restarted: $target ($program)"
