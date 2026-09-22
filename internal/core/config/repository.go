@@ -50,7 +50,16 @@ type repositoryFile struct {
 	MaxCheckFixRequests *int                      `toml:"max_check_fix_requests"`
 	MergeMethod         *string                   `toml:"merge_method"`
 	Roles               map[string]repositoryRole `toml:"roles"`
+	Notify              *repositoryNotify         `toml:"notify"`
 	ProtectedPaths      []string                  `toml:"protected_paths"`
+}
+
+type repositoryNotify struct {
+	Discord *repositoryNotifyDiscord `toml:"discord"`
+}
+
+type repositoryNotifyDiscord struct {
+	Enabled *bool `toml:"enabled"`
 }
 
 type repositoryRole struct {
@@ -107,6 +116,9 @@ func (s *Settings) WithRepository(data []byte) (*Settings, error) {
 		default:
 			fail("merge_method", limitMergeMethod, *f.MergeMethod)
 		}
+	}
+	if f.Notify != nil && f.Notify.Discord != nil && f.Notify.Discord.Enabled != nil {
+		effective.Notify.DiscordEnabled = *f.Notify.Discord.Enabled
 	}
 	// Sorted, so that the same file always gives the same error text.
 	for _, name := range slices.Sorted(maps.Keys(f.Roles)) {

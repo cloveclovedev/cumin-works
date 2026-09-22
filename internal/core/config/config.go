@@ -28,6 +28,9 @@ const (
 	defaultAgentTimeLimit      = 50 * time.Minute
 	// A GitHub App installation token expires one hour after it is issued.
 	maxAgentTimeLimit = 55 * time.Minute
+	// Notifications are on unless a Host or a repository turns them off.
+	// A forgotten setting must not hide an issue that stopped.
+	defaultNotifyDiscordEnabled = true
 )
 
 // Role is an agent role.
@@ -94,6 +97,7 @@ type Settings struct {
 	MergeMethod         MergeMethod
 	Roles               map[Role]RoleSettings
 	Quota               QuotaSettings
+	Notify              NotifySettings
 	// GitHubApps maps an organization to the Client ID of each GitHub App.
 	// The inner key is AppCuminCore or a Role. `cumin setup` writes the
 	// table, so it can be empty.
@@ -116,6 +120,15 @@ type RoleSettings struct {
 	// PATH. Tests point it at a fake CLI.
 	CLIPath string
 	Model   string // empty means the default model of the CLI
+}
+
+// NotifySettings holds how cumin tells the Owner that it needs attention.
+// A target repository may change these keys in its .cumin/config.toml.
+type NotifySettings struct {
+	// DiscordEnabled is the setting notify.discord.enabled. When it is
+	// false, cumin changes labels and writes comments as usual and sends
+	// no message.
+	DiscordEnabled bool
 }
 
 // DefaultPath returns the default path of the Host settings file.
@@ -167,7 +180,16 @@ type file struct {
 		Reviewer      fileRole `toml:"reviewer"`
 	} `toml:"roles"`
 	Quota      fileQuota                    `toml:"quota"`
+	Notify     fileNotify                   `toml:"notify"`
 	GitHubApps map[string]map[string]string `toml:"github_apps"`
+}
+
+type fileNotify struct {
+	Discord fileNotifyDiscord `toml:"discord"`
+}
+
+type fileNotifyDiscord struct {
+	Enabled bool `toml:"enabled"`
 }
 
 type fileRole struct {
@@ -186,6 +208,7 @@ func defaults() file {
 		MaxCheckFixRequests: defaultMaxCheckFixRequests,
 		MergeMethod:         string(MergeSquash),
 		Quota:               defaultQuota(),
+		Notify:              fileNotify{Discord: fileNotifyDiscord{Enabled: defaultNotifyDiscordEnabled}},
 	}
 	f.Roles.ChiefEngineer, f.Roles.Implementer, f.Roles.Reviewer = role, role, role
 	return f
@@ -238,6 +261,7 @@ func (f file) settings() (*Settings, error) {
 		MaxCheckFixRequests: f.MaxCheckFixRequests,
 		MergeMethod:         MergeMethod(f.MergeMethod),
 		Roles:               map[Role]RoleSettings{},
+		Notify:              NotifySettings{DiscordEnabled: f.Notify.Discord.Enabled},
 		GitHubApps:          f.GitHubApps,
 	}
 

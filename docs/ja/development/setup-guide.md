@@ -13,7 +13,7 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 | 1. GitHub App の登録と、秘密鍵の保存 | Organization の owner のブラウザと、Host の Keychain | Host | `cumin setup github-apps` |
 | 2. GitHub App のインストール | Organization の owner のブラウザ | どこでも | ブラウザ |
 | 3. リポジトリの準備 | リポジトリの管理者の `gh` | どのマシンでも | `scripts/setup-repo.sh` |
-| 4. cumin の常駐 | Host のユーザ | Host | `cumin setup launchd` と `launchctl` |
+| 4. 通知のアドレスの保存と cumin の常駐 | Host のユーザ | Host | `security`、`cumin setup launchd` と `launchctl` |
 
 分けた理由:
 
@@ -145,6 +145,38 @@ Owner が Pull Request を merge するとき:
 
 Host で、Owner 自身のアカウントで実行する。設定ファイルと Keychain の鍵がそろってから行う。
 
+### 通知のアドレスを Keychain に入れる
+
+cumin は、Owner の対応が要るときに Discord の webhook で知らせる。webhook のアドレスは秘密なので、設定ファイルではなく Keychain に置く ([cumin本体の設計メモ](../designs/cumin-core.md) の「Ownerへの通知」)。
+
+1. Discord で、通知を受けるチャンネルの "Integrations" から webhook を1つ作り、そのアドレスを控える。
+2. Host で、次を実行する。アドレスは標準入力から渡すので、コマンドの引数にも履歴にも残らない。`-U` は、同じ項目が既にあるときに置き換える。
+
+```sh
+security add-generic-password -U -s cumin-works -a discord-webhook-url -w
+```
+
+   コマンドがアドレスを2回尋ねる。貼り付けて、それぞれ Enter を押す。画面には出ない。値は既定の keychain (login) に入る。cumin が読むのもそこである。
+
+   `-w` のうしろに keychain のパスを書かない。`-w` は次の引数を値として取るので、パスがアドレスとして保存され、コマンドは成功したように見える (2026-09-22 に実機で確かめた)。
+
+3. 入っていることだけを確かめる。アドレスそのものは表示しない。cumin は既定の keychain だけを読むので、確かめるときも keychain を指定する。指定しないと、検索リストにある別の keychain の同じ名前の項目に当たり、cumin が見つけられない値を「ある」と答えてしまう。
+
+```sh
+KEYCHAIN=$(security default-keychain | tr -d ' "')
+security find-generic-password -s cumin-works -a discord-webhook-url "$KEYCHAIN" >/dev/null && echo stored
+```
+
+- 項目がなくても `cumin run` は起動する。起動のログに、項目の名前と設定のキーを示す警告が出て、通知だけが届かない。
+- Discord を使わない Host は、設定ファイルに `notify.discord.enabled = false` を書く ([設定の一覧](configuration.md))。対象のリポジトリが `.cumin/config.toml` で入れ直すこともできるので、その場合はアドレスを入れておく。
+- 入れ替えるときは、同じコマンドをもう一度実行する。消すときは、上と同じ理由で keychain を指定する。
+
+```sh
+security delete-generic-password -s cumin-works -a discord-webhook-url "$KEYCHAIN"
+```
+
+### 実行ファイルを置く
+
 まず、実行ファイルを作って置く。`go run` が作る一時的なバイナリは launchd から使えないので、`cumin setup launchd` はそれを拒否する。
 
 ```sh
@@ -247,6 +279,7 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
 | `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
+| `no Discord webhook URL in the Keychain` | 上の「通知のアドレスを Keychain に入れる」を実行する。Discord を使わないなら、設定ファイルに `notify.discord.enabled = false` を書く |
 | `... is a temporary build` | `go run` で実行している。`scripts/install.sh` で置いたバイナリから実行する |
 | `... holds a different job` | 同じ名前の plist が、違う内容で既にある。表示された差分を見て、置き換えてよければ `--force` を付ける |
 | launchd の job が動かない | `launchctl print gui/$(id -u)/dev.cloveclove.cumin` で最後の終了コードを見る。`~/.local/state/cumin/cumin.err.log` に設定の誤りが出る |

@@ -59,6 +59,21 @@
 - 要件のとおり、`cumin run` の起動時に読み、メモリにだけ持つ。値をログ、エラーの文章、手元の状態に入れない。
 - Keychain に触れるコードは `internal/platform/keychain` に閉じ込める。
 
+### Ownerへの通知
+
+- 通知は `internal/notify` の1か所を通る。ほかのパッケージが渡すのは、行の番号 (`I2` など)、理由の1行、リポジトリ、対象 (`issue #12`)、リンクだけで、どの手段で届くかを知らない。
+- 手段は `internal/platform/discord` が受け持つ。webhookのアドレス、JSONの本文、応答、1つのメッセージの上限 (2000文字。公式: Execute Webhook) は、ここで止まる。
+- 境界を越える値は、文章1つである (`Send(ctx, text)`)。1行目を要約にする。構造体を `internal/notify` に置いて渡すと、`internal/platform/*` がfeatureのパッケージをimportすることになり、依存の向きに反する ([コードの構成の設計](code-layout.md))。題と本文を分けて扱う手段が要るようになったら、型を共有の場所に移す。
+- 呼び出しには `wait=true` を付ける。付けないと、APIは受け取った時点で204を返し、公式ドキュメントのとおり「保存に失敗してもエラーにならない」ので、届かなかった通知を成功として扱ってしまう。
+- webhookのアドレスは秘密である。上の表のKeychainの項目から `cumin run` が起動時に1回読み、メモリにだけ持つ。ログ、エラーの文章、戻り値、手元の状態に入れない。エラーに入れるのは、状態コードとAPIの `message` だけである。
+- 通知を出すかどうかは、設定 `notify.discord.enabled` で決まる。対象のリポジトリの `.cumin/config.toml` で上書きできる。リポジトリが選べるのは出すかどうかだけで、宛先はHostのもの1つである。
+- Keychainに項目がなくても、`cumin run` は起動する。起動時に、項目の名前と設定のキーを警告に出す。通知を出す場面で足りなければ、そのときにerrorのログに出す。リポジトリが設定で通知を入れられる以上、起動を止めると、Discordを使わないHostが動かせなくなる。
+- 通知の失敗は、errorのログに出すだけである。コメントもラベルも巻き戻さない。判定に使うのはGitHub上の事実であり、通知は「見に来てほしい」と伝えるだけだからである。
+- 理由は500文字までにして、超えた分は `...` で切る。切るのは `internal/notify` の側である。手段の上限で切ると、最後の行にあるリンクが落ちて、Ownerが見に行けなくなる。通知は要約で、詳しい理由はIssueのコメントにある。手段の側の上限は、最後の備えとして残す。
+- メッセージの中の `@everyone` や利用者への言及を、Discordに解釈させない (`allowed_mentions` の `parse` を空にする。公式: Allowed Mentions Object)。通知の文章にはAgentが書いた部分が入るので、そのままだとチャンネル全体を呼び出せてしまう。
+- 採らなかった案: `internal/notify` からDiscordを直接呼ぶ。手段を差し替えるときに、featureのパッケージを書き換えることになる。
+- 採らなかった案: Discordのbotで双方向にする。[要求のbacklog](../requirements/backlog.md) にある。
+
 ### launchd
 
 cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHostのものなので、リポジトリには置かない。`cumin setup launchd` が、実行中のプロセスから値を取って書き出す。

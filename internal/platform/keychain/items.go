@@ -13,3 +13,8 @@ const Service = "cumin-works"
 func PrivateKeyAccount(clientID string) string {
 	return "github-app-private-key/" + clientID
 }
+
+// DiscordWebhookAccount is the account name of the item that holds the
+// address of the Discord webhook for the notifications to the Owner.
+// `cumin run` reads it at start and keeps it in memory.
+const DiscordWebhookAccount = "discord-webhook-url"

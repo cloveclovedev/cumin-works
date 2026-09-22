@@ -22,6 +22,7 @@
 ### 依存の向き
 
 - `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/platform/github`、`internal/core/config`、`roles` を使う。`internal/agent` は `internal/platform/github` と `internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`roles` は `templates` と `internal/core/config` を使う。
+- `internal/notify` は標準ライブラリだけを使う。通知の手段は、文章を受け取る `Sender` として外から差す。`internal/platform/discord` はその実装で、`internal/notify` をimportしない。`cmd/cumin` が2つをつなぐ ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
 - 純粋なファイル (`domain.go`、`request.go`) は標準ライブラリだけを読む。HTTPのクライアント、`os/exec`、GitHubの型を持ち込まない。判定の表形式のテストが、I/Oなしで書けるようにするためである。
 - GitHubの型 (RESTの本文、GraphQLの応答) は `internal/platform/github` で止める。他のパッケージには、cuminの型 (`RepositorySnapshot`、`Label`、`User` など) だけを渡す。
 
@@ -46,8 +47,11 @@
 | | `comments.go` | Issueへのコメントの投稿 |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ |
+| `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
-| | `items.go` | cuminが使うKeychainの項目の名前 |
+| | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
+| `internal/notify` | `domain.go` | 純粋。通知の内容と、その文章 |
+| | `notify.go` | 通知を送る入口 `Notifier` と、手段を表す `Sender` |
 | `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1)、実行終了の判定 (I2) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |

@@ -36,6 +36,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `quota.five_hour.reset_near` | 5h枠のリセットが近いとみなす残り時間 | `"30m"` | 0以上、5時間未満 |
 | `quota.weekly.threshold` | weekly枠のしきい値 (%)。どの時間帯にも入らない時刻に使われる | `85` | 1〜100 |
 | `quota.<window>.bands` | 時間帯ごとのしきい値。下の「時間帯」を参照 | なし | 同じ枠の時間帯は、重ねられない |
+| `notify.discord.enabled` | OwnerへのDiscordの通知を出すか。`false` のとき、cuminはラベルの付け替えとコメントをふだんどおり行い、通知だけを出さない | `true` | 真偽値 |
 | `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps` が書き込む | なし | キーを書くなら、空にできない |
 
 - `<role>` は、`chief-engineer`、`implementer`、`reviewer` のどれかである。
@@ -94,6 +95,9 @@ threshold = 100
 [quota.weekly]
 threshold = 85
 
+[notify.discord]
+enabled = true
+
 [github_apps.example-org]
 cumin-core = "<Client ID>"
 chief-engineer = "<Client ID>"
@@ -114,6 +118,7 @@ reviewer = "<Client ID>"
 | `merge_method` | Hostの設定と同じ |
 | `roles.<role>.cli` | Hostの設定と同じ |
 | `roles.<role>.model` | Hostの設定と同じ |
+| `notify.discord.enabled` | Hostの設定と同じ。そのリポジトリのIssueについて通知を出すかどうかを、リポジトリが選ぶ。webhookのアドレスはHostのもの1つで、リポジトリからは変えられない |
 | `protected_paths` | Agentに変更させないパスの一覧。cuminは読まない。使うのはGitHub Actionsのcheckと、Implementerへの指示である |
 
 読み込みの決まり:
@@ -155,4 +160,8 @@ protected_paths = [
 # 表の外のキーは、表より前に書く。表のあとに書くと、その表のキーになる。
 [roles.implementer]
 model = "sonnet"
+
+# このリポジトリのIssueについては、Discordの通知を出さない。
+[notify.discord]
+enabled = false
 ```

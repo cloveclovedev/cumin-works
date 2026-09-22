@@ -56,8 +56,28 @@ func TestLoadAppliesDefaults(t *testing.T) {
 			t.Errorf("Roles[%s] = %+v, want %+v", role, got, want)
 		}
 	}
+	if !s.Notify.DiscordEnabled {
+		t.Error("Notify.DiscordEnabled = false, want true by default")
+	}
 	if len(s.GitHubApps) != 0 {
 		t.Errorf("GitHubApps = %v, want empty", s.GitHubApps)
+	}
+}
+
+// The Host turns the notifications off with one key. A repository may turn
+// them on again (repository_test.go).
+func TestLoadReadsTheNotifySetting(t *testing.T) {
+	s, err := Load(writeFile(t, required+"\n[notify.discord]\nenabled = false\n"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if s.Notify.DiscordEnabled {
+		t.Error("Notify.DiscordEnabled = true, want false")
+	}
+
+	_, err = Load(writeFile(t, required+"\n[notify.discord]\nenabled = false\nchannel = \"general\"\n"))
+	if err == nil || !strings.Contains(err.Error(), "notify.discord.channel: unknown key") {
+		t.Errorf("an unknown key under notify gave %v, want an error that names it", err)
 	}
 }
 
