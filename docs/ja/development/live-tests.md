@@ -134,10 +134,17 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | 5 | Pull Request の先頭のコミットが、worktree の先頭のコミットと同じである | `git -C <work_dir>/<owner>/<repo>/<Issue番号>-implementer rev-parse HEAD` と `headRefOid` |
 | 6 | コミットの作者とコミッターが、Implementer の bot のユーザである | コミットの作者 |
 | 7 | 起動の記録の確認が通った。異常終了「user-level context」が出ていない | cumin のログ |
-| 8 | Implementer が、Pull Request を作る前に `cumin-pull-request` の skill を呼び、skill がエラーにならずに開いた | Claude Code のセッションの記録 (`~/.claude/projects/` の下の、worktree に対応するディレクトリ) の `Skill` のツールの呼び出しと、その直後の `gh pr create` |
-| 9 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+| 8 | Agent に渡された skill の一覧に、cumin の3つの skill (`cumin-pull-request`、`cumin-review-reply`、`cumin-decision-request`) が載っている。Host のユーザの `~/.claude/skills/` の skill は載っていない | Claude Code のセッションの記録 (`~/.claude/projects/` の下の、worktree に対応するディレクトリ) の、"The following skills are available for use with the Skill tool" で始まる system-reminder |
+| 9 | Implementer が、Pull Request を作る前に `cumin-pull-request` の skill を呼び、skill がエラーにならずに開いた | 同じ記録の `Skill` のツールの呼び出しと、その直後の `gh pr create` |
+| 10 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
 
-8を cumin のログで確かめられないのは、`init` のイベントの項目の名前だけを debug のログに出し、値を出さないためである ([Agentの実行の設計](../designs/agent-run.md) の「出力の読み取り」)。セッションの記録の側にも `init` のイベントは残らないので、`skills` の一覧そのものは実行のあとには読めない。skill が読み込まれたことは、`Skill` の呼び出しが通ったことで分かる。セッションの記録には token が載りうるので、記録の全体を画面やIssueに写さない。探すのは skill の名前と呼び出しの順だけにする。
+8と9を cumin のログで確かめられない理由:
+
+- `init` のイベントは `skills` を持つ (実測 86) が、cuminはそれを読まない。イベントを読む構造体が持つのは `plugins`、`mcp_servers`、`memory_paths` などで、`skills` は捨てている。生の行は、項目の名前だけを debug のログに出すのに1度使う ([Agentの実行の設計](../designs/agent-run.md) の「出力の読み取り」)。値は残らない。
+- Claude Code のセッションの記録には `init` のイベントそのものが入らない。残るのは、やりとりと、文脈に入った文章 (attachment) である。
+- そのかわり、Agent に実際に渡った skill の一覧は、文脈に入る system-reminder として記録に残る。組み込みの skill も同じ一覧に並ぶので、cuminの3つがあることと、Hostのユーザの skill がないことを見る。
+
+セッションの記録には token が載りうるので、記録の全体を画面やIssueに写さない。探すのは skill の名前と呼び出しの順だけにする。
 
 ### 後片付け
 
