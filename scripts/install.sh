@@ -67,10 +67,26 @@ if [ "$restart" -eq 0 ]; then
 fi
 
 command -v launchctl >/dev/null 2>&1 || die "launchctl is not on PATH: --restart works on macOS only"
+command -v plutil >/dev/null 2>&1 || die "plutil is not on PATH: --restart works on macOS only"
+
+# A restart starts the path that the job already holds, so a job that runs
+# another binary would come back on the old one while this script reported
+# success. The path is read from the plist, not from "launchctl print",
+# whose output is not an interface (man launchctl).
+plist="${HOME}/Library/LaunchAgents/${label}.plist"
+[ -f "$plist" ] || die "$plist does not exist: write it with \"cumin setup launchd\" first. See docs/ja/development/setup-guide.md"
+program="$(plutil -extract ProgramArguments.0 raw -o - "$plist")" ||
+  die "cannot read the path of cumin from $plist"
+# The plist may hold a symbolic link that points at the installed file, so
+# compare the files as well as the paths.
+if [ "$program" != "$prefix/cumin" ] && { [ ! -e "$program" ] || [ ! "$program" -ef "$prefix/cumin" ]; }; then
+  die "the LaunchAgent runs $program, not $prefix/cumin. Install to that path (--prefix $(dirname "$program")), or write the plist again with \"cumin setup launchd --force\" and reload it"
+fi
+
 target="gui/$(id -u)/$label"
 if launchctl print "$target" >/dev/null 2>&1; then
   launchctl kickstart -k "$target" || die "cannot restart $target"
-  echo "restarted: $target"
+  echo "restarted: $target ($program)"
 else
-  echo "the LaunchAgent is not loaded, so there was nothing to restart. See docs/ja/development/setup-guide.md"
+  echo "the LaunchAgent is not loaded, so there was nothing to restart. Load it with \"launchctl bootstrap gui/\$(id -u) $plist\". See docs/ja/development/setup-guide.md"
 fi

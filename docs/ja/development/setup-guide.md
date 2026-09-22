@@ -150,7 +150,17 @@ Host で、Owner 自身のアカウントで実行する。設定ファイルと
 scripts/install.sh
 ```
 
-スクリプトは、cumin をビルドして `~/.local/bin/cumin` に置く。Owner 自身のユーザのディレクトリなので、`sudo` は要らない。別の場所に置くなら `--prefix <ディレクトリ>` を付ける。`PATH` に入っていないディレクトリを指定したときは、警告が出る (launchd は plist のパスで起動するので、動きはする)。
+スクリプトは、cumin をビルドして `~/.local/bin/cumin` に置く。Owner 自身のユーザのディレクトリなので、`sudo` は要らない。別の場所に置くなら `--prefix <ディレクトリ>` を付ける。
+
+置いた先が `PATH` に入っていないと、スクリプトが警告を出す。そのときは、先に `PATH` に足すか、これ以降の `cumin` をフルパスで実行する。
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"     # ログインシェルの設定にも足す
+# または
+~/.local/bin/cumin setup launchd
+```
+
+`PATH` は、plist にも書き込まれる。cumin が起動する Agent の CLI (`claude`)、`git`、`gh` は、ここに入っている必要がある。
 
 次に、LaunchAgent を書き出す。
 
