@@ -1,6 +1,6 @@
-@startuml cumin-core-verify
+@startuml poll-verify
 ' cumin works - 実行終了の判定 (I2)。Implementerの実行が done で終わったあとの確認。
-' 対応する文書: cumin-core.md の「実行終了の判定」。
+' 対応する文書: poll.md の「実行終了の判定」。
 ' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
 skinparam shadowing false
 skinparam defaultFontName sans-serif

@@ -414,7 +414,7 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 }
 
 // Of two open pull requests that close the issue, the one with the highest
-// number is checked (cumin-core.md, the topic on the end of a run).
+// number is checked (poll.md, the topic on the end of a run).
 func TestI2_DoneChecksThePullRequestWithTheHighestNumber(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, "0000000000000000000000000000000000000000", implementerSlug, true)

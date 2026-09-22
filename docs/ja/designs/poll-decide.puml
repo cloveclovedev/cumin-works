@@ -1,4 +1,4 @@
-@startuml cumin-core-decide
+@startuml poll-decide
 ' cumin works - 定期確認の判定。スナップショットから着手リストを決める。
 ' 行の番号 (I1 など) は issue-states.md の表に対応する。
 ' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。

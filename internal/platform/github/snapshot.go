@@ -36,7 +36,7 @@ const (
 
 // RepositorySnapshot is what one poll reads of one repository: the open
 // requirement issues with their sub-issues, and the rate limit of the call.
-// docs/ja/designs/cumin-core.md, topic "What one poll reads".
+// docs/ja/designs/poll.md, topic "What one poll reads".
 type RepositorySnapshot struct {
 	// DefaultBranch is the name of the default branch, and DefaultBranchOID
 	// is the commit at its head. A repository without a commit has neither.
