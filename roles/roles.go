@@ -31,7 +31,17 @@ var roleTemplates = map[config.Role][]string{
 
 // Instruction returns the instruction of the role: the role file, then
 // the templates of the role.
+//
+// The role is matched against the three agent roles before the file is
+// read. The embedded directory holds other Markdown as well (the built-in
+// risk criteria), and a name that is not a role must never come back as an
+// instruction.
 func Instruction(role config.Role) (string, error) {
+	switch role {
+	case config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer:
+	default:
+		return "", fmt.Errorf("no role instruction for %q", role)
+	}
 	data, err := files.ReadFile(string(role) + ".md")
 	if err != nil {
 		return "", fmt.Errorf("no role instruction for %q", role)

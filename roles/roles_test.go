@@ -31,6 +31,11 @@ func TestInstructionRejectsUnknownRole(t *testing.T) {
 	if _, err := Instruction("../roles/implementer"); err == nil {
 		t.Error("Instruction with a path succeeded, want an error")
 	}
+	// The embedded directory holds other Markdown; only a role is an
+	// instruction.
+	if _, err := Instruction(config.Role(strings.TrimSuffix(RiskCriteriaFile, ".md"))); err == nil {
+		t.Error("Instruction(risk-criteria) succeeded, want an error")
+	}
 }
 
 // The Implementer instruction holds the writing rules, read from
