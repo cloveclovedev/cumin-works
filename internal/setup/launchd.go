@@ -243,13 +243,15 @@ func plistLabel(data []byte) (string, error) {
 				if err := decoder.DecodeElement(&text, &element); err != nil {
 					return "", err
 				}
-				afterLabelKey = depth == 1 && strings.TrimSpace(text) == "Label"
+				// The key is compared as it stands. " Label " is a key of
+				// its own, and it is not the one of the job.
+				afterLabelKey = depth == 1 && text == "Label"
 			case "string":
 				if err := decoder.DecodeElement(&text, &element); err != nil {
 					return "", err
 				}
 				if afterLabelKey {
-					return strings.TrimSpace(text), nil
+					return text, nil
 				}
 			default:
 				afterLabelKey = false

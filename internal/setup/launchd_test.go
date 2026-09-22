@@ -343,6 +343,13 @@ func TestPlistState_ReadsTheLabelKey(t *testing.T) {
 			PlistOfAnotherJob,
 		},
 		{
+			"another job with a key that only looks like Label",
+			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict>\n" +
+				"<key> Label </key><string>" + LaunchAgentLabel + "</string>\n" +
+				"<key>Label</key><string>com.example.other</string>\n</dict></plist>\n",
+			PlistOfAnotherJob,
+		},
+		{
 			"a plist with no label",
 			"<?xml version=\"1.0\"?>\n<plist version=\"1.0\"><dict><key>RunAtLoad</key><true/></dict></plist>\n",
 			PlistOfAnotherJob,
