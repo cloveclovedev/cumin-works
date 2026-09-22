@@ -76,8 +76,33 @@ func TestSend_ExecutesTheWebhookWithTheTextAsContent(t *testing.T) {
 	if got, _ := f.body["content"].(string); got != "cumin: I2: the Implementer returned blocked" {
 		t.Errorf("content = %q, want the text", got)
 	}
-	if len(f.body) != 1 {
-		t.Errorf("the body holds %d fields (%s), want only content", len(f.body), f.rawBody)
+	// Nothing in a notification may ring a channel: an agent writes part
+	// of the text, so mention parsing is off.
+	mentions, ok := f.body["allowed_mentions"].(map[string]any)
+	if !ok {
+		t.Fatalf("the body has no allowed_mentions: %s", f.rawBody)
+	}
+	if parse, ok := mentions["parse"].([]any); !ok || len(parse) != 0 {
+		t.Errorf("allowed_mentions.parse = %v, want an empty list", mentions["parse"])
+	}
+	if len(f.body) != 2 {
+		t.Errorf("the body holds %d fields (%s), want content and allowed_mentions", len(f.body), f.rawBody)
+	}
+}
+
+// A message that names @everyone reaches Discord as text, and rings
+// nobody, because the request turns mention parsing off.
+func TestSend_DoesNotLetAMentionRingAChannel(t *testing.T) {
+	f := newFakeDiscord(t)
+	if err := send(f, "cumin: I2: @everyone the run stopped"); err != nil {
+		t.Fatalf("Send() = %v, want nil", err)
+	}
+	if content, _ := f.body["content"].(string); !strings.Contains(content, "@everyone") {
+		t.Errorf("content = %q, want the text as it was written", content)
+	}
+	mentions, _ := f.body["allowed_mentions"].(map[string]any)
+	if parse, ok := mentions["parse"].([]any); !ok || len(parse) != 0 {
+		t.Errorf("allowed_mentions.parse = %v, want an empty list", mentions["parse"])
 	}
 }
 

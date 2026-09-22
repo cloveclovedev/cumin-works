@@ -64,6 +64,33 @@ func TestMessage_HoldsTheRowTheReasonAndTheLink(t *testing.T) {
 	}
 }
 
+// A reason that an agent wrote can be long. The message keeps the link,
+// which is the line that the Owner must be able to open.
+func TestMessage_CutsALongReasonAndKeepsTheLink(t *testing.T) {
+	t.Parallel()
+	link := "https://github.com/example-org/example-repo/issues/12"
+	got := Message(Notification{
+		Row:        "I2",
+		Reason:     strings.Repeat("a", maxReason+1000),
+		Repository: "example-org/example-repo",
+		Subject:    "issue #12",
+		Link:       link,
+	})
+	lines := strings.Split(got, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("the message has %d lines, want 3:\n%s", len(lines), got)
+	}
+	if lines[2] != link {
+		t.Errorf("the last line is %q, want the link", lines[2])
+	}
+	if n := len([]rune(lines[0])); n != len("cumin: I2: ")+maxReason {
+		t.Errorf("the summary holds %d characters, want the prefix and %d", n, maxReason)
+	}
+	if !strings.HasSuffix(lines[0], reasonCut) {
+		t.Errorf("the summary does not end with %q: %q", reasonCut, lines[0])
+	}
+}
+
 // fakeSender records the texts that it was given, and may fail.
 type fakeSender struct {
 	texts []string

@@ -15,6 +15,16 @@ import (
 	"unicode"
 )
 
+// maxReason is how much of a reason one message carries. The reason is a
+// summary: the whole text stays in the comment on the issue, which the link
+// opens. A channel has a limit of its own, and a reason that an agent wrote
+// can be long, so the reason is cut here, where the link is still the last
+// line that a reader must see.
+const maxReason = 500
+
+// reasonCut marks a reason that was cut.
+const reasonCut = "..."
+
 // Notification is one thing that cumin tells the Owner. The caller fills
 // the fields that it has; an empty field is left out of the message.
 type Notification struct {
@@ -45,7 +55,7 @@ type Notification struct {
 // topic on notifications to the Owner).
 func Message(n Notification) string {
 	var lines []string
-	summary := oneLine(n.Reason)
+	summary := cutReason(oneLine(n.Reason))
 	if n.Row != "" {
 		summary = oneLine(n.Row) + ": " + summary
 	}
@@ -59,6 +69,15 @@ func Message(n Notification) string {
 		lines = append(lines, link)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// cutReason keeps at most maxReason characters of a reason.
+func cutReason(reason string) string {
+	runes := []rune(reason)
+	if len(runes) <= maxReason {
+		return reason
+	}
+	return string(runes[:maxReason-len(reasonCut)]) + reasonCut
 }
 
 // oneLine joins a value into one line: every run of spaces, tabs, and line

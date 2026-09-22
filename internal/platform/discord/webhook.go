@@ -66,9 +66,14 @@ func (w Webhook) Send(ctx context.Context, text string) error {
 	if err != nil {
 		return err
 	}
+	// No mention is parsed. A notification carries text that an agent
+	// wrote, and "@everyone" in it would otherwise ring a whole channel
+	// (official: "Allowed Mentions Object": an empty "parse" suppresses
+	// every mention).
 	body, err := json.Marshal(struct {
-		Content string `json:"content"`
-	}{content})
+		Content         string          `json:"content"`
+		AllowedMentions allowedMentions `json:"allowed_mentions"`
+	}{content, allowedMentions{Parse: []string{}}})
 	if err != nil {
 		return fmt.Errorf("discord: build the request: %w", err)
 	}
@@ -91,6 +96,12 @@ func (w Webhook) Send(ctx context.Context, text string) error {
 		return fmt.Errorf("discord: execute the webhook: status %d%s", response.StatusCode, apiMessage(response.Body))
 	}
 	return nil
+}
+
+// allowedMentions is the field of the request that says which mentions of
+// the content Discord may turn into a real mention.
+type allowedMentions struct {
+	Parse []string `json:"parse"`
 }
 
 // Cut returns text with at most the number of characters that one message
