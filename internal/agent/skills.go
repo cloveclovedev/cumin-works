@@ -1,4 +1,4 @@
-package roles
+package agent
 
 // This file turns the templates of GitHub text into skills of Claude Code.
 // cumin run writes the skills once at start into one directory under the

@@ -138,13 +138,14 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 
 ### riskの基準の受け渡し
 
-riskの基準は、PlannerとReviewerがそのまま受け取る文章である。cuminは中身を読まない。
+riskの基準は、PlannerとReviewerがそのまま受け取る文章である。cuminは中身を読まない。解決した文章は、起動の依頼のデータとして `internal/agent` に渡り、roleの指示の最後に付く ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」)。
 
 - 初期値の文章は、cuminのバイナリに埋め込む。置き場所は `disciplines/software-engineering/risk-criteria.md` である。どの変更をriskが高いとするかは分野の判断なので、roleではなくdisciplineが持つ。Agentが受け取る文章は、Pull Requestでレビューされるべきものなので、要件文書ではなくリポジトリに置く (#102 の決定)。
 - 強い順に、リポジトリの `.cumin/risk-criteria.md`、Hostの設定ファイルと同じディレクトリの `risk-criteria.md`、埋め込みの初期値である。ある段のファイルは、弱い段の文章を丸ごと置き換える。
 - 解決する関数は、文章と、どの段から来たか (リポジトリ、Host、初期値) を返す。定期確認は、どの段から来たかだけをログに出す。文章はログに出さない。
 - ファイルがあって、中身が空白だけなら、パスを示すエラーにする。空の指示がAgentに渡ると、riskの判断の基準がなくなる。
-- 関数は `roles` パッケージに置く。`roles` は `internal/core/config` を role の名前のために import しているので、逆向きに置くと循環する。
+- 関数は `internal/core/config` に置く。3段の優先順位は設定の決まりであり、リポジトリの `.cumin/config.toml` をHostの設定に重ねる処理と同じ場所にある。初期値は `disciplines` から読む。
+- disciplineのroleのファイルは、今は埋め込みの1段だけである。同じ3段を持つようになったときも、解決はこの関数と同じ場所に置く。
 
 ### 起動前の使用率の確認
 

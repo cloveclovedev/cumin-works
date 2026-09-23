@@ -21,7 +21,6 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
-	"github.com/cloveclovedev/cumin-works/roles"
 )
 
 // TestLive_AgentRun is the live check of the last requirement of #7. It
@@ -48,14 +47,14 @@ func TestLive_AgentRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
-	instruction, err := roles.Instruction(config.RoleImplementer)
+	roleInstruction, err := instruction(config.RoleImplementer, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	cli := ClaudeCode{Path: path, Logger: testLogger(t)}
 	// The agent does not reach GitHub in this check, so the credentials
 	// are placeholders.
-	base := Request{Role: config.RoleImplementer, RoleInstruction: instruction, WorkDir: dir, TimeLimit: 5 * time.Minute, Credentials: testCredentials}
+	base := Request{Role: config.RoleImplementer, RoleInstruction: roleInstruction, WorkDir: dir, TimeLimit: 5 * time.Minute, Credentials: testCredentials}
 
 	// Run 1: a new session that reads a file and returns done.
 	req := base
@@ -528,10 +527,6 @@ func TestLive_AgentRunOnSandbox(t *testing.T) {
 	runID := time.Now().UTC().Format("20060102-150405")
 	branch := "cumin/live-" + runID + "-agent"
 	dir := sb.worktree(t, branch)
-	instruction, err := roles.Instruction(sb.role)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Cleanup by branch name, with a token of the test: the pull request
 	// that the agent opens is found through the branch.
@@ -561,7 +556,7 @@ func TestLive_AgentRunOnSandbox(t *testing.T) {
 	start := time.Now()
 	run, err := sb.service.Start(ctx, StartRequest{
 		Owner: sb.owner, Repo: sb.repo, Role: sb.role,
-		RoleInstruction: instruction, Text: text, WorkDir: dir,
+		Text: text, WorkDir: dir,
 	})
 	elapsed := time.Since(start)
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
-	"github.com/cloveclovedev/cumin-works/roles"
 )
 
 // RepositorySettings is what the .cumin/ of one repository decided, with
@@ -23,7 +22,7 @@ type RepositorySettings struct {
 	// receive word for word. cumin does not read it, and never logs it.
 	RiskCriteria string
 	// RiskCriteriaSource says which of the three levels the text came from.
-	RiskCriteriaSource roles.RiskCriteriaSource
+	RiskCriteriaSource config.RiskCriteriaSource
 	// FromRepository is true when the repository has a .cumin/config.toml.
 	FromRepository bool
 
@@ -65,7 +64,7 @@ func (s *Service) settingsFor(repository config.Repository, read github.Reposito
 	if read.CuminRiskCriteria != nil {
 		criteriaText = &read.CuminRiskCriteria.Text
 	}
-	criteria, source, err := roles.RiskCriteria(criteriaText, s.SettingsDir)
+	criteria, source, err := config.RiskCriteria(criteriaText, s.SettingsDir)
 	if err != nil {
 		return nil, false, err
 	}

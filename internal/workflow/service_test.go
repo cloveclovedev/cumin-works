@@ -1091,13 +1091,27 @@ func branchOf(t *testing.T, dir string) string {
 // separated by NUL.
 func promptOf(t *testing.T, args string) string {
 	t.Helper()
+	return argumentOf(t, args, "-p")
+}
+
+// systemPromptOf returns the instruction of the role from the recorded
+// arguments: the value of --append-system-prompt.
+func systemPromptOf(t *testing.T, args string) string {
+	t.Helper()
+	return argumentOf(t, args, "--append-system-prompt")
+}
+
+// argumentOf returns the value that follows flag in the recorded
+// arguments, which are separated by NUL.
+func argumentOf(t *testing.T, args, flag string) string {
+	t.Helper()
 	list := strings.Split(strings.TrimSuffix(args, "\x00"), "\x00")
 	for i, arg := range list {
-		if arg == "-p" && i+1 < len(list) {
+		if arg == flag && i+1 < len(list) {
 			return list[i+1]
 		}
 	}
-	t.Fatalf("the arguments have no -p: %q", list)
+	t.Fatalf("the arguments have no %s: %q", flag, list)
 	return ""
 }
 
@@ -1433,5 +1447,33 @@ func TestStopGrace_IsLongerThanTheGraceOfTheAdapter(t *testing.T) {
 	}
 	if workflow.DefaultStopGrace <= (&agent.Service{}).StopBudget()-time.Second {
 		t.Errorf("the default stop grace (%s) is not longer than the grace of the adapter", workflow.DefaultStopGrace)
+	}
+}
+
+// The risk criteria of the target repository reaches the agent as the last
+// part of its instruction. cumin resolves the three levels for the
+// repository and passes the text with the start request; internal/agent
+// joins it to the role file, the discipline file, and the writing rules
+// (docs/ja/requirements/agents/common.md, the section on the composition
+// of the instruction).
+func TestI1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
+	const criteria = "# Risk criteria of this repository\n\nEvery change is risk/high.\n"
+	sc := newScene(t)
+	sc.fake.SetFile(sc.repo, ".cumin/risk-criteria.md", githubtest.File{Content: criteria})
+	service := sc.service()
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	service.Wait()
+
+	instruction := systemPromptOf(t, sc.record(t, "agent.args"))
+	if !strings.HasSuffix(instruction, criteria) {
+		t.Errorf("the instruction does not end with the risk criteria of the repository:\n%s", instruction)
+	}
+	for _, want := range []string{"# Implementer", "# Software engineering for the Implementer"} {
+		if !strings.Contains(instruction, want) {
+			t.Errorf("the instruction does not hold %q", want)
+		}
 	}
 }

@@ -11,7 +11,7 @@ import (
 // discipline. The test reads the file from disk, so that a move of the
 // file fails here and not only where an agent would read the text.
 func TestRiskCriteria_ComesFromTheDirectoryOfTheDefaultDiscipline(t *testing.T) {
-	text, err := RiskCriteria()
+	text, err := RiskCriteria(Default)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestRiskCriteria_ComesFromTheDirectoryOfTheDefaultDiscipline(t *testing.T) 
 		t.Fatalf("read the file of the discipline: %v", err)
 	}
 	if text != string(onDisk) {
-		t.Errorf("RiskCriteria() is not %s/risk-criteria.md", Default)
+		t.Errorf("RiskCriteria(Default) is not %s/risk-criteria.md", Default)
 	}
 	if len(text) == 0 {
 		t.Error("the built-in risk criteria is empty")
@@ -50,13 +50,19 @@ func TestRole_TellsAFileOfTheRoleFromNoFile(t *testing.T) {
 	if _, _, err := roleFile(fsys, "a-discipline", ""); err == nil {
 		t.Error("roleFile with an empty role succeeded, want an error")
 	}
+	if _, _, err := roleFile(fsys, "../a-discipline", "implementer"); err == nil {
+		t.Error("roleFile with a path as the discipline succeeded, want an error")
+	}
+	if _, err := RiskCriteria("../software-engineering"); err == nil {
+		t.Error("RiskCriteria with a path succeeded, want an error")
+	}
 }
 
 // Every role that cumin drives is asked for, so that a typo in a file name
 // of the default discipline cannot pass unseen.
 func TestRole_AnswersForEveryRoleOfTheDefaultDiscipline(t *testing.T) {
 	for _, role := range []string{"planner", "implementer", "reviewer"} {
-		text, ok, err := Role(role)
+		text, ok, err := Role(Default, role)
 		if err != nil {
 			t.Errorf("Role(%s): %v", role, err)
 			continue

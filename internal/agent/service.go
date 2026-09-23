@@ -32,7 +32,7 @@ type Service struct {
 	// GitHub creates the tokens and reads the bot users.
 	GitHub *github.AppClient
 	// SkillsDir is the directory whose .claude/skills/ holds the skills
-	// that cumin run wrote at start (roles.WriteSkills). Every run gets it.
+	// that cumin run wrote at start (WriteSkills). Every run gets it.
 	SkillsDir string
 	// Logger may be nil. Then the default logger is used.
 	Logger *slog.Logger
@@ -64,8 +64,11 @@ type StartRequest struct {
 	Owner string
 	Repo  string
 	Role  config.Role
-	// RoleInstruction is the instruction of the role, from roles/.
-	RoleInstruction string
+	// RiskCriteria is the risk criteria text of the target repository,
+	// resolved over its three levels by the caller. It becomes the last
+	// part of the instruction of the role (instruction.go). An empty text
+	// leaves the instruction without that part.
+	RiskCriteria string
 	// Text is the request text: what the agent must do this time.
 	Text string
 	// WorkDir is the worktree that the agent runs in.
@@ -80,7 +83,8 @@ type StartRequest struct {
 	SessionID string
 }
 
-// Start runs one request. The steps, in order: the quota usage is read
+// Start runs one request. The steps, in order: the instruction of the role
+// is composed; the quota usage is read
 // with a minimal run (an error of kind *QuotaNotRead stops the start);
 // a token of the App of the role is created, limited to the repository;
 // the bot identity of the role is read, once; then the CLI runs with the
@@ -95,6 +99,13 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 		settings = *req.Settings
 	}
 	cred, err := s.app(req.Owner, req.Role)
+	if err != nil {
+		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
+	}
+	// The instruction of the role, with the risk criteria of the
+	// repository at its end. It is composed before anything is created on
+	// GitHub, so that a wrong role costs no token.
+	roleInstruction, err := instruction(req.Role, req.RiskCriteria)
 	if err != nil {
 		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
 	}
@@ -128,7 +139,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	// caller can compare it with the author of a pull request (I2).
 	run, err := cli.Run(ctx, Request{
 		Role:            req.Role,
-		RoleInstruction: req.RoleInstruction,
+		RoleInstruction: roleInstruction,
 		Text:            req.Text,
 		WorkDir:         req.WorkDir,
 		SessionID:       req.SessionID,

@@ -14,7 +14,6 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
-	"github.com/cloveclovedev/cumin-works/roles"
 )
 
 // Target is one target repository with the token of cumin-core for it.
@@ -339,17 +338,13 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 	if s.Agents == nil {
 		return errors.New("no agent service is configured")
 	}
-	instruction, err := roles.Instruction(config.RoleImplementer)
-	if err != nil {
-		return err
-	}
 	branch := BranchName(sub.Number, sub.Title)
 	done := s.markInProgress(ctx, target.Repository.String(), sub.Number)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
 		defer done()
-		s.runImplementer(ctx, target, settings, sub.Number, branch, instruction)
+		s.runImplementer(ctx, target, settings, sub.Number, branch)
 	}()
 	return nil
 }
@@ -371,7 +366,7 @@ const agentAttempts = 2
 // abnormal end as well; nothing is retried then, and no label changes,
 // because the Owner restarts the issue (cumin-core.md, the topic on the
 // stop).
-func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, branch, instruction string) {
+func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, branch string) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	role := settings.Settings.Roles[config.RoleImplementer]
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
@@ -387,13 +382,13 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	}
 	log.Info("I1: requested the work", "branch", branch)
 	request := agent.StartRequest{
-		Owner:           target.Repository.Owner,
-		Repo:            target.Repository.Name,
-		Role:            config.RoleImplementer,
-		RoleInstruction: instruction,
-		Text:            ImplementRequestText(target.Repository.String(), number, branch, workDir),
-		WorkDir:         workDir,
-		Settings:        &role,
+		Owner:        target.Repository.Owner,
+		Repo:         target.Repository.Name,
+		Role:         config.RoleImplementer,
+		RiskCriteria: settings.RiskCriteria,
+		Text:         ImplementRequestText(target.Repository.String(), number, branch, workDir),
+		WorkDir:      workDir,
+		Settings:     &role,
 	}
 
 	var firstKind agent.EndKind

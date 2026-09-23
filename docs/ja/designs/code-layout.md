@@ -21,7 +21,8 @@
 
 ### 依存の向き
 
-- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/notify`、`internal/platform/github`、`internal/core/config`、`roles` を使う。`internal/agent` は `internal/platform/github` と `internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`roles` は `templates`、`disciplines`、`internal/core/config` を使う。`disciplines` は標準ライブラリだけを使う。
+- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/notify`、`internal/platform/github`、`internal/core/config` を使う。`internal/agent` は `roles`、`disciplines`、`templates`、`internal/platform/github`、`internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`internal/core/config` は、riskの基準の初期値のために `disciplines` を使う。`disciplines` と `templates` は標準ライブラリだけを使い、`roles` は `internal/core/config` をroleの名前のために使う。
+- Agentが受け取る文章を持つ3つのパッケージ (`roles`、`disciplines`、`templates`) は、どれも自分のMarkdownを読むだけで、互いを知らない。指示に組み立てるのは `internal/agent/instruction.go` だけである。どの部分がどこから来るかを1か所に集めておくと、外から差し替えられる段が増えても、変わるのはそこだけになる。
 - `internal/notify` は標準ライブラリだけを使う。通知の手段は、文章を受け取る `Sender` として外から差す。`internal/platform/discord` はその実装で、`internal/notify` をimportしない。`cmd/cumin` が2つをつなぐ ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
 - 純粋なファイル (`domain.go`、`request.go`) は標準ライブラリだけを読む。HTTPのクライアント、`os/exec`、GitHubの型を持ち込まない。判定の表形式のテストが、I/Oなしで書けるようにするためである。
 - GitHubの型 (RESTの本文、GraphQLの応答) は `internal/platform/github` で止める。他のパッケージには、cuminの型 (`RepositorySnapshot`、`Label`、`User` など) だけを渡す。
@@ -35,6 +36,7 @@
 | | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
 | `internal/core/config` | `config.go` | Hostの設定ファイル (TOML) の読み込み、初期値、制限、既定のパス |
 | | `repository.go` | 対象のリポジトリの `.cumin/config.toml` を、Hostの設定に重ねる |
+| | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
 | | `githubapps.go` | `github_apps` の表の読み書き (`cumin setup` が書く) |
 | | `quota.go` | 利用枠の設定 (しきい値、時間帯) の読み込み |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
@@ -60,7 +62,9 @@
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
-| | `service.go` | 1回の依頼の入口 `Start` (使用率、token、身元、実行) と、Hostの警告 |
+| | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
+| | `skills.go` | テンプレートをskillとして書き出す |
+| | `service.go` | 1回の依頼の入口 `Start` (指示の合成、使用率、token、身元、実行) と、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |
 | | `quota.go` | 使用率を読む最小の実行 |
@@ -68,14 +72,12 @@
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
 | | `notify.go` | `cumin setup notify`。通知のアドレスの確認とKeychainへの保存 |
 | | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立て、書き出しと削除、`launchctl` のコマンドの表示 |
-| `roles` | `roles.go` | roleの指示の合成 (`<role>.md`、そのroleのdisciplineのファイル、平易な英語の決まりの順) |
-| | `skills.go` | テンプレートをskillとして書き出す |
-| | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
+| `roles` | `roles.go` | roleのファイルの読み出し。自分のMarkdownだけを読む |
 | | `<role>.md` | roleごとの指示の本文。cuminとAgentの約束 |
-| `disciplines` | `embed.go` | disciplineのファイルの読み出し (roleのファイル、riskの基準)。既定のdisciplineの名前を書く、コードで唯一の場所 |
+| `disciplines` | `embed.go` | disciplineのファイルの読み出し (roleのファイル、riskの基準)。disciplineの名前を引数に取る。既定のdisciplineの名前を書く、コードで唯一の場所 |
 | | `software-engineering/<role>.md` | roleごとの、ソフトウェア開発の基準。roleのファイルの次に指示に入る |
 | | `software-engineering/risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
-| `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。Agentが書くものは `roles` が読んで渡す。cuminが自分で書くもの (`follow-up-note.md`、`stop-note.md`) は、Agentには渡らず、テストが文面との一致を確かめる |
+| `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。平易な英語の決まりは指示に入り、1つの行動のためのテンプレートはskillになる。どちらも `internal/agent` が読む。cuminが自分で書くもの (`follow-up-note.md`、`stop-note.md`) は、Agentには渡らず、テストが文面との一致を確かめる |
 | `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
 | | `setup-repo.sh`、`setup-repo/` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) |
 | | `install.sh` | cuminをビルドしてHostに置き、LaunchAgentを新しいバイナリに入れ替える |
