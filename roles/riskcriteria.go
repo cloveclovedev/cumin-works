@@ -1,6 +1,6 @@
 package roles
 
-// The risk criteria is the text that the Chief Engineer and the Reviewer
+// The risk criteria is the text that the Planner and the Reviewer
 // receive word for word when they give a change a risk/* label. cumin does
 // not read it. It has the three levels of the other settings: the text that
 // ships with cumin, risk-criteria.md next to the Host settings file, and
@@ -71,7 +71,7 @@ func RiskCriteria(repository *string, hostDir string) (string, RiskCriteriaSourc
 }
 
 // DefaultRiskCriteria returns the text that ships with cumin, which the
-// requirement of the Chief Engineer names as the built-in value. The text
+// requirement of the Planner names as the built-in value. The text
 // belongs to the discipline, because a risk criterion is the judgment of
 // one field of work.
 func DefaultRiskCriteria() (string, error) {

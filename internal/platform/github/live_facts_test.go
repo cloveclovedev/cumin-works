@@ -32,7 +32,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 	defer func() { t.Log("\n" + l.table()) }()
 
 	core := l.token(t, "cumin-core")
-	chief := l.token(t, "chief-engineer")
+	planner := l.token(t, "planner")
 	implementer := l.token(t, "implementer")
 	reviewer := l.token(t, "reviewer")
 	l.requireFactFixtures(t, core)
@@ -41,10 +41,10 @@ func TestLiveGitHubFacts(t *testing.T) {
 	repo := l.newGitRepo(t, implementer, botLogin, botLogin+"@users.noreply.github.com")
 
 	// A parent, a sub-issue, and an issue that blocks the sub-issue.
-	parent := l.createIssue(t, chief, "test: live facts parent "+l.runID, nil, 0)
-	blocker := l.createIssue(t, chief, "test: live facts blocker "+l.runID, nil, 0)
-	child := l.createIssue(t, chief, "test: live facts child "+l.runID, nil, parent.ID)
-	if resp := l.api(t, chief, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/dependencies/blocked_by", child.Number), map[string]any{"issue_id": blocker.ID}); resp.status != http.StatusCreated {
+	parent := l.createIssue(t, planner, "test: live facts parent "+l.runID, nil, 0)
+	blocker := l.createIssue(t, planner, "test: live facts blocker "+l.runID, nil, 0)
+	child := l.createIssue(t, planner, "test: live facts child "+l.runID, nil, parent.ID)
+	if resp := l.api(t, planner, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/dependencies/blocked_by", child.Number), map[string]any{"issue_id": blocker.ID}); resp.status != http.StatusCreated {
 		t.Fatalf("add blocked by: status %d: %s", resp.status, resp.message())
 	}
 
@@ -351,13 +351,13 @@ func (l *live) recordNarrowTokenFact(t *testing.T) {
 	read := l.api(t, token.Token, http.MethodGet, "/repos/{repo}/issues?per_page=1", nil)
 	// In a public repository every GitHub account can open an issue, so this
 	// call does not need the Issues write permission. A label needs it.
-	target := l.createIssue(t, l.token(t, "chief-engineer"), "test: live facts narrow token "+l.runID, nil, 0)
+	target := l.createIssue(t, l.token(t, "planner"), "test: live facts narrow token "+l.runID, nil, 0)
 	labeled := l.api(t, token.Token, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/labels", target.Number), map[string]any{"labels": []string{"risk/low"}})
 	opened := l.api(t, token.Token, http.MethodPost, "/repos/{repo}/issues", map[string]any{"title": "test: live facts issue from a read-only token " + l.runID})
 	if opened.status == http.StatusCreated {
 		var created issue
 		opened.json(t, &created)
-		l.cleanUp(t, fmt.Sprintf("close the issue %d", created.Number), l.api(t, l.token(t, "chief-engineer"), http.MethodPatch, fmt.Sprintf("/repos/{repo}/issues/%d", created.Number), map[string]any{"state": "closed"}), http.StatusOK)
+		l.cleanUp(t, fmt.Sprintf("close the issue %d", created.Number), l.api(t, l.token(t, "planner"), http.MethodPatch, fmt.Sprintf("/repos/{repo}/issues/%d", created.Number), map[string]any{"state": "closed"}), http.StatusOK)
 	}
 	tooMuch := l.api(t, jwt, http.MethodPost, path, map[string]any{"repositories": []string{l.repo}, "permissions": map[string]string{"administration": "read"}})
 

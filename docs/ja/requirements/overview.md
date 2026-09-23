@@ -30,7 +30,7 @@ AIリソースを持ってはいるが、稼働していない時間も多い。
 
 ## Agent Role (現時点)
 
-- Chief Engineer: Ownerの記載した要求を1実装タスク単位のIssueに分割する。Issueの依存関係を整理する。Issueのマージriskを仮付けする
+- Planner: Ownerの記載した要求を1実装タスク単位のIssueに分割する。Issueの依存関係を整理する。Issueのマージriskを仮付けする
 - Implementer: Issueの内容を実装する
 - Reviewer: Issueに対する実装(Pull Request)をレビューする
 
@@ -45,7 +45,7 @@ AIリソースを持ってはいるが、稼働していない時間も多い。
 
 - Owner: OwnerのGitHubアカウント
 - cumin-core: cumin基盤が使うGitHub App。mainへのマージができる。実装Issueのラベルを書き換える
-- cumin-chief-engineer: Chief Engineerロールが使うGitHub App。Issue関連の読み書き
+- cumin-planner: Plannerロールが使うGitHub App。Issue関連の読み書き
 - cumin-implementer: Implementerロールが使うGitHub App。ブランチをpushできる。Pull Requestが作れる
 - cumin-reviewer: Reviewerロールが使うGitHub App。Pull RequestをApproveできる
 

@@ -12,7 +12,7 @@ import (
 )
 
 func TestInstructionExistsForEveryRole(t *testing.T) {
-	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+	for _, role := range []config.Role{config.RolePlanner, config.RoleImplementer, config.RoleReviewer} {
 		text, err := Instruction(role)
 		if err != nil {
 			t.Errorf("Instruction(%s): %v", role, err)
@@ -83,7 +83,7 @@ func TestInstruction_EveryRoleEndsWithTheWritingRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+	for _, role := range []config.Role{config.RolePlanner, config.RoleImplementer, config.RoleReviewer} {
 		text, err := Instruction(role)
 		if err != nil {
 			t.Fatal(err)
@@ -102,7 +102,7 @@ func TestInstruction_ARoleWithoutADisciplineFileIsTheRoleAndTheRules(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+	for _, role := range []config.Role{config.RolePlanner, config.RoleImplementer, config.RoleReviewer} {
 		if _, ok, err := disciplines.Role(string(role)); err != nil {
 			t.Fatal(err)
 		} else if ok {
@@ -130,7 +130,7 @@ func TestInstruction_ADisciplineFileStandsBetweenTheRoleAndTheRules(t *testing.T
 		t.Fatal(err)
 	}
 	var tested int
-	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+	for _, role := range []config.Role{config.RolePlanner, config.RoleImplementer, config.RoleReviewer} {
 		discipline, ok, err := disciplines.Role(string(role))
 		if err != nil {
 			t.Fatal(err)
@@ -177,7 +177,7 @@ func TestInstruction_ImplementerHoldsTheCraftOfItsDiscipline(t *testing.T) {
 // Every role file says that a discipline only adds to it, so that a
 // discipline cannot weaken a rule of the contract with cumin.
 func TestRoleFiles_SayThatTheRoleWinsOverItsDiscipline(t *testing.T) {
-	for _, role := range []config.Role{config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer} {
+	for _, role := range []config.Role{config.RolePlanner, config.RoleImplementer, config.RoleReviewer} {
 		data, err := files.ReadFile(string(role) + ".md")
 		if err != nil {
 			t.Fatal(err)

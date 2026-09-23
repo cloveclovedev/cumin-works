@@ -230,9 +230,9 @@ func (sc *scene) settings() *config.Settings {
 		MaxCheckFixRequests: 3,
 		MergeMethod:         config.MergeSquash,
 		Roles: map[config.Role]config.RoleSettings{
-			config.RoleChiefEngineer: roleSettings,
-			config.RoleImplementer:   roleSettings,
-			config.RoleReviewer:      roleSettings,
+			config.RolePlanner:     roleSettings,
+			config.RoleImplementer: roleSettings,
+			config.RoleReviewer:    roleSettings,
 		},
 		Notify: config.NotifySettings{DiscordEnabled: sc.notifications},
 	}

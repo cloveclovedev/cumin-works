@@ -13,7 +13,7 @@ state "cumin/status/reviewing" as Reviewing
 state "cumin/status/awaiting-owner-review" as OwnerReview
 state "cumin/status/awaiting-owner-decision" as Decision
 
-[*] --> Draft : Chief EngineerまたはOwnerが\nsub-issueとして作る
+[*] --> Draft : PlannerまたはOwnerが\nsub-issueとして作る
 Draft --> Ready : Ownerが確認し、\ncumin/status/ready を付ける
 Ready --> Implementing : I1 cuminが実装を依頼する
 Implementing --> Checks : I2 Implementerの実行が終わり、\nPull Requestがある

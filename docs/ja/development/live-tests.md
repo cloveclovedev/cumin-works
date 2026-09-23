@@ -95,12 +95,12 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
    [github_apps.<owner>]
    cumin-core = "<Client ID>"
-   chief-engineer = "<Client ID>"
+   planner = "<Client ID>"
    implementer = "<Client ID>"
    reviewer = "<Client ID>"
    ```
 
-3. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。付けると R1 が成り立ち、Chief Engineer の分割まで走ってしまう。
+3. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。付けると R1 が成り立ち、Planner の分割まで走ってしまう。
 4. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。数分で終わる内容にする。保護されたパスを触らせない (例: `live/` の下にファイルを1つ作って1行書く)。題はブランチの名前になるので、短い英語にする。
 5. sandbox に `cumin/status/ready` の付いた他の sub-issue がないことを確かめる。あると、そちらにも着手する。
 

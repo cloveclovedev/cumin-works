@@ -27,7 +27,7 @@ var appPermissions = map[string]map[string]string{
 		"pull_requests": permissionWrite,
 		"issues":        permissionWrite,
 	},
-	string(config.RoleChiefEngineer): {
+	string(config.RolePlanner): {
 		"issues":   permissionWrite,
 		"contents": permissionRead,
 	},

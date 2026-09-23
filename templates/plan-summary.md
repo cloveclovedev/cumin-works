@@ -1,6 +1,6 @@
 # Template: plan summary
 
-Written by: the Chief Engineer, as one comment on the requirement issue.
+Written by: the Planner, as one comment on the requirement issue.
 Read by: the Owner, to approve the plan.
 
 ## Rules

@@ -313,7 +313,7 @@ func TestSetupGitHubApps_RegistersFourAppsAndStoresTheKeys(t *testing.T) {
 		t.Fatalf("registered %d Apps and stored %d keys, want 4 and 4", len(registered), len(store.items))
 	}
 
-	wantNames := []string{"acme-cumin-core", "acme-cumin-chief-engineer", "acme-cumin-implementer", "acme-cumin-reviewer"}
+	wantNames := []string{"acme-cumin-core", "acme-cumin-planner", "acme-cumin-implementer", "acme-cumin-reviewer"}
 	for i, manifest := range browser.manifests {
 		app := Apps[i]
 		if manifest.Name != wantNames[i] {
@@ -560,7 +560,7 @@ func TestSetupGitHubApps_SecondRunRegistersOnlyTheMissingApps(t *testing.T) {
 	for _, manifest := range browser.manifests {
 		names = append(names, manifest.Name)
 	}
-	if want := "cumin-core cumin-chief-engineer cumin-implementer cumin-reviewer"; strings.Join(names, " ") != want {
+	if want := "cumin-core cumin-planner cumin-implementer cumin-reviewer"; strings.Join(names, " ") != want {
 		t.Errorf("registered %q over both runs, want each App one time: %q", names, want)
 	}
 	apps, _ = config.ReadGitHubApps(service.ConfigPath)
@@ -789,7 +789,7 @@ func TestSetupGitHubApps_OpensTheInstallPageOnlyForAppsThatAreNotInstalled(t *te
 		t.Fatalf("Run: %v", err)
 	}
 	want := []string{
-		"https://github.example/apps/cumin-chief-engineer/installations/new",
+		"https://github.example/apps/cumin-planner/installations/new",
 		"https://github.example/apps/cumin-implementer/installations/new",
 	}
 	if strings.Join(browser.installed, " ") != strings.Join(want, " ") {
@@ -806,9 +806,10 @@ func TestCheckNames(t *testing.T) {
 	if err := CheckNames("example-org", "acme-"); err != nil {
 		t.Errorf("valid names: %v", err)
 	}
-	// "cumin-chief-engineer" has 20 characters, so a prefix of 15 is too long.
+	// "cumin-implementer" has 17 characters, the longest of the four App
+	// names, so a prefix of 18 is too long.
 	for name, c := range map[string]struct{ org, prefix string }{
-		"name longer than 34 characters": {"example-org", "fifteen-chars--"},
+		"name longer than 34 characters": {"example-org", "seventeen-chars---"},
 		"prefix with a space":            {"example-org", "my org-"},
 		"organization with a slash":      {"example/org", ""},
 		"empty organization":             {"", ""},
@@ -817,10 +818,10 @@ func TestCheckNames(t *testing.T) {
 			t.Errorf("%s: no error", name)
 		}
 	}
-	if got := len(AppName("fourteen-chars", "chief-engineer")); got != 34 {
+	if got := len(AppName("seventeen-chars--", "implementer")); got != 34 {
 		t.Errorf("the longest valid name has %d characters, want 34", got)
 	}
-	if err := CheckNames("example-org", "fourteen-chars"); err != nil {
+	if err := CheckNames("example-org", "seventeen-chars--"); err != nil {
 		t.Errorf("a name of exactly 34 characters: %v", err)
 	}
 }

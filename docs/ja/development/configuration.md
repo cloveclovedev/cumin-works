@@ -39,7 +39,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `notify.discord.enabled` | OwnerへのDiscordの通知を出すか。`false` のとき、cuminはラベルの付け替えとコメントをふだんどおり行い、通知だけを出さない | `true` | 真偽値 |
 | `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps` が書き込む | なし | キーを書くなら、空にできない |
 
-- `<role>` は、`chief-engineer`、`implementer`、`reviewer` のどれかである。
+- `<role>` は、`planner`、`implementer`、`reviewer` のどれかである。
 - `<app>` は、`cumin-core` と、上の3つのroleのどれかである。
 - `<organization>` は、対象のリポジトリの持ち主の名前である。
 - `<window>` は、`five_hour` か `weekly` である。
@@ -100,7 +100,7 @@ enabled = true
 
 [github_apps.example-org]
 cumin-core = "<Client ID>"
-chief-engineer = "<Client ID>"
+planner = "<Client ID>"
 implementer = "<Client ID>"
 reviewer = "<Client ID>"
 ```
@@ -140,7 +140,7 @@ riskの基準は、このファイルではなく、同じディレクトリの 
 | リポジトリ | 対象のリポジトリの既定のブランチの `.cumin/risk-criteria.md` |
 
 - あるファイルの内容は、それより弱い段の文章を丸ごと置き換える。足すのではない。
-- cuminは中身を読まない。Chief EngineerとReviewerへの指示に、そのまま入れる。
+- cuminは中身を読まない。PlannerとReviewerへの指示に、そのまま入れる。
 - ファイルがあって、中身が空白だけのときは、そのリポジトリのエラーになる。空の指示がAgentに渡るのを防ぐためである。
 
 例:

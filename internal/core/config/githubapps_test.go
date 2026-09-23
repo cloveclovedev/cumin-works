@@ -36,7 +36,7 @@ func TestSetGitHubAppClientID_KeepsEveryOtherLine(t *testing.T) {
 
 	for _, c := range []struct{ app, clientID string }{
 		{"cumin-core", "Iv23liCORE"},
-		{"chief-engineer", "Iv23liCHIEF"},
+		{"planner", "Iv23liPLANNER"},
 		{"implementer", "Iv23liIMPL"},
 		{"reviewer", "Iv23liREV"},
 	} {
@@ -49,7 +49,7 @@ func TestSetGitHubAppClientID_KeepsEveryOtherLine(t *testing.T) {
 	want := settingsWithComments + `
 [github_apps.example-org]
 cumin-core = "Iv23liCORE"
-chief-engineer = "Iv23liCHIEF"
+planner = "Iv23liPLANNER"
 implementer = "Iv23liIMPL"
 reviewer = "Iv23liREV"
 `

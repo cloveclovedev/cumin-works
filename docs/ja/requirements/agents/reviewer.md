@@ -27,7 +27,7 @@ cuminが依頼のたびに渡すもの:
 - 対象のリポジトリ、実装Issueの番号、Pull Requestの番号
 - 依頼の種類と、何ラウンド目か
 - 作業場所。cuminがPull Requestのブランチの内容で作業ディレクトリを用意する。Reviewerはテストを実行してよいが、変更をpushしない
-- roleとしての指示。riskの基準を含む。Chief Engineerに渡すものと同じ基準である
+- roleとしての指示。riskの基準を含む。Plannerに渡すものと同じ基準である
 
 Reviewerが自分で読むもの:
 

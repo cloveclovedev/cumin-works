@@ -50,7 +50,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if s.MergeMethod != MergeSquash {
 		t.Errorf("MergeMethod = %q, want squash", s.MergeMethod)
 	}
-	for _, role := range []Role{RoleChiefEngineer, RoleImplementer, RoleReviewer} {
+	for _, role := range []Role{RolePlanner, RoleImplementer, RoleReviewer} {
 		want := RoleSettings{TimeLimit: 50 * time.Minute, CLI: CLIClaudeCode, CLIPath: "claude"}
 		if got := s.Roles[role]; got != want {
 			t.Errorf("Roles[%s] = %+v, want %+v", role, got, want)
@@ -98,7 +98,7 @@ model = "example-model"
 
 [github_apps.example-org]
 cumin-core = "client-id-core"
-chief-engineer = "client-id-chief"
+planner = "client-id-planner"
 implementer = "client-id-implementer"
 reviewer = "client-id-reviewer"
 `))
@@ -165,7 +165,7 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"merge_method unknown", required + `merge_method = "fast-forward"`, "merge_method:"},
 		{"time_limit over 55 minutes", required + "[roles.implementer]\n" + `time_limit = "56m"`, "roles.implementer.time_limit:"},
 		{"time_limit zero", required + "[roles.reviewer]\n" + `time_limit = "0s"`, "roles.reviewer.time_limit:"},
-		{"cli not supported", required + "[roles.chief-engineer]\n" + `cli = "codex"`, "roles.chief-engineer.cli:"},
+		{"cli not supported", required + "[roles.planner]\n" + `cli = "codex"`, "roles.planner.cli:"},
 		{"empty cli_path", required + "[roles.implementer]\n" + `cli_path = ""`, "roles.implementer.cli_path:"},
 		{"empty client ID", required + "[github_apps.example-org]\n" + `implementer = ""`, "github_apps.example-org.implementer:"},
 		{"unknown GitHub App", required + "[github_apps.example-org]\n" + `tester = "client-id"`, "github_apps.example-org.tester:"},

@@ -9,7 +9,7 @@ autonumber
 
 actor "Owner" as Owner
 participant "cumin" as Cumin
-participant "Chief Engineer" as CE <<Agent>>
+participant Planner <<Agent>>
 participant "Implementer" as Impl <<Agent>>
 participant "Reviewer" as Rev <<Agent>>
 database "Issue管理\n(GitHub Issues)" as Tracker
@@ -45,12 +45,12 @@ end note
 == 2. 計画 ==
 
 Cumin -> Tracker : 要求Issueのラベルを cumin/status/ready から cumin/status/planning に替える
-Cumin -> CE : 依頼: この要求を分割する
-CE -> Repo : リポジトリを読む (要求Issueからリンクされた文書を含む)
-CE -> Tracker : 実装Issueを要求Issueのsub-issueとして作る (1 Issue = 1実装タスク)
-CE -> Tracker : Issue間の依存関係を記録する
-CE -> Tracker : 各Issueにriskを仮付けする
-note right of CE
+Cumin -> Planner : 依頼: この要求を分割する
+Planner -> Repo : リポジトリを読む (要求Issueからリンクされた文書を含む)
+Planner -> Tracker : 実装Issueを要求Issueのsub-issueとして作る (1 Issue = 1実装タスク)
+Planner -> Tracker : Issue間の依存関係を記録する
+Planner -> Tracker : 各Issueにriskを仮付けする
+note right of Planner
   riskの基準:
   risk/low = 数行で影響が自明な変更。
   risk/high = revertで戻せない変更 (DBマイグレーション、デプロイやCIの設定、
@@ -59,7 +59,7 @@ note right of CE
   分割の基準は policies/issue-sizing.md に従う
   (risk/high の変更は、それだけの最小のIssueに隔離する)。
 end note
-CE --> Cumin : 計画完了 (Agentの実行が終わった)
+Planner --> Cumin : 計画完了 (Agentの実行が終わった)
 Cumin -> Tracker : sub-issueがあり、全てにriskが付いていることを確かめる
 
 == 3. 計画の確認 ==
@@ -153,10 +153,10 @@ end
 note over Cumin, Tracker
   開始条件: 要求Issueのsub-issueが全て閉じた。
 end note
-Cumin -> CE : 依頼: 受け入れの確認をする
-CE -> Repo : mainの最新で、要求Issueの Requirements を1項目ずつ確かめる
-CE -> Tracker : 結果と証拠、残っている作業を、要求Issueにコメントする
-CE --> Cumin : 確認完了 (Agentの実行が終わった)
+Cumin -> Planner : 依頼: 受け入れの確認をする
+Planner -> Repo : mainの最新で、要求Issueの Requirements を1項目ずつ確かめる
+Planner -> Tracker : 結果と証拠、残っている作業を、要求Issueにコメントする
+Planner --> Cumin : 確認完了 (Agentの実行が終わった)
 Cumin -> Tracker : 確認のコメントがあることを確かめ、要求Issueのラベルを cumin/status/awaiting-owner-review に替える
 Cumin -> Owner : 通知: 要求が受け入れ可能になった
 alt 受け入れる
@@ -168,7 +168,7 @@ else 差し戻す
   Owner -> Tracker : 要求Issueに追記する、またはsub-issueを追加する
   Owner -> Tracker : 追加したsub-issueに cumin/status/ready を付ける
   note right of Owner
-    差し戻しではChief Engineerを通さない (まずはここから始める)。
+    差し戻しではPlannerを通さない (まずはここから始める)。
     「4. 実装とレビュー」に戻り、sub-issueが全て閉じたら
     再び受け入れの通知が届く。
   end note
@@ -212,7 +212,7 @@ end note
 
 note over Cumin, Rev
   GitHub上の身元はOwnerと分け、roleごとにGitHub Appとして持つ (方針):
-  cumin-core、cumin-chief-engineer、cumin-implementer、cumin-reviewer。
+  cumin-core、cumin-planner、cumin-implementer、cumin-reviewer。
   対象リポジトリ (peppercheck) は公開なので、Freeプランでもrulesetを使える。
   mainを更新できるのはOwnerとcumin-coreだけ、とrulesetで制限する。
 end note

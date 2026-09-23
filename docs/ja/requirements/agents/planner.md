@@ -1,12 +1,12 @@
-# Chief Engineerの要件
+# Plannerの要件
 
-どのroleにも当てはまる要件は [Agentに共通の要件](common.md) にある。この文書には、Chief Engineerに固有のことだけを書く。
+どのroleにも当てはまる要件は [Agentに共通の要件](common.md) にある。この文書には、Plannerに固有のことだけを書く。
 
 ## 役割
 
 要求Issueを1つ受け取り、実装Issueに分割する。実装Issueどうしの依存関係を記録し、それぞれにriskを仮に付ける。sub-issueが全て閉じたら、まとめた結果が要求を満たしているかを確かめる (受け入れの確認)。
 
-Chief Engineerは分割に責任を持つ。コードは書かない。分割結果を承認するのはOwnerである。
+Plannerは分割に責任を持つ。コードは書かない。分割結果を承認するのはOwnerである。
 
 ## いつ起動されるか
 
@@ -22,10 +22,10 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 cuminが依頼のたびに渡すもの:
 
 - 対象のリポジトリと、要求Issueの番号
-- 作業場所。cuminがmainの最新の内容で作業ディレクトリを用意する。Chief Engineerは読むだけで、変更しない
+- 作業場所。cuminがmainの最新の内容で作業ディレクトリを用意する。Plannerは読むだけで、変更しない
 - roleとしての指示。[実装Issueの分割基準](../policies/issue-sizing.md)、[要求Issueの分割基準](../policies/requirement-sizing.md) の上限、riskの基準を含む
 
-Chief Engineerが自分で読むもの:
+Plannerが自分で読むもの:
 
 - 要求Issueと、そこからリンクされた文書
 - リポジトリの中身。リポジトリにある指示を含む
@@ -65,11 +65,11 @@ GitHubに残すもの:
 
 実行の最後にcuminに返すもの:
 
-- [共通の形式](common.md#結果の返し方) のJSON。Chief Engineerに固有の項目はない
+- [共通の形式](common.md#結果の返し方) のJSON。Plannerに固有の項目はない
 
 ## してよいこと、してはいけないこと
 
-GitHub上では `cumin-chief-engineer` として振る舞う。持っている権限は、Issueの読み書きと、コードの読み取りである。
+GitHub上では `cumin-planner` として振る舞う。持っている権限は、Issueの読み書きと、コードの読み取りである。
 
 してはいけないこと:
 
@@ -82,13 +82,13 @@ GitHub上では `cumin-chief-engineer` として振る舞う。持っている�
 
 riskは `risk/low`、`risk/medium`、`risk/high` の3段階である。段階の違いは、mergeを誰が判断するかに効く。`risk/low` はcuminがmergeし、`risk/medium` と `risk/high` はOwnerがmergeを判断する (I6、I7)。
 
-どの変更をどの段階にするかの基準は、Chief EngineerとReviewerがそのまま受け取る英語の文章で、設定で決まる。初期値は [disciplines/software-engineering/risk-criteria.md](../../../../disciplines/software-engineering/risk-criteria.md) で、Hostかリポジトリに `risk-criteria.md` があれば、cuminはその内容を代わりに指示に入れる (置き場所と優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある)。Reviewerにも、同じ基準が渡る。
+どの変更をどの段階にするかの基準は、PlannerとReviewerがそのまま受け取る英語の文章で、設定で決まる。初期値は [disciplines/software-engineering/risk-criteria.md](../../../../disciplines/software-engineering/risk-criteria.md) で、Hostかリポジトリに `risk-criteria.md` があれば、cuminはその内容を代わりに指示に入れる (置き場所と優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある)。Reviewerにも、同じ基準が渡る。
 
 迷ったら高いほうを付ける。riskを確定するのはOwnerである。
 
 ## 完了の条件
 
-Chief Engineerが `done` を返す前に自分で確かめること:
+Plannerが `done` を返す前に自分で確かめること:
 
 - 全ての実装Issueが、分割基準の1〜9を満たしている
 - 実装Issueを合わせると、要求Issueの範囲を全て覆っている

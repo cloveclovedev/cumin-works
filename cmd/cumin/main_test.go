@@ -113,7 +113,7 @@ func TestRunWithoutAClientIDNamesTheKey(t *testing.T) {
 	}{
 		{"no github_apps table", validConfig, "github_apps.example-org.cumin-core"},
 		{"table without cumin-core", validConfig + "[github_apps.example-org]\nimplementer = \"client-id-implementer\"\n", "github_apps.example-org.cumin-core"},
-		{"table without the Implementer", validConfig + "[github_apps.example-org]\ncumin-core = \"client-id-core\"\nchief-engineer = \"client-id-chief\"\nreviewer = \"client-id-reviewer\"\n", "github_apps.example-org.implementer"},
+		{"table without the Implementer", validConfig + "[github_apps.example-org]\ncumin-core = \"client-id-core\"\nplanner = \"client-id-planner\"\nreviewer = \"client-id-reviewer\"\n", "github_apps.example-org.implementer"},
 		{"table of another organization", validConfig + "[github_apps.other-org]\ncumin-core = \"client-id-core\"\n", "github_apps.example-org.cumin-core"},
 	}
 	for _, tt := range tests {

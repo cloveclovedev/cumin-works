@@ -55,7 +55,7 @@ func TestRole_TellsAFileOfTheRoleFromNoFile(t *testing.T) {
 // Every role that cumin drives is asked for, so that a typo in a file name
 // of the default discipline cannot pass unseen.
 func TestRole_AnswersForEveryRoleOfTheDefaultDiscipline(t *testing.T) {
-	for _, role := range []string{"chief-engineer", "implementer", "reviewer"} {
+	for _, role := range []string{"planner", "implementer", "reviewer"} {
 		text, ok, err := Role(role)
 		if err != nil {
 			t.Errorf("Role(%s): %v", role, err)

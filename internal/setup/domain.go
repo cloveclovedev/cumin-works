@@ -17,7 +17,7 @@ const maxAppNameLength = 34
 // Apps lists the GitHub Apps in the order in which the command registers them.
 var Apps = []string{
 	config.AppCuminCore,
-	string(config.RoleChiefEngineer),
+	string(config.RolePlanner),
 	string(config.RoleImplementer),
 	string(config.RoleReviewer),
 }

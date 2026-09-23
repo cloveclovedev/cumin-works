@@ -105,7 +105,7 @@ func probeWrite(path string) error {
 // new text, and its mode. It writes nothing.
 func prepareClientIDWrite(path, org, app, clientID string) (string, string, fs.FileMode, error) {
 	switch app {
-	case AppCuminCore, string(RoleChiefEngineer), string(RoleImplementer), string(RoleReviewer):
+	case AppCuminCore, string(RolePlanner), string(RoleImplementer), string(RoleReviewer):
 	default:
 		return "", "", 0, fmt.Errorf("set github_apps: unknown GitHub App name %q", app)
 	}

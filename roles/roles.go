@@ -11,7 +11,7 @@
 // the instruction, and docs/ja/designs/agent-run.md, the topic on the
 // start of Claude Code, record this composition.
 //
-// The files of the Chief Engineer and the Reviewer are placeholders until
+// The files of the Planner and the Reviewer are placeholders until
 // the requirement of each role writes the full instruction.
 package roles
 
@@ -45,7 +45,7 @@ const partSeparator = "\n---\n\n"
 // never come back as an instruction.
 func Instruction(role config.Role) (string, error) {
 	switch role {
-	case config.RoleChiefEngineer, config.RoleImplementer, config.RoleReviewer:
+	case config.RolePlanner, config.RoleImplementer, config.RoleReviewer:
 	default:
 		return "", fmt.Errorf("no role instruction for %q", role)
 	}
