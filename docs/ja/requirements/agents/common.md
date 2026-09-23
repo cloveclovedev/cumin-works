@@ -94,6 +94,6 @@ roleとしての指示は、3つの部分をこの順につないだ1つの文�
 
 ## どのroleもしてはいけないこと
 
-- `cumin/*` と `risk/*` のラベルを付け替えない。例外は、Plannerが実装Issueを作るときに `risk/*` を仮に付けることだけである。
+- `cumin/*` と `risk/*` のラベルを付け替えない。例外は、Plannerが実装Issueを作るときに `risk/*` を仮に付けることと、Ownerが手で行う作業のsub-issueに `cumin/type/owner-task` を付けることだけである。
 - `docs/ja/requirements/` のような、Ownerだけが書く文書を変更しない。対象はリポジトリの `.cumin/` で指定する。
 - 推測で進めない。決まっていないことに当たったら `blocked` を返す。
