@@ -73,7 +73,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 		}
 	}
 
-	s.notifyOwner(ctx, log, settings, notify.Notification{
+	s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        st.row,
 		Reason:     st.reason,
 		Repository: target.Repository.String(),
@@ -83,10 +83,10 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 }
 
 // notifyOwner sends one notification, when the repository wants one. The
-// setting notify.discord.enabled of that repository decides. A failure is
-// logged at error level and undoes nothing.
-func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, settings *RepositorySettings, n notify.Notification) {
-	if settings == nil || !settings.Settings.Notify.DiscordEnabled {
+// caller reads the setting notify.discord.enabled of that repository. A
+// failure is logged at error level and undoes nothing.
+func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled bool, n notify.Notification) {
+	if !enabled {
 		log.Info("the notification is off for this repository")
 		return
 	}

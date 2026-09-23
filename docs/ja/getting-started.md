@@ -64,7 +64,8 @@ go run ./cmd/cumin run --config <設定ファイル>
 6. 結果が `done` なら、そのリポジトリを読み直して、Issueを閉じる開いているPull Requestがあること、その作成者が Implementer の App であること、worktree の先頭のコミットがpushされていることを確かめる (I2)。通れば、ラベルを `cumin/status/awaiting-checks` に替える。
 7. 実行が異常終了したときは、同じ依頼を同じ作業場所で1回だけやり直す。新しいAgentの実行なので、利用枠を使う。cuminを止めたときの異常終了は、やり直さない。
 8. 先に進めないときは、Ownerに戻す。Issueにコメントを付け、ラベルを `cumin/status/awaiting-owner-decision` に替えて、Ownerに通知する。コメントは、結果が `blocked` ならAgentが返した理由そのもの、それ以外なら cumin が書く (どの確認で落ちたか、または2回の異常終了の種類)。`blocked` はやり直さない。
-9. 通知は Discord の webhook で届く。アドレスは Keychain にあり ([セットアップの手順](development/setup-guide.md))、出すかどうかは設定 `notify.discord.enabled` が決める。アドレスがなくても cumin は起動し、起動のログに警告が出る。
+9. リポジトリの定期確認が、同じ理由で3回続けて失敗したら、1回だけ通知する。次に知らせるのは、そのリポジトリの定期確認が成功したあとである。
+10. 通知は Discord の webhook で届く。アドレスは Keychain にあり ([セットアップの手順](development/setup-guide.md))、出すかどうかは設定 `notify.discord.enabled` が決める。アドレスがなくても cumin は起動し、起動のログに警告が出る。
 
 Implementer の実行は、本物の Claude Code を起動し、利用枠を使う。
 

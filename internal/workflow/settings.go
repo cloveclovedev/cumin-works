@@ -8,7 +8,6 @@ package workflow
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -46,7 +45,7 @@ func (s *Service) settingsFor(repository config.Repository, read github.Reposito
 	}
 	configOID, criteriaOID := blobOID(read.CuminConfig), blobOID(read.CuminRiskCriteria)
 
-	key := strings.ToLower(repository.String())
+	key := repositoryKey(repository)
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 	if kept, ok := s.repositorySettings[key]; ok && kept.configOID == configOID && kept.criteriaOID == criteriaOID {
