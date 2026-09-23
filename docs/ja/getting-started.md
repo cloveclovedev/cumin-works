@@ -62,8 +62,9 @@ go run ./cmd/cumin run --config <設定ファイル>
 4. 対象のリポジトリごとに、足りないラベル (`cumin/type/requirement`、`cumin/status/*`、`risk/*`) を作る。
 5. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`work_dir` の下に worktree を用意して、Implementer を起動する。実行は定期確認とは別に進むので、定期確認は止まらない。実行が終わると、結果 (`done` か `blocked`) とセッションの番号、または異常終了の種類がログに出る。
 6. 結果が `done` なら、そのリポジトリを読み直して、Issueを閉じる開いているPull Requestがあること、その作成者が Implementer の App であること、worktree の先頭のコミットがpushされていることを確かめる (I2)。通れば、ラベルを `cumin/status/awaiting-checks` に替える。
-7. 先に進めないときは、Ownerに戻す。どの確認で落ちたかを書いたコメント (結果が `done` のとき) か、Agentが返した理由そのもの (結果が `blocked` のとき) をIssueに付け、ラベルを `cumin/status/awaiting-owner-decision` に替えて、Ownerに通知する。`blocked` はやり直さない。異常終了は、今はログに出すだけである。
-8. 通知は Discord の webhook で届く。アドレスは Keychain にあり ([セットアップの手順](development/setup-guide.md))、出すかどうかは設定 `notify.discord.enabled` が決める。アドレスがなくても cumin は起動し、起動のログに警告が出る。
+7. 実行が異常終了したときは、同じ依頼を同じ作業場所で1回だけやり直す。新しいAgentの実行なので、利用枠を使う。cuminを止めたときの異常終了は、やり直さない。
+8. 先に進めないときは、Ownerに戻す。Issueにコメントを付け、ラベルを `cumin/status/awaiting-owner-decision` に替えて、Ownerに通知する。コメントは、結果が `blocked` ならAgentが返した理由そのもの、それ以外なら cumin が書く (どの確認で落ちたか、または2回の異常終了の種類)。`blocked` はやり直さない。
+9. 通知は Discord の webhook で届く。アドレスは Keychain にあり ([セットアップの手順](development/setup-guide.md))、出すかどうかは設定 `notify.discord.enabled` が決める。アドレスがなくても cumin は起動し、起動のログに警告が出る。
 
 Implementer の実行は、本物の Claude Code を起動し、利用枠を使う。
 
