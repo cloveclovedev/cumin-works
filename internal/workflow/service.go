@@ -354,11 +354,23 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 	return nil
 }
 
+// agentAttempts is how many times cumin starts one request: the first run,
+// and one more after an abnormal end (issue-states.md, the section on
+// abnormal ends). The count lives here, in the run, so a new claim (I1)
+// always starts at zero.
+const agentAttempts = 2
+
 // runImplementer prepares the worktree and runs one Implementer request to
 // its end. The end of the run is the trigger of I2: a done result goes to
-// verifyDone, and a blocked result stops the issue for the Owner. An
-// abnormal end is logged only; the retry and the stop after it are a later
-// requirement.
+// verifyDone, and a blocked result stops the issue for the Owner.
+//
+// An abnormal end starts the same request once more, in the same work
+// directory and in a new session (agent-run.md, the topic on the retry).
+// After the second one, the issue goes back to the Owner with the kind of
+// the end. While cumin is stopping, the context ends the run as an
+// abnormal end as well; nothing is retried then, and no label changes,
+// because the Owner restarts the issue (cumin-core.md, the topic on the
+// stop).
 func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, branch, instruction string) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	role := settings.Settings.Roles[config.RoleImplementer]
@@ -374,7 +386,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		return
 	}
 	log.Info("I1: requested the work", "branch", branch)
-	run, err := s.Agents.Start(ctx, agent.StartRequest{
+	request := agent.StartRequest{
 		Owner:           target.Repository.Owner,
 		Repo:            target.Repository.Name,
 		Role:            config.RoleImplementer,
@@ -382,22 +394,62 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		Text:            ImplementRequestText(target.Repository.String(), number, branch, workDir),
 		WorkDir:         workDir,
 		Settings:        &role,
-	})
-	var abnormal *agent.AbnormalEnd
-	switch {
-	case errors.As(err, &abnormal):
-		log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-			"session_id", abnormal.SessionID, "detail", abnormal.Detail)
-	case err != nil:
-		log.Error("the agent was not started", "error", err.Error())
-	default:
-		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-		if run.Result.Result != agent.ResultDone {
-			s.stopAfterBlocked(ctx, log, target, settings, number, run.Result.BlockedReason)
+	}
+
+	var firstKind agent.EndKind
+	for attempt := 1; attempt <= agentAttempts; attempt++ {
+		run, err := s.Agents.Start(ctx, request)
+		var abnormal *agent.AbnormalEnd
+		switch {
+		case errors.As(err, &abnormal):
+			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
+				"session_id", abnormal.SessionID, "detail", abnormal.Detail, "attempt", attempt)
+			if ctx.Err() != nil {
+				// cumin is stopping. The label stays, and the Owner
+				// restarts the issue with cumin/status/ready.
+				return
+			}
+			if attempt < agentAttempts {
+				firstKind = abnormal.Kind
+				log.Info("I2: the same request runs again in the same work directory", "attempt", attempt+1)
+				continue
+			}
+			s.stopAfterAbnormalEnd(ctx, log, target, settings, number, firstKind, abnormal.Kind)
+			return
+		case err != nil:
+			log.Error("the agent was not started", "error", err.Error())
+			return
+		default:
+			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+			if run.Result.Result != agent.ResultDone {
+				s.stopAfterBlocked(ctx, log, target, settings, number, run.Result.BlockedReason)
+				return
+			}
+			s.verifyDone(ctx, log, target, settings, number, workDir, run.BotLogin)
 			return
 		}
-		s.verifyDone(ctx, log, target, settings, number, workDir, run.BotLogin)
 	}
+}
+
+// stopAfterAbnormalEnd applies I2 after the second abnormal end of the
+// same request: the comment names both kinds and says that cumin ran the
+// request again, and the issue goes to the Owner. The two runs can end in
+// different ways, and the Owner needs the kind of each one to know where
+// to look.
+func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, first, second agent.EndKind) {
+	reason := fmt.Sprintf("The Implementer run ended abnormally (%s). cumin ran the same request again, and it ended abnormally too (%s).", first, second)
+	sub, _ := s.subIssueNow(ctx, log, target, number)
+	pullRequest := 0
+	if pr, ok := sub.LatestPullRequest(); ok {
+		pullRequest = pr.Number
+	}
+	s.stopForOwner(ctx, log, target, settings, stop{
+		row:     RowI2,
+		issue:   number,
+		labels:  sub.Labels,
+		reason:  reason,
+		comment: StopNote(RowI2, reason, pullRequest, true),
+	})
 }
 
 // stopAfterBlocked applies I2 for a blocked result: the blocked_reason of
@@ -412,10 +464,19 @@ func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target
 	s.stopForOwner(ctx, log, target, settings, stop{
 		row:     RowI2,
 		issue:   number,
-		labels:  s.issueLabels(ctx, log, target, number),
+		labels:  labelsNow(s.subIssueNow(ctx, log, target, number)),
 		reason:  "the Implementer returned blocked: " + question,
 		comment: reason,
 	})
+}
+
+// labelsNow is the labels of the sub-issue that subIssueNow read, or none
+// when it could not be read.
+func labelsNow(sub SubIssue, ok bool) []string {
+	if !ok {
+		return nil
+	}
+	return sub.Labels
 }
 
 // verifyDone applies I2 after a done result. It reads the snapshot of the

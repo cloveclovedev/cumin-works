@@ -218,13 +218,8 @@ type Verification struct {
 // only; when two or more close the issue, the one with the highest number
 // is checked. An empty implementer or an empty localHead never matches.
 func VerifyDone(sub SubIssue, implementer, localHead string) Verification {
-	var pr *PullRequest
-	for i := range sub.PullRequests {
-		if pr == nil || sub.PullRequests[i].Number > pr.Number {
-			pr = &sub.PullRequests[i]
-		}
-	}
-	if pr == nil {
+	pr, ok := sub.LatestPullRequest()
+	if !ok {
 		return Verification{Failure: FailureNoOpenPullRequest}
 	}
 	if implementer == "" || pr.Author != implementer {
@@ -234,6 +229,21 @@ func VerifyDone(sub SubIssue, implementer, localHead string) Verification {
 		return Verification{Failure: FailureHeadNotPushed, PullRequest: pr.Number}
 	}
 	return Verification{Passed: true, PullRequest: pr.Number}
+}
+
+// LatestPullRequest returns the open pull request with the highest number
+// that closes the issue. The snapshot holds open pull requests only, and
+// there is normally one; when there are more, the newest one is the one
+// that cumin looks at.
+func (s SubIssue) LatestPullRequest() (PullRequest, bool) {
+	var latest PullRequest
+	found := false
+	for _, pr := range s.PullRequests {
+		if !found || pr.Number > latest.Number {
+			latest, found = pr, true
+		}
+	}
+	return latest, found
 }
 
 // SubIssue returns the sub-issue with the number, from any requirement issue.

@@ -46,7 +46,7 @@
 | | `labels.go` | ラベルの一覧、作成、Issueのラベルの付け替え |
 | | `comments.go` | Issueへのコメントの投稿 |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
-| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ |
+| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
@@ -66,6 +66,7 @@
 | | `quota.go` | 使用率を読む最小の実行 |
 | | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け、先頭のコミットの読み取り |
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
+| | `notify.go` | `cumin setup notify`。通知のアドレスの確認とKeychainへの保存 |
 | | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立て、書き出しと削除、`launchctl` のコマンドの表示 |
 | `roles` | `roles.go` | roleの指示の合成 (`<role>.md`、そのroleのdisciplineのファイル、平易な英語の決まりの順) |
 | | `skills.go` | テンプレートをskillとして書き出す |

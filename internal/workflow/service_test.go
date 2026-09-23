@@ -179,6 +179,10 @@ type cliOptions struct {
 	// that does not end by itself. The adapter then sends SIGKILL after its
 	// grace.
 	ignoresTerm bool
+	// secondFixture is what the second agent run prints, when cumin runs
+	// the same request again after an abnormal end. Empty means that every
+	// run prints fixture.
+	secondFixture string
 }
 
 // service returns a new Service on the scene, as after a restart of cumin.
@@ -313,10 +317,18 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		}
 		sleep = "if [ $n = agent ]; then\n" + trap + "sleep 600\nfi\n"
 	}
+	// The second agent run prints another fixture, so that a test can let
+	// the retry end differently from the first run.
+	second := ""
+	if o.secondFixture != "" {
+		second = "if [ $n = agent ] && [ \"$(grep -c '^agent$' " + filepath.Join(dir, "order") + ")\" -ge 2 ]; then f=" +
+			fixturePath(t, o.secondFixture) + "; fi\n"
+	}
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
 		"echo $n >> " + filepath.Join(dir, "order") + "\n" +
+		second +
 		"for a in \"$@\"; do printf '%s\\0' \"$a\"; done > " + filepath.Join(dir, "$n.args") + "\n" +
 		"env > " + filepath.Join(dir, "$n.env") + "\n" +
 		"pwd > " + filepath.Join(dir, "$n.cwd") + "\n" +
@@ -685,6 +697,138 @@ func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 
 // assertVerificationFailed checks that the label of #10 stayed at
 // cumin/status/implementing and that the log names the failure.
+
+// Core-5 (cumin-core.md): a result that does not match the schema gives
+// exactly one retry. After the second abnormal end the issue goes to the
+// Owner, with one comment, the label, and exactly one notification.
+func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "invalid-result.jsonl"})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2 (the request and one retry)", n)
+	}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
+	}
+	body := comments[0].Body
+	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "invalid result", "Retried: once", "Pull request: None"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, body)
+		}
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-owner-decision"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+	messages := sc.webhook.messagesSent()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, want := range []string{"I2", "invalid result", "example-org/example-repo", "issue #10"} {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("the notification has no %q:\n%s", want, messages[0])
+		}
+	}
+	logs := sc.logs.String()
+	if !strings.Contains(logs, `"msg":"I2: the same request runs again in the same work directory"`) {
+		t.Errorf("the log does not say that the request ran again:\n%s", logs)
+	}
+}
+
+// The retry is the same request in the same work directory, and it starts
+// a new session: no session of the first run is resumed.
+func TestI2_TheRetryIsTheSameRequestInANewSession(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "no-result.jsonl"})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2", n)
+	}
+	// The records of the fake CLI hold the last run.
+	wantDir := filepath.Join(sc.workRoot, "example-org", "example-repo", "10-implementer")
+	if got := strings.TrimSpace(sc.record(t, "agent.cwd")); got != realPath(t, wantDir) {
+		t.Errorf("the retry ran in %q, want the same work directory %q", got, realPath(t, wantDir))
+	}
+	args := sc.record(t, "agent.args")
+	if strings.Contains(args, "--resume") {
+		t.Errorf("the retry resumed a session:\n%q", args)
+	}
+	// The request text is the one of the first run: the same kind, the
+	// same issue, the same branch, and the same work directory that cumin
+	// prepared (which the Workspace gives without resolving symlinks).
+	if got, want := promptOf(t, args), workflow.ImplementRequestText("example-org/example-repo", 10, wantBranch, wantDir); got != want {
+		t.Errorf("the request text of the retry = %q, want %q", got, want)
+	}
+}
+
+// A retry that ends normally goes on as usual: the verification runs, the
+// label moves to cumin/status/awaiting-checks, and nothing is said to the
+// Owner.
+func TestI2_ARetryThatEndsWellIsVerified(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "is-error.jsonl", secondFixture: "done.jsonl"})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none", n)
+	}
+	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
+		t.Errorf("%d notifications, want none: %v", len(messages), messages)
+	}
+}
+
+// The two runs can end in different ways. The comment names both kinds,
+// so that the Owner knows where to look.
+func TestI2_TheStopNoteNamesTheKindOfEachAbnormalEnd(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "no-result.jsonl", secondFixture: "invalid-result.jsonl"})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1", len(comments))
+	}
+	for _, want := range []string{"no result", "invalid result", "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+}
+
+// The stop note names the pull request that the agent left behind, so that
+// the Owner knows whether the work reached GitHub.
+func TestI2_TheStopNoteOfAnAbnormalEndNamesThePullRequest(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "no-init.jsonl"})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1", len(comments))
+	}
+	for _, want := range []string{"Pull request: #21", "user-level context", "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+}
+
 // assertVerificationFailed checks the whole failed path of I2: the log
 // names the check that failed, the issue holds one comment in the form of
 // templates/stop-note.md with the sentence of that check, the label is
