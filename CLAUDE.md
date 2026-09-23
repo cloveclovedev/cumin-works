@@ -13,7 +13,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 - `docs/ja/requirements/workflow/issue-states.md` is the source of truth for every cumin action. Its tables number the actions (R1, I1, Q1, ...).
 - `docs/ja/requirements/backlog.md` lists what is decided to be out of v0.1. Do not build those things.
 
-`templates/` holds the English templates for text on GitHub. The headings in the templates are a contract between cumin, the agents, and the Owner.
+`roles/` holds the contract of each role with cumin, `disciplines/<discipline>/` holds the standards of one field of work for each role and the built-in risk criteria, and `templates/` holds the English templates for text on GitHub. `templates/embed.go` embeds the templates for the code. The headings in the templates are a contract between cumin, the agents, and the Owner.
 
 ## Rules that you must not break
 
@@ -55,6 +55,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
   2. Is it shared and provider-neutral? Put it in `internal/core/`. The test: when the provider changes, only configuration changes. Example: config loading, logging.
   3. Is it shared and provider-specific? Put it in `internal/platform/`. The provider's types (SDK objects, HTTP DTOs) stop at this boundary. Example: GitHub, macOS Keychain.
   4. Does it wire implementations together? Put it in `cmd/cumin/`.
+  5. Is it text that an agent receives (a role file, a discipline file, a template)? It is neither `internal/core/` nor `internal/platform/`. Keep it at the top level (`roles/`, `disciplines/`, `templates/`), embedded by its own package, so that it is easy to find and to review.
 - `internal/platform/*` may import `internal/core/*`. `internal/core/*` never imports `internal/platform/*`. Feature packages never import each other's adapters.
 - Inside a feature package, separate roles by file: pure rules and models (`domain.go`), orchestration (`service.go`), outbound I/O (`store.go` or a file named for the external system). The pure rules import no HTTP client, no `os/exec`, and no provider type.
 - Do not add an interface unless a second implementation or a real testing need exists.
@@ -71,6 +72,7 @@ internal/notify/            Owner notifications (Discord webhook)
 internal/setup/             setup commands (GitHub App Manifest flow)
 internal/followup/          follow-up note after a merge
 roles/                      role instructions for agents (English)
+disciplines/                standards of one field of work for each role, and the built-in risk criteria (English)
 templates/                  templates for text on GitHub (English)
 ```
 
