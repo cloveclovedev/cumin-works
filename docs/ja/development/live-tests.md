@@ -156,3 +156,58 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 ### 記録
 
 結果は #101 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。
+
+## 実機の場面 Fail-1
+
+Implementer が `blocked` を返したときに、cumin が理由をIssueに書き、ラベルを `cumin/status/awaiting-owner-decision` に替え、Discord に通知を1件送るところを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。Owner が同意したときだけ行う。
+
+受け入れテストは偽の webhook を相手にするので、本物のメッセージが本物のチャンネルに届くことと、そのリンクが開くことは、この場面でだけ分かる。
+
+### 準備
+
+1. `go build -o cumin ./cmd/cumin` でバイナリを作る。
+2. webhook のアドレスを Keychain に入れる。まだなら `cumin setup notify --discord-webhook` を実行する ([セットアップの手順](setup-guide.md) の「通知のアドレスを Keychain に入れる」)。
+3. 場面 Impl-1 と同じ形の設定ファイルを1つ作る。対象は sandbox だけ、`work_dir` は捨ててよい一時ディレクトリにする。`notify.discord.enabled` は初期値の `true` のままにする。
+4. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。
+5. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。Implementer が必ず `blocked` を返す内容にする。決まっていないことが1つあり、推測では進めないと分かる題と本文にする。Agent は、決まっていないことに当たったら `blocked` を返す ([Agentに共通の要件](../requirements/agents/common.md))。
+6. sandbox に `cumin/status/ready` の付いた他の sub-issue がないことを確かめる。
+
+### 実行
+
+7. `./cumin run --config <設定ファイル>` を起動する。起動のログの `notifications` が `discord` であることを確かめる。`none` なら、手順2ができていない。
+8. 実装Issueに `cumin/status/ready` を付ける。
+9. 次の定期確認から、ログがこの順に出る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+   | `I1: requested the work` | ブランチの名前を決めて、Implementer を起動した |
+   | `the agent run ended` | 結果が `blocked` で返った |
+   | `the agent returned blocked` | 理由の1行目 |
+   | `I2: wrote the reason on the issue` | `blocked_reason` をコメントとして投稿した |
+   | `I2: the issue waits for the Owner` | ラベルを `cumin/status/awaiting-owner-decision` に替えた |
+   | `the Owner was notified` | Discord に送った |
+
+10. `the Owner was notified` が出たら、SIGTERM で止める。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/awaiting-owner-decision` に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 2 | 実装Issueにコメントが1つ付き、`## Decision needed:` で始まる決まった形式である ([decision-request.md](../../../templates/decision-request.md)) | Issue のコメント |
+| 3 | コメントの作成者が cumin本体の App の bot (`cumin-core[bot]`) である。文章はAgentが書き、投稿するのは cumin だからである | Issue のコメント |
+| 4 | Pull Request が作られていない。やり直しも起きていない (Claude Code の起動は2回だけ) | Pull Request の一覧と、cumin のログ |
+| 5 | Discord にメッセージが1件だけ届いた。1行目に `I2` と理由が入っている | Discord のチャンネル |
+| 6 | そのメッセージのリンクが、2のコメントを開く | Discord のメッセージ |
+| 7 | ログに token、秘密鍵、webhook のアドレス、使用率の数値が出ていない | cumin のログ |
+
+### 後片付け
+
+- 実装Issueと要求Issueを閉じる。
+- `work_dir` の一時ディレクトリを消す。
+- Discord のメッセージは残してよい。消すなら、Owner が自分で消す。
+
+### 記録
+
+結果は #139 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前、webhook のアドレスは書かない。
