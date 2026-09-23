@@ -100,6 +100,7 @@ scripts/render-diagrams.sh   # after you change a .puml file; commit the SVG too
 - Documents are in Japanese under `docs/ja/`. Do not use bold text. Use headings, lists, and tables.
 - Development procedures go under `docs/ja/development/`. Update them in the same pull request as the code.
 - Diagrams are PlantUML. Keep the `.puml` next to the document and render SVG with the script.
+- `docs/ja/getting-started.md` describes one whole run of cumin. A pull request that changes a path of a run updates it in the same pull request.
 
 ## Commits and pull requests
 
