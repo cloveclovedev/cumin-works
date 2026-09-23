@@ -56,4 +56,4 @@ jobs:
         with:
           go-version-file: go.mod
       - name: go test (Keychain)
-        run: go test -race -count=1 -v ./internal/platform/keychain/
+        run: go test -race -count=1 -v ./internal/platform/keychain/ ./internal/setup/

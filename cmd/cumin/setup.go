@@ -22,8 +22,8 @@ import (
 // launchctlPath is the tool that loads and unloads a job on macOS.
 const launchctlPath = "/bin/launchctl"
 
-// runSetup is `cumin setup`. It has two subcommands: github-apps and
-// launchd.
+// runSetup is `cumin setup`. It has three subcommands: github-apps,
+// launchd, and notify.
 func runSetup(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, setupUsage)
@@ -34,6 +34,8 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 		return runSetupGitHubApps(args, stdout, stderr)
 	case "launchd":
 		return runSetupLaunchd(args[1:], stdout, stderr)
+	case "notify":
+		return runSetupNotify(args[1:], stdout, stderr)
 	}
 	fmt.Fprintln(stderr, setupUsage)
 	return exitBadUsage
@@ -41,7 +43,8 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 
 const setupUsage = `usage: cumin setup github-apps --org <organization> [--name-prefix <prefix>] [--config <path>]
        cumin setup launchd [--config <path>] [--dry-run] [--force]
-       cumin setup launchd --remove [--dry-run] [--force]`
+       cumin setup launchd --remove [--dry-run] [--force]
+       cumin setup notify --discord-webhook`
 
 // runSetupGitHubApps registers the GitHub App of each role.
 func runSetupGitHubApps(args []string, stdout, stderr io.Writer) int {
@@ -96,6 +99,123 @@ func runSetupGitHubApps(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	return exitOK
+}
+
+// runSetupNotify is `cumin setup notify`: it puts the address of one
+// notification channel into the Keychain. The channel is a flag, because
+// the Discord webhook is one way of notifying and others may follow.
+//
+// The address is read from standard input, so that it stays out of the
+// process list and out of the shell history. On a terminal the command
+// asks for it; with a pipe it reads one line, so that a script can give
+// it.
+func runSetupNotify(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("cumin setup notify", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	chosen := map[string]*bool{}
+	for _, channel := range setup.Channels() {
+		chosen[channel.Flag] = fs.Bool(channel.Flag, false, "store the "+channel.What)
+	}
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
+		return exitBadUsage
+	}
+	var channels []setup.Channel
+	for _, channel := range setup.Channels() {
+		if *chosen[channel.Flag] {
+			channels = append(channels, channel)
+		}
+	}
+	// One channel for each run: the command reads one address, so two
+	// flags would ask for one address and store it twice.
+	if len(channels) != 1 || fs.NArg() > 0 {
+		fmt.Fprintln(stderr, setupUsage)
+		return exitBadUsage
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	secrets, err := keychain.Default(ctx)
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
+		return exitFailure
+	}
+	prompt := setup.NoPrompt
+	if isTerminal(os.Stdin) {
+		prompt = setup.PromptVisible
+		if restore, ok := hideInput(); ok {
+			prompt = setup.PromptHidden
+			defer restore()
+		}
+	}
+	// The prompt goes to standard error, which stays on the terminal when
+	// standard output is redirected. Otherwise the command would wait for
+	// an address with the echo off and no visible question.
+	address, err := readAddress(ctx, channels[0], prompt, stderr)
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
+		return exitFailure
+	}
+	if err := setup.StoreNotifyAddress(ctx, secrets, channels[0], address, stdout); err != nil {
+		fmt.Fprintf(stderr, "cumin setup notify: %v\n", err)
+		return exitFailure
+	}
+	return exitOK
+}
+
+// readAddress reads one address, and gives up when ctx ends. Ctrl-C at the
+// prompt ends the context, and the caller can then turn the echo of the
+// terminal back on before it returns; a read that blocks in the scanner
+// would leave the terminal without an echo. The goroutine stays behind on
+// that path, which is fine: the process is on its way out.
+func readAddress(ctx context.Context, channel setup.Channel, prompt setup.Prompt, ask io.Writer) (string, error) {
+	type result struct {
+		address string
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		address, err := setup.ReadAddress(os.Stdin, ask, channel, prompt)
+		done <- result{address, err}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", errors.New("stopped before the address was given")
+	case r := <-done:
+		return r.address, r.err
+	}
+}
+
+// isTerminal reports whether the file is a terminal, so that the command
+// asks for the address only when a person is there to paste it.
+func isTerminal(f *os.File) bool {
+	info, err := f.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// sttyPath turns the echo of a terminal on and off. The standard library
+// cannot do it, and cumin adds no dependency for it, so the command of the
+// Host does the work, as the security command does for the Keychain.
+const sttyPath = "/bin/stty"
+
+// hideInput turns the echo of the terminal off, so that a pasted secret
+// does not stay on the screen or in a recording of the session. It returns
+// the function that turns the echo back on, and whether it worked. A Host
+// without the command, or a terminal that refuses, leaves the echo on; the
+// prompt then says so instead of promising something else.
+func hideInput() (restore func(), ok bool) {
+	stty := func(arg string) error {
+		cmd := exec.Command(sttyPath, arg)
+		cmd.Stdin = os.Stdin
+		return cmd.Run()
+	}
+	if err := stty("-echo"); err != nil {
+		return func() {}, false
+	}
+	return func() { _ = stty("echo") }, true
 }
 
 // runSetupLaunchd writes the LaunchAgent of the current user, so that

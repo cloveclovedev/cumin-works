@@ -229,6 +229,9 @@ func TestSetupChecksTheArgumentsBeforeItOpensAnything(t *testing.T) {
 		{"extra argument", []string{"setup", "github-apps", "--org", "example-org", "extra"}, exitBadUsage, "usage: cumin setup github-apps"},
 		{"App name too long", []string{"setup", "github-apps", "--org", "example-org", "--name-prefix", "a-prefix-that-is-far-too-long-"}, exitFailure, "GitHub allows 34"},
 		{"wrong organization name", []string{"setup", "github-apps", "--org", "example/org"}, exitFailure, "not a name of an organization"},
+		{"notify without a channel", []string{"setup", "notify"}, exitBadUsage, "cumin setup notify --discord-webhook"},
+		{"notify with an unknown flag", []string{"setup", "notify", "--slack-webhook"}, exitBadUsage, "flag provided but not defined"},
+		{"notify with an extra argument", []string{"setup", "notify", "--discord-webhook", "https://example.test/x"}, exitBadUsage, "cumin setup notify --discord-webhook"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
