@@ -11,7 +11,7 @@ func RepositoryLabels() []github.Label {
 	return []github.Label{
 		{Name: LabelRequirement, Color: "5319E7", Description: "This is a requirement issue"},
 		{Name: LabelReady, Color: "0E8A16", Description: "The Owner says: this issue can start"},
-		{Name: LabelPlanning, Color: "1D76DB", Description: "The Chief Engineer splits the requirement"},
+		{Name: LabelPlanning, Color: "1D76DB", Description: "The Planner splits the requirement"},
 		{Name: LabelImplementing, Color: "1D76DB", Description: "The Implementer works on the issue, or the sub-issues are in progress"},
 		{Name: LabelAwaitingChecks, Color: "BFD4F2", Description: "The Implementer is done; waiting for the required checks"},
 		{Name: LabelReviewing, Color: "1D76DB", Description: "The Reviewer works on the pull request"},

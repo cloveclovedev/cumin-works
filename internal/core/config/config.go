@@ -37,13 +37,13 @@ const (
 type Role string
 
 const (
-	RoleChiefEngineer Role = "chief-engineer"
-	RoleImplementer   Role = "implementer"
-	RoleReviewer      Role = "reviewer"
+	RolePlanner     Role = "planner"
+	RoleImplementer Role = "implementer"
+	RoleReviewer    Role = "reviewer"
 )
 
 // allRoles are the agent roles, in the order of the settings file.
-var allRoles = []Role{RoleChiefEngineer, RoleImplementer, RoleReviewer}
+var allRoles = []Role{RolePlanner, RoleImplementer, RoleReviewer}
 
 // AllRoles returns the agent roles, in the order of the settings file.
 func AllRoles() []Role { return slices.Clone(allRoles) }
@@ -175,9 +175,9 @@ type file struct {
 	MaxCheckFixRequests int      `toml:"max_check_fix_requests"`
 	MergeMethod         string   `toml:"merge_method"`
 	Roles               struct {
-		ChiefEngineer fileRole `toml:"chief-engineer"`
-		Implementer   fileRole `toml:"implementer"`
-		Reviewer      fileRole `toml:"reviewer"`
+		Planner     fileRole `toml:"planner"`
+		Implementer fileRole `toml:"implementer"`
+		Reviewer    fileRole `toml:"reviewer"`
 	} `toml:"roles"`
 	Quota      fileQuota                    `toml:"quota"`
 	Notify     fileNotify                   `toml:"notify"`
@@ -210,7 +210,7 @@ func defaults() file {
 		Quota:               defaultQuota(),
 		Notify:              fileNotify{Discord: fileNotifyDiscord{Enabled: defaultNotifyDiscordEnabled}},
 	}
-	f.Roles.ChiefEngineer, f.Roles.Implementer, f.Roles.Reviewer = role, role, role
+	f.Roles.Planner, f.Roles.Implementer, f.Roles.Reviewer = role, role, role
 	return f
 }
 
@@ -317,7 +317,7 @@ func (f file) settings() (*Settings, error) {
 		role Role
 		file fileRole
 	}{
-		{RoleChiefEngineer, f.Roles.ChiefEngineer},
+		{RolePlanner, f.Roles.Planner},
 		{RoleImplementer, f.Roles.Implementer},
 		{RoleReviewer, f.Roles.Reviewer},
 	}
@@ -345,7 +345,7 @@ func (f file) settings() (*Settings, error) {
 			clientID := apps[app]
 			key := "github_apps." + org + "." + app
 			switch app {
-			case AppCuminCore, string(RoleChiefEngineer), string(RoleImplementer), string(RoleReviewer):
+			case AppCuminCore, string(RolePlanner), string(RoleImplementer), string(RoleReviewer):
 			default:
 				fail(key, "unknown GitHub App name")
 				continue

@@ -142,7 +142,7 @@ func TestWorktree_PrepareContinuesRemoteBranch(t *testing.T) {
 func TestWorktree_PrepareDetachedWithoutBranch(t *testing.T) {
 	r := newRemote(t)
 	w := newWorkspace(t, &bytes.Buffer{})
-	c := checkout(7, config.RoleChiefEngineer, "")
+	c := checkout(7, config.RolePlanner, "")
 
 	dir, err := w.Prepare(context.Background(), r.path, c)
 	if err != nil {
@@ -215,9 +215,9 @@ func TestWorktree_TwoRolesGetTwoWorktrees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare implementer: %v", err)
 	}
-	ce, err := w.Prepare(context.Background(), r.path, checkout(9, config.RoleChiefEngineer, ""))
+	ce, err := w.Prepare(context.Background(), r.path, checkout(9, config.RolePlanner, ""))
 	if err != nil {
-		t.Fatalf("Prepare chief engineer: %v", err)
+		t.Fatalf("Prepare planner: %v", err)
 	}
 	if impl == ce {
 		t.Errorf("both roles got %q", impl)
@@ -284,13 +284,13 @@ func TestWorktree_PrepareReplacesEmptyDirectory(t *testing.T) {
 func TestWorktree_PrepareFollowsNewDefaultBranch(t *testing.T) {
 	r := newRemote(t)
 	w := newWorkspace(t, &bytes.Buffer{})
-	if _, err := w.Prepare(context.Background(), r.path, checkout(1, config.RoleChiefEngineer, "")); err != nil {
+	if _, err := w.Prepare(context.Background(), r.path, checkout(1, config.RolePlanner, "")); err != nil {
 		t.Fatalf("first Prepare: %v", err)
 	}
 	want := r.commit("develop", "develop.txt", "new default\n")
 	gitCmd(t, r.path, "symbolic-ref", "HEAD", "refs/heads/develop")
 
-	dir, err := w.Prepare(context.Background(), r.path, checkout(2, config.RoleChiefEngineer, ""))
+	dir, err := w.Prepare(context.Background(), r.path, checkout(2, config.RolePlanner, ""))
 	if err != nil {
 		t.Fatalf("second Prepare: %v", err)
 	}

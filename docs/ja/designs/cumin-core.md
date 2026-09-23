@@ -138,7 +138,7 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 
 ### riskの基準の受け渡し
 
-riskの基準は、Chief EngineerとReviewerがそのまま受け取る文章である。cuminは中身を読まない。
+riskの基準は、PlannerとReviewerがそのまま受け取る文章である。cuminは中身を読まない。
 
 - 初期値の文章は、cuminのバイナリに埋め込む。置き場所は `disciplines/software-engineering/risk-criteria.md` である。どの変更をriskが高いとするかは分野の判断なので、roleではなくdisciplineが持つ。Agentが受け取る文章は、Pull Requestでレビューされるべきものなので、要件文書ではなくリポジトリに置く (#102 の決定)。
 - 強い順に、リポジトリの `.cumin/risk-criteria.md`、Hostの設定ファイルと同じディレクトリの `risk-criteria.md`、埋め込みの初期値である。ある段のファイルは、弱い段の文章を丸ごと置き換える。

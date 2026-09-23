@@ -1,6 +1,6 @@
 # 要求Issueの分割基準
 
-Ownerが要求Issueを書くときに、1つの要求Issueの大きさを決めるための判断基準。Chief Engineerは、基準4の上限を超える要求Issueを受け取ったら、分割せずに `blocked` を返す。
+Ownerが要求Issueを書くときに、1つの要求Issueの大きさを決めるための判断基準。Plannerは、基準4の上限を超える要求Issueを受け取ったら、分割せずに `blocked` を返す。
 
 実装Issueの大きさは [実装Issueの分割基準](issue-sizing.md) で決める。この文書は、その上の要求Issueの大きさだけを扱う。
 
@@ -21,8 +21,8 @@ Ownerが要求Issueを書くときに、1つの要求Issueの大きさを決め�
 
 ## 基準についての注意
 
-- 1つの要求Issueが、複数の領域 (例: GitHubとやりとりする部分と、Hostの上でAgentを起動する部分) にまたがってよい。領域ごとに切るのは、実装Issueの側であり、Chief Engineerの仕事である。要求Issueを領域で切り直す必要はない。
-- 基準4の上限は、Chief Engineerが `blocked` を返す条件でもある。このときChief Engineerは、要求Issueの分け方の案を `blocked_reason` に書く。Ownerは案を見て、要求Issueを書き直す。
+- 1つの要求Issueが、複数の領域 (例: GitHubとやりとりする部分と、Hostの上でAgentを起動する部分) にまたがってよい。領域ごとに切るのは、実装Issueの側であり、Plannerの仕事である。要求Issueを領域で切り直す必要はない。
+- 基準4の上限は、Plannerが `blocked` を返す条件でもある。このときPlannerは、要求Issueの分け方の案を `blocked_reason` に書く。Ownerは案を見て、要求Issueを書き直す。
 - 基準3を満たそうとすると、sub-issueの数は増えやすい。動くものを1つ通すには、複数の領域の変更が要るためである。基準4の数字は、そのことを見込んで決めた。
 
 ## 出典

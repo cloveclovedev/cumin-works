@@ -165,7 +165,7 @@ func testCredentials() AppCredentials {
 
 var allApps = []string{
 	config.AppCuminCore,
-	string(config.RoleChiefEngineer),
+	string(config.RolePlanner),
 	string(config.RoleImplementer),
 	string(config.RoleReviewer),
 }
@@ -208,10 +208,10 @@ func TestAppToken_IsLimitedToOneRepositoryAndToThePermissionsOfTheApp(t *testing
 // Change the document and this test together.
 func TestAppPermissions_MatchTheSetupDocument(t *testing.T) {
 	want := map[string]map[string]string{
-		"cumin-core":     {"contents": "write", "pull_requests": "write", "issues": "write"},
-		"chief-engineer": {"issues": "write", "contents": "read"},
-		"implementer":    {"contents": "write", "pull_requests": "write", "issues": "read"},
-		"reviewer":       {"pull_requests": "write", "contents": "read", "issues": "read"},
+		"cumin-core":  {"contents": "write", "pull_requests": "write", "issues": "write"},
+		"planner":     {"issues": "write", "contents": "read"},
+		"implementer": {"contents": "write", "pull_requests": "write", "issues": "read"},
+		"reviewer":    {"pull_requests": "write", "contents": "read", "issues": "read"},
 	}
 	if got := slices.Sorted(maps.Keys(appPermissions)); !slices.Equal(got, slices.Sorted(maps.Keys(want))) {
 		t.Fatalf("apps = %v", got)

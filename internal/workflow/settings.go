@@ -20,7 +20,7 @@ import (
 type RepositorySettings struct {
 	// Settings are the Host settings with the repository file applied.
 	Settings *config.Settings
-	// RiskCriteria is the text that the Chief Engineer and the Reviewer
+	// RiskCriteria is the text that the Planner and the Reviewer
 	// receive word for word. cumin does not read it, and never logs it.
 	RiskCriteria string
 	// RiskCriteriaSource says which of the three levels the text came from.

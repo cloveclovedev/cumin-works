@@ -28,7 +28,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 - 対象のリポジトリごとに、`<work_dir>/<owner>/<repo>/clone` にcloneを1つ置く。`git clone --no-checkout` で作るので作業ファイルは置かれず、worktreeの親としてだけ使う (公式: git-clone の `--no-checkout`)。一度作ったcloneは使い回し、着手のたびに `git fetch --prune origin` で更新する。fetchでは `origin/HEAD` が動かないため、続けて `git remote set-head origin --auto` を実行し、リモートの既定のブランチを問い合わせる (公式: git-remote)。
 - worktreeは、Issueとroleの組ごとに `<work_dir>/<owner>/<repo>/<Issue番号>-<role>` に1つ作る。こうしておけば、並行して進むIssueの作業が混ざらない。
-- 書き込みを行うrole (Implementer) のworktreeは、cuminが名前を決めたブランチに置く。`origin/<ブランチ>` が既にあればそこから始め (続きの依頼)、なければ `origin/HEAD` から新しく作る。読むだけのrole (Chief Engineer) のworktreeは、`origin/HEAD` をdetachedで開く。
+- 書き込みを行うrole (Implementer) のworktreeは、cuminが名前を決めたブランチに置く。`origin/<ブランチ>` が既にあればそこから始め (続きの依頼)、なければ `origin/HEAD` から新しく作る。読むだけのrole (Planner) のworktreeは、`origin/HEAD` をdetachedで開く。
 - worktreeが既にあるときは、fetchもせずにそのまま返す。異常終了後のやり直しは、同じ作業場所で続ける。再利用するのは、gitがworktreeとして認識するディレクトリだけである。用意が途中で止まって残った空のディレクトリは作り直し、ディレクトリだけが消えている場合は `git worktree prune` で登録を消してから作り直す。
 - 用意と片付けは、プロセスの中で直列に実行する。同じリポジトリの2つのIssueに同時に着手しても、cloneが2つ作られることはない。
 - worktreeの先頭のコミットは `git rev-parse HEAD` で読む。実行が終わったあとに、Pull Requestの先頭のコミットと比べて、最後のコミットがpushされたかを判定するためである ([定期確認の設計](poll.md) の「実行終了の判定」)。

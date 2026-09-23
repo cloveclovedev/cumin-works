@@ -1,6 +1,6 @@
 # 実装Issueの分割基準
 
-Chief Engineerが要求Issueを実装Issueに分割するときの判断基準。1つの実装Issueは、1つのAgentが1つのPull Requestで実装する。
+Plannerが要求Issueを実装Issueに分割するときの判断基準。1つの実装Issueは、1つのAgentが1つのPull Requestで実装する。
 
 基準は公開されている指針から組み立てた (2026-09-19調査)。AIが実装しAIがレビューするPull Requestの適切な大きさを直接調べた研究は見つからなかった。数値の目安は人間のレビューのデータからの借り物であり、運用しながら調整する。
 

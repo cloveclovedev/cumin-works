@@ -1,6 +1,6 @@
 # Template: implementation issue
 
-Written by: the Chief Engineer.
+Written by: the Planner.
 Read by: the Implementer and the Reviewer.
 One implementation issue becomes one pull request.
 

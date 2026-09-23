@@ -13,7 +13,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 | App | 使うrole | 権限 (Repository permissions) |
 |---|---|---|
 | `cumin-core` | cumin本体 | Contents: Read & write、Pull requests: Read & write、Issues: Read & write |
-| `cumin-chief-engineer` | Chief Engineer | Issues: Read & write、Contents: Read-only |
+| `cumin-planner` | Planner | Issues: Read & write、Contents: Read-only |
 | `cumin-implementer` | Implementer | Contents: Read & write、Pull requests: Read & write、Issues: Read-only |
 | `cumin-reviewer` | Reviewer | Pull requests: Read & write、Contents: Read-only、Issues: Read-only |
 
@@ -131,7 +131,7 @@ cuminは、mainに適用されるrulesetに登録された必須のcheckが全�
 | 1 | Implementer のAppのトークンで、mainに直接pushする | rulesetに拒否される | 拒否された (`GH013: Repository rule violations found`) |
 | 2 | Implementer のAppのトークンで、必須のcheckが通ったPull Requestをmergeする | rulesetに拒否される | 拒否された (405。`Cannot update this protected ref.`) |
 | 3 | cumin本体のAppのトークンで、同じPull Requestをmergeする | 成功する | 成功した (200) |
-| 4 | Chief Engineer のAppのトークンでIssueを作り、ラベル、sub-issue、依存関係 (blocked by) を付ける | 成功する。Issue作成時に渡したラベルが黙って捨てられないことも見る | 成功した。ラベルはIssueに付いた。sub-issueは `parent_issue_id` で作れた。blocked by は201。ラベルそのものは、先にcumin本体のAppが作った |
+| 4 | Planner のAppのトークンでIssueを作り、ラベル、sub-issue、依存関係 (blocked by) を付ける | 成功する。Issue作成時に渡したラベルが黙って捨てられないことも見る | 成功した。ラベルはIssueに付いた。sub-issueは `parent_issue_id` で作れた。blocked by は201。ラベルそのものは、先にcumin本体のAppが作った |
 | 5 | Reviewer のAppのトークンで、Implementer のAppが開いたPull RequestにAPPROVEのレビューを出す | 成功する | 成功した (200、`APPROVED`) |
 | 6 | Appの表示名と、コミットの作者の表示 | `<slug>[bot]` | Pull Requestの作成者も、コミットの作者も `<slug>[bot]` だった。コミットのメールアドレスを `<botのユーザID>+<slug>[bot]@users.noreply.github.com` にすると、GitHubがbotのユーザに紐づけた |
 | 7 | Implementer のAppのPull Requestで、保護されたパスを変える、変えない | 変えると `cumin-protected-paths` が失敗し、変えないと通る | そのとおりだった (`failure` と `success`) |

@@ -335,9 +335,9 @@ func TestStart_OwnerMatchesTheSettingsWithoutRegardToCase(t *testing.T) {
 
 func TestHostWarnings_EmptyForClaudeCode(t *testing.T) {
 	s := &Service{Roles: map[config.Role]config.RoleSettings{
-		config.RoleChiefEngineer: {CLI: config.CLIClaudeCode},
-		config.RoleImplementer:   {CLI: config.CLIClaudeCode},
-		config.RoleReviewer:      {CLI: config.CLIClaudeCode},
+		config.RolePlanner:     {CLI: config.CLIClaudeCode},
+		config.RoleImplementer: {CLI: config.CLIClaudeCode},
+		config.RoleReviewer:    {CLI: config.CLIClaudeCode},
 	}}
 	if warnings := s.HostWarnings(); len(warnings) != 0 {
 		t.Errorf("HostWarnings = %q, want none", warnings)

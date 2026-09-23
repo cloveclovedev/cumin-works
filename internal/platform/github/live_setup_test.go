@@ -22,7 +22,7 @@ func TestLiveSetupChecks(t *testing.T) {
 	defer func() { t.Log("\n" + l.table()) }()
 
 	core := l.token(t, "cumin-core")
-	chief := l.token(t, "chief-engineer")
+	planner := l.token(t, "planner")
 	implementer := l.token(t, "implementer")
 	reviewer := l.token(t, "reviewer")
 
@@ -131,23 +131,23 @@ func TestLiveSetupChecks(t *testing.T) {
 		t.Errorf("check 7b: conclusion = %q, want failure", conclusion)
 	}
 
-	// Check 4: the Chief Engineer App creates issues with a label, a sub-issue,
+	// Check 4: the Planner App creates issues with a label, a sub-issue,
 	// and a "blocked by" relationship. cumin creates missing labels, so the
 	// cumin-core App makes sure that the label exists.
 	label := l.api(t, core, http.MethodPost, "/repos/{repo}/labels", map[string]any{"name": "risk/low", "color": "C2E0C6"})
 	if label.status != http.StatusCreated && label.status != http.StatusUnprocessableEntity {
 		t.Errorf("check 4: create the label: status %d: %s", label.status, label.message())
 	}
-	parent := l.createIssue(t, chief, "test: live parent "+l.runID, nil, 0)
-	blocker := l.createIssue(t, chief, "test: live blocker "+l.runID, nil, 0)
-	child := l.createIssue(t, chief, "test: live child "+l.runID, []string{"risk/low"}, parent.ID)
-	dependency := l.api(t, chief, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/dependencies/blocked_by", child.Number), map[string]any{"issue_id": blocker.ID})
+	parent := l.createIssue(t, planner, "test: live parent "+l.runID, nil, 0)
+	blocker := l.createIssue(t, planner, "test: live blocker "+l.runID, nil, 0)
+	child := l.createIssue(t, planner, "test: live child "+l.runID, []string{"risk/low"}, parent.ID)
+	dependency := l.api(t, planner, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/dependencies/blocked_by", child.Number), map[string]any{"issue_id": blocker.ID})
 	var subIssues []struct {
 		Number int `json:"number"`
 	}
-	l.api(t, chief, http.MethodGet, fmt.Sprintf("/repos/{repo}/issues/%d/sub_issues", parent.Number), nil).mustJSON(t, http.StatusOK, &subIssues)
+	l.api(t, planner, http.MethodGet, fmt.Sprintf("/repos/{repo}/issues/%d/sub_issues", parent.Number), nil).mustJSON(t, http.StatusOK, &subIssues)
 	labels := strings.Join(child.labelNames(), ", ")
-	l.record("4", "The Chief Engineer App creates an issue with a label, as a sub-issue (`parent_issue_id`), and adds a \"blocked by\" relationship", "Success, and the label is on the issue",
+	l.record("4", "The Planner App creates an issue with a label, as a sub-issue (`parent_issue_id`), and adds a \"blocked by\" relationship", "Success, and the label is on the issue",
 		fmt.Sprintf("Issue created by `%s` with the labels [%s]. Sub-issues of the parent: %d. \"blocked by\": status %d", child.User.Login, labels, len(subIssues), dependency.status))
 	if labels != "risk/low" || len(subIssues) != 1 || dependency.status != http.StatusCreated {
 		t.Errorf("check 4: labels [%s], %d sub-issues, blocked by status %d: %s", labels, len(subIssues), dependency.status, dependency.message())

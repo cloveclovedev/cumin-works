@@ -1,6 +1,6 @@
 # Template: acceptance check
 
-Written by: the Chief Engineer, as one comment on the requirement issue, after all sub-issues are closed.
+Written by: the Planner, as one comment on the requirement issue, after all sub-issues are closed.
 Read by: the Owner, to accept the requirement or to send work back.
 
 ## Rules

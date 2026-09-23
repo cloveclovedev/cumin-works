@@ -34,7 +34,7 @@ const riskCriteriaFile = "risk-criteria.md"
 var files embed.FS
 
 // RiskCriteria returns the built-in risk criteria of the default
-// discipline: the text that the Chief Engineer and the Reviewer receive
+// discipline: the text that the Planner and the Reviewer receive
 // word for word when a file of the Host or of the target repository does
 // not replace it (docs/ja/requirements/cumin-core.md, the topic on
 // settings).

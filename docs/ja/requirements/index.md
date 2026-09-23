@@ -16,14 +16,14 @@ cumin works v2 の要求と要件の文書の入口。
 ## Agentの要件
 
 - [Agentに共通の要件](agents/common.md): 結果の返し方、指示の渡し方、GitHub上の身元、プロセスとセッション
-- [Chief Engineerの要件](agents/chief-engineer.md): 要求Issueを実装Issueに分割し、依存関係とriskを付ける
+- [Plannerの要件](agents/planner.md): 要求Issueを実装Issueに分割し、依存関係とriskを付ける
 - [Implementerの要件](agents/implementer.md): 実装Issueを実装して、Pull Requestにまとめる
 - [Reviewerの要件](agents/reviewer.md): Pull Requestをレビューし、指摘が残ったら原因を整理する
 
 ## Agentが従う判断基準
 
 - [要求Issueの分割基準](policies/requirement-sizing.md): Ownerが要求Issueを書くときの、1つの要求Issueの大きさの基準
-- [実装Issueの分割基準](policies/issue-sizing.md): Chief Engineerが要求Issueを分割するときの基準
+- [実装Issueの分割基準](policies/issue-sizing.md): Plannerが要求Issueを分割するときの基準
 - [GitHubに残す文章のテンプレート](policies/writing-templates.md): 要求Issue、実装Issue、Pull Requestの説明、レビュー、返答、Ownerに判断を求める文章の型
 
 ## 調査と実測
