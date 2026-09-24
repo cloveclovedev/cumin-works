@@ -68,6 +68,30 @@ type PullRequest struct {
 	AuthorIsBot bool
 	// Closes holds the numbers of the issues that the pull request closes.
 	Closes []int
+	// HeadBranch is the branch of the pull request.
+	HeadBranch string
+	// Labels are the labels of the pull request. I11 makes them equal to
+	// the labels of the issue.
+	Labels []string
+	// Checks are the checks on the head commit, as statusCheckRollup
+	// returns them.
+	Checks []Check
+}
+
+// Check is one check on the head commit of a pull request. A check with
+// CommitStatus is answered as a StatusContext and reads State; every other
+// check is answered as a CheckRun and reads Status and Conclusion.
+type Check struct {
+	Name string
+	// Status is the word of CheckStatusState. Empty means COMPLETED.
+	Status string
+	// Conclusion is the word of CheckConclusionState (SUCCESS, FAILURE,
+	// SKIPPED, NEUTRAL, ...).
+	Conclusion string
+	// CommitStatus makes the fake answer a commit status. State is then
+	// the word of StatusState (SUCCESS, FAILURE, PENDING, ...).
+	CommitStatus bool
+	State        string
 }
 
 // Label is one label of a repository.
@@ -90,6 +114,9 @@ type Repository struct {
 	// DefaultBranch is the name that the snapshot reads. Empty means that
 	// the repository has no commit, as a new repository on GitHub.
 	DefaultBranch string
+	// RequiredChecks are the checks that the rules of the default branch
+	// require, as "Get rules for a branch" returns them.
+	RequiredChecks []string
 	// Files are the files of the default branch, by path. SetFile writes
 	// them; the snapshot reads the files of .cumin/.
 	Files map[string]File
@@ -338,6 +365,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	labels := repoLabelsPath.FindStringSubmatch(r.URL.Path)
 	issueLabels := issueLabelsPath.FindStringSubmatch(r.URL.Path)
 	issueComments := issueCommentsPath.FindStringSubmatch(r.URL.Path)
+	branchRules := branchRulesPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -360,6 +388,8 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && issueComments != nil:
 		number, _ := strconv.Atoi(issueComments[3])
 		f.serveCreateIssueComment(w, body, issueComments[1], issueComments[2], number)
+	case r.Method == http.MethodGet && branchRules != nil:
+		f.serveBranchRules(w, branchRules[1], branchRules[2], branchRules[3])
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
@@ -372,7 +402,39 @@ var (
 	installationPath  = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/installation$`)
 	accessTokensPath  = regexp.MustCompile(`^/app/installations/(\d+)/access_tokens$`)
 	userPath          = regexp.MustCompile(`^/users/([^/]+)$`)
+	branchRulesPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/rules/branches/(.+)$`)
 )
+
+// serveBranchRules answers GET /repos/{owner}/{repo}/rules/branches/{branch}
+// with the rules that apply to the branch. Official: "Get rules for a
+// branch". The fake answers the required checks of the repository for its
+// default branch, and no rule for any other branch.
+func (f *Fake) serveBranchRules(w http.ResponseWriter, owner, name, branch string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	decoded, err := url.PathUnescape(branch)
+	if err != nil {
+		decoded = branch
+	}
+	rules := []map[string]any{}
+	if decoded == repo.DefaultBranch && len(repo.RequiredChecks) > 0 {
+		checks := []map[string]any{}
+		for _, name := range repo.RequiredChecks {
+			checks = append(checks, map[string]any{"context": name})
+		}
+		rules = append(rules,
+			map[string]any{"type": "update", "parameters": map[string]any{}},
+			map[string]any{"type": "required_status_checks", "parameters": map[string]any{
+				"required_status_checks":               checks,
+				"strict_required_status_checks_policy": false,
+			}})
+	}
+	writeJSON(w, http.StatusOK, rules)
+}
 
 // serveApp answers GET /app with the registered App. Official: "Get the
 // authenticated app".
@@ -582,6 +644,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			Labels       int     `json:"labels"`
 			BlockedBy    int     `json:"blockedBy"`
 			PullRequests int     `json:"pullRequests"`
+			Checks       int     `json:"checks"`
 			// RepositoryFiles asks for the default branch and the files of
 			// .cumin/. The client asks for them on the first page only.
 			RepositoryFiles bool `json:"repositoryFiles"`
@@ -618,7 +681,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			hasNextPage = true
 			break
 		}
-		page = append(page, f.issueNode(repo, issue, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests))
+		page = append(page, f.issueNode(repo, issue, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks))
 	}
 	endCursor := any(nil)
 	if len(page) > 0 {
@@ -640,7 +703,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	})
 }
 
-func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, blockedBy, pullRequests int) map[string]any {
+func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, blockedBy, pullRequests, checks int) map[string]any {
 	node := map[string]any{
 		"number": issue.Number,
 		"title":  issue.Title,
@@ -654,7 +717,7 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 	}
 	node["subIssues"] = connection(subs, subIssues, func(sub *Issue) any {
-		return f.issueNode(repo, sub, labels, subIssues, blockedBy, pullRequests)
+		return f.issueNode(repo, sub, labels, subIssues, blockedBy, pullRequests, checks)
 	})
 	node["blockedBy"] = connection(issue.BlockedBy, blockedBy, func(number int) any {
 		closed := false
@@ -671,15 +734,22 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 	}
 	node["closedByPullRequestsReferences"] = connection(closing, pullRequests, func(pr *PullRequest) any {
-		return pullRequestNode(pr)
+		return pullRequestNode(pr, labels, checks)
 	})
 	return node
 }
 
 // pullRequestNode is one pull request as GraphQL returns it: the author
-// of an App is a Bot whose login has no "[bot]".
-func pullRequestNode(pr *PullRequest) map[string]any {
-	node := map[string]any{"number": pr.Number, "headRefOid": pr.HeadCommit, "author": nil}
+// of an App is a Bot whose login has no "[bot]", and the rollup is null
+// when the head commit has no check.
+func pullRequestNode(pr *PullRequest, labels, checks int) map[string]any {
+	node := map[string]any{
+		"number":      pr.Number,
+		"headRefOid":  pr.HeadCommit,
+		"headRefName": pr.HeadBranch,
+		"author":      nil,
+		"labels":      connection(pr.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
+	}
 	if pr.Author != "" {
 		typeName := "User"
 		if pr.AuthorIsBot {
@@ -687,7 +757,30 @@ func pullRequestNode(pr *PullRequest) map[string]any {
 		}
 		node["author"] = map[string]any{"__typename": typeName, "login": pr.Author}
 	}
+	node["statusCheckRollup"] = nil
+	if len(pr.Checks) > 0 {
+		node["statusCheckRollup"] = map[string]any{
+			"contexts": connection(pr.Checks, checks, checkNode),
+		}
+	}
 	return node
+}
+
+// checkNode is one context of the rollup: a commit status or a check run.
+func checkNode(check Check) any {
+	if check.CommitStatus {
+		return map[string]any{"__typename": "StatusContext", "context": check.Name, "state": check.State}
+	}
+	status := check.Status
+	if status == "" {
+		status = "COMPLETED"
+	}
+	return map[string]any{
+		"__typename": "CheckRun",
+		"name":       check.Name,
+		"status":     status,
+		"conclusion": check.Conclusion,
+	}
 }
 
 func sortedPullRequests(repo *Repository) []*PullRequest {

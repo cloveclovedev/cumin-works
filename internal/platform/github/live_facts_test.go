@@ -1,6 +1,7 @@
 package github_test
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"net/http"
@@ -20,6 +21,8 @@ const (
 	commitStatusCheck   = "live-commit-status"
 	liveStatusContext   = "cumin-live-status"
 	failMarkerPath      = "live/fail-marker"
+	// requirementLabel is the label that the poll query of cumin asks for.
+	requirementLabel = "cumin/type/requirement"
 )
 
 // TestLiveGitHubFacts records facts about GitHub that the later requirements
@@ -41,7 +44,9 @@ func TestLiveGitHubFacts(t *testing.T) {
 	repo := l.newGitRepo(t, implementer, botLogin, botLogin+"@users.noreply.github.com")
 
 	// A parent, a sub-issue, and an issue that blocks the sub-issue.
-	parent := l.createIssue(t, planner, "test: live facts parent "+l.runID, nil, 0)
+	// The parent carries the requirement label, so that the poll query of
+	// cumin reads it with its sub-issue and the pull request (fact 12).
+	parent := l.createIssue(t, planner, "test: live facts parent "+l.runID, []string{requirementLabel}, 0)
 	blocker := l.createIssue(t, planner, "test: live facts blocker "+l.runID, nil, 0)
 	child := l.createIssue(t, planner, "test: live facts child "+l.runID, nil, parent.ID)
 	if resp := l.api(t, planner, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/dependencies/blocked_by", child.Number), map[string]any{"issue_id": blocker.ID}); resp.status != http.StatusCreated {
@@ -104,6 +109,9 @@ func TestLiveGitHubFacts(t *testing.T) {
 	if added.status != http.StatusOK || removed.status != http.StatusOK {
 		t.Errorf("fact 11: add %d (%s), remove %d (%s)", added.status, added.message(), removed.status, removed.message())
 	}
+
+	// Fact 12: the poll query and the required checks, as cumin reads them.
+	l.recordSnapshotFact(t, core, child.Number, pullA.Number)
 
 	// Fact 5: the fields of reviews.
 	for _, review := range []map[string]any{
@@ -255,6 +263,54 @@ func (l *live) recordFailedCheckFact(t *testing.T, token, sha string) {
 	// authentication does not. A change of either one is news for cumin.
 	if logs.status != http.StatusOK || anonymousLogs.status != http.StatusForbidden {
 		t.Errorf("fact 4: job log: status %d with the token (want 200), status %d without authentication (want 403)", logs.status, anonymousLogs.status)
+	}
+}
+
+// recordSnapshotFact runs the poll query and the read of the required
+// checks of cumin against the sandbox, and records the cost of the query.
+// The cost decides whether one poll a minute fits in the hourly points of
+// an installation (designs/cumin-core.md, the topic on the GitHub client).
+func (l *live) recordSnapshotFact(t *testing.T, token string, issueNumber, pullNumber int) {
+	t.Helper()
+	client := github.NewAppClient(github.DefaultBaseURL, nil)
+	ctx := context.Background()
+	snapshot, err := client.ReadSnapshot(ctx, token, l.owner, l.repo)
+	if err != nil {
+		t.Fatalf("fact 12: read the snapshot: %v", err)
+	}
+	required, err := client.RequiredChecks(ctx, token, l.owner, l.repo, l.branch)
+	if err != nil {
+		t.Fatalf("fact 12: read the required checks: %v", err)
+	}
+	var pull github.PullRequest
+	for _, issue := range snapshot.RequirementIssues {
+		for _, sub := range issue.SubIssues {
+			if sub.Number != issueNumber {
+				continue
+			}
+			for _, pr := range sub.PullRequests {
+				if pr.Number == pullNumber {
+					pull = pr
+				}
+			}
+		}
+	}
+	var checks []string
+	for _, check := range pull.Checks {
+		checks = append(checks, check.Name+"="+check.Conclusion.String())
+	}
+	l.record("12", "The poll query of cumin, with the head branch, the labels, and the checks of a pull request (I3, I4, I11)", "Every field is readable, and the cost stays small enough for one poll a minute",
+		fmt.Sprintf("`rateLimit.cost`: %d, `remaining`: %d, requirement issues: %d. Required checks: `%s`. Pull request #%d: branch `%s`, labels `%s`, checks `%s`",
+			snapshot.RateLimit.Cost, snapshot.RateLimit.Remaining, len(snapshot.RequirementIssues),
+			strings.Join(required, "`, `"), pull.Number, pull.HeadBranch, strings.Join(pull.Labels, "`, `"), strings.Join(checks, "`, `")))
+	if pull.Number != pullNumber || pull.HeadBranch == "" || len(pull.Checks) == 0 {
+		t.Errorf("fact 12: pull request %+v, want the branch and the checks of #%d", pull, pullNumber)
+	}
+	if !contains(required, protectedPathsCheck) {
+		t.Errorf("fact 12: required checks %v, want %s", required, protectedPathsCheck)
+	}
+	if snapshot.RateLimit.Cost < 1 {
+		t.Errorf("fact 12: cost %d", snapshot.RateLimit.Cost)
 	}
 }
 
