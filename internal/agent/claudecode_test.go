@@ -647,7 +647,8 @@ func TestRun_TheStartRecordMustListTheSkillsOfTheRole(t *testing.T) {
 		wantDetail string // empty means that the run succeeds
 	}{
 		{"every skill is listed", "done.jsonl", true, ""},
-		{"a list of objects with a name", "init-skills-objects.jsonl", true, ""},
+		{"a skill of the CLI stands next to them", "init-skills-and-more.jsonl", true, ""},
+		{"a list of objects with a name", "init-skills-objects.jsonl", true, "skills of an unknown shape"},
 		{"one skill did not arrive", "init-skill-missing.jsonl", true, "does not list the skill cumin-review-reply"},
 		{"a shape that cumin cannot read", "init-skills-shape.jsonl", true, "skills of an unknown shape"},
 		{"no skills field", "init-no-skills.jsonl", true, "no skills field"},

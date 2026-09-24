@@ -416,7 +416,9 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 		if e.Subtype == "init" {
 			// The names of the fields, not the values: the record of a
 			// live run uses them, and a changed shape shows here first.
-			log.Debug("agent init event", "fields", fieldNames(line, ""))
+			// The skills of a run are checked, so their shape is named
+			// too, which a live run records without any value.
+			log.Debug("agent init event", "fields", fieldNames(line, ""), "skills_shape", jsonShape(e.Skills))
 			s.init, s.initEvent = true, e
 		}
 	case "rate_limit_event":
@@ -480,9 +482,11 @@ func userContext(e event, workDir string, wantSkills []string) string {
 // from the template.
 //
 // The field must be present, as plugins and mcp_servers must: a record
-// that cumin cannot read confirms nothing. The shape of the field is not
-// in the official documentation, so both shapes that the neighbouring
-// fields use are read: a list of names, and a list of objects with a name.
+// that cumin cannot read confirms nothing. The field is a list of the
+// names of the skills, measured on 2026-09-25 with Claude Code 2.1.273
+// (the record on #166); the official documentation does not describe it.
+// Any other shape is unreadable and ends the run, as a missing plugins
+// field does.
 func missingSkill(e event, want []string) string {
 	if e.Skills == nil {
 		return "the init event has no skills field"
@@ -490,7 +494,7 @@ func missingSkill(e event, want []string) string {
 	if len(want) == 0 {
 		return ""
 	}
-	got, ok := jsonNames(e.Skills)
+	got, ok := jsonStringList(e.Skills)
 	if !ok {
 		// A shape that cumin cannot read cannot confirm anything.
 		return "the init event has skills of an unknown shape"
@@ -531,34 +535,60 @@ func jsonPresent(raw json.RawMessage) bool {
 	return true
 }
 
-// jsonNames returns the names of a list: the strings of a list of
-// strings, or the "name" of every object of a list of objects. These are
-// the two shapes that the neighbouring fields of the init event use
-// (capabilities is a list of strings; plugins and mcp_servers are lists of
-// objects with a name). The second value is false for any other shape, so
-// that the caller can tell "cumin cannot read this" from "the list is
-// empty".
-func jsonNames(raw json.RawMessage) ([]string, bool) {
-	var list []any
+// jsonShape names the shape of raw, and never a value of it: the type,
+// and for a list the type of its items with the keys of an object. A live
+// run records the shape of a field that cumin reads, so that a changed
+// shape is told from a changed value.
+func jsonShape(raw json.RawMessage) string {
+	if raw == nil {
+		return "absent"
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "not JSON"
+	}
+	list, ok := value.([]any)
+	if !ok {
+		if value == nil {
+			return "null"
+		}
+		if object, ok := value.(map[string]any); ok {
+			return "object with " + strings.Join(sortedKeys(object), ",")
+		}
+		return fmt.Sprintf("%T", value)
+	}
+	if len(list) == 0 {
+		return "empty list"
+	}
+	switch item := list[0].(type) {
+	case string:
+		return "list of strings"
+	case map[string]any:
+		return "list of objects with " + strings.Join(sortedKeys(item), ",")
+	default:
+		return fmt.Sprintf("list of %T", item)
+	}
+}
+
+// sortedKeys returns the keys of an object in a fixed order.
+func sortedKeys(object map[string]any) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// jsonStringList returns the strings of a JSON list of strings. The
+// second value is false for any other shape, so that the caller can tell
+// "cumin cannot read this" from "the list is empty".
+func jsonStringList(raw json.RawMessage) ([]string, bool) {
+	var list []string
 	if err := json.Unmarshal(raw, &list); err != nil {
 		return nil, false
 	}
-	names := make([]string, 0, len(list))
-	for _, item := range list {
-		switch item := item.(type) {
-		case string:
-			names = append(names, item)
-		case map[string]any:
-			name, ok := item["name"].(string)
-			if !ok {
-				return nil, false
-			}
-			names = append(names, name)
-		default:
-			return nil, false
-		}
-	}
-	return names, true
+	return list, true
 }
 
 // jsonStrings collects every string in raw, at any depth.

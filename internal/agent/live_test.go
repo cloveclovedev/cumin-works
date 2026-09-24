@@ -601,3 +601,85 @@ func TestLive_AgentRunOnSandbox(t *testing.T) {
 	t.Logf("result %s after %s; quota read before the start: true; session ID read: %v; pull request by the agent found: true; author is the Implementer bot: %v; commit author and committer are the bot: %v",
 		run.Result.Result, elapsed.Round(time.Second), run.SessionID != "", pullIsBot, commitIsBot)
 }
+
+// TestLive_InitSkillsShape measures the shape of the skills field of the
+// init event. The official documentation of the headless run describes
+// plugins, mcp_servers, and capabilities, and does not describe skills;
+// row 86 of measured-constraints.md records only the name of the field.
+// The check of the start record reads that field, so the shape has to be
+// measured before the check can rely on it (the Decision on #166).
+//
+// The run has the shape of a real one: the composed instruction of the
+// role as the system prompt, the skills directory of that role with
+// --add-dir, and the environment that the adapter builds. It reaches no
+// GitHub and reads no settings file of the Host. The prompt is one word,
+// so the run is the shortest that still carries a real system prompt.
+//
+// The test prints the shape and the field names only. No value of the
+// event, no path of the Host, and no session ID reaches the output.
+func TestLive_InitSkillsShape(t *testing.T) {
+	if os.Getenv("CUMIN_LIVE") != "1" {
+		t.Skip("set CUMIN_LIVE=1 to run the live check; it uses quota")
+	}
+	path := os.Getenv("CUMIN_CLAUDE_PATH")
+	if path == "" {
+		var err error
+		if path, err = exec.LookPath("claude"); err != nil {
+			t.Fatalf("claude is not on PATH: %v (set CUMIN_CLAUDE_PATH)", err)
+		}
+	}
+	role := config.RoleImplementer
+	root := t.TempDir()
+	if err := WriteSkills(root); err != nil {
+		t.Fatal(err)
+	}
+	roleInstruction, err := instruction(role, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The debug level carries the line that names the shape. The writer
+	// keeps only that one line, so that no other debug line, which may
+	// hold a path of the Host, reaches the output of the test.
+	var shape string
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == "skills_shape" {
+				shape = a.Value.String()
+			}
+			return a
+		},
+	}))
+
+	cli := ClaudeCode{Path: path, Logger: logger}
+	req := Request{
+		Role:            role,
+		RoleInstruction: roleInstruction,
+		Text:            "Reply with the single word ok. Use no tool.",
+		WorkDir:         t.TempDir(),
+		SkillsDir:       SkillDir(root, role),
+		TimeLimit:       3 * time.Minute,
+		Credentials:     testCredentials,
+	}
+	run, err := cli.Run(context.Background(), req)
+
+	t.Logf("the shape of skills: %s", shape)
+	switch {
+	case shape == "":
+		t.Fatal("the run printed no init event, so the shape was not measured")
+	case shape == "absent":
+		t.Errorf("the init event has no skills field; the check of the start record cannot read it")
+	case shape == "list of strings", shape == "empty list":
+		// The shape that the check reads.
+	default:
+		t.Errorf("the shape %q is not a list of names; the check must learn it", shape)
+	}
+	if err != nil {
+		// A run that the check stopped still measured the shape, and the
+		// reason says which skill was missing.
+		t.Logf("the run ended with: %v", err)
+		return
+	}
+	t.Logf("the run ended with the result %s", run.Result.Result)
+}

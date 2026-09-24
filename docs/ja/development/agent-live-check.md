@@ -18,6 +18,12 @@
 |---|
 | 使用率が読めて、2つの枠のリセット時刻が未来で、使用率が0から1の間にある。ログに `init` のイベントと `rate_limit_info` の項目の名前と、`status` の値が出る (数値は出ない) |
 
+テスト `TestLive_InitSkillsShape` は、`init` のイベントの `skills` の形を測る。起動の記録の確認がこの項目を読むのに、公式ドキュメントに形の記載がないためである。本物のClaude Codeを1回だけ、数秒の依頼で起動する。roleの指示とskillのディレクトリは本番と同じ形で渡し、GitHubには触れず、Hostの設定ファイルも読まない。
+
+| 確かめること |
+|---|
+| `skills` が、skillの名前の文字列の配列である。ログに出るのは形の名前だけで、skillの名前も、Hostのパスも、セッションの番号も出ない |
+
 ## 動かし方
 
 利用枠を使うので、Ownerが同意したときだけ動かす。
@@ -26,6 +32,8 @@
 CUMIN_LIVE=1 go test -race -count=1 -run TestLive -v ./internal/agent/
 # 使用率の確認だけ
 CUMIN_LIVE=1 go test -race -count=1 -run TestLive_ReadQuota -v ./internal/agent/
+# init の skills の形の確認だけ
+CUMIN_LIVE=1 go test -race -count=1 -run TestLive_InitSkillsShape -v ./internal/agent/
 ```
 
 - `claude` は `PATH` から探す。別の実行ファイルを使うときは、環境変数 `CUMIN_CLAUDE_PATH` にパスを書く。
