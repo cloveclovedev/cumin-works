@@ -16,6 +16,9 @@ import (
 // Label names from the table in issue-states.md.
 const (
 	LabelRequirement = "cumin/type/requirement"
+	// LabelOwnerTask marks a sub-issue whose work the Owner does by hand.
+	// cumin never claims it (I1).
+	LabelOwnerTask = "cumin/type/owner-task"
 
 	LabelReady                 = "cumin/status/ready"
 	LabelPlanning              = "cumin/status/planning"

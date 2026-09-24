@@ -43,8 +43,8 @@ func TestRepositoryLabels_MatchTheDocument(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("RepositoryLabels = %v\nthe document = %v", got, want)
 	}
-	// One type label, seven status labels, three risk labels.
-	if len(got) != 11 {
-		t.Errorf("%d labels, want 11", len(got))
+	// Two type labels, seven status labels, three risk labels.
+	if len(got) != 12 {
+		t.Errorf("%d labels, want 12", len(got))
 	}
 }

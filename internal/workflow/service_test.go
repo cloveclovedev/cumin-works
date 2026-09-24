@@ -1021,10 +1021,10 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n < 3 {
 		t.Errorf("%d snapshot reads, want 3 or more", n)
 	}
-	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 11 {
-		t.Errorf("%d labels created, want 11", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 12 {
+		t.Errorf("%d labels created, want 12", n)
 	}
-	if got := sc.fake.LabelNames(sc.repo); len(got) != 11 || !slices.Contains(got, "cumin/status/ready") {
+	if got := sc.fake.LabelNames(sc.repo); len(got) != 12 || !slices.Contains(got, "cumin/status/ready") {
 		t.Errorf("labels of the repository = %v", got)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/implementing") {
@@ -1063,8 +1063,8 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	if err := second.Run(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 11 {
-		t.Errorf("%d labels created after the second start, want 11 still", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 12 {
+		t.Errorf("%d labels created after the second start, want 12 still", n)
 	}
 }
 
