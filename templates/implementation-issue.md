@@ -7,7 +7,7 @@ One implementation issue becomes one pull request.
 ## Rules
 
 - Keep the issue within 40 lines. The Implementer reads it once; the Owner reads it on a phone.
-- Start with "Where in the workflow": which rows of the state tables this issue builds, and a small diagram of that part. A row number never stands alone; add its meaning.
+- Start with "Where this fits": the part of the product that this issue changes, as a small diagram of the flow or the state with this issue's part marked, and the rules of the documents that it implements, each with its meaning.
 
 - Create the issue as a sub-issue of the requirement issue.
 - Make the issue body complete. The Implementer must be able to do the work from the issue body, the linked documents, and the repository. Do not rely on later comments.
@@ -19,8 +19,8 @@ One implementation issue becomes one pull request.
 ## Template
 
 ```markdown
-## Where in the workflow
-<!-- The rows of issue-states.md that this issue builds, each with its meaning in five words or fewer, and a diagram of that part: a text diagram of at most 40 characters wide, or an image of the repository that is readable on a phone. -->
+## Where this fits
+<!-- The part of the product that this issue changes: a small diagram of the flow or the state, with this issue's part marked (a text diagram of at most 40 characters wide, or an image of the repository that is readable on a phone). Then the rules of the documents that it implements, each with its meaning in five words or fewer. -->
 
 ## Context
 <!-- 2 to 4 sentences: the problem, and why this issue exists. -->
@@ -53,7 +53,7 @@ Out of scope:
 ## Example
 
 ````markdown
-## Where in the workflow
+## Where this fits
 I4 (a required check failed, fix in the same session).
 
 ```
