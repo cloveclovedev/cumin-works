@@ -49,7 +49,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
   - `--append-system-prompt <roleの指示>`: roleの指示はシステムプロンプトの末尾に足す。Claude Code既定のシステムプロンプト (ツールの使い方、リポジトリの `CLAUDE.md`) はそのまま活かす。
     - roleの指示は、`roles/<role>.md`、そのroleのdisciplineのファイル (`disciplines/<discipline>/<role>.md`)、平易な英語の決まり (`templates/writing-rules.md`)、対象のリポジトリのriskの基準を、この順に連結したものである。disciplineのファイルがないroleは、その部分を飛ばす。riskの基準のない起動 (使用率を読む最小の実行) は、残りを受け取る。合成の決まりは [Agentに共通の要件](../requirements/agents/common.md) の「指示の合成」にある。続きの依頼でも同じ指示を渡すので、依頼の種類に依存することは、指示ではなく依頼文に書く。
     - 連結するのは `internal/agent` である。`roles`、`disciplines`、`templates` は、どれも自分のMarkdownを読むだけで、互いを知らない。riskの基準は、呼び出し処理が3段を解決したうえで、起動の依頼のデータとして渡す。1か所で連結するので、外から差し替えられる部分が増えても、変わるのはその1か所である (disciplineを外から読む仕組みは [要求のbacklog](../requirements/backlog.md) の「roleとdisciplineの分離」)。
-  - `--add-dir <skillのディレクトリ>`: 1つの行動のためのテンプレート (Pull Requestの説明、レビューの指摘への返答、Ownerに判断を求める文章) は、システムプロンプトではなくskillとして渡す。長い実装のあとにシステムプロンプトの末尾を忘れないように、行動の直前に読ませるためである。`cumin run` が起動時に、`templates/` の文面を本文にしたskill (`cumin-pull-request`、`cumin-review-reply`、`cumin-decision-request`) を、Hostの状態のディレクトリの `skills/.claude/skills/<名前>/SKILL.md` に書く。毎回上書きするので、ファイルはバイナリと一致する。Claude Codeは `--add-dir` のディレクトリの `.claude/skills/` からskillを読み、起動時には名前と説明だけを文脈に入れ、本文は呼ばれたときに読む (公式: Skills)。`--setting-sources project` でも読まれる (公式: Skills、`project` のsetting sourceに依存する)。起動の記録の確認は `skills` を見ないので、変わらない。テンプレートの文面は `templates/` にだけ置く。
+  - `--add-dir <そのroleのskillのディレクトリ>`: 1つの行動のためのテンプレート (Pull Requestの説明、レビューの指摘への返答、Ownerに判断を求める文章) は、システムプロンプトではなくskillとして渡す。長い実装のあとにシステムプロンプトの末尾を忘れないように、行動の直前に読ませるためである。`cumin run` が起動時に、`templates/` の文面を本文にしたskillを、Hostの状態のディレクトリの `skills/<role>/.claude/skills/<名前>/SKILL.md` に書く。roleごとにディレクトリを分け、そのroleが受け取るskillだけを入れる。起動では自分のroleのディレクトリだけを渡すので、roleは自分の仕事のskillしか見ない。毎回、roleのディレクトリごと作り直すので、ファイルはバイナリと一致し、roleの間で移したskillが古い側に残らない。Claude Codeは `--add-dir` のディレクトリの `.claude/skills/` からskillを読み、起動時には名前と説明だけを文脈に入れ、本文は呼ばれたときに読む (公式: Skills)。`--setting-sources project` でも読まれる (公式: Skills、`project` のsetting sourceに依存する)。テンプレートの文面は `templates/` にだけ置く。
   - `-p <依頼文>`: 依頼文はプロンプトの引数で渡す。
   - `--setting-sources project`: ユーザアカウントの設定と `CLAUDE.md` を読ませない (実測 6e、27)。
   - `--permission-mode bypassPermissions`: 全てのツールを許可する。headlessの実行では、許可を求められても答える人がいない。`--dangerously-skip-permissions` と同じ意味である (CLI reference)。
@@ -90,10 +90,11 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 ### 起動の記録の確認
 
-- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことを確かめる。見るのは、`plugins` と `mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (項目があり、作業場所の外のパスを指すか、パスとして読み取れない形なら異常) である。項目がない場合まで異常にするのは、Claude Codeが項目の名前を変えたときに、確かめないまま通してしまわないためである。`--setting-sources project` を付けると `plugins` と `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 28。2026-09-21 の最小の実機実行でも同じだった)。
+- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことと、cuminが渡したskillが届いていることを確かめる。見るのは、`plugins` と `mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (項目があり、作業場所の外のパスを指すか、パスとして読み取れない形なら異常)、`skills` (項目がない、または、cuminがそのroleのために書き出したskillが1つでも載っていなければ異常) である。項目がない場合まで異常にするのは、Claude Codeが項目の名前を変えたときに、確かめないまま通してしまわないためである。`--setting-sources project` を付けると `plugins` と `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 28。2026-09-21 の最小の実機実行でも同じだった)。
 - 異常に当たったら、実行時間の上限と同じ手順 (プロセスグループにSIGTERM、猶予のあとSIGKILL) でその場で止める。追えない指示のもとでAgentに作業を始めさせないためである。異常終了の種類は「user-level context」とし、理由には項目の名前だけを書いて、パスは書かない。
 - `result` のイベントが来るまでに `init` のイベントがなければ、同じ種類の異常終了にする。起動の記録がないと、Agentが何を読んだのか分からない。
-- 確かめられないこと: `init` のイベントには、読み込んだ指示ファイル (`CLAUDE.md`) の一覧がない (2026-09-21 の実機実行で確かめた項目名は `agents`、`mcp_servers`、`plugins`、`skills`、`slash_commands`、`tools` など)。作業場所の外の指示については、`--setting-sources project` に頼る (実測 6e)。`skills` は、組み込みのものとリポジトリのものを名前では区別できないので、確かめない。
+- 確かめられないこと: `init` のイベントには、読み込んだ指示ファイル (`CLAUDE.md`) の一覧がない (2026-09-21 の実機実行で確かめた項目名は `agents`、`mcp_servers`、`plugins`、`skills`、`slash_commands`、`tools` など)。作業場所の外の指示については、`--setting-sources project` に頼る (実測 6e)。`skills` で確かめるのは、cuminのskillが全て載っていることだけである。組み込みのskillとリポジトリのskillは名前では区別できないので、載っていること自体は異常にしない。
+- `skills` の中身の形は、公式ドキュメントに記載がない (実測 86 は項目名だけ)。隣の項目が使う2つの形、名前の配列と `name` を持つオブジェクトの配列を読む。どちらでもない形は、読めないものとして異常にする。他の項目と同じで、読めない記録は何も確かめられないためである。実機で形を確かめるのは、live scenarioの前である。
 - 使用率を読む最小の実行では、この確認を行わない。作業ディレクトリが空で、結果も使わないからである。
 - 実機で確かめたこと (2026-09-22、Claude Code 2.1.267): sandboxのworktreeで本物のClaude Codeを起動したところ、claude.aiアカウントのコネクタが `mcp_servers` に載り、この確認が起動の直後に実行を止めた。コネクタを環境変数で切ったあとの実行は、「Agentの環境」を参照。
 - 採らなかった案: 異常を見つけても実行を最後まで待ち、それから異常終了にする。利用枠を無駄にするうえ、追えない指示のもとでの作業がGitHubに残りかねない。

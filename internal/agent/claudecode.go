@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -94,6 +95,9 @@ type event struct {
 	Plugins     json.RawMessage `json:"plugins"`
 	MCPServers  json.RawMessage `json:"mcp_servers"`
 	MemoryPaths json.RawMessage `json:"memory_paths"`
+	// Field of the init event that lists the skills of the run
+	// (measured-constraints.md row 86).
+	Skills json.RawMessage `json:"skills"`
 }
 
 type rateLimitInfo struct {
@@ -169,12 +173,13 @@ func (c ClaudeCode) Run(ctx context.Context, req Request) (*Run, error) {
 	// environment, an error with the authorization header). It is
 	// redacted before any log.
 	ex := c.execute(ctx, log, execution{
-		dir:       req.WorkDir,
-		env:       environment(req.Credentials, ghConfigDir),
-		args:      c.args(req),
-		limit:     req.TimeLimit,
-		secrets:   req.Credentials.secrets(),
-		checkInit: true,
+		dir:        req.WorkDir,
+		env:        environment(req.Credentials, ghConfigDir),
+		args:       c.args(req),
+		limit:      req.TimeLimit,
+		secrets:    req.Credentials.secrets(),
+		checkInit:  true,
+		wantSkills: wantSkills(req),
 	})
 	if ex.startErr != nil {
 		if ex.limitErr != nil {
@@ -238,6 +243,9 @@ type execution struct {
 	// checkInit stops the run when the init event shows user-level
 	// context: plugins, MCP servers, or memory outside dir.
 	checkInit bool
+	// wantSkills are the skills that cumin wrote for the role of this
+	// request. The init event must list every one of them.
+	wantSkills []string
 
 	// pid is the process of the CLI. 0 when it did not start.
 	pid int
@@ -276,7 +284,7 @@ func (c ClaudeCode) execute(ctx context.Context, log *slog.Logger, ex execution)
 	cmd.WaitDelay = c.grace()
 	reader := &streamReader{c: c, log: log, secrets: ex.secrets}
 	if ex.checkInit {
-		reader.workDir, reader.stop = ex.dir, stop
+		reader.workDir, reader.stop, reader.wantSkills = ex.dir, stop, ex.wantSkills
 	}
 	cmd.Stdout = reader
 	var stderr bytes.Buffer
@@ -320,12 +328,14 @@ type streamReader struct {
 	c       ClaudeCode
 	log     *slog.Logger
 	secrets []string
-	// workDir and stop are set when the init event is checked. stop ends
-	// the run when the event shows user-level context.
-	workDir string
-	stop    context.CancelFunc
-	s       stream
-	buf     []byte
+	// workDir, wantSkills and stop are set when the init event is checked.
+	// stop ends the run when the event shows user-level context, or when a
+	// skill of cumin did not arrive.
+	workDir    string
+	wantSkills []string
+	stop       context.CancelFunc
+	s          stream
+	buf        []byte
 }
 
 func (r *streamReader) Write(p []byte) (int, error) {
@@ -360,7 +370,7 @@ func (r *streamReader) line(line []byte) {
 	var reason string
 	switch {
 	case r.s.init:
-		reason = userContext(r.s.initEvent, r.workDir)
+		reason = userContext(r.s.initEvent, r.workDir, r.wantSkills)
 	case r.s.result != nil:
 		reason = noInitEvent
 	default:
@@ -434,7 +444,7 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 // them cannot confirm that nothing was loaded. The init event lists no
 // instruction files, so instructions cannot be checked here. The reason
 // names the field, not the paths.
-func userContext(e event, workDir string) string {
+func userContext(e event, workDir string, wantSkills []string) string {
 	// A missing field cannot confirm that nothing was loaded. Safe side.
 	if e.Plugins == nil {
 		return "the init event has no plugins field"
@@ -460,7 +470,46 @@ func userContext(e event, workDir string) string {
 			}
 		}
 	}
+	return missingSkill(e, wantSkills)
+}
+
+// missingSkill reports which skill of cumin the init event does not list,
+// or "" when it lists them all. cumin writes the skills of a role into one
+// directory and passes it with --add-dir, so a skill that is not offered
+// means that the agent would write a text of GitHub from memory instead of
+// from the template.
+//
+// The field must be present, as plugins and mcp_servers must: a record
+// that cumin cannot read confirms nothing. The shape of the field is not
+// in the official documentation, so both shapes that the neighbouring
+// fields use are read: a list of names, and a list of objects with a name.
+func missingSkill(e event, want []string) string {
+	if e.Skills == nil {
+		return "the init event has no skills field"
+	}
+	if len(want) == 0 {
+		return ""
+	}
+	got, ok := jsonNames(e.Skills)
+	if !ok {
+		// A shape that cumin cannot read cannot confirm anything.
+		return "the init event has skills of an unknown shape"
+	}
+	for _, name := range want {
+		if !slices.Contains(got, name) {
+			return "the init event does not list the skill " + name
+		}
+	}
 	return ""
+}
+
+// wantSkills are the skills that the start record of this request must
+// list: those of its role, when cumin passed a directory of skills.
+func wantSkills(req Request) []string {
+	if req.SkillsDir == "" {
+		return nil
+	}
+	return SkillNamesOf(req.Role)
 }
 
 // jsonPresent reports whether raw is a JSON value other than null, an
@@ -480,6 +529,36 @@ func jsonPresent(raw json.RawMessage) bool {
 		return len(object) > 0
 	}
 	return true
+}
+
+// jsonNames returns the names of a list: the strings of a list of
+// strings, or the "name" of every object of a list of objects. These are
+// the two shapes that the neighbouring fields of the init event use
+// (capabilities is a list of strings; plugins and mcp_servers are lists of
+// objects with a name). The second value is false for any other shape, so
+// that the caller can tell "cumin cannot read this" from "the list is
+// empty".
+func jsonNames(raw json.RawMessage) ([]string, bool) {
+	var list []any
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return nil, false
+	}
+	names := make([]string, 0, len(list))
+	for _, item := range list {
+		switch item := item.(type) {
+		case string:
+			names = append(names, item)
+		case map[string]any:
+			name, ok := item["name"].(string)
+			if !ok {
+				return nil, false
+			}
+			names = append(names, name)
+		default:
+			return nil, false
+		}
+	}
+	return names, true
 }
 
 // jsonStrings collects every string in raw, at any depth.

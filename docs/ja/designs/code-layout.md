@@ -63,7 +63,7 @@
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
-| | `skills.go` | テンプレートをskillとして書き出す |
+| | `skills.go` | テンプレートを、roleごとのディレクトリにskillとして書き出す |
 | | `service.go` | 1回の依頼の入口 `Start` (指示の合成、使用率、token、身元、実行) と、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |

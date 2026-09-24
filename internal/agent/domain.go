@@ -29,7 +29,7 @@ type Request struct {
 	// SessionID continues an earlier session. Empty starts a new session.
 	SessionID string
 	// SkillsDir is the directory whose .claude/skills/ holds the skills
-	// that cumin wrote for the agents (WriteSkills). Empty passes no
+	// that cumin wrote for this role (WriteSkills). Empty passes no
 	// skills.
 	SkillsDir string
 	// Model is the model of the CLI. Empty uses the default of the CLI.

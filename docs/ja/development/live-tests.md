@@ -140,7 +140,8 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 8と9を cumin のログで確かめられない理由:
 
-- `init` のイベントは `skills` を持つ (実測 86) が、cuminはそれを読まない。イベントを読む構造体が持つのは `plugins`、`mcp_servers`、`memory_paths` などで、`skills` は捨てている。生の行は、項目の名前だけを debug のログに出すのに1度使う ([Agentの実行の設計](../designs/agent-run.md) の「出力の読み取り」)。値は残らない。
+- cumin は `init` のイベントの `skills` を読むが、確かめるのは、cumin がその role のために書き出した skill が全て載っていることだけである。1つでも欠けていれば、実行は異常終了「user-level context」で止まる (7で分かる)。載っている skill の一覧そのものは、ログに残らない。
+- Host のユーザの skill が載っていないことは、cumin の確認の範囲ではない。名前では組み込みの skill と区別できないためである。
 - Claude Code のセッションの記録には `init` のイベントそのものが入らない。残るのは、やりとりと、文脈に入った文章 (attachment) である。
 - そのかわり、Agent に実際に渡った skill の一覧は、文脈に入る system-reminder として記録に残る。組み込みの skill も同じ一覧に並ぶので、cuminの3つがあることと、Hostのユーザの skill がないことを見る。
 

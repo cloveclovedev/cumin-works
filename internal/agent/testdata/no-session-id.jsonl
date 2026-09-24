@@ -1,2 +1,2 @@
-{"type":"system","subtype":"init","plugins":[],"mcp_servers":[]}
+{"type":"system","subtype":"init","skills":["cumin-pull-request","cumin-review-reply","cumin-decision-request"],"plugins":[],"mcp_servers":[]}
 {"type":"result","subtype":"success","is_error":false,"num_turns":1,"structured_output":{"result":"done","summary":"I read the file.","blocked_reason":""}}

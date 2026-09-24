@@ -31,8 +31,9 @@ type Service struct {
 	Apps map[string]map[config.Role]github.AppCredentials
 	// GitHub creates the tokens and reads the bot users.
 	GitHub *github.AppClient
-	// SkillsDir is the directory whose .claude/skills/ holds the skills
-	// that cumin run wrote at start (WriteSkills). Every run gets it.
+	// SkillsDir is the directory that holds one directory of skills for
+	// each role, as cumin run wrote them at its start (WriteSkills). A run
+	// gets the directory of its own role.
 	SkillsDir string
 	// Logger may be nil. Then the default logger is used.
 	Logger *slog.Logger
@@ -143,7 +144,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 		Text:            req.Text,
 		WorkDir:         req.WorkDir,
 		SessionID:       req.SessionID,
-		SkillsDir:       s.SkillsDir,
+		SkillsDir:       s.skillsDir(req.Role),
 		Model:           settings.Model,
 		TimeLimit:       settings.TimeLimit,
 		Credentials:     Credentials{Token: token.Token, AuthorName: id.name, AuthorEmail: id.email},
@@ -268,4 +269,13 @@ func (s *Service) logger() *slog.Logger {
 		return s.Logger
 	}
 	return slog.Default()
+}
+
+// skillsDir is the directory of skills that a run of the role passes with
+// --add-dir, or an empty string when no skills were written.
+func (s *Service) skillsDir(role config.Role) string {
+	if s.SkillsDir == "" {
+		return ""
+	}
+	return SkillDir(s.SkillsDir, role)
 }

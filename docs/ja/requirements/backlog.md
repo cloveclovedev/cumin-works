@@ -279,7 +279,8 @@ cuminのroleの指示は、性質の違う2つのことを1つのファイルに
 - まずは、1つのroleに1つのdisciplineだけにする。複数を載せる案は、その次に考える。載せるときは、連結の順序を設定の並び順で決める。GitHubのラベルは集合であり順序を持たないので、ラベルに順序を求めると、同じ状態から同じ指示が組み立てられなくなる。
 - 本体はdisciplineの名前を1つも知らない。`software-engineering` も、追加のdisciplineとまったく同じ経路で読み込む。特別扱いを1つ作ると、同梱のdisciplineが通らない経路を、追加のdisciplineだけが通ることになる。
 - 追加のdisciplineが依存してよいもの (roleが定める見出し、`cumin-*` skillの存在、結果の形式) を契約として決め、cuminにその版を1つ持たせる。roleの指示を変えたときに、外のdisciplineが黙って壊れないようにする。
-- 追加のdisciplineはHostのディレクトリに置き、skillは `--add-dir` で渡す。起動の記録の確認が見るのは `plugins` と `mcp_servers` なので、skillとして渡す限り引っかからない。
+- 追加のdisciplineはHostのディレクトリに置き、skillは `--add-dir` で渡す。cuminがそのroleのために書き出したskillが全て載っていることは、起動の記録の確認が見る。追加のdisciplineのskillも、その一覧に入る形で渡す。
+- 1つのroleの、1つのdisciplineだけで使うskillは、そのdisciplineのディレクトリの、roleの名前のディレクトリに置く (`disciplines/<discipline>/<role>/`)。roleのファイルと同じ場所にまとまり、disciplineを差し替えるとskillも一緒に替わる。今はdisciplineが1つで、skillはroleごとにしか分かれていない。
 - 外部サービスへの投稿 (SNSなど) は、disciplineの仕事にしない。成果物はリポジトリのファイルとして残し、mergeされたものをGitHub Actionsが投稿する。cuminの完了の判定はGitHubの事実のままで、公開の認証情報もcuminの権限の範囲に入らない。
 
 #### 後回しにした理由

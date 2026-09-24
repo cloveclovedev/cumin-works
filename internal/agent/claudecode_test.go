@@ -209,7 +209,7 @@ func TestRun_CancelIsTimeLimit(t *testing.T) {
 	// The script prints the init event, then marks that it started. The
 	// child keeps no pipe open, so the read ends when sh is killed.
 	// Children of the real CLI are the subject of #41.
-	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\",\"plugins\":[],\"mcp_servers\":[]}'\n: > " + started + "\nsleep 60 >/dev/null 2>&1\n"
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\",\"plugins\":[],\"mcp_servers\":[],\"skills\":[]}'\n: > " + started + "\nsleep 60 >/dev/null 2>&1\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestRun_ResumeAndModel(t *testing.T) {
 // prologue is shell text that runs first (for example a trap).
 func neverEndingCLI(t *testing.T, prologue string) (path, childPID string) {
 	t.Helper()
-	return neverEndingCLIWithInit(t, prologue, `{"type":"system","subtype":"init","session_id":"`+fixtureSessionID+`","plugins":[],"mcp_servers":[]}`)
+	return neverEndingCLIWithInit(t, prologue, `{"type":"system","subtype":"init","session_id":"`+fixtureSessionID+`","plugins":[],"mcp_servers":[],"skills":[]}`)
 }
 
 // neverEndingCLIWithInit is neverEndingCLI with the given init line.
@@ -413,31 +413,31 @@ func TestUserContext_MemoryPathsAgainstTheWorkDirectory(t *testing.T) {
 	// clean is an init event with empty plugins and MCP servers, as a
 	// real one with --setting-sources project.
 	clean := func(memoryPaths string) event {
-		return event{Plugins: []byte(`[]`), MCPServers: []byte(`[]`), MemoryPaths: []byte(memoryPaths)}
+		return event{Plugins: []byte(`[]`), MCPServers: []byte(`[]`), MemoryPaths: []byte(memoryPaths), Skills: []byte(`[]`)}
 	}
 	inside := clean(`{"auto":"` + filepath.Join(work, ".claude", "memory") + `"}`)
-	if reason := userContext(inside, work); reason != "" {
+	if reason := userContext(inside, work, nil); reason != "" {
 		t.Errorf("userContext(inside) = %q, want none", reason)
 	}
 	outside := clean(`{"auto":"` + filepath.Join(t.TempDir(), "memory") + `"}`)
-	if reason := userContext(outside, work); !strings.Contains(reason, "memory_paths") {
+	if reason := userContext(outside, work, nil); !strings.Contains(reason, "memory_paths") {
 		t.Errorf("userContext(outside) = %q, want memory_paths", reason)
 	}
-	none := event{Plugins: []byte(`[]`), MCPServers: []byte(`[]`), MemoryPaths: []byte(`null`)}
-	if reason := userContext(none, work); reason != "" {
+	none := event{Plugins: []byte(`[]`), MCPServers: []byte(`[]`), MemoryPaths: []byte(`null`), Skills: []byte(`[]`)}
+	if reason := userContext(none, work, nil); reason != "" {
 		t.Errorf("userContext(none) = %q, want none", reason)
 	}
 	// A record without the fields cannot confirm that nothing was loaded.
-	if reason := userContext(event{MCPServers: []byte(`[]`)}, work); !strings.Contains(reason, "no plugins field") {
+	if reason := userContext(event{MCPServers: []byte(`[]`)}, work, nil); !strings.Contains(reason, "no plugins field") {
 		t.Errorf("userContext(no plugins field) = %q", reason)
 	}
-	if reason := userContext(event{Plugins: []byte(`[]`)}, work); !strings.Contains(reason, "no mcp_servers field") {
+	if reason := userContext(event{Plugins: []byte(`[]`)}, work, nil); !strings.Contains(reason, "no mcp_servers field") {
 		t.Errorf("userContext(no mcp_servers field) = %q", reason)
 	}
 	// A present value without a path cannot be checked, so it counts.
 	for _, raw := range []string{`true`, `{"auto":1}`, `[1, 2]`} {
 		unknown := clean(raw)
-		if reason := userContext(unknown, work); !strings.Contains(reason, "unknown shape") {
+		if reason := userContext(unknown, work, nil); !strings.Contains(reason, "unknown shape") {
 			t.Errorf("userContext(memory_paths %s) = %q, want unknown shape", raw, reason)
 		}
 	}
@@ -632,5 +632,59 @@ func TestRun_SkillsDirIsPassedWithAddDir(t *testing.T) {
 	i := slices.Index(args, "--add-dir")
 	if i < 0 || i+1 >= len(args) || args[i+1] != req.SkillsDir {
 		t.Errorf("args have no --add-dir %s: %q", req.SkillsDir, args)
+	}
+}
+
+// The start record must list every skill that cumin wrote for the role.
+// A skill that did not arrive means that the agent would write a text of
+// GitHub from memory instead of from the template, so the run is stopped
+// at once, as the other findings of this check are.
+func TestRun_TheStartRecordMustListTheSkillsOfTheRole(t *testing.T) {
+	tests := []struct {
+		name       string
+		fixture    string
+		skillsDir  bool
+		wantDetail string // empty means that the run succeeds
+	}{
+		{"every skill is listed", "done.jsonl", true, ""},
+		{"a list of objects with a name", "init-skills-objects.jsonl", true, ""},
+		{"one skill did not arrive", "init-skill-missing.jsonl", true, "does not list the skill cumin-review-reply"},
+		{"a shape that cumin cannot read", "init-skills-shape.jsonl", true, "skills of an unknown shape"},
+		{"no skills field", "init-no-skills.jsonl", true, "no skills field"},
+		// Without a skills directory cumin wrote nothing for this run, so
+		// there is nothing to find; the field must still be there.
+		{"no skills were written", "init-skill-missing.jsonl", false, ""},
+		{"no skills were written and no field", "init-no-skills.jsonl", false, "no skills field"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, _ := fakeCLI(t, tt.fixture, 0)
+			var logs bytes.Buffer
+			c := ClaudeCode{Path: path, Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))}
+			req := request(t)
+			if tt.skillsDir {
+				req.SkillsDir = t.TempDir()
+			}
+			run, err := c.Run(context.Background(), req)
+			if tt.wantDetail == "" {
+				if err != nil {
+					t.Fatalf("Run: %v", err)
+				}
+				if run.Result.Result != ResultDone {
+					t.Errorf("result = %+v, want done", run.Result)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Run = %+v, want an abnormal end", run)
+			}
+			end := abnormalEnd(t, err)
+			if end.Kind != EndUserContext {
+				t.Errorf("Kind = %s, want %s", end.Kind, EndUserContext)
+			}
+			if !strings.Contains(end.Detail, tt.wantDetail) {
+				t.Errorf("Detail = %q, want it to contain %q", end.Detail, tt.wantDetail)
+			}
+		})
 	}
 }
