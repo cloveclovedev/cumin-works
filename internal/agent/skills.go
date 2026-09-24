@@ -57,9 +57,11 @@ var skills = []Skill{
 	},
 }
 
-// Skills returns every skill that cumin has.
+// Skills returns every skill that cumin has, as a copy: the roles of a
+// skill decide which directory holds it and what the start record must
+// list, so a caller must not be able to change them.
 func Skills() []Skill {
-	return append([]Skill(nil), skills...)
+	return copySkills(skills)
 }
 
 // SkillsOf returns the skills of one role, in the order of the list.
@@ -70,7 +72,17 @@ func SkillsOf(role config.Role) []Skill {
 			of = append(of, skill)
 		}
 	}
-	return of
+	return copySkills(of)
+}
+
+// copySkills copies the list and the roles of each skill.
+func copySkills(list []Skill) []Skill {
+	out := make([]Skill, 0, len(list))
+	for _, skill := range list {
+		skill.Roles = slices.Clone(skill.Roles)
+		out = append(out, skill)
+	}
+	return out
 }
 
 // SkillNamesOf returns the names of the skills of one role, which is what

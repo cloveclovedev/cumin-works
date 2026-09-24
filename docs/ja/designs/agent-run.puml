@@ -7,9 +7,9 @@ participant "cumin\n(internal/agent)" as cumin
 participant "GitHub" as github
 participant "Claude Code\n(claude -p)" as claude
 
-run -> run : 起動時に、skill を書く (毎回上書き)\n$HOME/.local/state/cumin/skills/.claude/skills/<名前>/SKILL.md\n(本文は templates/ のテンプレート)
+run -> run : 起動時に、roleごとに skill を書く (毎回作り直す)\n$HOME/.local/state/cumin/skills/<role>/.claude/skills/<名前>/SKILL.md\n(本文は templates/ のテンプレート)
 note right of run : cumin-pull-request、cumin-review-reply、\ncumin-decision-request
-run -> cumin : 依頼 (skillのディレクトリを添えて)
+run -> cumin : 依頼 (そのroleのskillのディレクトリを添えて)
 
 cumin -> claude : 最小の実行 (空の一時ディレクトリで)\n使用率を読む
 claude --> cumin : rate_limit_event
@@ -20,10 +20,10 @@ github --> cumin : installation token
 cumin -> github : botの身元 (roleごとに初回だけ)\nGET /app、GET /users/<slug>[bot]
 github --> cumin : slug、user id
 
-cumin -> claude : 起動 (worktree で、tokenと作者を環境変数で)\nroleの指示 (--append-system-prompt)、依頼文、スキーマ、\nskillのディレクトリ (--add-dir)、\n新しいセッションか --resume
+cumin -> claude : 起動 (worktree で、tokenと作者を環境変数で)\nroleの指示 (--append-system-prompt)、依頼文、スキーマ、\nそのroleのskillのディレクトリ (--add-dir)、\n新しいセッションか --resume
 activate claude
 claude --> cumin : system / init\n(セッションの番号、plugins、mcp_servers、memory_paths、skills)
-cumin -> cumin : 起動の記録を確かめる\n(作業場所の外の文脈なら、その場で止める。skills は見ない)
+cumin -> cumin : 起動の記録を確かめる\n(作業場所の外の文脈、または cumin の skill の欠けなら、\nその場で止める)
 claude -> claude : 作業。行動の直前に skill を呼び、\nSKILL.md (テンプレート) を読む\n例: gh pr create の前に cumin-pull-request
 claude --> cumin : rate_limit_event\n(使用率とリセット時刻)
 claude --> cumin : assistant, user, ...\n(読み飛ばす)
