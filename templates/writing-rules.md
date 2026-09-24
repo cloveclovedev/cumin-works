@@ -13,6 +13,15 @@ These rules apply to every issue, pull request, review, comment, and commit mess
 9. Use lists and tables for steps, options, and conditions. Do not join more than two clauses with "and", "or", or "but".
 10. Define each abbreviation at first use. Write dates as `2026-09-19`. Put code, paths, and commands in backticks.
 
+## Length and diagrams
+
+The Owner reads most of this text on a phone, once, between other things. Short and visual wins.
+
+11. Keep to the length limits. Implementation issue: 40 lines. Pull request description: 40 lines. Decision request: 20 lines. Plan summary and acceptance check: the table, plus 15 lines. Any other comment to the Owner: 15 lines. Folded blocks (`<details>`) do not count. Put command output, long lists, and logs inside `<details>`.
+12. Never write a row number alone. Add its meaning in five words or fewer, every time: "I3 (checks passed, to reviewing)", "R2 (the split is verified)".
+13. Show a flow, a state, or a structure as a diagram before the text. Use an image that the repository holds (`![...](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/docs/.../<name>.svg)`) when it is readable on a phone without zoom, else a text diagram in a code block, at most 40 characters wide and 12 lines tall. Mermaid does not render in the GitHub app; do not use it. The text says only what the diagram cannot show.
+14. Put the point in the first two lines. One table beats three paragraphs. Do not repeat what the issue, the design note, or the template already says; link to it.
+
 Do not use bold text. Use headings, lists, and tables for structure.
 
 Keep the section headings of each template exactly as written. If a section has no content, write "None". Do not delete the section.

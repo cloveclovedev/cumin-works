@@ -13,7 +13,8 @@ Use this template in two cases:
 - Put the decision in the first line. The Owner must understand the question without reading the rest.
 - Say what is not decided. A review that does not end usually means that something in the requirement is not decided.
 - Give 2 or 3 options, with the good and bad points of each. Recommend one option.
-- Keep it short. Give only the facts that the Owner needs to decide.
+- Keep it within 20 lines. Give only the facts that the Owner needs to decide. Put background that the Owner may skip in a `<details>` block.
+- Write a row number with its meaning ("I5 (review comments, fix request)"). Show a flow or a state as a small diagram when it explains the question better than words.
 
 ## Template
 
