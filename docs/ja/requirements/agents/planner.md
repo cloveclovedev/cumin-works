@@ -39,6 +39,7 @@ GitHubに残すもの:
 - 実装Issueどうしの依存関係 (blocked by)。同じ要求Issueのsub-issueの間だけに張る。他の要求Issueへの依存は、Ownerが要求Issueどうしに張る
 - それぞれの実装Issueに、`risk/*` のラベルをちょうど1つ
 - 要求Issueにmilestoneが付いていれば、それぞれの実装Issueに同じmilestoneを付ける
+- Implementerが変更できないファイルの変更が要るときは、その変更をOwnerが手で行うsub-issueとして作る (分割基準9)。`cumin/type/owner-task` と `risk/high` を付け、状態ラベルは付けない。Contextに、Ownerが行う理由を書く。それに依存する実装Issueに blocked by を張り、分割の全体像の Please check に書く
 - 要求Issueへのコメントを1つ。分割の全体像を、Ownerが確認しやすい形で書く。形式は [plan-summary.md](../../../../templates/plan-summary.md) に従う
 
 実装Issueの本文は、[implementation-issue.md](../../../../templates/implementation-issue.md) の6つの節で書く。
@@ -90,7 +91,7 @@ riskは `risk/low`、`risk/medium`、`risk/high` の3段階である。段階の
 
 Plannerが `done` を返す前に自分で確かめること:
 
-- 全ての実装Issueが、分割基準の1〜9を満たしている
+- 全ての実装Issueが、分割基準の1〜10を満たしている
 - 実装Issueを合わせると、要求Issueの範囲を全て覆っている
 - 依存関係が循環していない
 - `risk/high` に当たる変更が、それだけの最小の実装Issueに隔離されている

@@ -173,3 +173,13 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 99 | `GET /repos/{owner}/{repo}/contents/{path}` を installation token で呼ぶには、Contents の read が要る | 公式: Permissions required for GitHub Apps | 公式文書 |
 | 100 | `man launchd.plist`: `KeepAlive` の `SuccessfulExit` は、終了コードが0かどうかの逆の条件で起動し直す意味で、`KeepAlive` は `RunAtLoad` を含意する。`ProcessType` の `Standard` は書かないのと同じで、`Background` はCPUとI/Oを絞る。`ExitTimeOut` はSIGTERMからSIGKILLまでの時間で、初期値はシステムが決める。launchdはjobのプロセスグループに残ったプロセスを止めるが、CLIは自分のプロセスグループで動くので届かない | `man launchd.plist` | 公式文書 |
 | 101 | ログイン中のユーザの LaunchAgent は `gui/<uid>` の domain にある。Appleが求めるのは一意な `Label` だけで、逆ドメインの形は例の慣習である。launchdから起動したcuminは、Keychainの項目を確認の画面なしで読み、`kill -9` のあと11秒で起動し直され、`launchctl kill SIGTERM` で終了コード0で止まった | `man launchctl`。Hostでの実測 (#112 の記録) | 公式文書 + 実測 |
+
+## 11. 通知の実装で確かめたこと (2026-09-22、2026-09-23)
+
+要求Issue #81 の実装 (#142、#158) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 102 | Discordのwebhookは `POST /webhooks/{webhook.id}/{webhook.token}` で実行する。本文には `content`、`embeds`、`components`、`file`、`poll` のどれかが要り、`content` は2000文字まで。既定の応答は `204 No Content` で、メッセージの保存に失敗してもエラーにならない。`wait=true` を付けると、作られたメッセージが返る。Allowed Mentions Object の `parse` を空の配列にすると、全てのメンションが抑えられる | 公式: Execute Webhook (2026-09-22) | 公式文書 |
+| 103 | `security add-generic-password ... -w` は、次の引数を値として取る。`-w` のあとにkeychainのパスを書くと、パスが秘密の値として保存され、コマンドは成功を報告する。`-w` を付けない、または `-w` を最後に置いてkeychainのパスを書かないと、値を標準入力から2回読む | Hostで、一時的なkeychainと作り物の値で実測 (2026-09-22) | 実測 |
+| 104 | keychainのパスを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧の全体を探す。cuminは既定のkeychainをパスで指定して読むので、手順書の `security` のコマンドもkeychainを指定する (66の続き) | `man security` と、Hostでの実測 | 公式文書 + 実測 |

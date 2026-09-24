@@ -6,10 +6,11 @@ import "github.com/cloveclovedev/cumin-works/internal/platform/github"
 // repository when it starts, when they are missing: the table "Labels" of
 // docs/ja/requirements/workflow/issue-states.md. The colors are the ones of
 // the cumin-works repository. A test compares the names with the document.
-// One type label, seven status labels, and three risk labels.
+// Two type labels, seven status labels, and three risk labels.
 func RepositoryLabels() []github.Label {
 	return []github.Label{
 		{Name: LabelRequirement, Color: "5319E7", Description: "This is a requirement issue"},
+		{Name: LabelOwnerTask, Color: "5319E7", Description: "The Owner does this work by hand; cumin does not start it"},
 		{Name: LabelReady, Color: "0E8A16", Description: "The Owner says: this issue can start"},
 		{Name: LabelPlanning, Color: "1D76DB", Description: "The Planner splits the requirement"},
 		{Name: LabelImplementing, Color: "1D76DB", Description: "The Implementer works on the issue, or the sub-issues are in progress"},

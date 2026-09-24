@@ -8,6 +8,7 @@ Read by: the Owner, to approve the plan.
 - Write the comment after you create all implementation issues.
 - Show that every requirement is covered by at least one issue.
 - Write every assumption that you made. The Owner corrects wrong assumptions before work starts.
+- Name every issue that the Owner must do by hand (label `cumin/type/owner-task`) under "Please check": what to change, why the Implementer cannot, and which issues wait for it.
 
 ## Template
 

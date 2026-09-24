@@ -8,7 +8,7 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 
 ラベルには3つの種類があり、名前の前半で見分けられる。
 
-- `cumin/type/*`: Issueの種類を表す。今は `cumin/type/requirement` だけで、Issueが要求Issueであることを表す。状態ではないので、閉じるまで付けたままにする。
+- `cumin/type/*`: Issueの種類を表す。`cumin/type/requirement` は要求Issue、`cumin/type/owner-task` はOwnerが手で行う作業のIssueを表す。状態ではないので、閉じるまで付けたままにする。
 - `cumin/status/*`: Issueの状態を表す。1つのIssueに常に1つだけ付く。
 - `risk/*`: mergeのriskを表す。実装Issueに常に1つだけ付く。
 
@@ -17,6 +17,7 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 | ラベル | 付く対象 | 意味 | 付ける人 |
 |---|---|---|---|
 | `cumin/type/requirement` | 要求Issue | これは要求Issueである | Owner |
+| `cumin/type/owner-task` | 実装Issue | この作業はOwnerが手で行う。cuminは着手しない。Implementerが変更できないファイル (保護されたパス、Appの権限で書けないファイル) の変更が要るときに使う | Planner、Owner |
 | `cumin/status/ready` | 実装Issue、要求Issue | Ownerが「進めてよい」と合図した | Owner |
 | `cumin/status/planning` | 要求Issue | Plannerが分割している | cumin |
 | `cumin/status/implementing` | 実装Issue、要求Issue | 実装Issueでは、Implementerが動いている (修正を含む)。要求Issueでは、sub-issueの実装が進んでいる | cumin |
@@ -68,6 +69,8 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 
 R3が `cumin/status/ready` の付いた時刻を見るのは、要求Issueを見直す場面のためである。前の分割で `cumin/status/ready` が付いたsub-issueは、cuminが着手するまでそのラベルのまま残る。ラベルの有無だけで判定すると、Ownerが新しいsub-issueを確認する前に、要求Issueが `cumin/status/implementing` に替わってしまう。ラベルが付いた時刻は、GitHubがIssueのイベントとして記録している。
 
+`cumin/type/owner-task` の付いたsub-issueは、Ownerが作業を済ませてから閉じる。cuminは、`cumin/status/ready` が付いていても着手しない。それに依存する実装Issueは、blocked by で止まる。Ownerが閉じ忘れて他のsub-issueが全て閉じると、R6が成り立つ。
+
 Ownerは、分割結果の確認のとき、一部のsub-issueにだけ `cumin/status/ready` を付けてもよい。それらが全て閉じて、状態ラベルのないsub-issueだけが残ると、R6が成り立ち、cuminがもう一度Ownerに確認を求める。Ownerが残りを忘れて、要求Issueが黙って止まることを防ぐ。残りのsub-issueが要らなくなったときは、Ownerがそれを閉じる。全て閉じれば、R4が成り立つ。
 
 Ownerは、要求Issueを書き終えたら `cumin/status/ready` を付ける。これでR1が成り立つ。分割に失敗して `cumin/status/awaiting-owner-decision` になったときも、要求Issueを直してから `cumin/status/ready` を付ける。sub-issueが途中まで作られていても、Plannerは既にあるsub-issueを確かめて、同じものを二重に作らない。`cumin/type/requirement` は要求Issueである印なので、外さずに付けたままにする。Ownerの「進めてよい」の合図を、実装Issueと同じ `cumin/status/ready` に揃えるため、この形にしている。
@@ -84,7 +87,7 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 
 | # | cuminの動作 | きっかけ | 動く前に確かめること | うまくいかないとき |
 |---|---|---|---|---|
-| I1 | ラベルを `cumin/status/implementing` に替え、新しいセッションでImplementerに実装を依頼する。Pull Requestが既にあれば、続きから進めるよう依頼する | 定期確認: 開いていて `cumin/status/ready` が付いた実装Issueがある | blocked by のIssueが全て閉じている。AIリソースに空きがある (利用枠がしきい値未満、または使い切りの許可がある) | — |
+| I1 | ラベルを `cumin/status/implementing` に替え、新しいセッションでImplementerに実装を依頼する。Pull Requestが既にあれば、続きから進めるよう依頼する | 定期確認: 開いていて `cumin/status/ready` が付いた実装Issueがある | `cumin/type/owner-task` が付いていない。blocked by のIssueが全て閉じている。AIリソースに空きがある (利用枠がしきい値未満、または使い切りの許可がある) | — |
 | I2 | ラベルを `cumin/status/awaiting-checks` に替え、必須のcheckの完了を待ち始める | 実行終了: Implementerの実行が終わり、結果が `done` | このIssueを閉じるPull Requestが開いている。そのPull Requestの作成者が、ImplementerのGitHub Appである。ブランチの先頭のコミットがpushされている | 結果が `blocked`、Pull Requestがない、作成者が違う、または先頭のコミットがpushされていないなら `cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら1回だけやり直し、それでも駄目なら同じ扱いにする |
 | I3 | ラベルを `cumin/status/reviewing` に替え、Reviewerにレビューを依頼する | 定期確認: `cumin/status/awaiting-checks` の実装Issueで、必須のcheckが、Pull Requestの先頭のコミットで全て通った。必須のcheckが1つもなければ、すぐに通ったとみなす | — | — |
 | I4 | ラベルを `cumin/status/implementing` に戻し、失敗したcheckの内容を添えてImplementerに修正を依頼する | 定期確認: `cumin/status/awaiting-checks` の実装Issueで、必須のcheckのどれかが失敗した | checkの修正依頼が上限 (3回) に達していない | 上限に達したら `cumin/status/awaiting-owner-decision` に替えて通知する |

@@ -80,6 +80,8 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | ログの入れ替え (rotation) | `~/.local/state/cumin/cumin.log` は、launchdが標準出力を向ける先で、増え続ける。1つのリポジトリで60秒ごとの定期確認では、25分で35行だった。`newsyslog` の設定か、cuminの中で日ごとに切り替える | v0.1では、Hostが開発機で、ファイルの大きさが問題にならない | Mac miniで常時動かすようになったとき |
 | 別のHostへの移行の手順 | GitHub Appとそのインストールは使い回せるが、Keychainの項目とLaunchAgentは1台のものである。手順は、バイナリの組み込み、設定ファイルのコピー、Appごとの秘密鍵の発行とKeychainへの登録、`cumin setup launchd` になる。setup-guide.md に節を書く | まだ移す先がない | Mac miniに移すとき |
 | `scripts/install.sh` の弱点 | `--restart` は、ディスクのplistと入れたバイナリを突き合わせるが、`launchctl kickstart` はlaunchdが読み込み済みの定義を起動する。plistを書き換えて読み込み直していないと、別のパスのバイナリを起動して成功と報告しうる。スクリプトのテストもない (偽の `go` と `launchctl` が要る) | 差し替えは手順書のとおり `bootout` と `bootstrap` で行えば起きない | 差し替えで失敗したとき。他のHostに導入するとき |
+| `cumin setup notify` の試しの通知 | webhookのアドレスを保存したあとに、試しのメッセージを1つ送って、届く道を1回で確かめる | 通知の要求では、本物のメッセージをlive scenarioの1回だけにした | 設定したのに通知が届かない、という事故が起きたとき |
+| live scenarioの通知先を分ける | live scenarioが送る通知が、Ownerの運用のチャンネルに残る。sandbox用のwebhookをKeychainの別の項目にして、live scenarioではそれを使う | 通知を送るlive scenarioが、まだ1つしかない | 通知を送るlive scenarioが増えて、運用の通知に紛れるようになったとき |
 | Linuxへの対応 | HostとしてLinuxを使えるようにする | Hostは Mac mini を想定している | Linuxのマシンで動かしたくなったとき |
 
 ## 対象を広げる
