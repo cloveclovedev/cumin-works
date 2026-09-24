@@ -22,7 +22,6 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
-	"github.com/cloveclovedev/cumin-works/roles"
 )
 
 // runRun is `cumin run`: the resident program. It loads the Host settings,
@@ -184,7 +183,7 @@ func writeSkills() (string, error) {
 		return "", err
 	}
 	dir := filepath.Join(state, "skills")
-	if err := roles.WriteSkills(dir); err != nil {
+	if err := agent.WriteSkills(dir); err != nil {
 		return "", err
 	}
 	return dir, nil

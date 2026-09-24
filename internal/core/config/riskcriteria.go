@@ -1,11 +1,17 @@
-package roles
+package config
 
-// The risk criteria is the text that the Planner and the Reviewer
-// receive word for word when they give a change a risk/* label. cumin does
-// not read it. It has the three levels of the other settings: the text that
-// ships with cumin, risk-criteria.md next to the Host settings file, and
+// The risk criteria is the text that the Planner and the Reviewer receive
+// word for word when they give a change a risk/* label. cumin does not read
+// it. It has the three levels of the other settings: the text that ships
+// with cumin, risk-criteria.md next to the Host settings file, and
 // .cumin/risk-criteria.md of the target repository, each stronger than the
 // one before (docs/ja/requirements/cumin-core.md, the topic on settings).
+// The text of a level replaces the whole text of a weaker one.
+//
+// The text that ships with cumin belongs to the discipline, because a risk
+// criterion is the judgment of one field of work. The file of a role in a
+// discipline has one level today; when it gains the same three, this file
+// is where the levels are resolved.
 
 import (
 	"errors"
@@ -71,9 +77,7 @@ func RiskCriteria(repository *string, hostDir string) (string, RiskCriteriaSourc
 }
 
 // DefaultRiskCriteria returns the text that ships with cumin, which the
-// requirement of the Planner names as the built-in value. The text
-// belongs to the discipline, because a risk criterion is the judgment of
-// one field of work.
+// requirement of the Planner names as the built-in value.
 func DefaultRiskCriteria() (string, error) {
-	return disciplines.RiskCriteria()
+	return disciplines.RiskCriteria(disciplines.Default)
 }

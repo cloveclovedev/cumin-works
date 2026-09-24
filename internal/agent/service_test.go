@@ -106,7 +106,7 @@ func startRequest(t *testing.T) StartRequest {
 	t.Helper()
 	return StartRequest{
 		Owner: "example-org", Repo: "example-repo", Role: config.RoleImplementer,
-		RoleInstruction: "# Implementer", Text: "Implement issue 12.", WorkDir: t.TempDir(),
+		Text: "Implement issue 12.", WorkDir: t.TempDir(),
 	}
 }
 

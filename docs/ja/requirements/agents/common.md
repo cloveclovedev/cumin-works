@@ -58,17 +58,20 @@ JSON Schema:
 
 ## 指示の合成
 
-roleとしての指示は、3つの部分をこの順につないだ1つの文章である。
+roleとしての指示は、4つの部分をこの順につないだ1つの文章である。
 
 | 順 | 部分 | 置き場所 | 内容 |
 |---|---|---|---|
 | 1 | roleのファイル | `roles/<role>.md` | cuminとAgentの約束。roleの身元と境目、読むもの、作業場所とブランチ、GitHubに残すもの、範囲と保護されたパス、返す結果、cuminの事情による `blocked` の条件、テンプレートに従う義務 |
 | 2 | disciplineのファイル | `disciplines/<discipline>/<role>.md` | 分野の基準。仕事が終わったことの確かめ方、コミットメッセージの決まり、そのroleにとっての良い仕事、分野の事情による `blocked` の条件 |
 | 3 | 平易な英語の決まり | `templates/writing-rules.md` | Agentが書く全ての文章に効くので、指示の本文に入れる |
+| 4 | riskの基準 | disciplineの `risk-criteria.md`、またはHostかリポジトリのファイル | 対象のリポジトリごとに決まる文章。3段の優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある |
 
+- 合成するのはcuminの `internal/agent` である。文章を持つ3つの置き場所は、どれも自分のMarkdownを読むだけで、互いを知らない。
+- riskの基準は、対象のリポジトリごとに決まるので、起動の依頼のデータとして渡す。tokenや作業場所と同じ扱いである。riskの基準がない起動 (使用率を読む最小の実行など) では、1から3だけを受け取る。
 - disciplineとは、roleが扱う分野のことである。roleはcuminが動かす箱で、disciplineはその箱を満たす分野である。
 - disciplineはroleに足すだけで、roleの決まりを緩めない。食い違ったらroleが勝つ。この決まりは、roleのファイルに書く。
-- disciplineのファイルがないroleは、1と3だけを受け取る。エラーにはしない。
+- disciplineのファイルがないroleは、その部分を飛ばす。エラーにはしない。
 - v0.1が持つdisciplineは、ソフトウェア開発の1つだけである。どのroleも同じdisciplineで動き、選ぶ仕組みはない。分野を選ぶ仕組みは [backlog](../backlog.md) の「roleとdisciplineの分離」にある。
 - 1つの行動のためのテンプレートは、指示ではなくskillとして渡す ([GitHubに残す文章のテンプレート](../policies/writing-templates.md) の「置き場所」)。
 
