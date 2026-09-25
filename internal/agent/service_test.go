@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -367,5 +368,33 @@ func TestStart_TheSettingsOfTheRequestReplaceTheOnesOfTheRole(t *testing.T) {
 	// The settings of the Service are not changed by a request.
 	if s.Roles[config.RoleImplementer].Model != "example-model" {
 		t.Errorf("the settings of the role changed: %+v", s.Roles[config.RoleImplementer])
+	}
+}
+
+// A start passes the skills directory of its own role, so that a role is
+// offered only the skills of its own work.
+func TestStart_PassesTheSkillsDirectoryOfTheRole(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+	root := t.TempDir()
+	if err := WriteSkills(root); err != nil {
+		t.Fatal(err)
+	}
+	s.SkillsDir = root
+
+	if _, err := s.Start(context.Background(), startRequest(t)); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	args := recordedArgs(t, filepath.Join(dir, "agent.args"))
+	i := slices.Index(args, "--add-dir")
+	want := SkillDir(root, config.RoleImplementer)
+	if i < 0 || i+1 >= len(args) || args[i+1] != want {
+		t.Errorf("args have no --add-dir %s: %q", want, args)
+	}
+	// The directory of another role is not the one that was passed.
+	if other := SkillDir(root, config.RolePlanner); slices.Contains(args, other) {
+		t.Errorf("the arguments name the directory of another role: %q", args)
 	}
 }
