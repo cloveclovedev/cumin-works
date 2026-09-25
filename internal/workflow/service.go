@@ -12,6 +12,7 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 )
@@ -42,6 +43,11 @@ type Service struct {
 	// builds it from the webhook URL in the Keychain. A nil notifier
 	// reports that no channel is configured, which is logged.
 	Notify *notify.Notifier
+	// State is what cumin keeps on the Host for each implementation issue:
+	// the session of the last run, and the number of check fix requests
+	// (I4). A nil store keeps nothing, which is the same as losing the
+	// file: the next request starts a new session and counts from zero.
+	State *state.Store
 	// Settings are the Host settings. Each poll applies the
 	// .cumin/config.toml of a repository over them, for the keys that a
 	// repository may set.
@@ -317,8 +323,15 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, c.Number, labels); err != nil {
 		return fmt.Errorf("I1: claim issue #%d: %w", c.Number, err)
 	}
-	s.logger().Info("I1: claimed the issue", "repository", target.Repository.String(),
-		"issue", c.Number, "requirement_issue", c.RequirementIssue, "labels", labels)
+	log := s.logger().With("repository", target.Repository.String(), "issue", c.Number)
+	log.Info("I1: claimed the issue",
+		"requirement_issue", c.RequirementIssue, "labels", labels)
+	// The Owner added cumin/status/ready, so the work starts again from a
+	// new session and a count of zero (issue-states.md, the section on the
+	// sessions of an agent).
+	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
+		log.Error("I1: the state of the issue was not cleared", "error", err.Error())
+	}
 	if err := s.startImplementer(ctx, target, settings, sub); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
@@ -416,6 +429,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			return
 		default:
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+			s.keepSession(log, target, number, run.SessionID)
 			if run.Result.Result != agent.ResultDone {
 				s.stopAfterBlocked(ctx, log, target, settings, number, run.Result.BlockedReason)
 				return
@@ -526,6 +540,21 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		return
 	}
 	log.Info("I2: verified the pull request", "pull_request", verification.PullRequest, "labels", labels)
+}
+
+// keepSession stores the session of the run, so that a request in the same
+// session can resume it (I4, I5). A failure is logged and changes nothing
+// else: the next request then starts a new session.
+func (s *Service) keepSession(log *slog.Logger, target Target, number int, sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	repository := target.Repository.String()
+	issue := s.State.Issue(repository, number)
+	issue.SessionID = sessionID
+	if err := s.State.Set(repository, number, issue); err != nil {
+		log.Error("the session of the run was not kept", "error", err.Error())
+	}
 }
 
 // firstLine is the first line of s, for one log field. The first line of a

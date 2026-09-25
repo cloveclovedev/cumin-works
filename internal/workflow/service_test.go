@@ -22,6 +22,7 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/discord"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -1475,5 +1476,54 @@ func TestI1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 		if !strings.Contains(instruction, want) {
 			t.Errorf("the instruction does not hold %q", want)
 		}
+	}
+}
+
+// TestI1_TheSessionOfARunIsKeptAndAClaimForgetsTheOldOne covers what the
+// state file of the Host is for: a request in the same session (I4, a check
+// failed) needs the session of the last run, and a claim (I1) after the
+// Owner added cumin/status/ready must forget the old session and the count
+// of check fixes.
+func TestI1_TheSessionOfARunIsKeptAndAClaimForgetsTheOldOne(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	path := filepath.Join(t.TempDir(), "state.json")
+	store := state.Open(path, nil)
+	// What an earlier round left behind for this issue.
+	if err := store.Set(sc.repo.Owner+"/"+sc.repo.Name, 10, state.Issue{SessionID: "old-session", CheckFixRequests: 2}); err != nil {
+		t.Fatal(err)
+	}
+	service := sc.service()
+	service.State = store
+
+	sc.pollAndWait(t, service)
+
+	// The session of the run that just ended, and the count back at zero.
+	const repository = "example-org/example-repo"
+	got := store.Issue(repository, 10)
+	if got.SessionID != "11111111-2222-4333-8444-555555555555" {
+		t.Errorf("session = %q, want the session of the run", got.SessionID)
+	}
+	if got.CheckFixRequests != 0 {
+		t.Errorf("check fix requests = %d, want 0 after a claim", got.CheckFixRequests)
+	}
+	// A restart of cumin reads the same session back.
+	if again := state.Open(path, nil).Issue(repository, 10); again != got {
+		t.Errorf("after a restart: %+v, want %+v", again, got)
+	}
+}
+
+// TestI1_AClaimWithoutAStateFileWorks: a Host without the file keeps
+// nothing, as a Host that just lost it does.
+func TestI1_AClaimWithoutAStateFileWorks(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+	service.State = nil
+
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingChecks) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks", got)
 	}
 }
