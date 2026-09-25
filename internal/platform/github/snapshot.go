@@ -136,11 +136,15 @@ func (c CheckConclusion) String() string {
 }
 
 // CheckResult is one check on the head commit of a pull request. A check
-// run and a commit status give the same two values, because the required
-// checks of a branch name both by the same name.
+// run and a commit status give the same values, because the required checks
+// of a branch name both by the same name. Integration is the database id of
+// the App of the check suite, or 0 for a commit status and for a check run
+// whose App cannot be read. A required check that names an App is met only
+// by the check of that App.
 type CheckResult struct {
-	Name       string
-	Conclusion CheckConclusion
+	Name        string
+	Conclusion  CheckConclusion
+	Integration int64
 }
 
 // IssueRef is an issue that another issue points to: only its number and
@@ -201,7 +205,7 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
                     pageInfo { hasNextPage }
                     nodes {
                       __typename
-                      ... on CheckRun { name status conclusion }
+                      ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }
                       ... on StatusContext { context state }
                     }
                   }
@@ -338,6 +342,12 @@ type checkNode struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
+	// CheckSuite carries the App that reported the check run.
+	CheckSuite *struct {
+		App *struct {
+			DatabaseID int64 `json:"databaseId"`
+		} `json:"app"`
+	} `json:"checkSuite"`
 	// A StatusContext.
 	Context string `json:"context"`
 	State   string `json:"state"`
@@ -348,7 +358,11 @@ type checkNode struct {
 func (n checkNode) result() (CheckResult, error) {
 	switch n.TypeName {
 	case "CheckRun":
-		return CheckResult{Name: n.Name, Conclusion: checkRunConclusion(n.Status, n.Conclusion)}, nil
+		result := CheckResult{Name: n.Name, Conclusion: checkRunConclusion(n.Status, n.Conclusion)}
+		if n.CheckSuite != nil && n.CheckSuite.App != nil {
+			result.Integration = n.CheckSuite.App.DatabaseID
+		}
+		return result, nil
 	case "StatusContext":
 		return CheckResult{Name: n.Context, Conclusion: statusConclusion(n.State)}, nil
 	}

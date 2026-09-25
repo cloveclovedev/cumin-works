@@ -92,6 +92,17 @@ type Check struct {
 	// the word of StatusState (SUCCESS, FAILURE, PENDING, ...).
 	CommitStatus bool
 	State        string
+	// Integration is the database id of the App of the check suite. It is
+	// left out for a commit status.
+	Integration int64
+}
+
+// RequiredCheck is one check that the rules of the default branch require in
+// the fake. Integration is the App that must report it, or 0 for a rule that
+// names no App.
+type RequiredCheck struct {
+	Name        string
+	Integration int64
 }
 
 // Label is one label of a repository.
@@ -116,7 +127,7 @@ type Repository struct {
 	DefaultBranch string
 	// RequiredChecks are the checks that the rules of the default branch
 	// require, as "Get rules for a branch" returns them.
-	RequiredChecks []string
+	RequiredChecks []RequiredCheck
 	// Files are the files of the default branch, by path. SetFile writes
 	// them; the snapshot reads the files of .cumin/.
 	Files map[string]File
@@ -423,8 +434,12 @@ func (f *Fake) serveBranchRules(w http.ResponseWriter, owner, name, branch strin
 	rules := []map[string]any{}
 	if decoded == repo.DefaultBranch && len(repo.RequiredChecks) > 0 {
 		checks := []map[string]any{}
-		for _, name := range repo.RequiredChecks {
-			checks = append(checks, map[string]any{"context": name})
+		for _, check := range repo.RequiredChecks {
+			entry := map[string]any{"context": check.Name}
+			if check.Integration != 0 {
+				entry["integration_id"] = check.Integration
+			}
+			checks = append(checks, entry)
 		}
 		rules = append(rules,
 			map[string]any{"type": "update", "parameters": map[string]any{}},
@@ -775,12 +790,17 @@ func checkNode(check Check) any {
 	if status == "" {
 		status = "COMPLETED"
 	}
-	return map[string]any{
+	node := map[string]any{
 		"__typename": "CheckRun",
 		"name":       check.Name,
 		"status":     status,
 		"conclusion": check.Conclusion,
+		"checkSuite": nil,
 	}
+	if check.Integration != 0 {
+		node["checkSuite"] = map[string]any{"app": map[string]any{"databaseId": check.Integration}}
+	}
+	return node
 }
 
 func sortedPullRequests(repo *Repository) []*PullRequest {

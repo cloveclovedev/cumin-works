@@ -16,15 +16,25 @@ func TestRequiredChecks_ReadsTheChecksOfTheRulesOfTheBranch(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	repo.DefaultBranch = "main"
-	repo.RequiredChecks = []string{"test", "cumin-protected-paths", "test"}
+	// The rules of the sandbox pin cumin-protected-paths to GitHub Actions.
+	repo.RequiredChecks = []githubtest.RequiredCheck{
+		{Name: "test"},
+		{Name: "cumin-protected-paths", Integration: 15368},
+		{Name: "test"},
+	}
 	client := github.NewAppClient(server.URL, server.Client())
 
 	checks, err := client.RequiredChecks(context.Background(), githubtest.Token, "example-org", "example-repo", "main")
 	if err != nil {
 		t.Fatalf("RequiredChecks: %v", err)
 	}
-	// Sorted, and a name that two rules require is returned once.
-	if want := []string{"cumin-protected-paths", "test"}; fmt.Sprint(checks) != fmt.Sprint(want) {
+	// Sorted, with the App of the rule kept, and a check that two rules
+	// require returned once.
+	want := []github.RequiredCheck{
+		{Name: "cumin-protected-paths", Integration: 15368},
+		{Name: "test"},
+	}
+	if fmt.Sprint(checks) != fmt.Sprint(want) {
 		t.Errorf("checks = %v, want %v", checks, want)
 	}
 }
@@ -73,7 +83,7 @@ func TestReadSnapshot_ReadsTheBranchTheLabelsAndTheChecksOfAPullRequest(t *testi
 		Closes:     []int{10},
 		Labels:     []string{"cumin/status/implementing", "risk/low"},
 		Checks: []githubtest.Check{
-			{Name: "test", Conclusion: "SUCCESS"},
+			{Name: "test", Conclusion: "SUCCESS", Integration: 15368},
 			{Name: "cumin-protected-paths", Conclusion: "SKIPPED"},
 			{Name: "lint", Conclusion: "NEUTRAL"},
 			{Name: "build", Conclusion: "FAILURE"},
@@ -97,7 +107,7 @@ func TestReadSnapshot_ReadsTheBranchTheLabelsAndTheChecksOfAPullRequest(t *testi
 		t.Errorf("labels = %v, want %s", pr.Labels, want)
 	}
 	want := []github.CheckResult{
-		{Name: "test", Conclusion: github.CheckPassed},
+		{Name: "test", Conclusion: github.CheckPassed, Integration: 15368},
 		{Name: "cumin-protected-paths", Conclusion: github.CheckPassed},
 		{Name: "lint", Conclusion: github.CheckPassed},
 		{Name: "build", Conclusion: github.CheckFailed},

@@ -297,17 +297,35 @@ func (l *live) recordSnapshotFact(t *testing.T, token string, issueNumber, pullN
 	}
 	var checks []string
 	for _, check := range pull.Checks {
-		checks = append(checks, check.Name+"="+check.Conclusion.String())
+		checks = append(checks, fmt.Sprintf("%s=%s (app %d)", check.Name, check.Conclusion, check.Integration))
+	}
+	var requiredNames []string
+	for _, check := range required {
+		requiredNames = append(requiredNames, fmt.Sprintf("%s (app %d)", check.Name, check.Integration))
 	}
 	l.record("12", "The poll query of cumin, with the head branch, the labels, and the checks of a pull request (I3, I4, I11)", "Every field is readable, and the cost stays small enough for one poll a minute",
 		fmt.Sprintf("`rateLimit.cost`: %d, `remaining`: %d, requirement issues: %d. Required checks: `%s`. Pull request #%d: branch `%s`, labels `%s`, checks `%s`",
 			snapshot.RateLimit.Cost, snapshot.RateLimit.Remaining, len(snapshot.RequirementIssues),
-			strings.Join(required, "`, `"), pull.Number, pull.HeadBranch, strings.Join(pull.Labels, "`, `"), strings.Join(checks, "`, `")))
+			strings.Join(requiredNames, "`, `"), pull.Number, pull.HeadBranch, strings.Join(pull.Labels, "`, `"), strings.Join(checks, "`, `")))
 	if pull.Number != pullNumber || pull.HeadBranch == "" || len(pull.Checks) == 0 {
 		t.Errorf("fact 12: pull request %+v, want the branch and the checks of #%d", pull, pullNumber)
 	}
-	if !contains(required, protectedPathsCheck) {
-		t.Errorf("fact 12: required checks %v, want %s", required, protectedPathsCheck)
+	// The ruleset of the sandbox pins the protected paths check to an App,
+	// and the check run of the pull request must name the same App.
+	protectedPaths := github.RequiredCheck{}
+	for _, check := range required {
+		if check.Name == protectedPathsCheck {
+			protectedPaths = check
+		}
+	}
+	reported := int64(0)
+	for _, check := range pull.Checks {
+		if check.Name == protectedPathsCheck {
+			reported = check.Integration
+		}
+	}
+	if protectedPaths.Name == "" || protectedPaths.Integration == 0 || reported != protectedPaths.Integration {
+		t.Errorf("fact 12: required %+v, reported by the App %d", protectedPaths, reported)
 	}
 	if snapshot.RateLimit.Cost < 1 {
 		t.Errorf("fact 12: cost %d", snapshot.RateLimit.Cost)
