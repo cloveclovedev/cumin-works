@@ -66,7 +66,8 @@ checkの結果の読み方:
 - `statusCheckRollup` の `contexts` は、check run (GitHub Actionsなど) と commit status の2種類を返す。cuminは、どちらからも名前 (`CheckRun.name`、`StatusContext.context`) と結論だけを読む。必須のcheckの一覧が、この名前で書かれているためである。
 - 結論は、通った (`SUCCESS`、`SKIPPED`、`NEUTRAL`)、落ちた、まだ終わっていない、の3つに畳む (実測 20、51)。終わっていない check run (`status` が `COMPLETED` でない) と、`EXPECTED`、`PENDING` の commit status は、まだ終わっていないものとして扱う。
 - 知らない種類の context が来たら、そのリポジトリの定期確認をエラーにする。読めない check の上でI3を通すより、止まって知らせるほうがよい。
-- 必須のcheckの一覧は、この問い合わせでは読めないのでRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。読むのは、`cumin/status/awaiting-checks` のIssueがそのリポジトリに1つ以上あるときだけである。
+- 必須のcheckの一覧は、この問い合わせでは読めないのでRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。読むのは、`cumin/status/awaiting-checks` のIssueがそのリポジトリに1つ以上あるときだけである。RESTの上限はGraphQLと別なので、問い合わせのポイントは増えない。
+- ラベルとcheckの結果を足すと、1ページのコストは9から39ポイントに上がった (2026-09-25に実測)。この2つの接続は、1件のPull Requestにつき3ポイントずつ足す。接続の中のページの大きさでは変わらない。見積もりと、足りなくなったときの案は [cumin本体の設計メモ](cumin-core.md) の「GitHubクライアント」にある。
 
 フォローアップノート (I9) で使うものは、mergeされたPull Requestについてだけ、別に読む。Pull Requestの説明、レビューのコメント、要求Issueのコメントである。要求Issueのコメントを読むのは、フォローアップノートの目印を探して、再起動のあとも同じノートを二重に書かないためである。
 
@@ -163,4 +164,5 @@ checkの結果の読み方:
 
 ## 後回しにしたこと
 
-- なし。要求の水準で後回しにしたことは、[要求のbacklog](../requirements/backlog.md) にある。
+- checkの結果とPull Requestのラベルを、定期確認の問い合わせから外し、待っているPull Requestだけの小さな問い合わせで読むこと。きっかけ: 対象のリポジトリが増えて、GraphQLのポイントが足りなくなったとき (1ページ39ポイント、60秒間隔で1リポジトリ毎時2,340ポイント)。
+- 要求の水準で後回しにしたことは、[要求のbacklog](../requirements/backlog.md) にある。

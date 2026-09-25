@@ -10,10 +10,13 @@ import (
 
 // Page sizes of the snapshot query. GitHub scores a query by the `first`
 // arguments along each path (official: Rate limits and node limits for the
-// GraphQL API). With these sizes one page cost 9 points on the sandbox on
-// 2026-09-22 (6 points before the pull requests were read), against 5,000
-// points per hour for one installation. The sizes are wide enough for the
-// limits of the sizing policies (12 sub-issues for one requirement issue).
+// GraphQL API). With these sizes one page cost 39 points on the sandbox on
+// 2026-09-25 (9 points before the labels and the checks of the pull
+// requests were read), against 5,000 points per hour for one installation.
+// Each connection under a pull request adds 3 points for every pull request
+// of the page; its own page size (checks, labels) changes nothing. The sizes
+// are wide enough for the limits of the sizing policies (12 sub-issues for
+// one requirement issue).
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
