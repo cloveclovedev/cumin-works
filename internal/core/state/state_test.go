@@ -72,6 +72,29 @@ func TestSetAndClear_SurviveANewStore(t *testing.T) {
 // TestSave_WritesTheVersionAndOnlyTheAllowedKeys keeps the file to what the
 // requirement allows: the session and the count of an issue, and nothing
 // else. A quota number, a token, or a path must never be in it.
+// TestIssue_TheRepositoryIgnoresCase: GitHub names ignore case, and the
+// settings of the Host may write the same repository with another
+// capitalization. The entry must still be found, not doubled.
+func TestIssue_TheRepositoryIgnoresCase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store := state.Open(path, nil)
+	if err := store.Set("Example-Org/Example-Repo", 12, state.Issue{SessionID: "s-1"}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	if got := store.Issue("example-org/example-repo", 12); got.SessionID != "s-1" {
+		t.Errorf("issue = %+v, want the entry of the same repository", got)
+	}
+	// A file written by an older cumin, with the capitalization of the
+	// settings, is read as the same entry.
+	if err := os.WriteFile(path, []byte(`{"version":1,"issues":{"Example-Org/Example-Repo#13":{"session_id":"s-2"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := state.Open(path, nil).Issue("example-org/example-repo", 13); got.SessionID != "s-2" {
+		t.Errorf("issue from the file = %+v, want the entry of the same repository", got)
+	}
+}
+
 func TestSave_WritesTheVersionAndOnlyTheAllowedKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	store := state.Open(path, nil)

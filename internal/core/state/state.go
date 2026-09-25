@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -82,9 +83,9 @@ func Open(path string, logger *slog.Logger) *Store {
 			fmt.Errorf("version %d, want %d", read.Version, Version))
 		return store
 	}
-	for key, issue := range read.Issues {
+	for name, issue := range read.Issues {
 		if !issue.empty() {
-			store.data.Issues[key] = issue
+			store.data.Issues[strings.ToLower(name)] = issue
 		}
 	}
 	return store
@@ -141,9 +142,12 @@ func (s *Store) Clear(repository string, number int) error {
 	return s.Set(repository, number, Issue{})
 }
 
-// key names one implementation issue: "<owner>/<repo>#<number>".
+// key names one implementation issue: "<owner>/<repo>#<number>". The
+// repository is lower case, because GitHub account and repository names
+// ignore case: the Host may write the same repository with another
+// capitalization in its settings, and the entry must still be found.
 func key(repository string, number int) string {
-	return fmt.Sprintf("%s#%d", repository, number)
+	return fmt.Sprintf("%s#%d", strings.ToLower(repository), number)
 }
 
 // save writes the whole file through a temporary file in the same directory

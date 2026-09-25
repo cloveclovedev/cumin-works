@@ -1513,6 +1513,41 @@ func TestI1_TheSessionOfARunIsKeptAndAClaimForgetsTheOldOne(t *testing.T) {
 	}
 }
 
+// TestI1_AStateThatCannotBeClearedStopsTheClaim: the state of an issue must
+// be cleared before the label changes. A stale entry would make a request in
+// the same session (I4) resume the session from before the Owner added
+// cumin/status/ready. The issue keeps its label, so the next poll tries
+// again.
+func TestI1_AStateThatCannotBeClearedStopsTheClaim(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	// A directory that cumin cannot write in.
+	dir := filepath.Join(t.TempDir(), "state")
+	if err := os.MkdirAll(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	store := state.Open(filepath.Join(dir, "state.json"), nil)
+	if err := store.Set("example-org/example-repo", 10, state.Issue{SessionID: "old-session"}); err == nil {
+		t.Skip("the test user can write in a directory with mode 500")
+	}
+	service := sc.service()
+	service.State = store
+
+	err := service.Poll(context.Background())
+	service.Wait()
+
+	if err == nil || !strings.Contains(err.Error(), "clear the state") {
+		t.Fatalf("err = %v, want the failed state write", err)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelReady) {
+		t.Errorf("labels of #10 = %v, want cumin/status/ready to stay", got)
+	}
+}
+
 // TestI1_AClaimWithoutAStateFileWorks: a Host without the file keeps
 // nothing, as a Host that just lost it does.
 func TestI1_AClaimWithoutAStateFileWorks(t *testing.T) {

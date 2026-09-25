@@ -319,6 +319,16 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if !ok {
 		return fmt.Errorf("I1: issue #%d is not in the snapshot", c.Number)
 	}
+	// The Owner added cumin/status/ready, so the work starts again from a
+	// new session and a count of zero (issue-states.md, the section on the
+	// sessions of an agent). This comes before the label change: a state
+	// that cumin cannot clear would resume the old session of a request in
+	// the same session (I4) after a restart, which the Owner's intervention
+	// must end. The issue keeps cumin/status/ready, so the next poll
+	// claims it again.
+	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
+		return fmt.Errorf("I1: clear the state of issue #%d: %w", c.Number, err)
+	}
 	labels := LabelsAfterClaim(sub.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, c.Number, labels); err != nil {
 		return fmt.Errorf("I1: claim issue #%d: %w", c.Number, err)
@@ -326,12 +336,6 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	log := s.logger().With("repository", target.Repository.String(), "issue", c.Number)
 	log.Info("I1: claimed the issue",
 		"requirement_issue", c.RequirementIssue, "labels", labels)
-	// The Owner added cumin/status/ready, so the work starts again from a
-	// new session and a count of zero (issue-states.md, the section on the
-	// sessions of an agent).
-	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
-		log.Error("I1: the state of the issue was not cleared", "error", err.Error())
-	}
 	if err := s.startImplementer(ctx, target, settings, sub); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
