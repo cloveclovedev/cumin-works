@@ -8,6 +8,8 @@ Read by: the Owner, to approve the plan.
 - Write the comment after you create all implementation issues.
 - Show that every requirement is covered by at least one issue.
 - Write every assumption that you made. The Owner corrects wrong assumptions before work starts.
+- Keep the text outside the table within 15 lines. Put the whole plan in the table: one row for each issue, and its blocked-by. Under "Please check", at most five points, each one line.
+- Under "Summary", add a small diagram of the order of the issues when the order is not a straight line (a text diagram, at most 40 characters wide).
 - Name every issue that the Owner must do by hand (label `cumin/type/owner-task`) under "Please check": what to change, why the Implementer cannot, and which issues wait for it.
 
 ## Template

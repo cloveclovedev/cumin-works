@@ -10,6 +10,7 @@ Read by: the Owner, to accept the requirement or to send work back.
 - Show evidence. Write the command that you ran and the result, or the file and line that you read. The Owner uses the evidence to tell a real failure from a mistake in the check.
 - Write `Fail` when a rule is not met. Do not fix anything. Do not create or change issues. For each `Fail`, propose a fix under "Proposed fixes": a title for a new sub-issue, and one or two sentences about the work. The Owner decides what to do.
 - Under "Left after this requirement", list the work that is still open: the follow-up notes on the requirement issue, without duplicates and without items that a later pull request already did. Also list work outside the scope that a pull request describes in a section other than "Follow-up".
+- Keep each cell of the table to one or two lines: the name of the test or the file and line, and the result. Put command output in a `<details>` block after the table. Keep the text outside the table within 15 lines, and "Left after this requirement" to the items that need a decision or a place to go.
 - Keep the heading `## Acceptance check` exactly as written. cumin looks for this heading.
 
 ## Template
