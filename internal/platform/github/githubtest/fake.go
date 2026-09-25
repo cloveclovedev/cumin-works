@@ -400,7 +400,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		number, _ := strconv.Atoi(issueComments[3])
 		f.serveCreateIssueComment(w, body, issueComments[1], issueComments[2], number)
 	case r.Method == http.MethodGet && branchRules != nil:
-		f.serveBranchRules(w, branchRules[1], branchRules[2], branchRules[3])
+		f.serveBranchRules(w, r, branchRules[1], branchRules[2], branchRules[3])
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
@@ -420,7 +420,11 @@ var (
 // with the rules that apply to the branch. Official: "Get rules for a
 // branch". The fake answers the required checks of the repository for its
 // default branch, and no rule for any other branch.
-func (f *Fake) serveBranchRules(w http.ResponseWriter, owner, name, branch string) {
+//
+// The answer is paginated, as GitHub's is. Each required check becomes its
+// own rule, as a repository with several rulesets has, so that a client that
+// reads one page only misses a required check.
+func (f *Fake) serveBranchRules(w http.ResponseWriter, r *http.Request, owner, name, branch string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	repo, ok := f.repository(w, owner, name)
@@ -431,24 +435,40 @@ func (f *Fake) serveBranchRules(w http.ResponseWriter, owner, name, branch strin
 	if err != nil {
 		decoded = branch
 	}
-	rules := []map[string]any{}
+	all := []map[string]any{}
 	if decoded == repo.DefaultBranch && len(repo.RequiredChecks) > 0 {
-		checks := []map[string]any{}
+		all = append(all, map[string]any{"type": "update", "parameters": map[string]any{}})
 		for _, check := range repo.RequiredChecks {
 			entry := map[string]any{"context": check.Name}
 			if check.Integration != 0 {
 				entry["integration_id"] = check.Integration
 			}
-			checks = append(checks, entry)
-		}
-		rules = append(rules,
-			map[string]any{"type": "update", "parameters": map[string]any{}},
-			map[string]any{"type": "required_status_checks", "parameters": map[string]any{
-				"required_status_checks":               checks,
+			all = append(all, map[string]any{"type": "required_status_checks", "parameters": map[string]any{
+				"required_status_checks":               []map[string]any{entry},
 				"strict_required_status_checks_policy": false,
 			}})
+		}
 	}
-	writeJSON(w, http.StatusOK, rules)
+	writeJSON(w, http.StatusOK, page(all, r))
+}
+
+// page returns the page of items that the query asks for, as a paginated
+// REST answer does. A missing per_page is the default of GitHub, 30.
+func page[T any](items []T, r *http.Request) []T {
+	perPage, err := strconv.Atoi(r.URL.Query().Get("per_page"))
+	if err != nil || perPage < 1 || perPage > 100 {
+		perPage = 30
+	}
+	number, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || number < 1 {
+		number = 1
+	}
+	from := (number - 1) * perPage
+	if from >= len(items) {
+		return []T{}
+	}
+	to := min(from+perPage, len(items))
+	return items[from:to]
 }
 
 // serveApp answers GET /app with the registered App. Official: "Get the

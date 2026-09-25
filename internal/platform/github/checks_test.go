@@ -39,6 +39,33 @@ func TestRequiredChecks_ReadsTheChecksOfTheRulesOfTheBranch(t *testing.T) {
 	}
 }
 
+// TestRequiredChecks_ReadsEveryPageOfTheRules: the answer of GitHub is
+// paginated (with per_page=1 the sandbox returned four pages on 2026-09-25).
+// A required check on a later page must not be missed, because I3 would then
+// treat it as passed.
+func TestRequiredChecks_ReadsEveryPageOfTheRules(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	repo.DefaultBranch = "main"
+	// One rule for each check, plus one rule of another type: more than one
+	// page of 100.
+	for i := range 120 {
+		repo.RequiredChecks = append(repo.RequiredChecks, githubtest.RequiredCheck{Name: fmt.Sprintf("check-%03d", i)})
+	}
+	client := github.NewAppClient(server.URL, server.Client())
+
+	checks, err := client.RequiredChecks(context.Background(), githubtest.Token, "example-org", "example-repo", "main")
+	if err != nil {
+		t.Fatalf("RequiredChecks: %v", err)
+	}
+	if len(checks) != 120 {
+		t.Errorf("%d checks, want 120", len(checks))
+	}
+	if n := fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/rules/branches/main"); n != 2 {
+		t.Errorf("%d requests, want 2 pages", n)
+	}
+}
+
 func TestRequiredChecks_ABranchWithoutRulesGivesAnEmptyList(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
