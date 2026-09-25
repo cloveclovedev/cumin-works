@@ -13,7 +13,8 @@ Use this template in two cases:
 - Put the decision in the first line. The Owner must understand the question without reading the rest.
 - Say what is not decided. A review that does not end usually means that something in the requirement is not decided.
 - Give 2 or 3 options, with the good and bad points of each. Recommend one option.
-- Keep it short. Give only the facts that the Owner needs to decide.
+- Keep it within 20 lines. Give only the facts that the Owner needs to decide. Put background that the Owner may skip in a `<details>` block.
+- Write a row number with its meaning ("I5 (review comments, fix request)"). Show a flow or a state as a small diagram when it explains the question better than words.
 
 ## Template
 
@@ -47,23 +48,33 @@ Background:
 
 ## Example
 
-```markdown
+````markdown
 ## Decision needed: Which Firebase project does the staging server use?
 
 Type: Blocked
 Work stopped: #42 Verify Firebase ID tokens in the API
 
-Situation: The token check needs a Firebase project ID for staging. No document names a staging project.
-Not decided: The Firebase project for staging. It should be written in `docs/architecture/overview.md`.
-Background: `docs/architecture/overview.md` lists only the production project. #43 and #44 do not depend on this decision.
+```
+login --> API: verify ID token
+             |
+             +-- needs: Firebase project ID for staging
+                 (production is the only one written down)
+```
+
+Not decided: the Firebase project for staging. It belongs in `docs/architecture/overview.md`.
 
 | | Option | Good | Bad |
 |---|---|---|---|
-| A | Create a new Firebase project for staging | Staging users are separate from production users | You must create the project and add one secret |
-| B | Use the production project in staging | No setup | Test accounts are mixed with real accounts |
+| A | A new Firebase project for staging | Staging users stay apart from production users | You create the project and add one secret |
+| B | The production project in staging | No setup | Test accounts mix with real accounts |
 
 Recommendation: A, because test data stays out of production.
 
 To continue: write your decision as a comment, or edit the issue. Then add the label `cumin/status/ready` to the implementation issue.
 Until then: this issue stays stopped. Other issues continue.
-```
+
+<details><summary>Background</summary>
+
+`docs/architecture/overview.md` lists only the production project. #43 and #44 do not depend on this decision.
+</details>
+````
