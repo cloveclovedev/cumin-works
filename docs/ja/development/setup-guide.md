@@ -104,10 +104,13 @@ roleの名前が変わったときに行う。例えば、Chief Engineer を Pla
 
 公式ドキュメントは、名前を変えたときに、インストール、秘密鍵、App ID、Client ID、slug (公開リンク) がどうなるかを書いていない (2026-09-25 に確認)。だから、変えたあとに必ず確かめる。
 
-cumin の側で分かっていることは2つある。
+cumin の側で分かっていることは3つある。
 
+- cumin は App の名前を照合しない。名前を使うのは、`cumin setup github-apps` が新しい App を登録するときだけで、そこでは `<prefix>cumin-<role>` を作る。登録済みの App の確認は、Client ID、秘密鍵、持ち主、権限で行う。だから名前は、この形でなくてもよい。ただし App を削除して登録し直すと、コマンドは自分が作る名前に戻す。
 - Host の設定に書いてあるのは Client ID だけで、App の名前ではない。Keychain の鍵も Client ID で引く。名前を変えても Client ID が変わらなければ、設定と鍵はそのままでよい。
 - cumin は依頼のたびに `GET /app` で slug を読み、`<slug>[bot]` をコミットの作者に使う ([Agentの実行の設計](../designs/agent-run.md) の「1回の依頼の手順」)。slug が変わっても、設定を直す必要はない。既にあるコミットの作者は、古い名前のまま残る。
+
+名前から作った値を覚えている場所が1つある。mainを守る ruleset の bypass list である。`scripts/setup-repo.sh --core-app <slug>` は、slug を `GET /apps/{slug}` で App の数値の id に置き換えてから ruleset に書くので、入っているのは名前ではなく id である。cumin本体の App の名前を変えたときは、id が同じかを確かめる (下の手順の6)。
 
 手順:
 
@@ -123,6 +126,15 @@ cumin の側で分かっていることは2つある。
    ```
 
    全ての App が登録済みなら、コマンドは何も登録せず、App ごとに `already registered <role>: client ID <Client ID>` と表示する。この行が出るのは、Keychain の鍵が読めて、GitHub がその鍵をその Client ID のものとして受け付け、App の持ち主がその Organization で、権限がその role の表と合っているときだけである。1つでも合わなければ、コマンドは何も変えずに止まり、理由を表示する。
+
+   cumin本体の App の名前を変えたときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <新しいslug>` をもう一度実行する。
+
+   ```sh
+   gh api apps/<新しいslug> --jq .id
+   gh api repos/<owner>/<repo>/rulesets --jq '.[] | .id' | while read -r id; do
+     gh api "repos/<owner>/<repo>/rulesets/$id" --jq '.name, (.bypass_actors[]? | select(.actor_type=="Integration") | .actor_id)'
+   done
+   ```
 7. cumin を起動し直す (`scripts/install.sh --restart`)。最初の定期確認が成功することをログで確かめる。
 
 インストールが外れていないかは、6のコマンドでは分からない。心配なときは、Organization の設定の "GitHub Apps" で、その App の "Configure" を開き、対象のリポジトリが選ばれたままかを見る。
