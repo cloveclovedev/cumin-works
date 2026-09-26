@@ -17,10 +17,17 @@ import (
 // multiplied by the number of pull requests. The page sizes inside those
 // connections (checks, labels) change nothing.
 //
+// Only the sub-issues and the pull requests change the cost, so only those
+// two are small; they stay above the limits of the requirement, which allows
+// 12 sub-issues for a requirement issue (requirement-sizing.md) and leaves an
+// implementation issue with one open closing pull request in normal use.
+// Every other size is at the maximum of GraphQL (100), because a connection
+// over its size stops the poll of that repository and costs nothing to widen:
+// a matrix workflow can put more than twenty checks on a commit, and another
+// tool can add labels of its own.
+//
 // With these sizes one page costs 11 points, against 5,000 points per hour
-// for one installation. They stay above the limits of the requirement:
-// a requirement issue has at most 12 sub-issues (requirement-sizing.md), and
-// an implementation issue has one open closing pull request in normal use.
+// for one installation (measured on the sandbox on 2026-09-26).
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
@@ -29,13 +36,12 @@ const (
 	// issue has one open closing pull request in normal use; a second one
 	// is read so that the newest of two is found (VerifyDone).
 	snapshotSubIssues    = 15
-	snapshotLabels       = 10
-	snapshotBlockedBy    = 20
+	snapshotLabels       = 100
+	snapshotBlockedBy    = 100
 	snapshotPullRequests = 2
 	// Checks of the head commit of one pull request. A repository requires
-	// a handful of checks; this leaves room for the ones that it does not
-	// require.
-	snapshotChecks = 20
+	// a handful of checks, and a commit carries every other check as well.
+	snapshotChecks = 100
 )
 
 // Paths of the files that a target repository keeps on its default branch.

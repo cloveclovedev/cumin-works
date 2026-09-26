@@ -173,8 +173,8 @@ func TestReadSnapshot_TooManyChecksOrLabelsOnAPullRequestIsAnError(t *testing.T)
 		pull    githubtest.PullRequest
 		message string
 	}{
-		{name: "checks", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Checks: manyChecks(21)}, message: "more than 20 checks"},
-		{name: "labels", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Labels: manyLabels(11)}, message: "more than 10 labels"},
+		{name: "checks", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Checks: manyChecks(101)}, message: "more than 100 checks"},
+		{name: "labels", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Labels: manyLabels(101)}, message: "more than 100 labels"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fake, server := githubtest.New(t)
