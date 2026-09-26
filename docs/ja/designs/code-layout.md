@@ -21,7 +21,7 @@
 
 ### 依存の向き
 
-- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/notify`、`internal/platform/github`、`internal/core/config` を使う。`internal/agent` は `roles`、`disciplines`、`templates`、`internal/platform/github`、`internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`internal/core/config` は、riskの基準の初期値のために `disciplines` を使う。`disciplines` と `templates` は標準ライブラリだけを使い、`roles` は `internal/core/config` をroleの名前のために使う。
+- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/notify`、`internal/platform/github`、`internal/core/config`、`internal/core/state` を使う。`internal/agent` は `roles`、`disciplines`、`templates`、`internal/platform/github`、`internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`internal/core/config` は、riskの基準の初期値のために `disciplines` を使う。`disciplines` と `templates` は標準ライブラリだけを使い、`roles` は `internal/core/config` をroleの名前のために使う。
 - Agentが受け取る文章を持つ3つのパッケージ (`roles`、`disciplines`、`templates`) は、どれも自分のMarkdownを読むだけで、互いを知らない。指示に組み立てるのは `internal/agent/instruction.go` だけである。どの部分がどこから来るかを1か所に集めておくと、外から差し替えられる段が増えても、変わるのはそこだけになる。
 - `internal/notify` は標準ライブラリだけを使う。通知の手段は、文章を受け取る `Sender` として外から差す。`internal/platform/discord` はその実装で、`internal/notify` をimportしない。`cmd/cumin` が2つをつなぐ ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
 - 純粋なファイル (`domain.go`、`request.go`) は標準ライブラリだけを読む。HTTPのクライアント、`os/exec`、GitHubの型を持ち込まない。判定の表形式のテストが、I/Oなしで書けるようにするためである。
@@ -32,13 +32,14 @@
 | パッケージ | ファイル | 受け持ち |
 |---|---|---|
 | `cmd/cumin` | `main.go` | サブコマンドの一覧と振り分け。終了コード |
-| | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、`agent.Service` と `workflow.Service` を組み立てて動かす |
+| | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、Hostの状態ファイルを開き、`agent.Service` と `workflow.Service` を組み立てて動かす |
 | | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
 | `internal/core/config` | `config.go` | Hostの設定ファイル (TOML) の読み込み、初期値、制限、既定のパス |
 | | `repository.go` | 対象のリポジトリの `.cumin/config.toml` を、Hostの設定に重ねる |
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
 | | `githubapps.go` | `github_apps` の表の読み書き (`cumin setup` が書く) |
 | | `quota.go` | 利用枠の設定 (しきい値、時間帯) の読み込み |
+| `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数。書くのは `cumin run` だけ |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) |
 | | `roles.go` | AppごとのGitHubの権限の表 |
@@ -58,7 +59,7 @@
 | `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1)、実行終了の判定 (I2) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
-| | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用し、Implementerを起動し、実行終了を判定する。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
+| | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |

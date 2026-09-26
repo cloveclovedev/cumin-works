@@ -17,6 +17,7 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/discord"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -87,6 +88,16 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	logger.Info("skills written", "dir", skillsDir)
+
+	// What cumin keeps on the Host: the session and the check fix count of
+	// each issue. A file that is missing or broken is an empty state, which
+	// costs a session and a count and nothing else.
+	states, err := openState(logger)
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin run: %v\n", err)
+		return exitFailure
+	}
+	logger.Info("state loaded", "issues", states.Issues())
 	client := github.NewAppClient(github.DefaultBaseURL, nil)
 	agents := &agent.Service{
 		Roles:     settings.Roles,
@@ -108,6 +119,7 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		GitHub:       client,
 		Agents:       agents,
 		Notify:       notifier,
+		State:        states,
 		Workspace:    agent.Workspace{Root: settings.WorkDir, Logger: logger},
 		Settings:     settings,
 		SettingsDir:  filepath.Dir(path),
@@ -187,6 +199,20 @@ func writeSkills() (string, error) {
 		return "", err
 	}
 	return dir, nil
+}
+
+// stateFileName is the file that cumin run keeps its own state in, under the
+// state directory (designs/cumin-core.md, the topic on the files of the
+// Host).
+const stateFileName = "state.json"
+
+// openState opens the state file of the Host. Only cumin run writes it.
+func openState(logger *slog.Logger) (*state.Store, error) {
+	dir, err := config.DefaultStateDir()
+	if err != nil {
+		return nil, err
+	}
+	return state.Open(filepath.Join(dir, stateFileName), logger), nil
 }
 
 // appClientIDs returns the Client ID of every GitHub App of cumin
