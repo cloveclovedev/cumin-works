@@ -8,7 +8,8 @@ Read by: the Reviewer and the Owner.
 - Title: use Conventional Commits, `<type>(<scope>): <description>`. Write the description as an order: "add ...", not "added ...".
 - Write `Closes #<implementation issue>` so that the merge closes the issue.
 - Keep the description within 40 lines, folded blocks excluded. The Owner reads it on a phone and decides from "What", the diagram, "Design", and the table under "How it was checked".
-- Under "What", give the same information that the diff of a design note gives: how it worked before, what this pull request changes, and the approach. Write it as "Before" and "After", each one to three lines, or as a diagram (a text diagram of at most 40 characters wide, or an image of the repository at the commit of this branch, readable on a phone). An identifier never stands alone; add its meaning.
+- Under "Where this fits", copy the section of the issue as it is: the image and the sentence that names the box or the arrow. Rewrite it only when the implementation moved the change to another place. When this pull request changed the diagram, show the SVG at the commit of this branch instead of the one of the issue. The heading is the same in the issue and in the pull request on purpose.
+- Under "What", give the same information that the diff of a design note gives: how it worked before, what this pull request changes, and the approach. Write it as "Before" and "After", each one to three lines. An identifier never stands alone; add its meaning.
 - Under "How it was checked", write one row for each thing that changed: what it is, how you checked it, and the result. Put the command output in a `<details>` block. Do not only say that the tests pass.
 - Update the description when you push more commits, so that it still describes the whole change.
 - Under "Follow-up", write only work that you noticed yourself and that is outside the scope of the issue. cumin copies this section to the requirement issue after the merge. Do not create issues.
@@ -17,8 +18,11 @@ Read by: the Reviewer and the Owner.
 ## Template
 
 ```markdown
+## Where this fits
+<!-- Copied from the issue: the image of the design document and one sentence that names the box or the arrow. When this pull request changed the diagram, the image at the commit of this branch. -->
+
 ## What
-<!-- One or two sentences, written as an order: "Add ...". Then "Before" and "After" (one to three lines each) or a diagram: how it worked, what changes, and the approach. -->
+<!-- One or two sentences, written as an order: "Add ...". Then "Before" and "After", one to three lines each: how it worked, what changes, and the approach. -->
 Before: ...
 After: ...
 
@@ -56,20 +60,16 @@ $ go test -race ./...
 ## Example
 
 ````markdown
+## Where this fits
+![I2 verification](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/docs/ja/designs/poll-verify.svg)
+
+The failure branches of the I2 verification (diagram changed by this pull request).
+
 ## What
 Hand the issue back to the Owner when the I2 verification (open pull request, author, head pushed) fails after `done`.
 
 Before: a failed verification was logged; the issue kept `cumin/status/implementing` with nothing on GitHub to say why.
 After: cumin posts one comment in a fixed shape (`templates/stop-note.md`), sets `cumin/status/awaiting-owner-decision`, and sends one notification that names the failed check. The comment is a template of cumin, not of an agent, so that its shape stays a contract.
-
-```
-Implementer done
-   |  I2 verify
-   +-- pass --> awaiting-checks
-   +-- fail --> comment
-                + awaiting-owner-decision
-                + one notification
-```
 
 ## Why
 A stopped issue was invisible to the Owner. The same sentence goes into the comment and the notification, so the Owner reads the same words in both places.
