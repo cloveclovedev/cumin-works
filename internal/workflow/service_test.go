@@ -1562,3 +1562,114 @@ func TestI1_AClaimWithoutAStateFileWorks(t *testing.T) {
 		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks", got)
 	}
 }
+
+// awaitingChecks puts issue #10 in cumin/status/awaiting-checks with one
+// open pull request of the Implementer App, and gives the repository the
+// required checks. checks are the results on the head commit.
+func (sc *scene) awaitingChecks(t *testing.T, required []string, checks []githubtest.Check) {
+	t.Helper()
+	// Issue returns a copy, so the label is set by replacing the issue.
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 10, Parent: 6, Title: subIssueTitle,
+		Labels: []string{"cumin/status/awaiting-checks", "risk/low"},
+	})
+	sc.repo.DefaultBranch = "main"
+	for _, name := range required {
+		sc.repo.RequiredChecks = append(sc.repo.RequiredChecks, githubtest.RequiredCheck{Name: name})
+	}
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 21, HeadCommit: sc.remoteHead, HeadBranch: "cumin/10-add-the-login-screen",
+		Author: implementerSlug, AuthorIsBot: true, Closes: []int{10}, Checks: checks,
+	})
+}
+
+const branchRulesPath = "/repos/example-org/example-repo/rules/branches/main"
+
+// TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview is the success
+// path of I3: the poll reads the required checks, they all passed on the
+// head commit, and the issue waits for the Reviewer.
+func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
+	sc := newScene(t)
+	sc.awaitingChecks(t, []string{"ci", "cumin-protected-paths"}, []githubtest.Check{
+		{Name: "ci", Conclusion: "SUCCESS"},
+		{Name: "cumin-protected-paths", Conclusion: "SKIPPED"},
+		{Name: "optional", Conclusion: "FAILURE"},
+	})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelReviewing}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/reviewing", got)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none: I3 changes a label only", n)
+	}
+	if !strings.Contains(sc.logs.String(), "I3: the pull request is ready for review") {
+		t.Errorf("the log does not say that the pull request is ready: %s", sc.logs)
+	}
+	// The issue leaves awaiting-checks, so the next poll asks for nothing.
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("second poll: %v", err)
+	}
+	if n := sc.fake.CountRequests(http.MethodGet, branchRulesPath); n != 1 {
+		t.Errorf("%d reads of the required checks, want 1", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
+		t.Errorf("%d label changes, want 1", n)
+	}
+}
+
+// TestI3_AnEmptyListOfRequiredChecksPassesAtOnce: a repository without a
+// ruleset moves to the review in the next poll (issue-states.md).
+func TestI3_AnEmptyListOfRequiredChecksPassesAtOnce(t *testing.T) {
+	sc := newScene(t)
+	sc.awaitingChecks(t, nil, nil)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelReviewing) {
+		t.Errorf("labels of #10 = %v, want cumin/status/reviewing", got)
+	}
+}
+
+// TestI3_AFailedOrRunningCheckKeepsTheIssueWaiting: I4 answers a failure,
+// and a check that has not finished is not an answer at all.
+func TestI3_AFailedOrRunningCheckKeepsTheIssueWaiting(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		check githubtest.Check
+	}{
+		{name: "failed", check: githubtest.Check{Name: "ci", Conclusion: "FAILURE"}},
+		{name: "running", check: githubtest.Check{Name: "ci", Status: "IN_PROGRESS"}},
+		{name: "not reported", check: githubtest.Check{Name: "other", Conclusion: "SUCCESS"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := newScene(t)
+			sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{tc.check})
+			service := sc.service()
+
+			sc.pollAndWait(t, service)
+
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingChecks) {
+				t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks to stay", got)
+			}
+		})
+	}
+}
+
+// TestI3_TheRequiredChecksAreReadOnlyWhenAnIssueWaits keeps the extra REST
+// call out of a poll that has nothing to decide.
+func TestI3_TheRequiredChecksAreReadOnlyWhenAnIssueWaits(t *testing.T) {
+	sc := newScene(t)
+	sc.repo.DefaultBranch = "main"
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.fake.CountRequests(http.MethodGet, branchRulesPath); n != 0 {
+		t.Errorf("%d reads of the required checks, want none while no issue waits", n)
+	}
+}
