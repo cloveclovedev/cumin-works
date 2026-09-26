@@ -290,6 +290,8 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"Read a pull request through the issues API",
 		// Only these three write a source; anyone may comment otherwise.
 		"is not a source",
+		// The Planner must be able to tell who the Owner is.
+		"the account that added `cumin/status/ready` to the requirement issue",
 		// The last lines of the decision request name the implementation
 		// issue; the Planner writes about the requirement issue.
 		"Write the requirement issue there instead",
