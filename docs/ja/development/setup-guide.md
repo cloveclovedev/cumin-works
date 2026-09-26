@@ -129,12 +129,14 @@ cumin の側で分かっていることは3つある。
 
    全ての App が登録済みでインストール済みなら、コマンドは何も変えず、App ごとに2行を表示する。
 
-   | 行 | その行が出たら分かること |
-   |---|---|
-   | `already registered <role>: client ID <Client ID>` | Keychain の鍵が読めて、GitHub がその鍵をその Client ID のものとして受け付け、App の持ち主がその Organization で、権限がその role の表と合っている |
-   | `installed <role> on <Organization>` | その App が、その Organization にインストールされたままである |
+   | 行 | 問い合わせ | その行が出たら分かること |
+   |---|---|---|
+   | `already registered <role>: client ID <Client ID>` | `GET /app` | Keychain の鍵が読めて、GitHub がその鍵をその Client ID の App として受け付け、App の持ち主がその Organization で、権限がその role の表と合っている |
+   | `installed <role> on <Organization>` | `GET /app/installations` | その App が、その Organization にインストールされたままである |
 
-   1つでも合わなければ、コマンドは何も変えずに止まり、理由を表示する。インストールが外れている App があれば、`installed` の行の代わりにインストールのページのアドレスを表示し、ブラウザを開く。
+   2つは別の事実を見ている。登録と鍵が正しいまま、インストールだけ外れていることがあるためである。そのときは installation token が出ないので、Agentは何もできない。
+
+   読むのは最後の行だけでよい。`already registered` の確認が1つでも合わなければ、コマンドは何も変えずにそこで止まるので、`installed` の行が roleの数だけ出ていれば、両方が通ったことになる。インストールが外れている App があれば、`installed` の行の代わりにインストールのページのアドレスを表示し、ブラウザを開く。
 
    cumin本体の App の名前を変えたときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <新しいslug>` をもう一度実行する。
 
