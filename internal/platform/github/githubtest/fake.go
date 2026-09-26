@@ -78,6 +78,32 @@ type PullRequest struct {
 	Checks []Check
 }
 
+// CheckRun is one check run of a commit, as the REST endpoints of a failed
+// check return it. A test that reads the content of a failed check adds it
+// with AddCheckRun.
+type CheckRun struct {
+	ID   int64
+	Name string
+	// Conclusion is the word of REST (success, failure, skipped, ...).
+	Conclusion string
+	// JobID is the job of GitHub Actions. The fake builds the details
+	// address from it, as GitHub does. 0 leaves the address without a job,
+	// as a check run of another App has.
+	JobID int64
+	// Annotations are the annotations of the check run.
+	Annotations []Annotation
+	// JobLog is the plain text log of the job.
+	JobLog string
+}
+
+// Annotation is one annotation of a check run.
+type Annotation struct {
+	Path string
+	// Level is the word of REST: failure, warning, or notice.
+	Level   string
+	Message string
+}
+
 // Check is one check on the head commit of a pull request. A check with
 // CommitStatus is answered as a StatusContext and reads State; every other
 // check is answered as a CheckRun and reads Status and Conclusion.
@@ -131,6 +157,8 @@ type Repository struct {
 	// Files are the files of the default branch, by path. SetFile writes
 	// them; the snapshot reads the files of .cumin/.
 	Files map[string]File
+	// CheckRuns are the check runs of a commit, by commit SHA.
+	CheckRuns map[string][]CheckRun
 	// comments holds the comments of each issue, by issue number, in the
 	// order in which they were created.
 	comments map[int][]Comment
@@ -239,6 +267,17 @@ func (f *Fake) AddIssue(r *Repository, issue *Issue) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r.Issues[issue.Number] = issue
+}
+
+// AddCheckRun adds one check run on a commit of the repository, for the
+// REST endpoints that read what a failed check says.
+func (f *Fake) AddCheckRun(r *Repository, sha string, run CheckRun) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r.CheckRuns == nil {
+		r.CheckRuns = map[string][]CheckRun{}
+	}
+	r.CheckRuns[sha] = append(r.CheckRuns[sha], run)
 }
 
 // AddPullRequest adds a pull request to the repository. The fake keeps the
@@ -377,6 +416,9 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	issueLabels := issueLabelsPath.FindStringSubmatch(r.URL.Path)
 	issueComments := issueCommentsPath.FindStringSubmatch(r.URL.Path)
 	branchRules := branchRulesPath.FindStringSubmatch(r.URL.Path)
+	commitChecks := commitChecksPath.FindStringSubmatch(r.URL.Path)
+	annotations := annotationsPath.FindStringSubmatch(r.URL.Path)
+	jobLog := jobLogPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -401,6 +443,14 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		f.serveCreateIssueComment(w, body, issueComments[1], issueComments[2], number)
 	case r.Method == http.MethodGet && branchRules != nil:
 		f.serveBranchRules(w, r, branchRules[1], branchRules[2], branchRules[3])
+	case r.Method == http.MethodGet && commitChecks != nil:
+		f.serveCommitCheckRuns(w, r, commitChecks[1], commitChecks[2], commitChecks[3])
+	case r.Method == http.MethodGet && annotations != nil:
+		id, _ := strconv.ParseInt(annotations[3], 10, 64)
+		f.serveAnnotations(w, annotations[1], annotations[2], id)
+	case r.Method == http.MethodGet && jobLog != nil:
+		id, _ := strconv.ParseInt(jobLog[3], 10, 64)
+		f.serveJobLog(w, jobLog[1], jobLog[2], id)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
@@ -414,7 +464,93 @@ var (
 	accessTokensPath  = regexp.MustCompile(`^/app/installations/(\d+)/access_tokens$`)
 	userPath          = regexp.MustCompile(`^/users/([^/]+)$`)
 	branchRulesPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/rules/branches/(.+)$`)
+	commitChecksPath  = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/commits/([^/]+)/check-runs$`)
+	annotationsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/check-runs/(\d+)/annotations$`)
+	jobLogPath        = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/jobs/(\d+)/logs$`)
 )
+
+// serveCommitCheckRuns answers GET .../commits/{sha}/check-runs. Official:
+// "List check runs for a Git reference". The answer is paginated.
+func (f *Fake) serveCommitCheckRuns(w http.ResponseWriter, r *http.Request, owner, name, sha string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	runs := []map[string]any{}
+	for _, run := range repo.CheckRuns[sha] {
+		details := ""
+		if run.JobID != 0 {
+			details = fmt.Sprintf("https://github.com/%s/%s/actions/runs/1/job/%d", owner, name, run.JobID)
+		}
+		runs = append(runs, map[string]any{
+			"id": run.ID, "name": run.Name, "status": "completed",
+			"conclusion": run.Conclusion, "details_url": details,
+		})
+	}
+	page := page(runs, r)
+	writeJSON(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": page})
+}
+
+// serveAnnotations answers GET .../check-runs/{id}/annotations. Official:
+// "List check run annotations".
+func (f *Fake) serveAnnotations(w http.ResponseWriter, owner, name string, id int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	run, ok := f.checkRun(repo, id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	notes := []map[string]any{}
+	for _, note := range run.Annotations {
+		notes = append(notes, map[string]any{
+			"path": note.Path, "annotation_level": note.Level, "message": note.Message,
+		})
+	}
+	writeJSON(w, http.StatusOK, notes)
+}
+
+// serveJobLog answers GET .../actions/jobs/{id}/logs with the plain text
+// log. GitHub answers with a redirect to a file; the fake answers the file
+// itself, which the client reads the same way.
+func (f *Fake) serveJobLog(w http.ResponseWriter, owner, name string, id int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	for _, runs := range repo.CheckRuns {
+		for _, run := range runs {
+			if run.JobID == id {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(run.JobLog))
+				return
+			}
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+}
+
+// checkRun finds one check run of the repository by its id. The caller
+// holds the lock.
+func (f *Fake) checkRun(repo *Repository, id int64) (CheckRun, bool) {
+	for _, runs := range repo.CheckRuns {
+		for _, run := range runs {
+			if run.ID == id {
+				return run, true
+			}
+		}
+	}
+	return CheckRun{}, false
+}
 
 // serveBranchRules answers GET /repos/{owner}/{repo}/rules/branches/{branch}
 // with the rules that apply to the branch. Official: "Get rules for a
