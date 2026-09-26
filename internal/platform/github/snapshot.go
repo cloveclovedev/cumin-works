@@ -10,23 +10,28 @@ import (
 
 // Page sizes of the snapshot query. GitHub scores a query by the `first`
 // arguments along each path (official: Rate limits and node limits for the
-// GraphQL API). With these sizes one page cost 39 points on the sandbox on
-// 2026-09-25 (9 points before the labels and the checks of the pull
-// requests were read), against 5,000 points per hour for one installation.
-// Each connection under a pull request adds 3 points for every pull request
-// of the page; its own page size (checks, labels) changes nothing. The sizes
-// are wide enough for the limits of the sizing policies (12 sub-issues for
-// one requirement issue).
+// GraphQL API). Measured on the sandbox on 2026-09-25, the cost of one page
+// is (requirement issues x sub-issues x k) / 100, where k counts the
+// connections: 2 under a sub-issue (labels, blocked by), 1 for the pull
+// requests, and one more for each connection under a pull request,
+// multiplied by the number of pull requests. The page sizes inside those
+// connections (checks, labels) change nothing.
+//
+// With these sizes one page costs 11 points, against 5,000 points per hour
+// for one installation. They stay above the limits of the requirement:
+// a requirement issue has at most 12 sub-issues (requirement-sizing.md), and
+// an implementation issue has one open closing pull request in normal use.
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
 	// Sub-issues, labels, blocked-by issues, and open closing pull requests
 	// are read once, up to this many for one issue. More is an error. An
-	// issue has one open closing pull request in normal use.
-	snapshotSubIssues    = 30
+	// issue has one open closing pull request in normal use; a second one
+	// is read so that the newest of two is found (VerifyDone).
+	snapshotSubIssues    = 15
 	snapshotLabels       = 10
 	snapshotBlockedBy    = 20
-	snapshotPullRequests = 5
+	snapshotPullRequests = 2
 	// Checks of the head commit of one pull request. A repository requires
 	// a handful of checks; this leaves room for the ones that it does not
 	// require.

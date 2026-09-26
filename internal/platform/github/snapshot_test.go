@@ -127,13 +127,16 @@ func TestReadSnapshot_TooManySubIssuesIsAnError(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
-	for n := 2; n <= 32; n++ {
+	// One more than the page size. The requirement allows 12 sub-issues
+	// for one requirement issue (requirement-sizing.md), so this never
+	// happens in normal use.
+	for n := 2; n <= 18; n++ {
 		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1})
 	}
 	client := github.NewAppClient(server.URL, server.Client())
 
 	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
-	if err == nil || !strings.Contains(err.Error(), "issue #1 has more than 30 sub-issues") {
+	if err == nil || !strings.Contains(err.Error(), "issue #1 has more than 15 sub-issues") {
 		t.Errorf("err = %v, want an error that names issue #1", err)
 	}
 }
@@ -162,8 +165,8 @@ func TestReadSnapshot_TooManyPullRequestsIsAnError(t *testing.T) {
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 2, Parent: 1})
-	// Six open pull requests are an error. Closed ones do not count.
-	for n := 10; n <= 15; n++ {
+	// Three open pull requests are an error. Closed ones do not count.
+	for n := 10; n <= 12; n++ {
 		fake.AddPullRequest(repo, &githubtest.PullRequest{Number: n, Author: "octocat", Closes: []int{2}})
 	}
 	for n := 16; n <= 25; n++ {
@@ -172,14 +175,14 @@ func TestReadSnapshot_TooManyPullRequestsIsAnError(t *testing.T) {
 	client := github.NewAppClient(server.URL, server.Client())
 
 	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
-	if err == nil || !strings.Contains(err.Error(), "issue #2 has more than 5 open closing pull requests") {
+	if err == nil || !strings.Contains(err.Error(), "issue #2 has more than 2 open closing pull requests") {
 		t.Errorf("err = %v, want an error that names issue #2", err)
 	}
-	if err := fake.ClosePullRequest(repo, 15); err != nil {
+	if err := fake.ClosePullRequest(repo, 12); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo"); err != nil {
-		t.Errorf("with five open pull requests: %v", err)
+		t.Errorf("with two open pull requests: %v", err)
 	}
 }
 
