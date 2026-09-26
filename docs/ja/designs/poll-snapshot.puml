@@ -6,15 +6,15 @@ skinparam shadowing false
 skinparam defaultFontName sans-serif
 
 object "リポジトリ" as repo
-object "要求Issue (開いている、cumin/type/requirement)\n番号、開閉、ラベル (10件まで)" as req
-object "sub-issue (実装Issue)\n番号、題、開閉、ラベル (10件まで)" as sub
+object "要求Issue (開いている、cumin/type/requirement)\n番号、開閉、ラベル (100件まで)" as req
+object "sub-issue (実装Issue)\n番号、題、開閉、ラベル (100件まで)" as sub
 object "blocked by のIssue\n番号、開閉" as blocker
-object "Issueを閉じる、開いているPull Request\n番号、作成者、先頭のコミット" as pr
+object "Issueを閉じる、開いているPull Request\n番号、作成者、先頭のコミット、ブランチ\nラベル (100件まで)、checkの結果 (100件まで)" as pr
 
 repo "1" --> "10件ずつ (ページ)" req : issues
-req "1" --> "30件まで" sub : subIssues
-sub "1" --> "20件まで" blocker : blockedBy
-sub "1" --> "5件まで" pr : closedByPullRequestsReferences
+req "1" --> "15件まで" sub : subIssues
+sub "1" --> "100件まで" blocker : blockedBy
+sub "1" --> "2件まで" pr : closedByPullRequestsReferences
 
 note bottom of pr
   閉じたPull Requestとmerge済みのPull Requestは読まない。

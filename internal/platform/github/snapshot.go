@@ -10,20 +10,38 @@ import (
 
 // Page sizes of the snapshot query. GitHub scores a query by the `first`
 // arguments along each path (official: Rate limits and node limits for the
-// GraphQL API). With these sizes one page cost 9 points on the sandbox on
-// 2026-09-22 (6 points before the pull requests were read), against 5,000
-// points per hour for one installation. The sizes are wide enough for the
-// limits of the sizing policies (12 sub-issues for one requirement issue).
+// GraphQL API). Measured on the sandbox on 2026-09-25, the cost of one page
+// is (requirement issues x sub-issues x k) / 100, where k counts the
+// connections: 2 under a sub-issue (labels, blocked by), 1 for the pull
+// requests, and one more for each connection under a pull request,
+// multiplied by the number of pull requests. The page sizes inside those
+// connections (checks, labels) change nothing.
+//
+// Only the sub-issues and the pull requests change the cost, so only those
+// two are small; they stay above the limits of the requirement, which allows
+// 12 sub-issues for a requirement issue (requirement-sizing.md) and leaves an
+// implementation issue with one open closing pull request in normal use.
+// Every other size is at the maximum of GraphQL (100), because a connection
+// over its size stops the poll of that repository and costs nothing to widen:
+// a matrix workflow can put more than twenty checks on a commit, and another
+// tool can add labels of its own.
+//
+// With these sizes one page costs 11 points, against 5,000 points per hour
+// for one installation (measured on the sandbox on 2026-09-26).
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
 	// Sub-issues, labels, blocked-by issues, and open closing pull requests
 	// are read once, up to this many for one issue. More is an error. An
-	// issue has one open closing pull request in normal use.
-	snapshotSubIssues    = 30
-	snapshotLabels       = 10
-	snapshotBlockedBy    = 20
-	snapshotPullRequests = 5
+	// issue has one open closing pull request in normal use; a second one
+	// is read so that the newest of two is found (VerifyDone).
+	snapshotSubIssues    = 15
+	snapshotLabels       = 100
+	snapshotBlockedBy    = 100
+	snapshotPullRequests = 2
+	// Checks of the head commit of one pull request. A repository requires
+	// a handful of checks, and a commit carries every other check as well.
+	snapshotChecks = 100
 )
 
 // Paths of the files that a target repository keeps on its default branch.
@@ -84,12 +102,60 @@ type PullRequest struct {
 	Number int
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
+	// HeadBranch is the branch of the pull request. A request that
+	// continues the work of an open pull request runs on it (I1).
+	HeadBranch string
+	// Labels are the labels of the pull request now. I11 compares them
+	// with the labels of the issue; no decision reads them (principle 5).
+	Labels []string
+	// Checks are the checks on the head commit, from statusCheckRollup.
+	// I3 and I4 read them together with the required checks of the branch
+	// (RequiredChecks).
+	Checks []CheckResult
 	// Author is the login of the author as the REST API shows it: a GitHub
 	// App is "<slug>[bot]", the form of the identity that an agent commits
 	// with. GraphQL gives the login of a Bot without "[bot]" (measured on
 	// the sandbox on 2026-09-22), so it is added here. Empty when the
 	// author is gone (a deleted account).
 	Author string
+}
+
+// CheckConclusion is what one check says, as the rows I3 and I4 read it.
+// GitHub has more conclusions; cumin needs only these three.
+type CheckConclusion int
+
+const (
+	// CheckPending: the check has not finished, or has not reported yet.
+	CheckPending CheckConclusion = iota
+	// CheckPassed: success, skipped, or neutral. GitHub treats these three
+	// as not blocking a merge (rows 20 and 51).
+	CheckPassed
+	// CheckFailed: the check finished with any other conclusion.
+	CheckFailed
+)
+
+func (c CheckConclusion) String() string {
+	switch c {
+	case CheckPending:
+		return "pending"
+	case CheckPassed:
+		return "passed"
+	case CheckFailed:
+		return "failed"
+	}
+	return fmt.Sprintf("CheckConclusion(%d)", int(c))
+}
+
+// CheckResult is one check on the head commit of a pull request. A check
+// run and a commit status give the same values, because the required checks
+// of a branch name both by the same name. Integration is the database id of
+// the App of the check suite, or 0 for a commit status and for a check run
+// whose App cannot be read. A required check that names an App is met only
+// by the check of that App.
+type CheckResult struct {
+	Name        string
+	Conclusion  CheckConclusion
+	Integration int64
 }
 
 // IssueRef is an issue that another issue points to: only its number and
@@ -118,7 +184,7 @@ type RateLimit struct {
 // from a pull request branch. The files are not a connection, so they do not
 // change the cost of the query; $repositoryFiles asks for them on the first
 // page only, because one poll reads them once.
-const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $repositoryFiles: Boolean!) {
+const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $repositoryFiles: Boolean!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef @include(if: $repositoryFiles) { name target { oid } }
     cuminConfig: object(expression: "HEAD:` + CuminConfigPath + `") @include(if: $repositoryFiles) { ...cuminFile }
@@ -139,7 +205,23 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
             blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
             closedByPullRequestsReferences(first: $pullRequests) {
               pageInfo { hasNextPage }
-              nodes { number headRefOid author { __typename login } }
+              nodes {
+                number
+                headRefOid
+                headRefName
+                author { __typename login }
+                labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+                statusCheckRollup {
+                  contexts(first: $checks) {
+                    pageInfo { hasNextPage }
+                    nodes {
+                      __typename
+                      ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }
+                      ... on StatusContext { context state }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -240,25 +322,122 @@ type issueNode struct {
 }
 
 type pullRequestNode struct {
-	Number     int    `json:"number"`
-	HeadRefOid string `json:"headRefOid"`
-	Author     *struct {
+	Number      int    `json:"number"`
+	HeadRefOid  string `json:"headRefOid"`
+	HeadRefName string `json:"headRefName"`
+	Author      *struct {
 		TypeName string `json:"__typename"`
 		Login    string `json:"login"`
 	} `json:"author"`
+	Labels struct {
+		PageInfo pageInfo `json:"pageInfo"`
+		Nodes    []struct {
+			Name string `json:"name"`
+		} `json:"nodes"`
+	} `json:"labels"`
+	// StatusCheckRollup is null when the head commit has no check at all.
+	StatusCheckRollup *struct {
+		Contexts struct {
+			PageInfo pageInfo    `json:"pageInfo"`
+			Nodes    []checkNode `json:"nodes"`
+		} `json:"contexts"`
+	} `json:"statusCheckRollup"`
+}
+
+// checkNode is one context of the rollup: a CheckRun (a GitHub Actions job
+// and the like) or a StatusContext (a commit status). The names of the
+// fields come from the schema (introspection on 2026-09-24).
+type checkNode struct {
+	TypeName string `json:"__typename"`
+	// A CheckRun.
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	// CheckSuite carries the App that reported the check run.
+	CheckSuite *struct {
+		App *struct {
+			DatabaseID int64 `json:"databaseId"`
+		} `json:"app"`
+	} `json:"checkSuite"`
+	// A StatusContext.
+	Context string `json:"context"`
+	State   string `json:"state"`
+}
+
+// result converts one context. An unknown type is an error: cumin must not
+// decide I3 or I4 on a check whose shape it does not know.
+func (n checkNode) result() (CheckResult, error) {
+	switch n.TypeName {
+	case "CheckRun":
+		result := CheckResult{Name: n.Name, Conclusion: checkRunConclusion(n.Status, n.Conclusion)}
+		if n.CheckSuite != nil && n.CheckSuite.App != nil {
+			result.Integration = n.CheckSuite.App.DatabaseID
+		}
+		return result, nil
+	case "StatusContext":
+		return CheckResult{Name: n.Context, Conclusion: statusConclusion(n.State)}, nil
+	}
+	return CheckResult{}, fmt.Errorf("the check %q has the unknown type %q", n.Name+n.Context, n.TypeName)
+}
+
+// checkRunConclusion reads a check run. A run that has not completed has no
+// conclusion yet, whatever it will be.
+func checkRunConclusion(status, conclusion string) CheckConclusion {
+	if status != "COMPLETED" {
+		return CheckPending
+	}
+	switch conclusion {
+	case "SUCCESS", "SKIPPED", "NEUTRAL":
+		return CheckPassed
+	case "":
+		return CheckPending
+	}
+	return CheckFailed
+}
+
+// statusConclusion reads a commit status. EXPECTED and PENDING mean that
+// the answer is still to come.
+func statusConclusion(state string) CheckConclusion {
+	switch state {
+	case "SUCCESS":
+		return CheckPassed
+	case "EXPECTED", "PENDING", "":
+		return CheckPending
+	}
+	return CheckFailed
 }
 
 // pullRequest converts one node. Without includeClosedPrs, the connection
 // holds open pull requests only (the schema: closedByPullRequestsReferences).
-func (n pullRequestNode) pullRequest() PullRequest {
-	pr := PullRequest{Number: n.Number, HeadCommit: n.HeadRefOid}
+// A connection over its page size is an error, as it is for an issue.
+func (n pullRequestNode) pullRequest() (PullRequest, error) {
+	pr := PullRequest{Number: n.Number, HeadCommit: n.HeadRefOid, HeadBranch: n.HeadRefName}
 	if n.Author != nil {
 		pr.Author = n.Author.Login
 		if n.Author.TypeName == "Bot" {
 			pr.Author += "[bot]"
 		}
 	}
-	return pr
+	if n.Labels.PageInfo.HasNextPage {
+		return PullRequest{}, fmt.Errorf("pull request #%d has more than %d labels", n.Number, snapshotLabels)
+	}
+	for _, label := range n.Labels.Nodes {
+		pr.Labels = append(pr.Labels, label.Name)
+	}
+	if n.StatusCheckRollup == nil {
+		return pr, nil
+	}
+	if n.StatusCheckRollup.Contexts.PageInfo.HasNextPage {
+		return PullRequest{}, fmt.Errorf("pull request #%d has more than %d checks", n.Number, snapshotChecks)
+	}
+	for _, node := range n.StatusCheckRollup.Contexts.Nodes {
+		check, err := node.result()
+		if err != nil {
+			return PullRequest{}, fmt.Errorf("pull request #%d: %w", n.Number, err)
+		}
+		pr.Checks = append(pr.Checks, check)
+	}
+	return pr, nil
 }
 
 // ReadSnapshot reads the snapshot of one repository with the installation
@@ -273,6 +452,7 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 			"owner": owner, "name": repo, "first": snapshotIssuePage, "after": after,
 			"subIssues": snapshotSubIssues, "labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
 			"pullRequests":    snapshotPullRequests,
+			"checks":          snapshotChecks,
 			"repositoryFiles": firstPage,
 		}
 		var resp snapshotResponse
@@ -369,7 +549,12 @@ func (n issueNode) issue() (Issue, error) {
 		issue.BlockedBy = append(issue.BlockedBy, IssueRef{Number: blocker.Number, Closed: blocker.State == "CLOSED"})
 	}
 	for _, node := range n.PullRequests.Nodes {
-		issue.PullRequests = append(issue.PullRequests, node.pullRequest())
+		pr, err := node.pullRequest()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("issue #%d: %w", n.Number, err))
+			continue
+		}
+		issue.PullRequests = append(issue.PullRequests, pr)
 	}
 	return issue, errors.Join(errs...)
 }
