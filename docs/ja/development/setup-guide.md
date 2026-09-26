@@ -127,7 +127,16 @@ cumin の側で分かっていることは3つある。
    cumin setup github-apps --org <Organizationの名前> [--config <Hostの設定ファイル>]
    ```
 
-   全ての App が登録済みなら、コマンドは何も登録せず、App ごとに `already registered <role>: client ID <Client ID>` と表示する。この行が出るのは、Keychain の鍵が読めて、GitHub がその鍵をその Client ID のものとして受け付け、App の持ち主がその Organization で、権限がその role の表と合っているときだけである。1つでも合わなければ、コマンドは何も変えずに止まり、理由を表示する。
+   全ての App が登録済みでインストール済みなら、コマンドは何も変えず、App ごとに2行を表示する。
+
+   | 行 | 問い合わせ | その行が出たら分かること |
+   |---|---|---|
+   | `already registered <role>: client ID <Client ID>` | `GET /app` | Keychain の鍵が読めて、GitHub がその鍵をその Client ID の App として受け付け、App の持ち主がその Organization で、権限がその role の表と合っている |
+   | `installed <role> on <Organization>` | `GET /app/installations` | その App が、その Organization にインストールされたままである |
+
+   2つは別の事実を見ている。登録と鍵が正しいまま、インストールだけ外れていることがあるためである。そのときは installation token が出ないので、Agentは何もできない。
+
+   読むのは最後の行だけでよい。`already registered` の確認が1つでも合わなければ、コマンドは何も変えずにそこで止まるので、`installed` の行が roleの数だけ出ていれば、両方が通ったことになる。インストールが外れている App があれば、`installed` の行の代わりにインストールのページのアドレスを表示し、ブラウザを開く。
 
    cumin本体の App の名前を変えたときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <新しいslug>` をもう一度実行する。
 
@@ -139,7 +148,7 @@ cumin の側で分かっていることは3つある。
    ```
 7. cumin を起動し直す (`scripts/install.sh --restart`)。最初の定期確認が成功することをログで確かめる。
 
-インストールが外れていないかは、6のコマンドでは分からない。心配なときは、Organization の設定の "GitHub Apps" で、その App の "Configure" を開き、対象のリポジトリが選ばれたままかを見る。
+どのリポジトリが選ばれているかまでは、6のコマンドでは分からない。確かめるときは、Organization の設定の "GitHub Apps" で、その App の "Configure" を開く。
 
 ## 手順3: リポジトリの準備
 
