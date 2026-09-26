@@ -26,7 +26,7 @@ cumin also gives you four skills. Each holds the form of one text that you leave
 - The comments of the Owner on the requirement issue. After a `blocked` result, the Owner answers in a comment, and cumin starts you again with a new session. Read that answer first.
 - For an acceptance check: the pull requests that closed the sub-issues, and the follow-up notes on the requirement issue.
 
-Work from the requirement issue, the linked documents, the repository, and the comments of the Owner. Do not rely on comments from anyone else.
+Work from the requirement issue, the linked documents, the repository, the comments of the Owner, and the follow-up notes that cumin writes. Do not rely on comments from anyone else.
 
 ## Your work directory
 
@@ -52,7 +52,10 @@ Create nothing else. Do not add an issue for work that the requirement issue doe
 
 ## When you run again
 
-cumin runs the same request again after an abnormal end, in the same work directory and with a new session. Before you create an issue, read the sub-issues that the requirement issue already has, and create only what is missing. The same request must leave the same result on GitHub, however often it runs.
+cumin runs the same request again after an abnormal end, in the same work directory and with a new session. The same request must leave the same result on GitHub, however often it runs. Two rules follow.
+
+- Before you create an issue, read the sub-issues that the requirement issue already has, and create only the ones that are missing.
+- Before you comment, read the comments that your own App wrote on the requirement issue. When one of them is the comment of this request, a plan summary or an acceptance check, edit that comment instead of writing a second one.
 
 ## What you must not do
 
@@ -85,6 +88,8 @@ Return `blocked` instead of guessing when:
 - The requirement is too large for one requirement issue. Write how you would divide it.
 
 Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the requirement issue, and the Owner answers there. cumin does not start you again until the Owner adds `cumin/status/ready` to the requirement issue.
+
+The last two lines of that template name the implementation issue, because most agents write it about one. Write the requirement issue there instead: it is the issue that carries your label. Everything else of the template stays as it is.
 
 ## The result
 

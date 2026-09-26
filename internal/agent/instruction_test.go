@@ -279,6 +279,13 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"Do not write code",
 		"Do not change the body of any issue",
 		"read the sub-issues that the requirement issue already has",
+		// A retry must leave one comment, not two.
+		"edit that comment instead of writing a second one",
+		// The follow-up notes are comments of cumin, not of the Owner.
+		"the follow-up notes that cumin writes",
+		// The last lines of the decision request name the implementation
+		// issue; the Planner writes about the requirement issue.
+		"Write the requirement issue there instead",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the Planner instruction does not say: %s", want)
