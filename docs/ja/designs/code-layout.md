@@ -50,6 +50,7 @@
 | | `comments.go` | Issueへのコメントの投稿 |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
+| | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
