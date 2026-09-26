@@ -281,8 +281,13 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"read the sub-issues that the requirement issue already has",
 		// A retry must leave one comment, not two.
 		"edit it only when it was written after the last sub-issue closed",
-		// The follow-up notes are comments of cumin, not of the Owner.
-		"the follow-up notes of cumin, for the work that is left",
+		// The acceptance check reads the pull requests, the follow-up
+		// notes of cumin, and the earlier plan summary of the Planner.
+		"the pull requests that closed the sub-issues, with their descriptions",
+		"the follow-up notes that cumin wrote on the requirement issue",
+		"your own earlier plan summary",
+		// Only these three write a source; anyone may comment otherwise.
+		"is not a source",
 		// The last lines of the decision request name the implementation
 		// issue; the Planner writes about the requirement issue.
 		"Write the requirement issue there instead",
