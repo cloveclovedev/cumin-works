@@ -92,6 +92,9 @@ type CheckRun struct {
 	JobID int64
 	// AppID is the App that reported the check run. 0 leaves it out.
 	AppID int64
+	// DetailsURL replaces the address that the fake builds from JobID, for
+	// a check run of an App that is not GitHub Actions.
+	DetailsURL string
 	// Annotations are the annotations of the check run.
 	Annotations []Annotation
 	// JobLog is the plain text log of the job.
@@ -482,8 +485,8 @@ func (f *Fake) serveCommitCheckRuns(w http.ResponseWriter, r *http.Request, owne
 	}
 	runs := []map[string]any{}
 	for _, run := range repo.CheckRuns[sha] {
-		details := ""
-		if run.JobID != 0 {
+		details := run.DetailsURL
+		if details == "" && run.JobID != 0 {
 			details = fmt.Sprintf("https://github.com/%s/%s/actions/runs/1/job/%d", owner, name, run.JobID)
 		}
 		node := map[string]any{

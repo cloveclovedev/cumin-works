@@ -118,6 +118,11 @@ func TestFailedCheckContent_AChecksWhoseContentIsOutOfReachNamesItself(t *testin
 			if !strings.Contains(text, `Check "ci" failed.`) || !strings.Contains(text, "could not read its content") {
 				t.Errorf("the text does not name the check and the missing content:\n%s", text)
 			}
+			// The Owner must be able to see in the log why the request of
+			// I4 carries no content.
+			if !strings.Contains(logs.String(), "WARN") {
+				t.Errorf("no warning for a check that could not be read: %s", logs)
+			}
 		})
 	}
 }
@@ -142,6 +147,63 @@ func TestFailedCheckContent_ReadsOnlyTheChecksThatFailed(t *testing.T) {
 	}
 	if n := fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/actions/jobs/42/logs"); n != 1 {
 		t.Errorf("%d reads of the log of the failed check, want 1", n)
+	}
+}
+
+// TestFailedCheckContent_ARunThatPassedIsNotTheFailure: a name can have two
+// runs, and a rerun can pass between the snapshot and this read. The text
+// must not hold the log of a run that passed.
+func TestFailedCheckContent_ARunThatPassedIsNotTheFailure(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 7, Name: "ci", Conclusion: "failure", JobID: 42, JobLog: "the run that failed\n",
+	})
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 9, Name: "ci", Conclusion: "success", JobID: 43, JobLog: "the rerun that passed\n",
+	})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	content := client.FailedCheckContent(context.Background(), githubtest.Token,
+		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, nil)
+
+	text := contentOf(t, content, "ci")
+	if !strings.Contains(text, "the run that failed") || strings.Contains(text, "passed") {
+		t.Errorf("the text does not come from the run that failed:\n%s", text)
+	}
+}
+
+// TestFailedCheckContent_ADetailsAddressOfAnotherAppIsNoJob: the details
+// address of another App is its own, and a number at its end is not a job
+// of GitHub Actions.
+func TestFailedCheckContent_ADetailsAddressOfAnotherAppIsNoJob(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 7, Name: "external", Conclusion: "failure",
+		DetailsURL: "https://ci.example.com/builds/42",
+		Annotations: []githubtest.Annotation{
+			{Path: "a.go", Level: "failure", Message: "the annotation of another App"},
+		},
+	})
+	// A job with the same number exists in the repository.
+	fake.AddCheckRun(repo, "another-commit", githubtest.CheckRun{
+		ID: 8, Name: "ci", Conclusion: "failure", JobID: 42, JobLog: "the log of an unrelated job\n",
+	})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	content := client.FailedCheckContent(context.Background(), githubtest.Token,
+		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "external"}}, nil)
+
+	text := contentOf(t, content, "external")
+	if !strings.Contains(text, "the annotation of another App") {
+		t.Errorf("the annotations of the check are missing:\n%s", text)
+	}
+	if strings.Contains(text, "unrelated job") {
+		t.Errorf("the text holds the log of an unrelated job:\n%s", text)
+	}
+	if n := fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/actions/jobs/42/logs"); n != 0 {
+		t.Errorf("%d reads of a job log, want none for a check of another App", n)
 	}
 }
 

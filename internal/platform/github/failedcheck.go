@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -83,7 +84,11 @@ func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, 
 		run, ok := pickRun(runs, check)
 		if !ok {
 			// A commit status has no check run, so it has neither
-			// annotations nor a job log.
+			// annotations nor a job log. A run that passed is not the
+			// failure either: a rerun can land between the snapshot and
+			// this read.
+			logger.Warn("a failed check has no failed check run to read",
+				"check", check.Name, "commit", short(sha))
 			content = append(content, FailedCheck{Check: check, Content: contentNotRead(check.Name)})
 			continue
 		}
@@ -95,10 +100,12 @@ func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, 
 	return content
 }
 
-// pickRun returns the check run of one required check. A rule that names an
-// App is met only by that App, as it is in the decision of I3 and I4, so
-// the content of a check never comes from the run of another App. Among the
-// runs that match, the newest one (the highest id) is the one to read.
+// pickRun returns the check run of one failed required check. A rule that
+// names an App is met only by that App, as it is in the decision of I3 and
+// I4, so the content never comes from the run of another App. Only a run
+// that failed is read: a name can have two runs, and a rerun can pass
+// between the snapshot and this read. Among the runs that failed, the
+// newest one (the highest id) is the one to read.
 func pickRun(runs []checkRun, check RequiredCheck) (checkRun, bool) {
 	var found checkRun
 	ok := false
@@ -109,11 +116,25 @@ func pickRun(runs []checkRun, check RequiredCheck) (checkRun, bool) {
 		if check.Integration != 0 && run.AppID != check.Integration {
 			continue
 		}
+		if !failedConclusion(run.Conclusion) {
+			continue
+		}
 		if !ok || run.ID > found.ID {
 			found, ok = run, true
 		}
 	}
 	return found, ok
+}
+
+// failedConclusion reports whether a conclusion of REST is a failure.
+// Success, skipped, and neutral are the three that pass (rows 20 and 51);
+// a run without a conclusion has not finished.
+func failedConclusion(conclusion string) bool {
+	switch conclusion {
+	case "", "success", "skipped", "neutral":
+		return false
+	}
+	return true
 }
 
 // contentNotRead is the text of a check whose content cumin could not read.
@@ -191,6 +212,9 @@ func (c *AppClient) contentOf(ctx context.Context, token, owner, repo, name stri
 		}
 	}
 	if len(annotations) == 0 && tail == "" {
+		// The check failed with nothing that cumin can read: no failure
+		// annotation, and no job of GitHub Actions behind it.
+		logger.Warn("a failed check has no annotation and no job log", "check", name)
 		return contentNotRead(name)
 	}
 	return cut(b.String(), checkContentLimit)
@@ -246,20 +270,25 @@ func (c *AppClient) jobLogTail(ctx context.Context, token, owner, repo, detailsU
 	return c.text(ctx, token, path, label)
 }
 
-// jobID is the last part of the details address of a check run of GitHub
-// Actions (".../runs/<run id>/job/<job id>"), or an empty string when the
-// address does not end in a number.
+// actionsJobPath is the path of the details address of a check run of
+// GitHub Actions: ".../actions/runs/<run id>/job/<job id>" (row 54).
+var actionsJobPath = regexp.MustCompile(`/actions/runs/\d+/job/(\d+)$`)
+
+// jobID is the job of a check run of GitHub Actions, or an empty string
+// for a check run of another App. The whole shape of the path must match:
+// the details address of another App is its own, and a number at its end
+// would otherwise send cumin to read the log of a job that has nothing to
+// do with the check.
 func jobID(detailsURL string) string {
-	last := detailsURL[strings.LastIndex(detailsURL, "/")+1:]
-	if last == "" {
+	parsed, err := url.Parse(detailsURL)
+	if err != nil {
 		return ""
 	}
-	for _, r := range last {
-		if r < '0' || r > '9' {
-			return ""
-		}
+	match := actionsJobPath.FindStringSubmatch(parsed.Path)
+	if match == nil {
+		return ""
 	}
-	return last
+	return match[1]
 }
 
 // text reads the body of a response as text, up to logReadLimit, and keeps
