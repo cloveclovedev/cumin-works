@@ -82,6 +82,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | `scripts/install.sh` の弱点 | `--restart` は、ディスクのplistと入れたバイナリを突き合わせるが、`launchctl kickstart` はlaunchdが読み込み済みの定義を起動する。plistを書き換えて読み込み直していないと、別のパスのバイナリを起動して成功と報告しうる。スクリプトのテストもない (偽の `go` と `launchctl` が要る) | 差し替えは手順書のとおり `bootout` と `bootstrap` で行えば起きない | 差し替えで失敗したとき。他のHostに導入するとき |
 | `cumin setup notify` の試しの通知 | webhookのアドレスを保存したあとに、試しのメッセージを1つ送って、届く道を1回で確かめる | 通知の要求では、本物のメッセージをlive scenarioの1回だけにした | 設定したのに通知が届かない、という事故が起きたとき |
 | live scenarioの通知先を分ける | live scenarioが送る通知が、Ownerの運用のチャンネルに残る。sandbox用のwebhookをKeychainの別の項目にして、live scenarioではそれを使う | 通知を送るlive scenarioが、まだ1つしかない | 通知を送るlive scenarioが増えて、運用の通知に紛れるようになったとき |
+| GitHub GraphQLのポイントの予算 | 定期確認の問い合わせは1ページ11ポイント (sub-issue 15件、Pull Request 2件、ラベルとcheckを含む)。60秒の間隔で、1リポジトリが毎時660ポイント使う。installationの毎時5,000ポイントを対象リポジトリの全部で分け合うので、1ページのリポジトリなら7つまで。減らす案は3つある。作業中のIssueがないリポジトリは間隔を延ばす。Pull Requestのcheckとラベルは、必要なIssueだけ小さな2つ目の問い合わせで読む (1ページ9ポイントに戻るが、時点が2つになる)。複数のリポジトリを1つの問い合わせにまとめる (設計メモの後回し) | v0.1の対象は1つの製品とsandboxで、60秒のまま収まる | 対象リポジトリが3つ以上になったとき。`rateLimit.remaining` のログが余裕を切ったとき。要求Issueが1ページ (10件) を超えたとき |
 | Linuxへの対応 | HostとしてLinuxを使えるようにする | Hostは Mac mini を想定している | Linuxのマシンで動かしたくなったとき |
 
 ## 対象を広げる

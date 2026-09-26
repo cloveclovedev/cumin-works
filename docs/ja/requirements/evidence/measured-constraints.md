@@ -162,6 +162,8 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 95 | 定期確認の問い合わせに `closedByPullRequestsReferences(first: 5)` を足すと、`rateLimit.cost` は6から9になる。`first` を3にしても、`includeClosedPrs: true` を付けても9で変わらない。77の積の式どおりには増えない | sandboxで実測 | 実測 |
 | 96 | contextを取り消した `git clone` は、"signal: killed" で失敗する。cuminの停止による取り消しは、Agentの異常終了ではなく、作業場所の用意の失敗として記録される | `TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval` で観測 | 実測 |
 | 97 | `--setting-sources project` と `--add-dir <ディレクトリ>` を付けた `-p` の実行で、Agentに見えるskillは、そのディレクトリのskillと、CLIに組み込みのskillだけである。Hostのユーザの `~/.claude/skills/` のskillは見えない | live scenario Impl-1 (#101) の記録 | 実測 |
+| 105 | 定期確認の問い合わせの1ページのポイントは「要求Issue × sub-issue × k ÷ 100」で決まる。k は接続の数で、sub-issueの下のラベルと blocked by で2、Pull Requestで1、Pull Requestの下の接続 (ラベル、check) ごとにPull Requestの件数を足す。接続の中のページサイズ (checkやラベルの件数) はポイントを変えない (95の続き) | sandboxで実測 (2026-09-25) | 実測 |
+| 106 | Pull Requestのラベルとcheckを足した問い合わせは、sub-issue 30件・Pull Request 5件で39ポイント、15件・2件で11ポイントだった。60秒の間隔で1リポジトリが毎時660ポイント使う | sandboxで実測 (2026-09-25) | 実測 |
 
 ## 10. launchdとリポジトリの設定の実装で確かめたこと (2026-09-22)
 
