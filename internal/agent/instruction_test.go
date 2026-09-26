@@ -286,6 +286,8 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"the pull requests that closed the sub-issues, with their descriptions",
 		"the follow-up notes that cumin wrote on the requirement issue",
 		"your own earlier plan summary",
+		// The App of the Planner cannot read the pull requests API.
+		"Read a pull request through the issues API",
 		// Only these three write a source; anyone may comment otherwise.
 		"is not a source",
 		// The last lines of the decision request name the implementation
