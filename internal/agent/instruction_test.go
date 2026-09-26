@@ -282,13 +282,18 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		// A retry must leave one comment, not two.
 		"edit it only when it was written after the last sub-issue closed",
 		// The follow-up notes are comments of cumin, not of the Owner.
-		"the follow-up notes that cumin writes",
+		"the follow-up notes of cumin, for the work that is left",
 		// The last lines of the decision request name the implementation
 		// issue; the Planner writes about the requirement issue.
 		"Write the requirement issue there instead",
 		// The Planner must know which files the Implementer cannot change.
 		"`protected_paths` of `.cumin/config.toml`",
 		"`.github/workflows/`",
+		// The list alone does not say which files it covers.
+		"matches a file of that name at any depth",
+		// A short answer of the Owner replies to the question in the
+		// decision request, which cumin posted.
+		"the decision request that cumin posted for you",
 		// A blocked run is not run again, so nothing may exist yet.
 		"Work out the whole split before you create anything on GitHub",
 	} {

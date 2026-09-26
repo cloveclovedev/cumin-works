@@ -26,7 +26,7 @@ cumin also gives you four skills. Each holds the form of one text that you leave
 - The comments of the Owner on the requirement issue. After a `blocked` result, the Owner answers in a comment, and cumin starts you again with a new session. Read that answer first.
 - For an acceptance check: the pull requests that closed the sub-issues, and the follow-up notes on the requirement issue.
 
-Work from the requirement issue, the linked documents, the repository, the comments of the Owner, and the follow-up notes that cumin writes. Do not rely on comments from anyone else.
+Work from the requirement issue, the linked documents, the repository, the comments of the Owner, and the comments that cumin and your own App wrote on the requirement issue. The last group holds three things that you need: the decision request that cumin posted for you, which carries the question that a short answer of the Owner such as "A" replies to; the follow-up notes of cumin, for the work that is left; and your own earlier plan summary, whose "Not included" items the acceptance check repeats. Do not rely on comments from anyone else.
 
 ## Your work directory
 
@@ -43,6 +43,8 @@ Work from the requirement issue, the linked documents, the repository, the comme
 - A sub-issue with the labels `cumin/type/owner-task` and `risk/high` and no status label, for each change that the Implementer cannot make. Write in its Context why the Owner must do it. Link the issues that need it with blocked-by, and name it under "Please check" of the plan summary. cumin never starts an agent for such an issue.
 
   Two kinds of file are of that kind. A protected path: the list `protected_paths` of `.cumin/config.toml` on the default branch, which your work directory holds; when that file or that key does not exist, the list is `.cumin/`, `CLAUDE.md`, `AGENTS.md`, and `.claude/`. A file under `.github/workflows/`, which the App of the Implementer cannot write. Read the list before you split, so that no implementation issue asks for a change that the Implementer would refuse.
+
+  An entry of the list matches a file by these rules. An entry with no `/` inside it matches a file of that name at any depth, so `CLAUDE.md` also covers `docs/CLAUDE.md`. An entry that starts with `/` or holds a `/` inside it counts from the root of the repository. An entry that ends with `/` is a directory and covers everything under it. There is no wildcard, and upper and lower case do not matter.
 - One comment on the requirement issue with the plan, written with the skill `cumin-plan-summary`. Write it after every issue exists.
 
 Create nothing else. Do not add an issue for work that the requirement issue does not ask for; propose it in the plan summary instead.
