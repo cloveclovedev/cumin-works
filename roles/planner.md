@@ -59,7 +59,9 @@ Work out the whole split before you create anything on GitHub. Every reason to r
 cumin runs the same request again after an abnormal end, in the same work directory and with a new session. The same request must leave the same result on GitHub, however often it runs. Two rules follow.
 
 - Before you create an issue, read the sub-issues that the requirement issue already has, and create only the ones that are missing.
-- Before you comment, read the comments that your own App wrote on the requirement issue. When one of them is the comment of this request, a plan summary or an acceptance check, edit that comment instead of writing a second one.
+- Before you comment, read the comments that your own App wrote on the requirement issue, and edit the one of the run that cumin is repeating instead of writing a second one. Tell that one from the comment of an earlier round:
+  - An acceptance check: edit it only when it was written after the last sub-issue closed. cumin compares the time of the comment with the time of that close, so an older comment that you edit never counts, and the requirement issue would ask for the check again and again. When every comment is older, write a new one.
+  - A plan summary: edit it only when it lists the issues that the requirement issue has now. The summary of an earlier round describes an earlier plan; leave it, and write a new one.
 
 ## What you must not do
 

@@ -280,7 +280,7 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"Do not change the body of any issue",
 		"read the sub-issues that the requirement issue already has",
 		// A retry must leave one comment, not two.
-		"edit that comment instead of writing a second one",
+		"edit it only when it was written after the last sub-issue closed",
 		// The follow-up notes are comments of cumin, not of the Owner.
 		"the follow-up notes that cumin writes",
 		// The last lines of the decision request name the implementation
