@@ -291,7 +291,8 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		// Only these three write a source; anyone may comment otherwise.
 		"is not a source",
 		// The Planner must be able to tell who the Owner is.
-		"the account that added `cumin/status/ready` to the requirement issue",
+		"The Owner is the account that adds `cumin/status/ready`",
+		"read the timelines of the sub-issues",
 		// The last lines of the decision request name the implementation
 		// issue; the Planner writes about the requirement issue.
 		"Write the requirement issue there instead",
