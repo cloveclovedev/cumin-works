@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 // Limits of the text that FailedCheckContent returns. They are constants of
@@ -28,9 +29,12 @@ const (
 	// logTailBytes is how much of the end of a job log the text holds. The
 	// failure of a job is at its end.
 	logTailBytes = 2000
-	// logReadLimit is how much of a job log cumin reads to find that end. A
-	// log of a long job is larger than anything worth keeping.
-	logReadLimit = 8 << 20
+	// logReadLimit is how much of a job log cumin reads at most. The read
+	// keeps only the end, so the limit is there for the time and the
+	// bandwidth of a log that never ends, not for the memory. A log that
+	// reaches it says so in the text, because the end that the text holds
+	// is then not the end of the job.
+	logReadLimit = 64 << 20
 	// annotationPage is the page size of the annotations of a check run.
 	annotationPage = 100
 	// checkRunPage is the page size of the check runs of a commit.
@@ -51,33 +55,54 @@ const (
 // Official: REST "List check runs for a Git reference", "List check run
 // annotations", and "Download job logs for a workflow run" (a redirect to a
 // plain text file).
-func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, sha string, names []string, logger *slog.Logger) map[string]string {
+func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, sha string, failed []RequiredCheck, logger *slog.Logger) map[string]string {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	content := make(map[string]string, len(names))
-	if len(names) == 0 {
+	content := make(map[string]string, len(failed))
+	if len(failed) == 0 {
 		return content
 	}
 	runs, err := c.checkRuns(ctx, token, owner, repo, sha)
 	if err != nil {
 		logger.Warn("the check runs of the commit were not read", "error", err.Error())
-		for _, name := range names {
-			content[name] = contentNotRead(name)
+		for _, check := range failed {
+			content[check.Name] = contentNotRead(check.Name)
 		}
 		return content
 	}
-	for _, name := range names {
-		run, ok := runs[name]
+	for _, check := range failed {
+		run, ok := pickRun(runs, check)
 		if !ok {
 			// A commit status has no check run, so it has neither
 			// annotations nor a job log.
-			content[name] = contentNotRead(name)
+			content[check.Name] = contentNotRead(check.Name)
 			continue
 		}
-		content[name] = c.contentOf(ctx, token, owner, repo, name, run, logger)
+		content[check.Name] = c.contentOf(ctx, token, owner, repo, check.Name, run, logger)
 	}
 	return content
+}
+
+// pickRun returns the check run of one required check. A rule that names an
+// App is met only by that App, as it is in the decision of I3 and I4, so
+// the content of a check never comes from the run of another App. Among the
+// runs that match, the newest one (the highest id) is the one to read.
+func pickRun(runs []checkRun, check RequiredCheck) (checkRun, bool) {
+	var found checkRun
+	ok := false
+	for _, run := range runs {
+		if run.Name != check.Name {
+			continue
+		}
+		if check.Integration != 0 && run.AppID != check.Integration {
+			continue
+		}
+		if !ok || run.ID > found.ID {
+			found, ok = run, true
+		}
+	}
+	return found, ok
 }
 
 // contentNotRead is the text of a check whose content cumin could not read.
@@ -92,14 +117,21 @@ type checkRun struct {
 	Conclusion string `json:"conclusion"`
 	// DetailsURL ends with the id of the job of GitHub Actions (row 54).
 	DetailsURL string `json:"details_url"`
+	// App is the App that reported the check run. A rule of a branch can
+	// name it (RequiredCheck.Integration).
+	App *struct {
+		ID int64 `json:"id"`
+	} `json:"app"`
+	// AppID is App.ID, or 0 when the answer has no App.
+	AppID int64 `json:"-"`
 }
 
-// checkRuns returns the check runs of a commit, by name. When a name has
-// more than one run, the one with the highest id is kept: it is the newest.
-func (c *AppClient) checkRuns(ctx context.Context, token, owner, repo, sha string) (map[string]checkRun, error) {
+// checkRuns returns every check run of a commit. Two Apps can report a
+// check of the same name, so the caller picks by name and App.
+func (c *AppClient) checkRuns(ctx context.Context, token, owner, repo, sha string) ([]checkRun, error) {
 	base := fmt.Sprintf("/repos/%s/%s/commits/%s/check-runs",
 		url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(sha))
-	runs := map[string]checkRun{}
+	var runs []checkRun
 	for page := 1; ; page++ {
 		var answer struct {
 			CheckRuns []checkRun `json:"check_runs"`
@@ -109,9 +141,10 @@ func (c *AppClient) checkRuns(ctx context.Context, token, owner, repo, sha strin
 			return nil, fmt.Errorf("github: read the check runs of %s/%s@%s: %w", owner, repo, short(sha), err)
 		}
 		for _, run := range answer.CheckRuns {
-			if kept, ok := runs[run.Name]; !ok || run.ID > kept.ID {
-				runs[run.Name] = run
+			if run.App != nil {
+				run.AppID = run.App.ID
 			}
+			runs = append(runs, run)
 		}
 		if len(answer.CheckRuns) < checkRunPage {
 			return runs, nil
@@ -161,22 +194,31 @@ type annotation struct {
 
 // annotations returns the failure annotations of a check run. Annotations
 // of another level (notice, warning) are left out: the request of I4 is
-// about what failed.
+// about what failed. Every page is read, because the failure can stand
+// behind a hundred warnings; the read stops early once the failures are
+// longer than the text will be.
 func (c *AppClient) annotations(ctx context.Context, token, owner, repo string, id int64) ([]annotation, error) {
-	path := fmt.Sprintf("/repos/%s/%s/check-runs/%d/annotations?per_page=%d",
-		url.PathEscape(owner), url.PathEscape(repo), id, annotationPage)
+	base := fmt.Sprintf("/repos/%s/%s/check-runs/%d/annotations", url.PathEscape(owner), url.PathEscape(repo), id)
 	label := fmt.Sprintf("/repos/%s/%s/check-runs/{id}/annotations", owner, repo)
-	var read []annotation
-	if err := c.do(ctx, token, http.MethodGet, path, label, nil, http.StatusOK, &read); err != nil {
-		return nil, err
-	}
 	var failures []annotation
-	for _, note := range read {
-		if note.Level == "failure" {
+	kept := 0
+	for page := 1; ; page++ {
+		var read []annotation
+		path := fmt.Sprintf("%s?per_page=%d&page=%d", base, annotationPage, page)
+		if err := c.do(ctx, token, http.MethodGet, path, label, nil, http.StatusOK, &read); err != nil {
+			return failures, err
+		}
+		for _, note := range read {
+			if note.Level != "failure" {
+				continue
+			}
 			failures = append(failures, note)
+			kept += len(note.Path) + len(note.Message)
+		}
+		if len(read) < annotationPage || kept >= checkContentLimit {
+			return failures, nil
 		}
 	}
-	return failures, nil
 }
 
 // jobLogTail returns the end of the log of the job of a check run. The job
@@ -190,11 +232,7 @@ func (c *AppClient) jobLogTail(ctx context.Context, token, owner, repo, detailsU
 	path := fmt.Sprintf("/repos/%s/%s/actions/jobs/%s/logs",
 		url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(id))
 	label := fmt.Sprintf("/repos/%s/%s/actions/jobs/{id}/logs", owner, repo)
-	raw, err := c.text(ctx, token, path, label)
-	if err != nil {
-		return "", err
-	}
-	return tailLines(raw), nil
+	return c.text(ctx, token, path, label)
 }
 
 // jobID is the last part of the details address of a check run of GitHub
@@ -239,11 +277,13 @@ func (c *AppClient) text(ctx context.Context, token, path, label string) (string
 		return "", fmt.Errorf("GET %s: status %d", label, resp.StatusCode)
 	}
 	// The end of the log is what says why the job failed, so the read
-	// keeps the last bytes and throws the rest away as it goes.
+	// keeps the last bytes and throws the rest away as it goes. Memory
+	// stays at the size of the tail, whatever the size of the log.
 	var tail []byte
 	buf := make([]byte, 32<<10)
 	total := 0
-	for total < logReadLimit {
+	reachedLimit := false
+	for {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
 			total += n
@@ -253,17 +293,25 @@ func (c *AppClient) text(ctx context.Context, token, path, label string) (string
 			}
 		}
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return "", fmt.Errorf("GET %s: %w", label, err)
 		}
+		if total >= logReadLimit {
+			reachedLimit = true
+			break
+		}
 	}
-	return string(tail), nil
+	text := tailLines(string(tail))
+	if reachedLimit && text != "" {
+		text = "[cumin stopped reading the log here; this is not the end of the job]\n" + text
+	}
+	return text, nil
 }
 
 // tailLines drops a first line that the tail cut in the middle, so that the
-// text starts at a line.
+// text starts at a line, and drops the bytes of a rune that the cut broke.
 func tailLines(raw string) string {
 	raw = strings.TrimRight(raw, "\n")
 	if raw == "" {
@@ -272,16 +320,21 @@ func tailLines(raw string) string {
 	if i := strings.Index(raw, "\n"); i >= 0 && len(raw) >= logTailBytes {
 		raw = raw[i+1:]
 	}
-	return raw
+	return strings.ToValidUTF8(raw, "")
 }
 
-// cut shortens a text to limit characters and says that it was cut.
+// cut shortens a text to limit bytes and says that it was cut. The cut
+// stands at the end of a rune, so that the text is valid UTF-8: an agent
+// receives it as the text of a request.
 func cut(text string, limit int) string {
 	if len(text) <= limit {
 		return text
 	}
 	const note = "\n[cut by cumin]\n"
 	keep := limit - len(note)
+	for keep > 0 && !utf8.RuneStart(text[keep]) {
+		keep--
+	}
 	return text[:keep] + note
 }
 

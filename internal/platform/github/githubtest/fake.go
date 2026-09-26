@@ -90,6 +90,8 @@ type CheckRun struct {
 	// address from it, as GitHub does. 0 leaves the address without a job,
 	// as a check run of another App has.
 	JobID int64
+	// AppID is the App that reported the check run. 0 leaves it out.
+	AppID int64
 	// Annotations are the annotations of the check run.
 	Annotations []Annotation
 	// JobLog is the plain text log of the job.
@@ -447,7 +449,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		f.serveCommitCheckRuns(w, r, commitChecks[1], commitChecks[2], commitChecks[3])
 	case r.Method == http.MethodGet && annotations != nil:
 		id, _ := strconv.ParseInt(annotations[3], 10, 64)
-		f.serveAnnotations(w, annotations[1], annotations[2], id)
+		f.serveAnnotations(w, r, annotations[1], annotations[2], id)
 	case r.Method == http.MethodGet && jobLog != nil:
 		id, _ := strconv.ParseInt(jobLog[3], 10, 64)
 		f.serveJobLog(w, jobLog[1], jobLog[2], id)
@@ -484,10 +486,14 @@ func (f *Fake) serveCommitCheckRuns(w http.ResponseWriter, r *http.Request, owne
 		if run.JobID != 0 {
 			details = fmt.Sprintf("https://github.com/%s/%s/actions/runs/1/job/%d", owner, name, run.JobID)
 		}
-		runs = append(runs, map[string]any{
+		node := map[string]any{
 			"id": run.ID, "name": run.Name, "status": "completed",
 			"conclusion": run.Conclusion, "details_url": details,
-		})
+		}
+		if run.AppID != 0 {
+			node["app"] = map[string]any{"id": run.AppID}
+		}
+		runs = append(runs, node)
 	}
 	page := page(runs, r)
 	writeJSON(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": page})
@@ -495,7 +501,7 @@ func (f *Fake) serveCommitCheckRuns(w http.ResponseWriter, r *http.Request, owne
 
 // serveAnnotations answers GET .../check-runs/{id}/annotations. Official:
 // "List check run annotations".
-func (f *Fake) serveAnnotations(w http.ResponseWriter, owner, name string, id int64) {
+func (f *Fake) serveAnnotations(w http.ResponseWriter, r *http.Request, owner, name string, id int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	repo, ok := f.repository(w, owner, name)
@@ -513,7 +519,7 @@ func (f *Fake) serveAnnotations(w http.ResponseWriter, owner, name string, id in
 			"path": note.Path, "annotation_level": note.Level, "message": note.Message,
 		})
 	}
-	writeJSON(w, http.StatusOK, notes)
+	writeJSON(w, http.StatusOK, page(notes, r))
 }
 
 // serveJobLog answers GET .../actions/jobs/{id}/logs with the plain text
