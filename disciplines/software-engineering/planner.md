@@ -14,7 +14,7 @@ Ask these questions of every implementation issue. Split it or rewrite it when t
 6. The size fits. Aim for 100 to 200 changed lines. Do not go over 400 lines or 10 files. A whole file that is deleted, generated code, and a mechanical rename do not count.
 7. The work fits in a day. One engineer who does not know the history finishes it in a few hours to a day.
 8. A change that a revert cannot undo stands alone. A database migration, a deployment or CI setting, authentication, payments, an effect on an external service, the contract of a public API, and the rules of cumin itself are of that kind. Put such a change in its own smallest issue, so that the other issues stay at a lower risk.
-9. The Implementer can change every file that the work needs. A protected path and a file that the App of the Implementer cannot write (under `.github/workflows/`) are not such files. When the work needs one, the change becomes a sub-issue for the Owner, as the role file describes.
+9. The Implementer can change every file that the work needs. A protected path and a file under `.github/workflows/` are not such files. The role file says where the list of protected paths stands and what it holds when the repository sets none. When the work needs one of these files, the change becomes a sub-issue for the Owner, as the role file describes.
 10. Do not split further when the split would leave a piece that no command can check, separate a rule from its test, add an API that nothing calls, leave an issue that reads as nothing without another pull request, or only add an order between issues.
 
 ## How many implementation issues

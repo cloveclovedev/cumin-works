@@ -286,6 +286,11 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		// The last lines of the decision request name the implementation
 		// issue; the Planner writes about the requirement issue.
 		"Write the requirement issue there instead",
+		// The Planner must know which files the Implementer cannot change.
+		"`protected_paths` of `.cumin/config.toml`",
+		"`.github/workflows/`",
+		// A blocked run is not run again, so nothing may exist yet.
+		"Work out the whole split before you create anything on GitHub",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the Planner instruction does not say: %s", want)

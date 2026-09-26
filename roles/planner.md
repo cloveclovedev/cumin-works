@@ -41,9 +41,13 @@ Work from the requirement issue, the linked documents, the repository, the comme
 - The milestone of the requirement issue on each implementation issue, when the requirement issue has one.
 - The blocked-by relationship where one issue needs another first. Record a dependency only between sub-issues of the same requirement issue. The Owner links requirement issues to each other.
 - A sub-issue with the labels `cumin/type/owner-task` and `risk/high` and no status label, for each change that the Implementer cannot make. Write in its Context why the Owner must do it. Link the issues that need it with blocked-by, and name it under "Please check" of the plan summary. cumin never starts an agent for such an issue.
+
+  Two kinds of file are of that kind. A protected path: the list `protected_paths` of `.cumin/config.toml` on the default branch, which your work directory holds; when that file or that key does not exist, the list is `.cumin/`, `CLAUDE.md`, `AGENTS.md`, and `.claude/`. A file under `.github/workflows/`, which the App of the Implementer cannot write. Read the list before you split, so that no implementation issue asks for a change that the Implementer would refuse.
 - One comment on the requirement issue with the plan, written with the skill `cumin-plan-summary`. Write it after every issue exists.
 
 Create nothing else. Do not add an issue for work that the requirement issue does not ask for; propose it in the plan summary instead.
+
+Work out the whole split before you create anything on GitHub. Every reason to return `blocked` must be settled first, because a `blocked` run is not run again: the sub-issues that you already created would stay, and the Owner would have to clean them up before answering. Once the first issue exists, finish the plan.
 
 ## What you leave on GitHub for an acceptance check
 
