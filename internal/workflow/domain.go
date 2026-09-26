@@ -38,7 +38,23 @@ func IsStatusLabel(name string) bool { return strings.HasPrefix(name, statusLabe
 // issues and their sub-issues. Closed requirement issues are not in it
 // (issue-states.md, principle 6).
 type Snapshot struct {
+	// DefaultBranch is the branch whose rules name the required checks.
+	DefaultBranch     string
 	RequirementIssues []RequirementIssue
+}
+
+// HasIssueAwaitingChecks reports whether an open sub-issue waits for the
+// required checks. The poll reads the required checks only then, because
+// that read is a REST call of its own.
+func (s Snapshot) HasIssueAwaitingChecks() bool {
+	for _, requirement := range s.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if !sub.Closed && slices.Contains(sub.Labels, LabelAwaitingChecks) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // RequirementIssue is an open issue with cumin/type/requirement.
@@ -66,8 +82,60 @@ type PullRequest struct {
 	Number int
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
+	// HeadBranch is the branch of the pull request. A request that
+	// continues its work runs on it (I1, I4).
+	HeadBranch string
 	// Author is the login of the author; a GitHub App is "<slug>[bot]".
 	Author string
+	// Labels are the labels of the pull request now. I11 makes them equal
+	// to the labels of the issue; no rule decides on them (principle 5).
+	Labels []string
+	// Checks are the checks on the head commit. I3 and I4 read them with
+	// the required checks of the default branch.
+	Checks []CheckResult
+}
+
+// CheckConclusion is what one check says. GitHub has more conclusions;
+// the rules need only these three (issue-states.md, the text on required
+// checks).
+type CheckConclusion int
+
+const (
+	// CheckPending: the check has not finished, or has not reported yet.
+	CheckPending CheckConclusion = iota
+	// CheckPassed: success, skipped, or neutral.
+	CheckPassed
+	// CheckFailed: the check finished with any other conclusion.
+	CheckFailed
+)
+
+func (c CheckConclusion) String() string {
+	switch c {
+	case CheckPending:
+		return "pending"
+	case CheckPassed:
+		return "passed"
+	case CheckFailed:
+		return "failed"
+	}
+	return fmt.Sprintf("CheckConclusion(%d)", int(c))
+}
+
+// CheckResult is one check on the head commit of a pull request.
+// Integration is the App that reported it, or 0 for a commit status.
+type CheckResult struct {
+	Name        string
+	Conclusion  CheckConclusion
+	Integration int64
+}
+
+// RequiredCheck is one check that the rules of the default branch require.
+// Integration is the App that must report it, or 0 when the rule names no
+// App. GitHub counts a check of another App as missing, so the match uses
+// both.
+type RequiredCheck struct {
+	Name        string
+	Integration int64
 }
 
 // BlockedBy is an issue that blocks a sub-issue.
@@ -83,21 +151,36 @@ type Claim struct {
 	RequirementIssue int
 }
 
+// StartReview is the action of I3: every required check passed on the head
+// commit of the pull request, so the status label becomes
+// cumin/status/reviewing. Starting the Reviewer is a later requirement.
+type StartReview struct {
+	Number      int
+	PullRequest int
+}
+
 // Action is one thing that cumin does after a poll. Later rules add types.
 type Action interface {
 	isAction()
 }
 
-func (Claim) isAction() {}
+func (Claim) isAction()       {}
+func (StartReview) isAction() {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
 // of one repository that can be in cumin/status/planning, implementing,
 // awaiting-checks, or reviewing at the same time (cumin-core.md, the
-// settings table).
-func Decide(snapshot Snapshot, maxInProgress int) []Action {
+// settings table). required are the checks that the rules of the default
+// branch require; the caller reads them only when an issue of the
+// repository waits for the checks.
+//
+// I3 comes before the claims of I1: an issue that leaves
+// cumin/status/awaiting-checks keeps its place in the limit, so deciding it
+// first never takes room from a claim.
+func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Action {
+	actions := reviewableSubIssues(snapshot, required)
 	room := maxInProgress - inProgress(snapshot)
-	var actions []Action
 	for _, claim := range readySubIssues(snapshot) {
 		if room <= 0 {
 			break
@@ -105,6 +188,32 @@ func Decide(snapshot Snapshot, maxInProgress int) []Action {
 		actions = append(actions, claim)
 		room--
 	}
+	return actions
+}
+
+// reviewableSubIssues returns the actions of I3: open sub-issues in
+// cumin/status/awaiting-checks whose open pull request has every required
+// check passed on its head commit.
+func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
+	var actions []Action
+	for _, requirement := range snapshot.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) {
+				continue
+			}
+			pr, ok := sub.LatestPullRequest()
+			if !ok {
+				continue
+			}
+			if ChecksOf(required, pr.Checks) != ChecksPassed {
+				continue
+			}
+			actions = append(actions, StartReview{Number: sub.Number, PullRequest: pr.Number})
+		}
+	}
+	slices.SortFunc(actions, func(a, b Action) int {
+		return a.(StartReview).Number - b.(StartReview).Number
+	})
 	return actions
 }
 
@@ -170,6 +279,106 @@ func ReplaceStatusLabel(labels []string, status string) []string {
 // starts the work.
 func LabelsAfterClaim(labels []string) []string {
 	return ReplaceStatusLabel(labels, LabelImplementing)
+}
+
+// ChecksState says what the required checks of a pull request say together.
+type ChecksState int
+
+const (
+	// ChecksWaiting: a required check has not reported yet, or has not
+	// finished. cumin waits (I3 and I4 both need an answer first).
+	ChecksWaiting ChecksState = iota
+	// ChecksPassed: every required check passed. I3 applies.
+	ChecksPassed
+	// ChecksFailed: a required check failed. I4 applies.
+	ChecksFailed
+)
+
+func (s ChecksState) String() string {
+	switch s {
+	case ChecksWaiting:
+		return "waiting"
+	case ChecksPassed:
+		return "passed"
+	case ChecksFailed:
+		return "failed"
+	}
+	return fmt.Sprintf("ChecksState(%d)", int(s))
+}
+
+// ChecksOf says what the required checks say on one commit
+// (issue-states.md, the text on required checks).
+//
+//   - An empty list of required checks passes at once.
+//   - A required check is met by the results with its name. A rule that
+//     names an App is met only by the results of that App; GitHub counts a
+//     check of another App as missing.
+//   - A required check passes when every result of it passed. Passed means
+//     success, skipped, or neutral (rows 20 and 51 of
+//     measured-constraints.md); the caller receives them folded already.
+//   - A failed result decides the whole answer, even when another required
+//     check has not reported yet: the fix of I4 comes before the wait.
+//   - A required check without a result, or with one that has not
+//     finished, makes the answer "waiting". The list of required checks is
+//     known before a push, so a check that is missing is a check that is
+//     still to come.
+//
+// Results that no rule requires are ignored, whatever they say.
+func ChecksOf(required []RequiredCheck, results []CheckResult) ChecksState {
+	state := ChecksPassed
+	for _, check := range required {
+		switch checkState(check, results) {
+		case ChecksFailed:
+			return ChecksFailed
+		case ChecksWaiting:
+			state = ChecksWaiting
+		}
+	}
+	return state
+}
+
+// FailedChecks returns the names of the required checks that failed, in the
+// order of the required checks. I4 names them in its request.
+func FailedChecks(required []RequiredCheck, results []CheckResult) []string {
+	var names []string
+	for _, check := range required {
+		if checkState(check, results) == ChecksFailed {
+			names = append(names, check.Name)
+		}
+	}
+	return names
+}
+
+// checkState says what one required check says.
+func checkState(check RequiredCheck, results []CheckResult) ChecksState {
+	found := false
+	state := ChecksPassed
+	for _, result := range results {
+		if result.Name != check.Name {
+			continue
+		}
+		// A rule that names an App is met only by that App.
+		if check.Integration != 0 && result.Integration != check.Integration {
+			continue
+		}
+		found = true
+		switch result.Conclusion {
+		case CheckFailed:
+			return ChecksFailed
+		case CheckPending:
+			state = ChecksWaiting
+		}
+	}
+	if !found {
+		return ChecksWaiting
+	}
+	return state
+}
+
+// LabelsAfterReview returns the labels of a sub-issue after I3:
+// cumin/status/reviewing in place of cumin/status/awaiting-checks.
+func LabelsAfterReview(labels []string) []string {
+	return ReplaceStatusLabel(labels, LabelReviewing)
 }
 
 // VerificationFailure says which check of I2 failed.

@@ -134,13 +134,13 @@ func TestDecide_I1(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Decide(tt.snapshot, tt.maxInProgress)
+			got := Decide(tt.snapshot, tt.maxInProgress, nil)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
 			// The same snapshot in another order gives the same actions.
 			shuffled := shuffle(tt.snapshot)
-			if again := Decide(shuffled, tt.maxInProgress); !slices.Equal(again, tt.want) {
+			if again := Decide(shuffled, tt.maxInProgress, nil); !slices.Equal(again, tt.want) {
 				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
 			}
 		})
