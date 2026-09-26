@@ -34,7 +34,7 @@ func TestFailedCheckContent_HoldsTheAnnotationsAndTheEndOfTheJobLog(t *testing.T
 	content := client.FailedCheckContent(context.Background(), githubtest.Token,
 		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, logger(logs))
 
-	text := content["ci"]
+	text := contentOf(t, content, "ci")
 	for _, want := range []string{`Check "ci" failed.`, "internal/a/a.go: a_test.go:12: want 2, got 1", "FAIL\tinternal/a"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the text does not hold %q:\n%s", want, text)
@@ -67,7 +67,7 @@ func TestFailedCheckContent_IsCutAtTheLimit(t *testing.T) {
 	content := client.FailedCheckContent(context.Background(), githubtest.Token,
 		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, nil)
 
-	text := content["ci"]
+	text := contentOf(t, content, "ci")
 	if len(text) > 4000 {
 		t.Errorf("the text is %d characters, want 4000 at most", len(text))
 	}
@@ -114,7 +114,7 @@ func TestFailedCheckContent_AChecksWhoseContentIsOutOfReachNamesItself(t *testin
 			content := client.FailedCheckContent(context.Background(), githubtest.Token,
 				"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, logger(logs))
 
-			text := content["ci"]
+			text := contentOf(t, content, "ci")
 			if !strings.Contains(text, `Check "ci" failed.`) || !strings.Contains(text, "could not read its content") {
 				t.Errorf("the text does not name the check and the missing content:\n%s", text)
 			}
@@ -134,14 +134,42 @@ func TestFailedCheckContent_ReadsOnlyTheChecksThatFailed(t *testing.T) {
 	content := client.FailedCheckContent(context.Background(), githubtest.Token,
 		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, nil)
 
-	if _, ok := content["lint"]; ok {
-		t.Error("the content holds a check that did not fail")
+	if len(content) != 1 || content[0].Check.Name != "ci" {
+		t.Errorf("content = %+v, want the failed check only", content)
 	}
 	if n := fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/actions/jobs/43/logs"); n != 0 {
 		t.Errorf("%d reads of the log of the passed check, want none", n)
 	}
 	if n := fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/actions/jobs/42/logs"); n != 1 {
 		t.Errorf("%d reads of the log of the failed check, want 1", n)
+	}
+}
+
+// TestFailedCheckContent_TwoRulesOfTheSameNameKeepTheirOwnText: two
+// rulesets can require the same name from two Apps. Each one keeps its own
+// annotations and log, so the request of I4 holds both failures.
+func TestFailedCheckContent_TwoRulesOfTheSameNameKeepTheirOwnText(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 7, Name: "build", Conclusion: "failure", AppID: 15368, JobID: 42, JobLog: "the job of the first App\n",
+	})
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 8, Name: "build", Conclusion: "failure", AppID: 999, JobID: 43, JobLog: "the job of the second App\n",
+	})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	content := client.FailedCheckContent(context.Background(), githubtest.Token,
+		"example-org", "example-repo", headSHA, []github.RequiredCheck{
+			{Name: "build", Integration: 15368},
+			{Name: "build", Integration: 999},
+		}, nil)
+
+	if len(content) != 2 {
+		t.Fatalf("%d texts, want one for each rule", len(content))
+	}
+	if !strings.Contains(content[0].Content, "the first App") || !strings.Contains(content[1].Content, "the second App") {
+		t.Errorf("the texts do not keep their own App:\n%+v", content)
 	}
 }
 
@@ -166,7 +194,7 @@ func TestFailedCheckContent_TheAppOfTheRuleDecidesWhichRunIsRead(t *testing.T) {
 		"example-org", "example-repo", headSHA,
 		[]github.RequiredCheck{{Name: "protected-paths", Integration: 15368}}, nil)
 
-	text := content["protected-paths"]
+	text := contentOf(t, content, "protected-paths")
 	if !strings.Contains(text, "the job of GitHub Actions") {
 		t.Errorf("the text does not come from the App of the rule:\n%s", text)
 	}
@@ -191,8 +219,8 @@ func TestFailedCheckContent_ReadsEveryPageOfTheAnnotations(t *testing.T) {
 	content := client.FailedCheckContent(context.Background(), githubtest.Token,
 		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, nil)
 
-	if !strings.Contains(content["ci"], "the failure of the second page") {
-		t.Errorf("the failure of the second page is missing:\n%s", content["ci"])
+	if text := contentOf(t, content, "ci"); !strings.Contains(text, "the failure of the second page") {
+		t.Errorf("the failure of the second page is missing:\n%s", text)
 	}
 }
 
@@ -210,8 +238,8 @@ func TestFailedCheckContent_CutsAtTheEndOfARune(t *testing.T) {
 	content := client.FailedCheckContent(context.Background(), githubtest.Token,
 		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, nil)
 
-	if !utf8.ValidString(content["ci"]) {
-		t.Errorf("the text is not valid UTF-8: %q", content["ci"])
+	if text := contentOf(t, content, "ci"); !utf8.ValidString(text) {
+		t.Errorf("the text is not valid UTF-8: %q", text)
 	}
 }
 
@@ -228,6 +256,18 @@ func TestFailedCheckContent_NoNameCostsNoCall(t *testing.T) {
 	if len(content) != 0 || len(fake.Requests()) != 0 {
 		t.Errorf("content = %v, %d requests, want none of either", content, len(fake.Requests()))
 	}
+}
+
+// contentOf is the text of the check with the name, for a test.
+func contentOf(t *testing.T, content []github.FailedCheck, name string) string {
+	t.Helper()
+	for _, check := range content {
+		if check.Check.Name == name {
+			return check.Content
+		}
+	}
+	t.Fatalf("no text for the check %q in %+v", name, content)
+	return ""
 }
 
 func logger(out *bytes.Buffer) *slog.Logger {

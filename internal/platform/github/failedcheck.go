@@ -41,10 +41,18 @@ const (
 	checkRunPage = 100
 )
 
-// FailedCheckContent returns, for each name, what the failed check says on
-// the commit: its failure annotations, and then the end of the log of its
-// job. One text is at most checkContentLimit characters, and a text that
-// was cut says so.
+// FailedCheck is one failed required check and what it says.
+type FailedCheck struct {
+	Check   RequiredCheck
+	Content string
+}
+
+// FailedCheckContent returns, for each failed required check, what it says
+// on the commit: its failure annotations, and then the end of the log of
+// its job. One text is at most checkContentLimit bytes, and a text that was
+// cut says so. The answer keeps the order of failed, so that the request of
+// I4 is the same for the same facts; two rules can require the same name
+// from two Apps, and each one keeps its own text.
 //
 // Nothing here is an error for the caller. A check that cumin cannot read
 // (a commit status, a missing permission, a job that is gone) gives a text
@@ -55,19 +63,19 @@ const (
 // Official: REST "List check runs for a Git reference", "List check run
 // annotations", and "Download job logs for a workflow run" (a redirect to a
 // plain text file).
-func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, sha string, failed []RequiredCheck, logger *slog.Logger) map[string]string {
+func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, sha string, failed []RequiredCheck, logger *slog.Logger) []FailedCheck {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	content := make(map[string]string, len(failed))
 	if len(failed) == 0 {
-		return content
+		return nil
 	}
+	content := make([]FailedCheck, 0, len(failed))
 	runs, err := c.checkRuns(ctx, token, owner, repo, sha)
 	if err != nil {
 		logger.Warn("the check runs of the commit were not read", "error", err.Error())
 		for _, check := range failed {
-			content[check.Name] = contentNotRead(check.Name)
+			content = append(content, FailedCheck{Check: check, Content: contentNotRead(check.Name)})
 		}
 		return content
 	}
@@ -76,10 +84,13 @@ func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, 
 		if !ok {
 			// A commit status has no check run, so it has neither
 			// annotations nor a job log.
-			content[check.Name] = contentNotRead(check.Name)
+			content = append(content, FailedCheck{Check: check, Content: contentNotRead(check.Name)})
 			continue
 		}
-		content[check.Name] = c.contentOf(ctx, token, owner, repo, check.Name, run, logger)
+		content = append(content, FailedCheck{
+			Check:   check,
+			Content: c.contentOf(ctx, token, owner, repo, check.Name, run, logger),
+		})
 	}
 	return content
 }
