@@ -48,7 +48,7 @@ Hostに置いて使うときは、`scripts/install.sh` を使う。ビルドし�
 
 ## 今できること
 
-`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1) と、Implementerの実行、そして実行のあとのPull Requestの検証 (I2) までである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
+`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1)、Implementerの実行、実行のあとのPull Requestの検証 (I2)、必須のcheckが通ったIssueをレビュー待ちに移すこと (I3) までである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
 
 ```sh
 go run ./cmd/cumin run --config <設定ファイル>
@@ -63,10 +63,11 @@ go run ./cmd/cumin run --config <設定ファイル>
 5. 対象のリポジトリごとに、足りないラベル (`cumin/type/requirement`、`cumin/status/*`、`risk/*`) を作る。
 6. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`work_dir` の下に worktree を用意して、Implementer を起動する。実行は定期確認とは別に進むので、定期確認は止まらない。実行が終わると、結果 (`done` か `blocked`) とセッションの番号、または異常終了の種類がログに出る。
 7. 結果が `done` なら、そのリポジトリを読み直して、Issueを閉じる開いているPull Requestがあること、その作成者が Implementer の App であること、worktree の先頭のコミットがpushされていることを確かめる (I2)。通れば、ラベルを `cumin/status/awaiting-checks` に替える。
-8. 実行が異常終了したときは、同じ依頼を同じ作業場所で1回だけやり直す。新しいAgentの実行なので、利用枠を使う。cuminを止めたときの異常終了は、やり直さない。
-9. 先に進めないときは、Ownerに戻す。Issueにコメントを付け、ラベルを `cumin/status/awaiting-owner-decision` に替えて、Ownerに通知する。コメントは、結果が `blocked` ならAgentが返した理由そのもの、それ以外なら cumin が書く (どの確認で落ちたか、または2回の異常終了の種類)。`blocked` はやり直さない。
-10. リポジトリの定期確認が、同じ理由で3回続けて失敗したら、1回だけ通知する。次に知らせるのは、そのリポジトリの定期確認が成功したあとである。
-11. 通知は Discord の webhook で届く。アドレスは Keychain にあり ([セットアップの手順](development/setup-guide.md))、出すかどうかは設定 `notify.discord.enabled` が決める。アドレスがなくても cumin は起動し、起動のログに警告が出る。
+8. `cumin/status/awaiting-checks` のIssueがあるリポジトリでは、既定のブランチの必須のcheckの一覧を読む。Pull Requestの先頭のコミットで必須のcheckが全て通っていれば、ラベルを `cumin/status/reviewing` に替えて、レビューの準備ができたとログに出す (I3)。必須のcheckが1つもなければ、すぐ替える。落ちたcheckがあるときの修正の依頼 (I4) は、まだ作られていない。
+9. 実行が異常終了したときは、同じ依頼を同じ作業場所で1回だけやり直す。新しいAgentの実行なので、利用枠を使う。cuminを止めたときの異常終了は、やり直さない。
+10. 先に進めないときは、Ownerに戻す。Issueにコメントを付け、ラベルを `cumin/status/awaiting-owner-decision` に替えて、Ownerに通知する。コメントは、結果が `blocked` ならAgentが返した理由そのもの、それ以外なら cumin が書く (どの確認で落ちたか、または2回の異常終了の種類)。`blocked` はやり直さない。
+11. リポジトリの定期確認が、同じ理由で3回続けて失敗したら、1回だけ通知する。次に知らせるのは、そのリポジトリの定期確認が成功したあとである。
+12. 通知は Discord の webhook で届く。アドレスは Keychain にあり ([セットアップの手順](development/setup-guide.md))、出すかどうかは設定 `notify.discord.enabled` が決める。アドレスがなくても cumin は起動し、起動のログに警告が出る。
 
 Implementer の実行は、本物の Claude Code を起動し、利用枠を使う。
 

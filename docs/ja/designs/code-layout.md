@@ -56,10 +56,10 @@
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
 | `internal/notify` | `domain.go` | 純粋。通知の内容と、その文章 |
 | | `notify.go` | 通知を送る入口 `Notifier` と、手段を表す `Sender` |
-| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1)、実行終了の判定 (I2) |
+| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、必須のcheckの判定、実行終了の判定 (I2) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
-| | `service.go` | 定期確認のループ。スナップショットを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
+| | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |

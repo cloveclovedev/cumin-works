@@ -291,16 +291,32 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 		log.Info("the settings of the repository were read",
 			"from_repository", settings.FromRepository, "risk_criteria", settings.RiskCriteriaSource)
 	}
+	// The required checks are a REST call of their own, so the poll makes
+	// it only when an issue of this repository waits for the checks (I3,
+	// I4). Its budget is not the one of the snapshot query.
+	var required []RequiredCheck
+	if snapshot.HasIssueAwaitingChecks() {
+		read, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
+		if err != nil {
+			return err
+		}
+		required = toRequiredChecks(read)
+	}
 	log.Info("poll",
 		"requirement_issues", len(snapshot.RequirementIssues),
+		"required_checks", len(required),
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
 	var errs []error
-	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress) {
+	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
 		switch a := action.(type) {
 		case Claim:
 			if err := s.claim(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
+		case StartReview:
+			if err := s.startReview(ctx, token, target, snapshot, a); err != nil {
 				errs = append(errs, err)
 			}
 		default:
@@ -339,6 +355,26 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if err := s.startImplementer(ctx, target, settings, sub); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
+	return nil
+}
+
+// startReview applies I3: every required check passed on the head commit of
+// the pull request, so the status label becomes cumin/status/reviewing.
+// Starting the Reviewer is the next requirement; until it lands, the log
+// line is what says that the pull request is ready.
+func (s *Service) startReview(ctx context.Context, token string, target Target, snapshot Snapshot, a StartReview) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	sub, ok := snapshot.SubIssue(a.Number)
+	if !ok {
+		return fmt.Errorf("I3: issue #%d is not in the snapshot", a.Number)
+	}
+	labels := LabelsAfterReview(sub.Labels)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+		return fmt.Errorf("I3: move issue #%d to the review: %w", a.Number, err)
+	}
+	s.logger().Info("I3: the pull request is ready for review",
+		"repository", target.Repository.String(), "issue", a.Number,
+		"pull_request", a.PullRequest, "labels", labels)
 	return nil
 }
 
@@ -568,10 +604,44 @@ func firstLine(s string) string {
 	return line
 }
 
+// toRequiredChecks converts the required checks that the REST call read.
+// The types of the platform package stop here.
+func toRequiredChecks(read []github.RequiredCheck) []RequiredCheck {
+	checks := make([]RequiredCheck, 0, len(read))
+	for _, check := range read {
+		checks = append(checks, RequiredCheck{Name: check.Name, Integration: check.Integration})
+	}
+	return checks
+}
+
+// toChecks converts the checks of one pull request.
+func toChecks(read []github.CheckResult) []CheckResult {
+	checks := make([]CheckResult, 0, len(read))
+	for _, check := range read {
+		checks = append(checks, CheckResult{
+			Name:        check.Name,
+			Conclusion:  toConclusion(check.Conclusion),
+			Integration: check.Integration,
+		})
+	}
+	return checks
+}
+
+// toConclusion folds the conclusion of the client into the one of the rules.
+func toConclusion(c github.CheckConclusion) CheckConclusion {
+	switch c {
+	case github.CheckPassed:
+		return CheckPassed
+	case github.CheckFailed:
+		return CheckFailed
+	}
+	return CheckPending
+}
+
 // toSnapshot converts what the GitHub client read to the snapshot of the
 // rules. The types of the platform package stop here.
 func toSnapshot(read github.RepositorySnapshot) Snapshot {
-	var snapshot Snapshot
+	snapshot := Snapshot{DefaultBranch: read.DefaultBranch}
 	for _, issue := range read.RequirementIssues {
 		requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
 		for _, sub := range issue.SubIssues {
@@ -580,7 +650,14 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 				subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 			}
 			for _, pr := range sub.PullRequests {
-				subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{Number: pr.Number, HeadCommit: pr.HeadCommit, Author: pr.Author})
+				subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{
+					Number:     pr.Number,
+					HeadCommit: pr.HeadCommit,
+					HeadBranch: pr.HeadBranch,
+					Author:     pr.Author,
+					Labels:     pr.Labels,
+					Checks:     toChecks(pr.Checks),
+				})
 			}
 			requirement.SubIssues = append(requirement.SubIssues, subIssue)
 		}
