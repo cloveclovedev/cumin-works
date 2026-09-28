@@ -55,6 +55,24 @@ var skills = []Skill{
 		Template:    "decision-request.md",
 		Roles:       config.AllRoles(),
 	},
+	{
+		Name:        "cumin-implementation-issue",
+		Description: "Write the body of an implementation issue in the form that the Implementer and the Reviewer read. Use before you create each implementation issue.",
+		Template:    "implementation-issue.md",
+		Roles:       []config.Role{config.RolePlanner},
+	},
+	{
+		Name:        "cumin-plan-summary",
+		Description: "Write the plan of a requirement issue as one comment for the Owner. Use after every implementation issue exists, before you comment.",
+		Template:    "plan-summary.md",
+		Roles:       []config.Role{config.RolePlanner},
+	},
+	{
+		Name:        "cumin-acceptance-check",
+		Description: "Write the result of an acceptance check as one comment on the requirement issue. Use before you write that comment.",
+		Template:    "acceptance-check.md",
+		Roles:       []config.Role{config.RolePlanner},
+	},
 }
 
 // Skills returns every skill that cumin has, as a copy: the roles of a

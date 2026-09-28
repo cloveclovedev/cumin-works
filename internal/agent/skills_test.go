@@ -32,8 +32,8 @@ func TestWriteSkills_WritesEachTemplateAsASkill(t *testing.T) {
 	if _, err := os.Stat(SkillPath(dir, "cumin-obsolete")); !os.IsNotExist(err) {
 		t.Errorf("the obsolete skill is still there (err = %v)", err)
 	}
-	if len(Skills()) != 3 {
-		t.Errorf("%d skills, want 3", len(Skills()))
+	if got, want := len(SkillsOf(config.RoleImplementer)), 3; got != want {
+		t.Errorf("%d skills of the Implementer, want %d", got, want)
 	}
 	for _, skill := range SkillsOf(config.RoleImplementer) {
 		data, err := os.ReadFile(SkillPath(dir, skill.Name))
