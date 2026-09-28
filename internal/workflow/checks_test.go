@@ -188,7 +188,13 @@ func TestDecide_I3(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
 			// The limit of issues in progress does not hold I3 back: the
 			// issue is already counted in it.
-			got := Decide(snapshot, 1, tt.required)
+			// The copies of I11 are another rule (TestDecide_I11).
+			var got []Action
+			for _, action := range Decide(snapshot, 1, tt.required) {
+				if _, ok := action.(CopyLabels); !ok {
+					got = append(got, action)
+				}
+			}
 			if fmt.Sprint(got) != fmt.Sprint(tt.want) {
 				t.Errorf("Decide = %v, want %v", got, tt.want)
 			}

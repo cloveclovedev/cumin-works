@@ -9,6 +9,7 @@ package workflow
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -29,6 +30,7 @@ const (
 	LabelAwaitingOwnerDecision = "cumin/status/awaiting-owner-decision"
 
 	statusLabelPrefix = "cumin/status/"
+	riskLabelPrefix   = "risk/"
 )
 
 // IsStatusLabel reports whether name is a cumin/status/* label.
@@ -159,6 +161,14 @@ type StartReview struct {
 	PullRequest int
 }
 
+// CopyLabels is the action of I11: the pull request gets Labels, so that its
+// cumin/status/* and risk/* labels are those of the issue that it closes.
+type CopyLabels struct {
+	Issue       int
+	PullRequest int
+	Labels      []string
+}
+
 // Action is one thing that cumin does after a poll. Later rules add types.
 type Action interface {
 	isAction()
@@ -166,6 +176,7 @@ type Action interface {
 
 func (Claim) isAction()       {}
 func (StartReview) isAction() {}
+func (CopyLabels) isAction()  {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -187,6 +198,42 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Ac
 		}
 		actions = append(actions, claim)
 		room--
+	}
+	return append(actions, labelCopies(snapshot)...)
+}
+
+// labelCopies returns the actions of I11: one for each open pull request
+// that closes a sub-issue and whose copied labels differ from the issue.
+// The copy is of the labels in the snapshot, so a label that this poll
+// changes reaches the pull request at the next poll. No other rule reads
+// the labels of a pull request (principle 5). A pull request that closes two
+// issues follows the one with the lowest number, so that the two do not
+// replace each other's labels at every poll, and the order of the snapshot
+// changes nothing.
+func labelCopies(snapshot Snapshot) []Action {
+	type source struct {
+		issue int
+		pr    PullRequest
+		want  []string
+	}
+	sources := map[int]source{}
+	for _, requirement := range snapshot.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			for _, pr := range sub.PullRequests {
+				if old, ok := sources[pr.Number]; ok && old.issue < sub.Number {
+					continue
+				}
+				sources[pr.Number] = source{issue: sub.Number, pr: pr, want: PullRequestLabels(sub.Labels, pr.Labels)}
+			}
+		}
+	}
+	var actions []Action
+	for _, number := range slices.Sorted(maps.Keys(sources)) {
+		src := sources[number]
+		if sameLabels(src.want, src.pr.Labels) {
+			continue
+		}
+		actions = append(actions, CopyLabels{Issue: src.issue, PullRequest: number, Labels: src.want})
 	}
 	return actions
 }
@@ -215,6 +262,37 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 		return a.(StartReview).Number - b.(StartReview).Number
 	})
 	return actions
+}
+
+// PullRequestLabels returns the labels that a pull request has after I11:
+// its own labels that are neither cumin/status/* nor risk/*, then those two
+// kinds from the issue.
+func PullRequestLabels(issue, pullRequest []string) []string {
+	after := []string{}
+	for _, label := range pullRequest {
+		if !isCopiedLabel(label) {
+			after = append(after, label)
+		}
+	}
+	for _, label := range issue {
+		if isCopiedLabel(label) {
+			after = append(after, label)
+		}
+	}
+	return after
+}
+
+// isCopiedLabel reports whether I11 copies the label from the issue.
+func isCopiedLabel(name string) bool {
+	return IsStatusLabel(name) || strings.HasPrefix(name, riskLabelPrefix)
+}
+
+// sameLabels reports whether a and b hold the same labels, in any order.
+func sameLabels(a, b []string) bool {
+	a, b = slices.Clone(a), slices.Clone(b)
+	slices.Sort(a)
+	slices.Sort(b)
+	return slices.Equal(slices.Compact(a), slices.Compact(b))
 }
 
 // inProgress counts the issues that fill the limit: open sub-issues in

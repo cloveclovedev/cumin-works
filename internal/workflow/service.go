@@ -319,6 +319,10 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 			if err := s.startReview(ctx, token, target, snapshot, a); err != nil {
 				errs = append(errs, err)
 			}
+		case CopyLabels:
+			if err := s.copyLabels(ctx, token, target, a); err != nil {
+				errs = append(errs, err)
+			}
 		default:
 			errs = append(errs, fmt.Errorf("unknown action %T", action))
 		}
@@ -375,6 +379,20 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	s.logger().Info("I3: the pull request is ready for review",
 		"repository", target.Repository.String(), "issue", a.Number,
 		"pull_request", a.PullRequest, "labels", labels)
+	return nil
+}
+
+// copyLabels applies I11: the pull request gets the cumin/status/* and
+// risk/* labels of the issue that it closes. A pull request is an issue on
+// the labels endpoint, so the call is the one for an issue.
+func (s *Service) copyLabels(ctx context.Context, token string, target Target, a CopyLabels) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.PullRequest, a.Labels); err != nil {
+		return fmt.Errorf("I11: copy the labels of issue #%d to pull request #%d: %w", a.Issue, a.PullRequest, err)
+	}
+	s.logger().Info("I11: copied the labels of the issue to the pull request",
+		"repository", target.Repository.String(), "issue", a.Issue,
+		"pull_request", a.PullRequest, "labels", a.Labels)
 	return nil
 }
 
