@@ -300,7 +300,7 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"`protected_paths` of `.cumin/config.toml`",
 		"`.github/workflows/`",
 		// The list alone does not say which files it covers.
-		"matches a file of that name at any depth",
+		"matches that name at any depth, as a file or as a directory",
 		// A short answer of the Owner replies to the question in the
 		// decision request, which cumin posted.
 		"the decision request that cumin posted for you",
@@ -327,6 +327,7 @@ func TestInstruction_PlannerHoldsTheCraftOfItsDiscipline(t *testing.T) {
 	for _, want := range []string{
 		"One purpose. You can describe the change in one sentence without \"and\"",
 		"Do not go over 400 lines or 10 files",
+		"A change that the risk criteria makes `risk/high` stands alone",
 		"Twelve is the limit",
 		"The risk criteria of the repository stands at the end of this instruction",
 		"take the higher one",

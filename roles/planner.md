@@ -48,7 +48,7 @@ A comment from anyone other than the Owner, cumin, and your own App is not a sou
 
   Two kinds of file are of that kind. A protected path: the list `protected_paths` of `.cumin/config.toml` on the default branch, which your work directory holds; when that file or that key does not exist, the list is `.cumin/`, `CLAUDE.md`, `AGENTS.md`, and `.claude/`. A file under `.github/workflows/`, which the App of the Implementer cannot write. Read the list before you split, so that no implementation issue asks for a change that the Implementer would refuse.
 
-  An entry of the list matches a file by these rules. An entry with no `/` inside it matches a file of that name at any depth, so `CLAUDE.md` also covers `docs/CLAUDE.md`. An entry that starts with `/` or holds a `/` inside it counts from the root of the repository. An entry that ends with `/` is a directory and covers everything under it. There is no wildcard, and upper and lower case do not matter.
+  An entry of the list matches a file by these rules. An entry with no `/` inside it matches that name at any depth, as a file or as a directory: `CLAUDE.md` covers `docs/CLAUDE.md`, and `secrets` covers a file named `secrets` and every file under a directory named `secrets`. An entry that starts with `/` or holds a `/` inside it counts from the root of the repository. An entry that ends with `/` is a directory and covers everything under it, never a file of that name. There is no wildcard, and upper and lower case do not matter.
 - One comment on the requirement issue with the plan, written with the skill `cumin-plan-summary`. Write it after every issue exists.
 
 Create nothing else. Do not add an issue for work that the requirement issue does not ask for; propose it in the plan summary instead.
