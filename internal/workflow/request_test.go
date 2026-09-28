@@ -53,3 +53,56 @@ func TestImplementRequestText_I1(t *testing.T) {
 		t.Error("the request text uses bold text")
 	}
 }
+
+// I1 (issue-states.md, implementer.md): a claim of an issue with an open
+// pull request continues on the branch of that pull request, the one with
+// the highest number of two; without one, the branch comes from the title.
+func TestClaimBranch_I1(t *testing.T) {
+	sub := func(prs ...PullRequest) SubIssue {
+		return SubIssue{Number: 10, Title: "Add the login screen", PullRequests: prs}
+	}
+	tests := []struct {
+		name       string
+		sub        SubIssue
+		wantBranch string
+		wantPR     int
+	}{
+		{"no pull request gives the branch of the title", sub(), "cumin/10-add-the-login-screen", 0},
+		{"an open pull request gives its branch, whatever the title", sub(PullRequest{Number: 21, HeadBranch: "cumin/10-an-older-title"}), "cumin/10-an-older-title", 21},
+		{"of two pull requests the highest number is used", sub(PullRequest{Number: 22, HeadBranch: "second"}, PullRequest{Number: 21, HeadBranch: "first"}), "second", 22},
+		{"a pull request without a known branch gives the branch of the title", sub(PullRequest{Number: 21}), "cumin/10-add-the-login-screen", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			branch, pr := ClaimBranch(tt.sub)
+			if branch != tt.wantBranch || pr != tt.wantPR {
+				t.Errorf("ClaimBranch = %q, #%d; want %q, #%d", branch, pr, tt.wantBranch, tt.wantPR)
+			}
+		})
+	}
+}
+
+// I1 (implementer.md, the request kind "continue"): the text names the pull
+// request and its branch, and says that the work goes on in it instead of a
+// new pull request.
+func TestContinueRequestText_I1(t *testing.T) {
+	text := ContinueRequestText("example-org/example-repo", 10, 21, "cumin/10-an-older-title", "/work/example-org/example-repo/10-implementer")
+	for _, want := range []string{
+		"Request: continue\n",
+		"Repository: example-org/example-repo\n",
+		"Implementation issue: #10\n",
+		"Pull request: #21\n",
+		"Branch: cumin/10-an-older-title\n",
+		"Work directory: /work/example-org/example-repo/10-implementer\n",
+		"Do not open a new pull request",
+		"skill cumin-pull-request",
+		"\"Closes #10\"",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text does not hold %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "**") {
+		t.Error("the request text uses bold text")
+	}
+}
