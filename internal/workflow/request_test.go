@@ -106,3 +106,20 @@ func TestContinueRequestText_I1(t *testing.T) {
 		t.Error("the request text uses bold text")
 	}
 }
+
+func TestPlanRequestText_R1(t *testing.T) {
+	text := PlanRequestText("example-org/example-repo", 6, "/work/example-org/example-repo/6-planner")
+	for _, want := range []string{
+		"Request: plan\n",
+		"Repository: example-org/example-repo\n",
+		"Requirement issue: #6\n",
+		"Work directory: /work/example-org/example-repo/6-planner\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text does not hold %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "**") {
+		t.Error("the request text uses bold text")
+	}
+}

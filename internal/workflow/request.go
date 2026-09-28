@@ -1,9 +1,9 @@
 package workflow
 
 // This file is pure, like domain.go: the branch name of an implementation
-// issue and the request text of the kind "implement". docs/ja/designs/
-// poll.md, the topic on the request to the Implementer, records the
-// rules.
+// issue and the request texts of the Implementer and the Planner.
+// docs/ja/designs/poll.md, the topics on the requests to the Implementer
+// and to the Planner, records the rules.
 
 import (
 	"fmt"
@@ -92,4 +92,19 @@ Work directory: %[4]s
 
 The pull request #%[5]d already closes the issue #%[2]d, and the work continues in it. Read the issue #%[2]d of %[1]s, its parent requirement issue, the documents that they link to, the pull request #%[5]d with its reviews, and the comments of the Owner. The work directory is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request; invoke the skill cumin-pull-request before you update the description of #%[5]d, and keep "Closes #%[2]d" in it. Then return the result.
 `, repository, number, branch, workDir, pullRequest)
+}
+
+// PlanRequestText returns the request text of the kind "plan"
+// (planner.md, the request kinds): the repository, the requirement issue,
+// and the work directory. The role instruction holds everything that does
+// not depend on the kind of the request, including the skills and the
+// rules on what the Planner leaves on GitHub.
+func PlanRequestText(repository string, number int, workDir string) string {
+	return fmt.Sprintf(`Request: plan
+Repository: %[1]s
+Requirement issue: #%[2]d
+Work directory: %[3]s
+
+Split the requirement issue #%[2]d of %[1]s into implementation issues, and comment the plan on it. The work directory is a detached checkout of the default branch; read it, and change nothing in it. Then return the result.
+`, repository, number, workDir)
 }

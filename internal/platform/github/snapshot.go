@@ -78,7 +78,8 @@ type RepositoryFile struct {
 }
 
 // Issue is one issue as the snapshot sees it. A requirement issue has
-// SubIssues. A sub-issue has Title, BlockedBy, and PullRequests.
+// SubIssues and BlockedBy (R1). A sub-issue has Title, BlockedBy, and
+// PullRequests.
 type Issue struct {
 	Number    int
 	Closed    bool
@@ -195,6 +196,7 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
         number
         state
         labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+        blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
         subIssues(first: $subIssues) {
           pageInfo { hasNextPage }
           nodes {

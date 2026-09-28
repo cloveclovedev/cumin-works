@@ -122,9 +122,10 @@ func TestDecide_I1(t *testing.T) {
 			maxInProgress: 1,
 		},
 		{
-			name:          "ready on a requirement issue gives no claim (R1 is another rule)",
+			name:          "ready on a requirement issue gives a plan, not a claim",
 			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, []string{LabelReady})}},
 			maxInProgress: 1,
+			want:          []Action{Plan{Number: 6}},
 		},
 		{
 			name:          "an empty snapshot gives no action",
@@ -144,6 +145,94 @@ func TestDecide_I1(t *testing.T) {
 				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
 			}
 		})
+	}
+}
+
+// R1 (issue-states.md): plan an open requirement issue with
+// cumin/status/ready whose blocked-by issues are all closed, with or
+// without sub-issues. R1 and I1 share the limit of issues in progress.
+func TestDecide_R1(t *testing.T) {
+	requirement := func(number int, status string, blockedBy []BlockedBy, subs ...SubIssue) RequirementIssue {
+		return RequirementIssue{Number: number, Labels: []string{LabelRequirement, status}, BlockedBy: blockedBy, SubIssues: subs}
+	}
+	readySub := SubIssue{Number: 10, Labels: []string{LabelReady, "risk/low"}}
+	open := []BlockedBy{{Number: 3}}
+	closed := []BlockedBy{{Number: 3, Closed: true}}
+
+	tests := []struct {
+		name          string
+		snapshot      Snapshot
+		maxInProgress int
+		want          []Action
+	}{
+		{
+			name:          "a ready requirement issue gives one plan",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelReady, nil)}},
+			maxInProgress: 1,
+			want:          []Action{Plan{Number: 6}},
+		},
+		{
+			name:          "a ready requirement issue with sub-issues gives a plan",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelReady, nil, SubIssue{Number: 10, Closed: true})}},
+			maxInProgress: 1,
+			want:          []Action{Plan{Number: 6}},
+		},
+		{
+			name:          "an open blocked-by issue gives no plan",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelReady, open)}},
+			maxInProgress: 1,
+		},
+		{
+			name:          "a closed blocked-by issue gives a plan",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelReady, closed)}},
+			maxInProgress: 1,
+			want:          []Action{Plan{Number: 6}},
+		},
+		{
+			name:          "a requirement issue in planning gives no plan and fills the limit",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelPlanning, nil), requirement(7, LabelReady, nil)}},
+			maxInProgress: 1,
+		},
+		{
+			name:          "a requirement issue in planning fills the limit for a sub-issue as well",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelPlanning, nil), requirement(7, LabelImplementing, nil, readySub)}},
+			maxInProgress: 1,
+		},
+		{
+			name:          "a plan and a claim share the limit, lowest issue number first",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(12, LabelReady, nil), requirement(7, LabelImplementing, nil, readySub)}},
+			maxInProgress: 1,
+			want:          []Action{Claim{Number: 10, RequirementIssue: 7}},
+		},
+		{
+			name:          "with room for two, the plan follows the claim",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(12, LabelReady, nil), requirement(7, LabelImplementing, nil, readySub)}},
+			maxInProgress: 2,
+			want:          []Action{Claim{Number: 10, RequirementIssue: 7}, Plan{Number: 12}},
+		},
+		{
+			name:          "awaiting-owner-decision without ready gives no plan",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelAwaitingOwnerDecision, nil)}},
+			maxInProgress: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Decide(tt.snapshot, tt.maxInProgress, nil)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Decide = %+v, want %+v", got, tt.want)
+			}
+			if again := Decide(shuffle(tt.snapshot), tt.maxInProgress, nil); !slices.Equal(again, tt.want) {
+				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
+			}
+		})
+	}
+}
+
+func TestLabelsAfterPlan_R1(t *testing.T) {
+	got := LabelsAfterPlan([]string{LabelRequirement, LabelReady})
+	if want := []string{LabelRequirement, LabelPlanning}; !slices.Equal(got, want) {
+		t.Errorf("LabelsAfterPlan = %v, want %v", got, want)
 	}
 }
 

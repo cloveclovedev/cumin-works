@@ -311,6 +311,10 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 	var errs []error
 	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
 		switch a := action.(type) {
+		case Plan:
+			if err := s.plan(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
 		case Claim:
 			if err := s.claim(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
@@ -394,6 +398,77 @@ func (s *Service) copyLabels(ctx context.Context, token string, target Target, a
 		"repository", target.Repository.String(), "issue", a.Issue,
 		"pull_request", a.PullRequest, "labels", a.Labels)
 	return nil
+}
+
+// plan applies R1: replace the status label of the requirement issue with
+// cumin/status/planning, and only then request the split. When the label
+// change fails, nothing is requested; the next poll decides again.
+func (s *Service) plan(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, p Plan) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	requirement, ok := snapshot.RequirementIssue(p.Number)
+	if !ok {
+		return fmt.Errorf("R1: issue #%d is not in the snapshot", p.Number)
+	}
+	labels := LabelsAfterPlan(requirement.Labels)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
+		return fmt.Errorf("R1: move issue #%d to planning: %w", p.Number, err)
+	}
+	s.logger().Info("R1: moved the requirement issue to planning",
+		"repository", target.Repository.String(), "issue", p.Number, "labels", labels)
+	if s.Agents == nil {
+		return fmt.Errorf("R1: request the split for issue #%d: no agent service is configured", p.Number)
+	}
+	done := s.markInProgress(ctx, target.Repository.String(), p.Number)
+	s.running.Add(1)
+	go func() {
+		defer s.running.Done()
+		defer done()
+		s.runPlanner(ctx, target, settings, p.Number)
+	}()
+	return nil
+}
+
+// runPlanner prepares the work directory and runs one Planner request of
+// the kind "plan" in a new session. The work directory is a detached
+// checkout of the default branch, because the Planner only reads
+// (agent-run.md, the topic on the work directory).
+//
+// The end of the run is only logged. What follows it (R2: the check of the
+// split, the notification, and the failure paths) is the next requirement
+// row; until then the requirement issue stays in cumin/status/planning.
+func (s *Service) runPlanner(ctx context.Context, target Target, settings *RepositorySettings, number int) {
+	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RolePlanner)
+	role := settings.Settings.Roles[config.RolePlanner]
+	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
+		Owner: target.Repository.Owner,
+		Repo:  target.Repository.Name,
+		Issue: number,
+		Role:  config.RolePlanner,
+	})
+	if err != nil {
+		log.Error("R1: the work directory was not prepared", "error", err.Error())
+		return
+	}
+	log.Info("R1: requested the split")
+	run, err := s.Agents.Start(ctx, agent.StartRequest{
+		Owner:        target.Repository.Owner,
+		Repo:         target.Repository.Name,
+		Role:         config.RolePlanner,
+		RiskCriteria: settings.RiskCriteria,
+		Text:         PlanRequestText(target.Repository.String(), number, workDir),
+		WorkDir:      workDir,
+		Settings:     &role,
+	})
+	var abnormal *agent.AbnormalEnd
+	switch {
+	case errors.As(err, &abnormal):
+		log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
+			"session_id", abnormal.SessionID, "detail", abnormal.Detail)
+	case err != nil:
+		log.Error("the agent was not started", "error", err.Error())
+	default:
+		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+	}
 }
 
 // startImplementer requests the work of I1 from the Implementer. The
@@ -687,6 +762,9 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 	snapshot := Snapshot{DefaultBranch: read.DefaultBranch}
 	for _, issue := range read.RequirementIssues {
 		requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
+		for _, blocker := range issue.BlockedBy {
+			requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
+		}
 		for _, sub := range issue.SubIssues {
 			subIssue := SubIssue{Number: sub.Number, Title: sub.Title, Closed: sub.Closed, Labels: sub.Labels}
 			for _, blocker := range sub.BlockedBy {

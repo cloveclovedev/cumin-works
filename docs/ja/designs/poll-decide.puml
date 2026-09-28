@@ -20,23 +20,30 @@ partition "判定 (純粋関数。I/Oなし)" {
     開いているsub-issue;
   :着手可能なIssue数を算出する
   max_issues_in_progress - 進行中のIssue数;
+  :R1の候補を集める
+  - 開いている要求Issue
+  - cumin/status/ready が付いている
+  - blocked by のIssueが全て閉じている;
   :I1の候補を集める
   - 開いているsub-issue
   - cumin/status/ready が付いている
   - blocked by のIssueが全て閉じている;
-  :候補をIssueの番号の昇順に並べ、
+  :R1とI1の候補を合わせてIssueの番号の昇順に並べ、
   着手可能なIssue数だけを残す;
   :I11のコピーを集める
   - Issueを閉じる開いているPull Requestごとに
   - cumin/status/* と risk/* が、
     このスナップショットのIssueと違うもの;
   :動作の一覧を返す
-  (I3、I1、I11の順);
+  (I3、R1とI1、I11の順);
 }
 partition "適用 (一覧の順に)" {
   :I3: ラベルを cumin/status/reviewing に替える;
-  :I1: ラベルを cumin/status/implementing に替え、
-  替えられたら依頼する。替えられなければ
+  :R1: ラベルを cumin/status/planning に替え、
+  替えられたらPlannerに分割を依頼する
+  I1: ラベルを cumin/status/implementing に替え、
+  替えられたらImplementerに依頼する
+  どちらも、替えられなければ
   次の定期確認でやり直す;
   :I11: Pull Requestのラベルを
   Issueと同じにする;

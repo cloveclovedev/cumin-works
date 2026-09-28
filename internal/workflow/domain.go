@@ -64,6 +64,9 @@ type RequirementIssue struct {
 	Number    int
 	Labels    []string
 	SubIssues []SubIssue
+	// BlockedBy are the issues that block the requirement issue. The Owner
+	// links requirement issues to each other, and R1 waits for them.
+	BlockedBy []BlockedBy
 }
 
 // SubIssue is an implementation issue: a sub-issue of a requirement issue.
@@ -169,6 +172,13 @@ type CopyLabels struct {
 	Labels      []string
 }
 
+// Plan is the action of R1: replace the status label of the requirement
+// issue with cumin/status/planning, and only then request the split from
+// the Planner.
+type Plan struct {
+	Number int
+}
+
 // Action is one thing that cumin does after a poll. Later rules add types.
 type Action interface {
 	isAction()
@@ -177,6 +187,7 @@ type Action interface {
 func (Claim) isAction()       {}
 func (StartReview) isAction() {}
 func (CopyLabels) isAction()  {}
+func (Plan) isAction()        {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -186,20 +197,46 @@ func (CopyLabels) isAction()  {}
 // branch require; the caller reads them only when an issue of the
 // repository waits for the checks.
 //
-// I3 comes before the claims of I1: an issue that leaves
+// I3 comes before the starts of R1 and I1: an issue that leaves
 // cumin/status/awaiting-checks keeps its place in the limit, so deciding it
-// first never takes room from a claim.
+// first never takes room from a start.
+//
+// R1 and I1 both start an agent, so they share the room under the limit.
+// The starts are taken lowest issue number first, whichever row they
+// belong to.
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Action {
 	actions := reviewableSubIssues(snapshot, required)
 	room := maxInProgress - inProgress(snapshot)
+	type start struct {
+		number int
+		action Action
+	}
+	var starts []start
+	for _, plan := range readyRequirementIssues(snapshot) {
+		starts = append(starts, start{plan.Number, plan})
+	}
 	for _, claim := range readySubIssues(snapshot) {
-		if room <= 0 {
-			break
-		}
-		actions = append(actions, claim)
-		room--
+		starts = append(starts, start{claim.Number, claim})
+	}
+	slices.SortFunc(starts, func(a, b start) int { return a.number - b.number })
+	for _, s := range starts[:max(0, min(room, len(starts)))] {
+		actions = append(actions, s.action)
 	}
 	return append(actions, labelCopies(snapshot)...)
+}
+
+// readyRequirementIssues returns the plans of R1 before the limit: open
+// requirement issues with cumin/status/ready whose blocked-by issues are
+// all closed. Whether the requirement issue has sub-issues does not
+// matter (issue-states.md, R1).
+func readyRequirementIssues(snapshot Snapshot) []Plan {
+	var plans []Plan
+	for _, requirement := range snapshot.RequirementIssues {
+		if slices.Contains(requirement.Labels, LabelReady) && !anyOpen(requirement.BlockedBy) {
+			plans = append(plans, Plan{Number: requirement.Number})
+		}
+	}
+	return plans
 }
 
 // labelCopies returns the actions of I11: one for each open pull request
@@ -327,7 +364,7 @@ func readySubIssues(snapshot Snapshot) []Claim {
 	var claims []Claim
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || blocked(sub) {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || anyOpen(sub.BlockedBy) {
 				continue
 			}
 			claims = append(claims, Claim{Number: sub.Number, RequirementIssue: requirement.Number})
@@ -349,6 +386,13 @@ func ReplaceStatusLabel(labels []string, status string) []string {
 		}
 	}
 	return append(after, status)
+}
+
+// LabelsAfterPlan returns the labels of a requirement issue after R1:
+// cumin/status/planning in place of cumin/status/ready. cumin/type/requirement
+// stays.
+func LabelsAfterPlan(labels []string) []string {
+	return ReplaceStatusLabel(labels, LabelPlanning)
 }
 
 // LabelsAfterClaim returns the labels of a sub-issue after I1:
@@ -536,6 +580,16 @@ func (s SubIssue) LatestPullRequest() (PullRequest, bool) {
 	return latest, found
 }
 
+// RequirementIssue returns the requirement issue with the number.
+func (s Snapshot) RequirementIssue(number int) (RequirementIssue, bool) {
+	for _, requirement := range s.RequirementIssues {
+		if requirement.Number == number {
+			return requirement, true
+		}
+	}
+	return RequirementIssue{}, false
+}
+
 // SubIssue returns the sub-issue with the number, from any requirement issue.
 func (s Snapshot) SubIssue(number int) (SubIssue, bool) {
 	for _, requirement := range s.RequirementIssues {
@@ -548,8 +602,9 @@ func (s Snapshot) SubIssue(number int) (SubIssue, bool) {
 	return SubIssue{}, false
 }
 
-func blocked(sub SubIssue) bool {
-	for _, blocker := range sub.BlockedBy {
+// anyOpen reports whether one of the blocking issues is still open.
+func anyOpen(blockedBy []BlockedBy) bool {
+	for _, blocker := range blockedBy {
 		if !blocker.Closed {
 			return true
 		}
