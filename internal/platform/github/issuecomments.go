@@ -8,19 +8,20 @@ import (
 	"time"
 )
 
-// issueCommentsLast is how many of the newest comments of a requirement
-// issue R4 and R7 read. The acceptance check comment is written after the
-// last sub-issue closed, so it is among the newest; the page stays small.
+// issueCommentsLast is the page size of the comments of a requirement
+// issue. The acceptance check comment is written after the last sub-issue
+// closed, so it is among the newest, and one page is the usual read.
 const issueCommentsLast = 50
 
 // The query of the newest comments of one issue. It runs only for a
 // requirement issue whose sub-issues are all closed (R4, R7), so the poll
 // query keeps its cost (docs/ja/designs/poll.md, the topic on the comments
 // of a requirement issue).
-const issueCommentsQuery = `query($owner: String!, $name: String!, $number: Int!, $last: Int!) {
+const issueCommentsQuery = `query($owner: String!, $name: String!, $number: Int!, $last: Int!, $before: String) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
-      comments(last: $last) {
+      comments(last: $last, before: $before) {
+        pageInfo { hasPreviousPage startCursor }
         nodes { createdAt body author { __typename login } }
       }
     }
@@ -38,34 +39,55 @@ type RequirementComment struct {
 	Body      string
 }
 
-// ReadIssueComments reads the newest comments of an issue, oldest first.
-func (c *AppClient) ReadIssueComments(ctx context.Context, token, owner, repo string, number int) ([]RequirementComment, RateLimit, error) {
-	variables := map[string]any{"owner": owner, "name": repo, "number": number, "last": issueCommentsLast}
-	var resp issueCommentsResponse
-	request := map[string]any{"query": issueCommentsQuery, "variables": variables}
-	if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
-		return nil, RateLimit{}, fmt.Errorf("github: read the comments of %s/%s#%d: %w", owner, repo, number, err)
-	}
-	if len(resp.Errors) > 0 {
-		var messages []string
-		for _, e := range resp.Errors {
-			messages = append(messages, e.Message)
-		}
-		return nil, RateLimit{}, fmt.Errorf("github: read the comments of %s/%s#%d: %s", owner, repo, number, strings.Join(messages, "; "))
-	}
-	rate := RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}
-	if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
-		return nil, rate, fmt.Errorf("github: read the comments of %s/%s#%d: the response has no issue", owner, repo, number)
-	}
+// ReadIssueComments reads the comments of an issue that were written after
+// since, newest page first, and returns them oldest first. It stops at the
+// first page that reaches since, so every comment after since is read
+// however many there are: an acceptance check comment that the Planner edits
+// keeps its place and its time, and must not fall out of a fixed window.
+func (c *AppClient) ReadIssueComments(ctx context.Context, token, owner, repo string, number int, since time.Time) ([]RequirementComment, RateLimit, error) {
 	var comments []RequirementComment
-	for _, node := range resp.Data.Repository.Issue.Comments.Nodes {
-		comment := RequirementComment{CreatedAt: node.CreatedAt, Body: node.Body}
-		if node.Author != nil {
-			comment.Author = restLogin(node.Author.TypeName, node.Author.Login)
+	var rate RateLimit
+	var before *string
+	for {
+		variables := map[string]any{"owner": owner, "name": repo, "number": number, "last": issueCommentsLast, "before": before}
+		var resp issueCommentsResponse
+		request := map[string]any{"query": issueCommentsQuery, "variables": variables}
+		if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
+			return nil, rate, fmt.Errorf("github: read the comments of %s/%s#%d: %w", owner, repo, number, err)
 		}
-		comments = append(comments, comment)
+		if len(resp.Errors) > 0 {
+			var messages []string
+			for _, e := range resp.Errors {
+				messages = append(messages, e.Message)
+			}
+			return nil, rate, fmt.Errorf("github: read the comments of %s/%s#%d: %s", owner, repo, number, strings.Join(messages, "; "))
+		}
+		rate.Cost += resp.Data.RateLimit.Cost
+		rate.Remaining = resp.Data.RateLimit.Remaining
+		if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
+			return nil, rate, fmt.Errorf("github: read the comments of %s/%s#%d: the response has no issue", owner, repo, number)
+		}
+		page := resp.Data.Repository.Issue.Comments
+		var read []RequirementComment
+		reached := false
+		for _, node := range page.Nodes {
+			if !node.CreatedAt.After(since) {
+				reached = true
+				continue
+			}
+			comment := RequirementComment{CreatedAt: node.CreatedAt, Body: node.Body}
+			if node.Author != nil {
+				comment.Author = restLogin(node.Author.TypeName, node.Author.Login)
+			}
+			read = append(read, comment)
+		}
+		comments = append(read, comments...)
+		if reached || !page.PageInfo.HasPreviousPage {
+			return comments, rate, nil
+		}
+		cursor := page.PageInfo.StartCursor
+		before = &cursor
 	}
-	return comments, rate, nil
 }
 
 // The GraphQL response. It stops in this package.
@@ -74,6 +96,10 @@ type issueCommentsResponse struct {
 		Repository *struct {
 			Issue *struct {
 				Comments struct {
+					PageInfo struct {
+						HasPreviousPage bool   `json:"hasPreviousPage"`
+						StartCursor     string `json:"startCursor"`
+					} `json:"pageInfo"`
 					Nodes []struct {
 						CreatedAt time.Time `json:"createdAt"`
 						Body      string    `json:"body"`

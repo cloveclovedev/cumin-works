@@ -208,7 +208,7 @@ func (s *Service) readAcceptanceComments(ctx context.Context, log *slog.Logger, 
 			log.Error("R4: the login of the Planner App was not read", "issue", requirement.Number, "error", err.Error())
 			return
 		}
-		read, rate, err := s.GitHub.ReadIssueComments(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number)
+		read, rate, err := s.GitHub.ReadIssueComments(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number, lastClose(*requirement))
 		if err != nil {
 			log.Error("R4: the comments were not read", "issue", requirement.Number, "error", err.Error())
 			continue

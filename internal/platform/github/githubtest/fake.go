@@ -905,8 +905,11 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			// one requirement issue.
 			Number int `json:"number"`
 			Events int `json:"events"`
-			// Last belongs to the query of the comments of one issue.
-			Last int `json:"last"`
+			// Last and Before belong to the query of the comments of one
+			// issue. Before is the index of the first comment of the page
+			// that the client read last.
+			Last   int     `json:"last"`
+			Before *string `json:"before"`
 		} `json:"variables"`
 	}
 	if err := json.Unmarshal(body, &request); err != nil || !strings.Contains(request.Query, "rateLimit") {
@@ -927,7 +930,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	}
 
 	if v.Number != 0 && v.Last != 0 {
-		f.serveIssueComments(w, repo, v.Number, v.Last)
+		f.serveIssueComments(w, repo, v.Number, v.Last, v.Before)
 		return
 	}
 	if v.Number != 0 {
@@ -973,7 +976,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 
 // serveIssueComments answers the query of the newest comments of an issue,
 // oldest first, with the author as GraphQL gives it.
-func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, number, last int) {
+func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, number, last int, before *string) {
 	if _, ok := repo.Issues[number]; !ok {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
@@ -982,9 +985,12 @@ func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, numbe
 		return
 	}
 	list := repo.comments[number]
-	if len(list) > last {
-		list = list[len(list)-last:]
+	end := len(list)
+	if before != nil {
+		end, _ = strconv.Atoi(*before)
 	}
+	start := max(0, end-last)
+	list = list[start:end]
 	nodes := []any{}
 	for _, comment := range list {
 		var author any
@@ -998,7 +1004,10 @@ func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, numbe
 		nodes = append(nodes, map[string]any{"createdAt": comment.At.UTC().Format(time.RFC3339Nano), "body": comment.Body, "author": author})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"data": map[string]any{"repository": map[string]any{"issue": map[string]any{"comments": map[string]any{"nodes": nodes}}}, "rateLimit": rateLimit(1)},
+		"data": map[string]any{"repository": map[string]any{"issue": map[string]any{"comments": map[string]any{
+			"pageInfo": map[string]any{"hasPreviousPage": start > 0, "startCursor": strconv.Itoa(start)},
+			"nodes":    nodes,
+		}}}, "rateLimit": rateLimit(1)},
 	})
 }
 
