@@ -629,8 +629,7 @@ func inProgress(snapshot Snapshot) int {
 			n++
 		}
 		for _, sub := range requirement.SubIssues {
-			// No agent runs for an owner task, so it takes no place.
-			if sub.Closed || slices.Contains(sub.Labels, LabelOwnerTask) {
+			if sub.Closed {
 				continue
 			}
 			for _, label := range []string{LabelImplementing, LabelAwaitingChecks, LabelReviewing} {

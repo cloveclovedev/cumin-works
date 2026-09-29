@@ -145,7 +145,7 @@ checkの結果の読み方:
 - I3が `cumin/status/reviewing` に替えたあと、Reviewerの起動は後の要求Issueが足す。それまでは、レビューの準備ができたことをログに出すだけである。
 - I11は、Issueを閉じる開いているPull Requestごとに、そのラベルのうち `cumin/status/*` と `risk/*` を、Issueのものに置き換える。ほかのラベルは残す。並び順によらず同じなら、書き込まない。書き込みは、Issueと同じ "Set labels for an issue" で行う。GitHubでは、Pull RequestもこのAPIのIssueである。
 - I11がコピーするのは、その定期確認で読んだIssueのラベルである。同じ定期確認や実行の終わりで替えたラベルは、次の定期確認でPull Requestに届く。ラベルは、OwnerがPull Requestの一覧で見るためのもので、判定には使わないので、この遅れは困らない。
-- I1は、`cumin/type/owner-task` の付いたsub-issueに着手しない。`cumin/status/ready` が付いていても、状態ラベルが何であっても同じである。Agentが動かないので、同時に進めるIssueの数にも数えない。
+- I1は、`cumin/type/owner-task` の付いたsub-issueに着手しない。`cumin/status/ready` が付いていても同じである。同時に進めるIssueの数は、ほかのIssueと同じく状態ラベルで数える。Ownerの作業のIssueはふつう状態ラベルを持たないので、数に入らない。作業の途中で `cumin/type/owner-task` が付いたIssueは、そのラベルのあいだAgentが動きうるので、数に入れたままにする。
 - R1とI1は、どちらもAgentを起動するので、同じ上限の空きを分け合う。候補を合わせてIssueの番号の昇順に並べ、先頭から空きの数だけ着手する。どちらかの行を先にする決まりは置かない。番号の順なら、Ownerが先に書いたものが先に進み、表形式のテストで結果が1つに決まる。
 - 採らなかった案: 定期確認の中で、GitHubを読みながら判定する。判定の途中で事実が変わりうるうえ、表形式のテストができない。
 

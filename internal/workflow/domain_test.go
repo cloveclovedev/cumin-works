@@ -397,8 +397,8 @@ func TestAcceptanceCheckAt_R7(t *testing.T) {
 	}
 }
 
-// I1 never claims a sub-issue with cumin/type/owner-task, and such an issue
-// takes no place under the limit, whatever its status label.
+// I1 never claims a sub-issue with cumin/type/owner-task. It has no status
+// label of work in progress, so it takes no place under the limit.
 func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
 	ownerTask := SubIssue{Number: 10, Labels: []string{LabelOwnerTask, LabelReady, "risk/high"}}
 	ready := SubIssue{Number: 11, Labels: []string{LabelReady, "risk/low"}}
@@ -408,11 +408,11 @@ func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
 		t.Errorf("Decide = %+v, want %+v", got, want)
 	}
 
-	// An owner task that carries a status label of work in progress, set by
-	// hand, still takes no place.
-	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelImplementing, "risk/high"}
-	if got := Decide(snapshot, 1, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
-		t.Errorf("Decide with an implementing owner task = %+v, want %+v", got, want)
+	// An issue that became an owner task while an agent works on it still
+	// counts by its status label: an agent may run or start for it (I4).
+	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelAwaitingChecks, "risk/high"}
+	if got := Decide(snapshot, 1, nil); len(got) != 0 {
+		t.Errorf("Decide with an owner task in awaiting-checks = %+v, want no claim", got)
 	}
 }
 
