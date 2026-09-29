@@ -73,8 +73,9 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 - Host の設定ファイルに、sandbox のリポジトリと、4つの App (`cumin-core` と3つの role) の Client ID がある。秘密鍵が Keychain にある。
 - `work_dir` が、捨ててよいディレクトリを指している。cumin はその下に clone と worktree を作る。
 - sandbox に、`cumin/status/ready` の付いた Issue と、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueが、確かめたいものだけある。ほかにあると、そちらにも着手する。
+- sandbox に、同時に進めるIssueの数に数えられるIssueが残っていない。`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いている sub-issue である。前の実行が途中で止まって残っていると、上限 (初期値は1) が埋まり、着手しない。閉じるか、ラベルを外す。
 
-止めるときは SIGTERM を送る。動いている Implementer の実行が終わるまで待つので、すぐには終わらない。実行を待たずに終わらせたいときは、もう一度 SIGTERM を送らずに、実行の時間の上限 (`roles.implementer.time_limit`) を短くした設定で動かし直す。
+止めるときは SIGTERM を送る。動いている Agent の実行が終わるまで待つので、すぐには終わらない。実行を待たずに終わらせたいときは、もう一度 SIGTERM を送らずに、動いている role の実行の時間の上限 (`roles.implementer.time_limit` や `roles.planner.time_limit`) を短くした設定で動かし直す。
 
 ## 実機の場面 Impl-1
 
