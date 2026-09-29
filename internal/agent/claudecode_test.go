@@ -713,6 +713,9 @@ func TestUserContext_OnlyBuiltinPluginsPass(t *testing.T) {
 		{"a built-in name without source", `[{"name":"agents-md","path":"builtin"}]`, "one has no source"},
 		{"a plugin of an unknown shape", `["agents-md@builtin"]`, "unknown shape"},
 		{"a plugins field that is not a list", `{"agents-md":true}`, "unknown shape"},
+		{"an empty object", `{}`, "unknown shape"},
+		{"null", `null`, "unknown shape"},
+		{"an empty list", `[]`, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

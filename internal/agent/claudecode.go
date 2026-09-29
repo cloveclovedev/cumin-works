@@ -494,13 +494,12 @@ func userContext(e event, workDir string, wantSkills []string) string {
 // cannot read, or an entry without source, confirms nothing and stops the
 // run, as a missing field does.
 func otherPlugins(raw json.RawMessage) string {
-	if !jsonPresent(raw) {
-		return ""
-	}
+	// Only a list is the shape of the field; null, an object, or any other
+	// value is a change of Claude Code that cumin cannot read. Safe side.
 	var plugins []struct {
 		Source *string `json:"source"`
 	}
-	if err := json.Unmarshal(raw, &plugins); err != nil {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &plugins) != nil {
 		return "the init event has plugins of an unknown shape"
 	}
 	for _, plugin := range plugins {
