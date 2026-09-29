@@ -1,11 +1,11 @@
 #!/bin/sh
 # Prepare a target repository for cumin with the administrator's own gh login:
-# the protected-path workflow, a starter .cumin/config.toml, and two rulesets.
+# the protected-path workflow, a starter .cumin/config.toml, and the rulesets.
 # cumin itself never uses administrator permissions, so a person runs this.
 #
 # Usage:
 #   scripts/setup-repo.sh <owner>/<repo> [--core-app <slug>]
-#       [--required-check <name>]... [--dry-run]
+#       [--implementer-app <slug>] [--required-check <name>]... [--dry-run]
 #
 # Running the script again with the same arguments changes nothing.
 # It needs only gh (logged in, with the "workflow" scope) and standard tools.
@@ -29,12 +29,14 @@ die() {
 workflow_differs=0
 repo=""
 core_app=""
+implementer_app=""
 extra_checks=""
 dry_run=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --core-app) [ $# -ge 2 ] || usage; core_app="$2"; shift 2 ;;
+    --implementer-app) [ $# -ge 2 ] || usage; implementer_app="$2"; shift 2 ;;
     --required-check)
       [ $# -ge 2 ] || usage
       # An empty name would be dropped without a word, and the check would not be required.
@@ -57,7 +59,9 @@ done
 
 [ -n "$repo" ] || usage
 echo "$repo" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || die "the repository must be <owner>/<repo>"
-[ -z "$core_app" ] || echo "$core_app" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || die "an App slug has only lower-case letters, digits, and '-': $core_app"
+for slug in "$core_app" "$implementer_app"; do
+  [ -z "$slug" ] || echo "$slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$' || die "an App slug has only lower-case letters, digits, and '-': $slug"
+done
 # A check name goes into a JSON string as it is.
 if printf '%s' "$extra_checks" | LC_ALL=C grep -q '["\\[:cntrl:]]'; then
   die "a check name must not contain a double quote, a backslash, or a control character"
@@ -79,6 +83,10 @@ branch="$(gh api "repos/$repo" --jq '.default_branch')"
 core_app_id=""
 if [ -n "$core_app" ]; then
   core_app_id="$(gh api "apps/$core_app" --jq '.id')" || die "cannot read the App $core_app"
+fi
+implementer_app_id=""
+if [ -n "$implementer_app" ]; then
+  implementer_app_id="$(gh api "apps/$implementer_app" --jq '.id')" || die "cannot read the App $implementer_app"
 fi
 # Only GitHub Actions may report the protected-path check.
 actions_app_id="$(gh api apps/github-actions --jq '.id')"
@@ -116,6 +124,32 @@ if [ -n "$core_app_id" ]; then
     >"$work/protect-main.json" || die "cannot find the bypass list in ruleset-protect-main.json"
 else
   cp "$here/ruleset-protect-main.json" "$work/protect-main.json"
+fi
+
+# The Planner App may write only the branch cumin/diagrams, the one for the
+# diagrams of its sub-issues: every other branch is for the administrators,
+# cumin-core, and the Implementer App. Without both Apps, the ruleset would
+# shut the Implementer out, so the script applies it only with both.
+apply_branches=0
+if [ -n "$core_app_id" ] && [ -n "$implementer_app_id" ]; then
+  apply_branches=1
+  replace_text "$here/ruleset-branches.json" '"bypass_actors": [' \
+    "\"bypass_actors\": [
+    { \"actor_type\": \"Integration\", \"actor_id\": $core_app_id, \"bypass_mode\": \"always\" },
+    { \"actor_type\": \"Integration\", \"actor_id\": $implementer_app_id, \"bypass_mode\": \"always\" }," \
+    >"$work/branches.json" || die "cannot find the bypass list in ruleset-branches.json"
+fi
+# Nobody deletes or force-pushes cumin/diagrams: an issue shows its diagrams
+# by a commit of that branch.
+cp "$here/ruleset-diagrams.json" "$work/diagrams.json"
+# Only the administrators and cumin-core change tags.
+if [ -n "$core_app_id" ]; then
+  replace_text "$here/ruleset-tags.json" '"bypass_actors": [' \
+    "\"bypass_actors\": [
+    { \"actor_type\": \"Integration\", \"actor_id\": $core_app_id, \"bypass_mode\": \"always\" }," \
+    >"$work/tags.json" || die "cannot find the bypass list in ruleset-tags.json"
+else
+  cp "$here/ruleset-tags.json" "$work/tags.json"
 fi
 
 checks="{ \"context\": \"$protected_check\", \"integration_id\": $actions_app_id }"
@@ -170,7 +204,7 @@ put_file() {
 put_file "$workflow_path" "$work/workflow.yml" report
 put_file "$config_path" "$work/config.toml" keep
 
-# --- The two rulesets -----------------------------------------------------------
+# --- The rulesets ---------------------------------------------------------------
 
 # apply_ruleset <local JSON file>
 apply_ruleset() {
@@ -197,9 +231,17 @@ apply_ruleset() {
 
 apply_ruleset "$work/protect-main.json"
 apply_ruleset "$work/required-checks.json"
+if [ "$apply_branches" -eq 1 ]; then
+  apply_ruleset "$work/branches.json"
+fi
+apply_ruleset "$work/diagrams.json"
+apply_ruleset "$work/tags.json"
 
 if [ -z "$core_app" ]; then
   echo "note: no --core-app. Only repository administrators can update $branch. Run the script again with --core-app after the Apps exist."
+fi
+if [ "$apply_branches" -eq 0 ]; then
+  echo "note: the ruleset cumin-branches needs --core-app and --implementer-app. Until it exists, the Planner App can write every branch other than $branch."
 fi
 if [ "$workflow_differs" -eq 1 ]; then
   # The rulesets are applied all the same. A pull request that fixes the

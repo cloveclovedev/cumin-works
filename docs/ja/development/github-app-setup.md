@@ -13,7 +13,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 | App | 使うrole | 権限 (Repository permissions) |
 |---|---|---|
 | `cumin-core` | cumin本体 | Contents: Read & write、Pull requests: Read & write、Issues: Read & write |
-| `cumin-planner` | Planner | Issues: Read & write、Contents: Read-only |
+| `cumin-planner` | Planner | Issues: Read & write、Contents: Read & write |
 | `cumin-implementer` | Implementer | Contents: Read & write、Pull requests: Read & write、Issues: Read-only |
 | `cumin-reviewer` | Reviewer | Pull requests: Read & write、Contents: Read-only、Issues: Read-only |
 
@@ -24,6 +24,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 - Pull Requestのmergeに必要な権限は Pull requests ではなく Contents: Read & write である。`cumin-core` に Contents の書き込みが要るのはこのため。
 - ブランチのpushにも Contents: Read & write が要る。つまり `cumin-implementer` は権限の上ではmainにもpushできてしまう。これを防ぐのが、後述のrulesetである。
 - `cumin-core` の Issues: Read & write は、状態ラベルの付け替えとコメントの投稿に使う。
+- `cumin-planner` の Contents: Read & write は、sub-issue の図をブランチ `cumin/diagrams` に置くためだけに使う。Contents の書き込みは全てのブランチとタグに及ぶので、`scripts/setup-repo.sh` の ruleset (`cumin-branches`、`cumin-diagrams`、`cumin-tags`) で、書き込める先を `cumin/diagrams` だけにする ([セットアップの手順](setup-guide.md) の手順3)。
 - `cumin-implementer` には Workflows の権限を与えない。`.github/workflows` の変更は risk/high であり、Agentに触らせないため。
 - Metadata: Read-only は、他の権限を選ぶと自動で付く。
 

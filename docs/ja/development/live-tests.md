@@ -15,7 +15,7 @@
 - [セットアップの手順](setup-guide.md) の手順1〜3が済んでいる。
   - 4つの GitHub App が登録され、sandbox のリポジトリにインストールされている。
   - Host の設定ファイルに Client ID があり、Keychain に秘密鍵がある。
-  - sandbox に `scripts/setup-repo.sh <owner>/<repo> --core-app <slug>` を実行してある。
+  - sandbox に `scripts/setup-repo.sh <owner>/<repo> --core-app <slug> --implementer-app <slug>` を実行してある。
 - sandbox は、公開のリポジトリである。App の token には Checks の権限がなく、check の結果を読めるのは公開のリポジトリだけだからである。テストは最初に、認証なしでリポジトリを読めることを確かめ、読めなければ止まる。
 - sandbox の保護されたパスの一覧 (`.cumin/config.toml` の `protected_paths`) に `CLAUDE.md` があり、`live/` を守っていない。テストは `live/CLAUDE.md` (保護されている) と `live/<日時>.md` (保護されていない) を使う。ファイルがなければ、初期値の一覧が使われるので、そのままでよい。合っていなければ、テストは Pull Request を作る前に止まる。
 - `TestLiveGitHubFacts` には、sandbox に次の2つが要る。リポジトリの管理者が用意する。
@@ -63,6 +63,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | `TestLive_AgentEnvironment` (`internal/agent`) | cumin が Agent のために組み立てる環境 ([Agentの実行の設計](../designs/agent-run.md) の「Agentの環境」) で、本物の git と gh を動かす。Implementer App の token と bot の身元を `Service` と同じ手順で用意し、sandbox の worktree で `git config --show-origin` に Host のファイルが出ないこと、commit と push と `gh pr create` が通ること、Pull Request の作成者と commit の作者が Implementer App の bot であることを確かめる。Claude Code は起動せず、利用枠を使わない。Pull Request は閉じ、ブランチと worktree は消す |
 | `TestLive_AgentRunOnSandbox` (`internal/agent`) | 本物の Claude Code を `Service.Start` で起動し (使用率の最小実行と Implementer の実行の 2 回、利用枠を使う)、sandbox の worktree でファイルを 1 つ commit して push し、`gh pr create` で Pull Request を開かせる。Pull Request の作成者と commit の作者が Implementer App の bot であることを確かめる。起動の記録の確認 (`init` イベント) も本物の実行で通る。Pull Request は閉じ、ブランチと worktree は消す |
 | `TestLiveGitHubFacts` | cumin の実装が前提にする GitHub の事実。check run と commit status の読み取り、token の絞り込み、飛ばされた必須のcheckと merge、失敗したcheckについて読める範囲、レビューの `state` と `commit_id`、`Closes #N` で sub-issue が閉じること、GraphQL の項目、`rules/branches`、@メンション、Pull Request へのラベル |
+| `TestLiveDiagramsBranch` | Planner の App が書き込めるのは `cumin/diagrams` だけであること。Planner の App が `cumin/diagrams` にファイルを足せ、ほかのブランチの作成、既定のブランチの移動、タグの作成、`cumin/diagrams` の force push と削除を拒否されること。cumin-core の App も `cumin/diagrams` を削除できないこと。Implementer の App が今までどおりブランチを作って消せること。`scripts/setup-repo.sh` を `--core-app` と `--implementer-app` 付きで実行してあり、Planner の App の Contents の書き込みがインストールで承認されている必要がある。`cumin/diagrams` に `live/<日時>.svg` が1つ残る |
 
 ## `cumin run` を sandbox で動かすとき
 

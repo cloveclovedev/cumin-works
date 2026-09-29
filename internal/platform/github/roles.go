@@ -28,8 +28,11 @@ var appPermissions = map[string]map[string]string{
 		"issues":        permissionWrite,
 	},
 	string(config.RolePlanner): {
-		"issues":   permissionWrite,
-		"contents": permissionRead,
+		"issues": permissionWrite,
+		// Only for the diagrams of its sub-issues: the rulesets of
+		// scripts/setup-repo/ let the Planner write the branch cumin/diagrams
+		// and nothing else.
+		"contents": permissionWrite,
 	},
 	string(config.RoleImplementer): {
 		"contents":      permissionWrite,

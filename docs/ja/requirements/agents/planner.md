@@ -70,7 +70,7 @@ GitHubに残すもの:
 
 ## してよいこと、してはいけないこと
 
-GitHub上では `cumin-planner` として振る舞う。持っている権限は、Issueの読み書きと、コードの読み取りである。
+GitHub上では `cumin-planner` として振る舞う。持っている権限は、Issueの読み書きと、リポジトリの内容の読み書き (Contents) である。内容の書き込みは、sub-issue の図をブランチ `cumin/diagrams` に置くためだけに使う。rulesetが、それ以外のブランチとタグへの書き込みを止める。
 
 してはいけないこと:
 
