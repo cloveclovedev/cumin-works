@@ -319,6 +319,34 @@ func (f *Fake) Issue(r *Repository, number int) *Issue {
 	return &copied
 }
 
+// PullRequestLabels returns a copy of the labels of one pull request, or nil.
+func (f *Fake) PullRequestLabels(r *Repository, number int) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	pr, ok := r.PullRequests[number]
+	if !ok {
+		return nil
+	}
+	return slices.Clone(pr.Labels)
+}
+
+// SetLabels replaces the labels of an issue or of a pull request, as the
+// Owner does by hand on GitHub. Issues and pull requests share one sequence
+// of numbers on GitHub, so the number names one of them.
+func (f *Fake) SetLabels(r *Repository, number int, labels []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if issue, ok := r.Issues[number]; ok {
+		issue.Labels = slices.Clone(labels)
+		return nil
+	}
+	if pr, ok := r.PullRequests[number]; ok {
+		pr.Labels = slices.Clone(labels)
+		return nil
+	}
+	return fmt.Errorf("no issue or pull request #%d", number)
+}
+
 // SetFile puts a file on the default branch of the repository.
 func (f *Fake) SetFile(r *Repository, path string, file File) {
 	f.mu.Lock()
@@ -744,7 +772,9 @@ func (f *Fake) serveCreateLabel(w http.ResponseWriter, body []byte, owner, name 
 }
 
 // serveSetIssueLabels answers PUT /repos/{owner}/{repo}/issues/{n}/labels:
-// it replaces every label of the issue. Official: "Set labels for an issue".
+// it replaces every label of the issue. A pull request is an issue on this
+// endpoint, so the number may name a pull request too (I11). Official: "Set
+// labels for an issue", "Every pull request is an issue".
 func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, name string, number int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -752,8 +782,12 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 	if !ok {
 		return
 	}
-	issue, ok := repo.Issues[number]
-	if !ok {
+	var target *[]string
+	if issue, ok := repo.Issues[number]; ok {
+		target = &issue.Labels
+	} else if pr, ok := repo.PullRequests[number]; ok {
+		target = &pr.Labels
+	} else {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 		return
 	}
@@ -764,9 +798,9 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
 		return
 	}
-	issue.Labels = slices.Clone(*request.Labels)
+	*target = slices.Clone(*request.Labels)
 	labels := []map[string]any{}
-	for _, labelName := range issue.Labels {
+	for _, labelName := range *target {
 		labels = append(labels, map[string]any{"name": labelName})
 	}
 	writeJSON(w, http.StatusOK, labels)

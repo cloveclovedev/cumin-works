@@ -1673,3 +1673,72 @@ func TestI3_TheRequiredChecksAreReadOnlyWhenAnIssueWaits(t *testing.T) {
 		t.Errorf("%d reads of the required checks, want none while no issue waits", n)
 	}
 }
+
+// Core-14 (cumin-core.md): cumin changes a label of the issue, the Owner
+// changes the risk of the issue, and the Owner changes a label of the pull
+// request. After each, the next poll makes the cumin/status/* and risk/*
+// labels of the pull request equal to those of the issue (I11), and the
+// labels of the pull request change no decision (principle 5).
+func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
+	sc := newScene(t)
+	// A pull request of another author: the run ends, I2 stops the issue for
+	// the Owner, and no later rule moves it again.
+	sc.addPullRequest(21, sc.remoteHead, "someone", false)
+	service := sc.service()
+	prLabelsPath := "/repos/example-org/example-repo/issues/21/labels"
+	assertEqual := func(step string) {
+		t.Helper()
+		issue := sc.fake.Issue(sc.repo, 10).Labels
+		pr := sc.fake.PullRequestLabels(sc.repo, 21)
+		if !sameLabelsAnyOrder(workflow.PullRequestLabels(issue, pr), pr) {
+			t.Errorf("%s: labels of the pull request = %v, want the status and risk of the issue %v", step, pr, issue)
+		}
+	}
+
+	// cumin changes the label of the issue: I1, then I2 stops it.
+	sc.pollAndWait(t, service)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
+		t.Fatalf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	}
+	sc.pollAndWait(t, service)
+	assertEqual("after cumin changed the issue")
+
+	// The Owner changes the risk of the issue.
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/high", workflow.LabelAwaitingOwnerDecision}); err != nil {
+		t.Fatal(err)
+	}
+	sc.pollAndWait(t, service)
+	assertEqual("after the Owner changed the risk of the issue")
+
+	// The Owner changes the labels of the pull request, and adds
+	// cumin/status/ready there. The issue is not claimed.
+	if err := sc.fake.SetLabels(sc.repo, 21, []string{"docs", workflow.LabelReady, "risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	sc.pollAndWait(t, service)
+	assertEqual("after the Owner changed the pull request")
+	if got := sc.fake.PullRequestLabels(sc.repo, 21); !slices.Contains(got, "docs") {
+		t.Errorf("labels of the pull request = %v, want the label docs kept", got)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: the labels of a pull request decide nothing", n)
+	}
+
+	// Equal labels cause no write.
+	writes := sc.fake.CountRequests(http.MethodPut, prLabelsPath)
+	sc.pollAndWait(t, service)
+	if n := sc.fake.CountRequests(http.MethodPut, prLabelsPath); n != writes {
+		t.Errorf("%d writes to the pull request after a poll with equal labels, want %d", n, writes)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"I11: copied the labels of the issue to the pull request"`) {
+		t.Error("the log has no line of I11")
+	}
+}
+
+// sameLabelsAnyOrder reports whether a and b hold the same labels.
+func sameLabelsAnyOrder(a, b []string) bool {
+	a, b = slices.Clone(a), slices.Clone(b)
+	slices.Sort(a)
+	slices.Sort(b)
+	return slices.Equal(a, b)
+}

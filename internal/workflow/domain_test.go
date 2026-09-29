@@ -230,3 +230,127 @@ func TestVerifyDone_I2(t *testing.T) {
 		}
 	}
 }
+
+// I11 (issue-states.md): the cumin/status/* and risk/* labels of an open
+// pull request that closes a sub-issue become those of the issue. Its other
+// labels stay, and equal labels give no action.
+func TestDecide_I11(t *testing.T) {
+	snapshotOf := func(issue []string, prs ...PullRequest) Snapshot {
+		return Snapshot{RequirementIssues: []RequirementIssue{{
+			Number: 6, Labels: []string{LabelRequirement, LabelImplementing},
+			SubIssues: []SubIssue{{Number: 10, Labels: issue, PullRequests: prs}},
+		}}}
+	}
+	checks := []string{LabelAwaitingChecks, "risk/medium"}
+
+	tests := []struct {
+		name     string
+		snapshot Snapshot
+		want     []Action
+	}{
+		{
+			name:     "a pull request without labels gets the status and the risk",
+			snapshot: snapshotOf(checks, PullRequest{Number: 21}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+		},
+		{
+			name:     "equal labels in another order give no action",
+			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"risk/medium", "docs", LabelAwaitingChecks}}),
+		},
+		{
+			name:     "an old status and an old risk are replaced, and other labels stay",
+			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"docs", LabelImplementing, "risk/low"}}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{"docs", LabelAwaitingChecks, "risk/medium"}}},
+		},
+		{
+			name:     "a status that the Owner added to the pull request is removed",
+			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, LabelReady, "risk/medium"}}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+		},
+		{
+			name:     "an issue without a risk label removes the risk of the pull request",
+			snapshot: snapshotOf([]string{LabelAwaitingChecks}, PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, "risk/low"}}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks}}},
+		},
+		{
+			name:     "labels of the issue that are not copied stay off the pull request",
+			snapshot: snapshotOf([]string{LabelOwnerTask, LabelReady, "risk/low"}, PullRequest{Number: 21, Labels: []string{LabelReady, "risk/low"}}),
+		},
+		{
+			name: "each open pull request that closes the issue is made equal",
+			snapshot: snapshotOf(checks,
+				PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
+				PullRequest{Number: 22}),
+			want: []Action{CopyLabels{Issue: 10, PullRequest: 22, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+		},
+		{
+			name: "a pull request that closes two issues follows the lower number, in any order",
+			snapshot: Snapshot{RequirementIssues: []RequirementIssue{{
+				Number: 6, Labels: []string{LabelRequirement, LabelImplementing},
+				SubIssues: []SubIssue{
+					{Number: 11, Labels: []string{LabelReviewing, "risk/low"}, PullRequests: []PullRequest{{Number: 21}}},
+					{Number: 10, Labels: checks, PullRequests: []PullRequest{{Number: 21}}},
+				},
+			}}},
+			want: []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+		},
+		{
+			name: "the actions are in the order of the pull request numbers",
+			snapshot: Snapshot{RequirementIssues: []RequirementIssue{{
+				Number: 6, Labels: []string{LabelRequirement, LabelImplementing},
+				SubIssues: []SubIssue{
+					{Number: 10, Labels: checks, PullRequests: []PullRequest{{Number: 23}}},
+					{Number: 11, Labels: checks, PullRequests: []PullRequest{{Number: 22}}},
+				},
+			}}},
+			want: []Action{
+				CopyLabels{Issue: 11, PullRequest: 22, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
+				CopyLabels{Issue: 10, PullRequest: 23, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []Action
+			for _, action := range Decide(tt.snapshot, 1, nil) {
+				if _, ok := action.(CopyLabels); ok {
+					got = append(got, action)
+				}
+			}
+			if !slices.EqualFunc(got, tt.want, func(a, b Action) bool {
+				ca, okA := a.(CopyLabels)
+				cb, okB := b.(CopyLabels)
+				return okA && okB && ca.Issue == cb.Issue && ca.PullRequest == cb.PullRequest && slices.Equal(ca.Labels, cb.Labels)
+			}) {
+				t.Errorf("Decide = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+// The labels of a pull request decide nothing (issue-states.md, principle 5):
+// a pull request with cumin/status/ready does not make its issue claimable,
+// and a pull request without it does not stop a ready issue.
+func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
+	sub := func(labels []string, prLabels []string) Snapshot {
+		return Snapshot{RequirementIssues: []RequirementIssue{{
+			Number: 6, Labels: []string{LabelRequirement, LabelImplementing},
+			SubIssues: []SubIssue{{Number: 10, Labels: labels, PullRequests: []PullRequest{{Number: 21, Labels: prLabels}}}},
+		}}}
+	}
+	claims := func(actions []Action) int {
+		n := 0
+		for _, action := range actions {
+			if _, ok := action.(Claim); ok {
+				n++
+			}
+		}
+		return n
+	}
+	if n := claims(Decide(sub([]string{LabelAwaitingOwnerReview, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil)); n != 0 {
+		t.Errorf("%d claims for a ready pull request of an issue in review, want 0", n)
+	}
+	if n := claims(Decide(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingOwnerDecision}), 1, nil)); n != 1 {
+		t.Errorf("%d claims for a ready issue, want 1", n)
+	}
+}

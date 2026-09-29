@@ -48,7 +48,7 @@ Hostに置いて使うときは、`scripts/install.sh` を使う。ビルドし�
 
 ## 今できること
 
-`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1)、Implementerの実行、実行のあとのPull Requestの検証 (I2)、必須のcheckが通ったIssueをレビュー待ちに移すこと (I3) までである。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
+`cumin run` は、常駐して定期確認を行う。今できるのは、着手 (I1)、Implementerの実行、実行のあとのPull Requestの検証 (I2)、必須のcheckが通ったIssueをレビュー待ちに移すこと (I3) までである。あわせて、IssueのラベルをPull Requestにコピーする (I11)。設定ファイルの書き方は [設定の一覧](development/configuration.md) にある。
 
 ```sh
 go run ./cmd/cumin run --config <設定ファイル>
@@ -61,7 +61,7 @@ go run ./cmd/cumin run --config <設定ファイル>
 3. Agentに渡すskillを、状態のディレクトリの下に書き出す。
 4. Hostの状態ファイル (`~/.local/state/cumin/state.json`) を読む。Issueごとのセッションの番号とcheckの修正の回数が入っている。ファイルがなければ、空の状態で静かに始める (初回の起動がこれである)。壊れている、読めない、版が違うときは、空の状態で始めて警告を1行出す。どちらでも失うのは、次の依頼が新しいセッションで始まり、回数が0に戻ることだけである。
 5. 対象のリポジトリごとに、足りないラベル (`cumin/type/requirement`、`cumin/status/*`、`risk/*`) を作る。
-6. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`work_dir` の下に worktree を用意して、Implementer を起動する。実行は定期確認とは別に進むので、定期確認は止まらない。実行が終わると、結果 (`done` か `blocked`) とセッションの番号、または異常終了の種類がログに出る。
+6. `poll_interval` (初期値は60秒) ごとに定期確認を行う。`cumin/status/ready` の付いた実装Issueがあれば、ラベルを `cumin/status/implementing` に替えてから、`work_dir` の下に worktree を用意して、Implementer を起動する。実行は定期確認とは別に進むので、定期確認は止まらない。実行が終わると、結果 (`done` か `blocked`) とセッションの番号、または異常終了の種類がログに出る。定期確認のたびに、実装Issueを閉じる開いているPull Requestの `cumin/status/*` と `risk/*` を、Issueと同じにする (I11)。
 7. 結果が `done` なら、そのリポジトリを読み直して、Issueを閉じる開いているPull Requestがあること、その作成者が Implementer の App であること、worktree の先頭のコミットがpushされていることを確かめる (I2)。通れば、ラベルを `cumin/status/awaiting-checks` に替える。
 8. `cumin/status/awaiting-checks` のIssueがあるリポジトリでは、既定のブランチの必須のcheckの一覧を読む。Pull Requestの先頭のコミットで必須のcheckが全て通っていれば、ラベルを `cumin/status/reviewing` に替えて、レビューの準備ができたとログに出す (I3)。必須のcheckが1つもなければ、すぐ替える。落ちたcheckがあるときの修正の依頼 (I4) は、まだ作られていない。
 9. 実行が異常終了したときは、同じ依頼を同じ作業場所で1回だけやり直す。新しいAgentの実行なので、利用枠を使う。cuminを止めたときの異常終了は、やり直さない。
