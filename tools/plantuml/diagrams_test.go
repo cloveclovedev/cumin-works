@@ -19,8 +19,9 @@ import (
 // PlantUML writes the source of a diagram into the SVG as a comment
 // <!--SRC=[...]-->: UTF-8, then raw Deflate, then its own base64 alphabet
 // (https://plantuml.com/text-encoding). The lines @startuml and @enduml are
-// not part of it.
-var sourceComment = regexp.MustCompile(`<!--SRC=\[([0-9A-Za-z_-]*)\]-->`)
+// not part of it. An XML comment cannot hold "--", so PlantUML writes "- -"
+// there: the spaces are not part of the encoding.
+var sourceComment = regexp.MustCompile(`<!--SRC=\[([0-9A-Za-z_ -]*)\]-->`)
 
 const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
 
@@ -113,7 +114,7 @@ func checkDiagrams(root string) ([]string, error) {
 			problems = append(problems, fmt.Sprintf("%s: the SVG has no source comment <!--SRC=[...]-->: %s", rel, fix))
 			return nil
 		}
-		embedded, err := decodeSource(string(match[1]))
+		embedded, err := decodeSource(strings.ReplaceAll(string(match[1]), " ", ""))
 		if err != nil {
 			problems = append(problems, fmt.Sprintf("%s: the source comment of the SVG does not decode (%v): %s", rel, err, fix))
 			return nil
@@ -158,6 +159,10 @@ func TestCheckDiagrams_FindsEachProblem(t *testing.T) {
 	write("renamed.puml", "@startuml other\nA -> B\n@enduml\n")
 	write("renamed.svg", comment)
 	write("same.svg", comment)
+	// PlantUML writes "- -" for "--" inside the comment; the space is ignored.
+	encoded := encodeForTest(t, "A -> B")
+	write("spaced.puml", "@startuml spaced\nA -> B\n@enduml\n")
+	write("spaced.svg", "<svg><!--SRC=["+encoded[:4]+" "+encoded[4:]+"]--></svg>")
 	write("changed.puml", "@startuml changed\nA -> C\n@enduml\n")
 	write("changed.svg", comment)
 	write("missing.puml", "@startuml missing\nA -> B\n@enduml\n")
