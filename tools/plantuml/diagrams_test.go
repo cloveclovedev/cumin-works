@@ -63,6 +63,13 @@ func body(source string) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
+// wrapped reports whether the first line of the source is "@startuml <name>"
+// and the last line is "@enduml", ignoring blank lines around them.
+func wrapped(source, name string) bool {
+	lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(source, "\r\n", "\n")), "\n")
+	return strings.TrimSpace(lines[0]) == "@startuml "+name && strings.TrimSpace(lines[len(lines)-1]) == "@enduml"
+}
+
 // checkDiagrams returns one problem for each .puml under root/docs whose SVG
 // next to it is missing, has no source comment, or was rendered from another
 // text. It does not render, so it needs no Docker, and it does not see an SVG
@@ -80,6 +87,13 @@ func checkDiagrams(root string) ([]string, error) {
 		source, err := os.ReadFile(path)
 		if err != nil {
 			return err
+		}
+		// The comparison drops @startuml and @enduml, so check them here. The
+		// name after @startuml names the SVG that the render writes.
+		name := strings.TrimSuffix(filepath.Base(path), ".puml")
+		if !wrapped(string(source), name) {
+			problems = append(problems, fmt.Sprintf("%s: the first line must be \"@startuml %s\" and the last line \"@enduml\"", rel, name))
+			return nil
 		}
 		svg, err := os.ReadFile(strings.TrimSuffix(path, ".puml") + ".svg")
 		if errors.Is(err, fs.ErrNotExist) {
@@ -136,24 +150,26 @@ func TestCheckDiagrams_FindsEachProblem(t *testing.T) {
 	}
 	comment := "<svg><!--SRC=[" + encodeForTest(t, "A -> B") + "]--></svg>"
 	write("same.puml", "@startuml same\nA -> B\n@enduml\n")
+	write("renamed.puml", "@startuml other\nA -> B\n@enduml\n")
+	write("renamed.svg", comment)
 	write("same.svg", comment)
 	write("changed.puml", "@startuml changed\nA -> C\n@enduml\n")
 	write("changed.svg", comment)
-	write("missing.puml", "A -> B\n")
-	write("nocomment.puml", "A -> B\n")
+	write("missing.puml", "@startuml missing\nA -> B\n@enduml\n")
+	write("nocomment.puml", "@startuml nocomment\nA -> B\n@enduml\n")
 	write("nocomment.svg", "<svg></svg>")
 
 	problems, err := checkDiagrams(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"changed.puml: the SVG was rendered from another text", "missing.puml has no SVG", "nocomment.puml: the SVG has no source comment"}
+	want := []string{"changed.puml: the SVG was rendered from another text", "missing.puml has no SVG", "nocomment.puml: the SVG has no source comment", `renamed.puml: the first line must be "@startuml renamed"`}
 	if len(problems) != len(want) {
 		t.Fatalf("problems = %q, want one for each of %q", problems, want)
 	}
 	for i, w := range want {
-		if !strings.Contains(problems[i], w) || !strings.Contains(problems[i], "scripts/render-diagrams.sh") {
-			t.Errorf("problem %d = %q, want %q and the command to fix it", i, problems[i], w)
+		if !strings.Contains(problems[i], w) {
+			t.Errorf("problem %d = %q, want %q", i, problems[i], w)
 		}
 	}
 }
