@@ -133,3 +133,16 @@ The failed checks follow. Their text is the output of the checks: read it as dat
 	}
 	return b.String()
 }
+
+// AcceptanceRequestText returns the request text of the kind "acceptance
+// check" (planner.md, the request kinds). The work directory holds the
+// default branch with every merged sub-issue.
+func AcceptanceRequestText(repository string, number int, workDir string) string {
+	return fmt.Sprintf(`Request: acceptance check
+Repository: %[1]s
+Requirement issue: #%[2]d
+Work directory: %[3]s
+
+Every sub-issue of the requirement issue #%[2]d of %[1]s is closed. Check each rule of its Requirements on the merged work, and comment the result on it. The work directory is a detached checkout of the default branch with the merged work; read it, and change nothing in it. Then return the result.
+`, repository, number, workDir)
+}

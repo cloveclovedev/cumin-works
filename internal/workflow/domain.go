@@ -44,6 +44,10 @@ type Snapshot struct {
 	// DefaultBranch is the branch whose rules name the required checks.
 	DefaultBranch     string
 	RequirementIssues []RequirementIssue
+	// Running are the issues whose agent runs in this cumin now. A label
+	// shows most of them; an acceptance check (R4) keeps the label of the
+	// requirement issue, so only this shows that its Planner runs.
+	Running map[int]bool
 }
 
 // HasIssueAwaitingChecks reports whether an open sub-issue waits for the
@@ -74,6 +78,12 @@ type RequirementIssue struct {
 	LabelTimesRead bool
 	// ReviewAt is when cumin/status/awaiting-owner-review was last added.
 	ReviewAt time.Time
+	// CommentsRead says that AcceptanceCheckAt was read. The poll reads
+	// the comments only when R4 or R7 needs them (NeedsComments).
+	CommentsRead bool
+	// AcceptanceCheckAt is when the newest acceptance check comment of the
+	// Planner App was written; zero when there is none.
+	AcceptanceCheckAt time.Time
 }
 
 // SubIssue is an implementation issue: a sub-issue of a requirement issue.
@@ -90,6 +100,8 @@ type SubIssue struct {
 	// ReadyAt is when cumin/status/ready was last added. It is read only
 	// when RequirementIssue.LabelTimesRead is true.
 	ReadyAt time.Time
+	// ClosedAt is when a closed sub-issue closed.
+	ClosedAt time.Time
 }
 
 // PullRequest is an open pull request that closes a sub-issue.
@@ -214,6 +226,19 @@ type ReviewRemaining struct {
 	Number int
 }
 
+// CheckAcceptance is the action of R4: request the acceptance check from
+// the Planner. The label stays cumin/status/implementing.
+type CheckAcceptance struct {
+	Number int
+}
+
+// Accept is the action of R7: the acceptance check comment exists, so the
+// requirement issue moves to cumin/status/awaiting-owner-review and the
+// Owner is told that it can be accepted.
+type Accept struct {
+	Number int
+}
+
 // Action is one thing that cumin does after a poll. Later rules add types.
 type Action interface {
 	isAction()
@@ -226,6 +251,8 @@ func (CopyLabels) isAction()       {}
 func (Plan) isAction()             {}
 func (StartRequirement) isAction() {}
 func (ReviewRemaining) isAction()  {}
+func (CheckAcceptance) isAction()  {}
+func (Accept) isAction()           {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -258,6 +285,9 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Ac
 	for _, plan := range readyRequirementIssues(snapshot) {
 		starts = append(starts, start{plan.Number, plan})
 	}
+	for _, check := range acceptanceChecks(snapshot) {
+		starts = append(starts, start{check.Number, check})
+	}
 	for _, claim := range readySubIssues(snapshot) {
 		starts = append(starts, start{claim.Number, claim})
 	}
@@ -280,6 +310,8 @@ func requirementMoves(snapshot Snapshot) []Action {
 			actions = append(actions, StartRequirement{Number: requirement.Number})
 		case remainingNeedReview(requirement):
 			actions = append(actions, ReviewRemaining{Number: requirement.Number})
+		case accepted(requirement):
+			actions = append(actions, Accept{Number: requirement.Number})
 		}
 	}
 	return actions
@@ -325,6 +357,92 @@ func remainingNeedReview(requirement RequirementIssue) bool {
 		open++
 	}
 	return open > 0
+}
+
+// NeedsComments reports whether R4 or R7 needs the comments of the
+// requirement issue: it is in cumin/status/implementing, and it has one or
+// more sub-issues, all closed. The follow-up notes (I9) are not waited
+// for, because cumin writes none yet.
+func NeedsComments(requirement RequirementIssue) bool {
+	if statusLabel(requirement.Labels) != LabelImplementing || len(requirement.SubIssues) == 0 {
+		return false
+	}
+	for _, sub := range requirement.SubIssues {
+		if !sub.Closed {
+			return false
+		}
+	}
+	return true
+}
+
+// lastClose is when the last sub-issue closed.
+func lastClose(requirement RequirementIssue) time.Time {
+	var last time.Time
+	for _, sub := range requirement.SubIssues {
+		if sub.ClosedAt.After(last) {
+			last = sub.ClosedAt
+		}
+	}
+	return last
+}
+
+// checked reports whether an acceptance check comment was written after the
+// last sub-issue closed. An older comment belongs to an earlier round: the
+// Owner added sub-issues after it (issue-states.md, the text below the
+// table).
+func checked(requirement RequirementIssue) bool {
+	return requirement.CommentsRead && requirement.AcceptanceCheckAt.After(lastClose(requirement))
+}
+
+// accepted is R7.
+func accepted(requirement RequirementIssue) bool {
+	return NeedsComments(requirement) && checked(requirement)
+}
+
+// acceptanceChecks returns the starts of R4 before the limit: every
+// sub-issue closed, the comments read, no acceptance check after the last
+// close, and no agent of the requirement issue running.
+func acceptanceChecks(snapshot Snapshot) []CheckAcceptance {
+	var checks []CheckAcceptance
+	for _, requirement := range snapshot.RequirementIssues {
+		if NeedsComments(requirement) && requirement.CommentsRead && !checked(requirement) && !snapshot.Running[requirement.Number] {
+			checks = append(checks, CheckAcceptance{Number: requirement.Number})
+		}
+	}
+	return checks
+}
+
+// AcceptanceCheckAt returns when the newest acceptance check comment was
+// written: a comment of the Planner App whose first line is the heading
+// "## Acceptance check" (issue-states.md, the text below the table). A
+// comment of anyone else never counts. cumin does not read the result
+// table.
+func AcceptanceCheckAt(comments []Comment, planner string) time.Time {
+	var newest time.Time
+	for _, comment := range comments {
+		if planner == "" || comment.Author != planner {
+			continue
+		}
+		first, _, _ := strings.Cut(strings.TrimLeft(comment.Body, " \t\r\n"), "\n")
+		if strings.TrimSpace(first) != acceptanceCheckHeading {
+			continue
+		}
+		if comment.CreatedAt.After(newest) {
+			newest = comment.CreatedAt
+		}
+	}
+	return newest
+}
+
+// acceptanceCheckHeading is the first heading of templates/acceptance-check.md.
+const acceptanceCheckHeading = "## Acceptance check"
+
+// Comment is one comment of a requirement issue, as R4 and R7 read it.
+type Comment struct {
+	// Author is the login, "<slug>[bot]" for a GitHub App.
+	Author    string
+	CreatedAt time.Time
+	Body      string
 }
 
 // NeedsLabelTimes reports whether R3 needs the label times of the
@@ -500,7 +618,9 @@ func sameLabels(a, b []string) bool {
 func inProgress(snapshot Snapshot) int {
 	n := 0
 	for _, requirement := range snapshot.RequirementIssues {
-		if slices.Contains(requirement.Labels, LabelPlanning) {
+		// An acceptance check (R4) keeps cumin/status/implementing, so its
+		// running Planner counts by the running set.
+		if slices.Contains(requirement.Labels, LabelPlanning) || snapshot.Running[requirement.Number] {
 			n++
 		}
 		for _, sub := range requirement.SubIssues {

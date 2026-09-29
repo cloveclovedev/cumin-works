@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Page sizes of the snapshot query. GitHub scores a query by the `first`
@@ -89,6 +90,10 @@ type Issue struct {
 	// made from it.
 	Title     string
 	BlockedBy []IssueRef
+	// ClosedAt is when a closed sub-issue closed. R4 and R7 compare it with
+	// the time of the acceptance check comment. The field is a scalar, so it
+	// does not change the cost of the query.
+	ClosedAt time.Time
 	// PullRequests are the open pull requests that close the sub-issue (the
 	// link that "Closes #N" makes). Closed and merged pull requests are not
 	// read: no rule of the poll needs them, and old pull requests of a
@@ -203,6 +208,7 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
             number
             title
             state
+            closedAt
             labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
             blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
             closedByPullRequestsReferences(first: $pullRequests) {
@@ -297,10 +303,11 @@ type pageInfo struct {
 }
 
 type issueNode struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	State  string `json:"state"`
-	Labels struct {
+	Number   int        `json:"number"`
+	Title    string     `json:"title"`
+	State    string     `json:"state"`
+	ClosedAt *time.Time `json:"closedAt"`
+	Labels   struct {
 		PageInfo pageInfo `json:"pageInfo"`
 		Nodes    []struct {
 			Name string `json:"name"`
@@ -409,16 +416,22 @@ func statusConclusion(state string) CheckConclusion {
 	return CheckFailed
 }
 
+// restLogin returns a login as the REST API shows it. GraphQL gives the
+// login of a Bot without "[bot]" (measured on the sandbox on 2026-09-22).
+func restLogin(typeName, login string) string {
+	if typeName == "Bot" {
+		return login + "[bot]"
+	}
+	return login
+}
+
 // pullRequest converts one node. Without includeClosedPrs, the connection
 // holds open pull requests only (the schema: closedByPullRequestsReferences).
 // A connection over its page size is an error, as it is for an issue.
 func (n pullRequestNode) pullRequest() (PullRequest, error) {
 	pr := PullRequest{Number: n.Number, HeadCommit: n.HeadRefOid, HeadBranch: n.HeadRefName}
 	if n.Author != nil {
-		pr.Author = n.Author.Login
-		if n.Author.TypeName == "Bot" {
-			pr.Author += "[bot]"
-		}
+		pr.Author = restLogin(n.Author.TypeName, n.Author.Login)
 	}
 	if n.Labels.PageInfo.HasNextPage {
 		return PullRequest{}, fmt.Errorf("pull request #%d has more than %d labels", n.Number, snapshotLabels)
@@ -532,6 +545,9 @@ func (n issueNode) issue() (Issue, error) {
 		return Issue{}, fmt.Errorf("issue #%d has more than %d open closing pull requests", n.Number, snapshotPullRequests)
 	}
 	issue := Issue{Number: n.Number, Title: n.Title, Closed: n.State == "CLOSED"}
+	if n.ClosedAt != nil {
+		issue.ClosedAt = *n.ClosedAt
+	}
 	if n.State != "OPEN" && n.State != "CLOSED" {
 		return Issue{}, fmt.Errorf("issue #%d has the unknown state %q", n.Number, n.State)
 	}
