@@ -896,7 +896,9 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 	if !ok {
 		return
 	}
-	if _, ok := repo.Issues[number]; !ok {
+	_, isIssue := repo.Issues[number]
+	_, isPullRequest := repo.PullRequests[number]
+	if !isIssue && !isPullRequest {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 		return
 	}
@@ -910,6 +912,13 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 	// The ids grow over the whole fake, as they do on GitHub.
 	f.lastCommentID++
 	comment := Comment{ID: f.lastCommentID, Body: *request.Body, At: time.Now()}
+	// The token of the fake is the same for cumin and for the agents. In the
+	// tests only an agent comments on a pull request (the Reviewer of I8),
+	// and cumin comments on issues; so a comment on a pull request is by
+	// the App of the fake.
+	if isPullRequest && f.app != nil {
+		comment.Author, comment.AuthorIsBot = f.app.Slug, true
+	}
 	repo.comments[number] = append(repo.comments[number], comment)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":   comment.ID,
@@ -1090,10 +1099,12 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 // serveIssueComments answers the query of the newest comments of an issue,
 // oldest first, with the author as GraphQL gives it.
 func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, number, last int, before *string) {
-	if _, ok := repo.Issues[number]; !ok {
+	_, isIssue := repo.Issues[number]
+	_, isPullRequest := repo.PullRequests[number]
+	if !isIssue && !isPullRequest {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
-			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an Issue with the number of %d.", number)}},
+			"data":   map[string]any{"repository": map[string]any{"issueOrPullRequest": nil}, "rateLimit": rateLimit(1)},
+			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an issue or pull request with the number of %d.", number)}},
 		})
 		return
 	}
@@ -1114,10 +1125,11 @@ func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, numbe
 			}
 			author = map[string]any{"__typename": typeName, "login": comment.Author}
 		}
-		nodes = append(nodes, map[string]any{"createdAt": comment.At.UTC().Format(time.RFC3339Nano), "body": comment.Body, "author": author})
+		nodes = append(nodes, map[string]any{"createdAt": comment.At.UTC().Format(time.RFC3339Nano), "body": comment.Body, "author": author,
+			"url": fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d", repo.Owner, repo.Name, number, comment.ID)})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"data": map[string]any{"repository": map[string]any{"issue": map[string]any{"comments": map[string]any{
+		"data": map[string]any{"repository": map[string]any{"issueOrPullRequest": map[string]any{"comments": map[string]any{
 			"pageInfo": map[string]any{"hasPreviousPage": start > 0, "startCursor": strconv.Itoa(start)},
 			"nodes":    nodes,
 		}}}, "rateLimit": rateLimit(1)},

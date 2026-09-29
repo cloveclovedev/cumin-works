@@ -8,44 +8,54 @@ import (
 	"time"
 )
 
-// issueCommentsLast is the page size of the comments of a requirement
-// issue. The acceptance check comment is written after the last sub-issue
-// closed, so it is among the newest, and one page is the usual read.
+// issueCommentsLast is the page size of the comments of an issue or a pull
+// request. The comment that cumin looks for is among the newest (the
+// acceptance check after the last sub-issue closed, the decision request of
+// I8 after the last review), and one page is the usual read.
 const issueCommentsLast = 50
 
-// The query of the newest comments of one issue. It runs only for a
-// requirement issue whose sub-issues are all closed (R4, R7), so the poll
-// query keeps its cost (docs/ja/designs/poll.md, the topic on the comments
-// of a requirement issue).
+// The query of the newest comments of one issue or pull request. It runs
+// only for a requirement issue whose sub-issues are all closed (R4, R7), and
+// after a Reviewer run that explained the cause (I8), so the poll query
+// keeps its cost (docs/ja/designs/poll.md, the topic on the comments of a
+// requirement issue). issueOrPullRequest answers for both; issue(number:)
+// does not resolve the number of a pull request (checked on 2026-09-30 on
+// cumin-works: NOT_FOUND). The cost stays 1 point.
 const issueCommentsQuery = `query($owner: String!, $name: String!, $number: Int!, $last: Int!, $before: String) {
   repository(owner: $owner, name: $name) {
-    issue(number: $number) {
-      comments(last: $last, before: $before) {
-        pageInfo { hasPreviousPage startCursor }
-        nodes { createdAt body author { __typename login } }
-      }
+    issueOrPullRequest(number: $number) {
+      ... on Issue { comments(last: $last, before: $before) { ...commentPage } }
+      ... on PullRequest { comments(last: $last, before: $before) { ...commentPage } }
     }
   }
   rateLimit { cost remaining }
+}
+
+fragment commentPage on IssueCommentConnection {
+  pageInfo { hasPreviousPage startCursor }
+  nodes { createdAt body url author { __typename login } }
 }`
 
-// RequirementComment is one comment of a requirement issue, as much as R4
-// and R7 need.
-type RequirementComment struct {
+// Comment is one comment of an issue or a pull request, as much as R4, R7,
+// and I8 need.
+type Comment struct {
 	// Author is the login as the REST API shows it: a GitHub App is
 	// "<slug>[bot]". Empty when the author is gone.
 	Author    string
 	CreatedAt time.Time
 	Body      string
+	// URL is the address of the comment, for a notification.
+	URL string
 }
 
-// ReadIssueComments reads the comments of an issue that were written after
-// since, newest page first, and returns them oldest first. It stops at the
-// first page that reaches since, so every comment after since is read
+// ReadIssueComments reads the comments of an issue or a pull request that
+// were written after since, newest page first, and returns them oldest
+// first. It stops at the first page that reaches since, so every comment
+// after since is read
 // however many there are: an acceptance check comment that the Planner edits
 // keeps its place and its time, and must not fall out of a fixed window.
-func (c *AppClient) ReadIssueComments(ctx context.Context, token, owner, repo string, number int, since time.Time) ([]RequirementComment, RateLimit, error) {
-	var comments []RequirementComment
+func (c *AppClient) ReadIssueComments(ctx context.Context, token, owner, repo string, number int, since time.Time) ([]Comment, RateLimit, error) {
+	var comments []Comment
 	var rate RateLimit
 	var before *string
 	for {
@@ -65,10 +75,10 @@ func (c *AppClient) ReadIssueComments(ctx context.Context, token, owner, repo st
 		rate.Cost += resp.Data.RateLimit.Cost
 		rate.Remaining = resp.Data.RateLimit.Remaining
 		if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
-			return nil, rate, fmt.Errorf("github: read the comments of %s/%s#%d: the response has no issue", owner, repo, number)
+			return nil, rate, fmt.Errorf("github: read the comments of %s/%s#%d: the response has no issue or pull request", owner, repo, number)
 		}
 		page := resp.Data.Repository.Issue.Comments
-		var read []RequirementComment
+		var read []Comment
 		reached := false
 		for _, node := range page.Nodes {
 			// A comment at the same second as since is kept: the times of
@@ -78,7 +88,7 @@ func (c *AppClient) ReadIssueComments(ctx context.Context, token, owner, repo st
 				reached = true
 				continue
 			}
-			comment := RequirementComment{CreatedAt: node.CreatedAt, Body: node.Body}
+			comment := Comment{CreatedAt: node.CreatedAt, Body: node.Body, URL: node.URL}
 			if node.Author != nil {
 				comment.Author = restLogin(node.Author.TypeName, node.Author.Login)
 			}
@@ -106,13 +116,14 @@ type issueCommentsResponse struct {
 					Nodes []struct {
 						CreatedAt time.Time `json:"createdAt"`
 						Body      string    `json:"body"`
+						URL       string    `json:"url"`
 						Author    *struct {
 							TypeName string `json:"__typename"`
 							Login    string `json:"login"`
 						} `json:"author"`
 					} `json:"nodes"`
 				} `json:"comments"`
-			} `json:"issue"`
+			} `json:"issueOrPullRequest"`
 		} `json:"repository"`
 		RateLimit struct {
 			Cost      int `json:"cost"`
