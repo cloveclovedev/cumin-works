@@ -9,6 +9,7 @@ on:
   pull_request:
 
 permissions:
+  contents: read
   pull-requests: read
   statuses: write
 
@@ -30,6 +31,36 @@ jobs:
             exit 1
           fi
           echo "No marker file."
+
+  # The live scenario Check-1 (a check fix request of I4). Fails when the pull
+  # request changes live/check-1.md and the file at the head of the pull
+  # request does not hold the required line on a line of its own; passes
+  # otherwise. The issue of the scenario does not name the line, so the
+  # Implementer learns it from this failure. The job has no path filter: a
+  # required check that a path filter skips stays pending (row 20 of
+  # measured-constraints.md).
+  live-check-1-required-line:
+    name: live-check-1-required-line
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require one line in live/check-1.md when the pull request changes it
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FILES_URL: ${{ github.api_url }}/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files?per_page=100
+          FILE_URL: ${{ github.api_url }}/repos/${{ github.repository }}/contents/live/check-1.md?ref=${{ github.event.pull_request.head.sha }}
+          REQUIRED_LINE: "Checked by the live scenario Check-1."
+        run: |
+          if ! curl --silent --show-error --fail -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$FILES_URL" | grep -q '"filename": *"live/check-1.md"'; then
+            echo "This pull request does not change live/check-1.md."
+            exit 0
+          fi
+          if curl --silent --show-error --fail -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.raw+json" "$FILE_URL" | grep -qxF "$REQUIRED_LINE"; then
+            echo "live/check-1.md holds the required line."
+            exit 0
+          fi
+          echo "::error file=live/check-1.md,line=1::live/check-1.md must hold this line exactly, on a line of its own: $REQUIRED_LINE"
+          exit 1
 
   # Skipped for every pull request of a bot (a GitHub App). The sandbox makes
   # this job a required check, so the live test can see that a required check
