@@ -385,6 +385,9 @@ func TestInstruction_ReviewerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"Exactly one review for each request, with the pull request review API",
 		"Set `commit_id` to that commit",
 		"Never submit a review with `COMMENT` only",
+		// A retry after an abnormal end must not submit a second review.
+		"its summary line names the same round, you already reviewed for this request",
+		"When a decision request of yours is newer than your last review",
 		// The work directory is read-only for the Reviewer.
 		"Do not commit, and do not push",
 		"Do not resolve review threads",

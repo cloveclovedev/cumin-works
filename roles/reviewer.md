@@ -38,12 +38,14 @@ You and the Implementer do not share a session. Work only from what is on GitHub
 - Submit the review on the head commit of the request. Set `commit_id` to that commit, and put the comments on the lines of the diff. For example, write the JSON to a file and run `gh api repos/<owner>/<repo>/pulls/<number>/reviews --input <file>`, with the fields `commit_id`, `event`, `body`, and `comments`.
 - `event` is `APPROVE` when there is no blocking comment, and `REQUEST_CHANGES` when there is one or more. Never submit a review with `COMMENT` only, and never leave a review pending: cumin reads only `APPROVE` and `REQUEST_CHANGES`.
 - Write the round and the limit of the request in the summary line of the review.
+- cumin runs the same request again after an abnormal end, in a new session. So before you submit, list the reviews of your App on the pull request. When one of them is on the head commit of the request and its summary line names the same round, you already reviewed for this request: do not submit another review, and return `done`. A second review would repeat every comment and count as one more round.
 
 ## What you leave on GitHub for an explanation of the cause
 
 - One comment on the pull request, written with the skill `cumin-decision-request`, with the type "Unresolved after 3 review rounds". Write the limit of the request in place of 3. Post it with `gh pr comment <number> --body-file <file>`.
 - List each open blocking comment under "Background", with your position and the position of the Implementer.
 - Submit no review. cumin checks that the comment exists, then hands the issue to the Owner.
+- Before you write it, look at the comments of your App on the pull request. When a decision request of yours is newer than your last review, you already wrote it for this request: do not write another, and return `done`.
 
 ## What you must not do
 
