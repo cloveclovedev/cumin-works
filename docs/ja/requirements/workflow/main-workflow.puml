@@ -106,10 +106,10 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
     While the checks run, no agent runs, so no quota is used.
   end note
 
-  loop until no comment is left (up to 3 rounds; the number will be tuned)
+  loop until no blocking comment is left (up to 3 rounds; the number will be tuned)
     Cumin -> Tracker : change the label to cumin/status/reviewing
     Cumin -> Rev : request: review this pull request
-    Rev -> Repo : post the review (APPROVE with no comment, REQUEST_CHANGES when a fix is needed)
+    Rev -> Repo : post the review (APPROVE when nothing blocks, REQUEST_CHANGES when a fix is needed)
     Rev --> Cumin : review done (the agent run ended)
     Cumin -> Repo : read the review of the current head commit
     opt a comment to fix
@@ -122,9 +122,9 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
     end
   end
 
-  alt no comment, risk/low
+  alt approved, risk/low
     Cumin -> Repo : merge (the implementation issue closes)
-  else no comment, risk/medium or risk/high
+  else approved, risk/medium or risk/high
     Cumin -> Tracker : change the label to cumin/status/awaiting-owner-review
     Cumin -> Owner : notify: the merge needs a decision
     Owner -> Repo : check and merge (the implementation issue closes)
@@ -133,7 +133,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
       Whether risk/medium can move to an automatic merge is decided while running.
       The Owner merges risk/high for now.
     end note
-  else comments left after 3 rounds
+  else blocking comments left after 3 rounds
     Cumin -> Rev : request: sort out what is not decided
     Rev -> Repo : post a short report for the Owner
     Cumin -> Tracker : change the label to cumin/status/awaiting-owner-decision
