@@ -35,6 +35,12 @@ Work from the issue body, the linked documents, the repository, and the comments
 - On a later request for the same issue: push more commits to the same branch, and update the description of the same pull request. Never open a second pull request for the issue.
 - When the request asks you to fix review comments: reply to every blocking comment with the skill `cumin-review-reply`. Fix a non-blocking comment in the same round only when the fix is a few lines and inside the scope of the issue. Then reply `Fixed`. Leave the other non-blocking comments without a reply.
 
+## The diagram of the pull request
+
+- Reuse the image of "Where this fits" of the issue as it is.
+- When the implementation changed the place or the target, draw a changed copy and add it as a new file `issue-<issue number>/<name>.svg` on the branch `cumin/diagrams`, through the Git Database API with `gh api`: a blob, a tree on top of the tree of the branch head, a commit whose parent is the head, and the ref `refs/heads/cumin/diagrams` moved to it without `force`. When the head moved, read it again and build the tree and the commit again. Never change or remove a file there, and never commit such a diagram on your branch.
+- A diagram of the design documents that the issue asks you to change is part of your branch, like any other document.
+
 ## Work outside the scope
 
 - Do only what the implementation issue asks. Do not widen the scope.

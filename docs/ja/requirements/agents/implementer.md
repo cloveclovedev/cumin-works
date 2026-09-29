@@ -56,7 +56,7 @@ GitHubに残すもの:
 
 ## してよいこと、してはいけないこと
 
-GitHub上では `cumin-implementer` として振る舞う。持っている権限は、コードの読み書き、Pull Requestの読み書き、Issueの読み取りである。
+GitHub上では `cumin-implementer` として振る舞う。持っている権限は、コードの読み書き、Pull Requestの読み書き、Issueの読み取りである。Pull Requestの図を直すときは、直した図をブランチ `cumin/diagrams` に新しいファイルとして足す。Pull Requestのブランチには、図のファイルを置かない (設計文書の図を変える場合を除く)。
 
 してはいけないこと:
 
