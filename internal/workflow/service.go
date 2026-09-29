@@ -308,14 +308,33 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
+	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	var errs []error
+	// A requirement issue that R3 could not move keeps its sub-issues
+	// waiting in this poll. A claim would take cumin/status/ready away from
+	// the sub-issue, and R3 would then never apply again: the requirement
+	// issue would stay in awaiting-owner-review while its work goes on.
+	notStarted := map[int]bool{}
 	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
 		switch a := action.(type) {
+		case StartRequirement:
+			if err := s.startRequirement(ctx, token, target, snapshot, a); err != nil {
+				notStarted[a.Number] = true
+				errs = append(errs, err)
+			}
+		case ReviewRemaining:
+			if err := s.reviewRemaining(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
 		case Plan:
 			if err := s.plan(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Claim:
+			if notStarted[a.RequirementIssue] {
+				log.Info("I1: waits for R3 of the requirement issue", "issue", a.Number, "requirement_issue", a.RequirementIssue)
+				continue
+			}
 			if err := s.claim(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}

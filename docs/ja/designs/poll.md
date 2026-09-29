@@ -28,7 +28,7 @@
 |---|---|---|
 | 要求Issueと、そのsub-issue。番号、id、開閉、今のラベル | `Issue.subIssues`、`labels` | R1〜R6、I1 |
 | sub-issueの題。依頼のブランチの名前に使う | `Issue.title` | I1 |
-| 状態ラベルが付いた時刻 | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt` と `label` | R3、レビューのラウンド |
+| 状態ラベルが付いた時刻。定期確認の問い合わせとは別の、小さな問い合わせで読む (「ラベルの時刻の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt` と `label` | R3、レビューのラウンド |
 | blocked by のIssueの開閉。要求Issueとsub-issueの両方 | `Issue.blockedBy` | R1、I1 |
 | Issueを閉じる、開いているPull Request。番号、作成者、先頭のコミット、ブランチの名前 | `Issue.closedByPullRequestsReferences`、`author { __typename login }`、`headRefOid`、`headRefName` | I1、I2、I4、I6、I7、I11 |
 | 開いているPull Requestの、今のラベル | `PullRequest.labels` | I11 |
@@ -84,6 +84,15 @@ checkの結果の読み方:
 
 フォローアップノート (I9) で使うものは、mergeされたPull Requestについてだけ、別に読む。Pull Requestの説明、レビューのコメント、要求Issueのコメントである。要求Issueのコメントを読むのは、フォローアップノートの目印を探して、再起動のあとも同じノートを二重に書かないためである。
 
+### ラベルの時刻の読み取り
+
+- R3は、要求Issueに `cumin/status/awaiting-owner-review` が付いた時刻と、sub-issueに `cumin/status/ready` が付いた時刻を比べる。時刻は、GitHubがIssueのタイムラインに残す `LabeledEvent` の `createdAt` から読む。
+- 定期確認の問い合わせには入れず、R3が成り立ちうる要求Issueのときだけ、別の問い合わせで読む。成り立ちうるのは、要求Issueが `cumin/status/awaiting-owner-review` で、`cumin/status/ready` の付いた開いているsub-issueがあるときである。判定の純粋関数 (`NeedsLabelTimes`) がこれを決める。
+- 1回の問い合わせで、要求Issueと、そのsub-issue (15件まで) のタイムラインを読む。各Issueは、新しいほうから100件の `LabeledEvent` を読み (`last: 100`)、ラベルごとに一番新しい時刻を使う。同じラベルが付いたり外れたりするためである。コストは1ポイントだった (2026-09-29にcumin-worksで実測)。
+- 読むのは状態ラベルがその形のあいだだけなので、ふだんの定期確認のコストは変わらない。Ownerが分割結果を確認している間 (前の分割の `cumin/status/ready` が残っているとき) は、定期確認のたびに1ポイント増える。
+- 読めなかったときは、ログに出して、R3をその定期確認では判定しない。その要求Issueのsub-issueの着手 (I1) も、次の定期確認まで待つ。着手すると `cumin/status/ready` が外れ、R3が二度と成り立たなくなるためである。R3がラベルを替えられなかったときも、同じ理由で待つ。ほかの行は進める。
+- 採らなかった案: 定期確認の問い合わせに、sub-issueごとのタイムラインを入れる。1ページに要求Issue 10件 x sub-issue 15件のタイムラインが加わり、ページを小さくしても、R3が要らない定期確認のたびにコストが増える。
+
 ### リポジトリの設定の読み取り
 
 対象のリポジトリの `.cumin/config.toml` と `.cumin/risk-criteria.md` は、定期確認の問い合わせで一緒に読む。何を上書きできるかと、優先順位は要件にあり、キーの一覧は [設定の一覧](../development/configuration.md) にある。ここでは、どう読むかだけを決める。
@@ -113,7 +122,9 @@ checkの結果の読み方:
 - 判定は `internal/workflow` の純粋関数である。スナップショットと、設定 (リポジトリごとに同時に進めるIssueの数) だけから、着手リストを返す。I/Oをしない。同じスナップショットからは、Issueの並び順によらず、同じ着手リストを返す。着手可能なIssue数は、定期確認のたびにラベルから数え直す。ファイルにもメモリにも持ち越さない。
 - 進行中として数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いているsub-issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。数えると、初期値の上限 (1) では、どのsub-issueにも着手できなくなる。
 - 動作の適用は、判定とは別の部分が行う。着手では、ラベルを替えてから依頼する (Issueのラベルと状態遷移の原則3)。ラベルを替えられなければ依頼せず、次の定期確認でやり直す。
-- 今の判定はR1、I1、I3、I4、I11である。あとの行 (R2〜R7、I2、I5〜I10) は、同じ関数に分岐を足す。
+- 今の判定はR1、R3、R6、I1、I3、I4、I11である。あとの行 (R4、R7、I5〜I10) は、同じ関数に分岐を足す。R2とI2は、実行の終わりに判定する。
+- R3とR6は、要求Issueのラベルを替えるだけで、Agentを起動しない。そのため一番先に決め、上限の空きを使わない。R3は、要求Issueに状態ラベルがないときは `cumin/status/ready` の付いた開いているsub-issueがあれば成り立ち、`cumin/status/awaiting-owner-review` のときは、そのラベルよりあとに `cumin/status/ready` が付いたsub-issueがあれば成り立つ。R6は、`cumin/status/implementing` の要求Issueに開いているsub-issueがあり、その全てに状態ラベルがないときに成り立つ。`cumin/type/owner-task` のsub-issueも、状態ラベルがないので数える。
+- R6の通知は、ラベルを替えたあとに1回だけ出す。次の定期確認では要求Issueがもう `cumin/status/implementing` ではないので、同じ通知を繰り返さない。ラベルを替えられなければ通知せず、次の定期確認でやり直す。
 - I3とI4は、着手 (R1、I1) より先に決める。`cumin/status/awaiting-checks` のIssueは、同時に進めるIssueの数に既に数えられているので、先に決めても着手の枠を奪わない。
 - checkの判定は純粋関数である。必須のcheckの一覧と、先頭のコミットのcheckの結果から、通った・落ちた・待ちの3つのどれかを返す。決まりは次のとおりである。
   - 必須のcheckが1つもなければ、すぐ通ったとみなす。

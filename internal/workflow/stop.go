@@ -28,6 +28,11 @@ const (
 	RowR2 = "R2"
 )
 
+// RowR6 is the row that hands a requirement issue back to the Owner when
+// only sub-issues without a status label are left. It notifies without a
+// stop: the requirement issue waits for a review, not for a decision.
+const RowR6 = "R6"
+
 // stop is one issue that cumin hands back to the Owner.
 type stop struct {
 	// row is the row of issue-states.md that stopped the issue.
