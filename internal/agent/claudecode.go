@@ -438,9 +438,21 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 	}
 }
 
+// builtinPlugins are the plugins that Claude Code ships in its binary and
+// lists in the init event whatever the setting sources (2.1.284, measured
+// on 2026-09-29; the Decision on #156). They are matched on source, the id
+// "<name>@builtin", never on the name alone: a plugin of the same name from
+// a marketplace or from claude.ai is user-level context. A new built-in
+// plugin stops the run until the Owner adds it here.
+var builtinPlugins = map[string]bool{
+	"agents-md@builtin": true,
+	"telemetry@builtin": true,
+}
+
 // userContext reports why the init event shows context from outside the
-// work directory, or "" when it shows none. Checked: plugins and MCP
-// servers (empty with --setting-sources project, row 27), and
+// work directory, or "" when it shows none. Checked: plugins other than
+// builtinPlugins and MCP servers (empty with --setting-sources project,
+// row 27), and
 // memory_paths (absent when auto memory is off, row 28; the live record
 // of #67). plugins and mcp_servers must be present: a record without
 // them cannot confirm that nothing was loaded. The init event lists no
@@ -454,8 +466,8 @@ func userContext(e event, workDir string, wantSkills []string) string {
 	if e.MCPServers == nil {
 		return "the init event has no mcp_servers field"
 	}
-	if jsonPresent(e.Plugins) {
-		return "the init event lists plugins"
+	if reason := otherPlugins(e.Plugins); reason != "" {
+		return reason
 	}
 	if jsonPresent(e.MCPServers) {
 		return "the init event lists MCP servers"
@@ -473,6 +485,28 @@ func userContext(e event, workDir string, wantSkills []string) string {
 		}
 	}
 	return missingSkill(e, wantSkills)
+}
+
+// otherPlugins reports why the plugins of the init event hold one that is
+// not in builtinPlugins, or "" when they hold none. A list that cumin
+// cannot read, or an entry without source, confirms nothing and stops the
+// run, as a missing field does.
+func otherPlugins(raw json.RawMessage) string {
+	if !jsonPresent(raw) {
+		return ""
+	}
+	var plugins []struct {
+		Source *string `json:"source"`
+	}
+	if err := json.Unmarshal(raw, &plugins); err != nil {
+		return "the init event has plugins of an unknown shape"
+	}
+	for _, plugin := range plugins {
+		if plugin.Source == nil || !builtinPlugins[*plugin.Source] {
+			return "the init event lists plugins"
+		}
+	}
+	return ""
 }
 
 // missingSkill reports which skill of cumin the init event does not list,

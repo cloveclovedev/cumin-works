@@ -91,9 +91,11 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 ### 起動の記録の確認
 
-- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことと、cuminが渡したskillが届いていることを確かめる。見るのは、`plugins` と `mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (項目があり、作業場所の外のパスを指すか、パスとして読み取れない形なら異常)、`skills` (項目がない、または、cuminがそのroleのために書き出したskillが1つでも載っていなければ異常) である。項目がない場合まで異常にするのは、Claude Codeが項目の名前を変えたときに、確かめないまま通してしまわないためである。`--setting-sources project` を付けると `plugins` と `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 28。2026-09-21 の最小の実機実行でも同じだった)。
+- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことと、cuminが渡したskillが届いていることを確かめる。見るのは、`plugins` (項目がない、または下の組み込みのplugin以外があれば異常)、`mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (項目があり、作業場所の外のパスを指すか、パスとして読み取れない形なら異常)、`skills` (項目がない、または、cuminがそのroleのために書き出したskillが1つでも載っていなければ異常) である。項目がない場合まで異常にするのは、Claude Codeが項目の名前を変えたときに、確かめないまま通してしまわないためである。`--setting-sources project` を付けると `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 28。2026-09-21 の最小の実機実行でも同じだった)。
 - 異常に当たったら、実行時間の上限と同じ手順 (プロセスグループにSIGTERM、猶予のあとSIGKILL) でその場で止める。追えない指示のもとでAgentに作業を始めさせないためである。異常終了の種類は「user-level context」とし、理由には項目の名前だけを書いて、パスは書かない。
 - `result` のイベントが来るまでに `init` のイベントがなければ、同じ種類の異常終了にする。起動の記録がないと、Agentが何を読んだのか分からない。
+- Claude Code 2.1.284 は、`--setting-sources project` を付けても、バイナリに入った2つのpluginを `plugins` に載せる (2026-09-29 に実測。#156 の Decision)。`agents-md@builtin` (`AGENTS.md` をプロジェクトの指示として読む) と `telemetry@builtin` (組み込みのpluginの利用状況を記録する) である。この2つだけを、`source` の値で照らして許す。名前だけでは照らさない。同じ名前でもmarketplaceやclaude.aiから来たpluginは、ユーザの文脈だからである。`source` のない項目と、読み取れない形は異常にする。新しい組み込みのpluginが現れたら実行は止まり、Ownerが一覧に足すまで動かない。一覧はコードに固定し、設定にはしない。
+- claude.aiのアカウントのコネクタは、`mcp_servers` に載る。Agentの環境に `ENABLE_CLAUDEAI_MCP_SERVERS=false` を入れて止めるので、`mcp_servers` の確かめ方は厳しいままにする。コネクタはOwnerのアカウントのデータを、`bypassPermissions` の実行に持ち込むためである。
 - 確かめられないこと: `init` のイベントには、読み込んだ指示ファイル (`CLAUDE.md`) の一覧がない (2026-09-21 の実機実行で確かめた項目名は `agents`、`mcp_servers`、`plugins`、`skills`、`slash_commands`、`tools` など)。作業場所の外の指示については、`--setting-sources project` に頼る (実測 6e)。`skills` で確かめるのは、cuminのskillが全て載っていることだけである。組み込みのskillとリポジトリのskillは名前では区別できないので、載っていること自体は異常にしない。
 - `skills` は、skillの名前の文字列の配列である。公式ドキュメントに記載がないので、実機で確かめた (2026-09-25、Claude Code 2.1.273。手順は [Agentの実機の確認](../development/agent-live-check.md)、記録は #166)。配列でない形と、文字列でない要素は、読めないものとして異常にする。他の項目と同じで、読めない記録は何も確かめられないためである。
 - 使用率を読む最小の実行では、この確認を行わない。作業ディレクトリが空で、結果も使わないからである。

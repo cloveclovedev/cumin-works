@@ -689,3 +689,37 @@ func TestRun_TheStartRecordMustListTheSkillsOfTheRole(t *testing.T) {
 		})
 	}
 }
+
+// The two plugins that Claude Code ships in its binary pass the start
+// check, matched on source (the Decision on #156). Any other plugin, a
+// built-in name from another source, an entry without source, or a shape
+// that cumin cannot read stops the run.
+func TestUserContext_OnlyTheBuiltinPluginsPass(t *testing.T) {
+	work := t.TempDir()
+	withPlugins := func(plugins string) event {
+		return event{Plugins: []byte(plugins), MCPServers: []byte(`[]`), Skills: []byte(`[]`)}
+	}
+	builtin := `{"name":"agents-md","path":"builtin","source":"agents-md@builtin"},{"name":"telemetry","path":"builtin","source":"telemetry@builtin"}`
+	tests := []struct {
+		name, plugins, want string
+	}{
+		{"the two built-in plugins, as Claude Code 2.1.284 lists them", `[` + builtin + `]`, ""},
+		{"one of them", `[{"name":"telemetry","path":"builtin","source":"telemetry@builtin"}]`, ""},
+		{"a built-in plugin next to another plugin", `[` + builtin + `,{"name":"context7","source":"context7@claude-plugins-official"}]`, "lists plugins"},
+		{"a built-in name synced from claude.ai", `[{"name":"agents-md","source":"agents-md@synced"}]`, "lists plugins"},
+		{"a built-in name without source", `[{"name":"agents-md","path":"builtin"}]`, "lists plugins"},
+		{"a plugin of an unknown shape", `["agents-md@builtin"]`, "unknown shape"},
+		{"a plugins field that is not a list", `{"agents-md":true}`, "unknown shape"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason := userContext(withPlugins(tt.plugins), work, nil)
+			if tt.want == "" && reason != "" {
+				t.Errorf("userContext = %q, want none", reason)
+			}
+			if tt.want != "" && !strings.Contains(reason, tt.want) {
+				t.Errorf("userContext = %q, want %q", reason, tt.want)
+			}
+		})
+	}
+}
