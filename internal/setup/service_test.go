@@ -928,7 +928,7 @@ func TestSetupGitHubApps_LeadsThroughAnAddedPermission(t *testing.T) {
 	if got := strings.Join(browser.installed, " "); got != appPage+" "+installationPage {
 		t.Errorf("opened %q, want the App page, then the installation page", got)
 	}
-	for _, line := range []string{"contents: none -> read", appPage, installationPage, "the installation of cumin-planner on example-org has the new permissions"} {
+	for _, line := range []string{"contents: none -> " + want["contents"], appPage, installationPage, "the installation of cumin-planner on example-org has the new permissions"} {
 		if !strings.Contains(out.String(), line) {
 			t.Errorf("the output does not show %q:\n%s", line, out.String())
 		}
