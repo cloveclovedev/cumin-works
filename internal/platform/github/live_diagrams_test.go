@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -47,19 +48,20 @@ func TestLiveDiagramsBranch(t *testing.T) {
 
 	// Everything else is refused for the Planner App.
 	l.expectRefused(t, "D2", "The Planner App creates another branch",
-		l.api(t, planner, http.MethodPost, "/repos/{repo}/git/refs", map[string]string{"ref": "refs/heads/live/planner-" + l.runID, "sha": commit}).status)
+		l.api(t, planner, http.MethodPost, "/repos/{repo}/git/refs", map[string]string{"ref": "refs/heads/live/planner-" + l.runID, "sha": commit}))
 	l.expectRefused(t, "D3", "The Planner App moves the default branch",
-		l.api(t, planner, http.MethodPatch, "/repos/{repo}/git/refs/heads/"+l.branch, map[string]any{"sha": commit, "force": true}).status)
+		l.api(t, planner, http.MethodPatch, "/repos/{repo}/git/refs/heads/"+l.branch, map[string]any{"sha": commit, "force": true}))
 	l.expectRefused(t, "D4", "The Planner App creates a tag",
-		l.api(t, planner, http.MethodPost, "/repos/{repo}/git/refs", map[string]string{"ref": "refs/tags/live-planner-" + l.runID, "sha": commit}).status)
-	if head != "" {
-		l.expectRefused(t, "D5", "The Planner App force-pushes cumin/diagrams back to its old head",
-			l.api(t, planner, http.MethodPatch, "/repos/{repo}/git/refs/heads/"+diagramsBranch, map[string]any{"sha": head, "force": true}).status)
-	}
+		l.api(t, planner, http.MethodPost, "/repos/{repo}/git/refs", map[string]string{"ref": "refs/tags/live-planner-" + l.runID, "sha": commit}))
+	// A commit with no shared history, so that moving the branch to it is a
+	// force push also on the first run, when the branch did not exist.
+	unrelated := l.plannerCommit(t, planner, "", "live/"+l.runID+"-unrelated.svg")
+	l.expectRefused(t, "D5", "The Planner App force-pushes cumin/diagrams to an unrelated commit",
+		l.api(t, planner, http.MethodPatch, "/repos/{repo}/git/refs/heads/"+diagramsBranch, map[string]any{"sha": unrelated, "force": true}))
 	l.expectRefused(t, "D6", "The Planner App deletes cumin/diagrams",
-		l.api(t, planner, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+diagramsBranch, nil).status)
+		l.api(t, planner, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+diagramsBranch, nil))
 	l.expectRefused(t, "D7", "The cumin-core App deletes cumin/diagrams",
-		l.api(t, core, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+diagramsBranch, nil).status)
+		l.api(t, core, http.MethodDelete, "/repos/{repo}/git/refs/heads/"+diagramsBranch, nil))
 
 	// The Implementer App still creates and deletes its branches.
 	var main struct {
@@ -112,10 +114,12 @@ func (l *live) expectAllowed(t *testing.T, number, what string, status int) {
 	}
 }
 
-func (l *live) expectRefused(t *testing.T, number, what string, status int) {
+// expectRefused requires a refusal by a ruleset: an error status with a
+// rule violation in the message, not any other failure.
+func (l *live) expectRefused(t *testing.T, number, what string, r response) {
 	t.Helper()
-	l.record(number, what, "Refused", fmt.Sprintf("Status %d", status))
-	if status >= 200 && status <= 299 {
-		t.Errorf("%s: %s: status %d, want a refusal", number, what, status)
+	l.record(number, what, "Refused by a ruleset", fmt.Sprintf("Status %d: %s", r.status, r.message()))
+	if r.status < 400 || !strings.Contains(strings.ToLower(r.message()), "rule") {
+		t.Errorf("%s: %s: status %d: %q, want a refusal by a ruleset", number, what, r.status, r.message())
 	}
 }
