@@ -54,7 +54,12 @@ func TestReviewRounds_CountsTheReviewsOfTheReviewerSinceTheStart(t *testing.T) {
 			review(reviewer, ReviewCommented, 5, "c1"),
 			{Author: reviewer, State: ReviewPending, Commit: "c1"},
 		}, at(0), 0, ""},
-		{"a dismissed request for changes still counts", []Review{review(reviewer, ReviewDismissed, 5, "c1")}, at(0), 1, "c1"},
+		{"a dismissed review starts the count again, as an APPROVE does", []Review{
+			review(reviewer, ReviewChangesRequested, 3, "c1"),
+			// A former APPROVE that a ruleset dismissed after a new push.
+			review(reviewer, ReviewDismissed, 5, "c2"),
+			review(reviewer, ReviewChangesRequested, 9, "c3"),
+		}, at(0), 1, "c3"},
 		{"the order of the list does not matter", []Review{
 			review(reviewer, ReviewChangesRequested, 9, "c2"),
 			review(reviewer, ReviewChangesRequested, 5, "c1"),

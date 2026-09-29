@@ -999,20 +999,28 @@ func anyOpen(blockedBy []BlockedBy) bool {
 // of cumin-reviewer. Both are facts on GitHub, so the count survives a
 // restart and cumin keeps nothing for it.
 //
-// A round is a review that asked for changes: CHANGES_REQUESTED, or
-// DISMISSED, which GitHub gives to such a review when a person dismisses
-// it. A review with only COMMENT is not a result of the Reviewer (the
-// Reviewer requirement, completion): cumin asks for the review again, and
-// that request is not a new round. A pending review is not submitted.
+// A round is a review that asked for changes: CHANGES_REQUESTED. A review
+// with only COMMENT is not a result of the Reviewer (the Reviewer
+// requirement, completion): cumin asks for the review again, and that
+// request is not a new round. A pending review is not submitted.
+//
+// A DISMISSED review starts the count again, as an APPROVE does. GitHub
+// shows only the state now, not the state before the dismissal. The rule
+// "Dismiss stale pull request approvals when new commits are pushed" of a
+// ruleset dismisses approvals, so a dismissed review is most often a former
+// APPROVE; counting it as a round would bring back the rounds before that
+// approval and reach the limit too early. A person who dismisses a request
+// for changes steps in as the Owner does, and the count may start again.
 
 // roundStart is the later of the last cumin/status/ready of the issue and
-// the last APPROVE of the Reviewer. The APPROVE is a start too, because a
-// merge conflict fixed after it changes the head commit, and the review
-// starts again (I6).
+// the last APPROVE of the Reviewer, or its last dismissed review. The
+// APPROVE is a start too, because a merge conflict fixed after it changes
+// the head commit, and the review starts again (I6).
 func roundStart(reviews []Review, reviewer string, readyAt time.Time) time.Time {
 	start := readyAt
 	for _, review := range reviews {
-		if review.Author == reviewer && review.State == ReviewApproved && review.SubmittedAt.After(start) {
+		restarts := review.State == ReviewApproved || review.State == ReviewDismissed
+		if review.Author == reviewer && restarts && review.SubmittedAt.After(start) {
 			start = review.SubmittedAt
 		}
 	}
@@ -1028,7 +1036,7 @@ func roundReviews(reviews []Review, reviewer string, readyAt time.Time) []Review
 		if review.Author != reviewer || !review.SubmittedAt.After(start) {
 			continue
 		}
-		if review.State == ReviewChangesRequested || review.State == ReviewDismissed {
+		if review.State == ReviewChangesRequested {
 			rounds = append(rounds, review)
 		}
 	}
