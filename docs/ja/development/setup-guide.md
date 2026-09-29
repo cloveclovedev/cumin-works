@@ -130,7 +130,7 @@ cumin の側で分かっていることは3つある。
 - Host の設定に書いてあるのは Client ID だけで、App の名前ではない。Keychain の鍵も Client ID で引く。名前を変えても Client ID が変わらなければ、設定と鍵はそのままでよい。
 - cumin は依頼のたびに `GET /app` で slug を読み、`<slug>[bot]` をコミットの作者に使う ([Agentの実行の設計](../designs/agent-run.md) の「1回の依頼の手順」)。slug が変わっても、設定を直す必要はない。既にあるコミットの作者は、古い名前のまま残る。
 
-名前から作った値を覚えている場所が1つある。mainを守る ruleset の bypass list である。`scripts/setup-repo.sh --core-app <slug>` は、slug を `GET /apps/{slug}` で App の数値の id に置き換えてから ruleset に書くので、入っているのは名前ではなく id である。cumin本体の App の名前を変えたときは、id が同じかを確かめる (下の手順の6)。
+名前から作った値を覚えている場所が1つある。ruleset の bypass list である。`scripts/setup-repo.sh --core-app <slug> --implementer-app <slug>` は、slug を `GET /apps/{slug}` で App の数値の id に置き換えてから ruleset に書くので、入っているのは名前ではなく id である。cumin本体か Implementer の App の名前を変えたときは、id が同じかを確かめる (下の手順の6)。
 
 手順:
 
@@ -158,7 +158,7 @@ cumin の側で分かっていることは3つある。
 
    読むのは最後の行だけでよい。`already registered` の確認が1つでも合わなければ、コマンドは何も変えずにそこで止まるので、`installed` の行が roleの数だけ出ていれば、両方が通ったことになる。インストールが外れている App があれば、`installed` の行の代わりにインストールのページのアドレスを表示し、ブラウザを開く。
 
-   cumin本体の App の名前を変えたときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <新しいslug>` をもう一度実行する。
+   cumin本体か Implementer の App の名前を変えたとき、または App を登録し直したときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <cumin本体のslug> --implementer-app <Implementerのslug>` をもう一度実行する。片方だけを渡すと、`cumin-branches` が古い id のまま残る。`cumin-branches` は既定のブランチも対象なので、古い id のままでは、新しい cumin本体の App が merge できない。
 
    ```sh
    gh api apps/<新しいslug> --jq .id
@@ -176,12 +176,13 @@ cumin-works のリポジトリを取得して、その中で実行する。
 
 ```sh
 scripts/setup-repo.sh <owner>/<repo> [--core-app <cumin本体のAppのslug>] \
-  [--required-check <checkの名前>]... [--dry-run]
+  [--implementer-app <ImplementerのAppのslug>] [--required-check <checkの名前>]... [--dry-run]
 ```
 
 | 引数 | 内容 |
 |---|---|
-| `--core-app` | cumin本体の App の slug。mainを守る ruleset の bypass list に入れる。App を登録する前なら省ける。登録したあとに、付けてもう一度実行する |
+| `--core-app` | cumin本体の App の slug。mainを守る ruleset、ブランチの ruleset、タグの ruleset の bypass list に入れる。App を登録する前なら省ける。登録したあとに、付けてもう一度実行する |
+| `--implementer-app` | Implementer の App の slug。ブランチの ruleset の bypass list に入れる。`--core-app` と両方あるときだけ、ブランチの ruleset を当てる |
 | `--required-check` | 必須のcheckに足すcheckの名前。リポジトリのCIのjobの名前を渡す。何度でも書ける |
 | `--dry-run` | 何も変えずに、何をするかと、当てる ruleset の JSON を表示する |
 
@@ -193,12 +194,19 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 2. 既定のブランチに、次の2つのファイルを足す。
    - `.github/workflows/cumin-protected-paths.yml`: 保護されたパスのcheck。作成者が bot (GitHub App) の Pull Request で動き、作成者が人の Pull Request では飛ばされる。App の名前は条件に書かない。名前を間違えるとcheckが飛ばされ、飛ばされたcheckは通った扱いになるためである。
    - `.cumin/config.toml`: 保護されたパスの一覧 (`protected_paths`) のひな形。
-3. 次の2つの ruleset を作る。どちらも既定のブランチが対象である。
+3. 次の ruleset を作る。
 
-| ruleset | 内容 | bypass list |
-|---|---|---|
-| `cumin-protect-main` | 更新の制限、削除の制限、force push の禁止 | リポジトリの管理者の role と、`--core-app` の App |
-| `cumin-main-required-checks` | 必須のcheck。`cumin-protected-paths` と、`--required-check` で渡したcheck | 空 |
+| ruleset | 対象 | 内容 | bypass list |
+|---|---|---|---|
+| `cumin-protect-main` | 既定のブランチ | 更新の制限、削除の制限、force push の禁止 | リポジトリの管理者の role と、`--core-app` の App |
+| `cumin-main-required-checks` | 既定のブランチ | 必須のcheck。`cumin-protected-paths` と、`--required-check` で渡したcheck | 空 |
+| `cumin-branches` | `cumin/diagrams` 以外の全てのブランチ | 作成の制限、更新の制限、削除の制限 | リポジトリの管理者の role と、`--core-app` と `--implementer-app` の App |
+| `cumin-diagrams` | `cumin/diagrams` | 削除の制限、force push の禁止 | 空 |
+| `cumin-tags` | 全てのタグ | 作成の制限、更新の制限、削除の制限 | リポジトリの管理者の role と、`--core-app` の App |
+
+- 下の3つは、Planner の App が書き込めるブランチを `cumin/diagrams` だけにし、タグを作れないようにするためにある。release など、ruleset で止まらない操作は、[GitHub Appの登録手順](github-app-setup.md) の「権限を決めた理由」にある。Planner の App は、sub-issue の図を置くために Contents の書き込みを持つ ([GitHub Appの登録手順](github-app-setup.md) の権限の表)。Contents の書き込みは、どのブランチとタグにも及ぶので、ruleset で絞る。
+- `cumin-branches` があると、管理者でない人は、ブランチを作ることも push することもできない。変更は、管理者か、cumin の App が行う。
+- `cumin-diagrams` の bypass list は空である。Issue は、このブランチのコミットで図を示すので、履歴を消せないようにする。
 
 - 2つに分けてあるのは、bypass list にいる cumin本体の App が、必須のcheckまで回避できないようにするためである。
 - `cumin-protected-paths` は、GitHub Actions が出したものだけを有効にする。他の App が同じ名前のcheckを出しても、通らない。

@@ -2,7 +2,7 @@
 
 cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして登録する手順。誰がどのroleかは [要求仕様書](../requirements/overview.md) の「GitHub上の登場人物」にある。
 
-この文書は、手作業の手順である。コマンドとスクリプトを使う手順は [セットアップの手順](setup-guide.md) にあり、そちらを先に試す。コマンドやスクリプトが使えないときに、この文書の手順を使う。手順4と5 (ruleset) は、`scripts/setup-repo.sh` が同じことを行う。
+この文書は、手作業の手順である。コマンドとスクリプトを使う手順は [セットアップの手順](setup-guide.md) にあり、そちらを先に試す。コマンドやスクリプトが使えないときに、この文書の手順を使う。手順4〜6 (ruleset) は、`scripts/setup-repo.sh` が同じことを行う。
 
 画面の操作とラベルは、2026-09-19時点のGitHub公式ドキュメントに基づく。末尾に出典と、まだ実機で確かめていない点をまとめた。
 
@@ -13,7 +13,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 | App | 使うrole | 権限 (Repository permissions) |
 |---|---|---|
 | `cumin-core` | cumin本体 | Contents: Read & write、Pull requests: Read & write、Issues: Read & write |
-| `cumin-planner` | Planner | Issues: Read & write、Contents: Read-only |
+| `cumin-planner` | Planner | Issues: Read & write、Contents: Read & write |
 | `cumin-implementer` | Implementer | Contents: Read & write、Pull requests: Read & write、Issues: Read-only |
 | `cumin-reviewer` | Reviewer | Pull requests: Read & write、Contents: Read-only、Issues: Read-only |
 
@@ -24,6 +24,8 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 - Pull Requestのmergeに必要な権限は Pull requests ではなく Contents: Read & write である。`cumin-core` に Contents の書き込みが要るのはこのため。
 - ブランチのpushにも Contents: Read & write が要る。つまり `cumin-implementer` は権限の上ではmainにもpushできてしまう。これを防ぐのが、後述のrulesetである。
 - `cumin-core` の Issues: Read & write は、状態ラベルの付け替えとコメントの投稿に使う。
+- `cumin-planner` の Contents: Read & write は、sub-issue の図をブランチ `cumin/diagrams` に置くためだけに使う。Contents の書き込みは全てのブランチとタグに及ぶので、`scripts/setup-repo.sh` の ruleset (`cumin-branches`、`cumin-diagrams`、`cumin-tags`) で、書き込めるブランチを `cumin/diagrams` だけにし、タグを作れないようにする ([セットアップの手順](setup-guide.md) の手順3)。
+- ruleset が止めるのは、ブランチとタグへの書き込みだけである。Contents の書き込みで使える次の操作は、ruleset では止まらない: 既にあるタグへの release の作成、release と release asset の編集と削除、`repository_dispatch` (workflow の起動)、コミットへのコメントの編集と削除。`cumin-implementer` は、同じ権限で同じ操作が既にできる。Planner に同じ危険を持たせることは、#198 で Owner が選んだ (案A)。これらを使う必要があるリポジトリでは、導入の前に見直す。
 - `cumin-implementer` には Workflows の権限を与えない。`.github/workflows` の変更は risk/high であり、Agentに触らせないため。
 - Metadata: Read-only は、他の権限を選ぶと自動で付く。
 
@@ -119,6 +121,18 @@ cuminは、mainに適用されるrulesetに登録された必須のcheckが全�
 3. "Bypass list" は空のままにする。手順4のrulesetに足さないのは、bypass listにいる `cumin-core` が必須のcheckまで回避できてしまうためである。
 4. ruleとして "Require status checks to pass before merging" を選び、CIのcheckを登録する。
 5. "Create" をクリックする。
+
+## 手順6: Plannerの書き込み先を `cumin/diagrams` だけにする (リポジトリごとに1回)
+
+`cumin-planner` の Contents: Read & write は、全てのブランチとタグに及ぶ。Plannerのインストールで新しい権限を承認する前に、次の3つのrulesetを作る。手順4と同じ画面で、"New ruleset" から作る。
+
+| 名前 | 種類 | "Target" | rule | "Bypass list" |
+|---|---|---|---|---|
+| `cumin-branches` | branch ruleset | "Include all branches" と、"Exclude by pattern" で `cumin/diagrams` | "Restrict creations"、"Restrict updates"、"Restrict deletions" | `cumin-core`、`cumin-implementer` (GitHub App)、Ownerのrole |
+| `cumin-diagrams` | branch ruleset | "Include by pattern" で `cumin/diagrams` | "Restrict deletions"、"Block force pushes" | 空 |
+| `cumin-tags` | tag ruleset | "Include all tags" | "Restrict creations"、"Restrict updates"、"Restrict deletions" | `cumin-core`、Ownerのrole |
+
+名前は `scripts/setup-repo.sh` が使う名前と同じにする。あとでスクリプトを実行しても、rulesetが二重にならない。
 
 ## 確認すること
 

@@ -209,7 +209,7 @@ func TestAppToken_IsLimitedToOneRepositoryAndToThePermissionsOfTheApp(t *testing
 func TestAppPermissions_MatchTheSetupDocument(t *testing.T) {
 	want := map[string]map[string]string{
 		"cumin-core":  {"contents": "write", "pull_requests": "write", "issues": "write"},
-		"planner":     {"issues": "write", "contents": "read"},
+		"planner":     {"issues": "write", "contents": "write"},
 		"implementer": {"contents": "write", "pull_requests": "write", "issues": "read"},
 		"reviewer":    {"pull_requests": "write", "contents": "read", "issues": "read"},
 	}

@@ -1,0 +1,16 @@
+{
+  "name": "cumin-tags",
+  "target": "tag",
+  "enforcement": "active",
+  "bypass_actors": [
+    { "actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always" }
+  ],
+  "conditions": {
+    "ref_name": { "include": ["~ALL"], "exclude": [] }
+  },
+  "rules": [
+    { "type": "creation" },
+    { "type": "update" },
+    { "type": "deletion" }
+  ]
+}

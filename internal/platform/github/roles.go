@@ -28,8 +28,13 @@ var appPermissions = map[string]map[string]string{
 		"issues":        permissionWrite,
 	},
 	string(config.RolePlanner): {
-		"issues":   permissionWrite,
-		"contents": permissionRead,
+		"issues": permissionWrite,
+		// Only for the diagrams of its sub-issues. The rulesets of
+		// scripts/setup-repo/ keep its branch writes on cumin/diagrams and
+		// stop tags. They do not stop releases, repository_dispatch, or
+		// commit comments; the Implementer has the same reach
+		// (docs/ja/development/github-app-setup.md).
+		"contents": permissionWrite,
 	},
 	string(config.RoleImplementer): {
 		"contents":      permissionWrite,

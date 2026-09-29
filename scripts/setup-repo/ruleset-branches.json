@@ -1,0 +1,16 @@
+{
+  "name": "cumin-branches",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [
+    { "actor_type": "RepositoryRole", "actor_id": 5, "bypass_mode": "always" }
+  ],
+  "conditions": {
+    "ref_name": { "include": ["~ALL"], "exclude": ["refs/heads/cumin/diagrams"] }
+  },
+  "rules": [
+    { "type": "creation" },
+    { "type": "update", "parameters": { "update_allows_fetch_and_merge": false } },
+    { "type": "deletion" }
+  ]
+}
