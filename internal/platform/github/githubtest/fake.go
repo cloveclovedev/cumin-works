@@ -88,6 +88,25 @@ type PullRequest struct {
 	// Checks are the checks on the head commit, as statusCheckRollup
 	// returns them.
 	Checks []Check
+	// Reviews are the reviews of the pull request, oldest first.
+	Reviews []Review
+}
+
+// Review is one review of a pull request, as GraphQL returns it. Author is
+// the login; for a GitHub App it is the slug without "[bot]", with
+// AuthorIsBot true.
+type Review struct {
+	Author      string
+	AuthorIsBot bool
+	// State is APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, or
+	// PENDING.
+	State string
+	// Commit is the SHA that the review is on. Empty answers null, as
+	// GitHub does for a commit that is gone.
+	Commit string
+	// SubmittedAt is zero for a pending review, which answers null.
+	SubmittedAt time.Time
+	URL         string
 }
 
 // CheckRun is one check run of a commit, as the REST endpoints of a failed
@@ -898,6 +917,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			BlockedBy    int     `json:"blockedBy"`
 			PullRequests int     `json:"pullRequests"`
 			Checks       int     `json:"checks"`
+			Reviews      int     `json:"reviews"`
 			// RepositoryFiles asks for the default branch and the files of
 			// .cumin/. The client asks for them on the first page only.
 			RepositoryFiles bool `json:"repositoryFiles"`
@@ -952,7 +972,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			hasNextPage = true
 			break
 		}
-		page = append(page, f.issueNode(repo, issue, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks))
+		page = append(page, f.issueNode(repo, issue, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks, v.Reviews))
 	}
 	endCursor := any(nil)
 	if len(page) > 0 {
@@ -1052,7 +1072,7 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 	})
 }
 
-func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, blockedBy, pullRequests, checks int) map[string]any {
+func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, blockedBy, pullRequests, checks, reviews int) map[string]any {
 	node := map[string]any{
 		"number": issue.Number,
 		"title":  issue.Title,
@@ -1072,7 +1092,7 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 	}
 	node["subIssues"] = connection(subs, subIssues, func(sub *Issue) any {
-		return f.issueNode(repo, sub, labels, subIssues, blockedBy, pullRequests, checks)
+		return f.issueNode(repo, sub, labels, subIssues, blockedBy, pullRequests, checks, reviews)
 	})
 	node["blockedBy"] = connection(issue.BlockedBy, blockedBy, func(number int) any {
 		closed := false
@@ -1089,7 +1109,7 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 	}
 	node["closedByPullRequestsReferences"] = connection(closing, pullRequests, func(pr *PullRequest) any {
-		return pullRequestNode(pr, labels, checks)
+		return pullRequestNode(pr, labels, checks, reviews)
 	})
 	return node
 }
@@ -1097,13 +1117,14 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 // pullRequestNode is one pull request as GraphQL returns it: the author
 // of an App is a Bot whose login has no "[bot]", and the rollup is null
 // when the head commit has no check.
-func pullRequestNode(pr *PullRequest, labels, checks int) map[string]any {
+func pullRequestNode(pr *PullRequest, labels, checks, reviews int) map[string]any {
 	node := map[string]any{
 		"number":      pr.Number,
 		"headRefOid":  pr.HeadCommit,
 		"headRefName": pr.HeadBranch,
 		"author":      nil,
 		"labels":      connection(pr.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
+		"reviews":     connection(pr.Reviews, reviews, reviewNode),
 	}
 	if pr.Author != "" {
 		typeName := "User"
@@ -1117,6 +1138,25 @@ func pullRequestNode(pr *PullRequest, labels, checks int) map[string]any {
 		node["statusCheckRollup"] = map[string]any{
 			"contexts": connection(pr.Checks, checks, checkNode),
 		}
+	}
+	return node
+}
+
+// reviewNode is one review as GraphQL returns it.
+func reviewNode(review Review) any {
+	node := map[string]any{"author": nil, "state": review.State, "submittedAt": nil, "url": review.URL, "commit": nil}
+	if review.Author != "" {
+		typeName := "User"
+		if review.AuthorIsBot {
+			typeName = "Bot"
+		}
+		node["author"] = map[string]any{"__typename": typeName, "login": review.Author}
+	}
+	if !review.SubmittedAt.IsZero() {
+		node["submittedAt"] = review.SubmittedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if review.Commit != "" {
+		node["commit"] = map[string]any{"oid": review.Commit}
 	}
 	return node
 }

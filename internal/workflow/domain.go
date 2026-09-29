@@ -120,6 +120,34 @@ type PullRequest struct {
 	// Checks are the checks on the head commit. I3 and I4 read them with
 	// the required checks of the default branch.
 	Checks []CheckResult
+	// Reviews are the reviews of the pull request. The round of the review
+	// and the check after a Reviewer run read them (I3, I5, I8).
+	Reviews []Review
+}
+
+// ReviewState is the state of a review on GitHub (the GraphQL schema,
+// PullRequestReviewState).
+type ReviewState string
+
+const (
+	ReviewApproved         ReviewState = "APPROVED"
+	ReviewChangesRequested ReviewState = "CHANGES_REQUESTED"
+	ReviewCommented        ReviewState = "COMMENTED"
+	ReviewDismissed        ReviewState = "DISMISSED"
+	ReviewPending          ReviewState = "PENDING"
+)
+
+// Review is one review of a pull request.
+type Review struct {
+	// Author is the login; a GitHub App is "<slug>[bot]".
+	Author string
+	State  ReviewState
+	// Commit is the full SHA that the review is on, or empty when that
+	// commit is gone.
+	Commit string
+	// SubmittedAt is zero for a pending review.
+	SubmittedAt time.Time
+	URL         string
 }
 
 // CheckConclusion is what one check says. GitHub has more conclusions;
@@ -974,4 +1002,92 @@ func anyOpen(blockedBy []BlockedBy) bool {
 		}
 	}
 	return false
+}
+
+// The round of the review (issue-states.md, the text on rounds): cumin
+// counts the reviews of cumin-reviewer after the later of two times, the
+// last cumin/status/ready of the implementation issue and the last APPROVE
+// of cumin-reviewer. Both are facts on GitHub, so the count survives a
+// restart and cumin keeps nothing for it.
+//
+// A round is a review that asked for changes: CHANGES_REQUESTED. A review
+// with only COMMENT is not a result of the Reviewer (the Reviewer
+// requirement, completion): cumin asks for the review again, and that
+// request is not a new round. A pending review is not submitted.
+//
+// A DISMISSED review starts the count again, as an APPROVE does. GitHub
+// shows only the state now, not the state before the dismissal. The rule
+// "Dismiss stale pull request approvals when new commits are pushed" of a
+// ruleset dismisses approvals, so a dismissed review is most often a former
+// APPROVE; counting it as a round would bring back the rounds before that
+// approval and reach the limit too early. A person who dismisses a request
+// for changes steps in as the Owner does, and the count may start again.
+
+// roundStart is the later of the last cumin/status/ready of the issue and
+// the last APPROVE of the Reviewer, or its last dismissed review. The
+// APPROVE is a start too, because a merge conflict fixed after it changes
+// the head commit, and the review starts again (I6).
+func roundStart(reviews []Review, reviewer string, readyAt time.Time) time.Time {
+	start := readyAt
+	for _, review := range reviews {
+		restarts := review.State == ReviewApproved || review.State == ReviewDismissed
+		if review.Author == reviewer && restarts && review.SubmittedAt.After(start) {
+			start = review.SubmittedAt
+		}
+	}
+	return start
+}
+
+// roundReviews are the reviews of the Reviewer that count as rounds since
+// roundStart, oldest first.
+func roundReviews(reviews []Review, reviewer string, readyAt time.Time) []Review {
+	start := roundStart(reviews, reviewer, readyAt)
+	var rounds []Review
+	for _, review := range reviews {
+		if review.Author != reviewer || !review.SubmittedAt.After(start) {
+			continue
+		}
+		if review.State == ReviewChangesRequested {
+			rounds = append(rounds, review)
+		}
+	}
+	slices.SortStableFunc(rounds, func(a, b Review) int { return a.SubmittedAt.Compare(b.SubmittedAt) })
+	return rounds
+}
+
+// ReviewRounds is the number of rounds of the Reviewer since the last
+// cumin/status/ready of the issue (readyAt) or its last APPROVE. After a
+// review that asked for changes, it is the round of that review: I5 asks for
+// a fix below max_review_rounds, and I8 stops at it. Before a review, the
+// next round is ReviewRounds + 1 (I3).
+func ReviewRounds(reviews []Review, reviewer string, readyAt time.Time) int {
+	return len(roundReviews(reviews, reviewer, readyAt))
+}
+
+// LastReviewedCommit is the commit of the last round of the Reviewer since
+// the start of the rounds, or "" in round 1. Round 2 and later look at the
+// diff from this commit to the head commit.
+func LastReviewedCommit(reviews []Review, reviewer string, readyAt time.Time) string {
+	rounds := roundReviews(reviews, reviewer, readyAt)
+	if len(rounds) == 0 {
+		return ""
+	}
+	return rounds[len(rounds)-1].Commit
+}
+
+// LatestReview is the last submitted review of the Reviewer, in any state.
+// The check after a Reviewer run reads it: it must be on the head commit,
+// with APPROVE or REQUEST_CHANGES (the Reviewer requirement, completion).
+func LatestReview(reviews []Review, reviewer string) (Review, bool) {
+	var latest Review
+	found := false
+	for _, review := range reviews {
+		if review.Author != reviewer || review.State == ReviewPending || review.SubmittedAt.IsZero() {
+			continue
+		}
+		if !found || !review.SubmittedAt.Before(latest.SubmittedAt) {
+			latest, found = review, true
+		}
+	}
+	return latest, found
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
@@ -293,5 +294,56 @@ func TestReadSnapshot_AsksForTheFilesOnTheFirstPageOnly(t *testing.T) {
 	}
 	if !strings.Contains(string(requests[1].Body), `"repositoryFiles":false`) {
 		t.Errorf("the second page asks for the files again: %s", requests[1].Body)
+	}
+}
+
+// The reviews of a pull request come with the author in the REST form, the
+// state, the commit, the time, and the address. A pending review has no
+// time, and a review whose commit is gone has no commit.
+func TestReadSnapshot_ReadsTheReviewsOfAPullRequest(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 2, Parent: 1})
+	at := time.Date(2026, 9, 30, 1, 2, 3, 0, time.UTC)
+	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 3, HeadCommit: "5555555555555555555555555555555555555555", Closes: []int{2}, Reviews: []githubtest.Review{
+		{Author: "example-reviewer", AuthorIsBot: true, State: "CHANGES_REQUESTED", Commit: "4444444444444444444444444444444444444444", SubmittedAt: at, URL: "https://github.com/example-org/example-repo/pull/3#pullrequestreview-1"},
+		{Author: "octocat", State: "COMMENTED", SubmittedAt: at.Add(time.Minute)},
+		{Author: "example-reviewer", AuthorIsBot: true, State: "PENDING", Commit: "5555555555555555555555555555555555555555"},
+	}})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	want := []github.Review{
+		{Author: "example-reviewer[bot]", State: "CHANGES_REQUESTED", Commit: "4444444444444444444444444444444444444444", SubmittedAt: at, URL: "https://github.com/example-org/example-repo/pull/3#pullrequestreview-1"},
+		{Author: "octocat", State: "COMMENTED", SubmittedAt: at.Add(time.Minute)},
+		{Author: "example-reviewer[bot]", State: "PENDING", Commit: "5555555555555555555555555555555555555555"},
+	}
+	got := snapshot.RequirementIssues[0].SubIssues[0].PullRequests[0].Reviews
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("reviews = %+v, want %+v", got, want)
+	}
+}
+
+// More reviews than one read holds are an error, as for every other
+// connection: a rule never counts the rounds on a part of the reviews.
+func TestReadSnapshot_TooManyReviewsIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 2, Parent: 1})
+	reviews := make([]githubtest.Review, 101)
+	for i := range reviews {
+		reviews[i] = githubtest.Review{Author: "octocat", State: "COMMENTED", SubmittedAt: time.Date(2026, 9, 30, 0, i, 0, 0, time.UTC)}
+	}
+	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 3, Closes: []int{2}, Reviews: reviews})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err == nil || !strings.Contains(err.Error(), "pull request #3 has more than 100 reviews") {
+		t.Errorf("err = %v, want an error that names pull request #3", err)
 	}
 }

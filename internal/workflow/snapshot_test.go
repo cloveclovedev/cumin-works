@@ -3,6 +3,7 @@ package workflow
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 )
@@ -16,7 +17,9 @@ func TestToSnapshot_CopiesTitleBlockedByAndPullRequests(t *testing.T) {
 			Number: 10, Title: "Add the login screen", Labels: []string{"cumin/status/implementing", "risk/low"},
 			BlockedBy: []github.IssueRef{{Number: 9, Closed: true}},
 			PullRequests: []github.PullRequest{
-				{Number: 21, HeadCommit: "2222", Author: "example-implementer[bot]"},
+				{Number: 21, HeadCommit: "2222", Author: "example-implementer[bot]", Reviews: []github.Review{
+					{Author: "example-reviewer[bot]", State: "APPROVED", Commit: "2222", SubmittedAt: time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), URL: "https://example.com/r/1"},
+				}},
 			},
 		}},
 	}}}
@@ -27,7 +30,9 @@ func TestToSnapshot_CopiesTitleBlockedByAndPullRequests(t *testing.T) {
 			Number: 10, Title: "Add the login screen", Labels: []string{"cumin/status/implementing", "risk/low"},
 			BlockedBy: []BlockedBy{{Number: 9, Closed: true}},
 			PullRequests: []PullRequest{
-				{Number: 21, HeadCommit: "2222", Author: "example-implementer[bot]"},
+				{Number: 21, HeadCommit: "2222", Author: "example-implementer[bot]", Reviews: []Review{
+					{Author: "example-reviewer[bot]", State: ReviewApproved, Commit: "2222", SubmittedAt: time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), URL: "https://example.com/r/1"},
+				}},
 			},
 		}},
 	}}}

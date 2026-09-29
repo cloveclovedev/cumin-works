@@ -28,7 +28,9 @@ import (
 // tool can add labels of its own.
 //
 // With these sizes one page costs 11 points, against 5,000 points per hour
-// for one installation (measured on the sandbox on 2026-09-26).
+// for one installation (measured on the sandbox on 2026-09-26). The reviews
+// of a pull request are one more connection under it, and raise the cost of
+// one page to 14 points (measured on the sandbox on 2026-09-30).
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
@@ -43,6 +45,9 @@ const (
 	// Checks of the head commit of one pull request. A repository requires
 	// a handful of checks, and a commit carries every other check as well.
 	snapshotChecks = 100
+	// Reviews of one pull request. The Reviewer gives one review for each
+	// round, and max_review_rounds is a few; people may add their own.
+	snapshotReviews = 100
 )
 
 // Paths of the files that a target repository keeps on its default branch.
@@ -124,6 +129,29 @@ type PullRequest struct {
 	// the sandbox on 2026-09-22), so it is added here. Empty when the
 	// author is gone (a deleted account).
 	Author string
+	// Reviews are the reviews of the pull request, oldest first. The round
+	// of the review and the checks after a Reviewer run read them (I3, I5,
+	// I8).
+	Reviews []Review
+}
+
+// Review is one review of a pull request, as the rules need it.
+type Review struct {
+	// Author is the login in the REST form: "<slug>[bot]" for an App.
+	// Empty when the author is gone.
+	Author string
+	// State is the state of GraphQL: APPROVED, CHANGES_REQUESTED,
+	// COMMENTED, DISMISSED, or PENDING (the schema, PullRequestReviewState).
+	State string
+	// Commit is the SHA of the commit that the review is on. Empty when
+	// that commit is no longer in the repository.
+	Commit string
+	// SubmittedAt is when the review was submitted; zero for a pending
+	// review.
+	SubmittedAt time.Time
+	// URL is the address of the review. A request that names the review
+	// links it.
+	URL string
 }
 
 // CheckConclusion is what one check says, as the rows I3 and I4 read it.
@@ -190,7 +218,7 @@ type RateLimit struct {
 // from a pull request branch. The files are not a connection, so they do not
 // change the cost of the query; $repositoryFiles asks for them on the first
 // page only, because one poll reads them once.
-const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $repositoryFiles: Boolean!) {
+const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!, $repositoryFiles: Boolean!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef @include(if: $repositoryFiles) { name target { oid } }
     cuminConfig: object(expression: "HEAD:` + CuminConfigPath + `") @include(if: $repositoryFiles) { ...cuminFile }
@@ -228,6 +256,10 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
                       ... on StatusContext { context state }
                     }
                   }
+                }
+                reviews(first: $reviews) {
+                  pageInfo { hasNextPage }
+                  nodes { author { __typename login } state submittedAt url commit { oid } }
                 }
               }
             }
@@ -351,6 +383,40 @@ type pullRequestNode struct {
 			Nodes    []checkNode `json:"nodes"`
 		} `json:"contexts"`
 	} `json:"statusCheckRollup"`
+	Reviews struct {
+		PageInfo pageInfo     `json:"pageInfo"`
+		Nodes    []reviewNode `json:"nodes"`
+	} `json:"reviews"`
+}
+
+// reviewNode is one review. The names of the fields come from the schema
+// (introspection on 2026-09-30): the author is an Actor, the commit is null
+// when it is gone, and submittedAt is null for a pending review.
+type reviewNode struct {
+	Author *struct {
+		TypeName string `json:"__typename"`
+		Login    string `json:"login"`
+	} `json:"author"`
+	State       string     `json:"state"`
+	SubmittedAt *time.Time `json:"submittedAt"`
+	URL         string     `json:"url"`
+	Commit      *struct {
+		OID string `json:"oid"`
+	} `json:"commit"`
+}
+
+func (n reviewNode) review() Review {
+	review := Review{State: n.State, URL: n.URL}
+	if n.Author != nil {
+		review.Author = restLogin(n.Author.TypeName, n.Author.Login)
+	}
+	if n.SubmittedAt != nil {
+		review.SubmittedAt = *n.SubmittedAt
+	}
+	if n.Commit != nil {
+		review.Commit = n.Commit.OID
+	}
+	return review
 }
 
 // checkNode is one context of the rollup: a CheckRun (a GitHub Actions job
@@ -439,6 +505,12 @@ func (n pullRequestNode) pullRequest() (PullRequest, error) {
 	for _, label := range n.Labels.Nodes {
 		pr.Labels = append(pr.Labels, label.Name)
 	}
+	if n.Reviews.PageInfo.HasNextPage {
+		return PullRequest{}, fmt.Errorf("pull request #%d has more than %d reviews", n.Number, snapshotReviews)
+	}
+	for _, node := range n.Reviews.Nodes {
+		pr.Reviews = append(pr.Reviews, node.review())
+	}
 	if n.StatusCheckRollup == nil {
 		return pr, nil
 	}
@@ -468,6 +540,7 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 			"subIssues": snapshotSubIssues, "labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
 			"pullRequests":    snapshotPullRequests,
 			"checks":          snapshotChecks,
+			"reviews":         snapshotReviews,
 			"repositoryFiles": firstPage,
 		}
 		var resp snapshotResponse
