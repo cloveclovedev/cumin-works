@@ -50,6 +50,12 @@ var skills = []Skill{
 		Roles:       []config.Role{config.RoleImplementer},
 	},
 	{
+		Name:        "cumin-review",
+		Description: "Write a review of a pull request, with its comments and its summary, in the form that cumin reads. Use before you submit a review.",
+		Template:    "review.md",
+		Roles:       []config.Role{config.RoleReviewer},
+	},
+	{
 		Name:        "cumin-decision-request",
 		Description: "Write a decision request for the Owner. Use before you return the result blocked, to write blocked_reason.",
 		Template:    "decision-request.md",

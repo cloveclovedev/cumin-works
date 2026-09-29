@@ -18,7 +18,7 @@ Read by: the Implementer and the Owner.
 - Everything else is `(non-blocking)`. Preferences are non-blocking.
 - Result: if there is one or more `(blocking)` comment, submit `REQUEST_CHANGES`. If there is none, submit `APPROVE`. Never submit a review with only `COMMENT`.
 - Comment on the code, not on the author.
-- In round 2 and later, first check that each earlier blocking comment is fixed. Add a new blocking comment on unchanged code only if it is about wrong behavior or security.
+- In round 2 and later, first check that each earlier blocking comment is fixed. A new blocking comment is allowed only for wrong behavior or a security problem inside the diff since your last review. Everything else is non-blocking.
 
 ## Comment format
 
@@ -54,8 +54,9 @@ Fix: Replace the loop with `if slices.Contains(allowed, status) {`.
 Write this as the body of the review.
 
 ```markdown
-Result: Changes requested (round <n> of 3)
+Result: Changes requested (round <n> of <limit>)
 Blocking: <count>. Non-blocking: <count>.
+Review skills: <the review skills that ran, or None>
 
 Blocking comments:
 1. `<path>:<line>` — <the problem in one sentence>
@@ -64,4 +65,4 @@ Blocking comments:
 Acceptance criteria: <x> of <y> are met. Not met: <list, or "None">.
 ```
 
-When the result is approval, write `Result: Approved (round <n> of 3)` and "Blocking comments: None".
+When the result is approval, write `Result: Approved (round <n> of <limit>)` and "Blocking comments: None". The request gives the round and the limit.
