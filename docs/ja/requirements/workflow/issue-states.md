@@ -51,7 +51,7 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 | # | cuminの動作 | きっかけ | 動く前に確かめること | うまくいかないとき |
 |---|---|---|---|---|
 | R1 | 要求Issueに `cumin/status/planning` を付け、Plannerに分割を依頼する | 定期確認: 開いていて、`cumin/type/requirement` と `cumin/status/ready` が付いた要求Issueがある。sub-issueがあるかどうかは問わない | 要求Issueの blocked by のIssueが全て閉じている。AIリソースに空きがある | — |
-| R2 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「分割結果の確認が必要」と通知する | 実行終了: Plannerの実行が終わった | sub-issueが1つ以上ある。全てのsub-issueにriskのラベルがちょうど1つ付いている | `cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら、その前に1回だけやり直す |
+| R2 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「分割結果の確認が必要」と通知する。sub-issueが全て閉じているときは、`cumin/status/implementing` に替え、通知しない | 実行終了: Plannerの実行が終わった | sub-issueが1つ以上ある。全てのsub-issueにriskのラベルがちょうど1つ付いている | `cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら、その前に1回だけやり直す |
 | R3 | 要求Issueのラベルを `cumin/status/implementing` に替える | 定期確認: 要求Issueに `cumin/status/awaiting-owner-review` が付いたあとで、sub-issueのどれかに `cumin/status/ready` が付いた。要求Issueに状態ラベルがないときは、sub-issueのどれかに `cumin/status/ready` が付いていればよい | — | — |
 | R4 | Plannerに、受け入れの確認を依頼する。ラベルは `cumin/status/implementing` のままにする | 定期確認: sub-issueが全て閉じていて、最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントが、まだない | 要求Issueに `cumin/status/implementing` が付いている。sub-issueが1つ以上ある。閉じたsub-issueのフォローアップノート (I9) を書き終えている。この要求IssueのAgentが動いていない。AIリソースに空きがある | 結果が `blocked` なら、`cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら1回だけやり直し、それでも駄目なら同じ扱いにする |
 | R5 | (何もしない。完了) | Ownerが要求Issueを閉じた | — | — |
@@ -74,6 +74,8 @@ R3が `cumin/status/ready` の付いた時刻を見るのは、要求Issueを見
 Ownerは、分割結果の確認のとき、一部のsub-issueにだけ `cumin/status/ready` を付けてもよい。それらが全て閉じて、状態ラベルのないsub-issueだけが残ると、R6が成り立ち、cuminがもう一度Ownerに確認を求める。Ownerが残りを忘れて、要求Issueが黙って止まることを防ぐ。残りのsub-issueが要らなくなったときは、Ownerがそれを閉じる。全て閉じれば、R4が成り立つ。
 
 Ownerは、要求Issueを書き終えたら `cumin/status/ready` を付ける。これでR1が成り立つ。分割に失敗して `cumin/status/awaiting-owner-decision` になったときも、要求Issueを直してから `cumin/status/ready` を付ける。sub-issueが途中まで作られていても、Plannerは既にあるsub-issueを確かめて、同じものを二重に作らない。`cumin/type/requirement` は要求Issueである印なので、外さずに付けたままにする。Ownerの「進めてよい」の合図を、実装Issueと同じ `cumin/status/ready` に揃えるため、この形にしている。
+
+受け入れの確認 (R4) が `blocked` を返して `cumin/status/awaiting-owner-decision` になったときも、Ownerは答えをコメントに書き、要求Issueに `cumin/status/ready` を付ける。R1が成り立ち、Plannerが要求Issueを読み直す。Requirementsを書き足していれば、Plannerは足りない分のsub-issueを作り、R2で分割結果の確認に進む。作るものがなければ、sub-issueは全て閉じたままなので、R2は要求Issueを `cumin/status/implementing` に替え、通知しない。次の定期確認でR4が成り立ち、Plannerがもう一度受け入れを確かめる。要求Issueの `cumin/status/ready` は、いつも「Plannerが要求を読み直す」という1つの意味である。
 
 要求Issueが他の要求Issueに依存するときは、Ownerが要求Issueどうしに blocked by を張る。先の要求Issueが閉じるまで、R1は成り立たない。先の要求の成果がまだ入っていないmainを読んで、Plannerが分割してしまうことを防ぐ。実装Issueの blocked by は、同じ要求Issueのsub-issueの間だけに張る。
 

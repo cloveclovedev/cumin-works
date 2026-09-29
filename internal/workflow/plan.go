@@ -238,10 +238,12 @@ func (s *Service) runningIssues(repository string) map[int]bool {
 }
 
 // verifySplit applies R2 after a done result, on a new snapshot of the
-// repository. On a pass the requirement issue moves to
-// cumin/status/awaiting-owner-review and the Owner is told that the split
-// needs a review. A failed check stops the requirement issue for the
-// Owner with the sentence of that check.
+// repository. On a pass with an open sub-issue, the requirement issue moves
+// to cumin/status/awaiting-owner-review and the Owner is told that the
+// split needs a review. On a pass with every sub-issue closed, it moves to
+// cumin/status/implementing without a notification, so that R4 asks for the
+// acceptance check again (SplitStatus). A failed check stops the
+// requirement issue for the Owner with the sentence of that check.
 func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int) {
 	requirement, ok := s.requirementIssueNow(ctx, log, target, number)
 	if !ok {
@@ -266,9 +268,16 @@ func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Targ
 		log.Error("R2: no token; the label was not changed", "error", err.Error())
 		return
 	}
-	labels := LabelsAfterSplit(requirement.Labels)
+	status := SplitStatus(requirement)
+	labels := ReplaceStatusLabel(requirement.Labels, status)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
 		log.Error("R2: the label was not changed", "error", err.Error())
+		return
+	}
+	if status == LabelImplementing {
+		// Nothing waits for the Owner: R4 asks for the acceptance check at
+		// the next poll, and R7 notifies when it is done.
+		log.Info("R2: every sub-issue is closed; the acceptance check follows", "sub_issues", len(requirement.SubIssues), "labels", labels)
 		return
 	}
 	log.Info("R2: the split waits for the Owner", "sub_issues", len(requirement.SubIssues), "labels", labels)
