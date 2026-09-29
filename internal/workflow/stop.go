@@ -3,8 +3,8 @@ package workflow
 // This file holds the one place that stops an issue for the Owner. Every
 // row of issue-states.md that hands work back uses it with its own row
 // number: post one comment on the issue, replace the status label with
-// cumin/status/awaiting-owner-decision, then notify the Owner. I2 and I4
-// use it today; I8 and I10 are later requirements.
+// cumin/status/awaiting-owner-decision, then notify the Owner. I2, I4, and
+// R2 use it today; I8 and I10 are later requirements.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
 
@@ -24,13 +24,16 @@ const (
 	// RowI4 is a failed required check after the limit of check fix
 	// requests.
 	RowI4 = "I4"
+	// RowR2 is the end of a Planner run that split a requirement issue.
+	RowR2 = "R2"
 )
 
 // stop is one issue that cumin hands back to the Owner.
 type stop struct {
 	// row is the row of issue-states.md that stopped the issue.
 	row string
-	// issue is the implementation issue.
+	// issue is the issue that stops: an implementation issue (I2) or a
+	// requirement issue (R2).
 	issue int
 	// labels are the labels of the issue now. An empty list means that
 	// cumin could not read them; the labels are then left alone, because
@@ -175,4 +178,25 @@ func VerificationReason(failure VerificationFailure) string {
 		return "The Implementer reported done, but the last commit of the work directory is not the head of the pull request, so it was not pushed."
 	}
 	return "The verification of the pull request failed."
+}
+
+// SplitReason is the sentence of one failed check of R2, for the comment
+// and the notification alike.
+func SplitReason(v SplitVerification) string {
+	switch v.Failure {
+	case SplitNoSubIssue:
+		return "The Planner reported done, but this requirement issue has no sub-issue."
+	case SplitNoRiskLabel:
+		return fmt.Sprintf("The Planner reported done, but the sub-issue #%d has no risk label.", v.SubIssue)
+	case SplitTwoRiskLabels:
+		return fmt.Sprintf("The Planner reported done, but the sub-issue #%d has more than one risk label.", v.SubIssue)
+	}
+	return "The verification of the split failed."
+}
+
+// abnormalReason is the sentence of a second abnormal end of the same
+// request. The two runs can end in different ways, and the Owner needs the
+// kind of each one to know where to look.
+func abnormalReason(role string, first, second fmt.Stringer) string {
+	return fmt.Sprintf("The %s run ended abnormally (%s). cumin ran the same request again, and it ended abnormally too (%s).", role, first, second)
 }

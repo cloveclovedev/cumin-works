@@ -42,12 +42,10 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
 	}
-	want := []string{githubtest.RequirementLabel, "cumin/status/planning"}
-	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
-		t.Errorf("labels of #6 = %v, want %v", got, want)
-	}
-	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != 1 {
-		t.Errorf("%d label changes of #6, want 1", n)
+	// Two label changes: planning before the request (R1), and the review
+	// of the Owner after the run (R2).
+	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != 2 {
+		t.Errorf("%d label changes of #6, want 2", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 0 {
 		t.Errorf("%d label changes of #10, want none", n)
@@ -87,7 +85,7 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 	}
 
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"R1: moved the requirement issue to planning"`,
+	for _, want := range []string{`"msg":"R1: moved the requirement issue to planning"`, `"cumin/status/planning"`,
 		`"msg":"R1: requested the split"`, `"role":"planner"`,
 		`"msg":"the agent run ended"`, `"result":"done"`} {
 		if !strings.Contains(logs, want) {
@@ -132,20 +130,21 @@ func TestR1_AnOpenBlockedByIssueWaits(t *testing.T) {
 	}
 }
 
-// A requirement issue in cumin/status/planning counts against the limit of
-// issues in progress (max_issues_in_progress is 1 in the scene), so a ready
-// sub-issue of another requirement issue waits.
+// A requirement issue in cumin/status/planning, whose Planner is still
+// running, counts against the limit of issues in progress
+// (max_issues_in_progress is 1 in the scene), so a ready sub-issue of
+// another requirement issue waits.
 func TestR1_PlanningFillsTheLimit(t *testing.T) {
 	sc := newPlanScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/planning"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 7, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 7, Title: "Another sub-issue", Labels: []string{"cumin/status/ready", "risk/low"}})
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
-	sc.pollAndWait(t, service)
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
 	}
 	if got := sc.fake.Issue(sc.repo, 11).Labels; !slices.Contains(got, "cumin/status/ready") {
 		t.Errorf("labels of #11 = %v, want cumin/status/ready while #6 is planning", got)
@@ -163,5 +162,149 @@ func TestR1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 	instruction := systemPromptOf(t, sc.record(t, "agent.args"))
 	if !strings.HasSuffix(instruction, criteria) {
 		t.Errorf("the instruction does not end with the risk criteria of the repository:\n%s", instruction)
+	}
+}
+
+// assertStoppedForTheOwner checks the stop step of R2 on the requirement
+// issue #6: one comment that holds each of body, the label
+// cumin/status/awaiting-owner-decision, and one notification that holds
+// each of message.
+func assertStoppedForTheOwner(t *testing.T, sc *scene, body, message []string) {
+	t.Helper()
+	comments := sc.fake.Comments(sc.repo, 6)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #6, want 1: %+v", len(comments), comments)
+	}
+	for _, want := range body {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-decision"}
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	messages := sc.webhook.messagesSent()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, want := range append([]string{"R2", "example-org/example-repo", "issue #6"}, message...) {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("the notification has no %q:\n%s", want, messages[0])
+		}
+	}
+}
+
+// R2 (issue-states.md): after done, the requirement issue has one or more
+// sub-issues, each with exactly one risk label. Then it moves to
+// cumin/status/awaiting-owner-review, and the Owner is notified once.
+func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
+	sc := newPlanScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Second", Labels: []string{"risk/high"}})
+	sc.pollAndWait(t, sc.service())
+
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"}
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none on the success path", n)
+	}
+	messages := sc.webhook.messagesSent()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, want := range []string{"R2", "needs a review", "issue #6", "/issues/6"} {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("the notification has no %q:\n%s", want, messages[0])
+		}
+	}
+	// One poll, and one read again after the run: R2 judges on the facts
+	// of that moment.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
+		t.Errorf("%d snapshot reads, want 2", n)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split waits for the Owner"`) {
+		t.Error("the log does not say that the split waits for the Owner")
+	}
+}
+
+func TestR2_NoSubIssueStopsForTheOwner(t *testing.T) {
+	sc := newPlanScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
+	sc.pollAndWait(t, sc.service())
+
+	reason := "this requirement issue has no sub-issue"
+	assertStoppedForTheOwner(t, sc, []string{"## Stopped for the Owner", "Row: R2", reason, "Retried: no"}, []string{reason})
+}
+
+func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
+	tests := []struct {
+		name   string
+		labels []string
+		reason string
+	}{
+		{"no risk label", nil, "the sub-issue #10 has no risk label"},
+		{"two risk labels", []string{"risk/low", "risk/high"}, "the sub-issue #10 has more than one risk label"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := newPlanScene(t)
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: tt.labels})
+			sc.pollAndWait(t, sc.service())
+
+			assertStoppedForTheOwner(t, sc, []string{"Row: R2", tt.reason}, []string{tt.reason})
+		})
+	}
+}
+
+// A blocked result posts the blocked_reason of the Planner and is not run
+// again.
+func TestR2_BlockedStopsForTheOwnerWithoutARetry(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl"})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	sc.pollAndWait(t, sc.service())
+
+	const question = "## Decision needed: which sign-in method does the login screen use?"
+	assertStoppedForTheOwner(t, sc, []string{question}, []string{question})
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// An abnormal end runs the same request once more; after the second one the
+// requirement issue stops for the Owner with the kind of each end.
+func TestR2_ASecondAbnormalEndStopsForTheOwner(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-invalid-result.jsonl"})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	sc.pollAndWait(t, sc.service())
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2 (the request and one retry)", n)
+	}
+	assertStoppedForTheOwner(t, sc,
+		[]string{"Row: R2", "The Planner run ended abnormally (invalid result)", "Retried: once", "Pull request: None"},
+		[]string{"invalid result"})
+	if !strings.Contains(sc.logs.String(), `"msg":"R2: the same request runs again in the same work directory"`) {
+		t.Error("the log does not say that the request ran again")
+	}
+}
+
+// A step of the stop that fails does not stop the next one: the Owner still
+// gets the label and the notification when the comment was not written.
+func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
+	sc := newPlanScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
+	sc.fake.FailNext(http.MethodPost, "/repos/example-org/example-repo/issues/6/comments", http.StatusInternalServerError)
+	sc.pollAndWait(t, sc.service())
+
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
+		t.Errorf("labels of #6 = %v, want cumin/status/awaiting-owner-decision", got)
+	}
+	if n := len(sc.webhook.messagesSent()); n != 1 {
+		t.Errorf("%d notifications, want 1", n)
 	}
 }
