@@ -68,11 +68,11 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 定期確認や着手を sandbox で確かめるときは、`go build -o cumin ./cmd/cumin` で組み込んだバイナリを動かす。`go run` で動かすと、親のプロセスに送った SIGTERM が `cumin` の子プロセスに届かず、止め方の確認にならない (2026-09-21 に確かめた)。launchd は組み込んだバイナリを起動するので、Host の運用には関係しない。
 
-`cumin run` は、`cumin/status/ready` の付いた sub-issue を見つけると、本物の Implementer を起動する。利用枠を使う (使用率の最小の実行と Implementer の実行で2回)。Owner が同意したときだけ動かす。動かす前に確かめること。
+`cumin run` は、`cumin/status/ready` の付いた sub-issue を見つけると本物の Implementer を、`cumin/status/ready` の付いた要求Issueか、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueを見つけると本物の Planner を起動する。どれも利用枠を使う (使用率の最小の実行と Agent の実行で2回)。Owner が同意したときだけ動かす。動かす前に確かめること。
 
 - Host の設定ファイルに、sandbox のリポジトリと、4つの App (`cumin-core` と3つの role) の Client ID がある。秘密鍵が Keychain にある。
 - `work_dir` が、捨ててよいディレクトリを指している。cumin はその下に clone と worktree を作る。
-- sandbox に、`cumin/status/ready` の付いた sub-issue が、確かめたいものだけある。ほかに ready の sub-issue があると、そちらにも着手する。
+- sandbox に、`cumin/status/ready` の付いた Issue と、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueが、確かめたいものだけある。ほかにあると、そちらにも着手する。
 
 止めるときは SIGTERM を送る。動いている Implementer の実行が終わるまで待つので、すぐには終わらない。実行を待たずに終わらせたいときは、もう一度 SIGTERM を送らずに、実行の時間の上限 (`roles.implementer.time_limit`) を短くした設定で動かし直す。
 
@@ -100,7 +100,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
    reviewer = "<Client ID>"
    ```
 
-3. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。付けると R1 が成り立ち、Planner の分割まで走ってしまう。
+3. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける。状態ラベルは付けない。sub-issue に `cumin/status/ready` を付けると、R3 が要求Issueを `cumin/status/implementing` に替える。要求Issueに `cumin/status/ready` を付けると R1 が成り立ち、Planner の分割まで走る。`cumin/status/implementing` を先に付けると、sub-issue に状態ラベルがないあいだに R6 が成り立ち、Owner への通知が1回余計に出る。
 4. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。数分で終わる内容にする。保護されたパスを触らせない (例: `live/` の下にファイルを1つ作って1行書く)。題はブランチの名前になるので、短い英語にする。
 5. sandbox に `cumin/status/ready` の付いた他の sub-issue がないことを確かめる。あると、そちらにも着手する。
 
@@ -169,7 +169,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
 1. `go build -o cumin ./cmd/cumin` でバイナリを作る。
 2. webhook のアドレスを Keychain に入れる。まだなら `cumin setup notify --discord-webhook` を実行する ([セットアップの手順](setup-guide.md) の「通知のアドレスを Keychain に入れる」)。
 3. 場面 Impl-1 と同じ形の設定ファイルを1つ作る。対象は sandbox だけ、`work_dir` は捨ててよい一時ディレクトリにする。`notify.discord.enabled` は初期値の `true` のままにする。
-4. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。
+4. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける (Impl-1 の手順3と同じ理由)。
 5. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。Implementer が必ず `blocked` を返す内容にする。決まっていないことが1つあり、推測では進めないと分かる題と本文にする。Agent は、決まっていないことに当たったら `blocked` を返す ([Agentに共通の要件](../requirements/agents/common.md))。
 6. sandbox に `cumin/status/ready` の付いた他の sub-issue がないことを確かめる。
 
@@ -225,7 +225,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 2. `go build -o cumin ./cmd/cumin` でバイナリを作る。
 3. 場面 Impl-1 と同じ形の設定ファイルを1つ作る。対象は sandbox だけ、`work_dir` は捨ててよい一時ディレクトリにする。`max_check_fix_requests` は初期値の3のままにする。
 4. Host で launchd の cumin が動いていれば、設定の対象によらず止める (`launchctl bootout gui/$(id -u)/dev.cloveclove.cumin`)。`--config` で設定ファイルを分けても、状態ファイル (`~/.local/state/cumin/state.json`) は同じである。2つの cumin がそれぞれ手元の内容でファイル全体を書き直すので、ほかのリポジトリのセッションの番号と回数が消えうる。
-5. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。
+5. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける (Impl-1 の手順3と同じ理由)。
 6. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。題は `Describe the live scenario Check-1` とし、本文には「`live/check-1.md` を作り、場面 Check-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。決まった1行 (`Checked by the live scenario Check-1 in pull request #<番号>.`) は書かない。1行には Pull Request の番号が入るので、Implementer が worktree の fixture の workflow を読んでも、Pull Request を開く前の最初の push では持てない。Implementer は、落ちたcheckの内容からそれを知る。
 7. sandbox に `live/check-1.md` がまだないことと、`cumin/status/ready` の付いた他の sub-issue がないことを確かめる。
 
@@ -278,3 +278,103 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 ### 記録
 
 結果は #185 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。
+
+## 実機の場面 Plan-1
+
+`cumin/status/ready` の付いた要求Issueを、Planner が sub-issue に分割し、要求Issueが `cumin/status/awaiting-owner-review` に移るまでを、1回通して確かめる (R1、R2)。本物の Claude Code を2回起動する (使用率の最小の実行と、Planner の実行) ので、利用枠を使う。Owner が同意したときだけ行う。
+
+### 準備
+
+1. `go build -o cumin ./cmd/cumin` でバイナリを作る。
+2. この場面だけの設定ファイルを1つ作る。Impl-1 の手順2と同じ形で、`[roles.implementer]` の代わりに `[roles.planner]` の `time_limit = "30m"` を書く。
+3. sandbox にマイルストーンを1つ作る。Planner が、要求Issueのマイルストーンを sub-issue に付けることを確かめるためである。
+4. sandbox に要求Issueを1つ作り、`cumin/type/requirement` とそのマイルストーンを付ける。`cumin/status/ready` はまだ付けない。本文には Requirements を3つ書く。2つか3つの sub-issue に分かれ、1つが他の1つを待つ内容にする (例: `live/` の下にページを2つ作り、ルートの `README.md` からその1つにリンクする)。保護されたパスを触らせない。
+5. sandbox に、`cumin/status/ready` の付いた他の Issue がないことを確かめる。
+
+### 実行
+
+6. `./cumin run --config <設定ファイル>` を起動する。
+7. 要求Issueに `cumin/status/ready` を付ける。
+8. 次の定期確認から、ログがこの順に出る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `R1: moved the requirement issue to planning` | ラベルを `cumin/status/planning` に替えた |
+   | `clone created`、`worktree created` | 既定のブランチを detached で開いた |
+   | `R1: requested the Planner` (`kind` が `plan`) | Planner を起動した |
+   | `quota usage read`、`agent token created`、`agent identity read` | 使用率の最小の実行と、roleのtokenとbotの身元 |
+   | `agent start`、`agent end`、`the agent run ended` | Claude Code の実行と、その結果 |
+   | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-owner-review` に替えた |
+   | `the Owner was notified` (`row` が `R2`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
+
+9. `R2: the split waits for the Owner` が出たら、Accept-1 に進むか、SIGTERM で止める。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 要求Issueのラベルが `cumin/status/ready` から `cumin/status/planning` を経て `cumin/status/awaiting-owner-review` に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 2 | sub-issue が2つか3つあり、要求Issueの sub-issue になっている。作成者は Planner の App である | 要求Issueの sub-issue の一覧 |
+| 3 | 全ての sub-issue に `risk/*` がちょうど1つと、要求Issueのマイルストーンが付いている | 各 sub-issue |
+| 4 | 待つ必要のある sub-issue に blocked by がある | 各 sub-issue の依存関係 |
+| 5 | 要求Issueに、Planner の App のコメントがちょうど1つある。`plan-summary.md` の見出しに従っている | 要求Issueのコメント |
+| 6 | 起動の記録の確認が通った。異常終了が出ていない | cumin のログ |
+| 7 | Agent に渡された skill の一覧に、Planner の4つの skill (`cumin-implementation-issue`、`cumin-plan-summary`、`cumin-acceptance-check`、`cumin-decision-request`) がある。他の role の skill と、Host のユーザの `~/.claude/skills/` の skill はない。Planner は sub-issue を作る前に `cumin-implementation-issue` を、コメントの前に `cumin-plan-summary` を呼んだ | Claude Code のセッションの記録 (Impl-1 の8と同じ見方)。worktree のディレクトリは `<Issue番号>-planner` である |
+| 8 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+
+skill の一覧を探すときは、"The following skills are available for use with the Skill tool" で始まる部分だけを読む。記録の全体を名前で grep すると、Planner が読んだファイルの中身に当たることがある。
+
+### 後片付け
+
+- sub-issue と要求Issueを、not planned で閉じる。
+- マイルストーンを閉じる。
+- Accept-1 に進まないなら、`work_dir` の一時ディレクトリを消す。
+
+### 記録
+
+結果は、この場面を作った Issue (#172) にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、Organization と App の名前は書かない。
+
+## 実機の場面 Accept-1
+
+sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認のコメントを書き、要求Issueが `cumin/status/awaiting-owner-review` に移るまでを、1回通して確かめる (R4、R7)。本物の Claude Code を2回起動するので、利用枠を使う。Owner が同意したときだけ行う。Plan-1 と同じ cumin の実行の中で続けてよい。
+
+### 準備
+
+1. Plan-1 の手順1と2と同じバイナリと設定ファイルを使う。
+2. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける。本文の Requirements には、sandbox の main で既に成り立つことを2つ書く (例: ルートの `README.md` の1行目の見出し)。確認の結果が Pass になり、Planner が根拠を書ける。
+3. その sub-issue を2つ作り、`risk/low` を付けて、completed で閉じる。
+4. 最後に、要求Issueに `cumin/status/implementing` を付ける。sub-issue が開いているうちに付けると R6 が成り立ち、要求Issueが `cumin/status/awaiting-owner-review` に移ってしまう。
+
+### 実行
+
+5. cumin が動いていなければ、`./cumin run --config <設定ファイル>` を起動する。次の定期確認から、ログがこの順に出る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `R4: read the comments` | sub-issue が全て閉じた要求Issueのコメントを読んだ。確認が終わるまで、定期確認のたびに出る |
+   | `worktree removed`、`worktree created` | 前の依頼の worktree を消し、merge された main で開き直した。初めての要求Issueでは `worktree removed` は出ない |
+   | `R4: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した。ラベルは替えない |
+   | `quota usage read`、`agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ |
+   | `R7: the requirement issue waits for the acceptance of the Owner` | 次の定期確認で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-owner-review` に替えた |
+   | `the Owner was notified` (`row` が `R7`) | 通知した |
+
+6. `R7: ...` が出たら、cumin のプロセスに SIGTERM を送る。`stopped` の行が出て、終了コード0で終わる。止めるときに途中だった定期確認は、`poll failed` (`context canceled`) を1行出すことがある。止めた結果で、問題ではない。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 要求Issueのラベルが、Planner の実行中も `cumin/status/implementing` のままで、確認のコメントのあとに `cumin/status/awaiting-owner-review` に移った | Issue のイベント |
+| 2 | 要求Issueに、`## Acceptance check` で始まる Planner の App のコメントがちょうど1つある。Requirements の1項目ごとに1行あり、どの行にも根拠がある | 要求Issueのコメント |
+| 3 | 実行で Issue が作られず、sub-issue も変わらなかった | sandbox の Issue の一覧と、sub-issue の更新の時刻 |
+| 4 | Planner は、コメントの前に `cumin-acceptance-check` を呼んだ。skill の一覧は Plan-1 の7と同じ | Claude Code のセッションの記録 |
+| 5 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+
+### 後片付け
+
+- 要求Issueを completed で閉じる。
+- `work_dir` の一時ディレクトリを消す。
+
+### 記録
+
+Plan-1 と同じ Issue に、同じ決まりで残す。
