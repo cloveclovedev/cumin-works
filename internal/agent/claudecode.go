@@ -438,9 +438,21 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 	}
 }
 
+// builtinSuffix ends the source of a plugin that Claude Code ships in its
+// binary. Claude Code lists such plugins in the init event whatever the
+// setting sources (2.1.284 lists agents-md@builtin and telemetry@builtin,
+// measured on 2026-09-29). "builtin" is a reserved marketplace name, so no
+// marketplace, claude.ai, or skills directory gives a plugin this source
+// (official: Marketplace reference, "Reserved names"). A built-in plugin is
+// part of the CLI, as its built-in tools are, so every one passes, and a
+// new one does not stop the runs after an update of Claude Code (the Owner,
+// on #156).
+const builtinSuffix = "@builtin"
+
 // userContext reports why the init event shows context from outside the
-// work directory, or "" when it shows none. Checked: plugins and MCP
-// servers (empty with --setting-sources project, row 27), and
+// work directory, or "" when it shows none. Checked: plugins that are not
+// built in (builtinSuffix) and MCP servers (empty with --setting-sources project,
+// row 27), and
 // memory_paths (absent when auto memory is off, row 28; the live record
 // of #67). plugins and mcp_servers must be present: a record without
 // them cannot confirm that nothing was loaded. The init event lists no
@@ -454,8 +466,8 @@ func userContext(e event, workDir string, wantSkills []string) string {
 	if e.MCPServers == nil {
 		return "the init event has no mcp_servers field"
 	}
-	if jsonPresent(e.Plugins) {
-		return "the init event lists plugins"
+	if reason := otherPlugins(e.Plugins); reason != "" {
+		return reason
 	}
 	if jsonPresent(e.MCPServers) {
 		return "the init event lists MCP servers"
@@ -473,6 +485,33 @@ func userContext(e event, workDir string, wantSkills []string) string {
 		}
 	}
 	return missingSkill(e, wantSkills)
+}
+
+// otherPlugins reports why the plugins of the init event hold one that is
+// not built in, or "" when they hold none. The reason names the source of
+// that plugin, so that the Owner sees what loaded; a source is an id such
+// as "context7@claude-plugins-official", never a path. A list that cumin
+// cannot read, or an entry without source, confirms nothing and stops the
+// run, as a missing field does.
+func otherPlugins(raw json.RawMessage) string {
+	// Only a list is the shape of the field; null, an object, or any other
+	// value is a change of Claude Code that cumin cannot read. Safe side.
+	var plugins []struct {
+		Source *string `json:"source"`
+	}
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &plugins) != nil {
+		return "the init event has plugins of an unknown shape"
+	}
+	for _, plugin := range plugins {
+		if plugin.Source == nil {
+			return "the init event lists plugins: one has no source"
+		}
+		name, found := strings.CutSuffix(*plugin.Source, builtinSuffix)
+		if !found || name == "" {
+			return fmt.Sprintf("the init event lists plugins: %q", *plugin.Source)
+		}
+	}
+	return ""
 }
 
 // missingSkill reports which skill of cumin the init event does not list,

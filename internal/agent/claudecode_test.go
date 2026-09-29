@@ -689,3 +689,43 @@ func TestRun_TheStartRecordMustListTheSkillsOfTheRole(t *testing.T) {
 		})
 	}
 }
+
+// The plugins that Claude Code ships in its binary pass the start check,
+// matched on the reserved source "<name>@builtin" (the Owner, on #156). Any
+// other plugin, a built-in name from another source, an entry without
+// source, or a shape that cumin cannot read stops the run, and the reason
+// names the source.
+func TestUserContext_OnlyBuiltinPluginsPass(t *testing.T) {
+	work := t.TempDir()
+	withPlugins := func(plugins string) event {
+		return event{Plugins: []byte(plugins), MCPServers: []byte(`[]`), Skills: []byte(`[]`)}
+	}
+	builtin := `{"name":"agents-md","path":"builtin","source":"agents-md@builtin"},{"name":"telemetry","path":"builtin","source":"telemetry@builtin"}`
+	tests := []struct {
+		name, plugins, want string
+	}{
+		{"the two built-in plugins, as Claude Code 2.1.284 lists them", `[` + builtin + `]`, ""},
+		{"a built-in plugin of a later version of Claude Code", `[{"name":"new-mod","path":"builtin","source":"new-mod@builtin"}]`, ""},
+		{"a built-in plugin next to another plugin", `[` + builtin + `,{"name":"context7","source":"context7@claude-plugins-official"}]`, `"context7@claude-plugins-official"`},
+		{"a built-in name synced from claude.ai", `[{"name":"agents-md","source":"agents-md@synced"}]`, `"agents-md@synced"`},
+		{"a source that only contains builtin", `[{"name":"x","source":"x@builtin-extra"}]`, `"x@builtin-extra"`},
+		{"a source without a name", `[{"name":"","source":"@builtin"}]`, `"@builtin"`},
+		{"a built-in name without source", `[{"name":"agents-md","path":"builtin"}]`, "one has no source"},
+		{"a plugin of an unknown shape", `["agents-md@builtin"]`, "unknown shape"},
+		{"a plugins field that is not a list", `{"agents-md":true}`, "unknown shape"},
+		{"an empty object", `{}`, "unknown shape"},
+		{"null", `null`, "unknown shape"},
+		{"an empty list", `[]`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason := userContext(withPlugins(tt.plugins), work, nil)
+			if tt.want == "" && reason != "" {
+				t.Errorf("userContext = %q, want none", reason)
+			}
+			if tt.want != "" && !strings.Contains(reason, tt.want) {
+				t.Errorf("userContext = %q, want %q", reason, tt.want)
+			}
+		})
+	}
+}
