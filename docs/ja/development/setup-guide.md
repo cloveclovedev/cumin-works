@@ -70,7 +70,7 @@ App の名前は `<prefix>cumin-core`、`<prefix>cumin-planner`、`<prefix>cumin
 もう一度実行したとき:
 
 - 登録済みの App は飛ばす。登録済みとは、Host の設定に Client ID があり、Keychain にその Client ID の鍵があることである。足りない App だけを登録する。設計の変更で App が増えたときも、同じコマンドで足りる。
-- 登録済みの App は、先に全て確かめる。Keychain の鍵が鍵として読めること、GitHub がその鍵をその Client ID のものとして受け付けること、その App の持ち主がこの Organization であること、App ごとに Client ID が違うこと、App の権限がその role の権限の表と同じであることである。4つの App は権限の組み合わせが全て違うので、Client ID が role の間で入れ替わっていると、ここで分かる。同じ App を2つの role に使うと、Agent が別の role の身元と権限で動いてしまう。1つでも合わなければ、何も登録せずに止まり、その App の名前を表示する。
+- 登録済みの App は、先に全て確かめる。Keychain の鍵が鍵として読めること、GitHub がその鍵をその Client ID のものとして受け付けること、その App の持ち主がこの Organization であること、App ごとに Client ID が違うこと、App の権限が別の role の権限の表と同じではないことである。4つの App は権限の組み合わせが全て違うので、Client ID が role の間で入れ替わっていると、ここで分かる。同じ App を2つの role に使うと、Agent が別の role の身元と権限で動いてしまう。1つでも合わなければ、何も登録せずに止まり、その App の名前を表示する。権限がどの role の表とも違う App は、権限の表が変わった App として扱い、下の「登録済みの App の権限を変える」の案内をする。
 - Organization の名前は、大文字と小文字を区別しない。設定ファイルに書いてある綴りの表を使う。大文字と小文字だけが違う表が2つあると、止まる。
 - 設定に Client ID があるのに、Keychain に鍵がない App があると、コマンドは何も登録せずに止まり、その App の名前を表示する。推測では直さない。App が GitHub に残っているなら、[GitHub Appの登録手順](github-app-setup.md) の手順2で鍵を発行し直して、Keychain に入れる。残っていないなら、設定ファイルのその行を消して、もう一度実行する。
 
@@ -87,10 +87,30 @@ App の名前は `<prefix>cumin-core`、`<prefix>cumin-planner`、`<prefix>cumin
 
 | したいこと | 手順 |
 |---|---|
-| 登録済みの App の権限を変える | Organization の設定で App の "Edit" → "Permissions & events" で権限を変えて保存する。そのあと、Organization の owner が、インストールの画面に出る新しい権限の確認を承認する。コードの権限の表 (`internal/platform/github/roles.go`) と [GitHub Appの登録手順](github-app-setup.md) の表も、同じ Pull Request で変える |
 | App を削除する | Organization の設定で App の "Edit" → "Advanced" → "Delete GitHub App"。Host の設定ファイルからその App の行を消す。Keychain の鍵 (`cumin-works` / `github-app-private-key/<Client ID>`) は、Keychain Access か `security delete-generic-password` で消す |
 | 1つの App だけ登録し直す、鍵を入れ替える | コマンドにはない。App を削除して設定の行を消してから、もう一度実行する。鍵だけなら、手順2で発行し直す |
 | 登録済みの App の名前を変える | 下の「登録済みの App の名前を変える」に従う |
+
+### 登録済みの App の権限を変える
+
+cumin の機能が変わって App の権限が変わるときは、App を消して登録し直さず、同じコマンドで変える。App を登録し直すと、App ID、slug、bot、秘密鍵が変わり、ruleset の bypass list や、途中の Pull Request の作成者の確認に影響するためである。
+
+GitHub には App の権限を変える API がない。変えられるのは App の設定画面だけで、足した権限は、インストールした Organization が承認するまで効かない。外した権限は、すぐに効く (公式: Modifying a GitHub App registration、Approving updated permissions for a GitHub App)。コマンドは、画面を開いて、GitHub の事実が変わるまで待つ。
+
+1. 権限の表を変える Pull Request を merge し、新しいバイナリを入れる (`scripts/install.sh`)。
+2. `cumin setup github-apps --org <Organizationの名前>` を実行する。表と違う App ごとに、次を行う。
+   1. 変える権限を表示し (例: `contents: read -> write`)、その App の権限の画面を開く。Owner は、表示どおりに変えて "Save changes" を押す。コマンドは `GET /app` を読み直し、表と同じになるまで待つ。
+   2. 権限を足したときだけ、インストールの画面を開く。Owner は、新しい権限の確認を承認する。コマンドは `GET /orgs/{org}/installation` を読み直し、承認された権限が表と同じになるまで待つ。インストールしていない App は、インストールの画面で新しい権限を求めるので、ここは飛ばす。
+3. 待つのは、1つの画面につき10分までである。過ぎると、その App の名前を表示して止まる。もう一度実行すれば、続きから案内する。
+
+何も変えることがなければ、画面は開かない。権限が別の role の表と同じ App は、表が変わったのではなく Client ID の入れ替わりなので、何も変えずに止まる。
+
+開く画面のアドレス:
+
+| 画面 | アドレス | 出どころ |
+|---|---|---|
+| App の権限 | `https://github.com/organizations/<Organization>/settings/apps/<slug>/permissions` | 公式ドキュメントに記載がない。画面の場所から組み立てた |
+| インストール | `GET /orgs/{org}/installation` の `html_url` | API の応答 |
 
 ### 登録済みの App の名前を変える
 
@@ -131,7 +151,7 @@ cumin の側で分かっていることは3つある。
 
    | 行 | 問い合わせ | その行が出たら分かること |
    |---|---|---|
-   | `already registered <role>: client ID <Client ID>` | `GET /app` | Keychain の鍵が読めて、GitHub がその鍵をその Client ID の App として受け付け、App の持ち主がその Organization で、権限がその role の表と合っている |
+   | `already registered <role>: client ID <Client ID>` | `GET /app` | Keychain の鍵が読めて、GitHub がその鍵をその Client ID の App として受け付け、App の持ち主がその Organization で、権限が別の role の表と同じではない。権限がその role の表と違えば、このあとで変更を案内する |
    | `installed <role> on <Organization>` | `GET /app/installations` | その App が、その Organization にインストールされたままである |
 
    2つは別の事実を見ている。登録と鍵が正しいまま、インストールだけ外れていることがあるためである。そのときは installation token が出ないので、Agentは何もできない。

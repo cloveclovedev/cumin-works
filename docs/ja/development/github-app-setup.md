@@ -17,7 +17,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 | `cumin-implementer` | Implementer | Contents: Read & write、Pull requests: Read & write、Issues: Read-only |
 | `cumin-reviewer` | Reviewer | Pull requests: Read & write、Contents: Read-only、Issues: Read-only |
 
-この表と同じ内容を、コードの `internal/platform/github/roles.go` に持つ。Appの登録と、installation access tokenの絞り込みは、コードの表を使う。表を変えるときは、この文書、コードの表、表を固定しているテストの3つを、同じPull Requestで変える。
+この表と同じ内容を、コードの `internal/platform/github/roles.go` に持つ。Appの登録と、installation access tokenの絞り込みは、コードの表を使う。表を変えるときは、この文書、コードの表、表を固定しているテストの3つを、同じPull Requestで変える。登録済みのAppの権限は、merge のあとに `cumin setup github-apps` で変える ([セットアップの手順](setup-guide.md) の「登録済みの App の権限を変える」)。
 
 権限を決めた理由:
 
