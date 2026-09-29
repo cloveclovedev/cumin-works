@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
@@ -306,5 +307,33 @@ func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications, want 1", n)
+	}
+}
+
+// R2 with every sub-issue closed: the Owner resumed a requirement issue after
+// a blocked acceptance check, and the Planner created nothing. The
+// requirement issue goes back to implementing without a notification, and R4
+// asks for the acceptance check at the next poll.
+func TestR2_EverySubIssueClosedSendsTheIssueBackToTheAcceptanceCheck(t *testing.T) {
+	sc := newPlanScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: time.Now().Add(-time.Hour), Labels: []string{"risk/low"}})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+	want := []string{githubtest.RequirementLabel, "cumin/status/implementing"}
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
+		t.Fatalf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.webhook.messagesSent()); n != 0 {
+		t.Errorf("%d notifications, want none", n)
+	}
+
+	// The next poll asks for the acceptance check (R4).
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the split and the acceptance check)", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: acceptance check") {
+		t.Errorf("the second request is not an acceptance check:\n%s", text)
 	}
 }

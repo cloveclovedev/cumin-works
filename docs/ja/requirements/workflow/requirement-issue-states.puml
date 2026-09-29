@@ -18,10 +18,12 @@ Draft --> Ready : Owner finishes,\nadds cumin/status/ready
 Draft --> Implementing : R3 Owner wrote the sub-issues,\nadded cumin/status/ready to one
 Ready --> Planning : R1 cumin asks the Planner to split
 Planning --> PlanReview : R2 split done
+Planning --> Implementing : R2 every sub-issue closed\n(resume after a blocked acceptance check)
 Planning --> Decision : R2 split failed
 Decision --> Ready : Owner fixes the requirement,\nadds cumin/status/ready
 PlanReview --> Implementing : R3 Owner checked, added\ncumin/status/ready to a sub-issue
 Implementing --> Implementing : R4 all sub-issues closed,\nPlanner checks acceptance
+Implementing --> Decision : R4 the check returned blocked
 Implementing --> Acceptance : R7 acceptance comment posted
 Implementing --> PlanReview : R6 only sub-issues\nwithout a status label remain
 Acceptance --> Implementing : R3 Owner sends it back\n(adds a sub-issue with cumin/status/ready)

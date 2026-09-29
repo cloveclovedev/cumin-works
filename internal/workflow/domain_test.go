@@ -434,6 +434,25 @@ func TestNeedsLabelTimes_R3(t *testing.T) {
 	}
 }
 
+// R2 (issue-states.md): after a pass, an open sub-issue sends the split to
+// the Owner; every sub-issue closed sends the requirement issue back to
+// implementing, where R4 asks for the acceptance check again.
+func TestSplitStatus_R2(t *testing.T) {
+	tests := []struct {
+		name string
+		subs []SubIssue
+		want string
+	}{
+		{"one open sub-issue", []SubIssue{{Number: 10, Closed: true}, {Number: 11}}, LabelAwaitingOwnerReview},
+		{"every sub-issue closed", []SubIssue{{Number: 10, Closed: true}, {Number: 11, Closed: true}}, LabelImplementing},
+	}
+	for _, tt := range tests {
+		if got := SplitStatus(RequirementIssue{Number: 6, SubIssues: tt.subs}); got != tt.want {
+			t.Errorf("%s: SplitStatus = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
 // shuffle returns a copy of the snapshot with the issues in a random order.
 func shuffle(snapshot Snapshot) Snapshot {
 	r := rand.New(rand.NewPCG(1, 2))

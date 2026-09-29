@@ -914,11 +914,19 @@ func VerifySplit(requirement RequirementIssue) SplitVerification {
 	return SplitVerification{Passed: true}
 }
 
-// LabelsAfterSplit returns the labels of a requirement issue after R2
-// passed: cumin/status/awaiting-owner-review in place of
-// cumin/status/planning.
-func LabelsAfterSplit(labels []string) []string {
-	return ReplaceStatusLabel(labels, LabelAwaitingOwnerReview)
+// SplitStatus returns the status label of a requirement issue after R2
+// passed. With one or more open sub-issues, the Owner reviews the split:
+// cumin/status/awaiting-owner-review. With every sub-issue closed, the
+// Planner created none, as when the Owner resumes a requirement issue after
+// a blocked acceptance check: cumin/status/implementing, so that R4 asks for
+// the acceptance check again (issue-states.md, R2).
+func SplitStatus(requirement RequirementIssue) string {
+	for _, sub := range requirement.SubIssues {
+		if !sub.Closed {
+			return LabelAwaitingOwnerReview
+		}
+	}
+	return LabelImplementing
 }
 
 // LatestPullRequest returns the open pull request with the highest number
