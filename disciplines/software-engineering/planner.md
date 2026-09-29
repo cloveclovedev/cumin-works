@@ -23,6 +23,17 @@ Three to eight is the target for one requirement issue. Twelve is the limit. Abo
 
 The number grows when one behavior needs more than one area. That is expected; the limit already allows for it.
 
+## How to draw the diagram of an issue
+
+The diagram lets the Owner point at the place that the issue changes, on a phone, without reading the text first.
+
+- Start from the diagram of the design documents that shows the part: copy its source, and keep its layout and names, so that the Owner recognizes it.
+- Show the target in one color, red (`#D62728`), with a bold line: the arrow, the state, or the box that the issue builds. Two targets are fine when the issue builds both. Everything else keeps its color.
+- Add a note next to the target when one sentence helps: what this issue adds there.
+- Cut what the issue does not touch, when the diagram would be hard to read on a phone. Keep enough around the target to show where it is.
+- Write every label and note in English: identifiers (`cumin/status/ready`, I3) and short phrases.
+- When no diagram of the design documents shows the part, draw the smallest new one, and add "the design document gains a diagram of this part" to the acceptance criteria.
+
 ## The risk criteria
 
 The risk criteria of the repository stands at the end of this instruction. Read it before you label an issue. It decides which change is `risk/low`, `risk/medium`, or `risk/high`. cumin does not read it.

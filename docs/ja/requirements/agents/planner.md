@@ -22,7 +22,7 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 cuminが依頼のたびに渡すもの:
 
 - 対象のリポジトリと、要求Issueの番号
-- 作業場所。cuminがmainの最新の内容で作業ディレクトリを用意する。Plannerは読むだけで、変更しない
+- 作業場所。cuminがmainの最新の内容で作業ディレクトリを用意する。Plannerは読むだけで、変更しない。リポジトリに書くのは、実装Issueの図だけである。図は、ブランチ `cumin/diagrams` に新しいファイルとして足す
 - roleとしての指示。[実装Issueの分割基準](../policies/issue-sizing.md)、[要求Issueの分割基準](../policies/requirement-sizing.md) の上限、riskの基準を含む
 
 Plannerが自分で読むもの:
@@ -122,7 +122,8 @@ cuminが `done` を受けて、GitHub上で確かめること:
 | 2 | DBマイグレーションを含む要求Issueを渡す | マイグレーションだけの実装Issueが分けて作られ、`risk/high` が付く |
 | 3 | 完了条件を書けないほど曖昧な要求Issueを渡す | 実装Issueは作られない。結果は `blocked` で、何が決まっていないかが理由に書いてある |
 | 4 | 実装Issueを途中まで作ったところで止め、同じ依頼をやり直す | 同じ実装Issueが二重に作られない |
-| 5 | コードの変更と、Pull Requestの作成を試みる | どちらも権限で拒否される |
+| 5 | `cumin/diagrams` 以外のブランチへの変更と、Pull Requestの作成を試みる | どちらも拒否される (ブランチはruleset、Pull Requestは権限) |
 | 6 | 実装Issueが12個を超える見込みの、大きな要求Issueを渡す | 実装Issueは作られない。結果は `blocked` で、要求Issueの分け方の案が理由に書いてある |
 | 7 | sub-issueが全て閉じた要求Issueで、受け入れの確認を依頼する | 要求Issueに `## Acceptance check` のコメントが1つ付く。Requirements の項目ごとに、結果と証拠がある。Issueは作られず、変更もされない。結果は `done` |
 | 8 | Requirements の1つが満たされていない状態で、受け入れの確認を依頼する | その項目が Fail になり、何が足りないかが証拠と一緒に書いてある。どう直すかの提案が書いてある。Issueは作られない |
+| 9 | 内容のはっきりした要求Issueを渡す | どの実装Issueも、「Where this fits」に英語の図の画像がある。画像は `cumin/diagrams` の `issue-<要求Issueの番号>/` にあるSVGを、コミットを指定して示す。対象の箇所が色で分かる |
