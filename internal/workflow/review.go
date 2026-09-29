@@ -181,7 +181,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 			s.stopAfterBlocked(ctx, log, target, settings, RowI10, "Reviewer", number, run.Result.BlockedReason)
 			return
 		}
-		result, sub, ok := s.checkReview(ctx, log, target, number, req)
+		result, sub, pr, ok := s.checkReview(ctx, log, target, number, req)
 		if !ok {
 			return
 		}
@@ -197,6 +197,24 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		}
 		if !missed {
 			missed = true
+			// The head can move while the Reviewer works, for example when
+			// the Owner pushes. The review must be on the head of now, so
+			// the worktree and the request move to it before the retry.
+			if pr.HeadCommit != req.review.HeadCommit {
+				log.Info("I3: the head commit moved during the review; the worktree opens the new head",
+					"head_commit", pr.HeadCommit)
+				checkout.Commit = pr.HeadCommit
+				if err := s.Workspace.Remove(ctx, checkout); err != nil {
+					log.Error("I3: the worktree of the old head was not removed", "error", err.Error())
+					return
+				}
+				workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
+				if err != nil {
+					log.Error("I3: the work directory was not prepared", "error", err.Error())
+					return
+				}
+				req.review.HeadCommit, req.review.WorkDir, request.WorkDir = pr.HeadCommit, workDir, workDir
+			}
 			log.Warn("I3: no review on the head commit; the Reviewer is asked once more", "round", req.review.Round)
 			request.SessionID = run.SessionID
 			request.Text = ReviewAgainRequestText(req.review)
@@ -220,20 +238,20 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 const MissingReviewReason = "The Reviewer reported done twice, but its latest review is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
 
 // checkReview reads the snapshot again and checks the latest review of the
-// Reviewer on the pull request of the request. The third value is false
+// Reviewer on the pull request of the request. The last value is false
 // when the snapshot or the pull request could not be read; that is logged,
 // and the issue keeps its label.
-func (s *Service) checkReview(ctx context.Context, log *slog.Logger, target Target, number int, req reviewerRequest) (ReviewResult, SubIssue, bool) {
+func (s *Service) checkReview(ctx context.Context, log *slog.Logger, target Target, number int, req reviewerRequest) (ReviewResult, SubIssue, PullRequest, bool) {
 	sub, ok := s.subIssueNow(ctx, log, target, number)
 	if !ok {
-		return ReviewMissing, SubIssue{}, false
+		return ReviewMissing, SubIssue{}, PullRequest{}, false
 	}
 	pr, ok := sub.LatestPullRequest()
 	if !ok || pr.Number != req.review.PullRequest {
 		log.Error("I3: the pull request of the review is no longer open")
-		return ReviewMissing, sub, false
+		return ReviewMissing, sub, PullRequest{}, false
 	}
 	result := CheckReview(pr, req.reviewer)
 	log.Info("I3: checked the review", "result", result.String(), "head_commit", pr.HeadCommit)
-	return result, sub, true
+	return result, sub, pr, true
 }

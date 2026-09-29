@@ -256,3 +256,32 @@ func TestI3_TheReviewIsRequestedOnceAcrossPolls(t *testing.T) {
 		t.Errorf("%d agent runs, want 1", n)
 	}
 }
+
+// The head can move while the Reviewer works. The review of the old head
+// does not count, and the retry reviews the new head: the worktree and the
+// request move to it (review of #244).
+func TestI3_TheRetryReviewsTheHeadOfNowWhenItMoved(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE", "APPROVE"}, movesHead: true})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{})
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want the review and one retry", n)
+	}
+	reviews := sc.fake.Reviews(sc.repo, 21)
+	moved := sc.repo.PullRequests[21].HeadCommit
+	if moved == sc.remoteHead || len(reviews) != 2 || reviews[1].Commit != moved {
+		t.Fatalf("reviews = %+v, head %s: want the second review on the moved head", reviews, moved)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Head commit: "+moved) {
+		t.Errorf("the retry does not name the moved head:\n%s", text)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none: the retry reviewed the new head", n)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"I3: the head commit moved during the review; the worktree opens the new head"`) {
+		t.Errorf("the log does not say that the head moved: %s", sc.logs)
+	}
+}

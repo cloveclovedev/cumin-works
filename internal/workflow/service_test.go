@@ -191,6 +191,9 @@ type cliOptions struct {
 	// the commit that the work directory holds, as a Reviewer submits it.
 	// A run past the end of the list submits nothing.
 	reviews []string
+	// movesHead makes the first agent run push a new commit and move the
+	// head of the pull request #21 to it, as a push during the review.
+	movesHead bool
 	// serverURL is the address of the fake GitHub; newScene sets it.
 	serverURL string
 }
@@ -358,6 +361,15 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 			"-d \"{\\\"commit_id\\\":\\\"$(git rev-parse HEAD)\\\",\\\"event\\\":\\\"$e\\\",\\\"body\\\":\\\"review\\\"}\" " +
 			o.serverURL + "/repos/example-org/example-repo/pulls/21/reviews 1>&2\n" +
 			"fi\nfi\n"
+	}
+	if o.movesHead {
+		review += "if [ $n = agent ] && [ \"$(grep -c '^agent$' " + filepath.Join(dir, "order") + ")\" = 1 ]; then\n" +
+			"echo moved > moved.txt; git add moved.txt 1>&2\n" +
+			"git -c user.name=t -c user.email=t@example.com commit --quiet -m moved 1>&2\n" +
+			"git push --quiet origin HEAD:refs/heads/moved 1>&2\n" +
+			"curl -s -X POST -H 'Authorization: Bearer " + githubtest.Token + "' -d \"{\\\"sha\\\":\\\"$(git rev-parse HEAD)\\\"}\" " +
+			o.serverURL + "/_fake/repos/example-org/example-repo/pulls/21/head 1>&2\n" +
+			"fi\n"
 	}
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +

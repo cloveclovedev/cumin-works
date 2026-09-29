@@ -512,6 +512,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	annotations := annotationsPath.FindStringSubmatch(r.URL.Path)
 	jobLog := jobLogPath.FindStringSubmatch(r.URL.Path)
 	reviews := reviewsPath.FindStringSubmatch(r.URL.Path)
+	moveHead := moveHeadPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -544,6 +545,9 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && jobLog != nil:
 		id, _ := strconv.ParseInt(jobLog[3], 10, 64)
 		f.serveJobLog(w, jobLog[1], jobLog[2], id)
+	case r.Method == http.MethodPost && moveHead != nil:
+		number, _ := strconv.Atoi(moveHead[3])
+		f.serveMoveHead(w, body, moveHead[1], moveHead[2], number)
 	case r.Method == http.MethodPost && reviews != nil:
 		number, _ := strconv.Atoi(reviews[3])
 		f.serveCreateReview(w, body, reviews[1], reviews[2], number)
@@ -564,6 +568,9 @@ var (
 	annotationsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/check-runs/(\d+)/annotations$`)
 	jobLogPath        = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/jobs/(\d+)/logs$`)
 	reviewsPath       = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/reviews$`)
+	// moveHeadPath is not an endpoint of GitHub. A fake agent run calls it
+	// to move the head of a pull request while it runs, as a push would.
+	moveHeadPath = regexp.MustCompile(`^/_fake/repos/([^/]+)/([^/]+)/pulls/(\d+)/head$`)
 )
 
 // serveCommitCheckRuns answers GET .../commits/{sha}/check-runs. Official:
@@ -910,6 +917,27 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 		"html_url": fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d",
 			repo.Owner, repo.Name, number, comment.ID),
 	})
+}
+
+// serveMoveHead sets the head commit of a pull request to the "sha" of the
+// body. It stands for a push to the branch of the pull request.
+func (f *Fake) serveMoveHead(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	pr, ok := repo.PullRequests[number]
+	var request struct {
+		SHA string `json:"sha"`
+	}
+	if !ok || json.Unmarshal(body, &request) != nil || request.SHA == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	pr.HeadCommit = request.SHA
+	writeJSON(w, http.StatusOK, map[string]any{"sha": request.SHA})
 }
 
 // serveCreateReview answers POST /repos/{owner}/{repo}/pulls/{number}/reviews
