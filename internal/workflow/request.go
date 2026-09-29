@@ -49,6 +49,18 @@ func slug(title string) string {
 	return s[:slugMaxLen]
 }
 
+// ClaimBranch returns the branch of a claim (I1) and the pull request whose
+// work the claim continues. When an open pull request closes the issue, the
+// work continues on its branch, and the request kind is "continue"; of two
+// or more, the one with the highest number is used, as I2 checks it.
+// Otherwise the branch comes from the title, and pullRequest is 0.
+func ClaimBranch(sub SubIssue) (branch string, pullRequest int) {
+	if pr, ok := sub.LatestPullRequest(); ok && pr.HeadBranch != "" {
+		return pr.HeadBranch, pr.Number
+	}
+	return BranchName(sub.Number, sub.Title), 0
+}
+
 // ImplementRequestText returns the request text of the kind "implement"
 // (implementer.md, the request kinds): what the Implementer does this
 // time. The role instruction holds everything that does not depend on the
@@ -63,4 +75,21 @@ Work directory: %[4]s
 
 Read the issue #%[2]d of %[1]s, its parent requirement issue, and the documents that they link to. Implement the issue in the work directory, which is a git worktree already on the branch %[3]s. Commit on that branch and push it. Then open one pull request to the default branch; invoke the skill cumin-pull-request before you write the description, and write "Closes #%[2]d" in it. Then return the result.
 `, repository, number, branch, workDir)
+}
+
+// ContinueRequestText returns the request text of the kind "continue"
+// (implementer.md, the request kinds): the Owner added cumin/status/ready
+// again to an issue whose pull request is open. The session is new, so the
+// text says where the earlier work is and that it goes on in the same pull
+// request.
+func ContinueRequestText(repository string, number, pullRequest int, branch, workDir string) string {
+	return fmt.Sprintf(`Request: continue
+Repository: %[1]s
+Implementation issue: #%[2]d
+Pull request: #%[5]d
+Branch: %[3]s
+Work directory: %[4]s
+
+The pull request #%[5]d already closes the issue #%[2]d, and the work continues in it. Read the issue #%[2]d of %[1]s, its parent requirement issue, the documents that they link to, the pull request #%[5]d with its reviews, and the comments of the Owner. The work directory is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request; invoke the skill cumin-pull-request before you update the description of #%[5]d, and keep "Closes #%[2]d" in it. Then return the result.
+`, repository, number, branch, workDir, pullRequest)
 }

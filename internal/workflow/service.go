@@ -397,8 +397,10 @@ func (s *Service) copyLabels(ctx context.Context, token string, target Target, a
 }
 
 // startImplementer requests the work of I1 from the Implementer. The
-// request kind is always "implement": the continuation request, which uses
-// the branch of an existing pull request, is a later requirement.
+// request kind is "implement", or "continue" when an open pull request
+// already closes the issue; the work then goes on on the branch of that
+// pull request (ClaimBranch). The session is new in both cases
+// (issue-states.md, the section on the sessions of an agent).
 //
 // The work runs in its own goroutine, so that the poll goes on while the
 // agent works. What the goroutine does (the worktree, the start, the end of
@@ -409,13 +411,13 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 	if s.Agents == nil {
 		return errors.New("no agent service is configured")
 	}
-	branch := BranchName(sub.Number, sub.Title)
+	branch, pullRequest := ClaimBranch(sub)
 	done := s.markInProgress(ctx, target.Repository.String(), sub.Number)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
 		defer done()
-		s.runImplementer(ctx, target, settings, sub.Number, branch)
+		s.runImplementer(ctx, target, settings, sub.Number, branch, pullRequest)
 	}()
 	return nil
 }
@@ -427,7 +429,8 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 const agentAttempts = 2
 
 // runImplementer prepares the worktree and runs one Implementer request to
-// its end. The end of the run is the trigger of I2: a done result goes to
+// its end. pullRequest is the open pull request whose work the request
+// continues, or 0 for a first request. The end of the run is the trigger of I2: a done result goes to
 // verifyDone, and a blocked result stops the issue for the Owner.
 //
 // An abnormal end starts the same request once more, in the same work
@@ -437,27 +440,49 @@ const agentAttempts = 2
 // abnormal end as well; nothing is retried then, and no label changes,
 // because the Owner restarts the issue (cumin-core.md, the topic on the
 // stop).
-func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, branch string) {
+func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, branch string, pullRequest int) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	role := settings.Settings.Roles[config.RoleImplementer]
-	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
+	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
 		Repo:   target.Repository.Name,
 		Issue:  number,
 		Role:   config.RoleImplementer,
 		Branch: branch,
-	})
+	}
+	// A continuation starts from the pull request on GitHub, as the new
+	// session does. A worktree of an earlier round can be on another
+	// branch, or behind commits that were pushed since, and Prepare reuses
+	// a worktree as it is; so it goes, and Prepare creates the worktree
+	// again from origin/<branch>. A worktree that holds work that is not on
+	// GitHub stays: a run that cumin stopped leaves its work there, and the
+	// Owner restarts the issue with cumin/status/ready.
+	if pullRequest != 0 {
+		removed, err := s.Workspace.RemoveIfPushed(ctx, checkout)
+		if err != nil {
+			log.Error("I1: the worktree of an earlier round was not checked", "error", err.Error())
+			return
+		}
+		if !removed {
+			log.Warn("I1: the worktree of an earlier round holds work that is not on GitHub; it is used as it is", "branch", branch)
+		}
+	}
+	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
 	if err != nil {
 		log.Error("I1: the work directory was not prepared", "error", err.Error())
 		return
 	}
-	log.Info("I1: requested the work", "branch", branch)
+	kind, text := "implement", ImplementRequestText(target.Repository.String(), number, branch, workDir)
+	if pullRequest != 0 {
+		kind, text = "continue", ContinueRequestText(target.Repository.String(), number, pullRequest, branch, workDir)
+	}
+	log.Info("I1: requested the work", "kind", kind, "branch", branch, "pull_request", pullRequest)
 	request := agent.StartRequest{
 		Owner:        target.Repository.Owner,
 		Repo:         target.Repository.Name,
 		Role:         config.RoleImplementer,
 		RiskCriteria: settings.RiskCriteria,
-		Text:         ImplementRequestText(target.Repository.String(), number, branch, workDir),
+		Text:         text,
 		WorkDir:      workDir,
 		Settings:     &role,
 	}

@@ -225,6 +225,61 @@ func (w Workspace) Remove(ctx context.Context, c Checkout) error {
 	return nil
 }
 
+// RemoveIfPushed removes the worktree of c as Remove does, but only when
+// it holds nothing that origin lacks: no change that is not committed, no
+// file that git does not track, and no commit that no branch of origin
+// holds. It fetches origin first, so that a commit pushed since the last
+// fetch counts as pushed. It reports whether no worktree is left: true
+// when it removed the worktree or when there was none, and false when it
+// kept a worktree with work that is not on GitHub.
+//
+// A continuation (I1) uses it: a worktree of an earlier round can be on
+// another branch or behind the pull request, but it can also hold the work
+// of a run that cumin stopped before the push.
+func (w Workspace) RemoveIfPushed(ctx context.Context, c Checkout) (bool, error) {
+	if err := c.validate(); err != nil {
+		return false, fmt.Errorf("remove worktree: %w", err)
+	}
+	root, err := w.root()
+	if err != nil {
+		return false, fmt.Errorf("remove worktree: %w", err)
+	}
+	w.Root = root
+	pushed, err := w.onlyPushedWork(ctx, c)
+	if err != nil || !pushed {
+		return false, err
+	}
+	if err := w.Remove(ctx, c); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// onlyPushedWork reports whether the worktree of c is missing, or holds
+// only work that origin has. It holds the lock of Prepare and Remove while
+// it reads the worktree.
+func (w Workspace) onlyPushedWork(ctx context.Context, c Checkout) (bool, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	dir := w.Dir(c)
+	if _, err := os.Stat(dir); err != nil || !w.isWorktree(ctx, dir) {
+		// Nothing of value: Prepare creates the worktree again.
+		return true, nil
+	}
+	if _, err := w.git(ctx, w.CloneDir(c), "fetch", "--quiet", "--prune", "origin"); err != nil {
+		return false, fmt.Errorf("check the worktree: %w", err)
+	}
+	status, err := w.git(ctx, dir, "status", "--porcelain")
+	if err != nil {
+		return false, fmt.Errorf("check the worktree: %w", err)
+	}
+	unpushed, err := w.git(ctx, dir, "rev-list", "--max-count=1", "HEAD", "--not", "--remotes=origin")
+	if err != nil {
+		return false, fmt.Errorf("check the worktree: %w", err)
+	}
+	return status == "" && unpushed == "", nil
+}
+
 // Head returns the full SHA of the head commit of the worktree dir. I2
 // compares it with the head commit of the pull request, to see that the
 // last commit of the agent is pushed.

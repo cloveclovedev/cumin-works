@@ -455,3 +455,68 @@ func TestWorktree_RejectsInvalidCheckout(t *testing.T) {
 		t.Error("Prepare with an empty remote URL succeeded, want an error")
 	}
 }
+
+// RemoveIfPushed removes a worktree that holds only what origin has, and
+// keeps one with a change that is not committed, a file that git does not
+// track, or a commit that is not pushed.
+func TestWorktree_RemoveIfPushedKeepsWorkThatIsNotOnTheRemote(t *testing.T) {
+	tests := []struct {
+		name        string
+		change      func(t *testing.T, dir string)
+		wantRemoved bool
+	}{
+		{"a worktree at a pushed commit is removed", func(*testing.T, string) {}, true},
+		{"a change that is not committed keeps it", func(t *testing.T, dir string) {
+			if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("changed\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, false},
+		{"a file that git does not track keeps it", func(t *testing.T, dir string) {
+			if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, false},
+		{"a commit that is not pushed keeps it", func(t *testing.T, dir string) {
+			if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			gitCmd(t, dir, "add", "new.txt")
+			gitCmd(t, dir, "commit", "--quiet", "-m", "add new.txt")
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := newRemote(t)
+			r.commit("cumin/3-continue", "work.txt", "in progress\n")
+			w := newWorkspace(t, &bytes.Buffer{})
+			c := checkout(3, config.RoleImplementer, "cumin/3-continue")
+			dir, err := w.Prepare(context.Background(), r.path, c)
+			if err != nil {
+				t.Fatalf("Prepare: %v", err)
+			}
+			tt.change(t, dir)
+
+			removed, err := w.RemoveIfPushed(context.Background(), c)
+			if err != nil {
+				t.Fatalf("RemoveIfPushed: %v", err)
+			}
+			if removed != tt.wantRemoved {
+				t.Errorf("removed = %v, want %v", removed, tt.wantRemoved)
+			}
+			_, statErr := os.Stat(dir)
+			if exists := statErr == nil; exists == tt.wantRemoved {
+				t.Errorf("the worktree exists = %v after RemoveIfPushed = %v", exists, removed)
+			}
+		})
+	}
+}
+
+// Without a worktree there is nothing to keep, and RemoveIfPushed says so
+// without a clone.
+func TestWorktree_RemoveIfPushedWithoutAWorktree(t *testing.T) {
+	w := newWorkspace(t, &bytes.Buffer{})
+	removed, err := w.RemoveIfPushed(context.Background(), checkout(3, config.RoleImplementer, "cumin/3-continue"))
+	if err != nil || !removed {
+		t.Errorf("RemoveIfPushed = %v, %v; want true, nil", removed, err)
+	}
+}

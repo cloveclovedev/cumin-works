@@ -1742,3 +1742,110 @@ func sameLabelsAnyOrder(a, b []string) bool {
 	slices.Sort(b)
 	return slices.Equal(a, b)
 }
+
+// I1 (issue-states.md, implementer.md): the Owner added cumin/status/ready
+// again to an issue whose pull request is open. The claim prepares the
+// worktree on the branch of that pull request, not on the branch of the
+// title, and asks to continue in the same pull request, in a new session.
+// A worktree that an earlier round left on another branch is replaced.
+func TestI1_AClaimWithAnOpenPullRequestContinuesOnItsBranch(t *testing.T) {
+	sc := newScene(t)
+	const branch = "cumin/10-an-older-title"
+	head := sc.pushBranch(t, branch)
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 21, HeadCommit: head, HeadBranch: branch, Author: implementerSlug, AuthorIsBot: true, Closes: []int{10},
+	})
+	service := sc.service()
+	// An earlier round left a worktree on the branch of the title, at main.
+	earlier, err := service.Workspace.Prepare(context.Background(), sc.remote, agent.Checkout{
+		Owner: "example-org", Repo: "example-repo", Issue: 10, Role: config.RoleImplementer, Branch: wantBranch,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := branchOf(t, earlier); got != wantBranch {
+		t.Fatalf("the earlier worktree is on %q, want %q", got, wantBranch)
+	}
+
+	sc.pollAndWait(t, service)
+
+	dir := filepath.Join(sc.workRoot, "example-org", "example-repo", "10-implementer")
+	if got := branchOf(t, dir); got != branch {
+		t.Errorf("branch of the worktree = %q, want the branch of the pull request %q", got, branch)
+	}
+	if got := git(t, dir, "rev-parse", "HEAD"); got != head {
+		t.Errorf("head of the worktree = %s, want the head of the pull request %s", got, head)
+	}
+	args := sc.record(t, "agent.args")
+	text := promptOf(t, args)
+	for _, want := range []string{"Request: continue", "Pull request: #21", "Branch: " + branch, "Do not open a new pull request"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(args, "--resume") {
+		t.Error("a claim resumed a session; I1 always starts a new one")
+	}
+	// The agent made no commit, so the head of the worktree is the head of
+	// the pull request, and I2 passes on it.
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	}
+	logs := sc.logs.String()
+	for _, want := range []string{`"kind":"continue"`, `"branch":"` + branch + `"`, `"pull_request":21`} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
+}
+
+// pushBranch adds one commit on a new branch of the remote, as the
+// Implementer did in an earlier round, and returns the commit.
+func (sc *scene) pushBranch(t *testing.T, branch string) string {
+	t.Helper()
+	work := filepath.Join(t.TempDir(), "work")
+	git(t, filepath.Dir(work), "clone", "--quiet", sc.remote, work)
+	git(t, work, "switch", "--quiet", "-c", branch)
+	if err := os.WriteFile(filepath.Join(work, "login.txt"), []byte("the earlier work\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, work, "add", "login.txt")
+	git(t, work, "commit", "--quiet", "-m", "add the earlier work")
+	git(t, work, "push", "--quiet", "origin", branch)
+	return git(t, work, "rev-parse", "HEAD")
+}
+
+// I1: a run that cumin stopped leaves its work in the worktree, and the
+// Owner restarts the issue with cumin/status/ready. The continuation keeps
+// that worktree, because its work is not on GitHub.
+func TestI1_AContinuationKeepsAWorktreeWithWorkThatIsNotPushed(t *testing.T) {
+	sc := newScene(t)
+	const branch = "cumin/10-an-older-title"
+	head := sc.pushBranch(t, branch)
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 21, HeadCommit: head, HeadBranch: branch, Author: implementerSlug, AuthorIsBot: true, Closes: []int{10},
+	})
+	service := sc.service()
+	earlier, err := service.Workspace.Prepare(context.Background(), sc.remote, agent.Checkout{
+		Owner: "example-org", Repo: "example-repo", Issue: 10, Role: config.RoleImplementer, Branch: branch,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unpushed := filepath.Join(earlier, "unpushed.txt")
+	if err := os.WriteFile(unpushed, []byte("the work of a stopped run\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sc.pollAndWait(t, service)
+
+	if _, err := os.Stat(unpushed); err != nil {
+		t.Errorf("the work that is not pushed is gone: %v", err)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"I1: the worktree of an earlier round holds work that is not on GitHub; it is used as it is"`) {
+		t.Error("the log does not say that the worktree was kept")
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: continue") {
+		t.Errorf("the request is not a continuation:\n%s", text)
+	}
+}
