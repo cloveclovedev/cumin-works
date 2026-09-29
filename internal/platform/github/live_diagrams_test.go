@@ -47,12 +47,10 @@ func TestLiveDiagramsBranch(t *testing.T) {
 	l.expectAllowed(t, "D1", "The Planner App adds a file to cumin/diagrams", status)
 
 	// Everything else is refused for the Planner App.
-	l.expectRefused(t, "D2", "The Planner App creates another branch",
-		l.api(t, planner, http.MethodPost, "/repos/{repo}/git/refs", map[string]string{"ref": "refs/heads/live/planner-" + l.runID, "sha": commit}))
+	l.expectNotCreated(t, planner, "D2", "The Planner App creates another branch", "heads/live/planner-"+l.runID, commit)
 	l.expectRefused(t, "D3", "The Planner App moves the default branch",
 		l.api(t, planner, http.MethodPatch, "/repos/{repo}/git/refs/heads/"+l.branch, map[string]any{"sha": commit, "force": true}))
-	l.expectRefused(t, "D4", "The Planner App creates a tag",
-		l.api(t, planner, http.MethodPost, "/repos/{repo}/git/refs", map[string]string{"ref": "refs/tags/live-planner-" + l.runID, "sha": commit}))
+	l.expectNotCreated(t, planner, "D4", "The Planner App creates a tag", "tags/live-planner-"+l.runID, commit)
 	// A commit with no shared history, so that moving the branch to it is a
 	// force push also on the first run, when the branch did not exist.
 	unrelated := l.plannerCommit(t, planner, "", "live/"+l.runID+"-unrelated.svg")
@@ -82,28 +80,40 @@ func TestLiveDiagramsBranch(t *testing.T) {
 func (l *live) plannerCommit(t *testing.T, token, parent, path string) string {
 	t.Helper()
 	svg := `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>`
-	var sha struct {
-		SHA  string `json:"sha"`
-		Tree struct {
-			SHA string `json:"sha"`
-		} `json:"tree"`
+	// Each answer has its own shape: the answer of git/trees holds the
+	// entries as an array under "tree", that of git/commits an object.
+	type object struct {
+		SHA string `json:"sha"`
 	}
-	l.api(t, token, http.MethodPost, "/repos/{repo}/git/blobs", map[string]string{"content": base64.StdEncoding.EncodeToString([]byte(svg)), "encoding": "base64"}).mustJSON(t, http.StatusCreated, &sha)
-	tree := map[string]any{"tree": []map[string]string{{"path": path, "mode": "100644", "type": "blob", "sha": sha.SHA}}}
+	var blob, tree, commit object
+	l.api(t, token, http.MethodPost, "/repos/{repo}/git/blobs", map[string]string{"content": base64.StdEncoding.EncodeToString([]byte(svg)), "encoding": "base64"}).mustJSON(t, http.StatusCreated, &blob)
+	request := map[string]any{"tree": []map[string]string{{"path": path, "mode": "100644", "type": "blob", "sha": blob.SHA}}}
 	parents := []string{}
 	if parent != "" {
 		var parentCommit struct {
-			Tree struct {
-				SHA string `json:"sha"`
-			} `json:"tree"`
+			Tree object `json:"tree"`
 		}
 		l.api(t, token, http.MethodGet, "/repos/{repo}/git/commits/"+parent, nil).mustJSON(t, http.StatusOK, &parentCommit)
-		tree["base_tree"] = parentCommit.Tree.SHA
+		request["base_tree"] = parentCommit.Tree.SHA
 		parents = append(parents, parent)
 	}
-	l.api(t, token, http.MethodPost, "/repos/{repo}/git/trees", tree).mustJSON(t, http.StatusCreated, &sha)
-	l.api(t, token, http.MethodPost, "/repos/{repo}/git/commits", map[string]any{"message": "Add " + path, "tree": sha.SHA, "parents": parents}).mustJSON(t, http.StatusCreated, &sha)
-	return sha.SHA
+	l.api(t, token, http.MethodPost, "/repos/{repo}/git/trees", request).mustJSON(t, http.StatusCreated, &tree)
+	l.api(t, token, http.MethodPost, "/repos/{repo}/git/commits", map[string]any{"message": "Add " + path, "tree": tree.SHA, "parents": parents}).mustJSON(t, http.StatusCreated, &commit)
+	return commit.SHA
+}
+
+// expectNotCreated requires that creating the ref fails and that the ref does
+// not exist afterwards. A ruleset refuses a creation with 422 "Reference
+// update failed", which names no rule (sandbox, 2026-09-30); the Implementer
+// App, in the bypass list, creates a ref with the same call (D8).
+func (l *live) expectNotCreated(t *testing.T, token, number, what, ref, sha string) {
+	t.Helper()
+	r := l.api(t, token, http.MethodPost, "/repos/{repo}/git/refs", map[string]string{"ref": "refs/" + ref, "sha": sha})
+	after := l.api(t, token, http.MethodGet, "/repos/{repo}/git/ref/"+ref, nil).status
+	l.record(number, what, "Refused, and the ref does not exist", fmt.Sprintf("Status %d: %s; then GET the ref: %d", r.status, r.message(), after))
+	if r.status < 400 || after != http.StatusNotFound {
+		t.Errorf("%s: %s: status %d, then GET %d, want a refusal and 404", number, what, r.status, after)
+	}
 }
 
 func (l *live) expectAllowed(t *testing.T, number, what string, status int) {
