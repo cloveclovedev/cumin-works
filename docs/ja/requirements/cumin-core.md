@@ -20,7 +20,7 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 | merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする。mergeの方法は設定で選べる (初期値はsquash) |
 | フォローアップノート | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、フォローアップノートとして要求Issueに転記する。フォローアップノートは、要求Issueに付ける1つのコメントである。AIの判断は使わず、決まった形式から機械的に拾う |
 | 通知 | Ownerの対応が要るとき、Discordのwebhookで知らせる |
-| 利用枠の管理 | Agentの実行結果から使用率を読み、しきい値を超えている間は新しい着手を止める |
+| 利用枠の管理 | 使用率を読み、上限に達している間は新しい着手を止める。weekly枠は週を通して配分し、5h枠はOwnerの分を時間帯ごとに残す |
 | Ownerからの操作の受け付け | Host上のコマンドで、状態の表示と、利用枠の使い切りの許可を受け付ける |
 
 cuminの動作ごとのきっかけと、動く前に確かめることは、[Issueのラベルと状態遷移](workflow/issue-states.md) の表に書いてある。この文書では繰り返さない。
@@ -46,16 +46,24 @@ Ownerが使うコマンド:
 | コマンド | 内容 |
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
-| `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、利用枠の使用率 |
+| `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限 |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
+| `cumin --version` | cuminの版を表示する |
 | `cumin setup github-apps` | 導入のときに、Hostで実行する。roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないroleだけを登録する |
 
 ## 利用枠の守り方
 
-- 5h枠とweekly枠のどちらかの使用率がしきい値を超えている間、cuminは新しい着手を止める
-- 使い切りを許可できるのは、5h枠だけである。Ownerの許可 (`cumin quota allow`) と、リセットが近いときにしきい値を100%にする決まりは、どちらも5h枠にだけ効く
-- weekly枠のしきい値は、どの方法でも超えさせない。weekly枠を使い切ると、Ownerが何日も使えなくなるためである。これはClaude Codeでも、Codexでも同じである
-- 5h枠の使い切りが許可されていても、weekly枠がしきい値を超えていれば、着手を止める
+先に尽きるのは、weekly枠である。5h枠を毎回80〜90%まで使うと、weekly枠は数日で尽きる。そのあとcuminは何日も止まり、Ownerの作業に使う分も残らない。そこで、weekly枠は週を通して均等に使うように配分し、5h枠はOwnerの分を時間帯ごとに残すために使う。
+
+- weekly枠の使用率が、ペースの上限以上の間、cuminは新しい着手を止める
+- ペースの上限は、目標 × min(1, (経過時間 + 前倒し) ÷ 7日) である
+  - 経過時間は、weekly枠の始まりからの時間である。始まりは、weekly枠のリセット時刻の7日前とする
+  - リセット時刻は、使用率を読むたびにClaude Codeから受け取る。リセットの曜日や時刻を、設定には持たない
+  - 目標は、週の終わりまでに使ってよい使用率である。前倒しは、週の始めにも少し先の分まで使えるようにする幅である。どちらも設定で変えられる
+- 5h枠の使用率が、今の時刻の時間帯のしきい値以上の間、cuminは新しい着手を止める。どの時間帯にも入らない時刻には、初期のしきい値を使う
+- 使い切りを許可できるのは、5h枠だけである。Ownerが `cumin quota allow` で許可すると、その5h枠がリセットされるまで、5h枠のしきい値を100%とする
+- weekly枠のペースの上限は、どの方法でも上げられない。`cumin quota allow` でも上がらない。weekly枠を使い切ると、Ownerが何日も使えなくなるためである。これはClaude Codeでも、Codexでも同じである
+- 5h枠の使い切りが許可されていても、weekly枠の使用率がペースの上限以上なら、着手を止める
 
 ## 止めたとき、スリープしたとき
 
@@ -69,7 +77,7 @@ v0.1では、次のように割り切る。Hostが常時動くMac miniになれ�
 ## 状態の持ち方
 
 - 作業の状態は、GitHubに置く。Issue、ラベル、Pull Request、レビュー、コメントが、状態の全てである
-- cuminが手元に持つのは、失っても作業をやり直せるものだけにする。Agentのセッションの番号、checkの修正を依頼した回数、最新の使用率、使い切りの許可がこれに当たる
+- cuminが手元に持つのは、失っても作業をやり直せるものだけにする。Agentのセッションの番号、checkの修正を依頼した回数、枠ごとの最新の使用率とリセット時刻とそれを読んだ時刻、使い切りの許可がこれに当たる
 - レビューのラウンド数は、手元に持たずに、Pull Requestに出ている `cumin-reviewer` のレビューの数から数える
 - cuminが再起動しても、GitHubを確かめ直せば、続きから動ける。ただし、作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。Ownerが `cumin/status/ready` を付け直せば再開する
 
@@ -116,8 +124,8 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | 要求が受け入れ可能になった | R7 |
 | mergeの判断が必要 | I7 |
 | Agentが先に進めない。指摘が残った | I2、I4、I8、I10、R2、R4 |
-| 利用枠がしきい値を超えた、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
-| 進められるIssueがなくなった | Q4 |
+| 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
+| 進められるIssueがなくなり、動いているAgentもいない | Q4 |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
 
 通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
@@ -139,8 +147,9 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | 対象のリポジトリ | cuminが確かめるリポジトリの一覧 | なし | できない |
 | 定期確認の間隔 | GitHubを確かめる間隔 | 60秒 | できない |
 | リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、同時に進めるIssueの数の上限。数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。Ownerの対応を待っているIssueも数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
-| 利用枠のしきい値 | 5h枠とweekly枠のそれぞれに、時間帯ごとに指定できる | 85% | できない |
-| リセットが近いとみなす残り時間 | 5h枠の残り時間がこれを切ったら、5h枠のしきい値を100%にする | 30分 | できない |
+| 5h枠のしきい値 | 5h枠の使用率がこれ以上なら、新しい着手を止める。時間帯ごとに指定できる。どの時間帯にも入らない時刻には、初期のしきい値を使う | 85% | できない |
+| weekly枠の目標 | ペースの上限の式の目標。weekly枠に時間帯はない | 85% | できない |
+| weekly枠の前倒し | ペースの上限の式で、経過時間に足す時間 | 1日 | できない |
 | 作業場所 | `git worktree` を置くディレクトリ | なし | できない |
 | Agentの実行時間の上限 | roleごとに指定できる。GitHub Appのtokenが発行から1時間で失効し、期限を延ばせないので、55分を超える値は指定できない | 50分 | できない |
 | roleとGitHub Appの対応 | roleごとのAppのClient ID。秘密鍵がHostにあるので、Hostの設定に書く。リポジトリの持ち主 (Organization) ごとに指定できる | なし | できない |
@@ -178,12 +187,15 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 3 | `risk/low` で承認され、checkの通ったPull Requestがある | cuminがmergeし、実装Issueが閉じる |
 | 4 | `risk/medium` で承認され、checkの通ったPull Requestがある | mergeしない。`cumin/status/awaiting-owner-review` に替えて、Ownerに通知する |
 | 5 | Agentが形式に合わない結果を返す | 同じ依頼を1回だけやり直す。それでも合わなければ `cumin/status/awaiting-owner-decision` に替えて通知する |
-| 6 | 使用率がしきい値を超える | 新しい着手を止めて、1回だけ通知する。実行中のIssueは最後まで進める。`cumin quota allow` で再開する。リセット時刻を過ぎたら自動で再開する |
+| 6 | 5h枠の使用率が、今の時間帯のしきい値に達する | 新しい着手を止めて、1回だけ通知する。実行中のIssueは最後まで進める。`cumin quota allow` で再開する。5h枠のリセット時刻を過ぎるか、しきい値の高い時間帯に入ると、自動で再開する |
 | 7 | 要求Issueのsub-issueが全て閉じる | Plannerに、受け入れの確認が1回だけ依頼される。確認のコメントが付いたあとで、要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに通知する。表にFailがあっても、同じ動作になる |
 | 8 | cuminを止めて、起動し直す | GitHubを確かめ直して動き始める。同じIssueを二重に依頼しない |
-| 9 | 進められるIssueがなくなる | 1回だけ通知する。同じ通知を繰り返さない |
+| 9 | 進められるIssueがなくなり、動いているAgentもいない | 1回だけ通知する。cuminが何か動作をするまで、同じ通知を繰り返さない |
 | 10 | `Follow-up` に文章があり、対応されなかった `(non-blocking)` の指摘が1つあるPull Requestをmergeする | 要求Issueに、決められた形式のフォローアップノートが1つ付く。cuminを再起動しても、同じフォローアップノートは増えない |
 | 11 | `Follow-up` が None で、`(non-blocking)` の指摘が全て `Fixed` になったPull Requestをmergeする | 要求Issueにフォローアップノートは付かない |
 | 12 | 要求Issueのsub-issueの一部にだけ `cumin/status/ready` を付け、それらが全て閉じる | 要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに1回だけ通知する。残りのsub-issueに `cumin/status/ready` を付けると、要求Issueが `cumin/status/implementing` に戻る |
 | 13 | `cumin/status/ready` のsub-issueが残っている要求Issueを見直し、Plannerが新しいsub-issueを足す | Ownerが新しく `cumin/status/ready` を付けるまで、要求Issueは `cumin/status/awaiting-owner-review` のままである |
 | 14 | cuminが実装Issueのラベルを付け替える。Ownerが実装Issueのriskを変える。OwnerがPull Requestの側のラベルを変える | どの場合も、次の定期確認のあとで、Pull Requestの `cumin/status/*` と `risk/*` が、実装Issueと同じになる。cuminの判定は、Pull Requestのラベルに左右されない |
+| 15 | weekly枠の使用率が変わらないまま、週の始め、中ごろ、終わりに、着手できるIssueがある | 週の始めは着手を止めて、1回だけ通知する。経過時間とともにペースの上限が上がり、使用率を上回ったあとの定期確認で、自動で再開する。上限は目標を超えない |
+| 16 | weekly枠の使用率がペースの上限に達していて、Ownerが `cumin quota allow` を実行する | 着手を再開しない |
+| 17 | 着手の直前の確認で、使用率を読み取れない | 着手せずに、1回だけ通知する |
