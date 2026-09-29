@@ -1135,3 +1135,7 @@ func CheckReview(pr PullRequest, reviewer string) ReviewResult {
 	}
 	return ReviewMissing
 }
+
+// ReviewFixAllowed is the check of I5: the round of the review that asked
+// for changes is below max_review_rounds. At the limit, I8 applies instead.
+func ReviewFixAllowed(round, limit int) bool { return round < limit }
