@@ -185,3 +185,13 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 102 | Discordのwebhookは `POST /webhooks/{webhook.id}/{webhook.token}` で実行する。本文には `content`、`embeds`、`components`、`file`、`poll` のどれかが要り、`content` は2000文字まで。既定の応答は `204 No Content` で、メッセージの保存に失敗してもエラーにならない。`wait=true` を付けると、作られたメッセージが返る。Allowed Mentions Object の `parse` を空の配列にすると、全てのメンションが抑えられる | 公式: Execute Webhook (2026-09-22) | 公式文書 |
 | 103 | `security add-generic-password ... -w` は、次の引数を値として取る。`-w` のあとにkeychainのパスを書くと、パスが秘密の値として保存され、コマンドは成功を報告する。`-w` を付けない、または `-w` を最後に置いてkeychainのパスを書かないと、値を標準入力から2回読む | Hostで、一時的なkeychainと作り物の値で実測 (2026-09-22) | 実測 |
 | 104 | keychainのパスを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧の全体を探す。cuminは既定のkeychainをパスで指定して読むので、手順書の `security` のコマンドもkeychainを指定する (66の続き) | `man security` と、Hostでの実測 | 公式文書 + 実測 |
+
+## 12. 必須のcheckの実装で確かめたこと (2026-09-25、2026-09-29、Claude Code 2.1.284)
+
+要求Issue #156 の実装 (#187、#207) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 107 | `--setting-sources project` を付けても、`init` の `plugins` に、バイナリに入ったpluginが載る。2.1.284 では `agents-md@builtin` と `telemetry@builtin` で、`path` は `builtin` である。claude.aiから同期したpluginではないので、`syncClaudeAiPlugins` では消えない。27の「`plugins` が空になる」は、この版では成り立たない (27の更新) | Hostで実測 (2026-09-29)。公式: `anthropics/claude-code` の `mods/` | 実測 + 公式文書 |
+| 108 | `builtin` は予約されたmarketplaceの名前で、Claude Codeはバイナリに入ったpluginにだけ使う。marketplace、claude.ai、skillsのディレクトリから来たpluginの `source` が `<名前>@builtin` になることはない | 公式: Marketplace reference の "Reserved names" (#207 で確認) | 公式文書 |
+| 109 | 必須のcheckは `GET /repos/{owner}/{repo}/rules/branches/{branch}` で読み、この応答はページに分かれる。`statusCheckRollup` は、`CheckRun` なら `name`、`status`、`conclusion`、`checkSuite.app.databaseId` を、`StatusContext` なら `context`、`state` を返す | #187 で実測 (2026-09-25) | 実測 |
