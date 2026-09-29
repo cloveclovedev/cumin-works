@@ -257,31 +257,27 @@ func TestI3_TheReviewIsRequestedOnceAcrossPolls(t *testing.T) {
 	}
 }
 
-// The head can move while the Reviewer works. The review of the old head
-// does not count, and the retry reviews the new head: the worktree and the
-// request move to it (review of #244).
-func TestI3_TheRetryReviewsTheHeadOfNowWhenItMoved(t *testing.T) {
-	sc := newScene(t, cliOptions{reviews: []string{"APPROVE", "APPROVE"}, movesHead: true})
+// The head can move while the Reviewer works. Only the old head passed the
+// required checks, so the issue goes back to cumin/status/awaiting-checks
+// and nothing is reviewed on the new head yet (review of #244): the checks
+// run on it, and I3 or I4 decides again.
+func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}, movesHead: true})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
 
 	sc.pollAndWait(t, service)
 
-	if n := sc.agentRuns(t); n != 2 {
-		t.Fatalf("%d agent runs, want the review and one retry", n)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want only the review of the old head", n)
 	}
-	reviews := sc.fake.Reviews(sc.repo, 21)
-	moved := sc.repo.PullRequests[21].HeadCommit
-	if moved == sc.remoteHead || len(reviews) != 2 || reviews[1].Commit != moved {
-		t.Fatalf("reviews = %+v, head %s: want the second review on the moved head", reviews, moved)
-	}
-	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Head commit: "+moved) {
-		t.Errorf("the retry does not name the moved head:\n%s", text)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
-		t.Errorf("%d comments on #10, want none: the retry reviewed the new head", n)
+		t.Errorf("%d comments on #10, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I3: the head commit moved during the review; the worktree opens the new head"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"I3: the head commit moved during the review; the issue waits for the checks again"`) {
 		t.Errorf("the log does not say that the head moved: %s", sc.logs)
 	}
 }

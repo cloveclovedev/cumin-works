@@ -185,6 +185,10 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		if !ok {
 			return
 		}
+		if pr.HeadCommit != req.review.HeadCommit {
+			s.headMoved(ctx, log, target, number, sub, pr)
+			return
+		}
 		switch result {
 		case ReviewApprovedOnHead:
 			// The merge (I6, I7) is the next requirement. Until then the
@@ -197,24 +201,6 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		}
 		if !missed {
 			missed = true
-			// The head can move while the Reviewer works, for example when
-			// the Owner pushes. The review must be on the head of now, so
-			// the worktree and the request move to it before the retry.
-			if pr.HeadCommit != req.review.HeadCommit {
-				log.Info("I3: the head commit moved during the review; the worktree opens the new head",
-					"head_commit", pr.HeadCommit)
-				checkout.Commit = pr.HeadCommit
-				if err := s.Workspace.Remove(ctx, checkout); err != nil {
-					log.Error("I3: the worktree of the old head was not removed", "error", err.Error())
-					return
-				}
-				workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
-				if err != nil {
-					log.Error("I3: the work directory was not prepared", "error", err.Error())
-					return
-				}
-				req.review.HeadCommit, req.review.WorkDir, request.WorkDir = pr.HeadCommit, workDir, workDir
-			}
 			log.Warn("I3: no review on the head commit; the Reviewer is asked once more", "round", req.review.Round)
 			request.SessionID = run.SessionID
 			request.Text = ReviewAgainRequestText(req.review)
@@ -254,4 +240,24 @@ func (s *Service) checkReview(ctx context.Context, log *slog.Logger, target Targ
 	result := CheckReview(pr, req.reviewer)
 	log.Info("I3: checked the review", "result", result.String(), "head_commit", pr.HeadCommit)
 	return result, sub, pr, true
+}
+
+// headMoved handles a head commit that moved while the Reviewer worked, for
+// example when the Owner pushed. Only the old head passed the required
+// checks, so the issue goes back to cumin/status/awaiting-checks: the checks
+// run on the new head, and I3 (or I4) decides again. A review that the
+// Reviewer gave on the old head stays on GitHub and counts as it is.
+func (s *Service) headMoved(ctx context.Context, log *slog.Logger, target Target, number int, sub SubIssue, pr PullRequest) {
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error("I3: no token; the issue keeps its label", "error", err.Error())
+		return
+	}
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingChecks)
+	if err := s.GitHub.SetIssueLabels(ctx, token, target.Repository.Owner, target.Repository.Name, number, labels); err != nil {
+		log.Error("I3: the label was not changed", "error", err.Error())
+		return
+	}
+	log.Info("I3: the head commit moved during the review; the issue waits for the checks again",
+		"head_commit", pr.HeadCommit, "labels", labels)
 }
