@@ -310,10 +310,16 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	var errs []error
+	// A requirement issue that R3 could not move keeps its sub-issues
+	// waiting in this poll. A claim would take cumin/status/ready away from
+	// the sub-issue, and R3 would then never apply again: the requirement
+	// issue would stay in awaiting-owner-review while its work goes on.
+	notStarted := map[int]bool{}
 	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
 		switch a := action.(type) {
 		case StartRequirement:
 			if err := s.startRequirement(ctx, token, target, snapshot, a); err != nil {
+				notStarted[a.Number] = true
 				errs = append(errs, err)
 			}
 		case ReviewRemaining:
@@ -325,6 +331,10 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 				errs = append(errs, err)
 			}
 		case Claim:
+			if notStarted[a.RequirementIssue] {
+				log.Info("I1: waits for R3 of the requirement issue", "issue", a.Number, "requirement_issue", a.RequirementIssue)
+				continue
+			}
 			if err := s.claim(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}

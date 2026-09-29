@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"context"
 	"net/http"
 	"slices"
 	"strings"
@@ -136,5 +137,35 @@ func TestR6_AnOpenSubIssueWithAStatusLabelKeepsImplementing(t *testing.T) {
 	}
 	if n := len(sc.webhook.messagesSent()); n != 0 {
 		t.Errorf("%d notifications, want none", n)
+	}
+}
+
+// When R3 cannot move the requirement issue, its ready sub-issue is not
+// claimed in the same poll: the claim would take away the cumin/status/ready
+// that R3 needs to apply again.
+func TestR3_AFailedMoveKeepsTheSubIssueReady(t *testing.T) {
+	sc := newScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel}})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.fake.FailNext(http.MethodPut, "/repos/example-org/example-repo/issues/6/labels", http.StatusInternalServerError)
+	service := sc.service()
+
+	if err := service.Poll(context.Background()); err == nil {
+		t.Fatal("the poll returned no error for the failed move")
+	}
+	service.Wait()
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/ready") {
+		t.Fatalf("labels of #10 = %v, want cumin/status/ready kept", got)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs, want none", n)
+	}
+
+	sc.pollAndWait(t, service)
+	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {
+		t.Errorf("labels of #6 = %v, want implementing", got)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
 	}
 }
