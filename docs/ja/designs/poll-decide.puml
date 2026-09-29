@@ -1,68 +1,70 @@
 @startuml poll-decide
-' cumin works - 定期確認の判定。スナップショットから動作の一覧を決める。
-' 行の番号 (I1 など) は issue-states.md の表に対応する。
-' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+' cumin works - the decision of a poll: from a snapshot to a list of actions.
+' The row numbers (I1 and so on) are the rows of issue-states.md.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
 
 start
-partition "定期確認 (リポジトリごと)" {
-  :スナップショットを読む
-  (1回のGraphQLの問い合わせ);
+partition "Poll (each repository)" {
+  :Read the snapshot
+  (one GraphQL query);
 }
-partition "判定 (純粋関数。I/Oなし)" {
-  :I3の候補を集める
-  - cumin/status/awaiting-checks の開いているsub-issue
-  - Pull Requestの先頭のコミットで、必須のcheckが全て通った;
-  :I4の候補を集める
-  - cumin/status/awaiting-checks の開いているsub-issue
-  - Pull Requestの先頭のコミットで、必須のcheckが落ちた;
-  :進行中のIssue数を数える
-  - cumin/status/planning の要求Issue
-  - implementing、awaiting-checks、reviewing の
-    開いているsub-issue;
-  :着手可能なIssue数を算出する
-  max_issues_in_progress - 進行中のIssue数;
-  :R1の候補を集める
-  - 開いている要求Issue
-  - cumin/status/ready が付いている
-  - blocked by のIssueが全て閉じている;
-  :I1の候補を集める
-  - 開いているsub-issue
-  - cumin/status/ready が付いている
-  - blocked by のIssueが全て閉じている;
-  :R1とI1の候補を合わせてIssueの番号の昇順に並べ、
-  着手可能なIssue数だけを残す;
-  :I11のコピーを集める
-  - Issueを閉じる開いているPull Requestごとに
-  - cumin/status/* と risk/* が、
-    このスナップショットのIssueと違うもの;
-  :動作の一覧を返す
-  (I3、I4、R1とI1、I11の順);
+partition "Decision (pure function, no I/O)" {
+  :Collect I3 candidates
+  - open sub-issues with cumin/status/awaiting-checks
+  - every required check passed on the head commit
+    of the pull request;
+  :Collect I4 candidates
+  - open sub-issues with cumin/status/awaiting-checks
+  - a required check failed on the head commit
+    of the pull request;
+  :Count the issues in progress
+  - requirement issues with cumin/status/planning
+  - open sub-issues with implementing,
+    awaiting-checks, or reviewing;
+  :Compute the free slots
+  max_issues_in_progress - issues in progress;
+  :Collect R1 candidates
+  - open requirement issues
+  - with cumin/status/ready
+  - every blocked-by issue closed;
+  :Collect I1 candidates
+  - open sub-issues
+  - with cumin/status/ready
+  - every blocked-by issue closed;
+  :Sort the R1 and I1 candidates by issue number
+  and keep as many as the free slots;
+  :Collect I11 copies
+  - each open pull request that closes an issue
+  - its cumin/status/* and risk/* differ
+    from the issue in this snapshot;
+  :Return the list of actions
+  (I3, I4, R1 and I1, I11, in this order);
 }
-partition "適用 (一覧の順に)" {
-  :I3: ラベルを cumin/status/reviewing に替える;
-  if (I4: 修正の依頼の回数が上限未満?) then (はい)
-    :回数を1つ増やし、ラベルを
-    cumin/status/implementing に替え、
-    同じセッションで修正を依頼する;
-  else (いいえ)
-    :Ownerに戻す (行I4);
+partition "Apply (in the order of the list)" {
+  :I3: change the label to cumin/status/reviewing;
+  if (I4: fix requests below the limit?) then (yes)
+    :count one more, change the label to
+    cumin/status/implementing, and request
+    a fix in the same session;
+  else (no)
+    :hand it back to the Owner (row I4);
   endif
-  :R1: ラベルを cumin/status/planning に替え、
-  替えられたらPlannerに分割を依頼する
-  I1: ラベルを cumin/status/implementing に替え、
-  替えられたらImplementerに依頼する
-  どちらも、替えられなければ
-  次の定期確認でやり直す;
-  :I11: Pull Requestのラベルを
-  Issueと同じにする;
+  :R1: change the label to cumin/status/planning,
+  then ask the Planner to split
+  I1: change the label to cumin/status/implementing,
+  then ask the Implementer
+  If a label does not change,
+  try again at the next poll;
+  :I11: make the labels of the pull request
+  the same as the issue;
 }
 note right
-  I11がコピーするのは、この定期確認で読んだ
-  Issueのラベルである。この定期確認や
-  実行の終わり (I2) で替わったラベルは、
-  次の定期確認でPull Requestに届く。
+  I11 copies the labels of the issue as this poll
+  read them. A label that this poll or the end of
+  a run (I2) changed reaches the pull request
+  at the next poll.
 end note
 stop
 @enduml

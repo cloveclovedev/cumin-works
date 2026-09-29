@@ -1,55 +1,55 @@
 @startuml poll-verify
-' cumin works - 実行終了の判定 (I2)。Implementerの実行が終わったあとの確認と、うまくいかなかったときの道。
-' 対応する文書: poll.md の「実行終了の判定」と「うまくいかなかったときに、Ownerに戻す道」。
-' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+' cumin works - the end of a run (I2): the checks after an Implementer run, and the way back to the Owner.
+' Document: poll.md, sections on the end of a run and the way back to the Owner.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
 
 start
-:Implementerの実行が終わる;
-if (結果は?) then (done)
-  :スナップショットを読み直す
-  (実行が終わった直後の事実);
-  :worktreeの先頭のコミットを読む;
-  partition "判定 (純粋関数。I/Oなし)" {
-    if (Issueを閉じる、開いている
-    Pull Requestがある?) then (いいえ)
-      :落ちた: 開いているPull Requestがない;
-    elseif (作成者が ImplementerのAppの
-    bot (<slug>[bot]) ?) then (いいえ)
-      :落ちた: 作成者が違う;
-    elseif (Pull Requestの先頭のコミットが
-    worktreeの先頭と同じ?) then (いいえ)
-      :落ちた: 先頭のコミットがpushされていない;
-    else (はい)
-      :通った;
+:The Implementer run ends;
+if (Result?) then (done)
+  :Read the snapshot again
+  (the facts right after the run);
+  :Read the head commit of the worktree;
+  partition "Decision (pure function, no I/O)" {
+    if (An open pull request
+    closes the issue?) then (no)
+      :failed: no open pull request;
+    elseif (Author is the bot of the
+    Implementer App (<slug>[bot])?) then (no)
+      :failed: another author;
+    elseif (Head commit of the pull request
+    equals the head of the worktree?) then (no)
+      :failed: head commit not pushed;
+    else (yes)
+      :passed;
     endif
   }
-  if (通った?) then (はい)
-    :ラベルを cumin/status/awaiting-checks に替える;
+  if (Passed?) then (yes)
+    :Change the label to cumin/status/awaiting-checks;
     stop
-  else (いいえ)
-    :コメントの文章を組み立てる
-    (stop-note.md。落ちた確認の1文);
+  else (no)
+    :Build the comment
+    (stop-note.md, one sentence for the failed check);
   endif
 elseif (blocked) then
-  :コメントの文章は blocked_reason
-  (Agentが書いた decision-request.md);
-else (異常終了)
-  :やり直しと、そのあとのOwnerへの引き渡し
-  (この要求の次の実装Issue);
+  :The comment is blocked_reason
+  (decision-request.md, written by the agent);
+else (abnormal end)
+  :Retry, then hand it back to the Owner
+  (the next implementation issue of this requirement);
   stop
 endif
 
-partition "Ownerに戻す (行の番号を引数で受け取る)" {
-  :実装Issueにコメントを書く;
-  :ラベルを cumin/status/awaiting-owner-decision に替える;
-  :Ownerに通知する
-  (リンクは書いたコメント。設定で出さないこともある);
+partition "Hand back to the Owner (the row number is an argument)" {
+  :Comment on the implementation issue;
+  :Change the label to cumin/status/awaiting-owner-decision;
+  :Notify the Owner
+  (the link is the comment; a setting can turn it off);
 }
 note right
-  途中で1つ失敗しても、次を止めない。
-  巻き戻さない。失敗はログに出す。
+  One failure does not stop the next step.
+  Nothing is rolled back. Failures are logged.
 end note
 stop
 @enduml

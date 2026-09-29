@@ -1,9 +1,9 @@
 @startuml main-workflow
-' cumin works v2 - メインワークフロー (要求レベル)
-' 叩き台: 正常系の骨格。Qn の note は未決事項であり、決定ではない。
-' 参加者は ../overview.md の登場人物のみ。実装の詳細は描かない。
-' Issueのラベルと状態遷移、cuminの各動作のきっかけは issue-states.md にある。
-' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+' cumin works - main workflow (requirement level)
+' Draft: the skeleton of the normal path. A note Qn is an open question, not a decision.
+' Participants are only the actors of ../overview.md. No implementation details.
+' The labels, the states of an issue, and what starts each action of cumin are in issue-states.md.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
 
 autonumber
 
@@ -12,209 +12,209 @@ participant "cumin" as Cumin
 participant Planner <<Agent>>
 participant "Implementer" as Impl <<Agent>>
 participant "Reviewer" as Rev <<Agent>>
-database "Issue管理\n(GitHub Issues)" as Tracker
-database "リポジトリ\n(GitHub)" as Repo
+database "Issue tracker\n(GitHub Issues)" as Tracker
+database "Repository\n(GitHub)" as Repo
 
 note over Cumin
-  Host (Mac mini) 上の常駐プログラム。
-  落ちたらlaunchdが再起動する。
-  将来: ハートビートを出し、外部マシンから監視する。
+  A resident program on the Host (Mac mini).
+  launchd restarts it when it stops.
+  Later: send a heartbeat, watched from another machine.
 end note
 / note over Tracker
-  将来Jiraなどに変わる可能性がある。
-  ソースコードの置き場所はGitHubのまま。
+  May change to Jira or another tracker later.
+  The source code stays on GitHub.
 end note
 
-== 1. 要求の受付 ==
+== 1. Receive a requirement ==
 
-Owner -> Tracker : 要求をIssueに書き、cumin/type/requirement を付ける
-Owner -> Tracker : 書き終えたら、要求Issueに cumin/status/ready を付ける
+Owner -> Tracker : write the requirement as an issue, add cumin/type/requirement
+Owner -> Tracker : when done, add cumin/status/ready to the requirement issue
 note right of Owner
-  cuminへの入口はIssueだけ。リポジトリの構成は前提にしない。
-  cumin/status/ready を付けることが「提出」の合図 (書きかけは拾われない)。
-  Ownerの要件文書 (例: requirements/) をリポジトリに置くのは自由。
-  Issueからリンクすれば、Agentが文脈として読める。
+  The only entry to cumin is an issue. No layout of the repository is assumed.
+  Adding cumin/status/ready means "submitted" (a draft is not picked up).
+  The Owner may keep requirement documents (for example requirements/) in the repository.
+  Linked from the issue, they are context that the agents read.
 end note
 
-Cumin -> Tracker : cumin/type/requirement と cumin/status/ready の付いたIssueがないか定期的に確認する
+Cumin -> Tracker : poll for issues with cumin/type/requirement and cumin/status/ready
 note right of Cumin
-  cuminは常駐しており、自分から仕事を取りに行く。
-  Ownerが起動するのではない。
+  cumin is resident and fetches work by itself.
+  The Owner does not start it.
 end note
 
-== 2. 計画 ==
+== 2. Plan ==
 
-Cumin -> Tracker : 要求Issueのラベルを cumin/status/ready から cumin/status/planning に替える
-Cumin -> Planner : 依頼: この要求を分割する
-Planner -> Repo : リポジトリを読む (要求Issueからリンクされた文書を含む)
-Planner -> Tracker : 実装Issueを要求Issueのsub-issueとして作る (1 Issue = 1実装タスク)
-Planner -> Tracker : Issue間の依存関係を記録する
-Planner -> Tracker : 各Issueにriskを仮付けする
+Cumin -> Tracker : change the label of the requirement issue from cumin/status/ready to cumin/status/planning
+Cumin -> Planner : request: split this requirement
+Planner -> Repo : read the repository (with the documents that the requirement issue links)
+Planner -> Tracker : create implementation issues as sub-issues (1 issue = 1 implementation task)
+Planner -> Tracker : record the dependencies between the issues
+Planner -> Tracker : add a provisional risk to each issue
 note right of Planner
-  riskの基準:
-  risk/low = 数行で影響が自明な変更。
-  risk/high = revertで戻せない変更 (DBマイグレーション、デプロイやCIの設定、
-  認証や決済、外部サービスへの副作用、公開APIの契約、cumin自身のルール)。
-  risk/medium = それ以外の全て。
-  分割の基準は policies/issue-sizing.md に従う
-  (risk/high の変更は、それだけの最小のIssueに隔離する)。
+  Risk criteria:
+  risk/low = a few lines whose effect is obvious.
+  risk/high = a change that a revert cannot undo (database migration, deployment or CI setting,
+  authentication or payment, side effect on an external service, public API contract, rules of cumin).
+  risk/medium = everything else.
+  Split by policies/issue-sizing.md
+  (a risk/high change is isolated in its own smallest issue).
 end note
-Planner --> Cumin : 計画完了 (Agentの実行が終わった)
-Cumin -> Tracker : sub-issueがあり、全てにriskが付いていることを確かめる
+Planner --> Cumin : plan done (the agent run ended)
+Cumin -> Tracker : check that sub-issues exist and each has a risk
 
-== 3. 計画の確認 ==
+== 3. Check the plan ==
 
-Cumin -> Tracker : 要求Issueのラベルを cumin/status/awaiting-owner-review に替える
-Cumin -> Owner : 通知: 分割結果の確認が必要
-Owner -> Tracker : 分割結果とriskを確認する (直すときはOwnerが自分で直す)
-Owner -> Tracker : 良ければ実装Issueに cumin/status/ready を付ける
+Cumin -> Tracker : change the label of the requirement issue to cumin/status/awaiting-owner-review
+Cumin -> Owner : notify: the split needs a check
+Owner -> Tracker : check the split and the risks (the Owner fixes them if needed)
+Owner -> Tracker : if good, add cumin/status/ready to the implementation issues
 note right of Owner
-  cumin/status/ready は1つで3つの意味を持つ:
-  分割の承認、riskの確定、実装開始の合図。
-  riskの判断には必ずOwnerが介在する (まずはここから始める)。
-  一部のsub-issueにだけ付けてもよい。それらが全て閉じて、
-  ラベルのないsub-issueだけが残ったら、cuminがもう一度確認を求める。
+  cumin/status/ready means three things:
+  the split is approved, the risk is final, and the implementation may start.
+  The Owner always takes part in the risk (a start).
+  It may go on only some sub-issues. When they are all closed and only
+  sub-issues without the label remain, cumin asks for a check again.
 end note
 
-== 4. 実装とレビュー ==
+== 4. Implement and review ==
 
-loop cumin/status/ready が付き依存が解決済みのIssueがあり、AIリソースに空きがある間
+loop while an issue has cumin/status/ready, its dependencies are done, and AI resources are free
   note over Cumin
-    AIリソースの空き = 利用枠 (Claude Codeなら5h枠とweekly枠) の使用率がしきい値 (8〜9割) 未満であること。
-    しきい値は時間帯ごとに変えられる (Ownerが使わない時間帯は高くする)。
-    5h枠のリセットが近づいたら、5h枠のしきい値を100%にする。
-    しきい値と時間帯は、cuminの設定ファイルで変えられる。
-    使用率はcuminが読み取れる (Claude Codeの実行結果に使用率とリセット時刻が含まれる。実測済み)。
+    AI resources are free = the usage of the quota (for Claude Code, the 5h window and the weekly window) is below the threshold (80 to 90%).
+    The threshold can change by time band (higher when the Owner does not work).
+    Near the reset of the 5h window, the 5h threshold becomes 100%.
+    The thresholds and time bands are in the settings file of cumin.
+    cumin can read the usage (the result of a Claude Code run holds the usage and the reset time; measured).
   end note
-  Cumin -> Tracker : 次の着手可能なIssueを選ぶ
-  Cumin -> Tracker : ラベルを cumin/status/ready から cumin/status/implementing に替える
+  Cumin -> Tracker : choose the next issue that can start
+  Cumin -> Tracker : change the label from cumin/status/ready to cumin/status/implementing
   note right of Cumin
-    ラベルの付け替えが「着手」。依頼より先に行うので、同じIssueを二重に依頼しない。
-    状態ラベルは実装Issueに付け、常に1つだけ。付け替えは全てcuminが行う (Agentには任せない)。
-    Pull Requestが既にあるIssueは、続きから再開する (Ownerの差し戻しや回答のあと)。
-    このときAgentのセッションは新しくし、Issue、Pull Request、コメントを読み直させる。
+    Changing the label is the claim. It comes before the request, so the same issue is never requested twice.
+    The status label is on the implementation issue, always exactly one. cumin changes all of them (never an agent).
+    An issue that already has a pull request continues from there (after the Owner sends it back or answers).
+    The agent then gets a new session and reads the issue, the pull request, and the comments again.
   end note
-  Cumin -> Impl : 依頼: このIssueを実装する
-  Impl -> Repo : ブランチをpushし、Pull Requestを開く
-  Impl --> Cumin : 実装完了 (Agentの実行が終わった)
-  Cumin -> Repo : Pull Requestが開かれていることを確かめる
-  Cumin -> Tracker : ラベルを cumin/status/awaiting-checks に替える
-  Cumin -> Repo : 必須のcheckが全て通るまで待つ (失敗したらImplementerに修正を依頼する。必須のcheckがなければ、すぐに通ったとみなす)
+  Cumin -> Impl : request: implement this issue
+  Impl -> Repo : push a branch and open a pull request
+  Impl --> Cumin : implementation done (the agent run ended)
+  Cumin -> Repo : check that the pull request is open
+  Cumin -> Tracker : change the label to cumin/status/awaiting-checks
+  Cumin -> Repo : wait until every required check passes (on a failure, ask the Implementer for a fix; with no required check, it passes at once)
   note right of Cumin
-    Pull Requestが開かれただけでは、実装完了としない。
-    cuminは、Agentの申告ではなくGitHub上の事実で判定する。
-    checkを待つ間、Agentは動いていないので利用枠を消費しない。
+    An open pull request alone does not mean the implementation is done.
+    cumin decides from facts on GitHub, not from what an agent reports.
+    While the checks run, no agent runs, so no quota is used.
   end note
 
-  loop 指摘がなくなるまで (最大3ラウンド。回数は調整していく)
-    Cumin -> Tracker : ラベルを cumin/status/reviewing に替える
-    Cumin -> Rev : 依頼: このPull Requestをレビューする
-    Rev -> Repo : レビューを投稿する (指摘なしなら APPROVE、修正が必要なら REQUEST_CHANGES)
-    Rev --> Cumin : レビュー完了 (Agentの実行が終わった)
-    Cumin -> Repo : 今の先頭のコミットに対するレビューの結果を読む
-    opt 修正すべき指摘あり
-      Cumin -> Tracker : ラベルを cumin/status/implementing に替える
-      Cumin -> Impl : 依頼: 指摘を修正する
-      Impl -> Repo : 修正をpushする
-      Impl --> Cumin : 修正完了
-      Cumin -> Tracker : ラベルを cumin/status/awaiting-checks に替える
-      Cumin -> Repo : 必須のcheckが全て通るまで待つ
+  loop until no blocking comment is left (up to 3 rounds; the number will be tuned)
+    Cumin -> Tracker : change the label to cumin/status/reviewing
+    Cumin -> Rev : request: review this pull request
+    Rev -> Repo : post the review (APPROVE when nothing blocks, REQUEST_CHANGES when a fix is needed)
+    Rev --> Cumin : review done (the agent run ended)
+    Cumin -> Repo : read the review of the current head commit
+    opt a comment to fix
+      Cumin -> Tracker : change the label to cumin/status/implementing
+      Cumin -> Impl : request: fix the comments
+      Impl -> Repo : push the fix
+      Impl --> Cumin : fix done
+      Cumin -> Tracker : change the label to cumin/status/awaiting-checks
+      Cumin -> Repo : wait until every required check passes
     end
   end
 
-  alt 指摘なし、risk/low
-    Cumin -> Repo : mergeする (実装Issueが閉じる)
-  else 指摘なし、risk/medium または risk/high
-    Cumin -> Tracker : ラベルを cumin/status/awaiting-owner-review に替える
-    Cumin -> Owner : 通知: mergeの判断が必要
-    Owner -> Repo : 確認してmergeする (実装Issueが閉じる)
+  alt approved, risk/low
+    Cumin -> Repo : merge (the implementation issue closes)
+  else approved, risk/medium or risk/high
+    Cumin -> Tracker : change the label to cumin/status/awaiting-owner-review
+    Cumin -> Owner : notify: the merge needs a decision
+    Owner -> Repo : check and merge (the implementation issue closes)
     note right of Owner
-      差し戻すときは、Pull Requestにコメントし、実装Issueに cumin/status/ready を付け直す。
-      risk/medium は、運用しながら自動mergeに移せるかを判断していく。
-      risk/high は当分Ownerがmergeする。
+      To send it back, comment on the pull request and add cumin/status/ready to the implementation issue again.
+      Whether risk/medium can move to an automatic merge is decided while running.
+      The Owner merges risk/high for now.
     end note
-  else 3ラウンドで指摘が残った
-    Cumin -> Rev : 依頼: 何が決まっていないことが原因かを整理する
-    Rev -> Repo : Owner向けの簡潔なレポートを投稿する
-    Cumin -> Tracker : ラベルを cumin/status/awaiting-owner-decision に替える
-    Cumin -> Owner : 通知: 判断が必要
-    Owner -> Repo : 回答する
-    Owner -> Tracker : 実装Issueに cumin/status/ready を付け直す
+  else blocking comments left after 3 rounds
+    Cumin -> Rev : request: sort out what is not decided
+    Rev -> Repo : post a short report for the Owner
+    Cumin -> Tracker : change the label to cumin/status/awaiting-owner-decision
+    Cumin -> Owner : notify: a decision is needed
+    Owner -> Repo : answer
+    Owner -> Tracker : add cumin/status/ready to the implementation issue again
   end
-  Cumin -> Tracker : mergeされたら、残った作業 (Follow-upと、対応されなかった提案) をフォローアップノートとして要求Issueに転記する
+  Cumin -> Tracker : after the merge, copy the remaining work (Follow-up and suggestions not taken) to the requirement issue as a follow-up note
   note over Owner, Cumin
-    Owner待ちの間も、cuminは依存関係にない他のIssueを進める。
-    Ownerの「進めてよい」の合図は、常に cumin/status/ready を付けること。
+    While waiting for the Owner, cumin goes on with other issues that do not depend on it.
+    The Owner's "go ahead" is always adding cumin/status/ready.
   end note
 end
 
-== 5. 受け入れ ==
+== 5. Acceptance ==
 
 note over Cumin, Tracker
-  開始条件: 要求Issueのsub-issueが全て閉じた。
+  Start: every sub-issue of the requirement issue is closed.
 end note
-Cumin -> Planner : 依頼: 受け入れの確認をする
-Planner -> Repo : mainの最新で、要求Issueの Requirements を1項目ずつ確かめる
-Planner -> Tracker : 結果と証拠、残っている作業を、要求Issueにコメントする
-Planner --> Cumin : 確認完了 (Agentの実行が終わった)
-Cumin -> Tracker : 確認のコメントがあることを確かめ、要求Issueのラベルを cumin/status/awaiting-owner-review に替える
-Cumin -> Owner : 通知: 要求が受け入れ可能になった
-alt 受け入れる
-  Owner -> Tracker : 要求Issueを閉じる (= 受け入れ)
+Cumin -> Planner : request: check the acceptance
+Planner -> Repo : check each item of Requirements of the requirement issue on the latest main
+Planner -> Tracker : comment the result, the evidence, and the remaining work on the requirement issue
+Planner --> Cumin : check done (the agent run ended)
+Cumin -> Tracker : check that the comment exists, change the label of the requirement issue to cumin/status/awaiting-owner-review
+Cumin -> Owner : notify: the requirement can be accepted
+alt accept
+  Owner -> Tracker : close the requirement issue (= accepted)
   note right of Owner
-    フォローアップノートにある作業のうち、やりたいものは新しい要求Issueに書く。
+    Work from the follow-up notes that the Owner wants goes into a new requirement issue.
   end note
-else 差し戻す
-  Owner -> Tracker : 要求Issueに追記する、またはsub-issueを追加する
-  Owner -> Tracker : 追加したsub-issueに cumin/status/ready を付ける
+else send back
+  Owner -> Tracker : add to the requirement issue, or add sub-issues
+  Owner -> Tracker : add cumin/status/ready to the added sub-issues
   note right of Owner
-    差し戻しではPlannerを通さない (まずはここから始める)。
-    「4. 実装とレビュー」に戻り、sub-issueが全て閉じたら
-    再び受け入れの通知が届く。
+    A send-back does not go through the Planner (a start).
+    Back to "4. Implement and review"; when every sub-issue is closed,
+    the acceptance notification comes again.
   end note
 end
 
-== 例外: Agentが先に進めない ==
+== Exception: an agent cannot go on ==
 
-Cumin -> Tracker : ラベルを cumin/status/awaiting-owner-decision に替える
-Cumin -> Owner : 通知: ブロック中、判断が必要
-Owner -> Tracker : 回答する
-Owner -> Tracker : 実装Issueに cumin/status/ready を付け直す
+Cumin -> Tracker : change the label to cumin/status/awaiting-owner-decision
+Cumin -> Owner : notify: blocked, a decision is needed
+Owner -> Tracker : answer
+Owner -> Tracker : add cumin/status/ready to the implementation issue again
 
-== 例外: 利用枠がしきい値を超えた ==
+== Exception: the quota passed the threshold ==
 
-Cumin -> Owner : 通知: 利用枠がしきい値を超えたので、新しいIssueの着手を止めた
-opt Ownerが今の5h枠の使い切りを許可する
-  Owner -> Cumin : 許可: 今の5h枠は使い切ってよい
+Cumin -> Owner : notify: the quota passed the threshold, so no new issue starts
+opt the Owner allows using up the current 5h window
+  Owner -> Cumin : allow: use up the current 5h window
   note right of Owner
-    許可は、その5h枠がリセットされるまで有効。cuminは100%まで着手を続ける。
-    weekly枠の使い切りは許可できない。
-    まずはHost上のコマンドで許可を伝える (外出先からはTailscaleとSSH)。
-    将来: Discordのbotにして、Discordから許可できるようにする。
+    The allowance lasts until that 5h window resets. cumin keeps starting issues up to 100%.
+    Using up the weekly window cannot be allowed.
+    First, the Owner gives the allowance with a command on the Host (from outside through Tailscale and SSH).
+    Later: a Discord bot, so that the allowance comes from Discord.
   end note
 end
 note over Cumin
-  枠がリセットされたら、cuminは自動で着手を再開する。
+  When the window resets, cumin starts issues again by itself.
 end note
 
-== 例外: 進められるIssueがなくなった ==
+== Exception: no issue can go on ==
 
-Cumin -> Owner : 通知: 待ち状態になった
+Cumin -> Owner : notify: waiting
 note right of Owner
-  まずは通知するだけで、cuminは何もしない。
-  将来: 要件文書から次の要求Issueの草案を作る、など。
+  First, cumin only notifies and does nothing else.
+  Later: draft the next requirement issue from the requirement documents, and more.
 end note
 
 note over Owner, Cumin
-  通知は「見に来てほしい」と伝えるだけ。やりとりの場はIssueとPull Request。
-  通知にはDiscordのwebhookを使う (将来差し替えられるようにする)。
+  A notification only says "come and look". The conversation is in issues and pull requests.
+  Notifications use a Discord webhook (replaceable later).
 end note
 
 note over Cumin, Rev
-  GitHub上の身元はOwnerと分け、roleごとにGitHub Appとして持つ (方針):
-  cumin-core、cumin-planner、cumin-implementer、cumin-reviewer。
-  対象リポジトリ (peppercheck) は公開なので、Freeプランでもrulesetを使える。
-  mainを更新できるのはOwnerとcumin-coreだけ、とrulesetで制限する。
+  The identities on GitHub are apart from the Owner, one GitHub App for each role (policy):
+  cumin-core, cumin-planner, cumin-implementer, cumin-reviewer.
+  The target repository (peppercheck) is public, so rulesets work on the Free plan.
+  A ruleset limits updates of main to the Owner and cumin-core.
 end note
 
 @enduml
