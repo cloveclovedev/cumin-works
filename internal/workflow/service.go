@@ -404,77 +404,6 @@ func (s *Service) copyLabels(ctx context.Context, token string, target Target, a
 	return nil
 }
 
-// plan applies R1: replace the status label of the requirement issue with
-// cumin/status/planning, and only then request the split. When the label
-// change fails, nothing is requested; the next poll decides again.
-func (s *Service) plan(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, p Plan) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
-	requirement, ok := snapshot.RequirementIssue(p.Number)
-	if !ok {
-		return fmt.Errorf("R1: issue #%d is not in the snapshot", p.Number)
-	}
-	labels := LabelsAfterPlan(requirement.Labels)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
-		return fmt.Errorf("R1: move issue #%d to planning: %w", p.Number, err)
-	}
-	s.logger().Info("R1: moved the requirement issue to planning",
-		"repository", target.Repository.String(), "issue", p.Number, "labels", labels)
-	if s.Agents == nil {
-		return fmt.Errorf("R1: request the split for issue #%d: no agent service is configured", p.Number)
-	}
-	done := s.markInProgress(ctx, target.Repository.String(), p.Number)
-	s.running.Add(1)
-	go func() {
-		defer s.running.Done()
-		defer done()
-		s.runPlanner(ctx, target, settings, p.Number)
-	}()
-	return nil
-}
-
-// runPlanner prepares the work directory and runs one Planner request of
-// the kind "plan" in a new session. The work directory is a detached
-// checkout of the default branch, because the Planner only reads
-// (agent-run.md, the topic on the work directory).
-//
-// The end of the run is only logged. What follows it (R2: the check of the
-// split, the notification, and the failure paths) is the next requirement
-// row; until then the requirement issue stays in cumin/status/planning.
-func (s *Service) runPlanner(ctx context.Context, target Target, settings *RepositorySettings, number int) {
-	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RolePlanner)
-	role := settings.Settings.Roles[config.RolePlanner]
-	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, agent.Checkout{
-		Owner: target.Repository.Owner,
-		Repo:  target.Repository.Name,
-		Issue: number,
-		Role:  config.RolePlanner,
-	})
-	if err != nil {
-		log.Error("R1: the work directory was not prepared", "error", err.Error())
-		return
-	}
-	log.Info("R1: requested the split")
-	run, err := s.Agents.Start(ctx, agent.StartRequest{
-		Owner:        target.Repository.Owner,
-		Repo:         target.Repository.Name,
-		Role:         config.RolePlanner,
-		RiskCriteria: settings.RiskCriteria,
-		Text:         PlanRequestText(target.Repository.String(), number, workDir),
-		WorkDir:      workDir,
-		Settings:     &role,
-	})
-	var abnormal *agent.AbnormalEnd
-	switch {
-	case errors.As(err, &abnormal):
-		log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-			"session_id", abnormal.SessionID, "detail", abnormal.Detail)
-	case err != nil:
-		log.Error("the agent was not started", "error", err.Error())
-	default:
-		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-	}
-}
-
 // implementerRequest is one request to the Implementer: its row, its kind,
 // the branch of its worktree, the session that it resumes, and its text.
 type implementerRequest struct {
@@ -731,7 +660,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 // different ways, and the Owner needs the kind of each one to know where
 // to look.
 func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, first, second agent.EndKind) {
-	reason := fmt.Sprintf("The Implementer run ended abnormally (%s). cumin ran the same request again, and it ended abnormally too (%s).", first, second)
+	reason := abnormalReason("Implementer", first, second)
 	sub, _ := s.subIssueNow(ctx, log, target, number)
 	pullRequest := 0
 	if pr, ok := sub.LatestPullRequest(); ok {

@@ -236,6 +236,30 @@ func TestLabelsAfterPlan_R1(t *testing.T) {
 	}
 }
 
+// R2 (issue-states.md): one or more sub-issues, each with exactly one risk
+// label. The first failing sub-issue by number is named.
+func TestVerifySplit_R2(t *testing.T) {
+	sub := func(number int, labels ...string) SubIssue { return SubIssue{Number: number, Labels: labels} }
+	tests := []struct {
+		name string
+		subs []SubIssue
+		want SplitVerification
+	}{
+		{"no sub-issue", nil, SplitVerification{Failure: SplitNoSubIssue}},
+		{"one risk label each", []SubIssue{sub(10, "risk/low"), sub(11, "risk/high", LabelReady)}, SplitVerification{Passed: true}},
+		{"a closed sub-issue counts as well", []SubIssue{{Number: 10, Closed: true}}, SplitVerification{Failure: SplitNoRiskLabel, SubIssue: 10}},
+		{"the lowest failing number is named", []SubIssue{sub(12), sub(11, "risk/low", "risk/medium")}, SplitVerification{Failure: SplitTwoRiskLabels, SubIssue: 11}},
+		{"an owner task with risk/high passes", []SubIssue{sub(10, LabelOwnerTask, "risk/high")}, SplitVerification{Passed: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := VerifySplit(RequirementIssue{Number: 6, SubIssues: tt.subs}); got != tt.want {
+				t.Errorf("VerifySplit = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
 // shuffle returns a copy of the snapshot with the issues in a random order.
 func shuffle(snapshot Snapshot) Snapshot {
 	r := rand.New(rand.NewPCG(1, 2))

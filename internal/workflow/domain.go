@@ -615,6 +615,65 @@ func VerifyDone(sub SubIssue, implementer, localHead string) Verification {
 	return Verification{Passed: true, PullRequest: pr.Number}
 }
 
+// SplitFailure says which check of R2 failed.
+type SplitFailure int
+
+const (
+	// SplitNone: the verification passed.
+	SplitNone SplitFailure = iota
+	// SplitNoSubIssue: the requirement issue has no sub-issue.
+	SplitNoSubIssue
+	// SplitNoRiskLabel: a sub-issue has no risk/* label.
+	SplitNoRiskLabel
+	// SplitTwoRiskLabels: a sub-issue has more than one risk/* label.
+	SplitTwoRiskLabels
+)
+
+// SplitVerification is the result of R2 after done. Passed is true when
+// every check held; otherwise Failure names the first check that failed,
+// and SubIssue the sub-issue that failed it (0 when there is none).
+type SplitVerification struct {
+	Passed   bool
+	Failure  SplitFailure
+	SubIssue int
+}
+
+// VerifySplit applies the checks of R2 (issue-states.md) to a requirement
+// issue after the Planner returned done: it has one or more sub-issues, and
+// every sub-issue carries exactly one risk/* label. The sub-issues are
+// checked lowest number first, so the same issue always names the same
+// failure. cumin judges nothing of the content of the split; the Owner
+// reviews it.
+func VerifySplit(requirement RequirementIssue) SplitVerification {
+	if len(requirement.SubIssues) == 0 {
+		return SplitVerification{Failure: SplitNoSubIssue}
+	}
+	subs := slices.Clone(requirement.SubIssues)
+	slices.SortFunc(subs, func(a, b SubIssue) int { return a.Number - b.Number })
+	for _, sub := range subs {
+		risks := 0
+		for _, label := range sub.Labels {
+			if strings.HasPrefix(label, riskLabelPrefix) {
+				risks++
+			}
+		}
+		switch {
+		case risks == 0:
+			return SplitVerification{Failure: SplitNoRiskLabel, SubIssue: sub.Number}
+		case risks > 1:
+			return SplitVerification{Failure: SplitTwoRiskLabels, SubIssue: sub.Number}
+		}
+	}
+	return SplitVerification{Passed: true}
+}
+
+// LabelsAfterSplit returns the labels of a requirement issue after R2
+// passed: cumin/status/awaiting-owner-review in place of
+// cumin/status/planning.
+func LabelsAfterSplit(labels []string) []string {
+	return ReplaceStatusLabel(labels, LabelAwaitingOwnerReview)
+}
+
 // LatestPullRequest returns the open pull request with the highest number
 // that closes the issue. The snapshot holds open pull requests only, and
 // there is normally one; when there are more, the newest one is the one
