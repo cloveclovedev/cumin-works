@@ -248,7 +248,8 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `I2: verified the pull request` | ラベルが `cumin/status/awaiting-checks` に戻った |
    | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた |
 
-11. `I3: the pull request is ready for review` のあと、もう1回定期確認が回って I11 が Pull Request のラベルを替えたら、SIGTERM で止める。
+11. 1回目の実行のあとの先頭のコミットで `live-check-1-required-line` が通ってしまったら (Implementer が Pull Request の番号を知ったあとで1行を足して push し直したとき)、I4 は起きずに I3 に進む。その回は数えずに、後片付けをしてからやり直す。Implementer は check を待たない約束なので、ふつうは起きない。
+12. `I3: the pull request is ready for review` のあと、もう1回定期確認が回って I11 が Pull Request のラベルを替えたら、SIGTERM で止める。
 
 ### 確かめること
 

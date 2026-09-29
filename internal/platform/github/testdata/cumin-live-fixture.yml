@@ -53,7 +53,10 @@ jobs:
           FILE_URL: ${{ github.api_url }}/repos/${{ github.repository }}/contents/live/check-1.md?ref=${{ github.event.pull_request.head.sha }}
           REQUIRED_LINE: "Checked by the live scenario Check-1 in pull request #${{ github.event.pull_request.number }}."
         run: |
-          if ! curl --silent --show-error --fail -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$FILES_URL" | grep -q '"filename": *"live/check-1.md"'; then
+          # A failed request fails the job here: the assignment carries the
+          # exit status of curl, and the shell runs with -e.
+          files=$(curl --silent --show-error --fail -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$FILES_URL")
+          if ! printf '%s' "$files" | grep -q '"filename": *"live/check-1.md"'; then
             echo "This pull request does not change live/check-1.md."
             exit 0
           fi
