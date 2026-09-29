@@ -20,7 +20,7 @@
 - sandbox の保護されたパスの一覧 (`.cumin/config.toml` の `protected_paths`) に `CLAUDE.md` があり、`live/` を守っていない。テストは `live/CLAUDE.md` (保護されている) と `live/<日時>.md` (保護されていない) を使う。ファイルがなければ、初期値の一覧が使われるので、そのままでよい。合っていなければ、テストは Pull Request を作る前に止まる。
 - `TestLiveGitHubFacts` には、sandbox に次の2つが要る。リポジトリの管理者が用意する。
   - `internal/platform/github/testdata/cumin-live-fixture.yml` を `.github/workflows/cumin-live-fixture.yml` として、既定のブランチに置く。main は保護されているので、Pull Request で入れる。
-  - `scripts/setup-repo.sh <owner>/<repo> --core-app <slug> --required-check live-skipped-for-bots` を実行して、fixture の job を必須のcheckにする。
+  - `scripts/setup-repo.sh <owner>/<repo> --core-app <slug> --required-check live-skipped-for-bots --required-check live-check-1-required-line` を実行して、fixture の2つの job を必須のcheckにする。このスクリプトは必須のcheckの一覧を丸ごと置き換えるので、2つとも毎回渡す。`live-check-1-required-line` は場面 Check-1 が使う。
   - 足りなければ、テストは最初に止まって、足りないものを表示する。
 - sandbox は、壊れてもよいリポジトリである。テストは Issue、Pull Request、ブランチ、ラベルを作り、main に小さなファイルを1つ merge する。
 
@@ -51,7 +51,7 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive
 
 ## 後片付け
 
-fixture の workflow は、sandbox の全ての Pull Request で動く。`live-fail-on-marker` は `live/fail-marker` を変える Pull Request で失敗し、`live-skipped-for-bots` は bot (GitHub App) の Pull Request で飛ばされ、`live-commit-status` は commit status を1つ作る。
+fixture の workflow は、sandbox の全ての Pull Request で動く。`live-fail-on-marker` は `live/fail-marker` を変える Pull Request で失敗し、`live-check-1-required-line` は `live/check-1.md` を変えて決まった1行を持たない Pull Request で失敗し、`live-skipped-for-bots` は bot (GitHub App) の Pull Request で飛ばされ、`live-commit-status` は commit status を1つ作る。
 
 テストは、Pull Request、ブランチ、Issue を作った直後に、後片付けを登録する。テストが途中で失敗しても、作ったものは閉じられ、消される。main に merge した小さなファイル (`live/<日時>.md`) は残る。
 
@@ -212,3 +212,69 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
 ### 記録
 
 結果は #139 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前、webhook のアドレスは書かない。
+
+## 実機の場面 Check-1
+
+Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセッションで修正を1回だけ依頼し (I4)、修正でcheckが通って、Issue が `cumin/status/reviewing` に移る (I3) までを、1回通して確かめる。本物の Claude Code を4回起動する (使用率の最小の実行と Implementer の実行を、最初の依頼と修正の依頼で1組ずつ) ので、利用枠を使う。Owner が同意したときだけ行う。
+
+受け入れテストは偽の GitHub と偽の CLI を相手にするので、本物の check の失敗の内容が依頼に載ること、`--resume` で本物のセッションが続くこと、修正の push で check が走り直すことは、この場面でだけ分かる。
+
+### 準備
+
+1. sandbox の fixture の workflow が、`internal/platform/github/testdata/cumin-live-fixture.yml` と同じで、`live-check-1-required-line` の job を持っている。`live-check-1-required-line` が必須のcheckに入っている (「前提」)。どちらもリポジトリの管理者が用意する。
+2. `go build -o cumin ./cmd/cumin` でバイナリを作る。
+3. 場面 Impl-1 と同じ形の設定ファイルを1つ作る。対象は sandbox だけ、`work_dir` は捨ててよい一時ディレクトリにする。`max_check_fix_requests` は初期値の3のままにする。
+4. Host で launchd の cumin が動いていれば、設定の対象によらず止める (`launchctl bootout gui/$(id -u)/dev.cloveclove.cumin`)。`--config` で設定ファイルを分けても、状態ファイル (`~/.local/state/cumin/state.json`) は同じである。2つの cumin がそれぞれ手元の内容でファイル全体を書き直すので、ほかのリポジトリのセッションの番号と回数が消えうる。
+5. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。
+6. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。題は `Describe the live scenario Check-1` とし、本文には「`live/check-1.md` を作り、場面 Check-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。決まった1行 (`Checked by the live scenario Check-1 in pull request #<番号>.`) は書かない。1行には Pull Request の番号が入るので、Implementer が worktree の fixture の workflow を読んでも、Pull Request を開く前の最初の push では持てない。Implementer は、落ちたcheckの内容からそれを知る。
+7. sandbox に `live/check-1.md` がまだないことと、`cumin/status/ready` の付いた他の sub-issue がないことを確かめる。
+
+### 実行
+
+8. `./cumin run --config <設定ファイル>` を起動する。
+9. 実装Issueに `cumin/status/ready` を付ける。
+10. 次の定期確認から、ログがこの順に出る。I11 (`I11: copied the labels of the issue to the pull request`) は、ラベルが替わったあとの定期確認ごとに間に入る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+   | `I1: requested the work` | `kind` が `implement`。Implementer を新しいセッションで起動した |
+   | `the agent run ended` | 1回目の実行が `done` で終わった |
+   | `I2: verified the pull request` | ラベルを `cumin/status/awaiting-checks` に替えた |
+   | `poll` | `required_checks` が1以上。check が終わるまで、何も起きない定期確認が続く |
+   | `I4: a required check failed; the issue goes back to the Implementer` | `failed` に `live-check-1-required-line`、`check_fix_requests` が1 |
+   | `I4: requested the work` | `kind` が `check fix`、`resumed` が `true` |
+   | `the agent run ended` | 修正の実行が `done` で終わった |
+   | `I2: verified the pull request` | ラベルが `cumin/status/awaiting-checks` に戻った |
+   | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた |
+
+11. 1回目の実行のあとの先頭のコミットで `live-check-1-required-line` が通ってしまったら (Implementer が Pull Request の番号を知ったあとで1行を足して push し直したとき)、I4 は起きずに I3 に進む。その回は数えずに、後片付けをしてからやり直す。Implementer は check を待たない約束なので、ふつうは起きない。
+12. `I3: the pull request is ready for review` のあと、もう1回定期確認が回って I11 が Pull Request のラベルを替えたら、SIGTERM で止める。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`implementing`、`awaiting-checks`、`reviewing` の順に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 2 | Pull Request がちょうど1つ開いている。2回の実行が同じブランチに積んだ | Pull Request とそのコミット |
+| 3 | 1回目の先頭のコミットで `live-check-1-required-line` が落ち、修正のあとの先頭のコミットで通った。ほかの必須のcheckは通ったか飛ばされた | Pull Request の check |
+| 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は4回である | cumin のログ |
+| 5 | 修正の依頼が、1回目の実行のセッションを再開した。2回の `the agent run ended` のセッションの番号が同じである。公式文書が新しい番号を与えると書くのは `--fork-session` と `/branch` だけなので、再開で番号が変わらないことはこの場面で確かめる | cumin のログ (番号は記録に書かない) |
+| 6 | 修正の依頼文に、落ちたcheckの名前と、annotation の文 (決まった1行を含む) が載っていた | Claude Code のセッションの記録で、`Request: check fix` で始まるユーザの入力 |
+| 7 | 修正のあとの `live/check-1.md` に、Pull Request の番号の入った決まった1行がある。最初のコミットにはない | Pull Request のコミットごとの差分 |
+| 8 | Pull Request のラベルが、最後に `cumin/status/reviewing` と `risk/low` である (I11) | Pull Request |
+| 9 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+
+セッションの記録には token が載りうるので、記録の全体を画面やIssueに写さない。6で見るのは、依頼文の見出しと、checkの名前と、annotation の1文だけにする。
+
+### 後片付け
+
+- Pull Request を閉じ、そのブランチを消す。`live/check-1.md` は main に入らない。
+- 実装Issueと要求Issueを閉じる。
+- `work_dir` の一時ディレクトリを消す。
+- 手順4で launchd の cumin を止めたなら、`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cloveclove.cumin.plist` で戻す。
+- Host の状態ファイルに、実装Issueのセッションの番号と回数が1件残る。sandbox の閉じたIssueのものなので、そのままでよい。
+
+### 記録
+
+結果は #185 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。
