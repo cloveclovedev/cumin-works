@@ -390,8 +390,13 @@ func lastClose(requirement RequirementIssue) time.Time {
 // last sub-issue closed. An older comment belongs to an earlier round: the
 // Owner added sub-issues after it (issue-states.md, the text below the
 // table).
+//
+// A comment at the same second as the last close counts: the times of
+// GitHub cannot order two events inside one second, and a check that never
+// counts would ask again at every poll.
 func checked(requirement RequirementIssue) bool {
-	return requirement.CommentsRead && requirement.AcceptanceCheckAt.After(lastClose(requirement))
+	return requirement.CommentsRead && !requirement.AcceptanceCheckAt.IsZero() &&
+		!requirement.AcceptanceCheckAt.Before(lastClose(requirement))
 }
 
 // accepted is R7.

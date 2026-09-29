@@ -71,7 +71,10 @@ func (c *AppClient) ReadIssueComments(ctx context.Context, token, owner, repo st
 		var read []RequirementComment
 		reached := false
 		for _, node := range page.Nodes {
-			if !node.CreatedAt.After(since) {
+			// A comment at the same second as since is kept: the times of
+			// GitHub have a resolution of one second and cannot order two
+			// events inside it.
+			if node.CreatedAt.Before(since) {
 				reached = true
 				continue
 			}

@@ -352,6 +352,7 @@ func TestDecide_R4AndR7(t *testing.T) {
 			r.CommentsRead = false
 			return r
 		}()}}, 1, nil},
+		{"R7: a comment at the same second as the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(2*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
 		{"R7: a comment after the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(3*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
 	}
 	for _, tt := range tests {
