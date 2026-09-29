@@ -29,6 +29,9 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - 対象のリポジトリごとに、`<work_dir>/<owner>/<repo>/clone` にcloneを1つ置く。`git clone --no-checkout` で作るので作業ファイルは置かれず、worktreeの親としてだけ使う (公式: git-clone の `--no-checkout`)。一度作ったcloneは使い回し、着手のたびに `git fetch --prune origin` で更新する。fetchでは `origin/HEAD` が動かないため、続けて `git remote set-head origin --auto` を実行し、リモートの既定のブランチを問い合わせる (公式: git-remote)。
 - worktreeは、Issueとroleの組ごとに `<work_dir>/<owner>/<repo>/<Issue番号>-<role>` に1つ作る。こうしておけば、並行して進むIssueの作業が混ざらない。
 - 書き込みを行うrole (Implementer) のworktreeは、cuminが名前を決めたブランチに置く。`origin/<ブランチ>` が既にあればそこから始め (続きの依頼)、なければ `origin/HEAD` から新しく作る。読むだけのrole (Planner) のworktreeは、`origin/HEAD` をdetachedで開き、依頼のたびに作り直す ([定期確認の設計](poll.md) の「Plannerへの依頼」)。
+- Reviewerのworktreeは、Pull Requestの先頭のコミットを、SHAを指定してdetachedで開く。同じIssueのImplementerのworktreeが、そのPull Requestのブランチを持っているためである。gitは、別のworktreeがチェックアウトしているブランチを、`--force` なしでは開かない。コミットを指定したdetachedの作業場所には、この制限がない (公式: git-worktree の `add` と `--force`)。ラウンドごとに先頭のコミットが変わるので、依頼のたびにworktreeを消して作り直す。Plannerと同じである。Reviewerは何もpushしないので、消して失うものはない。異常終了のあとのやり直しは、同じworktreeで続ける。
+- 開くコミットは、40桁か64桁の小文字の16進のSHAに限る。gitに渡す前に確かめる。短い名前は曖昧になりうるうえ、16進でない名前はオプションやrefとして読まれうるためである。コミットは、直前の `git fetch` で取り込まれる。cuminが扱うのは、同じリポジトリのブランチのPull Requestだけである。
+- 採らなかった案: Reviewerも、Pull Requestのブランチを開く。Implementerのworktreeと同時には開けない。`--force` で開くと、同じブランチの2つの作業場所が、互いの知らないところで動く。
 - worktreeが既にあるときは、fetchもせずにそのまま返す。異常終了後のやり直しは、同じ作業場所で続ける。再利用するのは、gitがworktreeとして認識するディレクトリだけである。用意が途中で止まって残った空のディレクトリは作り直し、ディレクトリだけが消えている場合は `git worktree prune` で登録を消してから作り直す。
 - 続きの依頼 (I1で、Pull Requestが既にある) の前には、前のラウンドのworktreeを、GitHubにないものを持っていないときだけ消す。確かめるのは、`git fetch` のあとで、`git status --porcelain` が空であることと、`git rev-list HEAD --not --remotes=origin` が空であることである。持っていれば、消さずにそのまま使う。cuminが止めた実行の作業は、pushされずにworktreeに残っているためである。
 - 用意と片付けは、プロセスの中で直列に実行する。同じリポジトリの2つのIssueに同時に着手しても、cloneが2つ作られることはない。
@@ -139,9 +142,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 ## まだ決めていないこと
 
-| 決める、または確かめること | どこで |
-|---|---|
-| Reviewerの作業場所。Pull Requestのブランチを、同じIssueのImplementerのworktreeと同時に開けるか | Reviewerへの依頼を作る要求Issue |
+なし。
 
 ## 後回しにしたこと
 
