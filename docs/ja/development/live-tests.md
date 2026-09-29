@@ -307,7 +307,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-owner-review` に替えた |
    | `the Owner was notified` (`row` が `R2`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
 
-9. `R2: the split waits for the Owner` が出たら、Accept-1 に進むか、SIGTERM で止める。
+9. `R2: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`R2: ...` の行で止めると、通知が取り消されることがある。
 
 ### 確かめること
 
@@ -358,7 +358,7 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    | `R7: the requirement issue waits for the acceptance of the Owner` | 次の定期確認で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-owner-review` に替えた |
    | `the Owner was notified` (`row` が `R7`) | 通知した |
 
-6. `R7: ...` が出たら、cumin のプロセスに SIGTERM を送る。`stopped` の行が出て、終了コード0で終わる。止めるときに途中だった定期確認は、`poll failed` (`context canceled`) を1行出すことがある。止めた結果で、問題ではない。
+6. `R7: ...` のあとの通知の行 (Plan-1 の手順9と同じ) が出たら、cumin のプロセスに SIGTERM を送る。`stopped` の行が出て、終了コード0で終わる。止めるときに途中だった定期確認は、`poll failed` (`context canceled`) を1行出すことがある。止めた結果で、問題ではない。
 
 ### 確かめること
 
