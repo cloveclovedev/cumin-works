@@ -690,11 +690,12 @@ func TestRun_TheStartRecordMustListTheSkillsOfTheRole(t *testing.T) {
 	}
 }
 
-// The two plugins that Claude Code ships in its binary pass the start
-// check, matched on source (the Decision on #156). Any other plugin, a
-// built-in name from another source, an entry without source, or a shape
-// that cumin cannot read stops the run.
-func TestUserContext_OnlyTheBuiltinPluginsPass(t *testing.T) {
+// The plugins that Claude Code ships in its binary pass the start check,
+// matched on the reserved source "<name>@builtin" (the Owner, on #156). Any
+// other plugin, a built-in name from another source, an entry without
+// source, or a shape that cumin cannot read stops the run, and the reason
+// names the source.
+func TestUserContext_OnlyBuiltinPluginsPass(t *testing.T) {
 	work := t.TempDir()
 	withPlugins := func(plugins string) event {
 		return event{Plugins: []byte(plugins), MCPServers: []byte(`[]`), Skills: []byte(`[]`)}
@@ -704,10 +705,12 @@ func TestUserContext_OnlyTheBuiltinPluginsPass(t *testing.T) {
 		name, plugins, want string
 	}{
 		{"the two built-in plugins, as Claude Code 2.1.284 lists them", `[` + builtin + `]`, ""},
-		{"one of them", `[{"name":"telemetry","path":"builtin","source":"telemetry@builtin"}]`, ""},
-		{"a built-in plugin next to another plugin", `[` + builtin + `,{"name":"context7","source":"context7@claude-plugins-official"}]`, "lists plugins"},
-		{"a built-in name synced from claude.ai", `[{"name":"agents-md","source":"agents-md@synced"}]`, "lists plugins"},
-		{"a built-in name without source", `[{"name":"agents-md","path":"builtin"}]`, "lists plugins"},
+		{"a built-in plugin of a later version of Claude Code", `[{"name":"new-mod","path":"builtin","source":"new-mod@builtin"}]`, ""},
+		{"a built-in plugin next to another plugin", `[` + builtin + `,{"name":"context7","source":"context7@claude-plugins-official"}]`, `"context7@claude-plugins-official"`},
+		{"a built-in name synced from claude.ai", `[{"name":"agents-md","source":"agents-md@synced"}]`, `"agents-md@synced"`},
+		{"a source that only contains builtin", `[{"name":"x","source":"x@builtin-extra"}]`, `"x@builtin-extra"`},
+		{"a source without a name", `[{"name":"","source":"@builtin"}]`, `"@builtin"`},
+		{"a built-in name without source", `[{"name":"agents-md","path":"builtin"}]`, "one has no source"},
 		{"a plugin of an unknown shape", `["agents-md@builtin"]`, "unknown shape"},
 		{"a plugins field that is not a list", `{"agents-md":true}`, "unknown shape"},
 	}

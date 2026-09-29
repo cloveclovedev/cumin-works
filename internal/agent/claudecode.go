@@ -438,20 +438,20 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 	}
 }
 
-// builtinPlugins are the plugins that Claude Code ships in its binary and
-// lists in the init event whatever the setting sources (2.1.284, measured
-// on 2026-09-29; the Decision on #156). They are matched on source, the id
-// "<name>@builtin", never on the name alone: a plugin of the same name from
-// a marketplace or from claude.ai is user-level context. A new built-in
-// plugin stops the run until the Owner adds it here.
-var builtinPlugins = map[string]bool{
-	"agents-md@builtin": true,
-	"telemetry@builtin": true,
-}
+// builtinSuffix ends the source of a plugin that Claude Code ships in its
+// binary. Claude Code lists such plugins in the init event whatever the
+// setting sources (2.1.284 lists agents-md@builtin and telemetry@builtin,
+// measured on 2026-09-29). "builtin" is a reserved marketplace name, so no
+// marketplace, claude.ai, or skills directory gives a plugin this source
+// (official: Marketplace reference, "Reserved names"). A built-in plugin is
+// part of the CLI, as its built-in tools are, so every one passes, and a
+// new one does not stop the runs after an update of Claude Code (the Owner,
+// on #156).
+const builtinSuffix = "@builtin"
 
 // userContext reports why the init event shows context from outside the
-// work directory, or "" when it shows none. Checked: plugins other than
-// builtinPlugins and MCP servers (empty with --setting-sources project,
+// work directory, or "" when it shows none. Checked: plugins that are not
+// built in (builtinSuffix) and MCP servers (empty with --setting-sources project,
 // row 27), and
 // memory_paths (absent when auto memory is off, row 28; the live record
 // of #67). plugins and mcp_servers must be present: a record without
@@ -488,7 +488,9 @@ func userContext(e event, workDir string, wantSkills []string) string {
 }
 
 // otherPlugins reports why the plugins of the init event hold one that is
-// not in builtinPlugins, or "" when they hold none. A list that cumin
+// not built in, or "" when they hold none. The reason names the source of
+// that plugin, so that the Owner sees what loaded; a source is an id such
+// as "context7@claude-plugins-official", never a path. A list that cumin
 // cannot read, or an entry without source, confirms nothing and stops the
 // run, as a missing field does.
 func otherPlugins(raw json.RawMessage) string {
@@ -502,8 +504,12 @@ func otherPlugins(raw json.RawMessage) string {
 		return "the init event has plugins of an unknown shape"
 	}
 	for _, plugin := range plugins {
-		if plugin.Source == nil || !builtinPlugins[*plugin.Source] {
-			return "the init event lists plugins"
+		if plugin.Source == nil {
+			return "the init event lists plugins: one has no source"
+		}
+		name, found := strings.CutSuffix(*plugin.Source, builtinSuffix)
+		if !found || name == "" {
+			return fmt.Sprintf("the init event lists plugins: %q", *plugin.Source)
 		}
 	}
 	return ""
