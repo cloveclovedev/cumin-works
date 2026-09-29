@@ -383,3 +383,123 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
 ### 記録
 
 Plan-1 と同じ Issue に、同じ決まりで残す。
+
+## 実機の場面 Review-1
+
+必須のcheckが通った Pull Request を、cumin が Reviewer に渡し (I3)、Reviewer が先頭のコミットに `APPROVE` を出すまでを、1回通して確かめる。本物の Claude Code を4回起動する (使用率の最小の実行と Agent の実行を、Implementer と Reviewer で1組ずつ)。Reviewer の1ラウンド目は組み込みのレビューの skill も動かすので、利用枠を多めに使う。Owner が同意したときだけ行う。
+
+受け入れテストは偽の CLI がレビューを出すので、本物の Reviewer が `commit_id` を付けて先頭のコミットにレビューを出すこと、組み込みのレビューの skill を headless の実行で呼べることは、この場面でだけ分かる。
+
+### 準備
+
+1. `go build -o cumin ./cmd/cumin` でバイナリを作る。
+2. 場面 Impl-1 と同じ形の設定ファイルを1つ作る。対象は sandbox だけ、`work_dir` は捨ててよい一時ディレクトリにする。`[roles.reviewer]` の `time_limit` を `"30m"` にする。`max_review_rounds` は初期値の3のままにする。
+3. Host で launchd の cumin が動いていれば止める (場面 Check-1 の手順4と同じ理由)。
+4. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける (場面 Impl-1 の手順3と同じ理由)。
+5. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。題は `Describe the live scenario Review-1` とし、本文の完了条件には「`live/review-1.md` を作り、場面 Review-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。
+6. sandbox に `live/review-1.md` がまだないことと、`cumin/status/ready` の付いた他の sub-issue がないことを確かめる。同時に進めるIssueの数に数えられるIssue (`cumin/status/reviewing` を含む) が残っていないことも確かめる (「`cumin run` を sandbox で動かすとき」)。
+
+### 実行
+
+7. `./cumin run --config <設定ファイル>` を起動する。
+8. 実装Issueに `cumin/status/ready` を付ける。
+9. 次の定期確認から、ログがこの順に出る。I11 のログは間に入る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `I1: requested the work` | Implementer を新しいセッションで起動した |
+   | `I2: verified the pull request` | ラベルを `cumin/status/awaiting-checks` に替えた |
+   | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた。`round` が1 |
+   | `I3: requested the review` | `round` が1、`resumed` が `false` |
+   | `the agent run ended` | Reviewer の実行が `done` で終わった |
+   | `I3: checked the review` | `result` が `approved` |
+   | `I3: the Reviewer approved the head commit` | ラベルは `cumin/status/reviewing` のまま |
+
+10. `I3: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`reviewing` の順に移り、`reviewing` のまま残った | Issue のイベント |
+| 2 | Pull Request に、Reviewer の App の bot のレビューがちょうど1つあり、結果が `APPROVED` で、対象のコミットが Pull Request の先頭のコミットである | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` の `user.login`、`state`、`commit_id` |
+| 3 | レビューの本文が `review.md` の形に従い、`Result: Approved (round 1 of 3)` と、実行したレビューの skill の行がある | レビューの本文 |
+| 4 | Reviewer は `<Issue番号>-reviewer` の worktree で動き、その HEAD は detached で、Pull Request の先頭のコミットだった | `git -C <work_dir>/<owner>/<repo>/<Issue番号>-reviewer rev-parse HEAD` と `git ... status` |
+| 5 | Reviewer に渡された skill の一覧に、`cumin-review` と `cumin-decision-request` があり、Implementer と Planner の skill はない。組み込みの `code-review` と `security-review` が一覧に載っているかを記録する | Claude Code のセッションの記録 (場面 Impl-1 の8と同じ見方)。worktree のディレクトリは `<Issue番号>-reviewer` である |
+| 6 | Reviewer が、レビューを出す前に `cumin-review` を呼んだ。組み込みの `code-review` と `security-review` を呼んだか、呼べなかったか (呼べなかったなら、そのときの応答の1文) を記録する。`--comment`、`--fix`、`ultra` を付けていない | 同じ記録の `Skill` のツールの呼び出し |
+| 7 | Reviewer は、コミットも push もしていない。Pull Request のコミットは Implementer のものだけである | Pull Request のコミット |
+| 8 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+
+5と6の結果は、組み込みのレビューの skill を1ラウンド目で使う決まり (Reviewerの要件の「ラウンドごとに見る範囲」) が、headless の実行で実際に効くかの記録である。呼べなかったときは、Reviewer は同じ観点を自分で確かめて続ける決まりなので、場面は失敗にしない。記録を #157 に残す。
+
+### 後片付け
+
+- Pull Request を閉じ、そのブランチを消す。
+- 実装Issueと要求Issueを閉じる。`cumin/status/reviewing` のまま残すと、同時に進めるIssueの数を1つ使い続け、次の場面に着手しない。
+- `work_dir` の一時ディレクトリを消す。
+- 手順3で launchd の cumin を止めたなら、戻す。
+
+### 記録
+
+結果は #229 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。
+
+## 実機の場面 Review-2
+
+Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implementer に同じセッションで修正を依頼し (I5)、Implementer が返答のテンプレートで答えて直し、2ラウンド目の Reviewer が同じセッションで `APPROVE` を出すまでを、1回通して確かめる。本物の Claude Code を8回起動する (使用率の最小の実行と Agent の実行を、Implementer の実装、Reviewer の1ラウンド目、Implementer の修正、Reviewer の2ラウンド目で1組ずつ)。Owner が同意したときだけ行う。
+
+修正を求める指摘を確実に起こすため、Implementer の Pull Request に、完了条件を1つ破るコミットを人が足してから、レビューに進める。
+
+### 準備
+
+1. 場面 Review-1 の手順1〜3と同じ。場面 Review-1 の実装Issueが閉じていることを確かめる。
+2. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける。
+3. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。題は `Describe the live scenario Review-2` とし、本文の完了条件に次の2つを書く。
+   - `live/review-2.md` を作り、場面 Review-2 が何を確かめるかを英語で2〜3文で書く。
+   - `live/review-2.md` のどの行も80文字以内である。
+4. sandbox に `live/review-2.md` がまだないことを確かめる。
+
+### 実行
+
+5. `./cumin run --config <設定ファイル>` を起動し、実装Issueに `cumin/status/ready` を付ける。
+6. `I2: verified the pull request` が出たら、すぐに SIGTERM で止める。必須のcheckが通る前に止めれば、I3 はまだ起きていない。止める前に `I3: the pull request is ready for review` が出てしまったら、その回は数えずに、後片付けをしてからやり直す。
+7. Pull Request のブランチを手元に取り、`live/review-2.md` の最後に、120文字を超える英語の1行を足すコミットを作って push する。コミットの作者は Owner のままでよい。先頭のコミットが変わるので、必須のcheckが走り直す。
+8. `./cumin run --config <設定ファイル>` を起動し直す。`cumin/status/awaiting-checks` のIssueは、再起動のあとも I3 と I4 で続きから進む。
+9. 次の定期確認から、ログがこの順に出る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `I3: requested the review` | `round` が1、`resumed` が `false` |
+   | `I3: checked the review` | `result` が `changes requested` |
+   | `I5: the Reviewer requested changes; the issue goes back to the Implementer` | `round` が1、`limit` が3。ラベルを `cumin/status/implementing` に替えた |
+   | `I5: requested the work` | `kind` が `review fix`、`resumed` が `true` |
+   | `I2: verified the pull request` | 修正が push され、ラベルが `cumin/status/awaiting-checks` に戻った |
+   | `I3: requested the review` | `round` が2、`resumed` が `true` |
+   | `I3: the Reviewer approved the head commit` | 2ラウンド目で承認された |
+
+10. `I3: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`reviewing`、`implementing`、`awaiting-checks`、`reviewing` の順に移った | Issue のイベント |
+| 2 | Reviewer の1つめのレビューが、手順7のコミットに対する `CHANGES_REQUESTED` である。80文字の完了条件を `(blocking)` の指摘にし、`Why` と `Fix` がある | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` と、そのレビューのコメント |
+| 3 | Implementer の修正が、手順7の行を直すコミットとして同じブランチに積まれた。新しい Pull Request はない | Pull Request のコミット |
+| 4 | Implementer が、修正を求める指摘のスレッドに `Fixed in <SHA>.` で始まる返答を書いた (`review-reply.md`)。スレッドは解決済みにしていない | Pull Request のレビューのスレッド |
+| 5 | Implementer の2回の実行が同じセッションである (`I1: requested the work` の実行と、`I5: requested the work` の実行の `the agent run ended` のセッションの番号が同じ) | cumin のログ (番号は記録に書かない) |
+| 6 | Reviewer の2回の実行が同じセッションで、Implementer のセッションとは違う | cumin のログ |
+| 7 | 2ラウンド目の依頼文に `Round: 2 of 3` と `Last reviewed commit:` (手順7のコミット) がある。2ラウンド目の Reviewer は、組み込みのレビューの skill を呼んでいない | Claude Code のセッションの記録で、`Request: review` で始まる2つめのユーザの入力と、そのあとの `Skill` の呼び出し |
+| 8 | Reviewer の2つめのレビューが、修正のあとの先頭のコミットに対する `APPROVED` で、`round 2 of 3` とある | レビュー |
+| 9 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+
+### 後片付け
+
+- Pull Request を閉じ、そのブランチを消す。
+- 実装Issueと要求Issueを閉じる。
+- `work_dir` の一時ディレクトリを消す。
+- launchd の cumin を止めたなら、戻す。
+- Host の状態ファイルに、実装Issueの2つのセッションの番号が1件残る。sandbox の閉じたIssueのものなので、そのままでよい。
+
+### 記録
+
+結果は #229 にコメントとして残す。書き方は場面 Review-1 と同じである。
