@@ -1,0 +1,50 @@
+@startuml poll-review
+' cumin works - the Reviewer request (I3), the check of its review after the run, and I10.
+' Document: poll.md, section on the Reviewer request.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:I3: every required check passed on the head commit;
+:Read the login of the Reviewer App
+and the last cumin/status/ready of the issue;
+:Count the round from the reviews on GitHub
+(pure function);
+:Change the label to cumin/status/reviewing;
+:Remove the Reviewer worktree,
+open the head commit detached;
+if (Round?) then (1)
+  :New session;
+else (2 or later)
+  :Resume the Reviewer session;
+  :Name the last reviewed commit;
+endif
+repeat
+  :Run the Reviewer ("review");
+  if (Result?) then (blocked)
+    :I10: hand back to the Owner
+    (blocked_reason, no retry);
+    stop
+  elseif (abnormal end) then
+    :Retry once in a new session,
+    then hand back to the Owner (row I3);
+    stop
+  else (done)
+    :Read the snapshot again;
+  endif
+  backward:Ask once more in the same session;
+repeat while (Latest review of the Reviewer is on the head
+commit with APPROVE or REQUEST_CHANGES?) is (no, first time)
+->yes, or no for the second time;
+if (Review?) then (APPROVE)
+  :Log it; the label stays
+  (the merge is a later requirement);
+elseif (REQUEST_CHANGES) then
+  :Log it
+  (I5 and I8 are the next issues);
+else (none, twice)
+  :Hand back to the Owner (row I5);
+endif
+stop
+@enduml

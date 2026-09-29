@@ -69,9 +69,6 @@ func TestSetAndClear_SurviveANewStore(t *testing.T) {
 	}
 }
 
-// TestSave_WritesTheVersionAndOnlyTheAllowedKeys keeps the file to what the
-// requirement allows: the session and the count of an issue, and nothing
-// else. A quota number, a token, or a path must never be in it.
 // TestIssue_TheRepositoryIgnoresCase: GitHub names ignore case, and the
 // settings of the Host may write the same repository with another
 // capitalization. The entry must still be found, not doubled.
@@ -95,10 +92,13 @@ func TestIssue_TheRepositoryIgnoresCase(t *testing.T) {
 	}
 }
 
+// TestSave_WritesTheVersionAndOnlyTheAllowedKeys keeps the file to what the
+// requirement allows: the sessions and the count of an issue, and nothing
+// else. A quota number, a token, or a path must never be in it.
 func TestSave_WritesTheVersionAndOnlyTheAllowedKeys(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	store := state.Open(path, nil)
-	if err := store.Set("example-org/example-repo", 12, state.Issue{SessionID: "s-1", CheckFixRequests: 1}); err != nil {
+	if err := store.Set("example-org/example-repo", 12, state.Issue{SessionID: "s-1", ReviewerSessionID: "r-1", CheckFixRequests: 1}); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestSave_WritesTheVersionAndOnlyTheAllowedKeys(t *testing.T) {
 		t.Fatalf("the file has no entry of the issue: %s", raw)
 	}
 	for name := range entry {
-		if name != "session_id" && name != "check_fix_requests" {
+		if name != "session_id" && name != "reviewer_session_id" && name != "check_fix_requests" {
 			t.Errorf("the entry has the key %q", name)
 		}
 	}
@@ -219,5 +219,18 @@ func TestSet_AFailedSaveKeepsTheEntryBefore(t *testing.T) {
 	}
 	if got := store.Issue("example-org/example-repo", 11); got != (state.Issue{}) {
 		t.Errorf("a new entry after a failed save = %+v, want none", got)
+	}
+}
+
+// A file of version 1, written before the Reviewer session existed, is
+// read as it is: its keys are a subset of version 2.
+func TestOpen_ReadsAFileOfVersion1(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"issues":{"example-org/example-repo#12":{"session_id":"s-1","check_fix_requests":2}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := state.Open(path, nil).Issue("example-org/example-repo", 12)
+	if got != (state.Issue{SessionID: "s-1", CheckFixRequests: 2}) {
+		t.Errorf("issue = %+v, want the entry of version 1", got)
 	}
 }

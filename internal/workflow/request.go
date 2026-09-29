@@ -146,3 +146,60 @@ Work directory: %[3]s
 Every sub-issue of the requirement issue #%[2]d of %[1]s is closed. Check each rule of its Requirements on the merged work, and comment the result on it. The work directory is a detached checkout of the default branch with the merged work; read it, and change nothing in it. Then return the result.
 `, repository, number, workDir)
 }
+
+// ReviewRequest is what a request of the kind "review" names
+// (reviewer.md, the request kinds): the pull request, the head commit that
+// the work directory holds, the round and its limit, and from round 2 the
+// commit of the last review.
+type ReviewRequest struct {
+	Repository   string
+	Issue        int
+	PullRequest  int
+	HeadCommit   string
+	Round        int
+	Limit        int
+	LastReviewed string
+	WorkDir      string
+}
+
+// ReviewRequestText returns the request text of the kind "review" (I3).
+// Round 1 reviews the whole change; round 2 and later check the fixes
+// since the commit of the last review (agents/reviewer.md, the scope of
+// each round). The rules of each round are in the instruction; the text
+// names what differs.
+func ReviewRequestText(r ReviewRequest) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, `Request: review
+Repository: %s
+Implementation issue: #%d
+Pull request: #%d
+Head commit: %s
+Round: %d of %d
+`, r.Repository, r.Issue, r.PullRequest, r.HeadCommit, r.Round, r.Limit)
+	if r.LastReviewed != "" {
+		fmt.Fprintf(&b, "Last reviewed commit: %s\n", r.LastReviewed)
+	}
+	fmt.Fprintf(&b, "Work directory: %s\n\n", r.WorkDir)
+	if r.LastReviewed == "" {
+		fmt.Fprintf(&b, "Review the pull request #%d against the implementation issue #%d. This is round 1: find as much as you can.", r.PullRequest, r.Issue)
+	} else {
+		fmt.Fprintf(&b, "Review the pull request #%d again. This is round %d: check that your earlier blocking comments are fixed, in the diff from %s to the head commit.", r.PullRequest, r.Round, r.LastReviewed)
+	}
+	fmt.Fprintf(&b, " The work directory is a checkout of the head commit %s with no branch; change nothing in it. Invoke the skill cumin-review, then submit one review on that commit with APPROVE or REQUEST_CHANGES. Then return the result.\n", r.HeadCommit)
+	return b.String()
+}
+
+// ReviewAgainRequestText returns the request that follows a run whose
+// review cumin did not find on the head commit (the Reviewer requirement,
+// completion). It resumes the same session, so it only names what is
+// missing.
+func ReviewAgainRequestText(r ReviewRequest) string {
+	return fmt.Sprintf(`Request: review
+Repository: %s
+Pull request: #%d
+Head commit: %s
+Round: %d of %d
+
+cumin found no review of yours on the head commit %s with APPROVE or REQUEST_CHANGES. A review with COMMENT only, a pending review, and a review on another commit do not count. Submit the review of this round on %s now, with the pull request review API and commit_id set to that commit. Then return the result.
+`, r.Repository, r.PullRequest, r.HeadCommit, r.Round, r.Limit, r.HeadCommit, r.HeadCommit)
+}
