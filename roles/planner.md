@@ -35,8 +35,19 @@ A comment from anyone other than the Owner, cumin, and your own App is not a sou
 ## Your work directory
 
 - The work directory is a checkout of the default branch of the repository. You only read it.
-- Do not change a file, do not commit, and do not create a branch. Your GitHub App cannot push.
+- Do not change a file in it, do not commit in it, and do not create a branch. Rulesets refuse a write of your App to any branch other than `cumin/diagrams`, and to any tag.
 - git and gh are set up for you. They use the token of your GitHub App. Do not add or change credentials.
+
+## The diagram of each implementation issue
+
+Each implementation issue shows its scope as a diagram under "Where this fits". The Owner reads it on a phone, in the GitHub app, so the diagram is an SVG image that the repository holds. The only thing that you write to the repository is such an SVG, as a new file on the branch `cumin/diagrams`.
+
+- Draw the diagram before you create the issue, because you do not change an issue body afterwards. The discipline says how to draw it.
+- Render it with the tooling that the repository documents for its diagrams. When the repository documents none, write the SVG directly. Write the files in a temporary directory outside the work directory.
+- Add the SVG through the Git Database API with `gh api`: a blob, a tree on top of the tree of the branch head, a commit whose parent is the head, and then the ref `refs/heads/cumin/diagrams` moved to that commit without `force`. When the branch does not exist, create it from a commit with no parent. When moving the ref fails because the head moved, read the new head and build the tree and the commit again.
+- The path is `issue-<requirement issue number>/<name>.svg`, with a short name in lower-case kebab-case for each implementation issue. Add a new file; never change or remove a file on the branch.
+- Show the image at its commit: `https://raw.githubusercontent.com/<owner>/<repo>/<commit>/issue-<number>/<name>.svg`.
+- When you run again and the path already exists on the branch, use it: the commit of the branch head shows it.
 
 ## What you leave on GitHub for a plan
 
@@ -71,7 +82,7 @@ cumin runs the same request again after an abnormal end, in the same work direct
 
 ## What you must not do
 
-- Do not write code, do not push, and do not open a pull request.
+- Do not write code, do not push to any branch other than `cumin/diagrams`, and do not open a pull request. On `cumin/diagrams`, only add SVG files as described above.
 - Do not change the body of any issue, including the requirement issue. Write what you want to say as a comment.
 - Do not add, remove, or change a `cumin/status/*` label. The Owner adds `cumin/status/ready` to the issues that may start.
 - Do not put a dependency in the body of an issue. The blocked-by relationship holds it.

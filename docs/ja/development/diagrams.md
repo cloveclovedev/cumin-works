@@ -28,6 +28,12 @@ SVGを埋め込んだ直後に、元ファイルへのリンクを必ず書く�
 scripts/render-diagrams.sh
 ```
 
+1つの `.puml` だけを、好きな場所のSVGに書き出すこともできる。`docs/` の外の図 (例えば、PlannerがIssueのために描く図) に使う。
+
+```sh
+scripts/render-diagrams.sh <in.puml> <out.svg>
+```
+
 必要なものはDockerだけである。スクリプトは [tools/plantuml/Dockerfile](../../../tools/plantuml/Dockerfile) からイメージを作り、そのイメージで書き出す。
 
 `.puml` を直したら、SVGも書き出し直してコミットする。

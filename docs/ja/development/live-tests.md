@@ -323,6 +323,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 | 6 | 起動の記録の確認が通った。異常終了が出ていない | cumin のログ |
 | 7 | Agent に渡された skill の一覧に、Planner の4つの skill (`cumin-implementation-issue`、`cumin-plan-summary`、`cumin-acceptance-check`、`cumin-decision-request`) がある。他の role の skill と、Host のユーザの `~/.claude/skills/` の skill はない。Planner は sub-issue を作る前に `cumin-implementation-issue` を、コメントの前に `cumin-plan-summary` を呼んだ | Claude Code のセッションの記録 (Impl-1 の8と同じ見方)。worktree のディレクトリは `<Issue番号>-planner` である |
 | 8 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+| 9 | どの sub-issue も「Where this fits」に英語の図の画像があり、対象の箇所が色で分かる。画像は `cumin/diagrams` の `issue-<要求Issueの番号>/` にあるSVGで、コミットを指定している。`cumin/diagrams` のほかに、Planner の App が作ったブランチやタグがない | 各 sub-issue、sandbox の `cumin/diagrams`、ブランチとタグの一覧 |
 
 skill の一覧を探すときは、"The following skills are available for use with the Skill tool" で始まる部分だけを読む。記録の全体を名前で grep すると、Planner が読んだファイルの中身に当たることがある。
 
