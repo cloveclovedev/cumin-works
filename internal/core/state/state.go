@@ -120,19 +120,33 @@ func (s *Store) Issue(repository string, number int) Issue {
 }
 
 // Set writes the entry of one implementation issue and saves the file. An
-// empty entry removes it, as Clear does.
+// empty entry removes it, as Clear does. When the file cannot be saved, the
+// entry keeps its value from before, and the error says why.
 func (s *Store) Set(repository string, number int, issue Issue) error {
 	if s == nil {
 		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	k := key(repository, number)
+	before, had := s.data.Issues[k]
 	if issue.empty() {
-		delete(s.data.Issues, key(repository, number))
+		delete(s.data.Issues, k)
 	} else {
-		s.data.Issues[key(repository, number)] = issue
+		s.data.Issues[k] = issue
 	}
-	return s.save()
+	if err := s.save(); err != nil {
+		// The entry goes back to what the file holds, so that a caller that
+		// tries again never builds on a change that was not saved (I4 would
+		// count requests that never started).
+		if had {
+			s.data.Issues[k] = before
+		} else {
+			delete(s.data.Issues, k)
+		}
+		return err
+	}
+	return nil
 }
 
 // Clear removes the entry of one implementation issue and saves the file.

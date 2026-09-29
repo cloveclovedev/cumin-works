@@ -14,6 +14,9 @@ partition "判定 (純粋関数。I/Oなし)" {
   :I3の候補を集める
   - cumin/status/awaiting-checks の開いているsub-issue
   - Pull Requestの先頭のコミットで、必須のcheckが全て通った;
+  :I4の候補を集める
+  - cumin/status/awaiting-checks の開いているsub-issue
+  - Pull Requestの先頭のコミットで、必須のcheckが落ちた;
   :進行中のIssue数を数える
   - cumin/status/planning の要求Issue
   - implementing、awaiting-checks、reviewing の
@@ -35,10 +38,17 @@ partition "判定 (純粋関数。I/Oなし)" {
   - cumin/status/* と risk/* が、
     このスナップショットのIssueと違うもの;
   :動作の一覧を返す
-  (I3、R1とI1、I11の順);
+  (I3、I4、R1とI1、I11の順);
 }
 partition "適用 (一覧の順に)" {
   :I3: ラベルを cumin/status/reviewing に替える;
+  if (I4: 修正の依頼の回数が上限未満?) then (はい)
+    :回数を1つ増やし、ラベルを
+    cumin/status/implementing に替え、
+    同じセッションで修正を依頼する;
+  else (いいえ)
+    :Ownerに戻す (行I4);
+  endif
   :R1: ラベルを cumin/status/planning に替え、
   替えられたらPlannerに分割を依頼する
   I1: ラベルを cumin/status/implementing に替え、

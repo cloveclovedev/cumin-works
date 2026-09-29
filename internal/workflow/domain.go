@@ -164,6 +164,17 @@ type StartReview struct {
 	PullRequest int
 }
 
+// FixChecks is the action of I4: a required check failed on the head
+// commit of the pull request, so the issue goes back to the Implementer
+// with the failed checks, in the same session. Whether the limit of check
+// fix requests allows it is decided when it is applied, from the count
+// that the Host keeps (CheckFixAllowed).
+type FixChecks struct {
+	Number      int
+	PullRequest int
+	Failed      []RequiredCheck
+}
+
 // CopyLabels is the action of I11: the pull request gets Labels, so that its
 // cumin/status/* and risk/* labels are those of the issue that it closes.
 type CopyLabels struct {
@@ -186,6 +197,7 @@ type Action interface {
 
 func (Claim) isAction()       {}
 func (StartReview) isAction() {}
+func (FixChecks) isAction()   {}
 func (CopyLabels) isAction()  {}
 func (Plan) isAction()        {}
 
@@ -197,7 +209,7 @@ func (Plan) isAction()        {}
 // branch require; the caller reads them only when an issue of the
 // repository waits for the checks.
 //
-// I3 comes before the starts of R1 and I1: an issue that leaves
+// I3 and I4 come before the starts of R1 and I1: an issue that leaves
 // cumin/status/awaiting-checks keeps its place in the limit, so deciding it
 // first never takes room from a start.
 //
@@ -206,6 +218,7 @@ func (Plan) isAction()        {}
 // belong to.
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Action {
 	actions := reviewableSubIssues(snapshot, required)
+	actions = append(actions, failedSubIssues(snapshot, required)...)
 	room := maxInProgress - inProgress(snapshot)
 	type start struct {
 		number int
@@ -299,6 +312,41 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 		return a.(StartReview).Number - b.(StartReview).Number
 	})
 	return actions
+}
+
+// failedSubIssues returns the actions of I4: open sub-issues in
+// cumin/status/awaiting-checks whose open pull request has a failed
+// required check on its head commit, lowest issue number first.
+func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
+	var actions []Action
+	for _, requirement := range snapshot.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) {
+				continue
+			}
+			pr, ok := sub.LatestPullRequest()
+			if !ok || ChecksOf(required, pr.Checks) != ChecksFailed {
+				continue
+			}
+			actions = append(actions, FixChecks{Number: sub.Number, PullRequest: pr.Number, Failed: FailedChecks(required, pr.Checks)})
+		}
+	}
+	slices.SortFunc(actions, func(a, b Action) int {
+		return a.(FixChecks).Number - b.(FixChecks).Number
+	})
+	return actions
+}
+
+// CheckFixAllowed reports whether I4 may send one more check fix request:
+// count requests were sent since the Owner last added cumin/status/ready,
+// and limit is max_check_fix_requests of the repository. At the limit, I4
+// stops the issue for the Owner instead.
+func CheckFixAllowed(count, limit int) bool { return count < limit }
+
+// LabelsAfterCheckFix returns the labels of a sub-issue after I4:
+// cumin/status/implementing in place of cumin/status/awaiting-checks.
+func LabelsAfterCheckFix(labels []string) []string {
+	return ReplaceStatusLabel(labels, LabelImplementing)
 }
 
 // PullRequestLabels returns the labels that a pull request has after I11:
@@ -459,16 +507,18 @@ func ChecksOf(required []RequiredCheck, results []CheckResult) ChecksState {
 	return state
 }
 
-// FailedChecks returns the names of the required checks that failed, in the
-// order of the required checks. I4 names them in its request.
-func FailedChecks(required []RequiredCheck, results []CheckResult) []string {
-	var names []string
+// FailedChecks returns the required checks that failed, in the order of the
+// required checks. I4 reads what each one says and names it in its request.
+// A check keeps its App, because two rules can require the same name from
+// two Apps.
+func FailedChecks(required []RequiredCheck, results []CheckResult) []RequiredCheck {
+	var failed []RequiredCheck
 	for _, check := range required {
 		if checkState(check, results) == ChecksFailed {
-			names = append(names, check.Name)
+			failed = append(failed, check)
 		}
 	}
-	return names
+	return failed
 }
 
 // checkState says what one required check says.
