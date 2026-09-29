@@ -2071,3 +2071,29 @@ func TestI4_AWorktreeOnAnotherBranchIsMadeAgainOnThePullRequest(t *testing.T) {
 		t.Errorf("labels of #10 = %v, want I2 to pass on the pull request", got)
 	}
 }
+
+// I1 (issue-states.md): a ready sub-issue with cumin/type/owner-task is never
+// claimed, across two polls, while a ready sub-issue without it is.
+func TestI1_AnOwnerTaskIsNeverClaimed(t *testing.T) {
+	sc := newScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 9, Parent: 6, Title: "Change a workflow", Labels: []string{"cumin/type/owner-task", "cumin/status/ready", "risk/high"}})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 9).Labels; !slices.Equal(got, []string{"cumin/type/owner-task", "cumin/status/ready", "risk/high"}) {
+		t.Errorf("labels of #9 = %v, want them unchanged", got)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, "/repos/example-org/example-repo/issues/9/labels"); n != 0 {
+		t.Errorf("%d label changes of #9, want none", n)
+	}
+	// #10 was claimed and ran once; #9 started nothing.
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 (for #10 only)", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of #10 = %v, want it claimed", got)
+	}
+}

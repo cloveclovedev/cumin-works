@@ -656,7 +656,10 @@ func readySubIssues(snapshot Snapshot) []Claim {
 			continue
 		}
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || anyOpen(sub.BlockedBy) {
+			// The Owner does an owner task by hand, so no agent ever
+			// starts for it, even with cumin/status/ready (I1).
+			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || anyOpen(sub.BlockedBy) ||
+				slices.Contains(sub.Labels, LabelOwnerTask) {
 				continue
 			}
 			claims = append(claims, Claim{Number: sub.Number, RequirementIssue: requirement.Number})
