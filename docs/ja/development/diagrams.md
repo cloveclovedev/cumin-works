@@ -28,7 +28,7 @@ scripts/render-diagrams.sh
 
 `go test ./...` に含まれるテスト `TestDiagrams_SVGMatchesSource` ([tools/plantuml/diagrams_test.go](../../../tools/plantuml/diagrams_test.go)) が、`docs/` の下の全ての `.puml` について、隣のSVGが今の `.puml` から書き出されたものかを確かめる。
 
-PlantUMLは、図の元の記述をSVGの中に `<!--SRC=[...]-->` というコメントで書き込む。形式は、UTF-8、Deflate、PlantUML独自のbase64の順である ([Text Encoding](https://plantuml.com/text-encoding))。テストはこのコメントを元に戻し、`@startuml` と `@enduml` の行を除いて `.puml` と比べる。書き出しはしないので、Dockerは要らない。
+PlantUMLは、図の元の記述をSVGの中に `<!--SRC=[...]-->` というコメントで書き込む。形式は、UTF-8、Deflate、PlantUML独自のbase64の順である ([Text Encoding](https://plantuml.com/text-encoding))。コメントには、最初の `@startuml` の行と最後の `@enduml` の行が入らない。テストは、`.puml` の最初の行が `@startuml <ファイル名>` で、最後の行が `@enduml` であることを確かめ (この名前が、書き出すSVGのファイル名になる)、その間の行を、元に戻したコメントと比べる。書き出しはしないので、Dockerは要らない。
 
 テストが見つけるものと、見つけないもの:
 

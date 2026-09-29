@@ -50,27 +50,32 @@ func decodeSource(encoded string) (string, error) {
 	return string(text), nil
 }
 
-// body returns the lines of a source without @startuml and @enduml, so that a
-// .puml and the source in its SVG compare equal.
-func body(source string) string {
-	var lines []string
-	for _, line := range strings.Split(strings.ReplaceAll(source, "\r\n", "\n"), "\n") {
-		if strings.HasPrefix(line, "@startuml") || strings.HasPrefix(line, "@enduml") {
-			continue
-		}
-		lines = append(lines, line)
+// normalize returns the source with Unix line ends and without the blank
+// lines around it.
+func normalize(source string) string {
+	return strings.TrimSpace(strings.ReplaceAll(source, "\r\n", "\n"))
+}
+
+// inner returns the lines between the first and the last line of a source,
+// the lines that PlantUML writes into the SVG. wrapped checks the two outer
+// lines first.
+func inner(source string) string {
+	lines := strings.Split(normalize(source), "\n")
+	if len(lines) < 2 {
+		return ""
 	}
-	return strings.TrimSpace(strings.Join(lines, "\n"))
+	return strings.TrimSpace(strings.Join(lines[1:len(lines)-1], "\n"))
 }
 
 // wrapped reports whether the first line of the source is "@startuml <name>"
 // and the last line is "@enduml", ignoring blank lines around them.
 func wrapped(source, name string) bool {
-	lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(source, "\r\n", "\n")), "\n")
-	return strings.TrimSpace(lines[0]) == "@startuml "+name && strings.TrimSpace(lines[len(lines)-1]) == "@enduml"
+	lines := strings.Split(normalize(source), "\n")
+	return len(lines) >= 2 && strings.TrimSpace(lines[0]) == "@startuml "+name && strings.TrimSpace(lines[len(lines)-1]) == "@enduml"
 }
 
-// checkDiagrams returns one problem for each .puml under root/docs whose SVG
+// checkDiagrams returns one problem for each .puml under root/docs that does
+// not start with "@startuml <file name>" and end with "@enduml", or whose SVG
 // next to it is missing, has no source comment, or was rendered from another
 // text. It does not render, so it needs no Docker, and it does not see an SVG
 // rendered with other fonts: docs/ja/development/diagrams.md forbids that.
@@ -113,7 +118,7 @@ func checkDiagrams(root string) ([]string, error) {
 			problems = append(problems, fmt.Sprintf("%s: the source comment of the SVG does not decode (%v): %s", rel, err, fix))
 			return nil
 		}
-		if body(embedded) != body(string(source)) {
+		if normalize(embedded) != inner(string(source)) {
 			problems = append(problems, fmt.Sprintf("%s: the SVG was rendered from another text of the .puml: %s", rel, fix))
 		}
 		return nil
@@ -196,11 +201,10 @@ func TestDecodeSource_ReadsTheEncodingOfPlantUML(t *testing.T) {
 	}
 }
 
-func TestBody_IgnoresStartAndEndLines(t *testing.T) {
-	a := "@startuml name\r\nA -> B\r\n@enduml\r\n"
-	b := "A -> B"
-	if body(a) != body(b) {
-		t.Errorf("body(%q) = %q, body(%q) = %q", a, body(a), b, body(b))
+func TestInner_KeepsInteriorDirectives(t *testing.T) {
+	source := "@startuml name\r\nA -> B\r\n@enduml\r\nC -> D\r\n@enduml\r\n"
+	if got, want := inner(source), "A -> B\n@enduml\nC -> D"; got != want {
+		t.Errorf("inner = %q, want %q", got, want)
 	}
 }
 
