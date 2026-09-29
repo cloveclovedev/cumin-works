@@ -52,6 +52,16 @@ type Issue struct {
 	Parent int
 	// BlockedBy holds the numbers of the issues that block this one.
 	BlockedBy []int
+	// LabelEvents are the times at which labels were added, oldest first,
+	// as GitHub records them in the timeline. A test adds the events of the
+	// past; the fake adds one for each label that "Set labels" adds.
+	LabelEvents []LabelEvent
+}
+
+// LabelEvent is one LabeledEvent of the timeline of an issue.
+type LabelEvent struct {
+	Label string
+	At    time.Time
 }
 
 // PullRequest is one pull request of the fake repository.
@@ -316,6 +326,7 @@ func (f *Fake) Issue(r *Repository, number int) *Issue {
 	copied := *issue
 	copied.Labels = slices.Clone(issue.Labels)
 	copied.BlockedBy = slices.Clone(issue.BlockedBy)
+	copied.LabelEvents = slices.Clone(issue.LabelEvents)
 	return &copied
 }
 
@@ -783,7 +794,8 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 		return
 	}
 	var target *[]string
-	if issue, ok := repo.Issues[number]; ok {
+	issue, isIssue := repo.Issues[number]
+	if isIssue {
 		target = &issue.Labels
 	} else if pr, ok := repo.PullRequests[number]; ok {
 		target = &pr.Labels
@@ -797,6 +809,14 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 	if err := json.Unmarshal(body, &request); err != nil || request.Labels == nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
 		return
+	}
+	if isIssue {
+		now := time.Now()
+		for _, label := range *request.Labels {
+			if !slices.Contains(issue.Labels, label) {
+				issue.LabelEvents = append(issue.LabelEvents, LabelEvent{Label: label, At: now})
+			}
+		}
 	}
 	*target = slices.Clone(*request.Labels)
 	labels := []map[string]any{}
@@ -862,6 +882,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			// RepositoryFiles asks for the default branch and the files of
 			// .cumin/. The client asks for them on the first page only.
 			RepositoryFiles bool `json:"repositoryFiles"`
+			// Number and Events belong to the query of the label times of
+			// one requirement issue.
+			Number int `json:"number"`
+			Events int `json:"events"`
 		} `json:"variables"`
 	}
 	if err := json.Unmarshal(body, &request); err != nil || !strings.Contains(request.Query, "rateLimit") {
@@ -878,6 +902,11 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			"data":   map[string]any{"repository": nil, "rateLimit": rateLimit(1)},
 			"errors": []map[string]any{{"message": "Could not resolve to a Repository with the name '" + v.Owner + "/" + v.Name + "'."}},
 		})
+		return
+	}
+
+	if v.Number != 0 {
+		f.serveLabelTimes(w, repo, v.Number, v.SubIssues, v.Events)
 		return
 	}
 
@@ -914,6 +943,47 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": repository, "rateLimit": rateLimit(len(page))},
+	})
+}
+
+// serveLabelTimes answers the query of the label times: the newest label
+// events of the issue and of each of its sub-issues. Official: the
+// LabeledEvent of the timeline of an Issue.
+func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, subIssues, events int) {
+	issue, ok := repo.Issues[number]
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
+			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an Issue with the number of %d.", number)}},
+		})
+		return
+	}
+	timeline := func(issue *Issue) map[string]any {
+		list := issue.LabelEvents
+		if len(list) > events {
+			list = list[len(list)-events:]
+		}
+		nodes := []any{}
+		for _, event := range list {
+			nodes = append(nodes, map[string]any{"createdAt": event.At.UTC().Format(time.RFC3339Nano), "label": map[string]any{"name": event.Label}})
+		}
+		return map[string]any{"nodes": nodes}
+	}
+	var subs []*Issue
+	for _, candidate := range sortedIssues(repo) {
+		if candidate.Parent == number {
+			subs = append(subs, candidate)
+		}
+	}
+	node := map[string]any{
+		"number":        number,
+		"timelineItems": timeline(issue),
+		"subIssues": connection(subs, subIssues, func(sub *Issue) any {
+			return map[string]any{"number": sub.Number, "timelineItems": timeline(sub)}
+		}),
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"repository": map[string]any{"issue": node}, "rateLimit": rateLimit(1)},
 	})
 }
 

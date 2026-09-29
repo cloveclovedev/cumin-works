@@ -308,9 +308,18 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
+	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	var errs []error
 	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
 		switch a := action.(type) {
+		case StartRequirement:
+			if err := s.startRequirement(ctx, token, target, snapshot, a); err != nil {
+				errs = append(errs, err)
+			}
+		case ReviewRemaining:
+			if err := s.reviewRemaining(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
 		case Plan:
 			if err := s.plan(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)

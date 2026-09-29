@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // I1 (issue-states.md): claim an open sub-issue with cumin/status/ready
@@ -257,6 +258,71 @@ func TestVerifySplit_R2(t *testing.T) {
 				t.Errorf("VerifySplit = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// R3 and R6 (issue-states.md): a requirement issue follows its sub-issues.
+func TestDecide_R3AndR6(t *testing.T) {
+	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	sub := func(number int, labels ...string) SubIssue { return SubIssue{Number: number, Labels: labels} }
+	readyAt := func(number int, at time.Time) SubIssue {
+		return SubIssue{Number: number, Labels: []string{LabelReady, "risk/low"}, ReadyAt: at}
+	}
+	requirement := func(status string, subs ...SubIssue) RequirementIssue {
+		labels := []string{LabelRequirement}
+		if status != "" {
+			labels = append(labels, status)
+		}
+		return RequirementIssue{Number: 6, Labels: labels, SubIssues: subs, LabelTimesRead: true, ReviewAt: t0}
+	}
+	closed := SubIssue{Number: 12, Closed: true, Labels: []string{"risk/low"}}
+
+	tests := []struct {
+		name        string
+		requirement RequirementIssue
+		want        []Action
+	}{
+		{"R3: ready added after the review label", requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(time.Minute))), []Action{StartRequirement{Number: 6}}},
+		{"R3: ready from before the review label waits", requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(-time.Minute))), nil},
+		{"R3: without the label times nothing moves", func() RequirementIssue {
+			r := requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(time.Minute)))
+			r.LabelTimesRead = false
+			return r
+		}(), nil},
+		{"R3: no status label and a ready sub-issue", requirement("", readyAt(10, time.Time{})), []Action{StartRequirement{Number: 6}}},
+		{"R3: no status label and no ready sub-issue", requirement("", sub(10, "risk/low")), nil},
+		{"R3: a closed sub-issue with ready does not count", requirement("", SubIssue{Number: 10, Closed: true, Labels: []string{LabelReady}}), nil},
+		{"R6: only sub-issues without a status label are open", requirement(LabelImplementing, closed, sub(10, "risk/low")), []Action{ReviewRemaining{Number: 6}}},
+		{"R6: an owner task left alone", requirement(LabelImplementing, closed, sub(10, LabelOwnerTask, "risk/high")), []Action{ReviewRemaining{Number: 6}}},
+		{"R6: an open sub-issue with a status label", requirement(LabelImplementing, sub(10, "risk/low"), sub(11, LabelAwaitingChecks, "risk/low")), nil},
+		{"R6: every sub-issue closed", requirement(LabelImplementing, closed), nil},
+		{"R6: not in awaiting-owner-review", requirement(LabelAwaitingOwnerReview, sub(10, "risk/low")), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Decide(Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}}, 0, nil)
+			if !slices.EqualFunc(got, tt.want, func(a, b Action) bool { return a == b }) {
+				t.Errorf("Decide = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNeedsLabelTimes_R3(t *testing.T) {
+	ready := SubIssue{Number: 10, Labels: []string{LabelReady}}
+	tests := []struct {
+		name string
+		r    RequirementIssue
+		want bool
+	}{
+		{"review with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{ready}}, true},
+		{"review without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{{Number: 10}}}, false},
+		{"implementing with a ready sub-issue", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{ready}}, false},
+	}
+	for _, tt := range tests {
+		if got := NeedsLabelTimes(tt.r); got != tt.want {
+			t.Errorf("%s: NeedsLabelTimes = %v, want %v", tt.name, got, tt.want)
+		}
 	}
 }
 

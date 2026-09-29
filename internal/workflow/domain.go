@@ -12,6 +12,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Label names from the table in issue-states.md.
@@ -67,6 +68,12 @@ type RequirementIssue struct {
 	// BlockedBy are the issues that block the requirement issue. The Owner
 	// links requirement issues to each other, and R1 waits for them.
 	BlockedBy []BlockedBy
+	// LabelTimesRead says that ReviewAt and the ReadyAt of the sub-issues
+	// were read. The poll reads them only when R3 needs them
+	// (NeedsLabelTimes).
+	LabelTimesRead bool
+	// ReviewAt is when cumin/status/awaiting-owner-review was last added.
+	ReviewAt time.Time
 }
 
 // SubIssue is an implementation issue: a sub-issue of a requirement issue.
@@ -80,6 +87,9 @@ type SubIssue struct {
 	// link that "Closes #N" makes). I2 finds the pull request of the
 	// Implementer here, not by the branch name.
 	PullRequests []PullRequest
+	// ReadyAt is when cumin/status/ready was last added. It is read only
+	// when RequirementIssue.LabelTimesRead is true.
+	ReadyAt time.Time
 }
 
 // PullRequest is an open pull request that closes a sub-issue.
@@ -190,16 +200,32 @@ type Plan struct {
 	Number int
 }
 
+// StartRequirement is the action of R3: the Owner let a sub-issue start, so
+// the requirement issue moves to cumin/status/implementing.
+type StartRequirement struct {
+	Number int
+}
+
+// ReviewRemaining is the action of R6: every open sub-issue has no status
+// label, so the requirement issue moves to
+// cumin/status/awaiting-owner-review and the Owner is told that the
+// remaining sub-issues need a look.
+type ReviewRemaining struct {
+	Number int
+}
+
 // Action is one thing that cumin does after a poll. Later rules add types.
 type Action interface {
 	isAction()
 }
 
-func (Claim) isAction()       {}
-func (StartReview) isAction() {}
-func (FixChecks) isAction()   {}
-func (CopyLabels) isAction()  {}
-func (Plan) isAction()        {}
+func (Claim) isAction()            {}
+func (StartReview) isAction()      {}
+func (FixChecks) isAction()        {}
+func (CopyLabels) isAction()       {}
+func (Plan) isAction()             {}
+func (StartRequirement) isAction() {}
+func (ReviewRemaining) isAction()  {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -216,8 +242,12 @@ func (Plan) isAction()        {}
 // R1 and I1 both start an agent, so they share the room under the limit.
 // The starts are taken lowest issue number first, whichever row they
 // belong to.
+//
+// R3 and R6 move a requirement issue and start no agent, so they come
+// first and take no room.
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Action {
-	actions := reviewableSubIssues(snapshot, required)
+	actions := requirementMoves(snapshot)
+	actions = append(actions, reviewableSubIssues(snapshot, required)...)
 	actions = append(actions, failedSubIssues(snapshot, required)...)
 	room := maxInProgress - inProgress(snapshot)
 	type start struct {
@@ -236,6 +266,89 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Ac
 		actions = append(actions, s.action)
 	}
 	return append(actions, labelCopies(snapshot)...)
+}
+
+// requirementMoves returns the actions of R3 and R6, lowest requirement
+// issue number first.
+func requirementMoves(snapshot Snapshot) []Action {
+	requirements := slices.Clone(snapshot.RequirementIssues)
+	slices.SortFunc(requirements, func(a, b RequirementIssue) int { return a.Number - b.Number })
+	var actions []Action
+	for _, requirement := range requirements {
+		switch {
+		case startsImplementing(requirement):
+			actions = append(actions, StartRequirement{Number: requirement.Number})
+		case remainingNeedReview(requirement):
+			actions = append(actions, ReviewRemaining{Number: requirement.Number})
+		}
+	}
+	return actions
+}
+
+// startsImplementing is R3. Without a status label, an open sub-issue with
+// cumin/status/ready is enough: the Owner wrote the sub-issues without the
+// Planner. In cumin/status/awaiting-owner-review, cumin/status/ready must
+// have been added after that label. A sub-issue that kept its
+// cumin/status/ready from an earlier split must not move the requirement
+// issue before the Owner looked at the new sub-issues (issue-states.md, the
+// text below the table).
+func startsImplementing(requirement RequirementIssue) bool {
+	switch statusLabel(requirement.Labels) {
+	case "":
+		return slices.ContainsFunc(requirement.SubIssues, openReady)
+	case LabelAwaitingOwnerReview:
+		if !requirement.LabelTimesRead {
+			return false
+		}
+		return slices.ContainsFunc(requirement.SubIssues, func(sub SubIssue) bool {
+			return openReady(sub) && sub.ReadyAt.After(requirement.ReviewAt)
+		})
+	}
+	return false
+}
+
+// remainingNeedReview is R6: the requirement issue is in
+// cumin/status/implementing, one or more sub-issues are open, and none of
+// the open ones has a status label.
+func remainingNeedReview(requirement RequirementIssue) bool {
+	if statusLabel(requirement.Labels) != LabelImplementing {
+		return false
+	}
+	open := 0
+	for _, sub := range requirement.SubIssues {
+		if sub.Closed {
+			continue
+		}
+		if statusLabel(sub.Labels) != "" {
+			return false
+		}
+		open++
+	}
+	return open > 0
+}
+
+// NeedsLabelTimes reports whether R3 needs the label times of the
+// requirement issue: it waits in cumin/status/awaiting-owner-review, and an
+// open sub-issue carries cumin/status/ready. Only then does the poll read
+// the times, so that the poll query keeps its cost.
+func NeedsLabelTimes(requirement RequirementIssue) bool {
+	return statusLabel(requirement.Labels) == LabelAwaitingOwnerReview &&
+		slices.ContainsFunc(requirement.SubIssues, openReady)
+}
+
+func openReady(sub SubIssue) bool {
+	return !sub.Closed && slices.Contains(sub.Labels, LabelReady)
+}
+
+// statusLabel returns the cumin/status/* label of an issue, or "" when it
+// has none.
+func statusLabel(labels []string) string {
+	for _, label := range labels {
+		if IsStatusLabel(label) {
+			return label
+		}
+	}
+	return ""
 }
 
 // readyRequirementIssues returns the plans of R1 before the limit: open
