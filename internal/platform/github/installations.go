@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -84,4 +85,37 @@ func (c *AppClient) jwtFor(cred AppCredentials) (string, error) {
 		return "", fmt.Errorf("github: the App has no client ID or no private key")
 	}
 	return signJWT(cred, c.now())
+}
+
+// Installation is the installation of an App on one account.
+type Installation struct {
+	HTMLURL string // the settings page, where the account approves new permissions
+	// Permissions are the repository permissions that the account approved,
+	// without "metadata", which GitHub adds by itself.
+	Permissions map[string]string
+}
+
+// GetOrgInstallation reads the installation of the App on an organization:
+// GET /orgs/{org}/installation with a JWT.
+func (c *AppClient) GetOrgInstallation(ctx context.Context, cred AppCredentials, org string) (Installation, error) {
+	jwt, err := c.jwtFor(cred)
+	if err != nil {
+		return Installation{}, err
+	}
+	var installation struct {
+		HTMLURL     string            `json:"html_url"`
+		Permissions map[string]string `json:"permissions"`
+	}
+	path := "/orgs/" + url.PathEscape(org) + "/installation"
+	if err := c.do(ctx, jwt, http.MethodGet, path, "/orgs/{org}/installation", nil, http.StatusOK, &installation); err != nil {
+		return Installation{}, fmt.Errorf("github: read the installation on %s of the App with client ID %s: %w", org, cred.ClientID, err)
+	}
+	if installation.HTMLURL == "" {
+		return Installation{}, fmt.Errorf("github: read the installation on %s of the App with client ID %s: the response has no address", org, cred.ClientID)
+	}
+	delete(installation.Permissions, "metadata")
+	if installation.Permissions == nil {
+		installation.Permissions = map[string]string{}
+	}
+	return Installation{HTMLURL: installation.HTMLURL, Permissions: installation.Permissions}, nil
 }

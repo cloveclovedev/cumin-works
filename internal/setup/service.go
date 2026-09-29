@@ -41,6 +41,7 @@ type GitHubAPI interface {
 	ConvertManifestCode(ctx context.Context, code string) (github.AppRegistration, error)
 	GetApp(ctx context.Context, cred github.AppCredentials) (github.AppInfo, error)
 	IsInstalledOn(ctx context.Context, cred github.AppCredentials, account string) (bool, error)
+	GetOrgInstallation(ctx context.Context, cred github.AppCredentials, org string) (github.Installation, error)
 }
 
 // Service runs "cumin setup github-apps".
@@ -52,6 +53,7 @@ type Service struct {
 	OpenBrowser    func(url string) error
 	Out            io.Writer // messages for the person; never a secret
 	ConfirmTimeout time.Duration
+	PollInterval   time.Duration // how often to read GitHub while waiting; DefaultPollInterval when zero
 }
 
 // Registered is one App after the registration. It holds no secret.
@@ -69,8 +71,10 @@ type callback struct {
 }
 
 // Run is "cumin setup github-apps". It registers every App that is not
-// registered on this Host, one by one, and then opens the installation page of
-// every App that has no installation on the organization.
+// registered on this Host, one by one. It leads the person through the change
+// of every registered App whose permissions differ from the permission table.
+// Then it opens the installation page of every App that has no installation on
+// the organization.
 //
 // An App counts as registered when the Host settings hold its Client ID and the
 // secret store holds the key for that Client ID. Run checks every App before it
@@ -93,6 +97,7 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 	// Check every registered App before any change: the key exists, it is a
 	// key, and GitHub accepts it for this Client ID.
 	var missing []string
+	var changes []permissionChange
 	usedBy := map[string]string{} // client ID -> the App that uses it
 	for _, app := range Apps {
 		clientID := clientIDs[app]
@@ -117,16 +122,21 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 		if err != nil {
 			return fmt.Errorf("setup: app %q: GitHub does not accept the private key in the Keychain for the client ID %s. Nothing is changed: %w", app, clientID, err)
 		}
-		// The four Apps have four different sets of permissions, so the
-		// permissions show that the client ID belongs to this role. With the
-		// client IDs of two roles swapped, an agent would act as another App,
-		// for example as the one that may bypass the ruleset.
-		if want, _ := github.AppPermissions(app); !maps.Equal(info.Permissions, want) {
-			return fmt.Errorf("setup: app %q: the App %s with the client ID %s has the permissions %v, and %q needs %v. The client ID belongs to another role, or the permissions of the App changed. Nothing is changed", app, info.Slug, clientID, info.Permissions, app, want)
-		}
 		// A private App can be installed only on the account that owns it.
 		if !strings.EqualFold(info.Owner, org) {
 			return fmt.Errorf("setup: app %q: the App %s with the client ID %s belongs to %q, not to %q. Nothing is changed", app, info.Slug, clientID, info.Owner, org)
+		}
+		// The four Apps have four different sets of permissions, so the
+		// permissions show that the client ID belongs to this role. With the
+		// client IDs of two roles swapped, an agent would act as another App,
+		// for example as the one that may bypass the ruleset. Permissions
+		// that match no role are a change of the table: the command leads the
+		// person through it below.
+		if want, _ := github.AppPermissions(app); !maps.Equal(info.Permissions, want) {
+			if other := roleOf(info.Permissions); other != "" {
+				return fmt.Errorf("setup: app %q: the App %s with the client ID %s has the permissions of %q: %v. The client ID belongs to another role. Nothing is changed", app, info.Slug, clientID, other, info.Permissions)
+			}
+			changes = append(changes, permissionChange{app: app, slug: info.Slug, cred: cred, have: info.Permissions, want: want})
 		}
 		fmt.Fprintf(s.Out, "already registered %s: client ID %s\n", app, clientID)
 	}
@@ -143,6 +153,11 @@ func (s *Service) Run(ctx context.Context, org, prefix string) error {
 	if len(missing) > 0 {
 		if _, err := s.RegisterApps(ctx, org, prefix, missing); err != nil {
 			return err
+		}
+	}
+	for _, change := range changes {
+		if err := s.changePermissions(ctx, org, change); err != nil {
+			return fmt.Errorf("setup: app %q: %w", change.app, err)
 		}
 	}
 	return s.openInstallPages(ctx, org)
