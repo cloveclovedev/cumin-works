@@ -46,8 +46,14 @@ type Checkout struct {
 	Issue int
 	Role  config.Role
 	// Branch is the branch of a role that writes. An empty Branch gives a
-	// detached checkout of the default branch, for a role that reads only.
+	// detached checkout, for a role that reads only.
 	Branch string
+	// Commit is the full SHA that a detached checkout opens: the head
+	// commit of a pull request, for the Reviewer. An empty Commit opens the
+	// default branch (origin/HEAD), for the Planner. A branch cannot be
+	// checked out in two worktrees (git-worktree, --force), so the Reviewer
+	// opens the commit next to the Implementer worktree on the branch.
+	Commit string
 }
 
 func (c Checkout) validate() error {
@@ -67,7 +73,31 @@ func (c Checkout) validate() error {
 	if strings.HasPrefix(c.Branch, "-") {
 		errs = append(errs, fmt.Errorf("branch %q must not start with -", c.Branch))
 	}
+	if c.Commit != "" {
+		if c.Branch != "" {
+			errs = append(errs, errors.New("a checkout has a branch or a commit, not both"))
+		}
+		if !isFullSHA(c.Commit) {
+			errs = append(errs, fmt.Errorf("commit %q must be a full hex SHA", c.Commit))
+		}
+	}
 	return errors.Join(errs...)
+}
+
+// isFullSHA reports whether s is a full object name of git: 40 hex digits
+// for SHA-1, or 64 for SHA-256, in lower case as GitHub gives them. A
+// shorter name could be ambiguous, and a name that is not hex could be an
+// option or a ref.
+func isFullSHA(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for _, r := range s {
+		if !('0' <= r && r <= '9' || 'a' <= r && r <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // isPathElement reports whether s can be one element of a path under the
@@ -109,7 +139,8 @@ func (w Workspace) Dir(c Checkout) string {
 // remoteURL, and is fetched before each new worktree. A new worktree with
 // a branch starts from origin/<branch> when that exists, and from
 // origin/HEAD otherwise. A new worktree without a branch is a detached
-// checkout of origin/HEAD. An existing worktree is returned as it is.
+// checkout of the commit of c, or of origin/HEAD when c has no commit. An
+// existing worktree is returned as it is.
 func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (string, error) {
 	if err := c.validate(); err != nil {
 		return "", fmt.Errorf("prepare worktree: %w", err)
@@ -169,6 +200,9 @@ func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (s
 	var add []string
 	start := "origin/HEAD"
 	switch {
+	case c.Commit != "":
+		start = c.Commit
+		add = []string{"worktree", "add", "--quiet", "--detach", dir, c.Commit}
 	case c.Branch == "":
 		add = []string{"worktree", "add", "--quiet", "--detach", dir, "origin/HEAD"}
 	case w.refExists(ctx, clone, "refs/heads/"+c.Branch):

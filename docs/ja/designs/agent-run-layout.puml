@@ -8,11 +8,13 @@ folder "<work_dir>" as workdir {
   folder "<owner>/<repo>" as repo {
     database "clone\n(no working files)" as clone
     folder "<issue number>-implementer\nbranch cumin/<issue number>-..." as implementer
+    folder "<issue number>-reviewer\nhead commit of the pull request, detached" as reviewer
     folder "<issue number>-planner\norigin/HEAD, detached" as planner
   }
 }
 
 github --> clone : git fetch --prune\n(at each start)
 clone --> implementer : git worktree add
+clone --> reviewer : git worktree add --detach <SHA>\n(again for each request)
 clone --> planner : git worktree add --detach
 @enduml

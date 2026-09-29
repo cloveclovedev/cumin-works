@@ -229,6 +229,53 @@ func TestWorktree_TwoRolesGetTwoWorktrees(t *testing.T) {
 	}
 }
 
+// The Reviewer opens the head commit of the pull request, detached, while
+// the Implementer worktree of the same issue holds the branch. git refuses
+// a branch in two worktrees (git-worktree, --force), not a commit.
+func TestWorktree_ReviewerOpensTheHeadCommitNextToTheImplementer(t *testing.T) {
+	r := newRemote(t)
+	branch := "cumin/5-review"
+	first := r.commit(branch, "work.txt", "round 1\n")
+	w := newWorkspace(t, &bytes.Buffer{})
+	impl, err := w.Prepare(context.Background(), r.path, checkout(5, config.RoleImplementer, branch))
+	if err != nil {
+		t.Fatalf("Prepare implementer: %v", err)
+	}
+	reviewer := Checkout{Owner: "example-org", Repo: "example-repo", Issue: 5, Role: config.RoleReviewer, Commit: first}
+
+	dir, err := w.Prepare(context.Background(), r.path, reviewer)
+	if err != nil {
+		t.Fatalf("Prepare reviewer: %v", err)
+	}
+	if want := filepath.Join(w.Root, "example-org", "example-repo", "5-reviewer"); dir != want {
+		t.Errorf("dir = %q, want %q", dir, want)
+	}
+	if got := gitCmd(t, dir, "rev-parse", "--abbrev-ref", "HEAD"); got != "HEAD" {
+		t.Errorf("abbrev-ref HEAD = %q, want a detached HEAD", got)
+	}
+	if got := gitCmd(t, dir, "rev-parse", "HEAD"); got != first {
+		t.Errorf("HEAD = %s, want the head commit %s", got, first)
+	}
+	if got := gitCmd(t, impl, "rev-parse", "--abbrev-ref", "HEAD"); got != branch {
+		t.Errorf("the Implementer worktree is on %q, want %q", got, branch)
+	}
+
+	// The next round: the Implementer pushed a fix. The Reviewer worktree is
+	// removed and opened again at the new head, after the fetch of Prepare.
+	second := r.commit(branch, "work.txt", "round 2\n")
+	if err := w.Remove(context.Background(), reviewer); err != nil {
+		t.Fatalf("Remove reviewer: %v", err)
+	}
+	reviewer.Commit = second
+	dir, err = w.Prepare(context.Background(), r.path, reviewer)
+	if err != nil {
+		t.Fatalf("Prepare reviewer again: %v", err)
+	}
+	if got := gitCmd(t, dir, "rev-parse", "HEAD"); got != second {
+		t.Errorf("HEAD = %s, want the new head commit %s", got, second)
+	}
+}
+
 func TestWorktree_PrepareAfterManualDeletion(t *testing.T) {
 	r := newRemote(t)
 	w := newWorkspace(t, &bytes.Buffer{})
@@ -440,6 +487,10 @@ func TestWorktree_RejectsInvalidCheckout(t *testing.T) {
 		{"issue zero", Checkout{Owner: "o", Repo: "r", Issue: 0, Role: config.RoleImplementer}},
 		{"no role", Checkout{Owner: "o", Repo: "r", Issue: 1}},
 		{"branch that looks like an option", Checkout{Owner: "o", Repo: "r", Issue: 1, Role: config.RoleImplementer, Branch: "-b"}},
+		{"short commit", Checkout{Owner: "o", Repo: "r", Issue: 1, Role: config.RoleReviewer, Commit: "abc1234"}},
+		{"commit that looks like an option", Checkout{Owner: "o", Repo: "r", Issue: 1, Role: config.RoleReviewer, Commit: "--" + strings.Repeat("a", 38)}},
+		{"commit in upper case", Checkout{Owner: "o", Repo: "r", Issue: 1, Role: config.RoleReviewer, Commit: strings.Repeat("A", 40)}},
+		{"branch and commit", Checkout{Owner: "o", Repo: "r", Issue: 1, Role: config.RoleReviewer, Branch: "b", Commit: strings.Repeat("a", 40)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
