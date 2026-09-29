@@ -397,6 +397,25 @@ func TestAcceptanceCheckAt_R7(t *testing.T) {
 	}
 }
 
+// I1 never claims a sub-issue with cumin/type/owner-task, and such an issue
+// takes no place under the limit, whatever its status label.
+func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
+	ownerTask := SubIssue{Number: 10, Labels: []string{LabelOwnerTask, LabelReady, "risk/high"}}
+	ready := SubIssue{Number: 11, Labels: []string{LabelReady, "risk/low"}}
+	snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{ownerTask, ready}}}}
+	want := []Action{Claim{Number: 11, RequirementIssue: 6}}
+	if got := Decide(snapshot, 1, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
+		t.Errorf("Decide = %+v, want %+v", got, want)
+	}
+
+	// An owner task that carries a status label of work in progress, set by
+	// hand, still takes no place.
+	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelImplementing, "risk/high"}
+	if got := Decide(snapshot, 1, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
+		t.Errorf("Decide with an implementing owner task = %+v, want %+v", got, want)
+	}
+}
+
 func TestNeedsLabelTimes_R3(t *testing.T) {
 	ready := SubIssue{Number: 10, Labels: []string{LabelReady}}
 	tests := []struct {

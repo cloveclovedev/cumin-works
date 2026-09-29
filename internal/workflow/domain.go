@@ -629,7 +629,8 @@ func inProgress(snapshot Snapshot) int {
 			n++
 		}
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed {
+			// No agent runs for an owner task, so it takes no place.
+			if sub.Closed || slices.Contains(sub.Labels, LabelOwnerTask) {
 				continue
 			}
 			for _, label := range []string{LabelImplementing, LabelAwaitingChecks, LabelReviewing} {
@@ -656,7 +657,10 @@ func readySubIssues(snapshot Snapshot) []Claim {
 			continue
 		}
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || anyOpen(sub.BlockedBy) {
+			// The Owner does an owner task by hand, so no agent ever
+			// starts for it, even with cumin/status/ready (I1).
+			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || anyOpen(sub.BlockedBy) ||
+				slices.Contains(sub.Labels, LabelOwnerTask) {
 				continue
 			}
 			claims = append(claims, Claim{Number: sub.Number, RequirementIssue: requirement.Number})
