@@ -97,6 +97,15 @@ func TestWriteSkills_WritesOneDirectoryForEachRole(t *testing.T) {
 	if names := SkillNamesOf(config.RolePlanner); slices.Contains(names, "cumin-pull-request") {
 		t.Errorf("the Planner has cumin-pull-request: %v", names)
 	}
+	// Only the Reviewer writes a review.
+	for _, role := range config.AllRoles() {
+		if has := slices.Contains(SkillNamesOf(role), "cumin-review"); has != (role == config.RoleReviewer) {
+			t.Errorf("the role %s has cumin-review: %v", role, has)
+		}
+	}
+	if got, want := SkillNamesOf(config.RoleReviewer), []string{"cumin-review", "cumin-decision-request"}; !slices.Equal(got, want) {
+		t.Errorf("the Reviewer has the skills %v, want %v", got, want)
+	}
 }
 
 // WriteSkills writes the directories again at every start, so that a

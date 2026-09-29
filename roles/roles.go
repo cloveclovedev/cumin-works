@@ -7,9 +7,6 @@
 // rules (package templates), and the risk criteria of the target
 // repository. docs/ja/requirements/agents/common.md, the section on the
 // composition of the instruction, records the order.
-//
-// The files of the Planner and the Reviewer are placeholders until the
-// requirement of each role writes the full instruction.
 package roles
 
 import (

@@ -357,3 +357,98 @@ func TestInstruction_ImplementerHoldsGoodWorkAndTheCraftReasonsForBlocked(t *tes
 		}
 	}
 }
+
+// The Reviewer instruction names its own skills and says what the
+// requirement of the Reviewer asks for. It holds no skill of another role.
+func TestInstruction_ReviewerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
+	text, err := instruction(config.RoleReviewer, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, skill := range SkillsOf(config.RoleReviewer) {
+		if !strings.Contains(text, "`"+skill.Name+"`") {
+			t.Errorf("the Reviewer instruction does not name the skill %s", skill.Name)
+		}
+	}
+	for _, skill := range Skills() {
+		if slices.Contains(skill.Roles, config.RoleReviewer) {
+			continue
+		}
+		if strings.Contains(text, "`"+skill.Name+"`") {
+			t.Errorf("the Reviewer instruction names the skill %s of another role", skill.Name)
+		}
+	}
+	for _, want := range []string{
+		// The two request kinds of the requirement.
+		"`review`", "`explain the cause`",
+		// One review on the head commit, which cumin checks.
+		"Exactly one review for each request, with the pull request review API",
+		"Set `commit_id` to that commit",
+		"Never submit a review with `COMMENT` only",
+		// A retry after an abnormal end must not submit a second review.
+		"its summary line names the same round, and its state is still `APPROVED` or `CHANGES_REQUESTED`, you already reviewed for this request",
+		"A review that someone dismissed does not count; submit a new one",
+		"When a decision request of yours is newer than your last review",
+		// The work directory is read-only for the Reviewer.
+		"Do not commit, and do not push",
+		"Do not resolve review threads",
+		"Do not merge, close, or reopen the pull request",
+		// The three reasons for blocked of the requirement.
+		"The `risk/*` label of the implementation issue does not match the change",
+		"The pull request has almost nothing to do with the implementation issue",
+		"An acceptance criterion of the issue is so vague",
+		"Do not put the result of the review in the JSON",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the Reviewer instruction does not say: %s", want)
+		}
+	}
+	if strings.Contains(text, "# Template:") {
+		t.Error("the Reviewer instruction holds a template of one action; those are skills")
+	}
+}
+
+// The craft of the Reviewer: round 1 finds as much as it can with the
+// review skills of the CLI, and later rounds check only the fixes, so that
+// the review ends (the rules that the Owner approved on #157).
+func TestInstruction_ReviewerHoldsTheCraftOfItsDiscipline(t *testing.T) {
+	text, err := instruction(config.RoleReviewer, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Round 1: find as much as you can",
+		"invoke the skill `code-review` with the arguments `high origin/HEAD...HEAD`",
+		"invoke the skill `security-review`",
+		"no `--comment`, no `--fix`, no `ultra`",
+		"read the code and confirm the problem yourself",
+		"When your CLI has no such skill, or a skill fails, check the same points yourself",
+		"Round 2 and later: check the fixes",
+		"`git diff <last reviewed commit>..HEAD`",
+		"A new blocking comment is allowed only for wrong behavior or a security problem inside that diff",
+		"Do not run the review skills again",
+		"An acceptance criterion of the issue that is not met",
+		"Does the change touch authentication, cryptography, or sessions?",
+		"Format and naming rules: do not review them",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the Reviewer instruction does not say: %s", want)
+		}
+	}
+	// The craft stays out of the contract, and the contract out of the
+	// craft.
+	role, err := roles.File(config.RoleReviewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(role, "security-review") || strings.Contains(role, "The six security questions") {
+		t.Error("the Reviewer role file holds the craft of its discipline")
+	}
+	discipline, ok := disciplineFile(t, config.RoleReviewer)
+	if !ok {
+		t.Fatal("the Reviewer has no discipline file")
+	}
+	if strings.Contains(discipline, "commit_id") || strings.Contains(discipline, "`cumin-") {
+		t.Error("the Reviewer discipline file holds the contract with cumin")
+	}
+}
