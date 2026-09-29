@@ -2,7 +2,7 @@
 
 cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして登録する手順。誰がどのroleかは [要求仕様書](../requirements/overview.md) の「GitHub上の登場人物」にある。
 
-この文書は、手作業の手順である。コマンドとスクリプトを使う手順は [セットアップの手順](setup-guide.md) にあり、そちらを先に試す。コマンドやスクリプトが使えないときに、この文書の手順を使う。手順4と5 (ruleset) は、`scripts/setup-repo.sh` が同じことを行う。
+この文書は、手作業の手順である。コマンドとスクリプトを使う手順は [セットアップの手順](setup-guide.md) にあり、そちらを先に試す。コマンドやスクリプトが使えないときに、この文書の手順を使う。手順4〜6 (ruleset) は、`scripts/setup-repo.sh` が同じことを行う。
 
 画面の操作とラベルは、2026-09-19時点のGitHub公式ドキュメントに基づく。末尾に出典と、まだ実機で確かめていない点をまとめた。
 
@@ -120,6 +120,18 @@ cuminは、mainに適用されるrulesetに登録された必須のcheckが全�
 3. "Bypass list" は空のままにする。手順4のrulesetに足さないのは、bypass listにいる `cumin-core` が必須のcheckまで回避できてしまうためである。
 4. ruleとして "Require status checks to pass before merging" を選び、CIのcheckを登録する。
 5. "Create" をクリックする。
+
+## 手順6: Plannerの書き込み先を `cumin/diagrams` だけにする (リポジトリごとに1回)
+
+`cumin-planner` の Contents: Read & write は、全てのブランチとタグに及ぶ。Plannerのインストールで新しい権限を承認する前に、次の3つのrulesetを作る。手順4と同じ画面で、"New ruleset" から作る。
+
+| 名前 | 種類 | "Target" | rule | "Bypass list" |
+|---|---|---|---|---|
+| `cumin-branches` | branch ruleset | "Include all branches" と、"Exclude by pattern" で `cumin/diagrams` | "Restrict creations"、"Restrict updates"、"Restrict deletions" | `cumin-core`、`cumin-implementer` (GitHub App)、Ownerのrole |
+| `cumin-diagrams` | branch ruleset | "Include by pattern" で `cumin/diagrams` | "Restrict deletions"、"Block force pushes" | 空 |
+| `cumin-tags` | tag ruleset | "Include all tags" | "Restrict creations"、"Restrict updates"、"Restrict deletions" | `cumin-core`、Ownerのrole |
+
+名前は `scripts/setup-repo.sh` が使う名前と同じにする。あとでスクリプトを実行しても、rulesetが二重にならない。
 
 ## 確認すること
 

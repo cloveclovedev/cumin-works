@@ -130,7 +130,7 @@ cumin の側で分かっていることは3つある。
 - Host の設定に書いてあるのは Client ID だけで、App の名前ではない。Keychain の鍵も Client ID で引く。名前を変えても Client ID が変わらなければ、設定と鍵はそのままでよい。
 - cumin は依頼のたびに `GET /app` で slug を読み、`<slug>[bot]` をコミットの作者に使う ([Agentの実行の設計](../designs/agent-run.md) の「1回の依頼の手順」)。slug が変わっても、設定を直す必要はない。既にあるコミットの作者は、古い名前のまま残る。
 
-名前から作った値を覚えている場所が1つある。mainを守る ruleset の bypass list である。`scripts/setup-repo.sh --core-app <slug>` は、slug を `GET /apps/{slug}` で App の数値の id に置き換えてから ruleset に書くので、入っているのは名前ではなく id である。cumin本体の App の名前を変えたときは、id が同じかを確かめる (下の手順の6)。
+名前から作った値を覚えている場所が1つある。ruleset の bypass list である。`scripts/setup-repo.sh --core-app <slug> --implementer-app <slug>` は、slug を `GET /apps/{slug}` で App の数値の id に置き換えてから ruleset に書くので、入っているのは名前ではなく id である。cumin本体か Implementer の App の名前を変えたときは、id が同じかを確かめる (下の手順の6)。
 
 手順:
 
@@ -158,7 +158,7 @@ cumin の側で分かっていることは3つある。
 
    読むのは最後の行だけでよい。`already registered` の確認が1つでも合わなければ、コマンドは何も変えずにそこで止まるので、`installed` の行が roleの数だけ出ていれば、両方が通ったことになる。インストールが外れている App があれば、`installed` の行の代わりにインストールのページのアドレスを表示し、ブラウザを開く。
 
-   cumin本体の App の名前を変えたときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <新しいslug>` をもう一度実行する。
+   cumin本体か Implementer の App の名前を変えたとき、または App を登録し直したときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <cumin本体のslug> --implementer-app <Implementerのslug>` をもう一度実行する。片方だけを渡すと、`cumin-branches` が古い id のまま残る。`cumin-branches` は既定のブランチも対象なので、古い id のままでは、新しい cumin本体の App が merge できない。
 
    ```sh
    gh api apps/<新しいslug> --jq .id
