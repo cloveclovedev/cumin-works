@@ -1,44 +1,44 @@
 @startuml poll-start
-' cumin works - 着手 (I1) と、Agentの実行の並行化。
-' 対応する文書: poll.md の「Agentの実行の並行化」。
-' SVGの書き出し: リポジトリの直下で scripts/render-diagrams.sh を実行する。
+' cumin works - the claim (I1) and agent runs in parallel.
+' Document: poll.md, section on agent runs in parallel.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
 
-participant "定期確認のループ" as poll
-participant "着手の処理 (I1)" as claim
+participant "poll loop" as poll
+participant "claim (I1)" as claim
 participant "GitHub" as gh
-participant "Workspace\n(cloneとworktree)" as ws
+participant "Workspace\n(clone and worktree)" as ws
 participant "agent.Service" as agents
 participant "Claude Code" as cli
 
-poll -> gh: スナップショットを読む
-poll -> claim: 着手リストを渡す
-claim -> gh: ラベルを cumin/status/implementing に替える
+poll -> gh: read the snapshot
+poll -> claim: hand over the claim list
+claim -> gh: change the label to cumin/status/implementing
 note right of claim
-  ラベルを替えられなければ
-  依頼しない (原則3)
+  No request when the label
+  does not change (principle 3)
 end note
-claim -> claim: ブランチの名前と依頼文を決める
-claim ->> agents: 実行を始める (別のgoroutine)
-claim --> poll: 戻る
-poll -> poll: 次の定期確認へ (実行を待たない)
+claim -> claim: decide the branch name and the request
+claim ->> agents: start the run (another goroutine)
+claim --> poll: return
+poll -> poll: next poll (does not wait for the run)
 
-group 別のgoroutine (Issueごとに1つ)
-  agents -> ws: worktreeを用意する
-  agents -> gh: roleのtokenを発行する
-  agents -> cli: 依頼文とroleの指示で起動する
-  cli --> agents: 結果、セッションの番号、使用率
-  agents -> agents: 結果をログに出す
+group another goroutine (one for each issue)
+  agents -> ws: prepare the worktree
+  agents -> gh: create the token of the role
+  agents -> cli: start with the request and the role instruction
+  cli --> agents: result, session ID, usage
+  agents -> agents: log the result
   note right of agents
-    ここが実行終了のきっかけになる。
-    判定は「実行終了の判定」(I2)
+    This is the end of the run.
+    The check is "end of a run" (I2).
   end note
 end
 
 note over poll, cli
-  cuminが止まるときは、動いている実行を待つ。
-  実行のcontextは定期確認のcontextなので、
-  止めると異常終了 (種類は実行時間の上限) になる。
+  When cumin stops, it waits for the running runs.
+  The context of a run is the context of the poll,
+  so a stop ends the run abnormally (kind: time limit).
 end note
 @enduml

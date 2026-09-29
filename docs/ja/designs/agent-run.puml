@@ -7,32 +7,32 @@ participant "cumin\n(internal/agent)" as cumin
 participant "GitHub" as github
 participant "Claude Code\n(claude -p)" as claude
 
-run -> run : 起動時に、roleごとに skill を書く (毎回作り直す)\n$HOME/.local/state/cumin/skills/<role>/.claude/skills/<名前>/SKILL.md\n(本文は templates/ のテンプレート)
-note right of run : cumin-pull-request、cumin-review-reply、\ncumin-decision-request
-run -> cumin : 依頼 (そのroleのskillのディレクトリを添えて)
+run -> run : at start, write the skills of each role (again every time)\n$HOME/.local/state/cumin/skills/<role>/.claude/skills/<name>/SKILL.md\n(the body is a template of templates/)
+note right of run : cumin-pull-request, cumin-review-reply,\ncumin-decision-request
+run -> cumin : request (with the skill directory of the role)
 
-cumin -> claude : 最小の実行 (空の一時ディレクトリで)\n使用率を読む
+cumin -> claude : minimal run (in an empty temporary directory)\nread the usage
 claude --> cumin : rate_limit_event
-note right of cumin : 読めなければ、ここで止める
+note right of cumin : stop here when it cannot be read
 
-cumin -> github : roleのAppのtokenを発行\n(対象のリポジトリだけ)
+cumin -> github : create the token of the role's App\n(the target repository only)
 github --> cumin : installation token
-cumin -> github : botの身元 (roleごとに初回だけ)\nGET /app、GET /users/<slug>[bot]
-github --> cumin : slug、user id
+cumin -> github : bot identity (once for each role)\nGET /app, GET /users/<slug>[bot]
+github --> cumin : slug, user id
 
-cumin -> claude : 起動 (worktree で、tokenと作者を環境変数で)\nroleの指示 (--append-system-prompt)、依頼文、スキーマ、\nそのroleのskillのディレクトリ (--add-dir)、\n新しいセッションか --resume
+cumin -> claude : start (in the worktree, token and author in the environment)\nrole instruction (--append-system-prompt), request, schema,\nskill directory of the role (--add-dir),\nnew session or --resume
 activate claude
-claude --> cumin : system / init\n(セッションの番号、plugins、mcp_servers、memory_paths、skills)
-cumin -> cumin : 起動の記録を確かめる\n(作業場所の外の文脈、または cumin の skill の欠けなら、\nその場で止める)
-claude -> claude : 作業。行動の直前に skill を呼び、\nSKILL.md (テンプレート) を読む\n例: gh pr create の前に cumin-pull-request
-claude --> cumin : rate_limit_event\n(使用率とリセット時刻)
-claude --> cumin : assistant, user, ...\n(読み飛ばす)
+claude --> cumin : system / init\n(session ID, plugins, mcp_servers, memory_paths, skills)
+cumin -> cumin : check the start record\n(stop at once on context from outside the work directory,\nor on a missing cumin skill)
+claude -> claude : work. Invoke a skill right before the action\nand read SKILL.md (the template)\nexample: cumin-pull-request before gh pr create
+claude --> cumin : rate_limit_event\n(usage and reset time)
+claude --> cumin : assistant, user, ...\n(skipped)
 claude --> cumin : result\n(structured_output, is_error)
 deactivate claude
-cumin -> cumin : 終了コード、result、\nスキーマ、blocked_reason を確かめる
-alt 正常終了
-  cumin -> cumin : セッションの番号、結果、使用率を返す
-else 異常終了
-  cumin -> cumin : 種類を付けて返す\n(やり直しはほかの部分が決める)
+cumin -> cumin : check the exit code, the result,\nthe schema, and blocked_reason
+alt normal end
+  cumin -> cumin : return the session ID, the result, the usage
+else abnormal end
+  cumin -> cumin : return it with its kind\n(another part decides the retry)
 end
 @enduml

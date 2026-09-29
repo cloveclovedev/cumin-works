@@ -6,13 +6,13 @@ cloud "GitHub\n<owner>/<repo>" as github
 
 folder "<work_dir>" as workdir {
   folder "<owner>/<repo>" as repo {
-    database "clone\n(作業ファイルなし)" as clone
-    folder "<Issue番号>-implementer\nブランチ cumin/<Issue番号>-..." as implementer
-    folder "<Issue番号>-planner\norigin/HEAD の detached" as planner
+    database "clone\n(no working files)" as clone
+    folder "<issue number>-implementer\nbranch cumin/<issue number>-..." as implementer
+    folder "<issue number>-planner\norigin/HEAD, detached" as planner
   }
 }
 
-github --> clone : git fetch --prune\n(着手のたび)
+github --> clone : git fetch --prune\n(at each start)
 clone --> implementer : git worktree add
 clone --> planner : git worktree add --detach
 @enduml
