@@ -308,9 +308,12 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
+	// The running set comes before the comments: a Planner that writes its
+	// acceptance check comment and ends between the two reads then still
+	// counts as running, and R4 waits one poll instead of asking twice.
+	snapshot.Running = s.runningIssues(target.Repository.String())
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
-	snapshot.Running = s.runningIssues(target.Repository.String())
 	var errs []error
 	// A requirement issue that R3 could not move keeps its sub-issues
 	// waiting in this poll. A claim would take cumin/status/ready away from
