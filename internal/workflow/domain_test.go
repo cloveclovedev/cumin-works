@@ -308,6 +308,21 @@ func TestDecide_R3AndR6(t *testing.T) {
 	}
 }
 
+// Without the label times, R3 cannot be judged, and a claim would take
+// away the cumin/status/ready that it needs: the sub-issues wait.
+func TestDecide_ClaimsWaitForTheLabelTimes(t *testing.T) {
+	requirement := RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelAwaitingOwnerReview},
+		SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelReady, "risk/low"}}}}
+	if got := Decide(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil); len(got) != 0 {
+		t.Errorf("Decide without the label times = %+v, want no action", got)
+	}
+	requirement.LabelTimesRead = true
+	want := []Action{Claim{Number: 10, RequirementIssue: 6}}
+	if got := Decide(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
+		t.Errorf("Decide with the label times = %+v, want %+v", got, want)
+	}
+}
+
 func TestNeedsLabelTimes_R3(t *testing.T) {
 	ready := SubIssue{Number: 10, Labels: []string{LabelReady}}
 	tests := []struct {

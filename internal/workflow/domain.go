@@ -524,6 +524,12 @@ func inProgress(snapshot Snapshot) int {
 func readySubIssues(snapshot Snapshot) []Claim {
 	var claims []Claim
 	for _, requirement := range snapshot.RequirementIssues {
+		// R3 could not be judged without the label times. A claim would
+		// take away the cumin/status/ready that R3 must still see, so the
+		// sub-issues wait for the next poll.
+		if NeedsLabelTimes(requirement) && !requirement.LabelTimesRead {
+			continue
+		}
 		for _, sub := range requirement.SubIssues {
 			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || anyOpen(sub.BlockedBy) {
 				continue
