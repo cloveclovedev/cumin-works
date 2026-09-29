@@ -35,8 +35,10 @@ jobs:
   # The live scenario Check-1 (a check fix request of I4). Fails when the pull
   # request changes live/check-1.md and the file at the head of the pull
   # request does not hold the required line on a line of its own; passes
-  # otherwise. The issue of the scenario does not name the line, so the
-  # Implementer learns it from this failure. The job has no path filter: a
+  # otherwise. The line holds the number of the pull request, so the first
+  # push of the Implementer cannot hold it even when the Implementer reads
+  # this file: the number exists only once the pull request is open. The
+  # Implementer learns the line from this failure. The job has no path filter: a
   # required check that a path filter skips stays pending (row 20 of
   # measured-constraints.md).
   live-check-1-required-line:
@@ -49,7 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           FILES_URL: ${{ github.api_url }}/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files?per_page=100
           FILE_URL: ${{ github.api_url }}/repos/${{ github.repository }}/contents/live/check-1.md?ref=${{ github.event.pull_request.head.sha }}
-          REQUIRED_LINE: "Checked by the live scenario Check-1."
+          REQUIRED_LINE: "Checked by the live scenario Check-1 in pull request #${{ github.event.pull_request.number }}."
         run: |
           if ! curl --silent --show-error --fail -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$FILES_URL" | grep -q '"filename": *"live/check-1.md"'; then
             echo "This pull request does not change live/check-1.md."

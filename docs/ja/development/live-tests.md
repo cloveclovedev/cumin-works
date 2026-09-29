@@ -224,9 +224,9 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 1. sandbox の fixture の workflow が、`internal/platform/github/testdata/cumin-live-fixture.yml` と同じで、`live-check-1-required-line` の job を持っている。`live-check-1-required-line` が必須のcheckに入っている (「前提」)。どちらもリポジトリの管理者が用意する。
 2. `go build -o cumin ./cmd/cumin` でバイナリを作る。
 3. 場面 Impl-1 と同じ形の設定ファイルを1つ作る。対象は sandbox だけ、`work_dir` は捨ててよい一時ディレクトリにする。`max_check_fix_requests` は初期値の3のままにする。
-4. Host で launchd の cumin が動いていて、その設定の対象に sandbox が入っているなら、止める (`launchctl bootout gui/$(id -u)/dev.cloveclove.cumin`)。2つの cumin が同じ sandbox を定期確認すると、同じ Issue に2回着手する。Host の状態ファイルも2つのプロセスが書くことになる。
+4. Host で launchd の cumin が動いていれば、設定の対象によらず止める (`launchctl bootout gui/$(id -u)/dev.cloveclove.cumin`)。`--config` で設定ファイルを分けても、状態ファイル (`~/.local/state/cumin/state.json`) は同じである。2つの cumin がそれぞれ手元の内容でファイル全体を書き直すので、ほかのリポジトリのセッションの番号と回数が消えうる。
 5. sandbox に要求Issueを1つ作り、`cumin/type/requirement` と `cumin/status/implementing` を付ける。`cumin/status/ready` は付けない。
-6. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。題は `Describe the live scenario Check-1` とし、本文には「`live/check-1.md` を作り、場面 Check-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。決まった1行 (`Checked by the live scenario Check-1.`) は書かない。Implementer は、落ちたcheckの内容からそれを知る。
+6. その sub-issue として実装Issueを1つ作り、`risk/low` を付ける。題は `Describe the live scenario Check-1` とし、本文には「`live/check-1.md` を作り、場面 Check-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。決まった1行 (`Checked by the live scenario Check-1 in pull request #<番号>.`) は書かない。1行には Pull Request の番号が入るので、Implementer が worktree の fixture の workflow を読んでも、Pull Request を開く前の最初の push では持てない。Implementer は、落ちたcheckの内容からそれを知る。
 7. sandbox に `live/check-1.md` がまだないことと、`cumin/status/ready` の付いた他の sub-issue がないことを確かめる。
 
 ### 実行
@@ -260,7 +260,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 | 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は4回である | cumin のログ |
 | 5 | 修正の依頼が、1回目の実行のセッションを再開した。2回の `the agent run ended` のセッションの番号が同じである。公式文書が新しい番号を与えると書くのは `--fork-session` と `/branch` だけなので、再開で番号が変わらないことはこの場面で確かめる | cumin のログ (番号は記録に書かない) |
 | 6 | 修正の依頼文に、落ちたcheckの名前と、annotation の文 (決まった1行を含む) が載っていた | Claude Code のセッションの記録で、`Request: check fix` で始まるユーザの入力 |
-| 7 | 修正のあとの `live/check-1.md` に、決まった1行がある | Pull Request の差分 |
+| 7 | 修正のあとの `live/check-1.md` に、Pull Request の番号の入った決まった1行がある。最初のコミットにはない | Pull Request のコミットごとの差分 |
 | 8 | Pull Request のラベルが、最後に `cumin/status/reviewing` と `risk/low` である (I11) | Pull Request |
 | 9 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
 
