@@ -26,6 +26,15 @@ const (
 	RowI4 = "I4"
 	// RowR2 is the end of a Planner run that split a requirement issue.
 	RowR2 = "R2"
+	// RowR4 is the end of a Planner run that checked the acceptance.
+	RowR4 = "R4"
+)
+
+// The rows that start the Planner (R1, R4) and that move a requirement
+// issue with a notification but without a stop (R6, R7).
+const (
+	RowR1 = "R1"
+	RowR7 = "R7"
 )
 
 // RowR6 is the row that hands a requirement issue back to the Owner when

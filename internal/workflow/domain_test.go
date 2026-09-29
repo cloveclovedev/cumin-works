@@ -323,6 +323,80 @@ func TestDecide_ClaimsWaitForTheLabelTimes(t *testing.T) {
 	}
 }
 
+// R4 and R7 (issue-states.md): every sub-issue closed; an acceptance check
+// comment after the last close moves the requirement issue to the Owner,
+// otherwise the Planner is asked.
+func TestDecide_R4AndR7(t *testing.T) {
+	closedAt := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	requirement := func(checkAt time.Time, subs ...SubIssue) RequirementIssue {
+		return RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: subs,
+			CommentsRead: true, AcceptanceCheckAt: checkAt}
+	}
+	closed := SubIssue{Number: 10, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}}
+	later := SubIssue{Number: 11, Closed: true, ClosedAt: closedAt.Add(2 * time.Hour), Labels: []string{"risk/low"}}
+
+	tests := []struct {
+		name     string
+		snapshot Snapshot
+		room     int
+		want     []Action
+	}{
+		{"R4: all closed and no comment", Snapshot{RequirementIssues: []RequirementIssue{requirement(time.Time{}, closed)}}, 1, []Action{CheckAcceptance{Number: 6}}},
+		{"R4: a comment from before the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(time.Hour), closed, later)}}, 1, []Action{CheckAcceptance{Number: 6}}},
+		{"R4: no room", Snapshot{RequirementIssues: []RequirementIssue{requirement(time.Time{}, closed)}}, 0, nil},
+		{"R4: the Planner of the requirement issue runs", Snapshot{RequirementIssues: []RequirementIssue{requirement(time.Time{}, closed)}, Running: map[int]bool{6: true}}, 2, nil},
+		{"R4: no sub-issue", Snapshot{RequirementIssues: []RequirementIssue{requirement(time.Time{})}}, 1, nil},
+		{"R4: an open sub-issue", Snapshot{RequirementIssues: []RequirementIssue{requirement(time.Time{}, closed, SubIssue{Number: 12, Labels: []string{LabelReviewing}})}}, 1, nil},
+		{"R4: the comments were not read", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := requirement(time.Time{}, closed)
+			r.CommentsRead = false
+			return r
+		}()}}, 1, nil},
+		{"R7: a comment at the same second as the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(2*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+		{"R7: a comment after the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(3*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Decide(tt.snapshot, tt.room, nil)
+			if !slices.EqualFunc(got, tt.want, func(a, b Action) bool { return a == b }) {
+				t.Errorf("Decide = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A running acceptance check fills the limit, although the label of the
+// requirement issue does not show it.
+func TestDecide_ARunningAcceptanceCheckFillsTheLimit(t *testing.T) {
+	snapshot := Snapshot{
+		RequirementIssues: []RequirementIssue{
+			{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true}}, CommentsRead: true},
+			{Number: 7, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{{Number: 11, Labels: []string{LabelReady, "risk/low"}}}},
+		},
+		Running: map[int]bool{6: true},
+	}
+	if got := Decide(snapshot, 1, nil); len(got) != 0 {
+		t.Errorf("Decide = %+v, want no action while the acceptance check runs", got)
+	}
+}
+
+func TestAcceptanceCheckAt_R7(t *testing.T) {
+	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	const planner = "example-planner[bot]"
+	comments := []Comment{
+		{Author: planner, CreatedAt: t0, Body: "## Acceptance check\n\n| Rule | Result |"},
+		{Author: planner, CreatedAt: t0.Add(time.Hour), Body: "## Plan for approval\n"},
+		{Author: "octocat", CreatedAt: t0.Add(2 * time.Hour), Body: "## Acceptance check\n"},
+		{Author: planner, CreatedAt: t0.Add(3 * time.Hour), Body: "Quote:\n## Acceptance check\n"},
+	}
+	if got := AcceptanceCheckAt(comments, planner); !got.Equal(t0) {
+		t.Errorf("AcceptanceCheckAt = %v, want %v: only the Planner, only the first line", got, t0)
+	}
+	if got := AcceptanceCheckAt(comments, ""); !got.IsZero() {
+		t.Errorf("AcceptanceCheckAt without the Planner login = %v, want zero", got)
+	}
+}
+
 func TestNeedsLabelTimes_R3(t *testing.T) {
 	ready := SubIssue{Number: 10, Labels: []string{LabelReady}}
 	tests := []struct {

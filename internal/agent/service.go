@@ -44,6 +44,37 @@ type Service struct {
 
 	mu         sync.Mutex
 	identities map[appKey]identity
+	botLogins  map[appKey]string
+}
+
+// BotLogin returns the login of the bot of the App of a role for an owner,
+// "<slug>[bot]", as the REST API shows the author of a comment. It needs no
+// installation token: the slug comes from GET /app with the JWT of the
+// App. The slug never changes while cumin runs, so it is read once.
+func (s *Service) BotLogin(ctx context.Context, owner string, role config.Role) (string, error) {
+	key := appKey{owner: strings.ToLower(owner), role: role}
+	s.mu.Lock()
+	login, ok := s.botLogins[key]
+	s.mu.Unlock()
+	if ok {
+		return login, nil
+	}
+	cred, err := s.app(owner, role)
+	if err != nil {
+		return "", err
+	}
+	app, err := s.GitHub.GetApp(ctx, cred)
+	if err != nil {
+		return "", err
+	}
+	login = app.Slug + "[bot]"
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.botLogins == nil {
+		s.botLogins = map[appKey]string{}
+	}
+	s.botLogins[key] = login
+	return login, nil
 }
 
 // appKey names one App: the owner of the repository (in lower case, as

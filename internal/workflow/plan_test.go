@@ -86,7 +86,7 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"R1: moved the requirement issue to planning"`, `"cumin/status/planning"`,
-		`"msg":"R1: requested the split"`, `"role":"planner"`,
+		`"msg":"R1: requested the Planner"`, `"kind":"plan"`, `"role":"planner"`,
 		`"msg":"the agent run ended"`, `"result":"done"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s", want)

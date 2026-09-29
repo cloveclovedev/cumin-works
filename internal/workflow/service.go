@@ -308,7 +308,12 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
+	// The running set comes before the comments: a Planner that writes its
+	// acceptance check comment and ends between the two reads then still
+	// counts as running, and R4 waits one poll instead of asking twice.
+	snapshot.Running = s.runningIssues(target.Repository.String())
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
+	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
 	var errs []error
 	// A requirement issue that R3 could not move keeps its sub-issues
 	// waiting in this poll. A claim would take cumin/status/ready away from
@@ -324,6 +329,14 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 			}
 		case ReviewRemaining:
 			if err := s.reviewRemaining(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
+		case Accept:
+			if err := s.accept(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
+		case CheckAcceptance:
+			if err := s.checkAcceptance(ctx, target, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Plan:
@@ -841,7 +854,7 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 			requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 		}
 		for _, sub := range issue.SubIssues {
-			subIssue := SubIssue{Number: sub.Number, Title: sub.Title, Closed: sub.Closed, Labels: sub.Labels}
+			subIssue := SubIssue{Number: sub.Number, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
 			for _, blocker := range sub.BlockedBy {
 				subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 			}

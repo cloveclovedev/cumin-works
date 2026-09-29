@@ -150,3 +150,17 @@ func TestCheckFixRequestText_I4(t *testing.T) {
 		t.Error("the request text uses bold text")
 	}
 }
+
+func TestAcceptanceRequestText_R4(t *testing.T) {
+	text := AcceptanceRequestText("example-org/example-repo", 6, "/work/example-org/example-repo/6-planner")
+	for _, want := range []string{
+		"Request: acceptance check\n",
+		"Requirement issue: #6\n",
+		"Work directory: /work/example-org/example-repo/6-planner\n",
+		"merged work",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text does not hold %q:\n%s", want, text)
+		}
+	}
+}

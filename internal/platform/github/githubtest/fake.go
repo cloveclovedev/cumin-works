@@ -47,7 +47,9 @@ type Issue struct {
 	Number int
 	Title  string
 	Closed bool
-	Labels []string
+	// ClosedAt is when a closed issue closed. The zero time answers null.
+	ClosedAt time.Time
+	Labels   []string
 	// Parent is the number of the parent issue, or 0.
 	Parent int
 	// BlockedBy holds the numbers of the issues that block this one.
@@ -155,6 +157,23 @@ type Label struct {
 type Comment struct {
 	ID   int64
 	Body string
+	// Author is the login without "[bot]", as GraphQL gives it, and
+	// AuthorIsBot says that the author is a GitHub App. A comment that
+	// cumin posts through the REST API has no author in the fake.
+	Author      string
+	AuthorIsBot bool
+	// At is when the comment was written.
+	At time.Time
+}
+
+// AddComment adds a comment of the past to an issue, for example one that
+// an agent wrote.
+func (f *Fake) AddComment(r *Repository, number int, comment Comment) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastCommentID++
+	comment.ID = f.lastCommentID
+	r.comments[number] = append(r.comments[number], comment)
 }
 
 // Repository is one repository of the fake.
@@ -849,7 +868,7 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 	}
 	// The ids grow over the whole fake, as they do on GitHub.
 	f.lastCommentID++
-	comment := Comment{ID: f.lastCommentID, Body: *request.Body}
+	comment := Comment{ID: f.lastCommentID, Body: *request.Body, At: time.Now()}
 	repo.comments[number] = append(repo.comments[number], comment)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":   comment.ID,
@@ -886,6 +905,11 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			// one requirement issue.
 			Number int `json:"number"`
 			Events int `json:"events"`
+			// Last and Before belong to the query of the comments of one
+			// issue. Before is the index of the first comment of the page
+			// that the client read last.
+			Last   int     `json:"last"`
+			Before *string `json:"before"`
 		} `json:"variables"`
 	}
 	if err := json.Unmarshal(body, &request); err != nil || !strings.Contains(request.Query, "rateLimit") {
@@ -905,6 +929,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 		return
 	}
 
+	if v.Number != 0 && v.Last != 0 {
+		f.serveIssueComments(w, repo, v.Number, v.Last, v.Before)
+		return
+	}
 	if v.Number != 0 {
 		f.serveLabelTimes(w, repo, v.Number, v.SubIssues, v.Events)
 		return
@@ -943,6 +971,43 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": repository, "rateLimit": rateLimit(len(page))},
+	})
+}
+
+// serveIssueComments answers the query of the newest comments of an issue,
+// oldest first, with the author as GraphQL gives it.
+func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, number, last int, before *string) {
+	if _, ok := repo.Issues[number]; !ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
+			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an Issue with the number of %d.", number)}},
+		})
+		return
+	}
+	list := repo.comments[number]
+	end := len(list)
+	if before != nil {
+		end, _ = strconv.Atoi(*before)
+	}
+	start := max(0, end-last)
+	list = list[start:end]
+	nodes := []any{}
+	for _, comment := range list {
+		var author any
+		if comment.Author != "" {
+			typeName := "User"
+			if comment.AuthorIsBot {
+				typeName = "Bot"
+			}
+			author = map[string]any{"__typename": typeName, "login": comment.Author}
+		}
+		nodes = append(nodes, map[string]any{"createdAt": comment.At.UTC().Format(time.RFC3339Nano), "body": comment.Body, "author": author})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"repository": map[string]any{"issue": map[string]any{"comments": map[string]any{
+			"pageInfo": map[string]any{"hasPreviousPage": start > 0, "startCursor": strconv.Itoa(start)},
+			"nodes":    nodes,
+		}}}, "rateLimit": rateLimit(1)},
 	})
 }
 
@@ -992,6 +1057,12 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		"number": issue.Number,
 		"title":  issue.Title,
 		"state":  state(issue.Closed),
+		"closedAt": func() any {
+			if !issue.Closed || issue.ClosedAt.IsZero() {
+				return nil
+			}
+			return issue.ClosedAt.UTC().Format(time.RFC3339Nano)
+		}(),
 		"labels": connection(issue.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
 	}
 	var subs []*Issue
