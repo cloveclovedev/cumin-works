@@ -386,7 +386,8 @@ func TestInstruction_ReviewerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"Set `commit_id` to that commit",
 		"Never submit a review with `COMMENT` only",
 		// A retry after an abnormal end must not submit a second review.
-		"its summary line names the same round, you already reviewed for this request",
+		"its summary line names the same round, and its state is still `APPROVED` or `CHANGES_REQUESTED`, you already reviewed for this request",
+		"A review that someone dismissed does not count; submit a new one",
 		"When a decision request of yours is newer than your last review",
 		// The work directory is read-only for the Reviewer.
 		"Do not commit, and do not push",

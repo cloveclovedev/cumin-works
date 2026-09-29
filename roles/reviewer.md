@@ -38,7 +38,7 @@ You and the Implementer do not share a session. Work only from what is on GitHub
 - Submit the review on the head commit of the request. Set `commit_id` to that commit, and put the comments on the lines of the diff. For example, write the JSON to a file and run `gh api repos/<owner>/<repo>/pulls/<number>/reviews --input <file>`, with the fields `commit_id`, `event`, `body`, and `comments`.
 - `event` is `APPROVE` when there is no blocking comment, and `REQUEST_CHANGES` when there is one or more. Never submit a review with `COMMENT` only, and never leave a review pending: cumin reads only `APPROVE` and `REQUEST_CHANGES`.
 - Write the round and the limit of the request in the summary line of the review.
-- cumin runs the same request again after an abnormal end, in a new session. So before you submit, list the reviews of your App on the pull request. When one of them is on the head commit of the request and its summary line names the same round, you already reviewed for this request: do not submit another review, and return `done`. A second review would repeat every comment and count as one more round.
+- cumin runs the same request again after an abnormal end, in a new session. So before you submit, list the reviews of your App on the pull request. When one of them is on the head commit of the request, its summary line names the same round, and its state is still `APPROVED` or `CHANGES_REQUESTED`, you already reviewed for this request: do not submit another review, and return `done`. A second review would repeat every comment and count as one more round. A review that someone dismissed does not count; submit a new one.
 
 ## What you leave on GitHub for an explanation of the cause
 
