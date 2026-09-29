@@ -1,0 +1,37 @@
+@startuml quota-start
+' cumin works - the quota check before a new start (R1, I1) and after a run.
+' Document: quota.md, section on the check before a start.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:poll: an issue can start (R1 or I1);
+if (stopped, the next try time is still ahead\n(from the stored usage), and no new allowance (Q2)) then (yes)
+  :no start, no minimal run;
+  stop
+else (no)
+endif
+:minimal run of Claude Code\n(read the usage);
+if (usage read?) then (no)
+  :Q1: no start;\nnotify once until a read succeeds;
+  stop
+else (yes)
+endif
+:store the usage, its reset times,\nand the time of the read;
+:5h limit = threshold of the current time band\n(100% while the allowance of Q2 holds);
+:weekly limit = pace limit\ntarget x min(1, (elapsed + lead) / 7 days);
+if (5h usage >= 5h limit\nor weekly usage >= weekly limit?) then (yes)
+  :Q1: no start;\nnotify once for each window;\ncompute the next try time (Q3);
+  stop
+else (no)
+  :change the label, then start the agent\n(R1 or I1);
+endif
+:the agent run ends;
+:store the usage of the run;
+if (a limit is reached?) then (yes)
+  :Q1: stop new starts;\nnotify once for each window;
+else (no)
+endif
+stop
+@enduml

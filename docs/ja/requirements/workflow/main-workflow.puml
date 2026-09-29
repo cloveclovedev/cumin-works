@@ -80,10 +80,10 @@ end note
 
 loop while an issue has cumin/status/ready, its dependencies are done, and AI resources are free
   note over Cumin
-    AI resources are free = the usage of the quota (for Claude Code, the 5h window and the weekly window) is below the threshold (80 to 90%).
-    The threshold can change by time band (higher when the Owner does not work).
-    Near the reset of the 5h window, the 5h threshold becomes 100%.
-    The thresholds and time bands are in the settings file of cumin.
+    AI resources are free = the usage of both quota windows of Claude Code is below its limit.
+    Weekly window: the pace limit = target x min(1, (elapsed + lead) / 7 days), so the week is used evenly.
+    5h window: the threshold of the current time band (higher when the Owner does not work).
+    The target, the lead, the thresholds, and the time bands are in the settings file of cumin.
     cumin can read the usage (the result of a Claude Code run holds the usage and the reset time; measured).
   end note
   Cumin -> Tracker : choose the next issue that can start
@@ -181,20 +181,20 @@ Cumin -> Owner : notify: blocked, a decision is needed
 Owner -> Tracker : answer
 Owner -> Tracker : add cumin/status/ready to the implementation issue again
 
-== Exception: the quota passed the threshold ==
+== Exception: the quota reached its limit ==
 
-Cumin -> Owner : notify: the quota passed the threshold, so no new issue starts
+Cumin -> Owner : notify: the quota reached its limit, so no new issue starts
 opt the Owner allows using up the current 5h window
   Owner -> Cumin : allow: use up the current 5h window
   note right of Owner
-    The allowance lasts until that 5h window resets. cumin keeps starting issues up to 100%.
-    Using up the weekly window cannot be allowed.
+    The allowance lasts until that 5h window resets. The 5h threshold becomes 100%.
+    Nothing raises the pace limit of the weekly window.
     First, the Owner gives the allowance with a command on the Host (from outside through Tailscale and SSH).
     Later: a Discord bot, so that the allowance comes from Discord.
   end note
 end
 note over Cumin
-  When the window resets, cumin starts issues again by itself.
+  When the window resets, or when the limit rises above the usage, cumin starts issues again by itself.
 end note
 
 == Exception: no issue can go on ==

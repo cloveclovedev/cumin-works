@@ -162,6 +162,7 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 - `rate_limit_event` の項目の一部は Agent SDK の文書にある (`status`、`utilization`、`resetsAt`、`rateLimitType`)。cuminが読む `unifiedWindows` は文書にない (実測 2)。イベントがない、または形が違うときは「読み取れなかった」として、理由を付けたエラーを返す。cuminのほかの部分は、着手せずにOwnerに通知する (Q1)。安全な側に倒す。
 - 2026-09-21 の最小の実機実行 (Claude Code 2.1.267) では、`rate_limit_info` に `status`、`resetsAt`、`rateLimitType`、`unifiedWindows` と overage の3項目があり、`status` は `allowed` だった。枠の上限に当たったときの値は、意図して当てられないので未確認である (「まだ決めていないこと」)。
 - この確認は Claude Code に固有なので、Claude Code の接続部分 (`internal/agent`) に置く。`internal/quota` が受け取るのは、枠ごとの使用率とリセット時刻だけである。
+- 読んだ使用率から着手を止めるかどうかの判定と、最小の実行をいつ行うかは、[利用枠の設計](quota.md) にある。
 
 ## まだ決めていないこと
 
