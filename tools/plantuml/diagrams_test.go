@@ -41,9 +41,10 @@ func decodeSource(encoded string) (string, error) {
 		}
 		packed.Write([]byte{byte(word >> 16), byte(word >> 8), byte(word)})
 	}
+	// A complete stream ends by itself; the padding of the last group after
+	// it is never read. So every error, a truncated stream too, is an error.
 	text, err := io.ReadAll(flate.NewReader(&packed))
-	// The padding of the last group leaves bytes after the end of the stream.
-	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+	if err != nil {
 		return "", err
 	}
 	return string(text), nil
@@ -169,6 +170,13 @@ func TestDecodeSource_ReadsTheEncodingOfPlantUML(t *testing.T) {
 	}
 	if _, err := decodeSource("a!b"); err == nil {
 		t.Error("a character outside the alphabet decodes without an error")
+	}
+	if _, err := decodeSource(""); err == nil {
+		t.Error("an empty source comment decodes without an error")
+	}
+	full := encodeForTest(t, "Bob -> Alice : hello")
+	if _, err := decodeSource(full[:len(full)/2]); err == nil {
+		t.Error("a truncated source comment decodes without an error")
 	}
 }
 
