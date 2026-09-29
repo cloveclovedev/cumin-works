@@ -191,10 +191,16 @@ func (sc *scene) service() *workflow.Service {
 	logger := slog.New(slog.NewJSONHandler(sc.logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	agents := &agent.Service{
 		Roles: map[config.Role]config.RoleSettings{
+			config.RolePlanner:     {TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: sc.cliPath},
 			config.RoleImplementer: {TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: sc.cliPath},
 		},
+		// The fake knows one App, so the Planner runs with the same
+		// credentials as the Implementer. R1 does not read the identity.
 		Apps: map[string]map[config.Role]github.AppCredentials{
-			"example-org": {config.RoleImplementer: {ClientID: "Iv23liEXAMPLE", PrivateKey: testKey()}},
+			"example-org": {
+				config.RolePlanner:     {ClientID: "Iv23liEXAMPLE", PrivateKey: testKey()},
+				config.RoleImplementer: {ClientID: "Iv23liEXAMPLE", PrivateKey: testKey()},
+			},
 		},
 		GitHub: sc.client,
 		Logger: logger,
