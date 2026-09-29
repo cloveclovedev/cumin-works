@@ -52,3 +52,26 @@ func TestReadLabelTimes_AnUnknownIssueIsAnError(t *testing.T) {
 		t.Error("ReadLabelTimes of an unknown issue returned no error")
 	}
 }
+
+// The round of the review needs the last cumin/status/ready of one
+// implementation issue. The same query reads it when it is given the
+// number of that issue, which has no sub-issues of its own.
+func TestReadLabelTimes_ReadsOneImplementationIssue(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	t0 := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/reviewing"}, LabelEvents: []githubtest.LabelEvent{
+		{Label: "cumin/status/ready", At: t0},
+		{Label: "cumin/status/ready", At: t0.Add(time.Hour)},
+	}})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	times, _, err := client.ReadLabelTimes(context.Background(), githubtest.Token, "example-org", "example-repo", 10)
+	if err != nil {
+		t.Fatalf("ReadLabelTimes: %v", err)
+	}
+	if got, want := times[10]["cumin/status/ready"], t0.Add(time.Hour); !got.Equal(want) {
+		t.Errorf("ready of #10 at %v, want %v", got, want)
+	}
+}

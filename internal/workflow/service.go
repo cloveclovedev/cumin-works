@@ -834,6 +834,14 @@ func toChecks(read []github.CheckResult) []CheckResult {
 }
 
 // toConclusion folds the conclusion of the client into the one of the rules.
+func toReviews(read []github.Review) []Review {
+	var reviews []Review
+	for _, r := range read {
+		reviews = append(reviews, Review{Author: r.Author, State: ReviewState(r.State), Commit: r.Commit, SubmittedAt: r.SubmittedAt, URL: r.URL})
+	}
+	return reviews
+}
+
 func toConclusion(c github.CheckConclusion) CheckConclusion {
 	switch c {
 	case github.CheckPassed:
@@ -866,6 +874,7 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 					Author:     pr.Author,
 					Labels:     pr.Labels,
 					Checks:     toChecks(pr.Checks),
+					Reviews:    toReviews(pr.Reviews),
 				})
 			}
 			requirement.SubIssues = append(requirement.SubIssues, subIssue)
