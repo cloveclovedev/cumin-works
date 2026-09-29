@@ -323,6 +323,10 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 			if err := s.startReview(ctx, token, target, snapshot, a); err != nil {
 				errs = append(errs, err)
 			}
+		case FixChecks:
+			if err := s.fixChecks(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
 		case CopyLabels:
 			if err := s.copyLabels(ctx, token, target, a); err != nil {
 				errs = append(errs, err)
@@ -471,28 +475,151 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 	}
 }
 
+// implementerRequest is one request to the Implementer: its row, its kind,
+// the branch of its worktree, the session that it resumes, and its text.
+type implementerRequest struct {
+	// row starts the log lines of the request: I1 or I4.
+	row string
+	// kind is the request kind of implementer.md, for the log.
+	kind   string
+	branch string
+	// pullRequest is the open pull request whose work the request
+	// continues, or 0 for a first request.
+	pullRequest int
+	// sessionID resumes that session. Empty starts a new session.
+	sessionID string
+	// text builds the request text once the work directory is known.
+	text func(workDir string) string
+}
+
+// fixChecks applies I4: a required check failed on the head commit of the
+// pull request. Below the limit of the repository, the count grows by one,
+// the status label becomes cumin/status/implementing, and the Implementer
+// fixes the checks in the session of its last run, on the branch of the
+// pull request. At the limit, the issue goes to the Owner through the stop
+// step with the row I4.
+//
+// The count is saved before the label changes: a count that cumin cannot
+// keep would let the requests run past the limit, so the label stays and
+// the next poll tries again. The label changes before the request, so that
+// a later poll never requests the same fix twice (principle 3).
+func (s *Service) fixChecks(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixChecks) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	repository := target.Repository.String()
+	log := s.logger().With("repository", repository, "issue", a.Number, "pull_request", a.PullRequest)
+	sub, ok := snapshot.SubIssue(a.Number)
+	if !ok {
+		return fmt.Errorf("I4: issue #%d is not in the snapshot", a.Number)
+	}
+	pr, ok := sub.LatestPullRequest()
+	if !ok {
+		return fmt.Errorf("I4: issue #%d has no open pull request", a.Number)
+	}
+	names := make([]string, 0, len(a.Failed))
+	for _, check := range a.Failed {
+		names = append(names, check.Name)
+	}
+
+	stored := s.State.Issue(repository, a.Number)
+	limit := settings.Settings.MaxCheckFixRequests
+	if !CheckFixAllowed(stored.CheckFixRequests, limit) {
+		reason := fmt.Sprintf("A required check failed again (%s) after %d check fix requests, the limit of this repository (max_check_fix_requests).",
+			strings.Join(names, ", "), stored.CheckFixRequests)
+		log.Warn("I4: the limit of check fix requests is reached", "failed", names, "check_fix_requests", stored.CheckFixRequests)
+		// The label first: until it changes, the next poll decides the same
+		// stop, and must not post the comment and notify again.
+		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerDecision)
+		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+			return fmt.Errorf("I4: stop issue #%d for the Owner: %w", a.Number, err)
+		}
+		log.Info("I4: the issue waits for the Owner", "labels", labels)
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row:       RowI4,
+			issue:     a.Number,
+			labels:    labels,
+			reason:    reason,
+			comment:   StopNote(RowI4, reason, pr.Number, false),
+			labelDone: true,
+		})
+		return nil
+	}
+
+	counted := stored
+	counted.CheckFixRequests++
+	if err := s.State.Set(repository, a.Number, counted); err != nil {
+		return fmt.Errorf("I4: keep the count of check fix requests of issue #%d: %w", a.Number, err)
+	}
+	labels := LabelsAfterCheckFix(sub.Labels)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+		// No request starts, so the count goes back: a label that fails
+		// again must not use up the limit without a single fix.
+		if undo := s.State.Set(repository, a.Number, stored); undo != nil {
+			log.Error("I4: the count of check fix requests was not set back", "error", undo.Error())
+		}
+		return fmt.Errorf("I4: move issue #%d back to the Implementer: %w", a.Number, err)
+	}
+	stored = counted
+	log.Info("I4: a required check failed; the issue goes back to the Implementer",
+		"failed", names, "check_fix_requests", stored.CheckFixRequests, "labels", labels)
+
+	failed := make([]github.RequiredCheck, 0, len(a.Failed))
+	for _, check := range a.Failed {
+		failed = append(failed, github.RequiredCheck{Name: check.Name, Integration: check.Integration})
+	}
+	contents := s.GitHub.FailedCheckContent(ctx, token, owner, repo, pr.HeadCommit, failed, log)
+	texts := make([]string, 0, len(contents))
+	for _, content := range contents {
+		texts = append(texts, content.Content)
+	}
+	branch := pr.HeadBranch
+	if branch == "" {
+		branch = BranchName(sub.Number, sub.Title)
+	}
+	return s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
+		row: "I4", kind: "check fix", branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
+		text: func(workDir string) string {
+			return CheckFixRequestText(repository, a.Number, pr.Number, branch, workDir, texts)
+		},
+	})
+}
+
 // startImplementer requests the work of I1 from the Implementer. The
 // request kind is "implement", or "continue" when an open pull request
 // already closes the issue; the work then goes on on the branch of that
 // pull request (ClaimBranch). The session is new in both cases
 // (issue-states.md, the section on the sessions of an agent).
-//
-// The work runs in its own goroutine, so that the poll goes on while the
-// agent works. What the goroutine does (the worktree, the start, the end of
-// the run) is only logged: the label stays cumin/status/implementing,
-// because no rule of v0.1 takes it back (issue-states.md, the section on
-// what v0.1 does not build).
 func (s *Service) startImplementer(ctx context.Context, target Target, settings *RepositorySettings, sub SubIssue) error {
+	branch, pullRequest := ClaimBranch(sub)
+	repository := target.Repository.String()
+	req := implementerRequest{
+		row: "I1", kind: "implement", branch: branch,
+		text: func(workDir string) string {
+			return ImplementRequestText(repository, sub.Number, branch, workDir)
+		},
+	}
+	if pullRequest != 0 {
+		req.kind, req.pullRequest = "continue", pullRequest
+		req.text = func(workDir string) string {
+			return ContinueRequestText(repository, sub.Number, pullRequest, branch, workDir)
+		}
+	}
+	return s.goImplementer(ctx, target, settings, sub.Number, req)
+}
+
+// goImplementer runs one Implementer request in its own goroutine, so that
+// the poll goes on while the agent works. What the goroutine does (the
+// worktree, the start, the end of the run) is only logged and handled by
+// the end of the run (I2).
+func (s *Service) goImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) error {
 	if s.Agents == nil {
 		return errors.New("no agent service is configured")
 	}
-	branch, pullRequest := ClaimBranch(sub)
-	done := s.markInProgress(ctx, target.Repository.String(), sub.Number)
+	done := s.markInProgress(ctx, target.Repository.String(), number)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
 		defer done()
-		s.runImplementer(ctx, target, settings, sub.Number, branch, pullRequest)
+		s.runImplementer(ctx, target, settings, number, req)
 	}()
 	return nil
 }
@@ -504,18 +631,18 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 const agentAttempts = 2
 
 // runImplementer prepares the worktree and runs one Implementer request to
-// its end. pullRequest is the open pull request whose work the request
-// continues, or 0 for a first request. The end of the run is the trigger of I2: a done result goes to
-// verifyDone, and a blocked result stops the issue for the Owner.
+// its end. The end of the run is the trigger of I2, whatever the row of the
+// request: a done result goes to verifyDone, and a blocked result stops the
+// issue for the Owner.
 //
 // An abnormal end starts the same request once more, in the same work
-// directory and in a new session (agent-run.md, the topic on the retry).
-// After the second one, the issue goes back to the Owner with the kind of
-// the end. While cumin is stopping, the context ends the run as an
-// abnormal end as well; nothing is retried then, and no label changes,
-// because the Owner restarts the issue (cumin-core.md, the topic on the
-// stop).
-func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, branch string, pullRequest int) {
+// directory and in a new session (agent-run.md, the topic on the retry): a
+// session that ended abnormally is not resumed again. After the second one,
+// the issue goes back to the Owner with the kind of the end. While cumin is
+// stopping, the context ends the run as an abnormal end as well; nothing is
+// retried then, and no label changes, because the Owner restarts the issue
+// (cumin-core.md, the topic on the stop).
+func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	role := settings.Settings.Roles[config.RoleImplementer]
 	checkout := agent.Checkout{
@@ -523,43 +650,42 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		Repo:   target.Repository.Name,
 		Issue:  number,
 		Role:   config.RoleImplementer,
-		Branch: branch,
+		Branch: req.branch,
 	}
-	// A continuation starts from the pull request on GitHub, as the new
-	// session does. A worktree of an earlier round can be on another
-	// branch, or behind commits that were pushed since, and Prepare reuses
-	// a worktree as it is; so it goes, and Prepare creates the worktree
-	// again from origin/<branch>. A worktree that holds work that is not on
-	// GitHub stays: a run that cumin stopped leaves its work there, and the
-	// Owner restarts the issue with cumin/status/ready.
-	if pullRequest != 0 {
+	// A request on an open pull request (a continuation of I1, a check fix
+	// of I4) starts from the pull request on GitHub. A worktree of an
+	// earlier round can be on another branch, or behind commits that were
+	// pushed since, and Prepare reuses a worktree as it is; so it goes, and
+	// Prepare creates the worktree again from origin/<branch>. A worktree
+	// that holds work that is not on GitHub stays: a run that cumin stopped
+	// leaves its work there, and the Owner restarts the issue with
+	// cumin/status/ready.
+	if req.pullRequest != 0 {
 		removed, err := s.Workspace.RemoveIfPushed(ctx, checkout)
 		if err != nil {
-			log.Error("I1: the worktree of an earlier round was not checked", "error", err.Error())
+			log.Error(req.row+": the worktree of an earlier round was not checked", "error", err.Error())
 			return
 		}
 		if !removed {
-			log.Warn("I1: the worktree of an earlier round holds work that is not on GitHub; it is used as it is", "branch", branch)
+			log.Warn(req.row+": the worktree of an earlier round holds work that is not on GitHub; it is used as it is", "branch", req.branch)
 		}
 	}
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
 	if err != nil {
-		log.Error("I1: the work directory was not prepared", "error", err.Error())
+		log.Error(req.row+": the work directory was not prepared", "error", err.Error())
 		return
 	}
-	kind, text := "implement", ImplementRequestText(target.Repository.String(), number, branch, workDir)
-	if pullRequest != 0 {
-		kind, text = "continue", ContinueRequestText(target.Repository.String(), number, pullRequest, branch, workDir)
-	}
-	log.Info("I1: requested the work", "kind", kind, "branch", branch, "pull_request", pullRequest)
+	log.Info(req.row+": requested the work", "kind", req.kind, "branch", req.branch,
+		"pull_request", req.pullRequest, "resumed", req.sessionID != "")
 	request := agent.StartRequest{
 		Owner:        target.Repository.Owner,
 		Repo:         target.Repository.Name,
 		Role:         config.RoleImplementer,
 		RiskCriteria: settings.RiskCriteria,
-		Text:         text,
+		Text:         req.text(workDir),
 		WorkDir:      workDir,
 		Settings:     &role,
+		SessionID:    req.sessionID,
 	}
 
 	var firstKind agent.EndKind
@@ -577,6 +703,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			}
 			if attempt < agentAttempts {
 				firstKind = abnormal.Kind
+				request.SessionID = ""
 				log.Info("I2: the same request runs again in the same work directory", "attempt", attempt+1)
 				continue
 			}

@@ -119,7 +119,11 @@ func TestChecksOf(t *testing.T) {
 			if got := ChecksOf(tt.required, tt.results); got != tt.want {
 				t.Errorf("ChecksOf = %s, want %s", got, tt.want)
 			}
-			if got := FailedChecks(tt.required, tt.results); !slices.Equal(got, tt.failed) {
+			var names []string
+			for _, check := range FailedChecks(tt.required, tt.results) {
+				names = append(names, check.Name)
+			}
+			if got := names; !slices.Equal(got, tt.failed) {
 				t.Errorf("FailedChecks = %v, want %v", got, tt.failed)
 			}
 		})
@@ -188,10 +192,10 @@ func TestDecide_I3(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
 			// The limit of issues in progress does not hold I3 back: the
 			// issue is already counted in it.
-			// The copies of I11 are another rule (TestDecide_I11).
+			// I4 and I11 are other rules (TestDecide_I4, TestDecide_I11).
 			var got []Action
 			for _, action := range Decide(snapshot, 1, tt.required) {
-				if _, ok := action.(CopyLabels); !ok {
+				if _, ok := action.(StartReview); ok {
 					got = append(got, action)
 				}
 			}
@@ -217,5 +221,87 @@ func TestSnapshot_HasIssueAwaitingChecks(t *testing.T) {
 	}}}}
 	if closed.HasIssueAwaitingChecks() {
 		t.Error("a closed issue must not ask for the required checks")
+	}
+}
+
+// TestDecide_I4 covers which issues the poll sends back for a check fix,
+// and which failed checks the action names.
+func TestDecide_I4(t *testing.T) {
+	required := []RequiredCheck{{Name: "ci"}, {Name: "lint", Integration: 15368}}
+	waiting := func(number int, checks ...CheckResult) SubIssue {
+		return SubIssue{Number: number, Labels: []string{LabelAwaitingChecks, "risk/low"},
+			PullRequests: []PullRequest{{Number: number + 10, Checks: checks}}}
+	}
+	ci := func(c CheckConclusion) CheckResult { return CheckResult{Name: "ci", Conclusion: c} }
+	lint := func(c CheckConclusion) CheckResult {
+		return CheckResult{Name: "lint", Conclusion: c, Integration: 15368}
+	}
+
+	tests := []struct {
+		name string
+		subs []SubIssue
+		want []Action
+	}{
+		{
+			name: "a failed check gives one fix with the failed check",
+			subs: []SubIssue{waiting(10, ci(CheckFailed), lint(CheckPassed))},
+			want: []Action{FixChecks{Number: 10, PullRequest: 20, Failed: []RequiredCheck{{Name: "ci"}}}},
+		},
+		{
+			name: "a failure next to a check that has not finished is fixed at once",
+			subs: []SubIssue{waiting(10, ci(CheckPending), lint(CheckFailed))},
+			want: []Action{FixChecks{Number: 10, PullRequest: 20, Failed: []RequiredCheck{{Name: "lint", Integration: 15368}}}},
+		},
+		{
+			name: "every failed check is named, in the order of the rules",
+			subs: []SubIssue{waiting(10, lint(CheckFailed), ci(CheckFailed))},
+			want: []Action{FixChecks{Number: 10, PullRequest: 20, Failed: required}},
+		},
+		{
+			name: "passed and waiting checks give no fix",
+			subs: []SubIssue{waiting(10, ci(CheckPassed), lint(CheckPassed)), waiting(11, ci(CheckPending))},
+		},
+		{
+			name: "a failure of another App is not the required check",
+			subs: []SubIssue{waiting(10, ci(CheckPassed), CheckResult{Name: "lint", Conclusion: CheckFailed, Integration: 99})},
+		},
+		{
+			name: "another status label is not I4",
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelImplementing}, PullRequests: []PullRequest{{Number: 20, Checks: []CheckResult{ci(CheckFailed)}}}}},
+		},
+		{
+			name: "lowest issue number first",
+			subs: []SubIssue{waiting(12, ci(CheckFailed)), waiting(10, ci(CheckFailed))},
+			want: []Action{
+				FixChecks{Number: 10, PullRequest: 20, Failed: []RequiredCheck{{Name: "ci"}}},
+				FixChecks{Number: 12, PullRequest: 22, Failed: []RequiredCheck{{Name: "ci"}}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
+			var got []Action
+			for _, action := range Decide(snapshot, 1, required) {
+				if _, ok := action.(FixChecks); ok {
+					got = append(got, action)
+				}
+			}
+			if fmt.Sprint(got) != fmt.Sprint(tt.want) {
+				t.Errorf("Decide = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// CheckFixAllowed: max_check_fix_requests requests are sent, not one more.
+func TestCheckFixAllowed_I4(t *testing.T) {
+	for _, tt := range []struct {
+		count, limit int
+		want         bool
+	}{{0, 3, true}, {2, 3, true}, {3, 3, false}, {4, 3, false}, {0, 1, true}, {1, 1, false}} {
+		if got := CheckFixAllowed(tt.count, tt.limit); got != tt.want {
+			t.Errorf("CheckFixAllowed(%d, %d) = %v, want %v", tt.count, tt.limit, got, tt.want)
+		}
 	}
 }

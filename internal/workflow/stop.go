@@ -3,8 +3,8 @@ package workflow
 // This file holds the one place that stops an issue for the Owner. Every
 // row of issue-states.md that hands work back uses it with its own row
 // number: post one comment on the issue, replace the status label with
-// cumin/status/awaiting-owner-decision, then notify the Owner. I2 uses it
-// today; I4, I8, and I10 are later requirements.
+// cumin/status/awaiting-owner-decision, then notify the Owner. I2 and I4
+// use it today; I8 and I10 are later requirements.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
 
@@ -17,9 +17,14 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 )
 
-// RowI2 is the row of issue-states.md that this requirement stops on: the
-// end of an Implementer run.
-const RowI2 = "I2"
+// The rows of issue-states.md that stop an issue for the Owner.
+const (
+	// RowI2 is the end of an Implementer run.
+	RowI2 = "I2"
+	// RowI4 is a failed required check after the limit of check fix
+	// requests.
+	RowI4 = "I4"
+)
 
 // stop is one issue that cumin hands back to the Owner.
 type stop struct {
@@ -35,6 +40,11 @@ type stop struct {
 	reason string
 	// comment is the text to post on the issue.
 	comment string
+	// labelDone says that the caller already replaced the status label.
+	// A stop that a poll decides (I4) changes the label first: a label that
+	// cumin cannot change would otherwise repeat the comment and the
+	// notification at every poll (principle 3).
+	labelDone bool
 }
 
 // stopForOwner posts the comment, replaces the status label, and notifies
@@ -61,9 +71,12 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 			link = comment.URL
 			log.Info(st.row+": wrote the reason on the issue", "comment", comment.ID)
 		}
-		if len(st.labels) == 0 {
+		switch {
+		case st.labelDone:
+			// The caller changed the label and logged it.
+		case len(st.labels) == 0:
 			log.Error(st.row + ": the labels of the issue were not read; the label was not changed")
-		} else {
+		default:
 			labels := ReplaceStatusLabel(st.labels, LabelAwaitingOwnerDecision)
 			if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
 				log.Error(st.row+": the label was not changed", "error", err.Error())

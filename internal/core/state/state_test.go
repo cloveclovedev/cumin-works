@@ -193,3 +193,31 @@ func TestNilStore_DoesNothing(t *testing.T) {
 func logger(out *bytes.Buffer) *slog.Logger {
 	return slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: slog.LevelDebug}))
 }
+
+// A write that cannot be saved leaves the entry as it was, so that a
+// caller that tries again never counts from a value that was not saved.
+func TestSet_AFailedSaveKeepsTheEntryBefore(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "state")
+	store := state.Open(filepath.Join(dir, "state.json"), nil)
+	if err := store.Set("example-org/example-repo", 10, state.Issue{SessionID: "s", CheckFixRequests: 1}); err != nil {
+		t.Fatal(err)
+	}
+	// The directory refuses new files, so the next save fails.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+
+	if err := store.Set("example-org/example-repo", 10, state.Issue{SessionID: "s", CheckFixRequests: 2}); err == nil {
+		t.Fatal("the save did not fail")
+	}
+	if got := store.Issue("example-org/example-repo", 10).CheckFixRequests; got != 1 {
+		t.Errorf("count after a failed save = %d, want 1", got)
+	}
+	if err := store.Set("example-org/example-repo", 11, state.Issue{SessionID: "t"}); err == nil {
+		t.Fatal("the save did not fail")
+	}
+	if got := store.Issue("example-org/example-repo", 11); got != (state.Issue{}) {
+		t.Errorf("a new entry after a failed save = %+v, want none", got)
+	}
+}
