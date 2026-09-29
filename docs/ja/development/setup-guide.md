@@ -204,7 +204,7 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 | `cumin-diagrams` | `cumin/diagrams` | 削除の制限、force push の禁止 | 空 |
 | `cumin-tags` | 全てのタグ | 作成の制限、更新の制限、削除の制限 | リポジトリの管理者の role と、`--core-app` の App |
 
-- 下の3つは、Planner の App が書き込めるのを `cumin/diagrams` だけにするためにある。Planner の App は、sub-issue の図を置くために Contents の書き込みを持つ ([GitHub Appの登録手順](github-app-setup.md) の権限の表)。Contents の書き込みは、どのブランチとタグにも及ぶので、ruleset で絞る。
+- 下の3つは、Planner の App が書き込めるブランチを `cumin/diagrams` だけにし、タグを作れないようにするためにある。release など、ruleset で止まらない操作は、[GitHub Appの登録手順](github-app-setup.md) の「権限を決めた理由」にある。Planner の App は、sub-issue の図を置くために Contents の書き込みを持つ ([GitHub Appの登録手順](github-app-setup.md) の権限の表)。Contents の書き込みは、どのブランチとタグにも及ぶので、ruleset で絞る。
 - `cumin-branches` があると、管理者でない人は、ブランチを作ることも push することもできない。変更は、管理者か、cumin の App が行う。
 - `cumin-diagrams` の bypass list は空である。Issue は、このブランチのコミットで図を示すので、履歴を消せないようにする。
 
