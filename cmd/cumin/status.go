@@ -55,11 +55,6 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "cumin status: %v\n", err)
 		return exitFailure
 	}
-	clientIDs, err := appClientIDs(settings)
-	if err != nil {
-		fmt.Fprintf(stderr, "cumin status: %v\n", err)
-		return exitFailure
-	}
 	dir, err := config.DefaultStateDir()
 	if err != nil {
 		fmt.Fprintf(stderr, "cumin status: %v\n", err)
@@ -77,7 +72,11 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 			return github.RepositorySnapshot{}, storeErr
 		}
 		owner := strings.ToLower(repo.Owner)
-		cred, err := readAppCredential(ctx, store, owner, config.AppCuminCore, clientIDs[owner][config.AppCuminCore])
+		clientID, err := coreClientID(settings, repo.Owner)
+		if err != nil {
+			return github.RepositorySnapshot{}, err
+		}
+		cred, err := readAppCredential(ctx, store, owner, config.AppCuminCore, clientID)
 		if err != nil {
 			return github.RepositorySnapshot{}, err
 		}
@@ -92,6 +91,28 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	return exitOK
+}
+
+// coreClientID returns the Client ID of the cumin-core App of an owner.
+// cumin status needs no other App, so a missing role App of the settings
+// does not stop the report. Owner names ignore case, as in appClientIDs.
+func coreClientID(settings *config.Settings, owner string) (string, error) {
+	var found []string
+	var id string
+	for org, table := range settings.GitHubApps {
+		if strings.EqualFold(org, owner) {
+			found = append(found, org)
+			id = table[config.AppCuminCore]
+		}
+	}
+	switch {
+	case len(found) > 1:
+		slices.Sort(found)
+		return "", fmt.Errorf("the settings have github_apps for %s more than once: %s", owner, strings.Join(found, ", "))
+	case id == "":
+		return "", fmt.Errorf("github_apps.%s.%s: no Client ID", owner, config.AppCuminCore)
+	}
+	return id, nil
 }
 
 // readRepository reads the snapshot of one target repository.

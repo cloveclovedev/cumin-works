@@ -148,3 +148,16 @@ func TestStatusRejectsAnExtraArgument(t *testing.T) {
 		t.Errorf("exit code = %d, want %d", code, exitBadUsage)
 	}
 }
+
+// cumin status needs only the cumin-core App: a missing role App does not
+// matter, and a missing cumin-core App names the key.
+func TestCoreClientIDNeedsOnlyTheCuminCoreApp(t *testing.T) {
+	settings := statusSettings()
+	settings.GitHubApps = map[string]map[string]string{"Example-Org": {config.AppCuminCore: "Iv23liCORE"}}
+	if id, err := coreClientID(settings, "example-org"); err != nil || id != "Iv23liCORE" {
+		t.Errorf("coreClientID = %q, %v, want the cumin-core ID", id, err)
+	}
+	if _, err := coreClientID(settings, "other-org"); err == nil || !strings.Contains(err.Error(), "github_apps.other-org.cumin-core") {
+		t.Errorf("err = %v, want one that names the key", err)
+	}
+}
