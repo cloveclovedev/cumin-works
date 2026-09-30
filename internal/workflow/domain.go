@@ -84,6 +84,10 @@ type RequirementIssue struct {
 	// AcceptanceCheckAt is when the newest acceptance check comment of the
 	// Planner App was written; zero when there is none.
 	AcceptanceCheckAt time.Time
+	// FollowUpsDone says that no closed sub-issue needs a follow-up note
+	// (I9) any more: each one has its note, was closed without a merge, or
+	// left nothing to copy. The poll sets it after I9, and R4 waits for it.
+	FollowUpsDone bool
 }
 
 // SubIssue is an implementation issue: a sub-issue of a requirement issue.
@@ -389,8 +393,7 @@ func remainingNeedReview(requirement RequirementIssue) bool {
 
 // NeedsComments reports whether R4 or R7 needs the comments of the
 // requirement issue: it is in cumin/status/implementing, and it has one or
-// more sub-issues, all closed. The follow-up notes (I9) are not waited
-// for, because cumin writes none yet.
+// more sub-issues, all closed.
 func NeedsComments(requirement RequirementIssue) bool {
 	if statusLabel(requirement.Labels) != LabelImplementing || len(requirement.SubIssues) == 0 {
 		return false
@@ -434,11 +437,13 @@ func accepted(requirement RequirementIssue) bool {
 
 // acceptanceChecks returns the starts of R4 before the limit: every
 // sub-issue closed, the comments read, no acceptance check after the last
-// close, and no agent of the requirement issue running.
+// close, the follow-up notes of the closed sub-issues written (I9), and no
+// agent of the requirement issue running.
 func acceptanceChecks(snapshot Snapshot) []CheckAcceptance {
 	var checks []CheckAcceptance
 	for _, requirement := range snapshot.RequirementIssues {
-		if NeedsComments(requirement) && requirement.CommentsRead && !checked(requirement) && !snapshot.Running[requirement.Number] {
+		if NeedsComments(requirement) && requirement.CommentsRead && !checked(requirement) &&
+			requirement.FollowUpsDone && !snapshot.Running[requirement.Number] {
 			checks = append(checks, CheckAcceptance{Number: requirement.Number})
 		}
 	}

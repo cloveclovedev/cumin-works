@@ -330,7 +330,7 @@ func TestDecide_R4AndR7(t *testing.T) {
 	closedAt := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
 	requirement := func(checkAt time.Time, subs ...SubIssue) RequirementIssue {
 		return RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: subs,
-			CommentsRead: true, AcceptanceCheckAt: checkAt}
+			CommentsRead: true, AcceptanceCheckAt: checkAt, FollowUpsDone: true}
 	}
 	closed := SubIssue{Number: 10, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}}
 	later := SubIssue{Number: 11, Closed: true, ClosedAt: closedAt.Add(2 * time.Hour), Labels: []string{"risk/low"}}
@@ -352,6 +352,16 @@ func TestDecide_R4AndR7(t *testing.T) {
 			r.CommentsRead = false
 			return r
 		}()}}, 1, nil},
+		{"R4: a follow-up note is still missing", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := requirement(time.Time{}, closed)
+			r.FollowUpsDone = false
+			return r
+		}()}}, 1, nil},
+		{"R7: a missing follow-up note does not stop it", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := requirement(closedAt.Add(3*time.Hour), closed, later)
+			r.FollowUpsDone = false
+			return r
+		}()}}, 0, []Action{Accept{Number: 6}}},
 		{"R7: a comment at the same second as the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(2*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
 		{"R7: a comment after the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(3*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
 	}
