@@ -1,8 +1,8 @@
 package workflow
 
-// This file applies I9: after a merged pull request closed a sub-issue of
-// an open requirement issue, cumin copies the work left into one follow-up
-// note on the requirement issue. It reads apart from the snapshot, and only
+// This file applies I9: when a sub-issue of an open requirement issue is
+// closed and a pull request linked to close it is merged, cumin copies the
+// work left into one follow-up note on the requirement issue. It reads apart from the snapshot, and only
 // for closed sub-issues without a note. docs/ja/designs/poll.md, the topic
 // on the follow-up notes.
 
@@ -73,41 +73,61 @@ func (s *Service) writeNotesOf(ctx context.Context, log *slog.Logger, token stri
 	marks := FollowUpMarks(comments, (*logins).cumin)
 	done := true
 	for _, sub := range FollowUpCandidates(requirement, marks) {
-		mark, err := s.writeFollowUpNote(ctx, log.With("issue", sub.Number), token, target, requirement.Number, sub, marks, (*logins).reviewer)
-		if err != nil {
-			done = false
-			continue
-		}
+		written, err := s.writeFollowUpNote(ctx, log.With("issue", sub.Number), token, target, requirement.Number, sub, marks, (*logins).reviewer)
 		// One pull request can close two sub-issues. The note written for
 		// the first one counts for the second in this poll too.
-		if mark != nil {
-			marks = append(marks, *mark)
+		marks = append(marks, written...)
+		if err != nil {
+			done = false
 		}
 	}
 	return done
 }
 
-// writeFollowUpNote reads the pull request that closed one sub-issue and
-// writes its note when it was merged, has no note yet, and leaves work. It
-// returns the marker of the note that it wrote, or nil when no note was
-// needed. An error means that a read or the write failed, and that the note
-// may still be missing.
-func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token string, target Target, requirement int, sub SubIssue, marks []FollowUpMark, reviewer string) (*FollowUpMark, error) {
+// writeFollowUpNote writes the notes of one closed sub-issue: one for each
+// merged pull request that is linked to close it and has no note yet, when
+// it leaves work. Who closed the sub-issue does not matter (the Note of the
+// Owner-role session on #239). It returns the markers of the notes that it
+// wrote. An error means that a read or a write failed, and that a note may
+// still be missing.
+func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token string, target Target, requirement int, sub SubIssue, marks []FollowUpMark, reviewer string) ([]FollowUpMark, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	read, rate, err := s.GitHub.ReadClosingPullRequest(ctx, token, owner, repo, sub.Number)
+	linked, rate, err := s.GitHub.ReadLinkedPullRequests(ctx, token, owner, repo, sub.Number)
 	if err != nil {
-		log.Error("I9: the pull request that closed the issue was not read", "error", err.Error())
+		log.Error("I9: the linked pull requests were not read", "error", err.Error())
 		return nil, err
 	}
-	log.Debug("I9: read the pull request that closed the issue", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	if read == nil || !read.Merged {
-		log.Debug("I9: no merged pull request closed the issue")
-		return nil, nil
+	log.Debug("I9: read the linked pull requests", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	var written []FollowUpMark
+	for _, l := range linked {
+		if !l.Merged || HasFollowUpNote(marks, l.Number) || HasFollowUpNote(written, l.Number) {
+			continue
+		}
+		mark, err := s.writeNoteOfPullRequest(ctx, log.With("pull_request", l.Number), token, target, requirement, sub, l.Number, reviewer)
+		if err != nil {
+			return written, err
+		}
+		if mark != nil {
+			written = append(written, *mark)
+		}
 	}
-	log = log.With("pull_request", read.Number)
-	if HasFollowUpNote(marks, read.Number) {
-		return nil, nil
+	if len(linked) == 0 {
+		log.Debug("I9: no pull request is linked to the issue")
 	}
+	return written, nil
+}
+
+// writeNoteOfPullRequest reads one merged pull request and writes its note
+// when it leaves work. It returns the marker of the note, or nil when
+// nothing was left.
+func (s *Service) writeNoteOfPullRequest(ctx context.Context, log *slog.Logger, token string, target Target, requirement int, sub SubIssue, number int, reviewer string) (*FollowUpMark, error) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	read, rate, err := s.GitHub.ReadPullRequestNote(ctx, token, owner, repo, number)
+	if err != nil {
+		log.Error("I9: the pull request was not read", "error", err.Error())
+		return nil, err
+	}
+	log.Debug("I9: read the pull request", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	pr := MergedPullRequest{Number: read.Number, Merged: read.Merged, Body: read.Body}
 	for _, t := range read.Threads {
 		thread := ReviewThread{Path: t.Path, Line: t.Line}
