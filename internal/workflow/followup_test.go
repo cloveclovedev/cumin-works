@@ -384,3 +384,100 @@ func TestI9_OnePullRequestThatClosesTwoSubIssuesGetsOneNote(t *testing.T) {
 		t.Errorf("%d follow-up notes, want 1", n)
 	}
 }
+
+// indexOf returns the index of the first request that matches, from the
+// index from, or -1.
+func indexOf(requests []githubtest.Request, from int, method, suffix string) int {
+	for i := from; i < len(requests); i++ {
+		if requests[i].Method == method && strings.HasSuffix(requests[i].Path, suffix) {
+			return i
+		}
+	}
+	return -1
+}
+
+// R4 (issue-states.md): when the last sub-issue closes, its follow-up note
+// comes before the request for the acceptance check, in the same poll.
+func TestR4_TheNoteComesBeforeTheAcceptanceCheck(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	sc.pollAndWait(t, sc.service())
+
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Fatalf("%d follow-up notes, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1", n)
+	}
+	requests := sc.fake.Requests()
+	note := indexOf(requests, 0, "POST", "/issues/6/comments")
+	token := indexOf(requests, 0, "POST", "/access_tokens")
+	if note < 0 || token < 0 || token < note {
+		t.Errorf("the note (request %d) does not come before the token of the Planner (request %d)", note, token)
+	}
+}
+
+// A note that cannot be written holds the acceptance check back. The next
+// poll writes the note, then asks.
+func TestR4_AFailedNoteWaitsForTheNextPoll(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	sc.fake.FailNext("POST", "/repos/example-org/example-repo/issues/6/comments", 500)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs with the note missing, want none", n)
+	}
+	if !strings.Contains(sc.logs.String(), "R4: waits for the follow-up notes") {
+		t.Error("the log does not say that R4 waits")
+	}
+
+	sc.pollAndWait(t, service)
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Errorf("%d follow-up notes, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A pull request with nothing to list, and a sub-issue closed without a
+// merge, need no note, so R4 does not wait for them.
+func TestR4_NoNoteNeededDoesNotWait(t *testing.T) {
+	tests := []struct {
+		name  string
+		body  string
+		scene followUpScene
+	}{
+		{"nothing to list", "## Follow-up\nNone\n", followUpScene{}},
+		{"closed by a person", followUpBody, followUpScene{closedByPerson: true}},
+		{"closed without a merge", followUpBody, followUpScene{notMerged: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := newFollowUpScene(t, tt.body, nil, tt.scene)
+			sc.pollAndWait(t, sc.service())
+
+			if n := sc.agentRuns(t); n != 1 {
+				t.Errorf("%d agent runs, want 1", n)
+			}
+		})
+	}
+}
+
+// A failed read of the comments also holds R4 back, with the same log.
+func TestR4_AFailedReadOfTheCommentsWaits(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	service := sc.service()
+	// The poll queries GraphQL three times: the snapshot, the comments for
+	// R4 and R7, then the comments for I9. The third query fails.
+	sc.fake.FailAfter("POST", "/graphql", 2, 502)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if !strings.Contains(sc.logs.String(), "I9: the comments were not read") {
+		t.Fatal("the failed query was not the read of I9")
+	}
+	if !strings.Contains(sc.logs.String(), "R4: waits for the follow-up notes") {
+		t.Error("the log does not say that R4 waits")
+	}
+}

@@ -333,7 +333,7 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 	snapshot.Running = s.runningIssues(target.Repository.String())
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
-	s.writeFollowUpNotes(ctx, log, token, target, snapshot)
+	s.writeFollowUpNotes(ctx, log, token, target, &snapshot)
 	s.cleanUp(ctx, log, target, snapshot)
 	var errs []error
 	// A requirement issue that R3 could not move keeps its sub-issues
