@@ -94,6 +94,12 @@ type Service struct {
 	// (quota.go). The polls and the ends of the runs share it.
 	quotaMu sync.Mutex
 	quota   quotaNotices
+
+	// kept are the worktrees of closed issues that the cleanup kept,
+	// because they hold work that is not on GitHub. The cleanup does not
+	// check them again until cumin restarts, so the log says so once.
+	keptMu sync.Mutex
+	kept   map[string]bool
 }
 
 // DefaultStopGrace is how long Run waits for the requests that are running
@@ -322,6 +328,7 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 	snapshot.Running = s.runningIssues(target.Repository.String())
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
+	s.cleanUp(ctx, log, target, snapshot)
 	var errs []error
 	// A requirement issue that R3 could not move keeps its sub-issues
 	// waiting in this poll. A claim would take cumin/status/ready away from

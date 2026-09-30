@@ -54,17 +54,19 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 
 	// The work directory is the one of the issue and the role, detached at
 	// the head of the default branch; no branch is made for it.
-	wantDir := filepath.Join(sc.workRoot, "example-org", "example-repo", "6-planner")
-	if got := strings.TrimSpace(sc.record(t, "agent.cwd")); got != realPath(t, wantDir) {
-		t.Errorf("the CLI ran in %q, want %q", got, realPath(t, wantDir))
+	// The work directory is gone after the run, so its path is resolved
+	// from the parent, which stays.
+	wantDir := filepath.Join(realPath(t, filepath.Join(sc.workRoot, "example-org", "example-repo")), "6-planner")
+	if got := strings.TrimSpace(sc.record(t, "agent.cwd")); got != wantDir {
+		t.Errorf("the CLI ran in %q, want %q", got, wantDir)
 	}
-	if got := branchOf(t, wantDir); got != "HEAD" {
+	if got := strings.TrimSpace(sc.record(t, "agent.ref")); got != "HEAD" {
 		t.Errorf("the work directory is on the branch %q, want a detached HEAD", got)
 	}
-	if got := git(t, wantDir, "rev-parse", "HEAD"); got != sc.remoteHead {
+	if got := strings.TrimSpace(sc.record(t, "agent.head")); got != sc.remoteHead {
 		t.Errorf("the work directory is at %s, want the head of main %s", got, sc.remoteHead)
 	}
-	if branches := git(t, wantDir, "branch", "--list", "cumin/*"); branches != "" {
+	if branches := strings.TrimSpace(sc.record(t, "agent.branches")); branches != "" {
 		t.Errorf("a branch was made for the Planner: %q", branches)
 	}
 

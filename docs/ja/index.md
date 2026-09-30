@@ -17,6 +17,7 @@
 
 - [はじめに](getting-started.md)
 - [設定の一覧](development/configuration.md)
+- [作業場所の片付け](development/work-directory.md)
 - [セットアップの手順](development/setup-guide.md)
 - [GitHub Appの登録手順 (手作業)](development/github-app-setup.md)
 - [実機の確認 (live test)](development/live-tests.md)

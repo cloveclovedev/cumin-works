@@ -289,6 +289,90 @@ func (w Workspace) RemoveIfPushed(ctx context.Context, c Checkout) (bool, error)
 	return true, nil
 }
 
+// RemoveClosed removes the worktree of c after its issue closed, with the
+// local branch that the worktree holds, when the worktree holds nothing
+// that GitHub lacks. It reports whether it kept a worktree with work that
+// is not on GitHub. A missing worktree is not an error.
+//
+// A merge deletes the branch of the pull request, and a squash merge puts
+// none of its commits on the default branch. So a commit also counts as on
+// GitHub when it is the head of a pull request: GitHub keeps the ref
+// refs/pull/<number>/head of every pull request (official: "Checking out
+// pull requests locally"). A worktree behind the last push of its pull
+// request is kept, which is the safe side.
+func (w Workspace) RemoveClosed(ctx context.Context, c Checkout) (bool, error) {
+	if err := c.validate(); err != nil {
+		return false, fmt.Errorf("remove worktree: %w", err)
+	}
+	root, err := w.root()
+	if err != nil {
+		return false, fmt.Errorf("remove worktree: %w", err)
+	}
+	w.Root = root
+	dir := w.Dir(c)
+	if _, err := os.Stat(dir); err != nil {
+		return false, nil
+	}
+	pushed, branch, err := w.closedWork(ctx, c)
+	if err != nil {
+		return false, err
+	}
+	if !pushed {
+		return true, nil
+	}
+	c.Branch = branch
+	return false, w.Remove(ctx, c)
+}
+
+// closedWork reports whether the worktree of a closed issue holds only
+// work that GitHub has, and the branch that it holds ("" when detached).
+// It holds the lock of Prepare and Remove while it reads the worktree.
+func (w Workspace) closedWork(ctx context.Context, c Checkout) (bool, string, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	dir := w.Dir(c)
+	if !w.isWorktree(ctx, dir) {
+		// Nothing of value: a directory that a failed Prepare left.
+		return true, "", nil
+	}
+	branch, err := w.git(ctx, dir, "branch", "--show-current")
+	if err != nil {
+		return false, "", fmt.Errorf("check the worktree: %w", err)
+	}
+	if _, err := w.git(ctx, w.CloneDir(c), "fetch", "--quiet", "--prune", "origin"); err != nil {
+		return false, "", fmt.Errorf("check the worktree: %w", err)
+	}
+	status, err := w.git(ctx, dir, "status", "--porcelain")
+	if err != nil {
+		return false, "", fmt.Errorf("check the worktree: %w", err)
+	}
+	if status != "" {
+		return false, branch, nil
+	}
+	unpushed, err := w.git(ctx, dir, "rev-list", "--max-count=1", "HEAD", "--not", "--remotes=origin")
+	if err != nil {
+		return false, "", fmt.Errorf("check the worktree: %w", err)
+	}
+	if unpushed == "" {
+		return true, branch, nil
+	}
+	head, err := w.git(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return false, "", fmt.Errorf("check the worktree: %w", err)
+	}
+	heads, err := w.git(ctx, w.CloneDir(c), "ls-remote", "origin", "refs/pull/*/head")
+	if err != nil {
+		return false, "", fmt.Errorf("check the worktree: %w", err)
+	}
+	for _, line := range strings.Split(heads, "\n") {
+		sha, _, _ := strings.Cut(line, "\t")
+		if sha == head {
+			return true, branch, nil
+		}
+	}
+	return false, branch, nil
+}
+
 // onlyPushedWork reports whether the worktree of c is missing, or holds
 // only work that origin has. It holds the lock of Prepare and Remove while
 // it reads the worktree.

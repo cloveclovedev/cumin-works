@@ -480,6 +480,21 @@ type Comment struct {
 	URL string
 }
 
+// IssuesToCleanUp are the closed sub-issues of the snapshot whose agent
+// does not run now. The Host keeps nothing for them (agent-run.md, the
+// topic on the work directory).
+func IssuesToCleanUp(snapshot Snapshot) []int {
+	var numbers []int
+	for _, requirement := range snapshot.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed && !snapshot.Running[sub.Number] {
+				numbers = append(numbers, sub.Number)
+			}
+		}
+	}
+	return numbers
+}
+
 // NeedsLabelTimes reports whether R3 needs the label times of the
 // requirement issue: it waits in cumin/status/awaiting-owner-review, and an
 // open sub-issue carries cumin/status/ready. Only then does the poll read

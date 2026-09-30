@@ -464,6 +464,11 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		"for a in \"$@\"; do printf '%s\\0' \"$a\"; done > " + filepath.Join(dir, "$n.args") + "\n" +
 		"env > " + filepath.Join(dir, "$n.env") + "\n" +
 		"pwd > " + filepath.Join(dir, "$n.cwd") + "\n" +
+		// The work directory as the agent saw it. The Planner's is removed
+		// when its run ends, so a test reads these records instead.
+		"git rev-parse HEAD > " + filepath.Join(dir, "$n.head") + " 2>/dev/null\n" +
+		"git rev-parse --abbrev-ref HEAD > " + filepath.Join(dir, "$n.ref") + " 2>/dev/null\n" +
+		"git branch --list 'cumin/*' > " + filepath.Join(dir, "$n.branches") + " 2>/dev/null\n" +
 		commit +
 		review +
 		"cat $f\n" +

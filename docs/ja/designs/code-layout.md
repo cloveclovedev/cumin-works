@@ -62,6 +62,7 @@
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
+| | `cleanup.go` | 閉じたsub-issueの片付け (worktree、ローカルのブランチ、状態ファイルの項目) |
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
 | | `quota.go` | 着手 (R1、I1) の前の使用率の確認と、実行の終わりの確認 (Q1)。枠ごとに1回だけ知らせる |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |
@@ -73,7 +74,7 @@
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |
 | | `quota.go` | 使用率を読む最小の実行 |
-| | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け、先頭のコミットの読み取り |
+| | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け (閉じたIssueのものも)、先頭のコミットの読み取り |
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
 | | `notify.go` | `cumin setup notify`。通知のアドレスの確認とKeychainへの保存 |
 | | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立て、書き出しと削除、`launchctl` のコマンドの表示 |

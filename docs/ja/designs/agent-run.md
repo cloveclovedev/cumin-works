@@ -36,7 +36,11 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - 続きの依頼 (I1で、Pull Requestが既にある) の前には、前のラウンドのworktreeを、GitHubにないものを持っていないときだけ消す。確かめるのは、`git fetch` のあとで、`git status --porcelain` が空であることと、`git rev-list HEAD --not --remotes=origin` が空であることである。持っていれば、消さずにそのまま使う。cuminが止めた実行の作業は、pushされずにworktreeに残っているためである。
 - 用意と片付けは、プロセスの中で直列に実行する。同じリポジトリの2つのIssueに同時に着手しても、cloneが2つ作られることはない。
 - worktreeの先頭のコミットは `git rev-parse HEAD` で読む。実行が終わったあとに、Pull Requestの先頭のコミットと比べて、最後のコミットがpushされたかを判定するためである ([定期確認の設計](poll.md) の「実行終了の判定」)。
-- Issueが閉じたら、`git worktree remove --force` でworktreeを消し、ローカルのブランチも消す。この片付けは、定期確認の処理が行う。
+- sub-issueが閉じたら、定期確認の処理が片付ける。対象は、スナップショットで閉じていると分かるsub-issueのうち、Agentが動いていないものである。roleごとのworktree (Implementer、Reviewer、Planner) を `git worktree remove --force` で消し、worktreeが持っていたローカルのブランチも消す。Hostの状態ファイルの、そのIssueの項目も消す。
+- 片付けの前に、worktreeがGitHubにないものを持っていないかを確かめる。確かめ方は続きの依頼と同じ (`git status --porcelain` と `git rev-list HEAD --not --remotes=origin`) だが、1つ足す。mergeするとPull Requestのブランチは消え、squash mergeではそのコミットが既定のブランチに入らない。そこで、worktreeの先頭のコミットが、どれかのPull Requestの先頭 (`refs/pull/<番号>/head`) と同じなら、GitHubにあるとみなす。GitHubは、全てのPull Requestについてこのrefを残す (公式: Checking out pull requests locally)。一覧は `git ls-remote origin 'refs/pull/*/head'` で読む。
+- GitHubにないものを持つworktreeは消さず、警告をログに1回出す。cuminは、再起動するまでそのworktreeを確かめ直さない。定期確認のたびにfetchしないためである。
+- スナップショットに出てこないIssue (閉じた要求Issueのsub-issue、Ownerが要求Issueから外したsub-issue) のworktreeは、消さない。閉じた要求Issueは読まない (原則6) うえ、外しただけのIssueは開いていることがある。Ownerが [作業場所の片付け](../development/work-directory.md) の手順で消す。
+- PlannerのworktreeはPlannerの実行が終わるたびに消す (done、blocked、2回目の異常終了のどれでも)。Plannerは読むだけで何も持たず、次の依頼で作り直すためである。こうすると、要求Issueが閉じたあとにPlannerのworktreeが残らない。cuminを止めるときも消す。
 - gitは `os/exec` で呼ぶ。認証の入力待ちで止まらないように `GIT_TERMINAL_PROMPT=0` を付ける (公式: git の環境変数)。gitの出力はエラーの文章にだけ含め、infoのログには出さない。
 - 採らなかった案: Issueごとにcloneする。毎回リポジトリ全体を取り直すことになり、遅いうえにディスクも使う。
 - 採らなかった案: cloneにmainをチェックアウトしておく。Agentが誤ってそこで作業しかねない。同じブランチを2か所でチェックアウトすることはできないので、worktreeの邪魔にもなる。
