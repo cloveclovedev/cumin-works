@@ -29,7 +29,7 @@ type command struct {
 
 var commands = []command{
 	{"run", "Run as a resident program. launchd starts this command.", runRun},
-	{"status", "Show running agents, issues that wait for the Owner, and the quota usage.", nil},
+	{"status", "Show running agents, issues that wait for the Owner, and the quota usage.", runStatus},
 	{"quota allow", "Allow cumin to use all of the current 5h quota window.", runQuotaAllow},
 	{"setup", "Set up cumin on the Host: \"setup github-apps\" registers the GitHub App of each role, \"setup launchd\" makes launchd run cumin.", runSetup},
 }
@@ -43,6 +43,7 @@ func main() {
 func runCLI(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cumin", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // runCLI prints the usage itself
+	showVersion := fs.Bool("version", false, "print the version of cumin")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			printUsage(stdout)
@@ -54,6 +55,14 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 	}
 
 	rest := fs.Args()
+	if *showVersion {
+		if len(rest) > 0 {
+			fmt.Fprintf(stderr, "cumin: --version takes no command\n")
+			return exitBadUsage
+		}
+		fmt.Fprintln(stdout, "cumin "+version())
+		return exitOK
+	}
 	if len(rest) == 0 {
 		printUsage(stderr)
 		return exitBadUsage
@@ -96,6 +105,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  cumin <command>")
+	fmt.Fprintln(w, "  cumin --version")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	for _, c := range commands {

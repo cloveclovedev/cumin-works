@@ -519,3 +519,25 @@ func TestQ2_ABrokenAllowanceFileWarnsOnce(t *testing.T) {
 		t.Errorf("%d warnings, want 1", n)
 	}
 }
+
+// Q3: a reading that comes in late never makes the stored time of the
+// read earlier.
+func TestQ3_ALateReadingKeepsTheLaterReadTime(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	withState(t, service)
+	reset := sceneNow.Add(2 * time.Hour)
+	newer := agent.QuotaUsage{
+		FiveHour: agent.QuotaWindow{Utilization: 0.90, ResetsAt: reset},
+		Weekly:   agent.QuotaWindow{Utilization: 0.20, ResetsAt: sceneNow.Add(time.Hour)},
+		ReadAt:   sceneNow,
+	}
+	older := newer
+	older.FiveHour.Utilization = 0.50
+	older.ReadAt = sceneNow.Add(-10 * time.Minute)
+	workflow.KeepUsage(service, newer)
+	workflow.KeepUsage(service, older)
+	if stored, _ := service.State.Quota(); !stored.ReadAt.Equal(sceneNow) {
+		t.Errorf("read_at = %v, want the later %v", stored.ReadAt, sceneNow)
+	}
+}

@@ -136,6 +136,11 @@ func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) quota.Usage
 		readAt = s.now()
 	}
 	if stored, ok := s.State.Quota(); ok {
+		// A reading that came in late keeps the later time: the kept
+		// values are never older than the stored time says.
+		if stored.ReadAt.After(readAt) {
+			readAt = stored.ReadAt
+		}
 		usage.FiveHour = quota.Newer(usage.FiveHour, quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt})
 		usage.Weekly = quota.Newer(usage.Weekly, quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt})
 	}
