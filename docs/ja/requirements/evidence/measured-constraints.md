@@ -195,3 +195,14 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 107 | `--setting-sources project` を付けても、`init` の `plugins` に、バイナリに入ったpluginが載る。2.1.284 では `agents-md@builtin` と `telemetry@builtin` で、`path` は `builtin` である。claude.aiから同期したpluginではないので、`syncClaudeAiPlugins` では消えない。27の「`plugins` が空になる」は、この版では成り立たない (27の更新) | Hostで実測 (2026-09-29)。公式: `anthropics/claude-code` の `mods/` | 実測 + 公式文書 |
 | 108 | `builtin` は予約されたmarketplaceの名前で、Claude Codeはバイナリに入ったpluginにだけ使う。marketplace、claude.ai、skillsのディレクトリから来たpluginの `source` が `<名前>@builtin` になることはない | 公式: Marketplace reference の "Reserved names" (#207 で確認) | 公式文書 |
 | 109 | 必須のcheckは `GET /repos/{owner}/{repo}/rules/branches/{branch}` で読み、この応答はページに分かれる。`statusCheckRollup` は、`CheckRun` なら `name`、`status`、`conclusion`、`checkSuite.app.databaseId` を、`StatusContext` なら `context`、`state` を返す | #187 で実測 (2026-09-25) | 実測 |
+
+## 13. Plannerの実装で確かめたこと (2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284)
+
+要求Issue #155 の実装 (#177、#189、#194、#221) で確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 110 | GitHub Appの名前を変えると、slugが名前に追従する。新しいslugの `GET /apps/{slug}` が答え、古いslugは404になる。App idは変わらない。Organizationへのインストールも、選んだリポジトリも、そのまま残る。botのログイン名はslugに追従するので、改名のあとのコミットは新しい名前になり、前のコミットは古い名前のまま残る | Ownerが改名した直後にRESTで確かめた (2026-09-25、#155 のNote)。公式文書は、改名で何が残るかを書いていない | 実測 |
+| 111 | `init` のイベントの `skills` は、skillの名前の文字列の配列である (86で項目の名前だけを記録した) | #166 の記録 (2026-09-25、Claude Code 2.1.273) | 実測 |
+| 112 | Issues の書き込みだけを持ち、Pull requests の権限を持たないAppのinstallation tokenで、sub-issueの作成、マイルストーンと blocked by の設定、コメントができる。`GET /repos/{owner}/{repo}/issues/{number}` で、Pull Requestの本文も読める | 公式: Permissions required for GitHub Apps (Issues の項にこのendpointがある)。live scenario Accept-1 (#172) で実測 (2026-09-29、Claude Code 2.1.284) | 公式文書 + 実測 |
+| 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである | #221 で実測 (2026-09-29) | 実測 |

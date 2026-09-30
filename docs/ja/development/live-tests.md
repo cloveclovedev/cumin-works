@@ -361,6 +361,8 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    | `R7: the requirement issue waits for the acceptance of the Owner` | 次の定期確認で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-owner-review` に替えた |
    | `the Owner was notified` (`row` が `R7`) | 通知した |
 
+   Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`R7: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
+
 6. `R7: ...` のあとの通知の行 (Plan-1 の手順9と同じ) が出たら、cumin のプロセスに SIGTERM を送る。`stopped` の行が出て、終了コード0で終わる。止めるときに途中だった定期確認は、`poll failed` (`context canceled`) を1行出すことがある。止めた結果で、問題ではない。
 
 ### 確かめること
