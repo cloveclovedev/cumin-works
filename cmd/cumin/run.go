@@ -135,6 +135,7 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 			Repository: repo,
 			RemoteURL:  remoteURL(repo),
 			Token:      source.Token,
+			Login:      source.BotLogin,
 		})
 		names = append(names, repo.String())
 	}

@@ -41,13 +41,14 @@
 | | `quota.go` | 利用枠の設定 (5h枠のしきい値と時間帯、weekly枠の目標と前倒し) の読み込み |
 | `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数。書くのは `cumin run` だけ |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
-| | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) |
+| | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
 | | `roles.go` | AppごとのGitHubの権限の表 |
 | | `installations.go` | Appの情報とインストールの確認 (`GET /app` など) |
 | | `manifest.go` | GitHub App Manifest flowの応答 |
 | | `users.go` | botのユーザの読み取り (`GET /users/{login}`) |
 | | `labels.go` | ラベルの一覧、作成、Issueのラベルの付け替え |
 | | `comments.go` | Issueへのコメントの投稿 |
+| | `closer.go` | Issueを閉じたPull Requestの読み取り (説明とレビューのスレッド。I9) |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
@@ -63,6 +64,8 @@
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
 | | `cleanup.go` | 閉じたsub-issueの片付け (worktree、ローカルのブランチ、状態ファイルの項目) |
+| | `followup.go` | 純粋。フォローアップノートを読むsub-issue、拾うもの、ノートの文章と目印 (I9) |
+| | `followupnote.go` | フォローアップノートの読み取りと書き込み (I9) |
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
 | | `quota.go` | 着手 (R1、I1) の前の使用率の確認と、実行の終わりの確認 (Q1)。枠ごとに1回だけ知らせる |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |

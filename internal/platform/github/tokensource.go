@@ -31,6 +31,8 @@ type TokenSource struct {
 
 	mu    sync.Mutex
 	token InstallationToken
+	// login is the login of the bot of the App, once BotLogin read it.
+	login string
 }
 
 // NewTokenSource returns a source with no token. The first Token call
@@ -54,6 +56,23 @@ func (s *TokenSource) Token(ctx context.Context) (string, error) {
 	}
 	s.token = token
 	return token.Token, nil
+}
+
+// BotLogin returns the login of the bot of the App, "<slug>[bot]", from
+// GET /app. The slug never changes, so the first success is kept. The
+// follow-up note (I9) uses it to know its own comments.
+func (s *TokenSource) BotLogin(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.login != "" {
+		return s.login, nil
+	}
+	app, err := s.client.GetApp(ctx, s.cred)
+	if err != nil {
+		return "", err
+	}
+	s.login = app.Slug + "[bot]"
+	return s.login, nil
 }
 
 // String keeps the token out of formatted output.

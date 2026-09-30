@@ -28,6 +28,11 @@ type Target struct {
 	// passes the Token method of a github.TokenSource. Tests pass a function
 	// that returns the token of the fake.
 	Token func(ctx context.Context) (string, error)
+	// Login returns the login of the bot of cumin-core, "<slug>[bot]". I9
+	// uses it to find its own follow-up notes. cumin run passes the
+	// BotLogin method of the same github.TokenSource. Without it, cumin
+	// writes no follow-up note.
+	Login func(ctx context.Context) (string, error)
 }
 
 // Service polls the target repositories and applies the rules.
@@ -328,6 +333,7 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 	snapshot.Running = s.runningIssues(target.Repository.String())
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
+	s.writeFollowUpNotes(ctx, log, token, target, snapshot)
 	s.cleanUp(ctx, log, target, snapshot)
 	var errs []error
 	// A requirement issue that R3 could not move keeps its sub-issues
