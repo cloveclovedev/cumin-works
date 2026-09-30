@@ -149,7 +149,25 @@ func (l *live) createFixtureIssue(t *testing.T, token, title string, labels []st
 	if parentID != 0 {
 		body["parent_issue_id"] = parentID
 	}
+	resp := l.api(t, token, http.MethodPost, "/repos/{repo}/issues", body)
 	var created issue
-	l.api(t, token, http.MethodPost, "/repos/{repo}/issues", body).mustJSON(t, http.StatusCreated, &created)
+	resp.mustJSON(t, http.StatusCreated, &created)
+	// GitHub drops a label that the repository does not have, without an
+	// error. cumin run creates its labels at start.
+	var withLabels struct {
+		Labels []struct {
+			Name string `json:"name"`
+		} `json:"labels"`
+	}
+	resp.json(t, &withLabels)
+	for _, want := range labels {
+		found := false
+		for _, got := range withLabels.Labels {
+			found = found || got.Name == want
+		}
+		if !found {
+			t.Fatalf("issue #%d has no label %s: start cumin run once so that it creates its labels, then close the issue and run the test again", created.Number, want)
+		}
+	}
 	return created
 }
