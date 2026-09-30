@@ -102,6 +102,9 @@ type Service struct {
 	// (quota.go). The polls and the ends of the runs share it.
 	quotaMu sync.Mutex
 	quota   quotaNotices
+	// waitingTold says that the Owner heard Q4 (waiting) since cumin last
+	// did something (waiting.go). quotaMu guards it.
+	waitingTold bool
 
 	// kept are the worktrees of closed issues that the cleanup kept,
 	// because they hold work that is not on GitHub. The cleanup does not
@@ -272,13 +275,15 @@ func (s *Service) ensureLabels(ctx context.Context) {
 // returned error joins the failures.
 func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
+	var all pollResult
 	for _, target := range s.Targets {
 		// The stop signal came while this poll was running. Start nothing
 		// more: the requests that are going on are the ones to wait for.
 		if ctx.Err() != nil {
-			break
+			return errors.Join(errs...)
 		}
-		err := s.pollRepository(ctx, target)
+		result, err := s.pollRepository(ctx, target)
+		all.decided = all.decided || result.decided
 		if err == nil {
 			s.pollSucceeded(target.Repository)
 			continue
@@ -287,10 +292,19 @@ func (s *Service) Poll(ctx context.Context) error {
 		errs = append(errs, err)
 		s.pollFailed(ctx, target.Repository, err)
 	}
+	// Q4 sends only after a poll that read every repository; a decided
+	// action ends the silence even when another repository failed.
+	s.waitingCheck(ctx, all, len(errs) == 0)
 	return errors.Join(errs...)
 }
 
-func (s *Service) pollRepository(ctx context.Context, target Target) error {
+func (s *Service) pollRepository(ctx context.Context, target Target) (pollResult, error) {
+	var result pollResult
+	err := s.pollRepositoryInto(ctx, target, &result)
+	return result, err
+}
+
+func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result *pollResult) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -345,6 +359,7 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 	// issue would stay in awaiting-owner-review while its work goes on.
 	notStarted := map[int]bool{}
 	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
+		result.note(action)
 		switch a := action.(type) {
 		case StartRequirement:
 			if err := s.startRequirement(ctx, token, target, snapshot, a); err != nil {
