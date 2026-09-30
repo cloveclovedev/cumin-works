@@ -2,12 +2,17 @@ package workflow_test
 
 import (
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
+	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
+	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
 
 // q1Messages returns the notifications of Q1.
@@ -260,5 +265,166 @@ func TestQ1_AWindowThatStopsAgainNotifiesAgain(t *testing.T) {
 	q1 := sc.q1Messages()
 	if len(q1) != 3 || !strings.Contains(q1[2], "5h") {
 		t.Errorf("Q1 notifications = %q, want a second one for the 5h window", q1)
+	}
+}
+
+// withState gives the service a state file, where the usage is kept.
+func withState(t *testing.T, service *workflow.Service) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "state.json")
+	service.State = state.Open(path, nil)
+	return path
+}
+
+// Q3: a stop by the 5h window makes no minimal run before its reset. After
+// the reset, the check before the start reads again, and the start goes on.
+func TestQ3_AFiveHourStopWaitsForItsResetWithoutAMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	reset := sceneNow.Add(2 * time.Hour)
+	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+	sc.clock.Set(reset.Add(-time.Minute))
+	sc.pollAndWait(t, service)
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs before the reset, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs before the reset, want 0", n)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+	if n := sc.quotaRuns(t); n != 2 {
+		t.Errorf("%d minimal runs after the reset, want 2", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs after the reset, want 1", n)
+	}
+}
+
+// Q3: a time band with a higher threshold ends the wait at its start.
+func TestQ3_AHigherTimeBandEndsTheWait(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	local := sceneNow.Local()
+	start := time.Date(local.Year(), local.Month(), local.Day(), local.Hour()+1, 0, 0, 0, time.Local)
+	from := config.TimeOfDay(start.Hour() * 60)
+	sc.quota.FiveHour.Bands = []config.TimeBand{{From: from, To: (from + 120) % (24 * 60), Threshold: 95}}
+	sc.setQuota(t, 0.90, sceneNow.Add(4*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	sc.pollAndWait(t, service)
+	sc.clock.Set(start.Add(-time.Minute))
+	sc.pollAndWait(t, service)
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs before the band, want 1", n)
+	}
+
+	sc.clock.Set(start)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs in the band, want 1", n)
+	}
+}
+
+// Core-15 and Q3: a stop by the weekly pace resumes by time alone, with no
+// minimal run while the stored usage stops the start.
+func TestCore15_TheWeeklyPaceResumesByTimeAloneWithoutAMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	weeklyReset := sceneNow.Add(6 * 24 * time.Hour) // one day into the week
+	sc.setQuota(t, 0.10, sceneNow.Add(time.Hour), 0.40, weeklyReset)
+	service := sc.service()
+	withState(t, service)
+	sc.pollAndWait(t, service)
+
+	// 85 x (e + 1 day) / 7 days passes 40 at e of about 2.29 days: about
+	// 31 hours after sceneNow, which is one day into the week.
+	sc.clock.Set(sceneNow.Add(30 * time.Hour))
+	sc.pollAndWait(t, service)
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs before the pace passes the usage, want 1", n)
+	}
+
+	sc.clock.Set(sceneNow.Add(32 * time.Hour))
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs after the pace passed the usage, want 1", n)
+	}
+}
+
+// Q3: after a restart, the stored usage keeps cumin stopped without a
+// minimal run.
+func TestQ3_ARestartWhileStoppedMakesNoMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.setQuota(t, 0.90, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	first := sc.service()
+	path := withState(t, first)
+	sc.pollAndWait(t, first)
+
+	again := sc.service()
+	again.State = state.Open(path, nil)
+	sc.pollAndWait(t, again)
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs across the restart, want 1", n)
+	}
+	if got := len(sc.q1Messages()); got != 1 {
+		t.Errorf("%d Q1 notifications, want 1", got)
+	}
+}
+
+// Q1: the usage of a run that ends is a read that succeeded, so a later
+// unread usage is a new failure and notifies again.
+func TestQ1_AReadAtTheEndOfARunEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
+	sc := newScene(t, cliOptions{commit: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "second", Labels: []string{"cumin/status/ready", "risk/low"}})
+	sc.failQuota(t)
+	service := sc.service()
+	service.Settings.MaxIssuesInProgress = 2
+	// #10 waits for a check fix, which reads no usage; #11 is ready.
+	sc.failingCheck(t, service, 0)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want the check fix", n)
+	}
+	sc.pollAndWait(t, service)
+
+	var unread int
+	for _, m := range sc.q1Messages() {
+		if strings.Contains(m, "was not read") {
+			unread++
+		}
+	}
+	if unread != 2 {
+		t.Errorf("%d notifications about an unread usage, want 2 (before and after the run)", unread)
+	}
+}
+
+// Q3: an older reading that arrives after a newer one never replaces it,
+// and the decision uses the newer one.
+func TestQ3_AnOlderReadingNeverReplacesANewerOne(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	withState(t, service)
+	reset := sceneNow.Add(2 * time.Hour)
+	newer := agent.QuotaUsage{
+		FiveHour: agent.QuotaWindow{Utilization: 0.90, ResetsAt: reset},
+		Weekly:   agent.QuotaWindow{Utilization: 0.20, ResetsAt: sceneNow.Add(time.Hour)},
+	}
+	older := newer
+	older.FiveHour.Utilization = 0.50
+	workflow.KeepUsage(service, newer)
+	got := workflow.KeepUsage(service, older)
+	if got.FiveHour.Utilization != 0.90 {
+		t.Errorf("the decision uses %v, want the newer reading 0.90", got.FiveHour.Utilization)
+	}
+	if stored, _ := service.State.Quota(); stored.FiveHour.Utilization != 0.90 {
+		t.Errorf("the state holds %v, want the newer reading 0.90", stored.FiveHour.Utilization)
 	}
 }

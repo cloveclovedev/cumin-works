@@ -1,8 +1,9 @@
 package workflow
 
-// This file applies Q1 of issue-states.md: before a new start (R1, I1), and
-// at the end of each agent run, the quota usage decides whether cumin
-// starts new work. The limits are the pure rules of internal/quota.
+// This file applies Q1 and Q3 of issue-states.md: before a new start (R1,
+// I1), and at the end of each agent run, the quota usage decides whether
+// cumin starts new work; while it stops, the stored usage decides when to
+// try again. The limits are the pure rules of internal/quota.
 // docs/ja/designs/quota.md records the design; the minimal run that reads
 // the usage is in internal/agent.
 
@@ -16,6 +17,7 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/quota"
@@ -59,6 +61,13 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		return false, errors.New("no agent service is configured")
 	}
 	log := s.logger().With("repository", target.Repository.String(), "issue", number)
+	// Q3: while the stored usage stops the starts, no minimal run happens
+	// before the next try time. Usage only rises until a reset, so no
+	// earlier read could pass.
+	if next, waiting := s.nextTry(); waiting {
+		log.Debug("Q3: waits for the next try time", "row", row, "next_try", next)
+		return false, nil
+	}
 	read, err := s.Agents.ReadQuota(ctx, role)
 	if err != nil {
 		var notRead *agent.QuotaNotRead
@@ -80,15 +89,13 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		}
 		return false, nil
 	}
-	s.quotaMu.Lock()
-	s.quota.unreadTold = false
-	s.quotaMu.Unlock()
-
-	decision := s.decideQuota(log, read)
+	usage := s.keepUsage(log, read)
+	decision := s.decideQuota(log, usage)
 	if decision.Allows() {
 		return true, nil
 	}
-	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped)
+	next, _ := quota.NextTry(usage, s.quotaSettings(), s.now())
+	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 	return false, nil
 }
@@ -100,7 +107,7 @@ func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Ta
 	if run == nil || !run.QuotaRead {
 		return
 	}
-	decision := s.decideQuota(log, run.Quota)
+	decision := s.decideQuota(log, s.keepUsage(log, run.Quota))
 	if decision.Allows() {
 		return
 	}
@@ -108,18 +115,72 @@ func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Ta
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 }
 
+// keepUsage stores a usage that was read, ends the silence after an unread
+// usage, and returns the usage that the state now holds, which the caller
+// decides from. The lock covers the read and the write of the state, so
+// that two runs that end together do not lose a reading: a later read that fails is a new failure. A state that
+// cannot be saved costs only a minimal run after a restart.
+func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) quota.Usage {
+	s.quotaMu.Lock()
+	defer s.quotaMu.Unlock()
+	s.quota.unreadTold = false
+	// Runs that overlap can end in any order, so each window keeps the
+	// newer of the stored reading and this one. An older reading never
+	// makes the next try time earlier.
+	usage := toUsage(read)
+	readAt := read.ReadAt
+	if readAt.IsZero() {
+		readAt = s.now()
+	}
+	if stored, ok := s.State.Quota(); ok {
+		usage.FiveHour = quota.Newer(usage.FiveHour, quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt})
+		usage.Weekly = quota.Newer(usage.Weekly, quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt})
+	}
+	err := s.State.SetQuota(state.Quota{
+		FiveHour: state.QuotaWindow{Utilization: usage.FiveHour.Utilization, ResetsAt: usage.FiveHour.ResetsAt},
+		Weekly:   state.QuotaWindow{Utilization: usage.Weekly.Utilization, ResetsAt: usage.Weekly.ResetsAt},
+		ReadAt:   readAt,
+	})
+	if err != nil {
+		log.Error("Q3: the quota usage was not kept", "error", err.Error())
+	}
+	return usage
+}
+
+// nextTry reports the next try time while the stored usage stops the
+// starts, and false when a start may read the usage now.
+func (s *Service) nextTry() (time.Time, bool) {
+	stored, ok := s.State.Quota()
+	if !ok {
+		return time.Time{}, false
+	}
+	usage := quota.Usage{
+		FiveHour: quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt},
+		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
+	}
+	now := s.now()
+	next, stopped := quota.NextTry(usage, s.quotaSettings(), now)
+	if !stopped || !now.Before(next) {
+		return time.Time{}, false
+	}
+	return next, true
+}
+
+func (s *Service) quotaSettings() config.QuotaSettings {
+	if s.Settings == nil {
+		return config.QuotaSettings{}
+	}
+	return s.Settings.Quota
+}
+
 // decideQuota applies the limits of the Host settings to one usage. The
 // numbers go to the debug log only (designs/quota.md).
-func (s *Service) decideQuota(log *slog.Logger, read agent.QuotaUsage) quota.Decision {
-	var settings config.QuotaSettings
-	if s.Settings != nil {
-		settings = s.Settings.Quota
-	}
-	decision := quota.Decide(toUsage(read), settings, s.now())
+func (s *Service) decideQuota(log *slog.Logger, usage quota.Usage) quota.Decision {
+	decision := quota.Decide(usage, s.quotaSettings(), s.now())
 	s.forgetResumedWindows(decision)
 	log.Debug("Q1: quota usage",
-		"five_hour_utilization", read.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,
-		"weekly_utilization", read.Weekly.Utilization, "weekly_limit", decision.WeeklyLimit)
+		"five_hour_utilization", usage.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,
+		"weekly_utilization", usage.Weekly.Utilization, "weekly_limit", decision.WeeklyLimit)
 	return decision
 }
 

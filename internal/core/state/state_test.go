@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 )
@@ -232,5 +233,48 @@ func TestOpen_ReadsAFileOfVersion1(t *testing.T) {
 	got := state.Open(path, nil).Issue("example-org/example-repo", 12)
 	if got != (state.Issue{SessionID: "s-1", CheckFixRequests: 2}) {
 		t.Errorf("issue = %+v, want the entry of version 1", got)
+	}
+}
+
+// Q3: the latest quota usage survives a new store, so that a restart
+// knows when to try again.
+func TestSetQuota_SurvivesANewStore(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store := state.Open(path, nil)
+	if _, ok := store.Quota(); ok {
+		t.Fatal("a new store has a quota usage")
+	}
+	reset := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	want := state.Quota{
+		FiveHour: state.QuotaWindow{Utilization: 0.5, ResetsAt: reset},
+		Weekly:   state.QuotaWindow{Utilization: 0.25, ResetsAt: reset.Add(72 * time.Hour)},
+		ReadAt:   reset.Add(-time.Hour),
+	}
+	if err := store.SetQuota(want); err != nil {
+		t.Fatalf("SetQuota: %v", err)
+	}
+	if err := store.Set("example-org/example-repo", 12, state.Issue{SessionID: "s-1"}); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+
+	got, ok := state.Open(path, nil).Quota()
+	if !ok || !got.FiveHour.ResetsAt.Equal(want.FiveHour.ResetsAt) || got.Weekly.Utilization != 0.25 || !got.ReadAt.Equal(want.ReadAt) {
+		t.Errorf("Quota after a restart = %+v, %v, want %+v", got, ok, want)
+	}
+}
+
+// A file from before the quota was kept opens with its issues and no
+// quota usage.
+func TestOpen_AFileWithoutTheQuotaOpens(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"issues":{"example-org/example-repo#12":{"session_id":"s-1"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := state.Open(path, nil)
+	if store.Issue("example-org/example-repo", 12).SessionID != "s-1" {
+		t.Error("the issue was not read")
+	}
+	if _, ok := store.Quota(); ok {
+		t.Error("the file has a quota usage")
 	}
 }
