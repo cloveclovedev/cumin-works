@@ -146,7 +146,8 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   Cumin -> Tracker : after the merge, copy the remaining work (Follow-up and suggestions not taken) to the requirement issue as a follow-up note
   note over Owner, Cumin
     While waiting for the Owner, cumin goes on with other issues that do not depend on it.
-    The Owner's "go ahead" is always adding cumin/status/ready.
+    The Owner's "go ahead" for work is adding cumin/status/ready.
+    The Owner's "merge it" is an approving review of the head commit (I12).
   end note
 end
 
