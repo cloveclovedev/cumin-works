@@ -33,20 +33,20 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `roles.<role>.cli_path` | CLIの実行ファイル。ディレクトリを含まない名前は、`PATH` から探す。受け入れテストは、偽のCLIの実行ファイルを指す | `"claude"` | 空にできない |
 | `roles.<role>.model` | Agentを動かすモデル。空なら、CLIの既定のモデルを使う | 空 | なし |
 | `quota.five_hour.threshold` | 5h枠のしきい値 (%)。どの時間帯にも入らない時刻に使われる | `85` | 1〜100 |
-| `quota.five_hour.reset_near` | 5h枠のリセットが近いとみなす残り時間 | `"30m"` | 0以上、5時間未満 |
-| `quota.weekly.threshold` | weekly枠のしきい値 (%)。どの時間帯にも入らない時刻に使われる | `85` | 1〜100 |
-| `quota.<window>.bands` | 時間帯ごとのしきい値。下の「時間帯」を参照 | なし | 同じ枠の時間帯は、重ねられない |
+| `quota.five_hour.bands` | 5h枠の時間帯ごとのしきい値。下の「時間帯」を参照 | なし | 時間帯どうしは、重ねられない |
+| `quota.weekly.target` | weekly枠のペースの上限の式の目標 (%) | `85` | 1〜100 |
+| `quota.weekly.lead` | weekly枠のペースの上限の式で、経過時間に足す時間 (前倒し) | `"24h"` | 0以上、`"168h"` (7日) 未満 |
 | `notify.discord.enabled` | OwnerへのDiscordの通知を出すか。`false` のとき、cuminはラベルの付け替えとコメントをふだんどおり行い、通知だけを出さない | `true` | 真偽値 |
 | `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps` が書き込む | なし | キーを書くなら、空にできない |
 
 - `<role>` は、`planner`、`implementer`、`reviewer` のどれかである。
 - `<app>` は、`cumin-core` と、上の3つのroleのどれかである。
 - `<organization>` は、対象のリポジトリの持ち主の名前である。
-- `<window>` は、`five_hour` か `weekly` である。
+- weekly枠に時間帯はない。リセットの曜日や時刻も、設定には持たない。週の始まりは、使用率とともに読むリセット時刻から決まる。
 
 ## 時間帯
 
-`[[quota.<window>.bands]]` を並べると、時間帯ごとにしきい値を変えられる。Ownerが使わない時間帯のしきい値を高くする、という使い方をする。
+`[[quota.five_hour.bands]]` を並べると、5h枠のしきい値を時間帯ごとに変えられる。Ownerが使わない時間帯のしきい値を高くする、という使い方をする。
 
 | キー | 内容 | 制限 |
 |---|---|---|
@@ -56,8 +56,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 
 - 時刻は、Hostのローカルの時刻である。
 - `to` が `from` より前なら、時間帯は日付をまたぐ。`from = "23:00"`、`to = "06:00"` は、23時から翌朝の6時までを表す。
-- 同じ枠の時間帯どうしは、重ねられない。重なっていると、両方の位置 (`quota.five_hour.bands[1]` など) を示して終わる。位置は、ファイルに書いた順に0から数える。5h枠とweekly枠の時間帯は、別々に調べる。
-- リセットが近いときに5h枠のしきい値を100%にする決まりは、まだ作られていない。今は、値を読み込むだけである。
+- 時間帯どうしは、重ねられない。重なっていると、両方の位置 (`quota.five_hour.bands[1]` など) を示して終わる。位置は、ファイルに書いた順に0から数える。
 
 このファイルで決められない設定:
 
@@ -84,7 +83,6 @@ model = ""
 
 [quota.five_hour]
 threshold = 85
-reset_near = "30m"
 
 # 23時から翌朝の6時までは、5h枠を使い切ってよい。
 [[quota.five_hour.bands]]
@@ -92,8 +90,10 @@ from = "23:00"
 to = "06:00"
 threshold = 100
 
+# weekly枠は、週を通して85%まで使う。1日分を前倒しで使ってよい。
 [quota.weekly]
-threshold = 85
+target = 85
+lead = "24h"
 
 [notify.discord]
 enabled = true

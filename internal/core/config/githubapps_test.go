@@ -78,7 +78,7 @@ cumin-core = "Iv23liOLD"  # old value
 reviewer = "Iv23liREV"
 
 [quota.weekly]
-threshold = 60
+target = 60
 `)
 	if err := SetGitHubAppClientID(path, "example-org", "cumin-core", "Iv23liNEW"); err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ reviewer = "Iv23liREV"
 implementer = "Iv23liIMPL"
 
 [quota.weekly]
-threshold = 60
+target = 60
 `
 	if got := readFile(t, path); got != want {
 		t.Errorf("the file is:\n%s\nwant:\n%s", got, want)
@@ -176,7 +176,7 @@ func TestSetGitHubAppClientID_WritesBehindADanglingSymbolicLink(t *testing.T) {
 // A file from Windows ends its lines with CRLF. The table must be found, and
 // the new lines get the same line ending.
 func TestSetGitHubAppClientID_KeepsCRLFLineEndings(t *testing.T) {
-	path := writeFile(t, "work_dir = \"/tmp/w\"\r\n\r\n[github_apps.example-org]\r\ncumin-core = \"Iv23liOLD\" # core\r\n\r\n[quota.weekly]\r\nthreshold = 60\r\n")
+	path := writeFile(t, "work_dir = \"/tmp/w\"\r\n\r\n[github_apps.example-org]\r\ncumin-core = \"Iv23liOLD\" # core\r\n\r\n[quota.weekly]\r\ntarget = 60\r\n")
 	if err := SetGitHubAppClientID(path, "example-org", "reviewer", "Iv23liREV"); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestSetGitHubAppClientID_KeepsCRLFLineEndings(t *testing.T) {
 	if err := SetGitHubAppClientID(path, "other-org", "reviewer", "Iv23liOTHER"); err != nil {
 		t.Fatal(err)
 	}
-	want := "work_dir = \"/tmp/w\"\r\n\r\n[github_apps.example-org]\r\ncumin-core = \"Iv23liNEW\" # core\r\nreviewer = \"Iv23liREV\"\r\n\r\n[quota.weekly]\r\nthreshold = 60\r\n\r\n[github_apps.other-org]\r\nreviewer = \"Iv23liOTHER\"\r\n"
+	want := "work_dir = \"/tmp/w\"\r\n\r\n[github_apps.example-org]\r\ncumin-core = \"Iv23liNEW\" # core\r\nreviewer = \"Iv23liREV\"\r\n\r\n[quota.weekly]\r\ntarget = 60\r\n\r\n[github_apps.other-org]\r\nreviewer = \"Iv23liOTHER\"\r\n"
 	if got := readFile(t, path); got != want {
 		t.Errorf("the file is %q\nwant        %q", got, want)
 	}
