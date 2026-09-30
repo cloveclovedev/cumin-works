@@ -4,7 +4,7 @@ package workflow
 // row of issue-states.md that hands work back uses it with its own row
 // number: post one comment on the issue, replace the status label with
 // cumin/status/awaiting-owner-decision, then notify the Owner. I2, I4, and
-// R2 use it today; I8 and I10 are later requirements.
+// R2, I3, I5, and I10 use it today; I8 is a later issue.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
 
@@ -28,6 +28,13 @@ const (
 	RowR2 = "R2"
 	// RowR4 is the end of a Planner run that checked the acceptance.
 	RowR4 = "R4"
+	// RowI3 is the end of a Reviewer run that ended abnormally twice.
+	RowI3 = "I3"
+	// RowI5 is the end of a Reviewer run whose review cumin did not find
+	// on the head commit, twice (the failure column of I5).
+	RowI5 = "I5"
+	// RowI10 is a Reviewer run that returned blocked.
+	RowI10 = "I10"
 )
 
 // The rows that start the Planner (R1, R4) and that move a requirement

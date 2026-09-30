@@ -154,6 +154,7 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	if len(opts) > 0 {
 		options = opts[0]
 	}
+	options.serverURL = server.URL
 	cliPath, cliDir := fakeCLI(t, options)
 	remote, head := newRemote(t)
 	webhook := newFakeWebhook(t)
@@ -184,6 +185,17 @@ type cliOptions struct {
 	// the same request again after an abnormal end. Empty means that every
 	// run prints fixture.
 	secondFixture string
+	// reviews are what each agent run submits on the pull request #21, one
+	// entry for each run in order: an event of the review API (APPROVE,
+	// REQUEST_CHANGES, COMMENT), or NONE for no review. The review is on
+	// the commit that the work directory holds, as a Reviewer submits it.
+	// A run past the end of the list submits nothing.
+	reviews []string
+	// movesHead makes the first agent run push a new commit and move the
+	// head of the pull request #21 to it, as a push during the review.
+	movesHead bool
+	// serverURL is the address of the fake GitHub; newScene sets it.
+	serverURL string
 }
 
 // service returns a new Service on the scene, as after a restart of cumin.
@@ -193,13 +205,16 @@ func (sc *scene) service() *workflow.Service {
 		Roles: map[config.Role]config.RoleSettings{
 			config.RolePlanner:     {TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: sc.cliPath},
 			config.RoleImplementer: {TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: sc.cliPath},
+			config.RoleReviewer:    {TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: sc.cliPath},
 		},
-		// The fake knows one App, so the Planner runs with the same
-		// credentials as the Implementer. R1 does not read the identity.
+		// The fake knows one App, so the Planner and the Reviewer run with
+		// the same credentials as the Implementer. R1 does not read the
+		// identity; the Reviewer is "<slug>[bot]" of that App.
 		Apps: map[string]map[config.Role]github.AppCredentials{
 			"example-org": {
 				config.RolePlanner:     {ClientID: "Iv23liEXAMPLE", PrivateKey: testKey()},
 				config.RoleImplementer: {ClientID: "Iv23liEXAMPLE", PrivateKey: testKey()},
+				config.RoleReviewer:    {ClientID: "Iv23liEXAMPLE", PrivateKey: testKey()},
 			},
 		},
 		GitHub: sc.client,
@@ -331,6 +346,31 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		second = "if [ $n = agent ] && [ \"$(grep -c '^agent$' " + filepath.Join(dir, "order") + ")\" -ge 2 ]; then f=" +
 			fixturePath(t, o.secondFixture) + "; fi\n"
 	}
+	// The review goes to the fake GitHub, as the Reviewer submits it with
+	// gh api. Its output goes to standard error.
+	review := ""
+	if len(o.reviews) > 0 {
+		list := filepath.Join(dir, "reviews")
+		if err := os.WriteFile(list, []byte(strings.Join(o.reviews, "\n")+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		review = "if [ $n = agent ]; then\n" +
+			"k=$(grep -c '^agent$' " + filepath.Join(dir, "order") + "); e=$(sed -n \"${k}p\" " + list + ")\n" +
+			"if [ -n \"$e\" ] && [ \"$e\" != NONE ]; then\n" +
+			"curl -s -X POST -H 'Authorization: Bearer " + githubtest.Token + "' " +
+			"-d \"{\\\"commit_id\\\":\\\"$(git rev-parse HEAD)\\\",\\\"event\\\":\\\"$e\\\",\\\"body\\\":\\\"review\\\"}\" " +
+			o.serverURL + "/repos/example-org/example-repo/pulls/21/reviews 1>&2\n" +
+			"fi\nfi\n"
+	}
+	if o.movesHead {
+		review += "if [ $n = agent ] && [ \"$(grep -c '^agent$' " + filepath.Join(dir, "order") + ")\" = 1 ]; then\n" +
+			"echo moved > moved.txt; git add moved.txt 1>&2\n" +
+			"git -c user.name=t -c user.email=t@example.com commit --quiet -m moved 1>&2\n" +
+			"git push --quiet origin HEAD:refs/heads/moved 1>&2\n" +
+			"curl -s -X POST -H 'Authorization: Bearer " + githubtest.Token + "' -d \"{\\\"sha\\\":\\\"$(git rev-parse HEAD)\\\"}\" " +
+			o.serverURL + "/_fake/repos/example-org/example-repo/pulls/21/head 1>&2\n" +
+			"fi\n"
+	}
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
@@ -340,6 +380,7 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		"env > " + filepath.Join(dir, "$n.env") + "\n" +
 		"pwd > " + filepath.Join(dir, "$n.cwd") + "\n" +
 		commit +
+		review +
 		"cat $f\n" +
 		sleep
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
@@ -626,7 +667,7 @@ func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 		t.Errorf("%d agent runs, want 1", n)
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"the agent returned blocked"`, `"msg":"I2: wrote the reason on the issue"`,
+	for _, want := range []string{`"msg":"I2: the agent returned blocked"`, `"msg":"I2: wrote the reason on the issue"`,
 		`"msg":"I2: the issue waits for the Owner"`, `"msg":"the Owner was notified"`, `"row":"I2"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
@@ -1595,7 +1636,7 @@ const branchRulesPath = "/repos/example-org/example-repo/rules/branches/main"
 // path of I3: the poll reads the required checks, they all passed on the
 // head commit, and the issue waits for the Reviewer.
 func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
-	sc := newScene(t)
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	sc.awaitingChecks(t, []string{"ci", "cumin-protected-paths"}, []githubtest.Check{
 		{Name: "ci", Conclusion: "SUCCESS"},
 		{Name: "cumin-protected-paths", Conclusion: "SKIPPED"},
@@ -1608,11 +1649,13 @@ func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelReviewing}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/reviewing", got)
 	}
-	if n := sc.agentRuns(t); n != 0 {
-		t.Errorf("%d agent runs, want none: I3 changes a label only", n)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want one Reviewer run", n)
 	}
-	if !strings.Contains(sc.logs.String(), "I3: the pull request is ready for review") {
-		t.Errorf("the log does not say that the pull request is ready: %s", sc.logs)
+	for _, want := range []string{"I3: the pull request is ready for review", "I3: the Reviewer approved the head commit"} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log does not say %q: %s", want, sc.logs)
+		}
 	}
 	// The issue leaves awaiting-checks, so the next poll asks for nothing.
 	if err := service.Poll(context.Background()); err != nil {
@@ -1629,7 +1672,7 @@ func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 // TestI3_AnEmptyListOfRequiredChecksPassesAtOnce: a repository without a
 // ruleset moves to the review in the next poll (issue-states.md).
 func TestI3_AnEmptyListOfRequiredChecksPassesAtOnce(t *testing.T) {
-	sc := newScene(t)
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	sc.awaitingChecks(t, nil, nil)
 	service := sc.service()
 
@@ -2089,9 +2132,13 @@ func TestI1_AnOwnerTaskIsNeverClaimed(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, "/repos/example-org/example-repo/issues/9/labels"); n != 0 {
 		t.Errorf("%d label changes of #9, want none", n)
 	}
-	// #10 was claimed and ran once; #9 started nothing.
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1 (for #10 only)", n)
+	// #10 was claimed and ran; #9 started nothing. The second poll also
+	// starts the Reviewer of #10 (I3), so the runs are counted by work
+	// directory: #9 has none.
+	for _, role := range []string{"implementer", "reviewer", "planner"} {
+		if _, err := os.Stat(filepath.Join(sc.workRoot, "example-org", "example-repo", "9-"+role)); err == nil {
+			t.Errorf("#9 has a %s worktree, want no run for it", role)
+		}
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, "cumin/status/ready") {
 		t.Errorf("labels of #10 = %v, want it claimed", got)

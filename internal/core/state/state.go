@@ -21,15 +21,21 @@ import (
 )
 
 // Version is the version of the file format. cumin reads its own version
-// only; a file of a later version is treated as missing, because a newer
-// cumin may have written keys that this one would drop.
-const Version = 1
+// and the earlier ones, whose keys are a subset of its own; a file of a
+// later version is treated as missing, because a newer cumin may have
+// written keys that this one would drop. Version 2 added the session of the
+// Reviewer.
+const Version = 2
 
 // Issue is what cumin keeps for one implementation issue.
 type Issue struct {
-	// SessionID is the session of the last agent run of the issue. A
-	// request in the same session resumes it (I4, I5).
+	// SessionID is the session of the last Implementer run of the issue.
+	// A request in the same session resumes it (I4, I5).
 	SessionID string `json:"session_id,omitempty"`
+	// ReviewerSessionID is the session of the last Reviewer run of the
+	// issue. The Reviewer and the Implementer never share a session
+	// (agents/reviewer.md); round 2 and later resume this one (I3).
+	ReviewerSessionID string `json:"reviewer_session_id,omitempty"`
 	// CheckFixRequests is how many check fixes cumin has asked for since
 	// the Owner last added cumin/status/ready (I4).
 	CheckFixRequests int `json:"check_fix_requests,omitempty"`
@@ -78,7 +84,7 @@ func Open(path string, logger *slog.Logger) *Store {
 		warn(logger, path, "the state file is not valid JSON", err)
 		return store
 	}
-	if read.Version != Version {
+	if read.Version < 1 || read.Version > Version {
 		warn(logger, path, "the state file has another version",
 			fmt.Errorf("version %d, want %d", read.Version, Version))
 		return store

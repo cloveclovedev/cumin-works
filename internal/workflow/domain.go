@@ -1091,3 +1091,47 @@ func LatestReview(reviews []Review, reviewer string) (Review, bool) {
 	}
 	return latest, found
 }
+
+// ReviewResult is what cumin finds after a Reviewer run that returned done
+// (the Reviewer requirement, completion).
+type ReviewResult int
+
+const (
+	// ReviewMissing: the latest review of the Reviewer is not on the head
+	// commit, is not APPROVE or REQUEST_CHANGES, or does not exist.
+	ReviewMissing ReviewResult = iota
+	// ReviewApprovedOnHead is APPROVE on the head commit (I6, I7).
+	ReviewApprovedOnHead
+	// ReviewChangesRequestedOnHead is REQUEST_CHANGES on the head commit
+	// (I5, I8).
+	ReviewChangesRequestedOnHead
+)
+
+func (r ReviewResult) String() string {
+	switch r {
+	case ReviewMissing:
+		return "missing"
+	case ReviewApprovedOnHead:
+		return "approved"
+	case ReviewChangesRequestedOnHead:
+		return "changes requested"
+	}
+	return fmt.Sprintf("ReviewResult(%d)", int(r))
+}
+
+// CheckReview reads the latest review of the Reviewer on the pull request.
+// Only a review on the head commit counts: a review of an older commit did
+// not see the change that is there now.
+func CheckReview(pr PullRequest, reviewer string) ReviewResult {
+	latest, ok := LatestReview(pr.Reviews, reviewer)
+	if !ok || latest.Commit == "" || latest.Commit != pr.HeadCommit {
+		return ReviewMissing
+	}
+	switch latest.State {
+	case ReviewApproved:
+		return ReviewApprovedOnHead
+	case ReviewChangesRequested:
+		return ReviewChangesRequestedOnHead
+	}
+	return ReviewMissing
+}

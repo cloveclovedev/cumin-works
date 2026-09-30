@@ -352,7 +352,7 @@ func (s *Service) pollRepository(ctx context.Context, target Target) error {
 				errs = append(errs, err)
 			}
 		case StartReview:
-			if err := s.startReview(ctx, token, target, snapshot, a); err != nil {
+			if err := s.startReview(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case FixChecks:
@@ -399,26 +399,6 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if err := s.startImplementer(ctx, target, settings, sub); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
-	return nil
-}
-
-// startReview applies I3: every required check passed on the head commit of
-// the pull request, so the status label becomes cumin/status/reviewing.
-// Starting the Reviewer is the next requirement; until it lands, the log
-// line is what says that the pull request is ready.
-func (s *Service) startReview(ctx context.Context, token string, target Target, snapshot Snapshot, a StartReview) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
-	sub, ok := snapshot.SubIssue(a.Number)
-	if !ok {
-		return fmt.Errorf("I3: issue #%d is not in the snapshot", a.Number)
-	}
-	labels := LabelsAfterReview(sub.Labels)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf("I3: move issue #%d to the review: %w", a.Number, err)
-	}
-	s.logger().Info("I3: the pull request is ready for review",
-		"repository", target.Repository.String(), "issue", a.Number,
-		"pull_request", a.PullRequest, "labels", labels)
 	return nil
 }
 
@@ -668,16 +648,16 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				log.Info("I2: the same request runs again in the same work directory", "attempt", attempt+1)
 				continue
 			}
-			s.stopAfterAbnormalEnd(ctx, log, target, settings, number, firstKind, abnormal.Kind)
+			s.stopAfterAbnormalEnd(ctx, log, target, settings, RowI2, "Implementer", number, firstKind, abnormal.Kind)
 			return
 		case err != nil:
 			log.Error("the agent was not started", "error", err.Error())
 			return
 		default:
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-			s.keepSession(log, target, number, run.SessionID)
+			s.keepSession(log, target, config.RoleImplementer, number, run.SessionID)
 			if run.Result.Result != agent.ResultDone {
-				s.stopAfterBlocked(ctx, log, target, settings, number, run.Result.BlockedReason)
+				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
 				return
 			}
 			s.verifyDone(ctx, log, target, settings, number, workDir, run.BotLogin)
@@ -686,41 +666,43 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	}
 }
 
-// stopAfterAbnormalEnd applies I2 after the second abnormal end of the
-// same request: the comment names both kinds and says that cumin ran the
+// stopAfterAbnormalEnd stops the issue after the second abnormal end of the
+// same request, with the row of the request (I2 for the Implementer, I3 for
+// the Reviewer): the comment names both kinds and says that cumin ran the
 // request again, and the issue goes to the Owner. The two runs can end in
 // different ways, and the Owner needs the kind of each one to know where
 // to look.
-func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, first, second agent.EndKind) {
-	reason := abnormalReason("Implementer", first, second)
+func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, first, second agent.EndKind) {
+	reason := abnormalReason(role, first, second)
 	sub, _ := s.subIssueNow(ctx, log, target, number)
 	pullRequest := 0
 	if pr, ok := sub.LatestPullRequest(); ok {
 		pullRequest = pr.Number
 	}
 	s.stopForOwner(ctx, log, target, settings, stop{
-		row:     RowI2,
+		row:     row,
 		issue:   number,
 		labels:  sub.Labels,
 		reason:  reason,
-		comment: StopNote(RowI2, reason, pullRequest, true),
+		comment: StopNote(row, reason, pullRequest, true),
 	})
 }
 
-// stopAfterBlocked applies I2 for a blocked result: the blocked_reason of
-// the agent becomes the comment, because the agent already wrote it in the
-// form of templates/decision-request.md, and its first line is the
-// question for the Owner. Nothing is retried: a blocked result usually
-// means that a requirement is missing, so the Owner answers first
-// (issue-states.md, the paragraph on a blocked result of the Implementer).
-func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, reason string) {
+// stopAfterBlocked stops the issue for a blocked result, with the row of
+// the result (I2 for the Implementer, I10 for the Reviewer): the
+// blocked_reason of the agent becomes the comment, because the agent
+// already wrote it in the form of templates/decision-request.md, and its
+// first line is the question for the Owner. Nothing is retried: a blocked
+// result usually means that a requirement is missing, so the Owner answers
+// first (issue-states.md, the paragraph on a blocked result).
+func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, reason string) {
 	question := firstLine(reason)
-	log.Warn("the agent returned blocked", "reason", question)
+	log.Warn(row+": the agent returned blocked", "reason", question)
 	s.stopForOwner(ctx, log, target, settings, stop{
-		row:     RowI2,
+		row:     row,
 		issue:   number,
 		labels:  labelsNow(s.subIssueNow(ctx, log, target, number)),
-		reason:  "the Implementer returned blocked: " + question,
+		reason:  "the " + role + " returned blocked: " + question,
 		comment: reason,
 	})
 }
@@ -788,16 +770,21 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 	log.Info("I2: verified the pull request", "pull_request", verification.PullRequest, "labels", labels)
 }
 
-// keepSession stores the session of the run, so that a request in the same
-// session can resume it (I4, I5). A failure is logged and changes nothing
-// else: the next request then starts a new session.
-func (s *Service) keepSession(log *slog.Logger, target Target, number int, sessionID string) {
+// keepSession stores the session of the run of the role, so that a request
+// in the same session can resume it (I4, I5, and the later rounds of I3).
+// The Implementer and the Reviewer each keep their own. A failure is logged
+// and changes nothing else: the next request then starts a new session.
+func (s *Service) keepSession(log *slog.Logger, target Target, role config.Role, number int, sessionID string) {
 	if sessionID == "" {
 		return
 	}
 	repository := target.Repository.String()
 	issue := s.State.Issue(repository, number)
-	issue.SessionID = sessionID
+	if role == config.RoleReviewer {
+		issue.ReviewerSessionID = sessionID
+	} else {
+		issue.SessionID = sessionID
+	}
 	if err := s.State.Set(repository, number, issue); err != nil {
 		log.Error("the session of the run was not kept", "error", err.Error())
 	}

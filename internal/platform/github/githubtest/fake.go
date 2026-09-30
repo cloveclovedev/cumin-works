@@ -353,6 +353,16 @@ func (f *Fake) ClosePullRequest(r *Repository, number int) error {
 	return nil
 }
 
+// Reviews returns a copy of the reviews of one pull request.
+func (f *Fake) Reviews(r *Repository, number int) []Review {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if pr, ok := r.PullRequests[number]; ok {
+		return slices.Clone(pr.Reviews)
+	}
+	return nil
+}
+
 // Issue returns a copy of one issue, or nil.
 func (f *Fake) Issue(r *Repository, number int) *Issue {
 	f.mu.Lock()
@@ -501,6 +511,8 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	commitChecks := commitChecksPath.FindStringSubmatch(r.URL.Path)
 	annotations := annotationsPath.FindStringSubmatch(r.URL.Path)
 	jobLog := jobLogPath.FindStringSubmatch(r.URL.Path)
+	reviews := reviewsPath.FindStringSubmatch(r.URL.Path)
+	moveHead := moveHeadPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -533,6 +545,12 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && jobLog != nil:
 		id, _ := strconv.ParseInt(jobLog[3], 10, 64)
 		f.serveJobLog(w, jobLog[1], jobLog[2], id)
+	case r.Method == http.MethodPost && moveHead != nil:
+		number, _ := strconv.Atoi(moveHead[3])
+		f.serveMoveHead(w, body, moveHead[1], moveHead[2], number)
+	case r.Method == http.MethodPost && reviews != nil:
+		number, _ := strconv.Atoi(reviews[3])
+		f.serveCreateReview(w, body, reviews[1], reviews[2], number)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
@@ -549,6 +567,10 @@ var (
 	commitChecksPath  = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/commits/([^/]+)/check-runs$`)
 	annotationsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/check-runs/(\d+)/annotations$`)
 	jobLogPath        = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/jobs/(\d+)/logs$`)
+	reviewsPath       = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/reviews$`)
+	// moveHeadPath is not an endpoint of GitHub. A fake agent run calls it
+	// to move the head of a pull request while it runs, as a push would.
+	moveHeadPath = regexp.MustCompile(`^/_fake/repos/([^/]+)/([^/]+)/pulls/(\d+)/head$`)
 )
 
 // serveCommitCheckRuns answers GET .../commits/{sha}/check-runs. Official:
@@ -895,6 +917,77 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 		"html_url": fmt.Sprintf("https://github.com/%s/%s/issues/%d#issuecomment-%d",
 			repo.Owner, repo.Name, number, comment.ID),
 	})
+}
+
+// serveMoveHead sets the head commit of a pull request to the "sha" of the
+// body. It stands for a push to the branch of the pull request.
+func (f *Fake) serveMoveHead(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	pr, ok := repo.PullRequests[number]
+	var request struct {
+		SHA string `json:"sha"`
+	}
+	if !ok || json.Unmarshal(body, &request) != nil || request.SHA == "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	pr.HeadCommit = request.SHA
+	writeJSON(w, http.StatusOK, map[string]any{"sha": request.SHA})
+}
+
+// serveCreateReview answers POST /repos/{owner}/{repo}/pulls/{number}/reviews
+// (official: "Create a review for a pull request"). The author is the App
+// of the fake, as the token of an agent run belongs to it. An event of
+// APPROVE, REQUEST_CHANGES, or COMMENT submits the review; no event leaves
+// it pending. REQUEST_CHANGES and COMMENT need a body.
+func (f *Fake) serveCreateReview(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	pr, ok := repo.PullRequests[number]
+	if !ok || f.app == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	var request struct {
+		CommitID string `json:"commit_id"`
+		Event    string `json:"event"`
+		Body     string `json:"body"`
+	}
+	states := map[string]string{"APPROVE": "APPROVED", "REQUEST_CHANGES": "CHANGES_REQUESTED", "COMMENT": "COMMENTED", "": "PENDING"}
+	err := json.Unmarshal(body, &request)
+	state, known := states[request.Event]
+	if err != nil || !known || (request.Body == "" && (state == "CHANGES_REQUESTED" || state == "COMMENTED")) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	commit := request.CommitID
+	if commit == "" {
+		commit = pr.HeadCommit
+	}
+	f.lastCommentID++
+	review := Review{Author: f.app.Slug, AuthorIsBot: true, State: state, Commit: commit,
+		URL: fmt.Sprintf("https://github.com/%s/%s/pull/%d#pullrequestreview-%d", repo.Owner, repo.Name, number, f.lastCommentID)}
+	if state != "PENDING" {
+		// Each review is later than the one before, even within the same
+		// clock tick, as on GitHub.
+		review.SubmittedAt = time.Now().UTC()
+		for _, before := range pr.Reviews {
+			if !review.SubmittedAt.After(before.SubmittedAt) {
+				review.SubmittedAt = before.SubmittedAt.Add(time.Millisecond)
+			}
+		}
+	}
+	pr.Reviews = append(pr.Reviews, review)
+	writeJSON(w, http.StatusOK, map[string]any{"id": f.lastCommentID, "state": state, "commit_id": commit, "html_url": review.URL})
 }
 
 func labelJSON(label Label) map[string]any {
