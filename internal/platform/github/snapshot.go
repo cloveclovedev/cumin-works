@@ -31,6 +31,11 @@ import (
 // for one installation (measured on the sandbox on 2026-09-26). The reviews
 // of a pull request are one more connection under it, and raise the cost of
 // one page to 14 points (measured on the sandbox on 2026-09-30).
+// MaxOpenClosingPullRequests is the most open closing pull requests that
+// the snapshot reads for one issue. I2 adds no closing link that would go
+// over it, because every later poll would then fail on that issue.
+const MaxOpenClosingPullRequests = 2
+
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
@@ -41,7 +46,7 @@ const (
 	snapshotSubIssues    = 15
 	snapshotLabels       = 100
 	snapshotBlockedBy    = 100
-	snapshotPullRequests = 2
+	snapshotPullRequests = MaxOpenClosingPullRequests
 	// Checks of the head commit of one pull request. A repository requires
 	// a handful of checks, and a commit carries every other check as well.
 	snapshotChecks = 100

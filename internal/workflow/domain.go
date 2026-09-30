@@ -869,6 +869,10 @@ const (
 	// FailureHeadNotPushed: the head commit of the worktree is not the
 	// head of the pull request.
 	FailureHeadNotPushed
+	// FailureTooManyLinks: the issue needs a closing link, but it has
+	// maxLinks open closing pull requests already, and one more would make
+	// the issue unreadable for the poll.
+	FailureTooManyLinks
 )
 
 func (f VerificationFailure) String() string {
@@ -881,6 +885,8 @@ func (f VerificationFailure) String() string {
 		return "the author of the pull request is not the Implementer App"
 	case FailureHeadNotPushed:
 		return "the head commit of the worktree is not pushed"
+	case FailureTooManyLinks:
+		return "the issue has too many open closing pull requests for one more link"
 	}
 	return fmt.Sprintf("VerificationFailure(%d)", int(f))
 }
@@ -911,8 +917,10 @@ type Verification struct {
 // The pull request is found by the branch, not by the closing link,
 // because GitHub does not always make the link from "Closes #N". When the
 // issue has no link to it, AddLink asks cumin-core to add one; every other
-// row reads the link.
-func VerifyDone(sub SubIssue, branch string, onBranch []PullRequest, implementer, localHead string) Verification {
+// row reads the link. maxLinks is the most open closing pull requests
+// that the poll reads for one issue; a link that would go over it is not
+// added, and the issue stops instead.
+func VerifyDone(sub SubIssue, branch string, onBranch []PullRequest, implementer, localHead string, maxLinks int) Verification {
 	var mine, other PullRequest
 	for _, pr := range onBranch {
 		if branch == "" || pr.HeadBranch != branch {
@@ -934,7 +942,13 @@ func VerifyDone(sub SubIssue, branch string, onBranch []PullRequest, implementer
 	case localHead == "" || mine.HeadCommit != localHead:
 		return Verification{Failure: FailureHeadNotPushed, PullRequest: mine.Number}
 	}
-	return Verification{Passed: true, PullRequest: mine.Number, AddLink: !linksPullRequest(sub, mine.Number)}
+	if linksPullRequest(sub, mine.Number) {
+		return Verification{Passed: true, PullRequest: mine.Number}
+	}
+	if len(sub.PullRequests) >= maxLinks {
+		return Verification{Failure: FailureTooManyLinks, PullRequest: mine.Number}
+	}
+	return Verification{Passed: true, PullRequest: mine.Number, AddLink: true}
 }
 
 // linksPullRequest reports whether the issue has a closing link to the pull

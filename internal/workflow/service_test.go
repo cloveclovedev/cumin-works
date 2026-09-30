@@ -839,6 +839,28 @@ func TestI2_ALinkThatIsMissingAfterwardsStopsTheIssueOnce(t *testing.T) {
 	assertStoppedAtI2(t, sc, workflow.LinkMissingReason(21), 21)
 }
 
+// An issue that GitHub already links to as many open pull requests as the
+// poll reads gets no more links: one more would make every later poll of
+// the repository fail. The issue stops once instead.
+func TestI2_ALinkOverTheLimitOfThePollIsNotAdded(t *testing.T) {
+	sc := newScene(t)
+	// Two pull requests without an author already close #10; #19 is on the
+	// branch of the issue, so the claim continues on that branch. The
+	// Implementer App opened #21 on the same branch, and GitHub linked it
+	// to nothing.
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{Number: 18, HeadCommit: sc.remoteHead, HeadBranch: "cumin/10-old", Closes: []int{10}})
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{Number: 19, HeadCommit: sc.remoteHead, HeadBranch: wantBranch, Closes: []int{10}})
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := closingLinkRequests(sc); n != 0 {
+		t.Errorf("%d closing link requests, want none", n)
+	}
+	assertVerificationFailed(t, sc, "the issue has too many open closing pull requests for one more link", workflow.FailureTooManyLinks, 21)
+}
+
 // closingLinkRequests counts the requests of the closing link
 // (addCloseIssueReferences).
 func closingLinkRequests(sc *scene) int {

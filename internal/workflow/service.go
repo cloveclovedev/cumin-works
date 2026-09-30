@@ -809,7 +809,7 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		log.Error("I2: the head commit of the work directory was not read", "error", err.Error())
 		return
 	}
-	verification := VerifyDone(sub, branch, onBranch, botLogin, head)
+	verification := VerifyDone(sub, branch, onBranch, botLogin, head, github.MaxOpenClosingPullRequests)
 	stopI2 := func(reason string, pullRequest int) {
 		s.stopForOwner(ctx, log, target, settings, stop{
 			row:     RowI2,

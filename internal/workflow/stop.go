@@ -208,6 +208,8 @@ func VerificationReason(failure VerificationFailure) string {
 		return "The Implementer reported done, but the open pull request on the branch of this issue was not opened by the Implementer App."
 	case FailureHeadNotPushed:
 		return "The Implementer reported done, but the last commit of the work directory is not the head of the pull request, so it was not pushed."
+	case FailureTooManyLinks:
+		return "The Implementer reported done, but this issue already has other open pull requests that close it, so cumin-core does not link one more."
 	}
 	return "The verification of the pull request failed."
 }

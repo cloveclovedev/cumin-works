@@ -534,23 +534,25 @@ func TestVerifyDone_I2(t *testing.T) {
 		{"the pull request of the bot is taken before a newer one of another author", nil, []PullRequest{pr(21, branch, bot, head), pr(25, branch, "octocat", head)}, head, Verification{Passed: true, PullRequest: 21, AddLink: true}},
 		{"two pull requests of the bot: the highest number is checked", nil, []PullRequest{pr(21, branch, bot, head), pr(25, branch, bot, "4444444444444444444444444444444444444444")}, head, Verification{Failure: FailureHeadNotPushed, PullRequest: 25}},
 		{"a local commit that is not pushed", nil, []PullRequest{pr(21, branch, bot, head)}, "3333333333333333333333333333333333333333", Verification{Failure: FailureHeadNotPushed, PullRequest: 21}},
+		{"a link that would be over the limit is not added", []PullRequest{pr(18, "a", bot, head), pr(19, "b", bot, head)}, []PullRequest{pr(21, branch, bot, head)}, head, Verification{Failure: FailureTooManyLinks, PullRequest: 21}},
+		{"a linked pull request passes at the limit", []PullRequest{pr(19, "b", bot, head), pr(21, branch, bot, head)}, []PullRequest{pr(21, branch, bot, head)}, head, Verification{Passed: true, PullRequest: 21}},
 		{"an unknown local head never matches", nil, []PullRequest{pr(21, branch, bot, head)}, "", Verification{Failure: FailureHeadNotPushed, PullRequest: 21}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := VerifyDone(SubIssue{Number: 10, PullRequests: tt.linked}, branch, tt.onBranch, bot, tt.localHead)
+			got := VerifyDone(SubIssue{Number: 10, PullRequests: tt.linked}, branch, tt.onBranch, bot, tt.localHead, 2)
 			if got != tt.want {
 				t.Errorf("VerifyDone = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
-	if got := VerifyDone(SubIssue{}, branch, []PullRequest{pr(21, branch, "", head)}, "", head); got.Passed {
+	if got := VerifyDone(SubIssue{}, branch, []PullRequest{pr(21, branch, "", head)}, "", head, 2); got.Passed {
 		t.Error("an empty implementer login matched an empty author")
 	}
-	if got := VerifyDone(SubIssue{}, "", []PullRequest{pr(21, "", bot, head)}, bot, head); got.Passed {
+	if got := VerifyDone(SubIssue{}, "", []PullRequest{pr(21, "", bot, head)}, bot, head, 2); got.Passed {
 		t.Error("an empty branch matched a pull request without a branch")
 	}
-	for _, f := range []VerificationFailure{FailureNone, FailureNoOpenPullRequest, FailureAuthorMismatch, FailureHeadNotPushed} {
+	for _, f := range []VerificationFailure{FailureNone, FailureNoOpenPullRequest, FailureAuthorMismatch, FailureHeadNotPushed, FailureTooManyLinks} {
 		if s := f.String(); s == "" || strings.HasPrefix(s, "VerificationFailure(") {
 			t.Errorf("%d has no name", int(f))
 		}
