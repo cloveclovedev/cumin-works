@@ -111,7 +111,7 @@ func startRequest(t *testing.T) StartRequest {
 	}
 }
 
-func TestStart_QuotaThenTokenThenIdentityThenRun(t *testing.T) {
+func TestStart_TokenThenIdentityThenRunWithoutAQuotaRun(t *testing.T) {
 	fake, client := newFakeGitHub(t)
 	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
 	var logs bytes.Buffer
@@ -133,8 +133,10 @@ func TestStart_QuotaThenTokenThenIdentityThenRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.TrimSpace(string(order)); got != "quota\nagent" {
-		t.Errorf("order of the runs = %q, want the quota run first", got)
+	// A request is not always a new start, so Start reads no usage; the
+	// caller reads it before R1 and I1 (designs/quota.md).
+	if got := strings.TrimSpace(string(order)); got != "agent" {
+		t.Errorf("order of the runs = %q, want only the agent run", got)
 	}
 	env := recordedEnv(t, filepath.Join(dir, "agent"))
 	if env["GH_TOKEN"] != serviceToken {
@@ -147,10 +149,6 @@ func TestStart_QuotaThenTokenThenIdentityThenRun(t *testing.T) {
 	wantEmail := fmt.Sprintf("%d+%s[bot]@users.noreply.github.com", serviceBotID, serviceSlug)
 	if env["GIT_AUTHOR_NAME"] != serviceSlug+"[bot]" || env["GIT_AUTHOR_EMAIL"] != wantEmail || env["GIT_COMMITTER_EMAIL"] != wantEmail {
 		t.Errorf("identity = %q <%q> / <%q>, want %s[bot] <%s>", env["GIT_AUTHOR_NAME"], env["GIT_AUTHOR_EMAIL"], env["GIT_COMMITTER_EMAIL"], serviceSlug, wantEmail)
-	}
-	quotaEnv := recordedEnv(t, filepath.Join(dir, "quota"))
-	if _, ok := quotaEnv["GH_TOKEN"]; ok {
-		t.Error("the quota run received the token")
 	}
 	args := recordedArgs(t, filepath.Join(dir, "agent.args"))
 	if i := indexOf(args, "--model"); i < 0 || args[i+1] != "example-model" {
@@ -172,7 +170,7 @@ func TestStart_QuotaThenTokenThenIdentityThenRun(t *testing.T) {
 	if strings.Contains(logs.String(), serviceToken) {
 		t.Errorf("the info logs hold the token:\n%s", logs.String())
 	}
-	for _, want := range []string{"quota usage read", "agent token created", "agent identity read", "agent end"} {
+	for _, want := range []string{"agent token created", "agent identity read", "agent end"} {
 		if !strings.Contains(logs.String(), want) {
 			t.Errorf("info logs lack %q:\n%s", want, logs.String())
 		}
@@ -188,8 +186,7 @@ func indexOf(list []string, s string) int {
 	return -1
 }
 
-// Every line of a start names the role, and none names it twice. The
-// quota run logs through the same logger, so it is named too.
+// Every line of a start names the role, and none names it twice.
 func TestStart_EveryLogLineNamesTheRoleOnce(t *testing.T) {
 	_, client := newFakeGitHub(t)
 	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
@@ -212,13 +209,13 @@ func TestStart_EveryLogLineNamesTheRoleOnce(t *testing.T) {
 		if !strings.Contains(line, want) {
 			t.Errorf("the line does not name the role:\n%s", line)
 		}
-		for _, msg := range []string{"quota usage read", "agent start", "agent end"} {
+		for _, msg := range []string{"agent start", "agent end"} {
 			if strings.Contains(line, `msg="`+msg+`"`) || strings.Contains(line, "msg="+msg) {
 				seen[msg] = true
 			}
 		}
 	}
-	for _, msg := range []string{"quota usage read", "agent start", "agent end"} {
+	for _, msg := range []string{"agent start", "agent end"} {
 		if !seen[msg] {
 			t.Errorf("the logs have no line %q:\n%s", msg, logs.String())
 		}
@@ -245,21 +242,60 @@ func TestStart_IdentityIsReadOnceAndTokenEveryTime(t *testing.T) {
 	}
 }
 
-func TestStart_UnreadableQuotaStopsBeforeTheToken(t *testing.T) {
+// ReadQuota runs the minimal run with the CLI of the role, without a token,
+// and names the role in its log lines.
+func TestReadQuota_RunsTheMinimalRunWithoutAToken(t *testing.T) {
 	fake, client := newFakeGitHub(t)
-	path, dir := serviceCLI(t, "no-quota.jsonl", "done.jsonl")
-	s := newService(t, path, client, nil)
+	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	var logs bytes.Buffer
+	s := newService(t, path, client, &logs)
 
-	_, err := s.Start(context.Background(), startRequest(t))
-	var q *QuotaNotRead
-	if !errors.As(err, &q) {
-		t.Fatalf("err = %v, want *QuotaNotRead", err)
+	usage, err := s.ReadQuota(context.Background(), config.RoleImplementer)
+	if err != nil {
+		t.Fatalf("ReadQuota: %v", err)
+	}
+	if usage.FiveHour.ResetsAt.IsZero() || usage.Weekly.ResetsAt.IsZero() {
+		t.Errorf("usage = %+v, want both windows", usage)
+	}
+	order, err := os.ReadFile(filepath.Join(dir, "order"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(order)); got != "quota" {
+		t.Errorf("order of the runs = %q, want only the quota run", got)
+	}
+	if _, ok := recordedEnv(t, filepath.Join(dir, "quota"))["GH_TOKEN"]; ok {
+		t.Error("the quota run received a token")
 	}
 	if n := fake.CountRequests(http.MethodPost, serviceTokenPath); n != 0 {
 		t.Errorf("token requests = %d, want 0", n)
 	}
-	if _, statErr := os.Stat(filepath.Join(dir, "agent.args")); statErr == nil {
-		t.Error("the agent run started")
+	if !strings.Contains(logs.String(), "quota usage read") || !strings.Contains(logs.String(), "role="+string(config.RoleImplementer)) {
+		t.Errorf("the logs lack the read or the role:\n%s", logs.String())
+	}
+}
+
+func TestReadQuota_UnreadableUsageIsQuotaNotRead(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, _ := serviceCLI(t, "no-quota.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+
+	_, err := s.ReadQuota(context.Background(), config.RoleImplementer)
+	var q *QuotaNotRead
+	if !errors.As(err, &q) {
+		t.Fatalf("err = %v, want *QuotaNotRead", err)
+	}
+}
+
+func TestReadQuota_UnknownRoleIsQuotaNotRead(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+
+	_, err := s.ReadQuota(context.Background(), config.Role("unknown"))
+	var q *QuotaNotRead
+	if !errors.As(err, &q) {
+		t.Fatalf("err = %v, want *QuotaNotRead", err)
 	}
 }
 

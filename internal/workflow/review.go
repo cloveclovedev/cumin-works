@@ -181,6 +181,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		}
 
 		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+		s.quotaAfterRun(ctx, log, target, number, run)
 		s.keepSession(log, target, config.RoleReviewer, number, run.SessionID)
 		if run.Result.Result != agent.ResultDone {
 			s.stopAfterBlocked(ctx, log, target, settings, RowI10, "Reviewer", number, run.Result.BlockedReason)

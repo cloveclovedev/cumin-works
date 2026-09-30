@@ -1,8 +1,9 @@
 package agent
 
-// This file puts the pieces of one agent start in order: read the quota
-// usage, create a fresh token of the role limited to the repository, read
-// the bot identity of the role, then run the CLI in the work directory.
+// This file puts the pieces of one agent start in order: create a fresh
+// token of the role limited to the repository, read the bot identity of the
+// role, then run the CLI in the work directory. It also reads the quota
+// usage, which the caller asks for before a new start (R1, I1) only.
 // docs/ja/designs/agent-run.md (the topic on the steps of one request)
 // records the order and the reasons. The rest of cumin calls only Start.
 
@@ -115,10 +116,24 @@ type StartRequest struct {
 	SessionID string
 }
 
+// ReadQuota reads the quota usage with one minimal run of the CLI of the
+// role. The caller decides the limits (Q1) before a new start; Start itself
+// reads nothing, so that a request that is not a new start (I4, I5, the
+// Reviewer) goes on over a limit (designs/quota.md, the topic on the check
+// before a start). An error is a *QuotaNotRead.
+func (s *Service) ReadQuota(ctx context.Context, role config.Role) (QuotaUsage, error) {
+	settings, ok := s.Roles[role]
+	if !ok {
+		return QuotaUsage{}, &QuotaNotRead{Reason: "no settings for the role " + string(role)}
+	}
+	log := s.logger().With("role", role)
+	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit}
+	return cli.ReadQuota(ctx)
+}
+
 // Start runs one request. The steps, in order: the instruction of the role
-// is composed; the quota usage is read
-// with a minimal run (an error of kind *QuotaNotRead stops the start);
-// a token of the App of the role is created, limited to the repository;
+// is composed; a token of the App of the role is created, limited to the
+// repository;
 // the bot identity of the role is read, once; then the CLI runs with the
 // token and the identity. The token lives only in the request of the run.
 // An error from the run is an *AbnormalEnd.
@@ -143,17 +158,11 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	}
 	// The logger names the role and the repository. The CLI adapter adds
 	// nothing of its own to it, so that no line carries the role twice
-	// and every line of the adapter, the quota run included, names it.
+	// and every line of the adapter names it.
 	log := s.logger().With("role", req.Role, "repository", req.Owner+"/"+req.Repo)
 	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit}
 
-	// 1. The quota usage. The decision on thresholds (Q1) is a later
-	// requirement; here an unreadable usage stops the start.
-	if _, err := cli.ReadQuota(ctx); err != nil {
-		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
-	}
-
-	// 2. A fresh token for this request. A run lasts up to 55 minutes and
+	// 1. A fresh token for this request. A run lasts up to 55 minutes and
 	// a token lives one hour, so no token is reused.
 	token, err := s.GitHub.CreateInstallationToken(ctx, cred, string(req.Role), req.Owner, req.Repo)
 	if err != nil {
@@ -161,13 +170,13 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	}
 	log.Info("agent token created", "expires_at", token.ExpiresAt)
 
-	// 3. The identity of the commits of the agent.
+	// 2. The identity of the commits of the agent.
 	id, err := s.identity(ctx, appKey{strings.ToLower(req.Owner), req.Role}, cred, token.Token)
 	if err != nil {
 		return nil, fmt.Errorf("start %s on %s/%s: %w", req.Role, req.Owner, req.Repo, err)
 	}
 
-	// 4. The run. The login of the bot goes with the result, so that the
+	// 3. The run. The login of the bot goes with the result, so that the
 	// caller can compare it with the author of a pull request (I2).
 	run, err := cli.Run(ctx, Request{
 		Role:            req.Role,

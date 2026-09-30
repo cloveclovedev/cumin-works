@@ -217,7 +217,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
 
 ## 実機の場面 Check-1
 
-Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセッションで修正を1回だけ依頼し (I4)、修正でcheckが通って、Issue が `cumin/status/reviewing` に移る (I3) までを、1回通して確かめる。本物の Claude Code を4回起動する (使用率の最小の実行と Implementer の実行を、最初の依頼と修正の依頼で1組ずつ) ので、利用枠を使う。Owner が同意したときだけ行う。
+Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセッションで修正を1回だけ依頼し (I4)、修正でcheckが通って、Issue が `cumin/status/reviewing` に移る (I3) までを、1回通して確かめる。本物の Claude Code を3回起動する (使用率の最小の実行と、最初の依頼と修正の依頼の Implementer の実行。修正の依頼は新しい着手ではないので、使用率を読まない) ので、利用枠を使う。Owner が同意したときだけ行う。
 
 受け入れテストは偽の GitHub と偽の CLI を相手にするので、本物の check の失敗の内容が依頼に載ること、`--resume` で本物のセッションが続くこと、修正の push で check が走り直すことは、この場面でだけ分かる。
 
@@ -260,7 +260,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 | 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`implementing`、`awaiting-checks`、`reviewing` の順に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | Pull Request がちょうど1つ開いている。2回の実行が同じブランチに積んだ | Pull Request とそのコミット |
 | 3 | 1回目の先頭のコミットで `live-check-1-required-line` が落ち、修正のあとの先頭のコミットで通った。ほかの必須のcheckは通ったか飛ばされた | Pull Request の check |
-| 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は4回である | cumin のログ |
+| 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は3回である | cumin のログ |
 | 5 | 修正の依頼が、1回目の実行のセッションを再開した。2回の `the agent run ended` のセッションの番号が同じである。公式文書が新しい番号を与えると書くのは `--fork-session` と `/branch` だけなので、再開で番号が変わらないことはこの場面で確かめる | cumin のログ (番号は記録に書かない) |
 | 6 | 修正の依頼文に、落ちたcheckの名前と、annotation の文 (決まった1行を含む) が載っていた | Claude Code のセッションの記録で、`Request: check fix` で始まるユーザの入力 |
 | 7 | 修正のあとの `live/check-1.md` に、Pull Request の番号の入った決まった1行がある。最初のコミットにはない | Pull Request のコミットごとの差分 |
@@ -339,7 +339,7 @@ skill の一覧を探すときは、"The following skills are available for use 
 
 ## 実機の場面 Accept-1
 
-sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認のコメントを書き、要求Issueが `cumin/status/awaiting-owner-review` に移るまでを、1回通して確かめる (R4、R7)。本物の Claude Code を2回起動するので、利用枠を使う。Owner が同意したときだけ行う。Plan-1 と同じ cumin の実行の中で続けてよい。
+sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認のコメントを書き、要求Issueが `cumin/status/awaiting-owner-review` に移るまでを、1回通して確かめる (R4、R7)。本物の Claude Code を1回起動するので、利用枠を使う。受け入れの確認の依頼は新しい着手ではないので、使用率を読む最小の実行はしない。Owner が同意したときだけ行う。Plan-1 と同じ cumin の実行の中で続けてよい。
 
 ### 準備
 
@@ -357,7 +357,7 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    | `R4: read the comments` | sub-issue が全て閉じた要求Issueのコメントを読んだ。確認が終わるまで、定期確認のたびに出る |
    | `worktree removed`、`worktree created` | 前の依頼の worktree を消し、merge された main で開き直した。初めての要求Issueでは `worktree removed` は出ない |
    | `R4: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した。ラベルは替えない |
-   | `quota usage read`、`agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ |
+   | `agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ。使用率を読む `quota usage read` は出ない |
    | `R7: the requirement issue waits for the acceptance of the Owner` | 次の定期確認で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-owner-review` に替えた |
    | `the Owner was notified` (`row` が `R7`) | 通知した |
 

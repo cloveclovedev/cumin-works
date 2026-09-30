@@ -21,7 +21,7 @@
 
 ### 依存の向き
 
-- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/notify`、`internal/platform/github`、`internal/core/config`、`internal/core/state` を使う。`internal/agent` は `roles`、`disciplines`、`templates`、`internal/platform/github`、`internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`internal/core/config` は、riskの基準の初期値のために `disciplines` を使う。`disciplines` と `templates` は標準ライブラリだけを使い、`roles` は `internal/core/config` をroleの名前のために使う。
+- `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/quota`、`internal/notify`、`internal/platform/github`、`internal/core/config`、`internal/core/state` を使う。`internal/agent` は `roles`、`disciplines`、`templates`、`internal/platform/github`、`internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`internal/quota` は `internal/core/config` だけを使う。`internal/core/config` は、riskの基準の初期値のために `disciplines` を使う。`disciplines` と `templates` は標準ライブラリだけを使い、`roles` は `internal/core/config` をroleの名前のために使う。
 - Agentが受け取る文章を持つ3つのパッケージ (`roles`、`disciplines`、`templates`) は、どれも自分のMarkdownを読むだけで、互いを知らない。指示に組み立てるのは `internal/agent/instruction.go` だけである。どの部分がどこから来るかを1か所に集めておくと、外から差し替えられる段が増えても、変わるのはそこだけになる。
 - `internal/notify` は標準ライブラリだけを使う。通知の手段は、文章を受け取る `Sender` として外から差す。`internal/platform/discord` はその実装で、`internal/notify` をimportしない。`cmd/cumin` が2つをつなぐ ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
 - 純粋なファイル (`domain.go`、`request.go`) は標準ライブラリだけを読む。HTTPのクライアント、`os/exec`、GitHubの型を持ち込まない。判定の表形式のテストが、I/Oなしで書けるようにするためである。
@@ -63,11 +63,13 @@
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
+| | `quota.go` | 着手 (R1、I1) の前の使用率の確認と、実行の終わりの確認 (Q1)。枠ごとに1回だけ知らせる |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |
+| `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定 |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
 | | `skills.go` | テンプレートを、roleごとのディレクトリにskillとして書き出す |
-| | `service.go` | 1回の依頼の入口 `Start` (指示の合成、使用率、token、身元、実行) と、Hostの警告 |
+| | `service.go` | 1回の依頼の入口 `Start` (指示の合成、token、身元、実行)、使用率の読み取りの入口 `ReadQuota`、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |
 | | `quota.go` | 使用率を読む最小の実行 |
