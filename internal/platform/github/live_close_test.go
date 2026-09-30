@@ -90,22 +90,33 @@ func TestLiveCloseReferences(t *testing.T) {
 
 	// Observation 5: the cumin-core App merges the pull request. Whether
 	// GitHub closes the linked issue is recorded only.
-	// The merge needs the required checks. This test needs no fixture
-	// workflow, so it waits for the check of the protected paths only.
-	l.waitForCheck(t, core, sha, protectedPathsCheck)
+	// The merge needs every required check of the default branch. The
+	// sandbox may require the checks of the fixture workflow too.
+	status, required := l.requiredChecks(t, core)
+	if status != http.StatusOK {
+		t.Fatalf("observation C5: read the required checks: status %d", status)
+	}
+	for _, name := range required {
+		l.waitForCheck(t, core, sha, name)
+	}
 	merge := l.api(t, core, http.MethodPut, fmt.Sprintf("/repos/{repo}/pulls/%d/merge", pull.Number), map[string]any{"merge_method": "squash", "sha": sha})
 	if merge.status != http.StatusOK {
 		t.Fatalf("observation C5: the merge failed: status %d: %s", merge.status, merge.message())
 	}
 	closedAfter := "not closed within 30 seconds"
 	start := time.Now()
-	for time.Since(start) < 30*time.Second {
+	// The last read is at or after the end of the window, so a close in
+	// the last sleep is seen.
+	for {
 		var current struct {
 			State string `json:"state"`
 		}
 		l.api(t, core, http.MethodGet, fmt.Sprintf("/repos/{repo}/issues/%d", linked.Number), nil).mustJSON(t, http.StatusOK, &current)
 		if current.State == "closed" {
 			closedAfter = fmt.Sprintf("closed after about %d seconds", int(time.Since(start).Seconds()))
+			break
+		}
+		if time.Since(start) >= 30*time.Second {
 			break
 		}
 		time.Sleep(5 * time.Second)
