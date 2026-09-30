@@ -462,3 +462,22 @@ func TestR4_NoNoteNeededDoesNotWait(t *testing.T) {
 		})
 	}
 }
+
+// A failed read of the comments also holds R4 back, with the same log.
+func TestR4_AFailedReadOfTheCommentsWaits(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	service := sc.service()
+	// The poll queries GraphQL three times: the snapshot, the comments for
+	// R4 and R7, then the comments for I9. The third query fails.
+	sc.fake.FailAfter("POST", "/graphql", 2, 502)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if !strings.Contains(sc.logs.String(), "I9: the comments were not read") {
+		t.Fatal("the failed query was not the read of I9")
+	}
+	if !strings.Contains(sc.logs.String(), "R4: waits for the follow-up notes") {
+		t.Error("the log does not say that R4 waits")
+	}
+}

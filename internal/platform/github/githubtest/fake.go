@@ -292,6 +292,8 @@ func (f *Fake) SetCommentAuthor(slug string) {
 type failure struct {
 	method, path string
 	status       int
+	// skip is how many matching requests are answered as usual first.
+	skip int
 }
 
 // New starts the fake. The server closes when the test ends.
@@ -490,9 +492,15 @@ func (f *Fake) Comments(r *Repository, number int) []Comment {
 // path with the status and an error body, once. The request is recorded and
 // changes nothing.
 func (f *Fake) FailNext(method, path string, status int) {
+	f.FailAfter(method, path, 0, status)
+}
+
+// FailAfter is FailNext after skip matching requests are answered as
+// usual. A test uses it to fail one of several GraphQL queries of a poll.
+func (f *Fake) FailAfter(method, path string, skip, status int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.failNext = &failure{method: method, path: path, status: status}
+	f.failNext = &failure{method: method, path: path, status: status, skip: skip}
 }
 
 // Requests returns the requests that the fake received, in order.
@@ -520,7 +528,10 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.requests = append(f.requests, Request{Method: r.Method, Path: r.URL.Path, Body: body})
 	fail := f.failNext
-	if fail != nil && fail.method == r.Method && fail.path == r.URL.Path {
+	if fail != nil && fail.method == r.Method && fail.path == r.URL.Path && fail.skip > 0 {
+		fail.skip--
+		fail = nil
+	} else if fail != nil && fail.method == r.Method && fail.path == r.URL.Path {
 		f.failNext = nil
 	} else {
 		fail = nil
