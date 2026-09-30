@@ -439,6 +439,10 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
 - `work_dir` の一時ディレクトリを消す。
 - 手順3で launchd の cumin を止めたなら、戻す。
 
+### GitHub が紐づけを作らないとき
+
+2026-09-30 には、GitHub が `Closes #<番号>` の紐づけを作らなかった (#157 の decision request)。そのときは、1回目の I2 が「Issue を閉じる開いている Pull Request がない」で止まる。Owner が Pull Request のサイドバーの Development で実装Issueを紐づけると、API にすぐ現れる。紐づけたら、実装Issueに `cumin/status/ready` を付け直す。I1 が続きの依頼 (新しいセッション) で進める。Claude Code の起動が2回増える。記録には、手で紐づけたことを書く。
+
 ### 記録
 
 結果は #229 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。
@@ -461,8 +465,8 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 ### 実行
 
 5. `./cumin run --config <設定ファイル>` を起動し、実装Issueに `cumin/status/ready` を付ける。
-6. `I2: verified the pull request` が出たら、すぐに SIGTERM で止める。必須のcheckが通る前に止めれば、I3 はまだ起きていない。止める前に `I3: the pull request is ready for review` が出てしまったら、その回は数えずに、後片付けをしてからやり直す。
-7. Pull Request のブランチを手元に取り、`live/review-2.md` の最後に、120文字を超える英語の1行を足すコミットを作って push する。コミットの作者は Owner のままでよい。先頭のコミットが変わるので、必須のcheckが走り直す。
+6. `I2: verified the pull request` が出たら、すぐに SIGTERM で止める。必須のcheckが通る前に止めれば、I3 はまだ起きていない。ログの行を1秒ごとに見て SIGTERM を送る小さなループを使うと、確実に間に合う。GitHub が紐づけを作らないときは、その前に場面 Review-1 の「GitHub が紐づけを作らないとき」の手順が入る。止める前に `I3: the pull request is ready for review` が出てしまったら、その回は数えずに、後片付けをしてからやり直す。
+7. Pull Request のブランチの `live/review-2.md` の最後に、120文字を超える英語の1行を足すコミットを作って push する。`gh api -X PUT repos/<owner>/<repo>/contents/live/review-2.md` にブランチと元のファイルの `sha` を渡せば、手元にブランチを取らずにできる。コミットの作者は Owner のままでよい。先頭のコミットが変わるので、必須のcheckが走り直す。
 8. `./cumin run --config <設定ファイル>` を起動し直す。`cumin/status/awaiting-checks` のIssueは、再起動のあとも I3 と I4 で続きから進む。
 9. 次の定期確認から、ログがこの順に出る。
 
@@ -485,7 +489,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 | 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`reviewing`、`implementing`、`awaiting-checks`、`reviewing` の順に移った | Issue のイベント |
 | 2 | Reviewer の1つめのレビューが、手順7のコミットに対する `CHANGES_REQUESTED` である。80文字の完了条件を `(blocking)` の指摘にし、`Why` と `Fix` がある | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` と、そのレビューのコメント |
 | 3 | Implementer の修正が、手順7の行を直すコミットとして同じブランチに積まれた。新しい Pull Request はない | Pull Request のコミット |
-| 4 | Implementer が、修正を求める指摘のスレッドに `Fixed in <SHA>.` で始まる返答を書いた (`review-reply.md`)。スレッドは解決済みにしていない | Pull Request のレビューのスレッド |
+| 4 | Implementer が、修正を求める指摘のスレッドに `Fixed in <SHA>.` で始まる返答を書いた (`review-reply.md`)。スレッドは解決済みにしていない。返答はレビューの API で書くので、Implementer の App の `COMMENTED` のレビューとしても現れる。cumin は Reviewer の App のレビューだけを数えるので、ラウンドは変わらない | Pull Request のレビューのスレッド |
 | 5 | Implementer の2回の実行が同じセッションである (`I1: requested the work` の実行と、`I5: requested the work` の実行の `the agent run ended` のセッションの番号が同じ) | cumin のログ (番号は記録に書かない) |
 | 6 | Reviewer の2回の実行が同じセッションで、Implementer のセッションとは違う | cumin のログ |
 | 7 | 2ラウンド目の依頼文に `Round: 2 of 3` と `Last reviewed commit:` (手順7のコミット) がある。2ラウンド目の Reviewer は、組み込みのレビューの skill を呼んでいない | Claude Code のセッションの記録で、`Request: review` で始まる2つめのユーザの入力と、そのあとの `Skill` の呼び出し |
