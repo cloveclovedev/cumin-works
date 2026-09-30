@@ -594,7 +594,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 ### 実行: 前半 (weekly枠)
 
-9. `./cumin run --config <前半の設定ファイル>` を起動し、実装Issueに `cumin/status/ready` を付ける。
+9. 実装Issueに `cumin/status/ready` を付けてから、`./cumin run --config <前半の設定ファイル>` を起動する。先に起動すると、`cumin/status/ready` を付ける前の定期確認で Q4 (待ち状態) の通知が1件出る。
 10. 次の定期確認から、ログがこの順に出る。
 
     | ログの行 | 意味 |
@@ -628,9 +628,8 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     | `quota usage read` | 許可で次に試す時刻の待ちが終わり、読み直した (Q2) |
     | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
     | `I1: requested the work`、`agent start`、`agent end`、`the agent run ended` | Implementer の実行 |
-    | `I2: verified the pull request` | ラベルを `cumin/status/awaiting-checks` に替えた |
 
-20. `I2: verified the pull request` が出たら、SIGTERM で止める。
+20. `the agent run ended` のあとの I2 の行が出たら、SIGTERM で止める。I2 の結果は、この場面では確かめない。GitHub が `Closes #<番号>` の紐づけを作らないと、I2 は「Issue を閉じる開いている Pull Request がない」で止まる (Review-1 の「GitHub が紐づけを作らないとき」)。利用枠とは関係がない。
 
 使用率が0%のときは、1%のしきい値でも止まらない。リセットの直後に起きうる。そのときは、その枠の使用率が上がってからやり直す。
 
@@ -643,7 +642,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 | 3 | 前半で、`quota usage read` は1行だけである。手順11と13の定期確認で増えていない | cumin のログ |
 | 4 | 前半で、`cumin quota allow` のあとも着手しない | cumin のログ、Issue のイベント |
 | 5 | 後半の Q1 の通知は1件で、5h枠の停止と `cumin quota allow` を知らせている | Discord |
-| 6 | 後半で、`cumin quota allow` のあとの定期確認で着手し、ラベルが `cumin/status/implementing` を経て `cumin/status/awaiting-checks` に移った | Issue のイベント |
+| 6 | 後半で、`cumin quota allow` のあとの定期確認で使用率を読み直して着手し、ラベルが `cumin/status/implementing` に替わった | cumin のログ、Issue のイベント |
 | 7 | `cumin status` の表示に、使用率を読んだ時刻、今の上限、止まっている枠が出た | ターミナル |
 | 8 | ログと通知に、token、秘密鍵、webhook のアドレス、使用率の数値が出ていない。`cumin status` の表示の数値は、記録に写さない | cumin のログ、Discord |
 
