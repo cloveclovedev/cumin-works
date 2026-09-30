@@ -539,7 +539,8 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	sc := newScene(t)
 	// The pull request that the Implementer opens, so that the run ends on
 	// the success path of I2 and the issue is not stopped for the Owner.
-	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	// GitHub made no closing link, so I2 adds it.
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	service := sc.service()
 	ctx := context.Background()
 
@@ -560,9 +561,10 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2", n)
 	}
-	// Three polls, and one read again at the end of the run (I2).
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 4 {
-		t.Errorf("%d snapshot reads, want 4", n)
+	// Three polls, one read again at the end of the run (I2), the closing
+	// link, and one read after it.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
+		t.Errorf("%d GraphQL requests, want 6", n)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none on the success path", n)
@@ -627,7 +629,16 @@ func TestCore08_RestartDoesNotRequestTwice(t *testing.T) {
 // addPullRequest registers one open pull request that closes #10.
 func (sc *scene) addPullRequest(number int, head, author string, isBot bool) {
 	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
-		Number: number, HeadCommit: head, Author: author, AuthorIsBot: isBot, Closes: []int{10},
+		Number: number, HeadCommit: head, Author: author, AuthorIsBot: isBot, Closes: []int{10}, HeadBranch: wantBranch,
+	})
+}
+
+// addUnlinkedPullRequest registers one open pull request of the Implementer
+// App on the branch of #10, with no closing link: GitHub did not make one
+// from "Closes #10".
+func (sc *scene) addUnlinkedPullRequest(number int, head string) {
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: number, HeadCommit: head, Author: implementerSlug, AuthorIsBot: true, HeadBranch: wantBranch,
 	})
 }
 
@@ -705,7 +716,7 @@ func TestI2_DoneWithoutAPullRequestStopsTheIssue(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	assertVerificationFailed(t, sc, "no open pull request closes the issue", workflow.FailureNoOpenPullRequest, 0)
+	assertVerificationFailed(t, sc, "no open pull request is on the branch of the issue", workflow.FailureNoOpenPullRequest, 0)
 }
 
 func TestI2_DoneWithAPullRequestOfAnotherAuthorStopsTheIssue(t *testing.T) {
@@ -731,6 +742,113 @@ func TestI2_DoneWithACommitThatIsNotPushedStopsTheIssue(t *testing.T) {
 	sc.pollAndWait(t, service)
 
 	assertVerificationFailed(t, sc, "the head commit of the worktree is not pushed", workflow.FailureHeadNotPushed, 21)
+}
+
+// I2 (issue-states.md): GitHub made no closing link from "Closes #10". The
+// pull request is found on the branch that cumin chose, cumin-core adds
+// exactly one link, reads it back, and the issue moves on.
+func TestI2_APullRequestWithoutALinkGetsExactlyOneLink(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := closingLinkRequests(sc); n != 1 {
+		t.Errorf("%d closing link requests, want 1", n)
+	}
+	if got := sc.fake.PullRequestCloses(sc.repo, 21); !slices.Equal(got, []int{10}) {
+		t.Errorf("pull request #21 closes %v, want [10]", got)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	}
+	logs := sc.logs.String()
+	for _, want := range []string{`"msg":"I2: added the closing link"`, `"msg":"I2: verified the pull request"`, `"pull_request":21`} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the log has no %s:\n%s", want, logs)
+		}
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none", n)
+	}
+}
+
+// When GitHub already linked the pull request, cumin adds nothing.
+func TestI2_ALinkedPullRequestGetsNoLink(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := closingLinkRequests(sc); n != 0 {
+		t.Errorf("%d closing link requests, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-checks") {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks", got)
+	}
+}
+
+// A pull request of the Implementer App on another branch is not the pull
+// request of the issue, even when it is linked: the issue stops as today.
+func TestI2_APullRequestOnAnotherBranchIsNotTaken(t *testing.T) {
+	sc := newScene(t)
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 21, HeadCommit: sc.remoteHead, Author: implementerSlug, AuthorIsBot: true, HeadBranch: "cumin/10-another-branch",
+	})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	assertVerificationFailed(t, sc, "no open pull request is on the branch of the issue", workflow.FailureNoOpenPullRequest, 0)
+	if n := closingLinkRequests(sc); n != 0 {
+		t.Errorf("%d closing link requests, want none", n)
+	}
+}
+
+// A closing link that GitHub refuses stops the issue once, and the comment
+// and the notification name the answer of GitHub.
+func TestI2_AFailedLinkStopsTheIssueOnce(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	sc.fake.SetLinkErrors("Resource not accessible by integration")
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := closingLinkRequests(sc); n != 1 {
+		t.Errorf("%d closing link requests, want 1", n)
+	}
+	assertStoppedAtI2(t, sc, workflow.LinkFailedReason(21, "Resource not accessible by integration"), 21)
+	if !strings.Contains(sc.fake.Comments(sc.repo, 10)[0].Body, "GitHub answered: Resource not accessible by integration.") {
+		t.Errorf("the comment does not name the answer of GitHub:\n%s", sc.fake.Comments(sc.repo, 10)[0].Body)
+	}
+}
+
+// A link that GitHub accepted and the issue does not show stops the issue
+// once.
+func TestI2_ALinkThatIsMissingAfterwardsStopsTheIssueOnce(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	sc.fake.IgnoreLinks()
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	assertStoppedAtI2(t, sc, workflow.LinkMissingReason(21), 21)
+}
+
+// closingLinkRequests counts the requests of the closing link
+// (addCloseIssueReferences).
+func closingLinkRequests(sc *scene) int {
+	n := 0
+	for _, r := range sc.fake.Requests() {
+		if r.Path == "/graphql" && strings.Contains(string(r.Body), "addCloseIssueReferences") {
+			n++
+		}
+	}
+	return n
 }
 
 // A blocked result is logged with the question of blocked_reason. The label
@@ -996,7 +1114,15 @@ func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind work
 		t.Errorf("the log does not name the failure %q:\n%s", failure, logs)
 	}
 
-	reason := workflow.VerificationReason(kind)
+	assertStoppedAtI2(t, sc, workflow.VerificationReason(kind), pullRequest)
+}
+
+// assertStoppedAtI2 checks the stop step of I2 for #10: one comment in the
+// form of templates/stop-note.md with the reason, the label
+// cumin/status/awaiting-owner-decision, and exactly one notification with
+// the same reason.
+func assertStoppedAtI2(t *testing.T, sc *scene, reason string, pullRequest int) {
+	t.Helper()
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)

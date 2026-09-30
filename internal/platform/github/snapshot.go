@@ -93,7 +93,11 @@ type Issue struct {
 	SubIssues []Issue
 	// Title is read for sub-issues only; the branch name of a request is
 	// made from it.
-	Title     string
+	Title string
+	// NodeID is the GraphQL ID, read for sub-issues only: I2 adds the
+	// closing link with it. The field is a scalar, so it does not change
+	// the cost of the query.
+	NodeID    string
 	BlockedBy []IssueRef
 	// ClosedAt is when a closed sub-issue closed. R4 and R7 compare it with
 	// the time of the acceptance check comment. The field is a scalar, so it
@@ -234,6 +238,7 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
           pageInfo { hasNextPage }
           nodes {
             number
+            id
             title
             state
             closedAt
@@ -336,6 +341,7 @@ type pageInfo struct {
 
 type issueNode struct {
 	Number   int        `json:"number"`
+	ID       string     `json:"id"`
 	Title    string     `json:"title"`
 	State    string     `json:"state"`
 	ClosedAt *time.Time `json:"closedAt"`
@@ -617,7 +623,7 @@ func (n issueNode) issue() (Issue, error) {
 	if n.PullRequests.PageInfo.HasNextPage {
 		return Issue{}, fmt.Errorf("issue #%d has more than %d open closing pull requests", n.Number, snapshotPullRequests)
 	}
-	issue := Issue{Number: n.Number, Title: n.Title, Closed: n.State == "CLOSED"}
+	issue := Issue{Number: n.Number, Title: n.Title, NodeID: n.ID, Closed: n.State == "CLOSED"}
 	if n.ClosedAt != nil {
 		issue.ClosedAt = *n.ClosedAt
 	}

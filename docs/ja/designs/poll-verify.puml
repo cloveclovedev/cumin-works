@@ -10,27 +10,38 @@ start
 if (Result?) then (done)
   :Read the snapshot again
   (the facts right after the run);
+  :List the open pull requests of the branch
+  that cumin chose (REST);
   :Read the head commit of the worktree;
   partition "Decision (pure function, no I/O)" {
     if (An open pull request
-    closes the issue?) then (no)
+    on the branch?) then (no)
       :failed: no open pull request;
-    elseif (Author is the bot of the
+    elseif (One by the bot of the
     Implementer App (<slug>[bot])?) then (no)
       :failed: another author;
     elseif (Head commit of the pull request
     equals the head of the worktree?) then (no)
       :failed: head commit not pushed;
     else (yes)
-      :passed;
+      :passed; add the link
+      when the issue has none;
     endif
   }
   if (Passed?) then (yes)
+    if (Add the link?) then (yes)
+      :cumin-core adds the link
+      (GraphQL addCloseIssueReferences);
+      :Read the snapshot again;
+    endif
+  endif
+  if (Passed, and the link is there?) then (yes)
     :Change the label to cumin/status/awaiting-checks;
     stop
   else (no)
     :Build the comment
-    (stop-note.md, one sentence for the failed check);
+    (stop-note.md, one sentence for the failed check,
+    or the answer of GitHub);
   endif
 elseif (blocked) then
   :The comment is blocked_reason
