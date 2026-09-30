@@ -31,31 +31,6 @@ func TestHelpListsSubcommands(t *testing.T) {
 	}
 }
 
-func TestSubcommandThatIsNotBuiltFails(t *testing.T) {
-	tests := []struct {
-		args []string
-		name string
-	}{
-		{[]string{"status"}, "status"},
-	}
-	for _, tt := range tests {
-		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			code := runCLI(tt.args, &stdout, &stderr)
-			if code == 0 {
-				t.Errorf("exit code = 0, want non-zero")
-			}
-			want := "cumin " + tt.name + ": not built yet\n"
-			if stderr.String() != want {
-				t.Errorf("stderr = %q, want %q", stderr.String(), want)
-			}
-			if stdout.Len() != 0 {
-				t.Errorf("stdout = %q, want empty", stdout.String())
-			}
-		})
-	}
-}
-
 func TestBadUsagePrintsUsageAndFails(t *testing.T) {
 	tests := []struct {
 		name    string

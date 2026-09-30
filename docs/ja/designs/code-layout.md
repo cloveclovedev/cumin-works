@@ -34,6 +34,7 @@
 | `cmd/cumin` | `main.go` | サブコマンドの一覧と振り分け。終了コード |
 | | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、Hostの状態ファイルを開き、`agent.Service` と `workflow.Service` を組み立てて動かす |
 | | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
+| | `status.go` | `cumin status` (GitHubのラベル、最新の使用率、今の上限の表示) と `cumin --version` (Goのビルド情報)。表示の中身は `writeStatus` にまとめ、Keychainなしでテストする |
 | | `quota.go` | `cumin quota allow` (Q2)。状態ファイルの最新の5h枠のリセット時刻を、許可のファイルに書く |
 | `internal/core/config` | `config.go` | Hostの設定ファイル (TOML) の読み込み、初期値、制限、既定のパス |
 | | `repository.go` | 対象のリポジトリの `.cumin/config.toml` を、Hostの設定に重ねる |
