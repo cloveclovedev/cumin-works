@@ -369,3 +369,18 @@ func TestI9_AThreadOnMovedCodeNamesItsOriginalLine(t *testing.T) {
 		t.Errorf("the notes: %v", notes)
 	}
 }
+
+// One pull request that closes two sub-issues gets one note, also in the
+// poll that writes it.
+func TestI9_OnePullRequestThatClosesTwoSubIssuesGetsOneNote(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 11, Parent: 6, Title: "Add the logout button", Closed: true, ClosedAt: time.Now().Add(-time.Hour),
+		ClosedBy: 21, Labels: []string{"risk/low"},
+	})
+	sc.pollAndWait(t, sc.service())
+
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Errorf("%d follow-up notes, want 1", n)
+	}
+}
