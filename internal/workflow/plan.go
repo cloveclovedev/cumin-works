@@ -26,6 +26,13 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	if !ok {
 		return fmt.Errorf("R1: issue #%d is not in the snapshot", p.Number)
 	}
+	// Q1: the quota decides before the label changes.
+	if ok, err := s.quotaAllowsStart(ctx, RowR1, config.RolePlanner, target, p.Number); err != nil || !ok {
+		if err != nil {
+			return fmt.Errorf("R1: issue #%d: %w", p.Number, err)
+		}
+		return nil
+	}
 	labels := LabelsAfterPlan(requirement.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
 		return fmt.Errorf("R1: move issue #%d to planning: %w", p.Number, err)
@@ -149,6 +156,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 			return
 		default:
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+			s.quotaAfterRun(ctx, log, target, number, run)
 			if run.Result.Result != agent.ResultDone {
 				question := firstLine(run.Result.BlockedReason)
 				log.Warn("the agent returned blocked", "reason", question)

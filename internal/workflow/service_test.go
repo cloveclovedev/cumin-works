@@ -81,6 +81,66 @@ type scene struct {
 	notifier *notify.Notifier
 	// notifications is the Host setting notify.discord.enabled.
 	notifications bool
+	// clock is the time of the quota decisions (Q1).
+	clock *testClock
+	// quota are the Host settings of the quota limits: the defaults of the
+	// settings table.
+	quota config.QuotaSettings
+}
+
+// sceneNow is the default time of the quota decisions: one hour before the
+// weekly reset of the fixtures of internal/agent, so that the pace limit is
+// the target and their usage stops nothing. Their 5h window reset earlier,
+// so it stops nothing either.
+var sceneNow = time.Unix(1900300000, 0).Add(-time.Hour)
+
+// testClock is a clock that a test moves between polls.
+type testClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (c *testClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *testClock) Set(t time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = t
+}
+
+// setQuota makes every later minimal run of the fake CLI report this usage.
+func (sc *scene) setQuota(t *testing.T, fiveHour float64, fiveHourReset time.Time, weekly float64, weeklyReset time.Time) {
+	t.Helper()
+	event := fmt.Sprintf(`{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":{"five_hour":{"utilization":%v,"resetsAt":%d},"seven_day":{"utilization":%v,"resetsAt":%d}}},"session_id":"22222222-2222-4333-8444-555555555555"}`,
+		fiveHour, fiveHourReset.Unix(), weekly, weeklyReset.Unix())
+	content := `{"type":"system","subtype":"init","skills":[],"session_id":"22222222-2222-4333-8444-555555555555","cwd":"/example/quota","model":"example-small-model","tools":[],"plugins":[],"mcp_servers":[]}` + "\n" +
+		event + "\n" +
+		`{"type":"result","subtype":"success","is_error":false,"session_id":"22222222-2222-4333-8444-555555555555","num_turns":1,"result":"OK"}` + "\n"
+	if err := os.WriteFile(filepath.Join(sc.cliDir, "quota-override.jsonl"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// failQuota makes every later minimal run print no rate_limit_event.
+func (sc *scene) failQuota(t *testing.T) {
+	t.Helper()
+	data, err := os.ReadFile(fixturePath(t, "no-quota.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sc.cliDir, "quota-override.jsonl"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// quotaRuns returns the number of minimal runs of the fake CLI.
+func (sc *scene) quotaRuns(t *testing.T) int {
+	t.Helper()
+	return len(readLines(t, filepath.Join(sc.cliDir, "order"), "quota"))
 }
 
 // fakeWebhook is the Discord of the tests: it records the messages and can
@@ -163,6 +223,11 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 		logs: &bytes.Buffer{}, remote: remote, remoteHead: head, cliDir: cliDir,
 		workRoot: t.TempDir(), cliPath: cliPath, settingsDir: t.TempDir(),
 		webhook: webhook, notifier: webhook.notifier(), notifications: true,
+		clock: &testClock{now: sceneNow},
+		quota: config.QuotaSettings{
+			FiveHour: config.FiveHourQuota{Threshold: 85},
+			Weekly:   config.WeeklyQuota{Target: 85, Lead: 24 * time.Hour},
+		},
 	}
 }
 
@@ -240,6 +305,7 @@ func (sc *scene) service() *workflow.Service {
 		Settings:    sc.settings(),
 		SettingsDir: sc.settingsDir,
 		Logger:      logger,
+		Now:         sc.clock.Now,
 	}
 }
 
@@ -261,6 +327,7 @@ func (sc *scene) settings() *config.Settings {
 			config.RoleReviewer:    roleSettings,
 		},
 		Notify: config.NotifySettings{DiscordEnabled: sc.notifications},
+		Quota:  sc.quota,
 	}
 }
 
@@ -391,6 +458,7 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
+		"[ $n = quota ] && [ -f " + filepath.Join(dir, "quota-override.jsonl") + " ] && f=" + filepath.Join(dir, "quota-override.jsonl") + "\n" +
 		"echo $n >> " + filepath.Join(dir, "order") + "\n" +
 		second +
 		"for a in \"$@\"; do printf '%s\\0' \"$a\"; done > " + filepath.Join(dir, "$n.args") + "\n" +

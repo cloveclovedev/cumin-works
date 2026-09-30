@@ -1,0 +1,158 @@
+package quota
+
+import (
+	"math"
+	"testing"
+	"time"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
+)
+
+// defaults are the settings of the settings table: 5h threshold 85, weekly
+// target 85, lead one day.
+var defaults = config.QuotaSettings{
+	FiveHour: config.FiveHourQuota{Threshold: 85},
+	Weekly:   config.WeeklyQuota{Target: 85, Lead: 24 * time.Hour},
+}
+
+// weeklyReset is the reset of the weekly window in these tests, so its
+// start is 7 days earlier.
+var weeklyReset = time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
+
+func weekStart() time.Time { return weeklyReset.Add(-week) }
+
+func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
+
+// The pace limit rises through the week, starts at target x lead / 7 days,
+// and never passes the target (Core-15).
+func TestCore15_PaceLimitAtTheStartTheMiddleAndTheEndOfAWeek(t *testing.T) {
+	tests := []struct {
+		name string
+		at   time.Time
+		want float64
+	}{
+		{"before the start", weekStart().Add(-time.Hour), 85.0 / 7},
+		{"the start", weekStart(), 85.0 / 7},
+		{"the middle", weekStart().Add(week / 2), 85 * (3.5 + 1) / 7},
+		{"one day before the end", weeklyReset.Add(-24 * time.Hour), 85},
+		{"the end", weeklyReset.Add(-time.Minute), 85},
+		{"after the reset", weeklyReset.Add(time.Hour), 85},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PaceLimit(defaults.Weekly, weeklyReset, tt.at); !near(got, tt.want) {
+				t.Errorf("PaceLimit = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPaceLimitWithoutLead(t *testing.T) {
+	settings := config.WeeklyQuota{Target: 70}
+	if got := PaceLimit(settings, weeklyReset, weekStart()); got != 0 {
+		t.Errorf("PaceLimit at the start = %v, want 0", got)
+	}
+	if got := PaceLimit(settings, weeklyReset, weekStart().Add(week*2/7)); !near(got, 20) {
+		t.Errorf("PaceLimit after 2 days = %v, want 20", got)
+	}
+}
+
+// The same weekly usage stops a start early in the week and lets it go
+// later, by time alone.
+func TestCore15_TheSameWeeklyUsageStopsEarlyAndPassesLater(t *testing.T) {
+	usage := Usage{Weekly: Window{Utilization: 0.40, ResetsAt: weeklyReset}}
+	early := Decide(usage, defaults, weekStart().Add(24*time.Hour))
+	if early.Allows() || len(early.Stopped) != 1 || early.Stopped[0] != Weekly {
+		t.Errorf("early in the week: %+v, want stopped by the weekly window", early)
+	}
+	// 85 x (e + 1 day) / 7 days > 40 from e = 40/85 x 7 - 1 days, about 2.29 days.
+	late := Decide(usage, defaults, weekStart().Add(56*time.Hour))
+	if !late.Allows() {
+		t.Errorf("later in the week: %+v, want a start", late)
+	}
+}
+
+func TestFiveHourLimitByTimeBand(t *testing.T) {
+	settings := config.FiveHourQuota{Threshold: 85, Bands: []config.TimeBand{
+		{From: 23 * 60, To: 6 * 60, Threshold: 100},
+		{From: 12 * 60, To: 13 * 60, Threshold: 95},
+	}}
+	day := func(hour, minute int) time.Time { return time.Date(2026, 10, 1, hour, minute, 0, 0, time.Local) }
+	tests := []struct {
+		at   time.Time
+		want float64
+	}{
+		{day(23, 0), 100},
+		{day(2, 30), 100},
+		{day(6, 0), 85},
+		{day(12, 59), 95},
+		{day(13, 0), 85},
+		{day(18, 0), 85},
+	}
+	for _, tt := range tests {
+		if got := FiveHourLimit(settings, tt.at); got != tt.want {
+			t.Errorf("FiveHourLimit at %s = %v, want %v", tt.at.Format("15:04"), got, tt.want)
+		}
+	}
+}
+
+func TestDecideStopsAtOrAboveTheLimit(t *testing.T) {
+	now := weeklyReset.Add(-time.Hour) // the weekly limit is the target
+	fiveHourReset := now.Add(time.Hour)
+	usage := func(fiveHour, weekly float64) Usage {
+		return Usage{
+			FiveHour: Window{Utilization: fiveHour, ResetsAt: fiveHourReset},
+			Weekly:   Window{Utilization: weekly, ResetsAt: weeklyReset},
+		}
+	}
+	tests := []struct {
+		name  string
+		usage Usage
+		want  []Name
+	}{
+		{"both below", usage(0.84, 0.84), nil},
+		{"5h at the limit", usage(0.85, 0.10), []Name{FiveHour}},
+		{"weekly at the limit", usage(0.10, 0.85), []Name{Weekly}},
+		{"both above", usage(0.99, 0.90), []Name{FiveHour, Weekly}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := Decide(tt.usage, defaults, now)
+			if len(d.Stopped) != len(tt.want) {
+				t.Fatalf("Stopped = %v, want %v", d.Stopped, tt.want)
+			}
+			for i := range tt.want {
+				if d.Stopped[i] != tt.want[i] {
+					t.Errorf("Stopped = %v, want %v", d.Stopped, tt.want)
+				}
+			}
+			if d.Allows() != (len(tt.want) == 0) {
+				t.Errorf("Allows = %v", d.Allows())
+			}
+		})
+	}
+}
+
+// A utilization such as 0.29 is 28.999999999999996 in percent; it still
+// reaches a limit of 29.
+func TestDecideAbsorbsTheRoundingOfAPercent(t *testing.T) {
+	settings := defaults
+	settings.FiveHour.Threshold = 29
+	now := weeklyReset.Add(-time.Hour)
+	d := Decide(Usage{FiveHour: Window{Utilization: 0.29, ResetsAt: now.Add(time.Hour)}}, settings, now)
+	if d.Allows() {
+		t.Errorf("0.29 against 29: %+v, want stopped", d)
+	}
+}
+
+// A usage from before a reset stops nothing.
+func TestDecideIgnoresAWindowWhoseResetHasPassed(t *testing.T) {
+	now := weeklyReset.Add(time.Minute)
+	usage := Usage{
+		FiveHour: Window{Utilization: 1, ResetsAt: now.Add(-time.Minute)},
+		Weekly:   Window{Utilization: 1, ResetsAt: weeklyReset},
+	}
+	if d := Decide(usage, defaults, now); !d.Allows() {
+		t.Errorf("Decide = %+v, want a start", d)
+	}
+}

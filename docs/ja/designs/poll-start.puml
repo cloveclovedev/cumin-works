@@ -14,6 +14,14 @@ participant "Claude Code" as cli
 
 poll -> gh: read the snapshot
 poll -> claim: hand over the claim list
+claim -> agents: read the quota usage (minimal run)
+agents -> cli: minimal run
+cli --> agents: usage
+agents --> claim: usage
+note right of claim
+  Q1: at a limit, no label change
+  and no request (quota.md)
+end note
 claim -> gh: change the label to cumin/status/implementing
 note right of claim
   No request when the label

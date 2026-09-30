@@ -151,8 +151,8 @@ func parseTimeOfDay(s string) (TimeOfDay, bool) {
 	return TimeOfDay(hour*60 + minute), true
 }
 
-// contains reports whether the band covers the time of day t.
-func (b TimeBand) contains(t TimeOfDay) bool {
+// Contains reports whether the band covers the time of day t.
+func (b TimeBand) Contains(t TimeOfDay) bool {
 	if b.From < b.To {
 		return b.From <= t && t < b.To
 	}
@@ -163,5 +163,5 @@ func (b TimeBand) contains(t TimeOfDay) bool {
 func (b TimeBand) overlaps(other TimeBand) bool {
 	// Two ranges on a circle overlap exactly when one of them contains the
 	// start of the other.
-	return b.contains(other.From) || other.contains(b.From)
+	return b.Contains(other.From) || other.Contains(b.From)
 }

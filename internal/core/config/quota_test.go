@@ -166,7 +166,7 @@ func TestTimeBandContains(t *testing.T) {
 		{day, 8*60 + 59, false},
 	}
 	for _, tt := range tests {
-		if got := tt.band.contains(tt.at); got != tt.want {
+		if got := tt.band.Contains(tt.at); got != tt.want {
 			t.Errorf("band %s-%s contains %s = %v, want %v", tt.band.From, tt.band.To, tt.at, got, tt.want)
 		}
 	}

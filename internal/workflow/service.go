@@ -66,6 +66,9 @@ type Service struct {
 	// they are missing. RepositoryLabels gives the list of cumin.
 	Labels []github.Label
 	Logger *slog.Logger
+	// Now is the clock of the quota decisions (Q1). Nil means time.Now.
+	// Tests set it, so that a week passes without waiting.
+	Now func() time.Time
 
 	// running counts the agent runs that the polls started. Each run has
 	// its own goroutine, so that the poll goes on while an agent works.
@@ -86,6 +89,11 @@ type Service struct {
 	// (pollfailure.go).
 	failureMu    sync.Mutex
 	pollFailures map[string]*repeatedFailure
+
+	// quota keeps which Q1 notifications the Owner already got
+	// (quota.go). The polls and the ends of the runs share it.
+	quotaMu sync.Mutex
+	quota   quotaNotices
 }
 
 // DefaultStopGrace is how long Run waits for the requests that are running
@@ -379,6 +387,13 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if !ok {
 		return fmt.Errorf("I1: issue #%d is not in the snapshot", c.Number)
 	}
+	// Q1: the quota decides before anything changes, the state included.
+	if ok, err := s.quotaAllowsStart(ctx, "I1", config.RoleImplementer, target, c.Number); err != nil || !ok {
+		if err != nil {
+			return fmt.Errorf("I1: issue #%d: %w", c.Number, err)
+		}
+		return nil
+	}
 	// The Owner added cumin/status/ready, so the work starts again from a
 	// new session and a count of zero (issue-states.md, the section on the
 	// sessions of an agent). This comes before the label change: a state
@@ -655,6 +670,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			return
 		default:
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+			s.quotaAfterRun(ctx, log, target, number, run)
 			s.keepSession(log, target, config.RoleImplementer, number, run.SessionID)
 			if run.Result.Result != agent.ResultDone {
 				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
