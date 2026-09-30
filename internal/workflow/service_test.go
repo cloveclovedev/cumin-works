@@ -183,6 +183,18 @@ func (f *fakeWebhook) messagesSent() []string {
 	return slices.Clone(f.messages)
 }
 
+// messagesExceptQ4 returns the messages other than Q4 (waiting). A test of
+// another row that ends with nothing to do also gets one Q4 notification.
+func (sc *scene) messagesExceptQ4() []string {
+	var messages []string
+	for _, m := range sc.webhook.messagesSent() {
+		if !strings.HasPrefix(m, "cumin: Q4: ") {
+			messages = append(messages, m)
+		}
+	}
+	return messages
+}
+
 // fails makes the webhook answer with status from now on.
 func (f *fakeWebhook) fails(status int) {
 	f.mu.Lock()

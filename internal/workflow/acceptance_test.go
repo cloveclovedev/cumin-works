@@ -67,7 +67,7 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	messages := sc.webhook.messagesSent()
+	messages := sc.messagesExceptQ4()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}

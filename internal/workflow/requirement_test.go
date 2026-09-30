@@ -104,7 +104,7 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Fatalf("labels of #6 = %v, want %v", got, want)
 	}
-	messages := sc.webhook.messagesSent()
+	messages := sc.messagesExceptQ4()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications after two polls, want 1: %v", len(messages), messages)
 	}
@@ -122,7 +122,7 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {
 		t.Errorf("labels of #6 = %v, want implementing again", got)
 	}
-	if n := len(sc.webhook.messagesSent()); n != 1 {
+	if n := len(sc.messagesExceptQ4()); n != 1 {
 		t.Errorf("%d notifications, want still 1", n)
 	}
 }
@@ -135,7 +135,7 @@ func TestR6_AnOpenSubIssueWithAStatusLabelKeepsImplementing(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {
 		t.Errorf("labels of #6 = %v, want implementing kept", got)
 	}
-	if n := len(sc.webhook.messagesSent()); n != 0 {
+	if n := len(sc.messagesExceptQ4()); n != 0 {
 		t.Errorf("%d notifications, want none", n)
 	}
 }
