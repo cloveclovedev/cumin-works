@@ -217,7 +217,7 @@ func (s *Service) readAcceptanceComments(ctx context.Context, log *slog.Logger, 
 			"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 		comments := make([]Comment, 0, len(read))
 		for _, c := range read {
-			comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body})
+			comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
 		}
 		requirement.CommentsRead = true
 		requirement.AcceptanceCheckAt = AcceptanceCheckAt(comments, planner)

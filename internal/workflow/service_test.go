@@ -194,6 +194,10 @@ type cliOptions struct {
 	// movesHead makes the first agent run push a new commit and move the
 	// head of the pull request #21 to it, as a push during the review.
 	movesHead bool
+	// comments are what each agent run writes on the pull request #21, one
+	// entry for each run in order: DECISION writes a decision request, NONE
+	// writes nothing, as the Reviewer does for I8.
+	comments []string
 	// serverURL is the address of the fake GitHub; newScene sets it.
 	serverURL string
 }
@@ -370,6 +374,19 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 			"curl -s -X POST -H 'Authorization: Bearer " + githubtest.Token + "' -d \"{\\\"sha\\\":\\\"$(git rev-parse HEAD)\\\"}\" " +
 			o.serverURL + "/_fake/repos/example-org/example-repo/pulls/21/head 1>&2\n" +
 			"fi\n"
+	}
+	if len(o.comments) > 0 {
+		list := filepath.Join(dir, "comments")
+		if err := os.WriteFile(list, []byte(strings.Join(o.comments, "\n")+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		review += "if [ $n = agent ]; then\n" +
+			"k=$(grep -c '^agent$' " + filepath.Join(dir, "order") + "); e=$(sed -n \"${k}p\" " + list + ")\n" +
+			"if [ \"$e\" = DECISION ]; then\n" +
+			"curl -s -X POST -H 'Authorization: Bearer " + githubtest.Token + "' " +
+			"-d '{\"body\":\"## Decision needed: Which error does the handler return?\\n\\nType: Unresolved after 3 review rounds\"}' " +
+			o.serverURL + "/repos/example-org/example-repo/issues/21/comments 1>&2\n" +
+			"fi\nfi\n"
 	}
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +

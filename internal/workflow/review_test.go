@@ -138,3 +138,29 @@ func TestReviewRounds_TheCountComesFromGitHubAndSurvivesARestart(t *testing.T) {
 		}
 	}
 }
+
+// I8 counts only a decision request of the Reviewer that is not older than
+// its last review.
+func TestExplanationOf_IsANewDecisionRequestOfTheReviewer(t *testing.T) {
+	const reviewer = "example-reviewer[bot]"
+	since := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	decision := "## Decision needed: Which error does the handler return?\n\nType: Unresolved after 3 review rounds"
+	tests := []struct {
+		name    string
+		comment Comment
+		want    bool
+	}{
+		{"a decision request after the review", Comment{Author: reviewer, CreatedAt: since.Add(time.Minute), Body: decision, URL: "u"}, true},
+		{"one at the same second as the review", Comment{Author: reviewer, CreatedAt: since, Body: decision}, true},
+		{"one before the review", Comment{Author: reviewer, CreatedAt: since.Add(-time.Minute), Body: decision}, false},
+		{"another author", Comment{Author: "octocat", CreatedAt: since.Add(time.Minute), Body: decision}, false},
+		{"another heading", Comment{Author: reviewer, CreatedAt: since.Add(time.Minute), Body: "Looks fine to me."}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, ok := ExplanationOf([]Comment{tt.comment}, reviewer, since); ok != tt.want {
+				t.Errorf("found = %v, want %v", ok, tt.want)
+			}
+		})
+	}
+}

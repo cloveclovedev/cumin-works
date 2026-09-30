@@ -337,30 +337,82 @@ func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
 	}
 }
 
-// At the limit of rounds, I5 does not apply: no fix is requested, and the
-// issue waits for I8.
-func TestI5_NoFixIsRequestedAtTheLimitOfRounds(t *testing.T) {
-	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES"}})
-	service := sc.service()
-	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
-	// Two rounds before this one; the limit of the scene is 3.
+// atTheLimit gives the pull request two rounds of the Reviewer before the
+// next review; the limit of the scene is 3, so the next one is round 3.
+func (sc *scene) atTheLimit(t *testing.T) {
+	t.Helper()
 	for i, commit := range []string{"1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"} {
 		sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "CHANGES_REQUESTED",
 			Commit: commit, SubmittedAt: time.Now().Add(time.Duration(i-10) * time.Minute)})
 	}
+}
+
+// I8 (issue-states.md): REQUEST_CHANGES at the limit of rounds does not
+// go to the Implementer. The Reviewer explains the cause in its session;
+// its decision request on the pull request is the reason, so cumin writes
+// no comment, moves the issue to cumin/status/awaiting-owner-decision, and
+// sends one notification that links the explanation.
+func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}, comments: []string{"NONE", "DECISION"}})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	sc.atTheLimit(t)
 
 	sc.pollAndWait(t, service)
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want only the review of round 3", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want the review of round 3 and the explanation", n)
 	}
-	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Round: 3 of 3") {
-		t.Errorf("the review was not round 3:\n%s", text)
+	args := sc.record(t, "agent.args")
+	if got := argumentOf(t, args, "--resume"); got != fixtureSession {
+		t.Errorf("--resume = %q, want the Reviewer session of round 3", got)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelReviewing) {
-		t.Errorf("labels of #10 = %v, want cumin/status/reviewing", got)
+	if text := promptOf(t, args); !strings.Contains(text, "Request: explain the cause") || !strings.Contains(text, "after 3 review rounds") {
+		t.Errorf("the request text is not the explanation of I8:\n%s", text)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I8: blocking comments remain at the limit of rounds"`) {
-		t.Errorf("the log does not say that the limit is reached: %s", sc.logs)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none: the Reviewer wrote the reason", n)
+	}
+	explanations := sc.fake.Comments(sc.repo, 21)
+	if len(explanations) != 1 {
+		t.Fatalf("comments on #21 = %+v, want the explanation", explanations)
+	}
+	messages := sc.webhook.messagesSent()
+	if len(messages) != 1 || !strings.Contains(messages[0], "I8") || !strings.Contains(messages[0], "issuecomment-") {
+		t.Errorf("notifications = %q, want one of I8 that links the comment", messages)
+	}
+	for _, want := range []string{`"msg":"I8: blocking comments remain at the limit of rounds"`,
+		`"msg":"I8: requested the explanation of the cause"`, `"msg":"I8: the issue waits for the Owner"`} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
+}
+
+// Without the explanation, the stop step hands the issue to the Owner with
+// the row I8: one comment, one label change, one notification.
+func TestI8_WithoutTheExplanationTheStopStepHandsOverTheIssue(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	sc.atTheLimit(t)
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2", n)
+	}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I8") || !strings.Contains(comments[0].Body, workflow.MissingExplanationReason) {
+		t.Fatalf("comments on #10 = %+v, want one stop note with the row I8", comments)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	}
+	if n := len(sc.webhook.messagesSent()); n != 1 {
+		t.Errorf("%d notifications, want 1", n)
 	}
 }

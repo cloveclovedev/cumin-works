@@ -476,6 +476,8 @@ type Comment struct {
 	Author    string
 	CreatedAt time.Time
 	Body      string
+	// URL is the address of the comment; the notification of I8 links it.
+	URL string
 }
 
 // NeedsLabelTimes reports whether R3 needs the label times of the
@@ -1139,3 +1141,31 @@ func CheckReview(pr PullRequest, reviewer string) ReviewResult {
 // ReviewFixAllowed is the check of I5: the round of the review that asked
 // for changes is below max_review_rounds. At the limit, I8 applies instead.
 func ReviewFixAllowed(round, limit int) bool { return round < limit }
+
+// DecisionRequestHeading starts every decision request
+// (templates/decision-request.md). I8 looks for a comment of the Reviewer
+// that starts with it.
+const DecisionRequestHeading = "## Decision needed"
+
+// ExplanationOf returns the decision request that the Reviewer wrote on the
+// pull request after its last review (I8): the newest comment of the
+// Reviewer whose first line starts with DecisionRequestHeading, created at
+// or after since. The comments are the ones that cumin read after since.
+func ExplanationOf(comments []Comment, reviewer string, since time.Time) (Comment, bool) {
+	var found Comment
+	ok := false
+	for _, c := range comments {
+		if c.Author != reviewer || c.CreatedAt.Before(since) || !strings.HasPrefix(firstBodyLine(c.Body), DecisionRequestHeading) {
+			continue
+		}
+		if !ok || !c.CreatedAt.Before(found.CreatedAt) {
+			found, ok = c, true
+		}
+	}
+	return found, ok
+}
+
+func firstBodyLine(body string) string {
+	line, _, _ := strings.Cut(strings.TrimLeft(body, "\r\n"), "\n")
+	return strings.TrimSpace(line)
+}

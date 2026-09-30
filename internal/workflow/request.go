@@ -221,3 +221,19 @@ Review: %[6]s
 The Reviewer requested changes on the pull request #%[5]d. Read that review and its comments on GitHub. Fix every blocking comment in the work directory, which is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request. Reply to every blocking comment with the skill cumin-review-reply. When the fix changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
 `, repository, number, branch, workDir, pullRequest, review)
 }
+
+// ExplainCauseRequestText returns the request text of the kind "explain
+// the cause" (reviewer.md, the request kinds): blocking comments remain at
+// the limit of rounds (I8). The request resumes the Reviewer session, which
+// holds the rounds.
+func ExplainCauseRequestText(repository string, number, pullRequest, limit int, workDir string) string {
+	return fmt.Sprintf(`Request: explain the cause
+Repository: %[1]s
+Implementation issue: #%[2]d
+Pull request: #%[3]d
+Round: %[4]d of %[4]d
+Work directory: %[5]s
+
+Blocking comments remain on the pull request #%[3]d after %[4]d review rounds. Invoke the skill cumin-decision-request, and write one comment for the Owner on the pull request #%[3]d: what is not decided, so that the comments do not end, with the position of the Reviewer and of the Implementer on each open blocking comment. Submit no review. Then return the result.
+`, repository, number, pullRequest, limit, workDir)
+}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/notify"
 )
 
 // reviewerRequest is one request to the Reviewer: the pull request, the
@@ -201,7 +202,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 			log.Info("I3: the Reviewer approved the head commit", "round", req.review.Round)
 			return
 		case ReviewChangesRequestedOnHead:
-			s.afterChangesRequested(ctx, log, target, settings, number, req, sub, pr)
+			s.afterChangesRequested(ctx, log, target, settings, number, req, sub, pr, run.SessionID)
 			return
 		}
 		if !missed {
@@ -275,15 +276,17 @@ func (s *Service) headMoved(ctx context.Context, log *slog.Logger, target Target
 // first (principle 3), then asks the Implementer to fix the comments in the
 // session of its last run, on the branch of the pull request. The end of
 // that run is the end of any Implementer run: I2 verifies it, and the
-// checks and I3 follow. At the limit, the issue waits for I8.
-func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, sub SubIssue, pr PullRequest) {
+// checks and I3 follow. At the limit, I8 asks the Reviewer to explain the
+// cause, in the session of the run that just ended.
+func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, sub SubIssue, pr PullRequest, sessionID string) {
 	round := ReviewRounds(pr.Reviews, req.reviewer, req.readyAt)
 	limit := settings.Settings.MaxReviewRounds
+	latest, _ := LatestReview(pr.Reviews, req.reviewer)
 	if !ReviewFixAllowed(round, limit) {
 		log.Info("I8: blocking comments remain at the limit of rounds", "round", round, "limit", limit)
+		s.explainCause(ctx, log, target, settings, number, req, latest, sessionID)
 		return
 	}
-	latest, _ := LatestReview(pr.Reviews, req.reviewer)
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -307,3 +310,122 @@ func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, t
 		},
 	})
 }
+
+// explainCause applies I8: blocking comments remain at the limit of rounds.
+// The Reviewer writes one decision request on the pull request, in the
+// session that holds the rounds. cumin then looks for a comment of the
+// Reviewer that starts with the heading of a decision request and is not
+// older than the last review; with it, the issue goes to
+// cumin/status/awaiting-owner-decision and the Owner gets one notification
+// that links the comment. The Reviewer wrote the reason, so cumin writes
+// no comment of its own.
+//
+// Without that comment, with a blocked result, or after a second abnormal
+// end, the stop step hands the issue to the Owner with the row I8: the
+// Owner must decide either way. The time of the last review comes from
+// GitHub, as the time of the comment does, so the clock of the Host plays
+// no part.
+func (s *Service) explainCause(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, latest Review, sessionID string) {
+	role := settings.Settings.Roles[config.RoleReviewer]
+	limit := req.review.Limit
+	log.Info("I8: requested the explanation of the cause", "resumed", sessionID != "")
+	request := agent.StartRequest{
+		Owner:        target.Repository.Owner,
+		Repo:         target.Repository.Name,
+		Role:         config.RoleReviewer,
+		RiskCriteria: settings.RiskCriteria,
+		Text:         ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, limit, req.review.WorkDir),
+		WorkDir:      req.review.WorkDir,
+		Settings:     &role,
+		SessionID:    sessionID,
+	}
+	var firstKind agent.EndKind
+	for attempt := 1; attempt <= agentAttempts; attempt++ {
+		run, err := s.Agents.Start(ctx, request)
+		var abnormal *agent.AbnormalEnd
+		switch {
+		case errors.As(err, &abnormal):
+			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
+				"session_id", abnormal.SessionID, "detail", abnormal.Detail, "attempt", attempt)
+			if ctx.Err() != nil {
+				return
+			}
+			if attempt < agentAttempts {
+				firstKind = abnormal.Kind
+				request.SessionID = ""
+				log.Info("I8: the same request runs again in the same work directory", "attempt", attempt+1)
+				continue
+			}
+			s.stopAfterAbnormalEnd(ctx, log, target, settings, RowI8, "Reviewer", number, firstKind, abnormal.Kind)
+			return
+		case err != nil:
+			log.Error("the agent was not started", "error", err.Error())
+			return
+		}
+		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+		s.keepSession(log, target, config.RoleReviewer, number, run.SessionID)
+		if run.Result.Result != agent.ResultDone {
+			s.stopAfterBlocked(ctx, log, target, settings, RowI8, "Reviewer", number, run.Result.BlockedReason)
+			return
+		}
+		s.handOverExplanation(ctx, log, target, settings, number, req, latest)
+		return
+	}
+}
+
+// handOverExplanation checks the comment of I8 and hands the issue to the
+// Owner. See explainCause.
+func (s *Service) handOverExplanation(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, latest Review) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	pullRequest := req.review.PullRequest
+	sub, ok := s.subIssueNow(ctx, log, target, number)
+	if !ok {
+		return
+	}
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error("I8: no token; the issue keeps its label", "error", err.Error())
+		return
+	}
+	read, rate, err := s.GitHub.ReadIssueComments(ctx, token, owner, repo, pullRequest, latest.SubmittedAt)
+	if err != nil {
+		log.Error("I8: the comments of the pull request were not read; the issue keeps its label", "error", err.Error())
+		return
+	}
+	log.Debug("I8: read the comments of the pull request", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	comments := make([]Comment, 0, len(read))
+	for _, c := range read {
+		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
+	}
+	explanation, found := ExplanationOf(comments, req.reviewer, latest.SubmittedAt)
+	if !found {
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row:     RowI8,
+			issue:   number,
+			labels:  sub.Labels,
+			reason:  MissingExplanationReason,
+			comment: StopNote(RowI8, MissingExplanationReason, pullRequest, false),
+		})
+		return
+	}
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerDecision)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
+		// The notification still goes: the Owner must learn that the
+		// review did not end, as in the stop step.
+		log.Error("I8: the label was not changed", "error", err.Error())
+	} else {
+		log.Info("I8: the issue waits for the Owner", "labels", labels, "comment", explanation.URL)
+	}
+	s.notifyOwner(ctx, log.With("row", RowI8), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		Row:        RowI8,
+		Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", req.review.Limit, firstBodyLine(explanation.Body)),
+		Repository: target.Repository.String(),
+		Subject:    fmt.Sprintf("issue #%d", number),
+		Link:       explanation.URL,
+	})
+}
+
+// MissingExplanationReason is the sentence of the stop of I8 when the
+// Reviewer wrote no decision request, for the comment and the
+// notification alike.
+const MissingExplanationReason = "Blocking comments remain at the limit of review rounds, and the Reviewer reported done, but it wrote no decision request on the pull request after its last review."
