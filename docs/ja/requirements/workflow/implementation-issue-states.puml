@@ -1,6 +1,6 @@
 @startuml implementation-issue-states
 ' cumin works - states of an implementation issue.
-' A state is a label on GitHub. Each arrow names one row of issue-states.md (I1 to I10); I11 is a note.
+' A state is a label on GitHub. Each arrow names one row of issue-states.md (I1 to I12); I9 and I11 are notes.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 
 hide empty description
@@ -26,10 +26,11 @@ Reviewing --> [*] : I6 APPROVE, risk/low\n(cumin merges)
 Reviewing --> OwnerReview : I7 APPROVE,\nrisk/medium or risk/high
 Reviewing --> Decision : I8 comments left\nafter 3 rounds
 Reviewing --> Decision : I10 Reviewer\nreturned blocked
-OwnerReview --> [*] : I9 Owner merges,\nfollow-up note
+OwnerReview --> [*] : I12 Owner approves the head commit\n(cumin merges)
 OwnerReview --> Ready : Owner sends it back\n(comment, cumin/status/ready again)
 Decision --> Ready : Owner answers,\nadds cumin/status/ready again
 
 note "I11: in every state, cumin copies the\ncumin/status/* and risk/* labels of the\nissue to its open pull request." as I11
+note "I9: after every merge (I6, I12, or by the Owner),\ncumin copies the work left to a follow-up note." as I9
 
 @enduml

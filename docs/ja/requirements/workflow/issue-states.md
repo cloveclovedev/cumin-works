@@ -23,7 +23,7 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 | `cumin/status/implementing` | 実装Issue、要求Issue | 実装Issueでは、Implementerが動いている (修正を含む)。要求Issueでは、sub-issueの実装が進んでいる | cumin |
 | `cumin/status/awaiting-checks` | 実装Issue | Implementerの実行が終わり、必須のcheckの完了を待っている。Agentは動いていない | cumin |
 | `cumin/status/reviewing` | 実装Issue | Reviewerが作業している | cumin |
-| `cumin/status/awaiting-owner-review` | 実装Issue、要求Issue | Ownerが見て承認するのを待っている (分割結果、merge、受け入れ) | cumin |
+| `cumin/status/awaiting-owner-review` | 実装Issue、要求Issue | Ownerが見て承認するのを待っている。実装Issueでは、Pull RequestのmergeをOwnerが判断する。OwnerがGitHubのレビューで承認すると、cuminがmergeする (I12)。要求Issueでは、分割結果と受け入れ | cumin |
 | `cumin/status/awaiting-owner-decision` | 実装Issue、要求Issue | Agentが先に進めない。Ownerの回答を待っている | cumin |
 | `risk/low`、`risk/medium`、`risk/high` | 実装Issue | mergeのrisk。Plannerが仮に付け、Ownerが確定する | Planner、Owner |
 
@@ -94,14 +94,23 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | I3 | ラベルを `cumin/status/reviewing` に替え、Reviewerにレビューを依頼する | 定期確認: `cumin/status/awaiting-checks` の実装Issueで、必須のcheckが、Pull Requestの先頭のコミットで全て通った。必須のcheckが1つもなければ、すぐに通ったとみなす | — | — |
 | I4 | ラベルを `cumin/status/implementing` に戻し、失敗したcheckの内容を添えてImplementerに修正を依頼する | 定期確認: `cumin/status/awaiting-checks` の実装Issueで、必須のcheckのどれかが失敗した | checkの修正依頼が上限 (3回) に達していない | 上限に達したら `cumin/status/awaiting-owner-decision` に替えて通知する |
 | I5 | ラベルを `cumin/status/implementing` に替え、Implementerに指摘の修正を依頼する | 実行終了: Reviewerの実行が終わった | Reviewerの最新のレビューが、Pull Requestの今の先頭のコミットに対する `REQUEST_CHANGES` である。ラウンドが上限に達していない | レビューが出ていない、または古いコミットに対するものなら、Reviewerに1回だけ依頼し直す |
-| I6 | Pull Requestをmergeする | 実行終了: Reviewerの実行が終わった | 最新のレビューが今の先頭のコミットに対する `APPROVE` である。checkが全て通っている。riskが `risk/low` である | mergeできない (衝突など) なら、`cumin/status/implementing` に替えてImplementerに解消を依頼する |
+| I6 | Pull Requestをmergeする。GitHubが実装Issueを閉じなければ、少し待ってから1回だけ閉じる | 実行終了: Reviewerの実行が終わった | 最新のレビューが今の先頭のコミットに対する `APPROVE` である。checkが全て通っている。riskが `risk/low` である | 衝突でmergeできないなら、`cumin/status/implementing` に替えて、同じセッションでImplementerに解消を依頼する。riskのラベルがちょうど1つでないとき、または衝突のほかの理由でmergeできないときは、mergeせずに `cumin/status/awaiting-owner-decision` に替えて通知する |
 | I7 | ラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「mergeの判断が必要」と通知する | I6と同じ | I6と同じ。ただしriskが `risk/medium` または `risk/high` である | — |
 | I8 | Reviewerに「何が決まっていないことが原因か」の整理を依頼し、レポートが投稿されたら `cumin/status/awaiting-owner-decision` に替えて通知する | 実行終了: Reviewerの実行が終わった | 最新のレビューが `REQUEST_CHANGES` で、ラウンドが上限に達した | — |
 | I9 | 残った作業を、フォローアップノートとして要求Issueに転記する。実装Issueはこれで完了 | 定期確認: 実装Issueが閉じていて、それを閉じるよう結び付いたPull Requestが、merge済みである。誰が閉じたか (GitHub、cumin、Owner) は問わない | このPull Requestのフォローアップノートが、まだない。要求Issueが開いている。`Follow-up` に文章があるか、対応されなかった `(non-blocking)` の指摘がある | — |
 | I10 | `blocked_reason` を実装Issueにコメントとして投稿し、ラベルを `cumin/status/awaiting-owner-decision` に替えて通知する。やり直さない | 実行終了: Reviewerの実行が終わり、結果が `blocked` | — | — |
 | I11 | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする | 定期確認: 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | — | — |
+| I12 | Pull Requestをmergeする。mergeの手順と、うまくいかないときの扱いは、I6と同じ | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Pull Requestの今の先頭のコミットに対する、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) の `APPROVE` のレビューがある | 必須のcheckが、その先頭のコミットで全て通っている。riskのラベルがちょうど1つである | I6と同じ |
 
 I5〜I8は、Reviewerの結果が `done` のときの動作である。結果が `blocked` のときは、I10に従う。
+
+I7のあと、OwnerはPull RequestをGitHubのレビューで判断する。
+
+- 承認するときは、今の先頭のコミットに `APPROVE` のレビューを出す。I12が成り立ち、cuminがmergeする。古いコミットへの承認は数えない。衝突の解消などで新しいコミットがpushされたら、Ownerはもう一度承認する
+- 差し戻すときは、今までどおり、コメントを書いて実装Issueに `cumin/status/ready` を付ける。I1が成り立つ
+- 自分でmergeしてもよい。そのあとの扱いは、cuminがmergeしたときと同じである (I9)。ただし、GitHubが実装Issueを閉じなければ、Ownerが閉じる。cuminが閉じるのは、自分のmergeの直後だけである
+
+mergeのあとにcuminが実装Issueを閉じるのは、GitHubの動作に合わせるためである。2026-09-30から、GitHubは、手で付けたリンクや `addCloseIssueReferences` で付けたリンクのPull Requestをmergeしても、Issueを閉じないことがある。cuminは、mergeの手順の中で少し待ってから実装Issueを読み、開いていれば1回だけ閉じる。あとの定期確認では閉じないので、Ownerが開き直したIssueは開いたままになる。
 
 必須のcheckとは、mainに適用されるrulesetの "Require status checks to pass before merging" に登録されたcheckである。cuminは `GET /repos/{owner}/{repo}/rules/branches/{branch}` でその一覧を読む。
 
@@ -164,7 +173,7 @@ Agentの実行が異常終了したとき (プロセスの失敗、タイムア�
 ## v0.1では実装しないこと
 
 - 辻褄の合わないIssueの回収。cuminが再起動すると、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing` のまま、実行中のAgentがいないIssueが残りうる。`cumin/status/awaiting-checks` のIssueは、Agentが動いていない状態なので、再起動のあともI3とI4で続きから進む。将来は、ラベルとcuminの動作状態を突き合わせて、適切な状態まで戻す機能を作る。v0.1では、OwnerがそのIssueに `cumin/status/ready` を付け直せば、I1により続きから再開する。
-- mergeの前にmainの最新を取り込んでcheckをやり直すこと。v0.1では、衝突がなく、実装時点の必須のcheckが通っていればmergeする。将来は、rulesetの "Require branches to be up to date before merging" を使う案がある。依存関係のあるIssueは、先のIssueがmergeされてから着手するので、この問題が起きるのは並行して進めた独立のIssueの間だけである。
+- mergeの前にmainの最新を取り込んでcheckをやり直すこと (I6、I12)。v0.1では、衝突がなく、実装時点の必須のcheckが通っていればmergeする。将来は、rulesetの "Require branches to be up to date before merging" を使う案がある。依存関係のあるIssueは、先のIssueがmergeされてから着手するので、この問題が起きるのは並行して進めた独立のIssueの間だけである。
 
 ## まだ確かめていないこと
 
