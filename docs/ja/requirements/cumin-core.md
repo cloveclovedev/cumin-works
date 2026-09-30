@@ -209,5 +209,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 15 | weekly枠の使用率が変わらないまま、週の始め、中ごろ、終わりに、着手できるIssueがある | 週の始めは着手を止めて、1回だけ通知する。経過時間とともにペースの上限が上がり、使用率を上回ったあとの定期確認で、自動で再開する。上限は目標を超えない |
 | 16 | weekly枠の使用率がペースの上限に達していて、Ownerが `cumin quota allow` を実行する | 着手を再開しない |
 | 17 | 着手の直前の確認で、使用率を読み取れない | 着手せずに、1回だけ通知する |
-| 18 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestを、Ownerが今の先頭のコミットでGitHubのレビューにより承認する | cuminがmergeし、実装Issueが閉じる。古いコミットへの承認、botの承認、writeの権限のないアカウントの承認では、mergeしない |
+| 18 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestを、Ownerが今の先頭のコミットでGitHubのレビューにより承認する | cuminがmergeし、実装Issueが閉じる。古いコミットへの承認、botの承認、writeの権限のないアカウントの承認、あとから `REQUEST_CHANGES` で覆された承認では、mergeしない |
 | 19 | cuminがmergeしたあと、GitHubが実装Issueを閉じない | cuminが1回だけ閉じる。Ownerがそれを開き直しても、あとの定期確認では閉じない |
