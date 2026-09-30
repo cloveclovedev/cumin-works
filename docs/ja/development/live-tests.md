@@ -545,28 +545,19 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`reviewing` の順に移り、`reviewing` のまま残った | Issue のイベント |
-| 2 | Pull Request に、Reviewer の App の bot のレビューがちょうど1つあり、結果が `APPROVED` で、対象のコミットが Pull Request の先頭のコミットである | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` の `user.login`、`state`、`commit_id` |
-| 3 | レビューの本文が `review.md` の形に従い、`Result: Approved (round 1 of 3)` と、実行したレビューの skill の行がある | レビューの本文 |
-| 4 | Reviewer は `<Issue番号>-reviewer` の worktree で動き、その HEAD は detached で、Pull Request の先頭のコミットだった | `git -C <work_dir>/<owner>/<repo>/<Issue番号>-reviewer rev-parse HEAD` と `git ... status` |
-| 5 | Reviewer に渡された skill の一覧に、`cumin-review` と `cumin-decision-request` があり、Implementer と Planner の skill はない。組み込みの `code-review` と `security-review` が一覧に載っているかを記録する | Claude Code のセッションの記録 (場面 Impl-1 の8と同じ見方)。worktree のディレクトリは `<Issue番号>-reviewer` である |
-| 6 | Reviewer が、レビューを出す前に `cumin-review` を呼んだ。組み込みの `code-review` と `security-review` を呼んだか、呼べなかったか (呼べなかったなら、そのときの応答の1文) を記録する。`--comment`、`--fix`、`ultra` を付けていない | 同じ記録の `Skill` のツールの呼び出し |
-| 7 | Reviewer は、コミットも push もしていない。Pull Request のコミットは Implementer のものだけである | Pull Request のコミット |
-| 8 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
-
-5と6の結果は、組み込みのレビューの skill を1ラウンド目で使う決まり (Reviewerの要件の「ラウンドごとに見る範囲」) が、headless の実行で実際に効くかの記録である。呼べなかったときは、Reviewer は同じ観点を自分で確かめて続ける決まりなので、場面は失敗にしない。記録を #157 に残す。
+| 1 | #A に、cumin-core の App のコメントがちょうど1つある。1行目が `## Follow-up from #C (<#B の題>)` である | #A のコメント |
+| 2 | コメントの「From the pull request description:」の下に、#C の `Follow-up` の1行がそのままある | #A のコメント |
+| 3 | 「Open non-blocking review comments:」の下に、`suggestion` の指摘だけが1行あり、`<ファイル>:1` とリンクが付いている。`Fixed` の返答が付いた `nitpick` はない | #A のコメント |
+| 4 | コメントの最後に、目に見えない目印 `<!-- cumin:follow-up-note issue=B pull-request=C notes=C -->` がある | #A のコメントを編集画面か API で読む |
+| 5 | 手順7のあとも、#A のフォローアップノートは1つのままである | #A のコメント |
+| 6 | Agent が起動していない (`agent start` の行がない)。ログに token と秘密鍵が出ていない | cumin のログ |
 
 ### 後片付け
 
-- Pull Request を閉じ、そのブランチを消す。
-- 実装Issueと要求Issueを閉じる。`cumin/status/reviewing` のまま残すと、同時に進めるIssueの数を1つ使い続け、次の場面に着手しない。
+- 要求Issue #A を not planned で閉じる。#B は、merge か手順4で閉じている。
+- main に merge した `live/<日時>-follow-1.md` は残してよい。
 - `work_dir` の一時ディレクトリを消す。
-- 手順3で launchd の cumin を止めたなら、戻す。
-
-### GitHub が紐づけを作らないとき
-
-2026-09-30 には、GitHub が `Closes #<番号>` の紐づけを作らなかった (#157 の decision request)。そのときは、1回目の I2 が「Issue を閉じる開いている Pull Request がない」で止まる。Owner が Pull Request のサイドバーの Development で実装Issueを紐づけると、API にすぐ現れる。紐づけたら、実装Issueに `cumin/status/ready` を付け直す。I1 が続きの依頼 (新しいセッション) で進める。Claude Code の起動が2回増える。記録には、手で紐づけたことを書く。
 
 ### 記録
 
-結果は #229 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。
+結果は、この場面の Issue (#259) にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。

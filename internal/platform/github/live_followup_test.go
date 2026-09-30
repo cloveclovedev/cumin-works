@@ -108,6 +108,9 @@ func (l *live) waitForClosingLink(t *testing.T, token string, pull, issue int) b
 }`
 	for range 6 {
 		var resp struct {
+			Errors []struct {
+				Message string `json:"message"`
+			} `json:"errors"`
 			Data struct {
 				Repository struct {
 					PullRequest struct {
@@ -121,6 +124,11 @@ func (l *live) waitForClosingLink(t *testing.T, token string, pull, issue int) b
 			} `json:"data"`
 		}
 		l.api(t, token, http.MethodPost, "/graphql", map[string]any{"query": query, "variables": map[string]any{"owner": l.owner, "name": l.repo, "number": pull}}).mustJSON(t, http.StatusOK, &resp)
+		// A GraphQL error comes with the status 200. It must stop the test,
+		// not look like a missing link.
+		if len(resp.Errors) > 0 {
+			t.Fatalf("read the closing link of pull request #%d: %s", pull, resp.Errors[0].Message)
+		}
 		for _, n := range resp.Data.Repository.PullRequest.ClosingIssuesReferences.Nodes {
 			if n.Number == issue {
 				return true
