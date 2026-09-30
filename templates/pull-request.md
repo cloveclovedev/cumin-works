@@ -8,7 +8,7 @@ Read by: the Reviewer and the Owner.
 - Title: use Conventional Commits, `<type>(<scope>): <description>`. Write the description as an order: "add ...", not "added ...".
 - Write `Closes #<implementation issue>` so that the merge closes the issue.
 - Keep the description within 40 lines, folded blocks excluded. The Owner reads it on a phone and decides from "What", the diagram, "Design", and the table under "How it was checked".
-- Under "Where this fits", copy the section of the issue as it is: the image and the sentence that names the box or the arrow. Rewrite it only when the implementation moved the change to another place. When this pull request changed the diagram, show the SVG at the commit of this branch instead of the one of the issue. The heading is the same in the issue and in the pull request on purpose.
+- Under "Where this fits", copy the section of the issue as it is: the image and the sentence that names the box or the arrow. Rewrite it only when the implementation moved the change to another place. To change the image, add a new SVG `issue-<issue number>/<name>.svg` on the branch `cumin/diagrams`, as your role says, and show it at its commit; never commit such a diagram on the branch of this pull request. When this pull request changed a diagram of the design documents, show that SVG at the commit of this branch. The heading is the same in the issue and in the pull request on purpose.
 - Under "What", give the same information that the diff of a design note gives: how it worked before, what this pull request changes, and the approach. Write it as "Before" and "After", each one to three lines. An identifier never stands alone; add its meaning.
 - Under "How it was checked", write one row for each thing that changed: what it is, how you checked it, and the result. Put the command output in a `<details>` block. Do not only say that the tests pass.
 - Update the description when you push more commits, so that it still describes the whole change.
@@ -19,7 +19,7 @@ Read by: the Reviewer and the Owner.
 
 ```markdown
 ## Where this fits
-<!-- Copied from the issue: the image of the design document and one sentence that names the box or the arrow. When this pull request changed the diagram, the image at the commit of this branch. -->
+<!-- Copied from the issue: the image and one sentence that names the colored box or arrow. A changed image: a new SVG on cumin/diagrams, or a changed design-document SVG at the commit of this branch. -->
 
 ## What
 <!-- One or two sentences, written as an order: "Add ...". Then "Before" and "After", one to three lines each: how it worked, what changes, and the approach. -->
