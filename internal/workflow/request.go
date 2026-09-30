@@ -203,3 +203,21 @@ Round: %d of %d
 cumin found no review of yours on the head commit %s with APPROVE or REQUEST_CHANGES. A review with COMMENT only, a pending review, and a review on another commit do not count. Submit the review of this round on %s now, with the pull request review API and commit_id set to that commit. Then return the result.
 `, r.Repository, r.PullRequest, r.HeadCommit, r.Round, r.Limit, r.HeadCommit, r.HeadCommit)
 }
+
+// ReviewFixRequestText returns the request text of the kind "review fix"
+// (implementer.md, the request kinds): the Reviewer requested changes on
+// the head commit, below the limit of rounds (I5). The request resumes the
+// Implementer session and names the review; the comments stand on GitHub,
+// where the Implementer replies to them.
+func ReviewFixRequestText(repository string, number, pullRequest int, branch, workDir, review string) string {
+	return fmt.Sprintf(`Request: review fix
+Repository: %[1]s
+Implementation issue: #%[2]d
+Pull request: #%[5]d
+Branch: %[3]s
+Work directory: %[4]s
+Review: %[6]s
+
+The Reviewer requested changes on the pull request #%[5]d. Read that review and its comments on GitHub. Fix every blocking comment in the work directory, which is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request. Reply to every blocking comment with the skill cumin-review-reply. When the fix changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
+`, repository, number, branch, workDir, pullRequest, review)
+}

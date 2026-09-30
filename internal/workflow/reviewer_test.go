@@ -130,7 +130,7 @@ func TestI3_Round2ResumesTheReviewerSessionAndNamesTheLastReviewedCommit(t *test
 // review on the head commit with APPROVE or REQUEST_CHANGES is asked once
 // more, in the same session. A review with COMMENT only does not count.
 func TestI3_AReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
-	sc := newScene(t, cliOptions{reviews: []string{"COMMENT", "REQUEST_CHANGES"}})
+	sc := newScene(t, cliOptions{reviews: []string{"COMMENT", "APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
 	// An APPROVE of the Reviewer on an older commit is not a review of the
@@ -152,8 +152,8 @@ func TestI3_AReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none: the second run left its review", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I3: the Reviewer requested changes"`) {
-		t.Errorf("the log does not say that changes were requested: %s", sc.logs)
+	if !strings.Contains(sc.logs.String(), `"msg":"I3: the Reviewer approved the head commit"`) {
+		t.Errorf("the log does not say that the head commit was approved: %s", sc.logs)
 	}
 }
 
@@ -279,5 +279,88 @@ func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
 	}
 	if !strings.Contains(sc.logs.String(), `"msg":"I3: the head commit moved during the review; the issue waits for the checks again"`) {
 		t.Errorf("the log does not say that the head moved: %s", sc.logs)
+	}
+}
+
+// I5 (issue-states.md): REQUEST_CHANGES on the head commit below the limit
+// moves the issue back to cumin/status/implementing and asks the
+// Implementer to fix the comments in its own session, naming the review.
+// After done, I2 runs again and the issue waits for the checks.
+func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES"}})
+	service := sc.service()
+	path := sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	ctx := context.Background()
+
+	for i := range 2 {
+		if err := service.Poll(ctx); err != nil {
+			t.Fatalf("poll %d: %v", i+1, err)
+		}
+	}
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want the review and one fix", n)
+	}
+	args := sc.record(t, "agent.args")
+	if got := argumentOf(t, args, "--resume"); got != "implementer-session" {
+		t.Errorf("--resume = %q, want the Implementer session, never the Reviewer one", got)
+	}
+	reviews := sc.fake.Reviews(sc.repo, 21)
+	if len(reviews) != 1 {
+		t.Fatalf("reviews = %+v, want the one of the Reviewer", reviews)
+	}
+	text := promptOf(t, args)
+	for _, want := range []string{"Request: review fix", "Pull request: #21", "Review: " + reviews[0].URL,
+		"Branch: cumin/10-add-the-login-screen", "cumin-review-reply", "Do not open a new pull request"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	wantDir := filepath.Join(sc.workRoot, "example-org", "example-repo", "10-implementer")
+	if got := strings.TrimSpace(sc.record(t, "agent.cwd")); got != realPath(t, wantDir) {
+		t.Errorf("the fix ran in %q, want %q", got, realPath(t, wantDir))
+	}
+	// The fix is pushed (the fake CLI adds no commit), so I2 passes.
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	}
+	got := state.Open(path, nil).Issue("example-org/example-repo", 10)
+	if got.SessionID != fixtureSession || got.ReviewerSessionID != fixtureSession {
+		t.Errorf("state = %+v, want both sessions of the two runs", got)
+	}
+	for _, want := range []string{`"msg":"I5: the Reviewer requested changes; the issue goes back to the Implementer"`,
+		`"round":1`, `"msg":"I5: requested the work"`, `"kind":"review fix"`, `"msg":"I2: verified the pull request"`} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
+}
+
+// At the limit of rounds, I5 does not apply: no fix is requested, and the
+// issue waits for I8.
+func TestI5_NoFixIsRequestedAtTheLimitOfRounds(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES"}})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	// Two rounds before this one; the limit of the scene is 3.
+	for i, commit := range []string{"1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"} {
+		sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "CHANGES_REQUESTED",
+			Commit: commit, SubmittedAt: time.Now().Add(time.Duration(i-10) * time.Minute)})
+	}
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want only the review of round 3", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Round: 3 of 3") {
+		t.Errorf("the review was not round 3:\n%s", text)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelReviewing) {
+		t.Errorf("labels of #10 = %v, want cumin/status/reviewing", got)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"I8: blocking comments remain at the limit of rounds"`) {
+		t.Errorf("the log does not say that the limit is reached: %s", sc.logs)
 	}
 }

@@ -41,8 +41,14 @@ if (Review?) then (APPROVE)
   :Log it; the label stays
   (the merge is a later requirement);
 elseif (REQUEST_CHANGES) then
-  :Log it
-  (I5 and I8 are the next issues);
+  if (Round below max_review_rounds?) then (yes)
+    :I5: change the label to cumin/status/implementing;
+    :Ask the Implementer to fix the comments
+    (its own session, the branch of the pull request);
+    :I2, the checks, and I3 again;
+  else (no)
+    :Log it (I8 is the next issue);
+  endif
 else (none, twice)
   :Hand back to the Owner (row I5);
 endif

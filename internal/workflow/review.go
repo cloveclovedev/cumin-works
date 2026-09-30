@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
@@ -23,6 +24,9 @@ type reviewerRequest struct {
 	// reviewer is the login of the Reviewer App, "<slug>[bot]". The check
 	// after the run reads its latest review.
 	reviewer string
+	// readyAt is the last cumin/status/ready of the issue: the start of the
+	// count of the rounds, which the end of the run counts again.
+	readyAt time.Time
 	// sessionID resumes that session. Empty starts a new session.
 	sessionID string
 }
@@ -77,6 +81,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 			LastReviewed: LastReviewedCommit(pr.Reviews, reviewer, readyAt),
 		},
 		reviewer: reviewer,
+		readyAt:  readyAt,
 	}
 	if round > 1 {
 		req.sessionID = s.State.Issue(repository, a.Number).ReviewerSessionID
@@ -196,7 +201,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 			log.Info("I3: the Reviewer approved the head commit", "round", req.review.Round)
 			return
 		case ReviewChangesRequestedOnHead:
-			log.Info("I3: the Reviewer requested changes", "round", req.review.Round)
+			s.afterChangesRequested(ctx, log, target, settings, number, req, sub, pr)
 			return
 		}
 		if !missed {
@@ -260,4 +265,45 @@ func (s *Service) headMoved(ctx context.Context, log *slog.Logger, target Target
 	}
 	log.Info("I3: the head commit moved during the review; the issue waits for the checks again",
 		"head_commit", pr.HeadCommit, "labels", labels)
+}
+
+// afterChangesRequested decides between I5 and I8 on a review that asked
+// for changes on the head commit. The round is counted again from the
+// reviews that cumin just read, so it is the round of that review.
+//
+// Below max_review_rounds, I5 moves the issue to cumin/status/implementing
+// first (principle 3), then asks the Implementer to fix the comments in the
+// session of its last run, on the branch of the pull request. The end of
+// that run is the end of any Implementer run: I2 verifies it, and the
+// checks and I3 follow. At the limit, the issue waits for I8.
+func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, sub SubIssue, pr PullRequest) {
+	round := ReviewRounds(pr.Reviews, req.reviewer, req.readyAt)
+	limit := settings.Settings.MaxReviewRounds
+	if !ReviewFixAllowed(round, limit) {
+		log.Info("I8: blocking comments remain at the limit of rounds", "round", round, "limit", limit)
+		return
+	}
+	latest, _ := LatestReview(pr.Reviews, req.reviewer)
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error("I5: no token; the issue keeps its label", "error", err.Error())
+		return
+	}
+	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
+		log.Error("I5: the label was not changed; nothing is requested", "error", err.Error())
+		return
+	}
+	log.Info("I5: the Reviewer requested changes; the issue goes back to the Implementer",
+		"round", round, "limit", limit, "review", latest.URL, "labels", labels)
+	repository := target.Repository.String()
+	branch := pr.HeadBranch
+	s.runImplementer(ctx, target, settings, number, implementerRequest{
+		row: "I5", kind: "review fix", branch: branch, pullRequest: pr.Number,
+		sessionID: s.State.Issue(repository, number).SessionID,
+		text: func(workDir string) string {
+			return ReviewFixRequestText(repository, number, pr.Number, branch, workDir, latest.URL)
+		},
+	})
 }
