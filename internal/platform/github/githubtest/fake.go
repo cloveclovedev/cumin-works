@@ -54,6 +54,9 @@ type Issue struct {
 	Parent int
 	// BlockedBy holds the numbers of the issues that block this one.
 	BlockedBy []int
+	// ClosedBy is the pull request that closed the issue last, as the
+	// closer of its ClosedEvent. 0 answers a close by a person.
+	ClosedBy int
 	// LabelEvents are the times at which labels were added, oldest first,
 	// as GitHub records them in the timeline. A test adds the events of the
 	// past; the fake adds one for each label that "Set labels" adds.
@@ -90,6 +93,30 @@ type PullRequest struct {
 	Checks []Check
 	// Reviews are the reviews of the pull request, oldest first.
 	Reviews []Review
+	// Body is the description of the pull request.
+	Body string
+	// Threads are the review threads, as the follow-up note (I9) reads
+	// them.
+	Threads []ReviewThread
+}
+
+// ReviewThread is one thread of review comments on a line of a pull
+// request, first comment first.
+type ReviewThread struct {
+	Path string
+	// Line is the line now; 0 answers null, as GitHub does for a thread
+	// on code that has moved. OriginalLine is the line it was written on.
+	Line, OriginalLine int
+	Comments           []ReviewComment
+}
+
+// ReviewComment is one comment of a review thread. Author is the login;
+// for a GitHub App it is the slug without "[bot]", with AuthorIsBot true.
+type ReviewComment struct {
+	Author      string
+	AuthorIsBot bool
+	Body        string
+	URL         string
 }
 
 // Review is one review of a pull request, as GraphQL returns it. Author is
@@ -247,6 +274,18 @@ type Fake struct {
 	failNext     *failure
 	// lastCommentID is the id of the comment that was created last.
 	lastCommentID int64
+	// commentAuthor is the author of the comments that the REST API
+	// creates, as SetCommentAuthor set it.
+	commentAuthor string
+}
+
+// SetCommentAuthor makes the comments that cumin creates through the REST
+// API carry the App with the slug as their author, as GitHub does for an
+// installation token. Without it they have no author.
+func (f *Fake) SetCommentAuthor(slug string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.commentAuthor = slug
 }
 
 // failure is one answer that the fake gives instead of the real one.
@@ -911,7 +950,7 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 	}
 	// The ids grow over the whole fake, as they do on GitHub.
 	f.lastCommentID++
-	comment := Comment{ID: f.lastCommentID, Body: *request.Body, At: time.Now()}
+	comment := Comment{ID: f.lastCommentID, Body: *request.Body, At: time.Now(), Author: f.commentAuthor, AuthorIsBot: f.commentAuthor != ""}
 	// The token of the fake is the same for cumin and for the agents. In the
 	// tests only an agent comments on a pull request (the Reviewer of I8),
 	// and cumin comments on issues; so a comment on a pull request is by
@@ -1032,6 +1071,9 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			// that the client read last.
 			Last   int     `json:"last"`
 			Before *string `json:"before"`
+			// Threads belongs to the query of the pull request that
+			// closed one issue (I9).
+			Threads int `json:"threads"`
 		} `json:"variables"`
 	}
 	if err := json.Unmarshal(body, &request); err != nil || !strings.Contains(request.Query, "rateLimit") {
@@ -1051,6 +1093,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 		return
 	}
 
+	if v.Number != 0 && v.Threads != 0 {
+		f.serveCloser(w, repo, v.Number, v.Threads)
+		return
+	}
 	if v.Number != 0 && v.Last != 0 {
 		f.serveIssueComments(w, repo, v.Number, v.Last, v.Before)
 		return
@@ -1093,6 +1139,59 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": repository, "rateLimit": rateLimit(len(page))},
+	})
+}
+
+// serveCloser answers the query of the pull request that closed an issue:
+// the closer of its last ClosedEvent, with the description and the review
+// threads. Official: ClosedEvent.closer, PullRequest.reviewThreads.
+func (f *Fake) serveCloser(w http.ResponseWriter, repo *Repository, number, threads int) {
+	issue, ok := repo.Issues[number]
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
+			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an Issue with the number of %d.", number)}},
+		})
+		return
+	}
+	nodes := []any{}
+	if issue.Closed {
+		var closer any
+		if pr, ok := repo.PullRequests[issue.ClosedBy]; ok {
+			closer = map[string]any{
+				"__typename": "PullRequest",
+				"number":     pr.Number,
+				"merged":     pr.Merged,
+				"body":       pr.Body,
+				"reviewThreads": connection(pr.Threads, threads, func(t ReviewThread) any {
+					node := map[string]any{"path": t.Path, "line": nil, "originalLine": nil}
+					if t.Line != 0 {
+						node["line"] = t.Line
+					}
+					if t.OriginalLine != 0 {
+						node["originalLine"] = t.OriginalLine
+					}
+					node["comments"] = connection(t.Comments, threads, func(c ReviewComment) any {
+						var author any
+						if c.Author != "" {
+							typeName := "User"
+							if c.AuthorIsBot {
+								typeName = "Bot"
+							}
+							author = map[string]any{"__typename": typeName, "login": c.Author}
+						}
+						return map[string]any{"body": c.Body, "url": c.URL, "author": author}
+					})
+					return node
+				}),
+			}
+		}
+		nodes = append(nodes, map[string]any{"closer": closer})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"repository": map[string]any{"issue": map[string]any{
+			"timelineItems": map[string]any{"nodes": nodes},
+		}}, "rateLimit": rateLimit(1)},
 	})
 }
 

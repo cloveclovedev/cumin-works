@@ -3,6 +3,8 @@ package github
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -94,5 +96,30 @@ func TestTokenSource_DoesNotAppearInOutput(t *testing.T) {
 	formatted := fmt.Sprintf("%v %+v %#v %s %q %d %x", source, source, source, source, source, source, source)
 	if strings.Contains(formatted, testToken) {
 		t.Errorf("the output holds the token: %s", formatted)
+	}
+}
+
+// BotLogin reads GET /app once and keeps the login of the bot.
+func TestTokenSource_BotLoginReadsTheAppOnce(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/app" {
+			http.NotFound(w, r)
+			return
+		}
+		calls++
+		writeJSON(w, http.StatusOK, map[string]any{"slug": "acme-cumin-core", "html_url": "https://github.com/apps/acme-cumin-core"})
+	}))
+	t.Cleanup(server.Close)
+	source := NewTokenSource(NewAppClient(server.URL, server.Client()), testCredentials(), config.AppCuminCore, "example-org", "example-repo")
+
+	for range 2 {
+		login, err := source.BotLogin(context.Background())
+		if err != nil || login != "acme-cumin-core[bot]" {
+			t.Fatalf("BotLogin = %q, %v; want acme-cumin-core[bot]", login, err)
+		}
+	}
+	if calls != 1 {
+		t.Errorf("GET /app was called %d times, want 1", calls)
 	}
 }

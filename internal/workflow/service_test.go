@@ -301,6 +301,7 @@ func (sc *scene) service() *workflow.Service {
 			Repository: config.Repository{Owner: "example-org", Name: "example-repo"},
 			RemoteURL:  sc.remote,
 			Token:      func(context.Context) (string, error) { return githubtest.Token, nil },
+			Login:      func(context.Context) (string, error) { return cuminLogin, nil },
 		}},
 		Settings:    sc.settings(),
 		SettingsDir: sc.settingsDir,
