@@ -292,10 +292,9 @@ func (s *Service) Poll(ctx context.Context) error {
 		errs = append(errs, err)
 		s.pollFailed(ctx, target.Repository, err)
 	}
-	// Q4 judges only a poll that saw every repository.
-	if len(errs) == 0 {
-		s.waitingCheck(ctx, all)
-	}
+	// Q4 sends only after a poll that read every repository; a decided
+	// action ends the silence even when another repository failed.
+	s.waitingCheck(ctx, all, len(errs) == 0)
 	return errors.Join(errs...)
 }
 

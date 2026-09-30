@@ -26,15 +26,22 @@ type pollResult struct {
 // note records one decided action.
 func (r *pollResult) note(Action) { r.decided = true }
 
-// waitingCheck applies Q4 after a poll that saw every repository. The mark
-// lives in memory: a restart may send the notification once more.
-func (s *Service) waitingCheck(ctx context.Context, result pollResult) {
+// waitingCheck applies Q4 after a poll. A decided action or a running agent
+// ends the silence whatever else happened in the poll. The notification
+// goes out only after a poll that read every repository (complete), since
+// a repository that was not read may hold work. The mark lives in memory:
+// a restart may send the notification once more.
+func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete bool) {
 	running := len(s.inProgressIssues()) > 0
 	s.quotaMu.Lock()
 	if result.decided || running {
 		// cumin did something, or has something to do: a later time with
 		// nothing to do is new.
 		s.waitingTold = false
+		s.quotaMu.Unlock()
+		return
+	}
+	if !complete {
 		s.quotaMu.Unlock()
 		return
 	}

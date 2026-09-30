@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -106,5 +107,62 @@ func TestQ4_ARunningAgentIsNotWaiting(t *testing.T) {
 	}
 	if got := sc.q4Messages(); len(got) != 0 {
 		t.Errorf("Q4 notifications = %q, want none while an agent runs", got)
+	}
+}
+
+// Q4: a poll that failed sends no Q4, since a repository it did not read
+// may hold work.
+func TestQ4_AFailedPollSendsNothing(t *testing.T) {
+	sc := newScene(t)
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	service := sc.service()
+	sc.fake.FailNext(http.MethodPost, "/graphql", http.StatusBadGateway)
+	_ = service.Poll(t.Context())
+	if got := sc.q4Messages(); len(got) != 0 {
+		t.Errorf("Q4 after a failed poll = %q, want none", got)
+	}
+	// The first poll that succeeds moves #6 back to the Owner (R6); the
+	// next one finds nothing to do.
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+	if got := len(sc.q4Messages()); got != 1 {
+		t.Errorf("%d Q4 after polls that succeeded, want 1", got)
+	}
+}
+
+// Q4: an action that a poll decided ends the silence, even when that poll
+// failed. A later time with nothing to do notifies again.
+func TestQ4_AnActionInAFailedPollEndsTheSilence(t *testing.T) {
+	sc := newScene(t)
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	service := sc.service()
+	// R6 moves #6 back to the Owner; then nothing is left to do.
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+	if got := len(sc.q4Messages()); got != 1 {
+		t.Fatalf("%d Q4 notifications, want 1", got)
+	}
+
+	// The Owner makes #10 ready; the claim is decided, and its label
+	// change fails, so the poll fails.
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{"cumin/status/ready", "risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	sc.fake.FailNext(http.MethodPut, putLabelsPath, http.StatusBadGateway)
+	_ = service.Poll(t.Context())
+	service.Wait()
+	// The Owner takes the label away again. R3 moved #6 to implementing,
+	// so R6 moves it back first; then nothing is left to do.
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+	if got := len(sc.q4Messages()); got != 2 {
+		t.Errorf("%d Q4 notifications, want 2", got)
 	}
 }
