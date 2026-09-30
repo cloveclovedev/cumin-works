@@ -274,6 +274,37 @@ type Fake struct {
 	// commentAuthor is the author of the comments that the REST API
 	// creates, as SetCommentAuthor set it.
 	commentAuthor string
+	// linkErrors and linksIgnored change the answer of the closing link
+	// (addCloseIssueReferences), as SetLinkErrors and IgnoreLinks set them.
+	linkErrors   []string
+	linksIgnored bool
+}
+
+// SetLinkErrors makes the closing link (addCloseIssueReferences) answer
+// with these GraphQL errors and add nothing, as GitHub answers a call that
+// it refuses. No messages make it work again.
+func (f *Fake) SetLinkErrors(messages ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.linkErrors = messages
+}
+
+// IgnoreLinks makes the closing link answer as a success and add nothing,
+// so that a read of the issue after it does not show the link.
+func (f *Fake) IgnoreLinks() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.linksIgnored = true
+}
+
+// IssueNodeID and PullRequestNodeID are the GraphQL IDs of the fake. The
+// closing link takes them.
+func IssueNodeID(r *Repository, number int) string {
+	return fmt.Sprintf("I_%s_%d", key(r.Owner, r.Name), number)
+}
+
+func PullRequestNodeID(r *Repository, number int) string {
+	return fmt.Sprintf("PR_%s_%d", key(r.Owner, r.Name), number)
 }
 
 // SetCommentAuthor makes the comments that cumin creates through the REST
@@ -427,6 +458,18 @@ func (f *Fake) PullRequestLabels(r *Repository, number int) []string {
 	return slices.Clone(pr.Labels)
 }
 
+// PullRequestCloses returns the numbers of the issues that the pull request
+// closes (its closing links).
+func (f *Fake) PullRequestCloses(r *Repository, number int) []int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	pr, ok := r.PullRequests[number]
+	if !ok {
+		return nil
+	}
+	return slices.Clone(pr.Closes)
+}
+
 // SetLabels replaces the labels of an issue or of a pull request, as the
 // Owner does by hand on GitHub. Issues and pull requests share one sequence
 // of numbers on GitHub, so the number names one of them.
@@ -560,6 +603,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	jobLog := jobLogPath.FindStringSubmatch(r.URL.Path)
 	reviews := reviewsPath.FindStringSubmatch(r.URL.Path)
 	moveHead := moveHeadPath.FindStringSubmatch(r.URL.Path)
+	pulls := pullsPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -595,6 +639,8 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && moveHead != nil:
 		number, _ := strconv.Atoi(moveHead[3])
 		f.serveMoveHead(w, body, moveHead[1], moveHead[2], number)
+	case r.Method == http.MethodGet && pulls != nil:
+		f.serveListPulls(w, r, pulls[1], pulls[2])
 	case r.Method == http.MethodPost && reviews != nil:
 		number, _ := strconv.Atoi(reviews[3])
 		f.serveCreateReview(w, body, reviews[1], reviews[2], number)
@@ -615,6 +661,7 @@ var (
 	annotationsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/check-runs/(\d+)/annotations$`)
 	jobLogPath        = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/jobs/(\d+)/logs$`)
 	reviewsPath       = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/reviews$`)
+	pullsPath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls$`)
 	// moveHeadPath is not an endpoint of GitHub. A fake agent run calls it
 	// to move the head of a pull request while it runs, as a push would.
 	moveHeadPath = regexp.MustCompile(`^/_fake/repos/([^/]+)/([^/]+)/pulls/(\d+)/head$`)
@@ -1046,6 +1093,83 @@ func (f *Fake) serveCreateReview(w http.ResponseWriter, body []byte, owner, name
 	writeJSON(w, http.StatusOK, map[string]any{"id": f.lastCommentID, "state": state, "commit_id": commit, "html_url": review.URL})
 }
 
+// serveListPulls answers GET .../pulls. Official: "List pull requests",
+// with state and head as "owner:branch". The fake reads state=open and a
+// head of the repository owner only, as cumin asks.
+func (f *Fake) serveListPulls(w http.ResponseWriter, r *http.Request, owner, name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repositories[key(owner, name)]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	headOwner, branch, _ := strings.Cut(r.URL.Query().Get("head"), ":")
+	list := []map[string]any{}
+	for _, pr := range sortedPullRequests(repo) {
+		if r.URL.Query().Get("state") == "open" && pr.Closed {
+			continue
+		}
+		if branch != "" && (!strings.EqualFold(headOwner, owner) || pr.HeadBranch != branch) {
+			continue
+		}
+		var user any
+		if pr.Author != "" {
+			login, kind := pr.Author, "User"
+			if pr.AuthorIsBot {
+				login, kind = pr.Author+"[bot]", "Bot"
+			}
+			user = map[string]any{"login": login, "type": kind}
+		}
+		list = append(list, map[string]any{
+			"number":  pr.Number,
+			"node_id": PullRequestNodeID(repo, pr.Number),
+			"user":    user,
+			"head":    map[string]any{"sha": pr.HeadCommit, "ref": pr.HeadBranch},
+		})
+	}
+	// GitHub lists the newest first.
+	slices.Reverse(list)
+	writeJSON(w, http.StatusOK, list)
+}
+
+// serveAddClosingLink answers the mutation addCloseIssueReferences: each
+// pull request then closes the issue. Official, GraphQL reference, Issues.
+func (f *Fake) serveAddClosingLink(w http.ResponseWriter, issueID string, pullRequestIDs []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.linkErrors) > 0 {
+		var errs []map[string]any
+		for _, message := range f.linkErrors {
+			errs = append(errs, map[string]any{"message": message})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"addCloseIssueReferences": nil}, "errors": errs})
+		return
+	}
+	for _, repo := range f.repositories {
+		for number, issue := range repo.Issues {
+			if IssueNodeID(repo, number) != issueID {
+				continue
+			}
+			for _, id := range pullRequestIDs {
+				for prNumber, pr := range repo.PullRequests {
+					if PullRequestNodeID(repo, prNumber) == id && !f.linksIgnored && !slices.Contains(pr.Closes, number) {
+						pr.Closes = append(pr.Closes, number)
+					}
+				}
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
+				"addCloseIssueReferences": map[string]any{"issue": map[string]any{"number": issue.Number}},
+			}})
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":   map[string]any{"addCloseIssueReferences": nil},
+		"errors": []map[string]any{{"message": "Could not resolve to a node with the global id of '" + issueID + "'"}},
+	})
+}
+
 func labelJSON(label Label) map[string]any {
 	return map[string]any{"name": label.Name, "color": label.Color, "description": label.Description}
 }
@@ -1084,7 +1208,14 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			// the follow-up note (I9).
 			Linked  int `json:"linked"`
 			Threads int `json:"threads"`
+			// IssueID and PullRequestIDs belong to the closing link.
+			IssueID        string   `json:"issueId"`
+			PullRequestIDs []string `json:"pullRequestIds"`
 		} `json:"variables"`
+	}
+	if err := json.Unmarshal(body, &request); err == nil && strings.HasPrefix(strings.TrimSpace(request.Query), "mutation") && strings.Contains(request.Query, "addCloseIssueReferences") {
+		f.serveAddClosingLink(w, request.Variables.IssueID, request.Variables.PullRequestIDs)
+		return
 	}
 	if err := json.Unmarshal(body, &request); err != nil || !strings.Contains(request.Query, "rateLimit") {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"message": "Problems parsing JSON"})
@@ -1310,6 +1441,7 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, blockedBy, pullRequests, checks, reviews int) map[string]any {
 	node := map[string]any{
 		"number": issue.Number,
+		"id":     IssueNodeID(repo, issue.Number),
 		"title":  issue.Title,
 		"state":  state(issue.Closed),
 		"closedAt": func() any {

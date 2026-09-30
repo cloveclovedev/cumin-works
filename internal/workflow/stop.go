@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -202,13 +203,27 @@ To continue: read the reason, fix what it names, and say in a comment how to go 
 func VerificationReason(failure VerificationFailure) string {
 	switch failure {
 	case FailureNoOpenPullRequest:
-		return "The Implementer reported done, but no open pull request closes this issue."
+		return "The Implementer reported done, but no open pull request is on the branch of this issue."
 	case FailureAuthorMismatch:
-		return "The Implementer reported done, but the pull request that closes this issue was not opened by the Implementer App."
+		return "The Implementer reported done, but the open pull request on the branch of this issue was not opened by the Implementer App."
 	case FailureHeadNotPushed:
 		return "The Implementer reported done, but the last commit of the work directory is not the head of the pull request, so it was not pushed."
+	case FailureTooManyLinks:
+		return "The Implementer reported done, but this issue already has other open pull requests that close it, so cumin-core does not link one more."
 	}
 	return "The verification of the pull request failed."
+}
+
+// LinkFailedReason is the sentence of I2 when cumin-core could not add the
+// closing link: it names the pull request and the answer of GitHub.
+func LinkFailedReason(pullRequest int, answer string) string {
+	return fmt.Sprintf("cumin-core could not link the pull request #%d to this issue as a closing reference; GitHub answered: %s.", pullRequest, strings.TrimSuffix(answer, "."))
+}
+
+// LinkMissingReason is the sentence of I2 when GitHub accepted the closing
+// link, but the issue does not show it when cumin reads it again.
+func LinkMissingReason(pullRequest int) string {
+	return fmt.Sprintf("cumin-core linked the pull request #%d to this issue, but the issue does not show the closing link when cumin reads it again.", pullRequest)
 }
 
 // SplitReason is the sentence of one failed check of R2, for the comment

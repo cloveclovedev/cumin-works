@@ -92,14 +92,18 @@ type RequirementIssue struct {
 
 // SubIssue is an implementation issue: a sub-issue of a requirement issue.
 type SubIssue struct {
-	Number    int
+	Number int
+	// NodeID is the GraphQL ID of the issue. I2 adds the closing link
+	// with it.
+	NodeID    string
 	Title     string
 	Closed    bool
 	Labels    []string
 	BlockedBy []BlockedBy
 	// PullRequests are the open pull requests that close the issue (the
-	// link that "Closes #N" makes). I2 finds the pull request of the
-	// Implementer here, not by the branch name.
+	// closing link). Every row reads the pull request of the issue here.
+	// Only I2 finds it by the branch, and then adds the link when it is
+	// missing.
 	PullRequests []PullRequest
 	// ReadyAt is when cumin/status/ready was last added. It is read only
 	// when RequirementIssue.LabelTimesRead is true.
@@ -856,14 +860,19 @@ type VerificationFailure int
 const (
 	// FailureNone: the verification passed.
 	FailureNone VerificationFailure = iota
-	// FailureNoOpenPullRequest: no open pull request closes the issue.
+	// FailureNoOpenPullRequest: no open pull request is on the branch of
+	// the issue.
 	FailureNoOpenPullRequest
-	// FailureAuthorMismatch: the author of the pull request is not the
-	// Implementer App.
+	// FailureAuthorMismatch: the open pull requests on the branch of the
+	// issue are not by the Implementer App.
 	FailureAuthorMismatch
 	// FailureHeadNotPushed: the head commit of the worktree is not the
 	// head of the pull request.
 	FailureHeadNotPushed
+	// FailureTooManyLinks: the issue needs a closing link, but it has
+	// maxLinks open closing pull requests already, and one more would make
+	// the issue unreadable for the poll.
+	FailureTooManyLinks
 )
 
 func (f VerificationFailure) String() string {
@@ -871,45 +880,86 @@ func (f VerificationFailure) String() string {
 	case FailureNone:
 		return "none"
 	case FailureNoOpenPullRequest:
-		return "no open pull request closes the issue"
+		return "no open pull request is on the branch of the issue"
 	case FailureAuthorMismatch:
 		return "the author of the pull request is not the Implementer App"
 	case FailureHeadNotPushed:
 		return "the head commit of the worktree is not pushed"
+	case FailureTooManyLinks:
+		return "the issue has too many open closing pull requests for one more link"
 	}
 	return fmt.Sprintf("VerificationFailure(%d)", int(f))
 }
 
 // Verification is the result of I2 after done. Passed is true when every
-// check held; otherwise Failure names the first check that failed. The
-// failure paths (label, comment, notification) read Failure; this
-// requirement only logs it. PullRequest is the pull request that was
-// checked, or 0 when there is none.
+// check held; otherwise Failure names the first check that failed.
+// PullRequest is the pull request that was checked, or 0 when there is
+// none. AddLink is true when the verification passed and the issue has no
+// closing link to that pull request, so cumin-core adds it.
 type Verification struct {
 	Passed      bool
 	Failure     VerificationFailure
 	PullRequest int
+	AddLink     bool
 }
 
 // VerifyDone applies the checks of I2 (issue-states.md) to a sub-issue
-// after the Implementer returned done: an open pull request closes the
-// issue; its author is implementer (the login "<slug>[bot]" of the
-// Implementer App); its head commit is localHead, the head of the worktree
-// (so the last commit is pushed). The snapshot holds open pull requests
-// only; when two or more close the issue, the one with the highest number
-// is checked. An empty implementer or an empty localHead never matches.
-func VerifyDone(sub SubIssue, implementer, localHead string) Verification {
-	pr, ok := sub.LatestPullRequest()
-	if !ok {
+// after the Implementer returned done. onBranch holds the open pull
+// requests whose head is branch, the branch that cumin chose for the
+// request; one of them is by implementer (the login "<slug>[bot]" of the
+// Implementer App), the one with the highest number of two or more; its
+// head commit is localHead, the head of the worktree (so the last commit is
+// pushed). A pull request on another branch is never taken. When only
+// another author has a pull request on the branch, the one with the highest
+// number is named. An empty branch, implementer, or localHead never
+// matches.
+//
+// The pull request is found by the branch, not by the closing link,
+// because GitHub does not always make the link from "Closes #N". When the
+// issue has no link to it, AddLink asks cumin-core to add one; every other
+// row reads the link. maxLinks is the most open closing pull requests
+// that the poll reads for one issue; a link that would go over it is not
+// added, and the issue stops instead.
+func VerifyDone(sub SubIssue, branch string, onBranch []PullRequest, implementer, localHead string, maxLinks int) Verification {
+	var mine, other PullRequest
+	for _, pr := range onBranch {
+		if branch == "" || pr.HeadBranch != branch {
+			continue
+		}
+		if implementer != "" && pr.Author == implementer {
+			if pr.Number > mine.Number {
+				mine = pr
+			}
+		} else if pr.Number > other.Number {
+			other = pr
+		}
+	}
+	switch {
+	case mine.Number == 0 && other.Number == 0:
 		return Verification{Failure: FailureNoOpenPullRequest}
+	case mine.Number == 0:
+		return Verification{Failure: FailureAuthorMismatch, PullRequest: other.Number}
+	case localHead == "" || mine.HeadCommit != localHead:
+		return Verification{Failure: FailureHeadNotPushed, PullRequest: mine.Number}
 	}
-	if implementer == "" || pr.Author != implementer {
-		return Verification{Failure: FailureAuthorMismatch, PullRequest: pr.Number}
+	if linksPullRequest(sub, mine.Number) {
+		return Verification{Passed: true, PullRequest: mine.Number}
 	}
-	if localHead == "" || pr.HeadCommit != localHead {
-		return Verification{Failure: FailureHeadNotPushed, PullRequest: pr.Number}
+	if len(sub.PullRequests) >= maxLinks {
+		return Verification{Failure: FailureTooManyLinks, PullRequest: mine.Number}
 	}
-	return Verification{Passed: true, PullRequest: pr.Number}
+	return Verification{Passed: true, PullRequest: mine.Number, AddLink: true}
+}
+
+// linksPullRequest reports whether the issue has a closing link to the pull
+// request.
+func linksPullRequest(sub SubIssue, number int) bool {
+	for _, pr := range sub.PullRequests {
+		if pr.Number == number {
+			return true
+		}
+	}
+	return false
 }
 
 // SplitFailure says which check of R2 failed.

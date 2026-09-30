@@ -707,7 +707,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
 				return
 			}
-			s.verifyDone(ctx, log, target, settings, number, workDir, run.BotLogin)
+			s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin)
 			return
 		}
 	}
@@ -766,14 +766,17 @@ func labelsNow(sub SubIssue, ok bool) []string {
 // verifyDone applies I2 after a done result. It reads the snapshot of the
 // repository again, because a rule that the end of a run triggers judges on
 // the facts of that moment, not on those of the last poll (cumin-core.md,
-// the topic on the GitHub client). It then reads the head commit of the
-// worktree and runs the pure check.
+// the topic on the GitHub client). It then lists the open pull requests of
+// the branch of the run, reads the head commit of the worktree, and runs
+// the pure check.
 //
-// On a pass the status label becomes cumin/status/awaiting-checks. A failed
-// check hands the issue back to the Owner through the stop step, with the
-// sentence of that check. Nothing here is retried: the Owner decides what
-// to do next.
-func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, workDir, botLogin string) {
+// On a pass, when the issue has no closing link to the pull request,
+// cumin-core adds it and reads the snapshot once more to see it; then the
+// status label becomes cumin/status/awaiting-checks. A failed check, a
+// failed link, and a link that is still missing hand the issue back to the
+// Owner through the stop step, with one sentence. Nothing here is retried:
+// the Owner decides what to do next.
+func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin string) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -790,24 +793,61 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		log.Error("I2: the issue is not in the snapshot")
 		return
 	}
+	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, branch)
+	if err != nil {
+		log.Error("I2: the open pull requests of the branch were not read", "branch", branch, "error", err.Error())
+		return
+	}
+	onBranch := make([]PullRequest, 0, len(listed))
+	nodeIDs := map[int]string{}
+	for _, pr := range listed {
+		onBranch = append(onBranch, PullRequest{Number: pr.Number, HeadCommit: pr.HeadCommit, HeadBranch: pr.HeadBranch, Author: pr.Author})
+		nodeIDs[pr.Number] = pr.NodeID
+	}
 	head, err := s.Workspace.Head(ctx, workDir)
 	if err != nil {
 		log.Error("I2: the head commit of the work directory was not read", "error", err.Error())
 		return
 	}
-	verification := VerifyDone(sub, botLogin, head)
-	if !verification.Passed {
-		log.Warn("I2: the verification failed", "failure", verification.Failure.String(),
-			"pull_request", verification.PullRequest)
-		reason := VerificationReason(verification.Failure)
+	verification := VerifyDone(sub, branch, onBranch, botLogin, head, github.MaxOpenClosingPullRequests)
+	stopI2 := func(reason string, pullRequest int) {
 		s.stopForOwner(ctx, log, target, settings, stop{
 			row:     RowI2,
 			issue:   number,
 			labels:  sub.Labels,
 			reason:  reason,
-			comment: StopNote(RowI2, reason, verification.PullRequest, false),
+			comment: StopNote(RowI2, reason, pullRequest, false),
 		})
+	}
+	if !verification.Passed {
+		log.Warn("I2: the verification failed", "failure", verification.Failure.String(),
+			"branch", branch, "pull_request", verification.PullRequest)
+		stopI2(VerificationReason(verification.Failure), verification.PullRequest)
 		return
+	}
+	if verification.AddLink {
+		pr := verification.PullRequest
+		if err := s.GitHub.AddClosingLink(ctx, token, sub.NodeID, nodeIDs[pr]); err != nil {
+			log.Warn("I2: the closing link was not added", "pull_request", pr, "error", err.Error())
+			stopI2(LinkFailedReason(pr, githubAnswer(err)), pr)
+			return
+		}
+		again, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+		if err != nil {
+			log.Error("I2: the snapshot was not read after the closing link", "error", err.Error())
+			return
+		}
+		sub, ok = toSnapshot(again).SubIssue(number)
+		if !ok {
+			log.Error("I2: the issue is not in the snapshot after the closing link")
+			return
+		}
+		if !linksPullRequest(sub, pr) {
+			log.Warn("I2: the closing link is missing after cumin-core added it", "pull_request", pr)
+			stopI2(LinkMissingReason(pr), pr)
+			return
+		}
+		log.Info("I2: added the closing link", "pull_request", pr)
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingChecks)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
@@ -815,6 +855,13 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		return
 	}
 	log.Info("I2: verified the pull request", "pull_request", verification.PullRequest, "labels", labels)
+}
+
+// githubAnswer is the answer of GitHub in an error of AddClosingLink: the
+// request, the status, and the message of GitHub, or the messages of a
+// GraphQL answer.
+func githubAnswer(err error) string {
+	return strings.TrimPrefix(err.Error(), "github: add the closing link: ")
 }
 
 // keepSession stores the session of the run of the role, so that a request
@@ -896,7 +943,7 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 			requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 		}
 		for _, sub := range issue.SubIssues {
-			subIssue := SubIssue{Number: sub.Number, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
+			subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
 			for _, blocker := range sub.BlockedBy {
 				subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 			}
