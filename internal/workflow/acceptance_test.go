@@ -143,13 +143,12 @@ func TestR4_BlockedStopsForTheOwner(t *testing.T) {
 // split, made before the merge, is made again at the head of main.
 func TestR4_TheCheckReadsTheMergedWork(t *testing.T) {
 	sc, _ := newAcceptanceScene(t, "planner-done.jsonl")
-	dir := filepath.Join(sc.workRoot, "example-org", "example-repo", "6-planner")
 
 	// The split ran at the first commit of main.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	sc.pollAndWait(t, sc.service())
-	if got := git(t, dir, "rev-parse", "HEAD"); got != sc.remoteHead {
+	if got := strings.TrimSpace(sc.record(t, "agent.head")); got != sc.remoteHead {
 		t.Fatalf("the split ran at %s, want %s", got, sc.remoteHead)
 	}
 
@@ -159,7 +158,7 @@ func TestR4_TheCheckReadsTheMergedWork(t *testing.T) {
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: time.Now(), Labels: []string{"risk/low"}})
 	sc.pollAndWait(t, sc.service())
 
-	if got := git(t, dir, "rev-parse", "HEAD"); got != merged {
+	if got := strings.TrimSpace(sc.record(t, "agent.head")); got != merged {
 		t.Errorf("the acceptance check ran at %s, want the merged head %s", got, merged)
 	}
 }

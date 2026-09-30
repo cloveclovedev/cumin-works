@@ -88,7 +88,8 @@ func (s *Service) goPlanner(ctx context.Context, target Target, settings *Reposi
 // acceptance check must read the work of every merged sub-issue, which a
 // worktree of an earlier request does not hold (agent-run.md, the topic on
 // the work directory). The retry after an abnormal end keeps the work
-// directory of the first run.
+// directory of the first run, and the work directory is removed when the
+// request ends.
 //
 // The end of the run: a blocked result stops the requirement issue for the
 // Owner without a retry; an abnormal end runs the same request once more,
@@ -115,6 +116,16 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 		log.Error(req.start+": the work directory was not prepared", "error", err.Error())
 		return
 	}
+	// The work directory holds nothing after the run: the Planner only
+	// reads, and the next request makes it again. Removing it here leaves
+	// no worktree behind when the requirement issue closes, which the poll
+	// never reads again (principle 6). It is removed also while cumin
+	// stops, so the removal does not use the ending context.
+	defer func() {
+		if err := s.Workspace.Remove(context.WithoutCancel(ctx), checkout); err != nil {
+			log.Error("cleanup: the work directory of the Planner was not removed", "error", err.Error())
+		}
+	}()
 	log.Info(req.start+": requested the Planner", "kind", req.kind)
 	request := agent.StartRequest{
 		Owner:        target.Repository.Owner,
