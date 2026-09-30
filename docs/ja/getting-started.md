@@ -79,6 +79,8 @@ Implementer の実行は、本物の Claude Code を起動し、利用枠を使�
 
 常駐させるときは、ターミナルではなく launchd から起動する。`cumin setup launchd` が、今のユーザの LaunchAgent を書き出し、`launchctl` のコマンドを表示する。手順は [セットアップの手順](development/setup-guide.md) の手順4にある。launchd から動かすと、ログは標準出力ではなく `~/.local/state/cumin/cumin.log` に出る。
 
-ほかのサブコマンド (`status`、`quota allow`) は、まだ作られていない。実行すると、作られていないことを表示して、0以外の終了コードで終わる。
+5h枠のしきい値で着手が止まったとき、その5h枠を使い切ってよければ、Hostで `cumin quota allow` を実行する (Q2)。`cumin run` が最後に読んだ5h枠のリセット時刻を、`~/.local/state/cumin/quota-allowance.json` に書く。次の定期確認から、その時刻まで5h枠のしきい値が100%になる。weekly枠のペースの上限は変わらない。`cumin run` がまだ使用率を読んでいないとき、または最後に読んだ5h枠が既にリセットされたときは、何も書かずに0以外の終了コードで終わる。
+
+ほかのサブコマンド (`status`) は、まだ作られていない。実行すると、作られていないことを表示して、0以外の終了コードで終わる。
 
 サブコマンドを作るたびに、このページを更新する。

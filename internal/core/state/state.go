@@ -15,7 +15,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -232,31 +231,5 @@ func (s *Store) save() error {
 	if err != nil {
 		return fmt.Errorf("state: write %s: %w", s.path, err)
 	}
-	raw = append(raw, '\n')
-	dir := filepath.Dir(s.path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("state: write %s: %w", s.path, err)
-	}
-	temp, err := os.CreateTemp(dir, filepath.Base(s.path)+".*")
-	if err != nil {
-		return fmt.Errorf("state: write %s: %w", s.path, err)
-	}
-	// Every path out of here removes the temporary file, except the rename,
-	// which moves it.
-	defer os.Remove(temp.Name())
-	if err := temp.Chmod(0o600); err != nil {
-		temp.Close()
-		return fmt.Errorf("state: write %s: %w", s.path, err)
-	}
-	if _, err := temp.Write(raw); err != nil {
-		temp.Close()
-		return fmt.Errorf("state: write %s: %w", s.path, err)
-	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("state: write %s: %w", s.path, err)
-	}
-	if err := os.Rename(temp.Name(), s.path); err != nil {
-		return fmt.Errorf("state: write %s: %w", s.path, err)
-	}
-	return nil
+	return writeFile(s.path, append(raw, '\n'))
 }

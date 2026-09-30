@@ -37,7 +37,6 @@ func TestSubcommandThatIsNotBuiltFails(t *testing.T) {
 		name string
 	}{
 		{[]string{"status"}, "status"},
-		{[]string{"quota", "allow"}, "quota allow"},
 	}
 	for _, tt := range tests {
 		t.Run(strings.Join(tt.args, " "), func(t *testing.T) {

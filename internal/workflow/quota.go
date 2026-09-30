@@ -1,6 +1,6 @@
 package workflow
 
-// This file applies Q1 and Q3 of issue-states.md: before a new start (R1,
+// This file applies Q1 to Q3 of issue-states.md: before a new start (R1,
 // I1), and at the end of each agent run, the quota usage decides whether
 // cumin starts new work; while it stops, the stored usage decides when to
 // try again. The limits are the pure rules of internal/quota.
@@ -37,6 +37,9 @@ type quotaNotices struct {
 	// unreadTold says that the Owner heard that the usage was not read,
 	// since the last read that succeeded.
 	unreadTold bool
+	// allowanceWarning is the last reason why the allowance file was not
+	// read, so that the same reason is logged once.
+	allowanceWarning string
 }
 
 // now is the time of the quota decisions. Tests set Service.Now.
@@ -94,7 +97,7 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 	if decision.Allows() {
 		return true, nil
 	}
-	next, _ := quota.NextTry(usage, s.quotaSettings(), s.now())
+	next, _ := quota.NextTry(usage, s.quotaSettings(), s.allowance(log), s.now())
 	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 	return false, nil
@@ -159,11 +162,34 @@ func (s *Service) nextTry() (time.Time, bool) {
 		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
 	}
 	now := s.now()
-	next, stopped := quota.NextTry(usage, s.quotaSettings(), now)
+	next, stopped := quota.NextTry(usage, s.quotaSettings(), s.allowance(s.logger()), now)
 	if !stopped || !now.Before(next) {
 		return time.Time{}, false
 	}
 	return next, true
+}
+
+// allowance reads the allowance file that `cumin quota allow` writes (Q2).
+// cumin reads it at every check, so that a new allowance counts at the next
+// poll. A file that cannot be read is no allowance, with one warning that
+// names the path, until the reason changes.
+func (s *Service) allowance(log *slog.Logger) quota.Allowance {
+	if s.AllowancePath == "" {
+		return quota.Allowance{}
+	}
+	read, err := state.ReadAllowance(s.AllowancePath)
+	s.quotaMu.Lock()
+	warn := err != nil && err.Error() != s.quota.allowanceWarning
+	if err == nil {
+		s.quota.allowanceWarning = ""
+	} else {
+		s.quota.allowanceWarning = err.Error()
+	}
+	s.quotaMu.Unlock()
+	if warn {
+		log.Warn("Q2: the allowance file was not read; cumin goes on without an allowance", "path", s.AllowancePath, "error", err.Error())
+	}
+	return quota.Allowance{FiveHourUntil: read.FiveHourUntil}
 }
 
 func (s *Service) quotaSettings() config.QuotaSettings {
@@ -176,7 +202,7 @@ func (s *Service) quotaSettings() config.QuotaSettings {
 // decideQuota applies the limits of the Host settings to one usage. The
 // numbers go to the debug log only (designs/quota.md).
 func (s *Service) decideQuota(log *slog.Logger, usage quota.Usage) quota.Decision {
-	decision := quota.Decide(usage, s.quotaSettings(), s.now())
+	decision := quota.Decide(usage, s.quotaSettings(), s.allowance(log), s.now())
 	s.forgetResumedWindows(decision)
 	log.Debug("Q1: quota usage",
 		"five_hour_utilization", usage.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,
@@ -222,7 +248,7 @@ func limitReason(window quota.Name) string {
 	if window == quota.Weekly {
 		return "The weekly quota window reached its pace limit. cumin starts no new work until the pace limit rises above the usage or the window resets. Running issues go on."
 	}
-	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no new work until the window resets or a time band with a higher limit starts. Running issues go on.", window)
+	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no new work until the window resets, a time band with a higher limit starts, or the Owner runs cumin quota allow. Running issues go on.", window)
 }
 
 // notifyQuota sends one Q1 notification. The quota belongs to the account
