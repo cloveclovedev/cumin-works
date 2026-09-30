@@ -543,3 +543,24 @@ func TestFollowUpCandidates_EveryNamedPullRequestNeedsItsNote(t *testing.T) {
 		t.Errorf("candidates = %v, want #10 only", got)
 	}
 }
+
+// A linked pull request that is still open when the first note is written
+// may be merged later. The marker names it, so the sub-issue is read again,
+// and its note follows the merge.
+func TestI9_ALinkedPullRequestMergedLaterGetsItsNote(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	later := &githubtest.PullRequest{Number: 22, Closes: []int{10}, Body: followUpBody}
+	sc.fake.AddPullRequest(sc.repo, later)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Fatalf("%d follow-up notes, want 1", n)
+	}
+
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{Number: 22, Closed: true, Merged: true, Closes: []int{10}, Body: followUpBody})
+	sc.pollAndWait(t, service)
+	notes := followUpNotes(sc)
+	if len(notes) != 2 || !strings.HasPrefix(notes[1].Body, "## Follow-up from #22") {
+		t.Errorf("the notes after the later merge: %v", notes)
+	}
+}

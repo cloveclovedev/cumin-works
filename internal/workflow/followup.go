@@ -51,8 +51,9 @@ type FollowUpMark struct {
 	Issue       int
 	PullRequest int
 	At          time.Time
-	// Notes are the merged pull requests of the sub-issue that leave work,
-	// this one included. The sub-issue is done when each of them has a
+	// Notes are the pull requests of the sub-issue that need a note: the
+	// merged ones that leave work, this one included, and the linked ones
+	// that were still open. The sub-issue is done when each of them has a
 	// note. A marker without the list names its own pull request only.
 	Notes []int
 }

@@ -1177,7 +1177,7 @@ func (f *Fake) serveLinked(w http.ResponseWriter, repo *Repository, number, firs
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": map[string]any{"issue": map[string]any{
 			"closedByPullRequestsReferences": connection(linked, first, func(pr *PullRequest) any {
-				return map[string]any{"number": pr.Number, "merged": pr.Merged}
+				return map[string]any{"number": pr.Number, "merged": pr.Merged, "closed": pr.Closed}
 			}),
 		}}, "rateLimit": rateLimit(1)},
 	})

@@ -105,8 +105,8 @@ func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token
 	if len(linked) == 0 {
 		log.Debug("I9: no pull request is linked to the issue")
 	}
-	// The pull requests that need a note: those with a note already, and
-	// those that leave work now.
+	// The pull requests that need a note: those with a note already, those
+	// that leave work now, and those that are still open.
 	var notes []int
 	for _, m := range marks {
 		if m.Issue == sub.Number && !m.At.Before(sub.ClosedAt) {
@@ -119,6 +119,13 @@ func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token
 	}
 	var toWrite []pending
 	for _, l := range linked {
+		if !l.Closed {
+			// A linked pull request that is still open may be merged
+			// later. The marker names it, so that the sub-issue is read
+			// again until then.
+			notes = append(notes, l.Number)
+			continue
+		}
 		if !l.Merged || HasFollowUpNote(marks, l.Number) {
 			continue
 		}

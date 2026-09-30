@@ -29,7 +29,7 @@ const linkedQuery = `query($owner: String!, $name: String!, $number: Int!, $link
     issue(number: $number) {
       closedByPullRequestsReferences(first: $linked, includeClosedPrs: true) {
         pageInfo { hasNextPage }
-        nodes { number merged }
+        nodes { number merged closed }
       }
     }
   }
@@ -68,6 +68,8 @@ const pullRequestNoteQuery = `query($owner: String!, $name: String!, $number: In
 type LinkedPullRequest struct {
 	Number int
 	Merged bool
+	// Closed is true for a merged pull request too.
+	Closed bool
 }
 
 // ReadLinkedPullRequests reads the pull requests that are linked to close
@@ -94,7 +96,7 @@ func (c *AppClient) ReadLinkedPullRequests(ctx context.Context, token, owner, re
 	}
 	linked := make([]LinkedPullRequest, 0, len(refs.Nodes))
 	for _, n := range refs.Nodes {
-		linked = append(linked, LinkedPullRequest{Number: n.Number, Merged: n.Merged})
+		linked = append(linked, LinkedPullRequest{Number: n.Number, Merged: n.Merged, Closed: n.Closed})
 	}
 	return linked, rate, nil
 }
@@ -198,6 +200,7 @@ type linkedResponse struct {
 					Nodes []struct {
 						Number int  `json:"number"`
 						Merged bool `json:"merged"`
+						Closed bool `json:"closed"`
 					} `json:"nodes"`
 				} `json:"closedByPullRequestsReferences"`
 			} `json:"issue"`
