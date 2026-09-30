@@ -444,7 +444,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 ### 実行
 
-4. Owner が、Pull Request #C を squash で merge し、ブランチを消す。必須のレビューがないので、管理者として merge する。#B が閉じる。
+4. Owner が、Pull Request #C を squash で merge し、ブランチを消す。必須のレビューがないので、管理者として merge する。#B が閉じる。閉じなければ、Owner が #B を手で閉じる。I9 は、誰が閉じたかを見ない。
    - 手順3の出力に `GitHub made no closing link` があれば、merge の前に、Owner が #C を #B に手で結び付ける (Pull Request の画面の Development)。2026-09-30 から、GitHub は新しい Pull Request の `Closes #N` を結び付けていない。結び付けないと、merge しても #B は閉じず、ノートも付かない。
 5. `./cumin run --config <設定ファイル>` を起動する。最初の定期確認で、ログに `I9: wrote the follow-up note` (`requirement_issue` が #A、`issue` が #B、`pull_request` が #C) が1行出る。
 6. 次の定期確認のログ (`poll`) が出たら、SIGTERM で止める。`stopped` の行が出る。
