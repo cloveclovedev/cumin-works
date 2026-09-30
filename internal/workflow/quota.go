@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
@@ -85,9 +86,6 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 
 	decision := s.decideQuota(log, read)
 	if decision.Allows() {
-		s.quotaMu.Lock()
-		s.quota.told = nil
-		s.quotaMu.Unlock()
 		return true, nil
 	}
 	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped)
@@ -118,10 +116,24 @@ func (s *Service) decideQuota(log *slog.Logger, read agent.QuotaUsage) quota.Dec
 		settings = s.Settings.Quota
 	}
 	decision := quota.Decide(toUsage(read), settings, s.now())
+	s.forgetResumedWindows(decision)
 	log.Debug("Q1: quota usage",
 		"five_hour_utilization", read.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,
 		"weekly_utilization", read.Weekly.Utilization, "weekly_limit", decision.WeeklyLimit)
 	return decision
+}
+
+// forgetResumedWindows takes back the mark of each window that is below its
+// limit in this read. A window that stops again later is a new stop, and
+// the Owner hears about it again, whatever the other window does.
+func (s *Service) forgetResumedWindows(decision quota.Decision) {
+	s.quotaMu.Lock()
+	defer s.quotaMu.Unlock()
+	for window := range s.quota.told {
+		if !slices.Contains(decision.Stopped, window) {
+			delete(s.quota.told, window)
+		}
+	}
 }
 
 // tellQuotaLimit notifies the Owner once for each window that stops the
@@ -153,8 +165,10 @@ func limitReason(window quota.Name) string {
 }
 
 // notifyQuota sends one Q1 notification. The quota belongs to the account
-// of the Host, so the Host setting decides, as for a poll that keeps
-// failing. The issue whose start or run met the limit is the link. It
+// of the Host, and the marks against a second notification are shared by
+// every repository, so the Host setting decides, as for a poll that keeps
+// failing. A repository that turns its notifications off would otherwise
+// silence the stop for every repository. The issue whose start or run met the limit is the link. It
 // reports false when the channel failed.
 func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) bool {
 	return s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{

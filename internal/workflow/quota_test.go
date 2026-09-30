@@ -237,3 +237,28 @@ func TestQ1_AFailedNotificationIsSentAgain(t *testing.T) {
 		t.Errorf("%d notifications after the channel recovered, want 1", got)
 	}
 }
+
+// Q1: a window that resumes and stops again is a new stop, even while the
+// other window still stops the starts.
+func TestQ1_AWindowThatStopsAgainNotifiesAgain(t *testing.T) {
+	sc := newScene(t)
+	weeklyReset := sceneNow.Add(6 * 24 * time.Hour) // early in the week
+	sc.setQuota(t, 0.90, sceneNow.Add(time.Hour), 0.40, weeklyReset)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	if got := len(sc.q1Messages()); got != 2 {
+		t.Fatalf("%d notifications, want one for each window", got)
+	}
+
+	// The 5h window resets; the weekly window still stops the start.
+	sc.setQuota(t, 0.10, sceneNow.Add(6*time.Hour), 0.40, weeklyReset)
+	sc.pollAndWait(t, service)
+	// The new 5h window reaches its limit again.
+	sc.setQuota(t, 0.90, sceneNow.Add(6*time.Hour), 0.40, weeklyReset)
+	sc.pollAndWait(t, service)
+
+	q1 := sc.q1Messages()
+	if len(q1) != 3 || !strings.Contains(q1[2], "5h") {
+		t.Errorf("Q1 notifications = %q, want a second one for the 5h window", q1)
+	}
+}
