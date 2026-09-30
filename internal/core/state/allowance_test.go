@@ -37,6 +37,8 @@ func TestAllowance_ABrokenFileIsAnErrorThatNamesThePath(t *testing.T) {
 	for name, content := range map[string]string{
 		"not JSON":      "{",
 		"other version": `{"version":99,"five_hour_until":"2026-10-01T15:00:00Z"}`,
+		"no reset time": `{"version":1}`,
+		"null reset":    `{"version":1,"five_hour_until":null}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), state.AllowanceFileName)

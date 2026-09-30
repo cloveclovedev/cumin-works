@@ -51,6 +51,9 @@ func ReadAllowance(path string) (Allowance, error) {
 	if read.Version != Version {
 		return Allowance{}, fmt.Errorf("allowance: read %s: version %d, want %d", path, read.Version, Version)
 	}
+	if read.FiveHourUntil.IsZero() {
+		return Allowance{}, fmt.Errorf("allowance: read %s: no five_hour_until", path)
+	}
 	return read.Allowance, nil
 }
 
