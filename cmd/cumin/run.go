@@ -275,19 +275,27 @@ func readCredentials(ctx context.Context, clientIDs map[string]map[string]string
 	for _, owner := range slices.Sorted(maps.Keys(clientIDs)) {
 		credentials[owner] = map[string]github.AppCredentials{}
 		for _, app := range config.AllApps() {
-			clientID := clientIDs[owner][app]
-			pemBytes, err := store.GetBase64(ctx, keychain.Service, keychain.PrivateKeyAccount(clientID))
+			cred, err := readAppCredential(ctx, store, owner, app, clientIDs[owner][app])
 			if err != nil {
-				return nil, fmt.Errorf("read the private key of the %s App of %s from the Keychain: %w", app, owner, err)
+				return nil, err
 			}
-			key, err := github.ParsePrivateKey(pemBytes)
-			if err != nil {
-				return nil, fmt.Errorf("the private key of the %s App of %s: %w", app, owner, err)
-			}
-			credentials[owner][app] = github.AppCredentials{ClientID: clientID, PrivateKey: key}
+			credentials[owner][app] = cred
 		}
 	}
 	return credentials, nil
+}
+
+// readAppCredential reads the private key of one App from the Keychain.
+func readAppCredential(ctx context.Context, store *keychain.Keychain, owner, app, clientID string) (github.AppCredentials, error) {
+	pemBytes, err := store.GetBase64(ctx, keychain.Service, keychain.PrivateKeyAccount(clientID))
+	if err != nil {
+		return github.AppCredentials{}, fmt.Errorf("read the private key of the %s App of %s from the Keychain: %w", app, owner, err)
+	}
+	key, err := github.ParsePrivateKey(pemBytes)
+	if err != nil {
+		return github.AppCredentials{}, fmt.Errorf("the private key of the %s App of %s: %w", app, owner, err)
+	}
+	return github.AppCredentials{ClientID: clientID, PrivateKey: key}, nil
 }
 
 // roleCredentials keeps only the Apps of the agent roles, in the shape that

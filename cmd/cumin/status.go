@@ -22,6 +22,7 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
+	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
 	"github.com/cloveclovedev/cumin-works/internal/quota"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
@@ -65,15 +66,21 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	ctx := context.Background()
-	credentials, err := readCredentials(ctx, clientIDs)
-	if err != nil {
-		fmt.Fprintf(stderr, "cumin status: %v\n", err)
-		return exitFailure
-	}
-	// The labels are read as cumin-core, the identity of cumin run.
+	// The labels are read as cumin-core, the identity of cumin run. Only
+	// its key is read, for each repository, so that a key that cannot be
+	// read costs the lines of its owner only; the quota and the other
+	// repositories are still shown.
+	store, storeErr := keychain.Default(ctx)
 	client := github.NewAppClient(github.DefaultBaseURL, nil)
 	read := func(ctx context.Context, repo config.Repository) (github.RepositorySnapshot, error) {
-		cred := credentials[strings.ToLower(repo.Owner)][config.AppCuminCore]
+		if storeErr != nil {
+			return github.RepositorySnapshot{}, storeErr
+		}
+		owner := strings.ToLower(repo.Owner)
+		cred, err := readAppCredential(ctx, store, owner, config.AppCuminCore, clientIDs[owner][config.AppCuminCore])
+		if err != nil {
+			return github.RepositorySnapshot{}, err
+		}
 		token, err := github.NewTokenSource(client, cred, config.AppCuminCore, repo.Owner, repo.Name).Token(ctx)
 		if err != nil {
 			return github.RepositorySnapshot{}, err

@@ -73,7 +73,7 @@
 
 - `cumin status` は、状態ファイルと許可のファイルを読むだけで、最小の実行をしない。表示する使用率は、最後に読んだ値とその時刻である。
 - 実行中のAgentとOwnerの対応を待つIssueは、GitHubのラベルから読む。`cumin run` とプロセスが違い、手元に実行中の一覧を持たないためである。Agentが動くのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing` と `cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issueは、Agentが動いていないので数えない (R3)。
-- GitHubは、`cumin run` と同じ `cumin-core` のtokenで読む。定期確認と同じスナップショットの問い合わせを使うので、GitHubから見た身元も読むものも増えない。Keychainの秘密鍵を読むので、`cumin run` と同じHostのユーザで実行する。
+- GitHubは、`cumin run` と同じ `cumin-core` のtokenで読む。定期確認と同じスナップショットの問い合わせを使うので、GitHubから見た身元も読むものも増えない。Keychainの秘密鍵を読むので、`cumin run` と同じHostのユーザで実行する。読む鍵は `cumin-core` の分だけで、リポジトリごとに読む。鍵が読めない持ち主のリポジトリだけが「読めなかった」になり、利用枠とほかのリポジトリは表示する。
 - 読めなかったリポジトリは、理由を添えて表示し、終了コードを0以外にする。ほかのリポジトリと利用枠は表示する。
 
 ## まだ決めていないこと
