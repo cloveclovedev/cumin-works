@@ -115,6 +115,11 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 	// notifications to the Owner).
 	notifier, destination := readNotifier(ctx, logger)
 
+	allowancePath, err := allowanceFile()
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin run: %v\n", err)
+		return exitFailure
+	}
 	service := &workflow.Service{
 		GitHub:       client,
 		Agents:       agents,
@@ -126,6 +131,8 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		PollInterval: settings.PollInterval,
 		Labels:       workflow.RepositoryLabels(),
 		Logger:       logger,
+		// cumin quota allow writes it; each check before a start reads it (Q2).
+		AllowancePath: allowancePath,
 	}
 	var names []string
 	for _, repo := range settings.Repositories {

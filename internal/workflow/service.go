@@ -71,6 +71,9 @@ type Service struct {
 	// they are missing. RepositoryLabels gives the list of cumin.
 	Labels []github.Label
 	Logger *slog.Logger
+	// AllowancePath is the allowance file that `cumin quota allow` writes
+	// (Q2). Each check before a start reads it. Empty means no allowance.
+	AllowancePath string
 	// Now is the clock of the quota decisions (Q1). Nil means time.Now.
 	// Tests set it, so that a week passes without waiting.
 	Now func() time.Time

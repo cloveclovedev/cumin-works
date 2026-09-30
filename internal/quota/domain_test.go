@@ -61,12 +61,12 @@ func TestPaceLimitWithoutLead(t *testing.T) {
 // later, by time alone.
 func TestCore15_TheSameWeeklyUsageStopsEarlyAndPassesLater(t *testing.T) {
 	usage := Usage{Weekly: Window{Utilization: 0.40, ResetsAt: weeklyReset}}
-	early := Decide(usage, defaults, weekStart().Add(24*time.Hour))
+	early := Decide(usage, defaults, Allowance{}, weekStart().Add(24*time.Hour))
 	if early.Allows() || len(early.Stopped) != 1 || early.Stopped[0] != Weekly {
 		t.Errorf("early in the week: %+v, want stopped by the weekly window", early)
 	}
 	// 85 x (e + 1 day) / 7 days > 40 from e = 40/85 x 7 - 1 days, about 2.29 days.
-	late := Decide(usage, defaults, weekStart().Add(56*time.Hour))
+	late := Decide(usage, defaults, Allowance{}, weekStart().Add(56*time.Hour))
 	if !late.Allows() {
 		t.Errorf("later in the week: %+v, want a start", late)
 	}
@@ -117,7 +117,7 @@ func TestDecideStopsAtOrAboveTheLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := Decide(tt.usage, defaults, now)
+			d := Decide(tt.usage, defaults, Allowance{}, now)
 			if len(d.Stopped) != len(tt.want) {
 				t.Fatalf("Stopped = %v, want %v", d.Stopped, tt.want)
 			}
@@ -139,7 +139,7 @@ func TestDecideAbsorbsTheRoundingOfAPercent(t *testing.T) {
 	settings := defaults
 	settings.FiveHour.Threshold = 29
 	now := weeklyReset.Add(-time.Hour)
-	d := Decide(Usage{FiveHour: Window{Utilization: 0.29, ResetsAt: now.Add(time.Hour)}}, settings, now)
+	d := Decide(Usage{FiveHour: Window{Utilization: 0.29, ResetsAt: now.Add(time.Hour)}}, settings, Allowance{}, now)
 	if d.Allows() {
 		t.Errorf("0.29 against 29: %+v, want stopped", d)
 	}
@@ -152,7 +152,7 @@ func TestDecideIgnoresAWindowWhoseResetHasPassed(t *testing.T) {
 		FiveHour: Window{Utilization: 1, ResetsAt: now.Add(-time.Minute)},
 		Weekly:   Window{Utilization: 1, ResetsAt: weeklyReset},
 	}
-	if d := Decide(usage, defaults, now); !d.Allows() {
+	if d := Decide(usage, defaults, Allowance{}, now); !d.Allows() {
 		t.Errorf("Decide = %+v, want a start", d)
 	}
 }
@@ -187,20 +187,20 @@ func TestQ3_NextTry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := NextTry(tt.usage, tt.settings, now)
+			got, ok := NextTry(tt.usage, tt.settings, Allowance{}, now)
 			if diff := got.Sub(tt.want); !ok || diff < -time.Second || diff > time.Second {
 				t.Errorf("NextTry = %v, %v, want %v", got, ok, tt.want)
 			}
 			// No try before that time can pass, and a try then does.
-			if d := Decide(tt.usage, tt.settings, got.Add(-time.Minute)); d.Allows() && got.Sub(now) > time.Minute {
+			if d := Decide(tt.usage, tt.settings, Allowance{}, got.Add(-time.Minute)); d.Allows() && got.Sub(now) > time.Minute {
 				t.Errorf("a try one minute earlier passes: %+v", d)
 			}
-			if d := Decide(tt.usage, tt.settings, got); !d.Allows() && got.Before(weeklyReset) && !got.Equal(fiveHourReset) {
+			if d := Decide(tt.usage, tt.settings, Allowance{}, got); !d.Allows() && got.Before(weeklyReset) && !got.Equal(fiveHourReset) {
 				t.Errorf("a try at the next try time stops: %+v", d)
 			}
 		})
 	}
-	if _, ok := NextTry(usage(0.10, 0.10), defaults, now); ok {
+	if _, ok := NextTry(usage(0.10, 0.10), defaults, Allowance{}, now); ok {
 		t.Error("NextTry without a stop reports a time")
 	}
 }
@@ -223,5 +223,31 @@ func TestNewerKeepsTheNewestReading(t *testing.T) {
 		if got := Newer(tt.a, tt.b); got != tt.want {
 			t.Errorf("Newer(%+v, %+v) = %+v, want %+v", tt.a, tt.b, got, tt.want)
 		}
+	}
+}
+
+// Q2 and Core-16: an allowance makes the 5h limit 100% until its end, and
+// never passes the weekly pace limit.
+func TestQ2_AnAllowanceLiftsOnlyTheFiveHourLimit(t *testing.T) {
+	now := weeklyReset.Add(-time.Hour) // the weekly limit is the target
+	fiveHourReset := now.Add(2 * time.Hour)
+	allowance := Allowance{FiveHourUntil: fiveHourReset}
+	usage := func(fiveHour, weekly float64) Usage {
+		return Usage{
+			FiveHour: Window{Utilization: fiveHour, ResetsAt: fiveHourReset},
+			Weekly:   Window{Utilization: weekly, ResetsAt: weeklyReset},
+		}
+	}
+	if d := Decide(usage(0.95, 0.10), defaults, allowance, now); !d.Allows() || d.FiveHourLimit != 100 {
+		t.Errorf("5h over its threshold with an allowance: %+v, want a start at a limit of 100", d)
+	}
+	if d := Decide(usage(0.95, 0.90), defaults, allowance, now); d.Allows() || d.Stopped[0] != Weekly {
+		t.Errorf("weekly over its pace with an allowance: %+v, want stopped by the weekly window", d)
+	}
+	if d := Decide(usage(0.95, 0.10), defaults, Allowance{FiveHourUntil: now}, now); d.Allows() {
+		t.Errorf("an allowance that ended: %+v, want stopped", d)
+	}
+	if _, ok := NextTry(usage(0.95, 0.10), defaults, allowance, now); ok {
+		t.Error("a new allowance does not end the wait")
 	}
 }

@@ -30,7 +30,7 @@ type command struct {
 var commands = []command{
 	{"run", "Run as a resident program. launchd starts this command.", runRun},
 	{"status", "Show running agents, issues that wait for the Owner, and the quota usage.", nil},
-	{"quota allow", "Allow cumin to use all of the current 5h quota window.", nil},
+	{"quota allow", "Allow cumin to use all of the current 5h quota window.", runQuotaAllow},
 	{"setup", "Set up cumin on the Host: \"setup github-apps\" registers the GitHub App of each role, \"setup launchd\" makes launchd run cumin.", runSetup},
 }
 

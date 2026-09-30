@@ -40,6 +40,13 @@ const (
 	Weekly   Name = "weekly"
 )
 
+// Allowance is the Owner's allowance to use the rest of one 5h window (Q2):
+// the 5h limit is 100% before FiveHourUntil, the reset of that window. It
+// never raises the weekly limit. The zero value is no allowance.
+type Allowance struct {
+	FiveHourUntil time.Time
+}
+
 // Decision is the result of Decide.
 type Decision struct {
 	// FiveHourLimit and WeeklyLimit are the limits at the time of the
@@ -57,10 +64,15 @@ func (d Decision) Allows() bool { return len(d.Stopped) == 0 }
 // Decide compares the usage with the limit of each window at now. The time
 // bands of the 5h window use the clock time of now, so now carries the
 // local time zone of the Host. A window whose reset time has passed stops
-// nothing: its usage is from before the reset.
-func Decide(usage Usage, settings config.QuotaSettings, now time.Time) Decision {
+// nothing: its usage is from before the reset. An allowance that holds at
+// now makes the 5h limit 100%.
+func Decide(usage Usage, settings config.QuotaSettings, allowance Allowance, now time.Time) Decision {
+	fiveHourLimit := FiveHourLimit(settings.FiveHour, now)
+	if now.Before(allowance.FiveHourUntil) {
+		fiveHourLimit = 100
+	}
 	d := Decision{
-		FiveHourLimit: FiveHourLimit(settings.FiveHour, now),
+		FiveHourLimit: fiveHourLimit,
 		WeeklyLimit:   PaceLimit(settings.Weekly, usage.Weekly.ResetsAt, now),
 	}
 	if reached(usage.FiveHour, d.FiveHourLimit, now) {
@@ -122,9 +134,10 @@ const retryMargin = time.Minute
 //     reset, whichever comes first.
 //
 // When both windows stop, the later of the two times counts. The second
-// value is false when nothing stops at now.
-func NextTry(usage Usage, settings config.QuotaSettings, now time.Time) (time.Time, bool) {
-	d := Decide(usage, settings, now)
+// value is false when nothing stops at now, an allowance included: a new
+// allowance ends the wait at once.
+func NextTry(usage Usage, settings config.QuotaSettings, allowance Allowance, now time.Time) (time.Time, bool) {
+	d := Decide(usage, settings, allowance, now)
 	if d.Allows() {
 		return time.Time{}, false
 	}

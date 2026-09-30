@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -426,5 +427,95 @@ func TestQ3_AnOlderReadingNeverReplacesANewerOne(t *testing.T) {
 	}
 	if stored, _ := service.State.Quota(); stored.FiveHour.Utilization != 0.90 {
 		t.Errorf("the state holds %v, want the newer reading 0.90", stored.FiveHour.Utilization)
+	}
+}
+
+// allow writes the allowance file of the service, as cumin quota allow does.
+func allow(t *testing.T, service *workflow.Service, until time.Time) {
+	t.Helper()
+	if service.AllowancePath == "" {
+		service.AllowancePath = filepath.Join(t.TempDir(), state.AllowanceFileName)
+	}
+	if err := state.WriteAllowance(service.AllowancePath, state.Allowance{FiveHourUntil: until}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Core-6 and Q2: after cumin quota allow, the next poll starts the issue
+// that the 5h window stopped, without waiting for the next try time.
+func TestCore06_QuotaAllowResumesTheStart(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	reset := sceneNow.Add(2 * time.Hour)
+	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs before the allowance, want 0", n)
+	}
+
+	allow(t, service, reset)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs after the allowance, want 1", n)
+	}
+	if q1 := sc.q1Messages(); len(q1) != 1 || !strings.Contains(q1[0], "cumin quota allow") {
+		t.Errorf("Q1 notifications = %q, want one that names cumin quota allow", q1)
+	}
+}
+
+// Core-16: cumin quota allow never passes the weekly pace limit.
+func TestCore16_QuotaAllowDoesNotPassTheWeeklyPace(t *testing.T) {
+	sc := newScene(t)
+	reset := sceneNow.Add(2 * time.Hour)
+	sc.setQuota(t, 0.90, reset, 0.90, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	allow(t, service, reset)
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want 0", n)
+	}
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs, want 1: the allowance does not end the weekly wait", n)
+	}
+}
+
+// Q2: the allowance ends at the reset of the 5h window that it names. A
+// new window at its limit stops the start again.
+func TestQ2_TheAllowanceEndsAtTheResetOfItsWindow(t *testing.T) {
+	sc := newScene(t)
+	reset := sceneNow.Add(time.Hour)
+	sc.setQuota(t, 0.90, reset.Add(5*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	allow(t, service, reset)
+	sc.clock.Set(reset)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs after the allowance ended, want 0", n)
+	}
+}
+
+// Q2: an allowance file that cannot be read is no allowance, with one
+// warning across polls.
+func TestQ2_ABrokenAllowanceFileWarnsOnce(t *testing.T) {
+	sc := newScene(t)
+	sc.setQuota(t, 0.90, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	service.AllowancePath = filepath.Join(t.TempDir(), state.AllowanceFileName)
+	if err := os.WriteFile(service.AllowancePath, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want 0", n)
+	}
+	if n := strings.Count(sc.logs.String(), "Q2: the allowance file was not read"); n != 1 {
+		t.Errorf("%d warnings, want 1", n)
 	}
 }
