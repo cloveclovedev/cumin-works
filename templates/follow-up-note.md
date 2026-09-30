@@ -8,7 +8,7 @@ cumin writes this comment after a pull request of an implementation issue is mer
 ## Rules
 
 - Write the comment only if there is something to list.
-- Write at most one comment for each pull request. End the comment with the hidden marker line, which names the implementation issue and the pull request. cumin finds its notes by the marker after a restart.
+- Write at most one comment for each pull request. End the comment with the hidden marker line, which names the implementation issue, the pull request, and every pull request of the issue that needs a note. cumin finds its notes by the marker after a restart.
 - Copy the text of "Follow-up" from the pull request description as it is. Do not change the text.
 - List each open non-blocking review comment with a link. A non-blocking comment is open if no reply starts with `Fixed` or `Answer`. Do not list comments with the label `praise` or `note`.
 
@@ -26,5 +26,5 @@ Open non-blocking review comments:
 
 To do any of this work: write a new requirement issue that names the items. This list is only a record.
 
-<!-- cumin:follow-up-note issue=<implementation issue> pull-request=<pull request> -->
+<!-- cumin:follow-up-note issue=<implementation issue> pull-request=<pull request> notes=<the pull requests of the issue that need a note, comma-separated> -->
 ```

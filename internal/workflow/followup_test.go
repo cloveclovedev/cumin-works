@@ -150,7 +150,7 @@ func TestCore10_ANoteInTheFixedFormOnceAcrossRestarts(t *testing.T) {
 		"Open non-blocking review comments:\n" +
 		"- `lib/login.dart:12` — suggestion (non-blocking): Move the validation into its own function. (https://example.test/c1)\n\n" +
 		"To do any of this work: write a new requirement issue that names the items. This list is only a record.\n\n" +
-		"<!-- cumin:follow-up-note issue=10 pull-request=21 -->\n"
+		"<!-- cumin:follow-up-note issue=10 pull-request=21 notes=21 -->\n"
 	if notes[0].Body != want {
 		t.Errorf("the note:\n%s\nwant:\n%s", notes[0].Body, want)
 	}
@@ -233,7 +233,7 @@ func TestI9_AMarkerOfAnotherAuthorDoesNotStopTheNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
 		Author: "octocat", At: time.Now(),
-		Body: "Nothing here.\n\n" + workflow.FollowUpMarker(10, 21) + "\n",
+		Body: "Nothing here.\n\n" + workflow.FollowUpMarker(10, 21, []int{21}) + "\n",
 	})
 	sc.pollAndWait(t, sc.service())
 
@@ -268,7 +268,7 @@ func TestFollowUpNote_FollowsTheTemplate(t *testing.T) {
 	pr := workflow.MergedPullRequest{Number: 21, Merged: true, Body: followUpBody, Threads: []workflow.ReviewThread{
 		{Path: "a.go", Line: 3, Comments: []workflow.ReviewComment{{Author: "r[bot]", Body: "todo (non-blocking): Add a test.", URL: "https://example.test/c"}}},
 	}}
-	note, ok := workflow.FollowUpNote(workflow.SubIssue{Number: 10, Title: "Title"}, pr, "r[bot]")
+	note, ok := workflow.FollowUpNote(workflow.SubIssue{Number: 10, Title: "Title"}, pr, "r[bot]", nil)
 	if !ok {
 		t.Fatal("no note")
 	}
@@ -297,12 +297,12 @@ func TestFollowUpNote_FollowsTheTemplate(t *testing.T) {
 func TestFollowUpNote_AnEmptyPartSaysNone(t *testing.T) {
 	t.Parallel()
 	sub := workflow.SubIssue{Number: 10, Title: "Title"}
-	onlyText, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Body: followUpBody}, "r[bot]")
+	onlyText, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Body: followUpBody}, "r[bot]", nil)
 	if !ok || !strings.Contains(onlyText, "Open non-blocking review comments:\nNone\n") {
 		t.Errorf("a note without open comments:\n%s", onlyText)
 	}
 	threads := []workflow.ReviewThread{{Path: "a.go", Comments: []workflow.ReviewComment{{Author: "r[bot]", Body: "todo (non-blocking): Add a test.", URL: "u"}}}}
-	onlyComments, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Threads: threads}, "r[bot]")
+	onlyComments, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Threads: threads}, "r[bot]", nil)
 	if !ok || !strings.Contains(onlyComments, "From the pull request description:\nNone\n") {
 		t.Errorf("a note without follow-up text:\n%s", onlyComments)
 	}
@@ -489,5 +489,57 @@ func TestR4_AFailedReadOfTheCommentsWaits(t *testing.T) {
 	}
 	if !strings.Contains(sc.logs.String(), "R4: waits for the follow-up notes") {
 		t.Error("the log does not say that R4 waits")
+	}
+}
+
+// Two merged pull requests close the same sub-issue, and the second note
+// fails. The first marker names both, so the next poll reads the sub-issue
+// again and writes the second note; R4 waits until then.
+func TestI9_ANoteThatFailsHalfwayIsWrittenAtTheNextPoll(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 22, Closed: true, Merged: true, Closes: []int{10}, Body: followUpBody,
+	})
+	sc.fake.FailAfter("POST", "/repos/example-org/example-repo/issues/6/comments", 1, 500)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Fatalf("%d follow-up notes after the failure, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs with a note missing, want none", n)
+	}
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+	notes := followUpNotes(sc)
+	if len(notes) != 2 {
+		t.Fatalf("%d follow-up notes, want 2", len(notes))
+	}
+	for i, pr := range []string{"#21", "#22"} {
+		if !strings.HasPrefix(notes[i].Body, "## Follow-up from "+pr) || !strings.Contains(notes[i].Body, "notes=21,22 -->") {
+			t.Errorf("note %d:\n%s", i, notes[i].Body)
+		}
+	}
+}
+
+// A marker names the pull requests that need a note; the sub-issue is done
+// only when each has one. A marker without the list names its own pull
+// request only.
+func TestFollowUpCandidates_EveryNamedPullRequestNeedsItsNote(t *testing.T) {
+	t.Parallel()
+	closed := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	requirement := workflow.RequirementIssue{Number: 6, SubIssues: []workflow.SubIssue{
+		{Number: 10, Closed: true, ClosedAt: closed},
+		{Number: 11, Closed: true, ClosedAt: closed},
+	}}
+	comments := []workflow.Comment{
+		{Author: "cumin[bot]", CreatedAt: closed, Body: "x\n" + workflow.FollowUpMarker(10, 21, []int{21, 22}) + "\n"},
+		{Author: "cumin[bot]", CreatedAt: closed, Body: "x\n<!-- cumin:follow-up-note issue=11 pull-request=23 -->\n"},
+	}
+	marks := workflow.FollowUpMarks(comments, "cumin[bot]")
+	got := workflow.FollowUpCandidates(requirement, marks)
+	if len(got) != 1 || got[0].Number != 10 {
+		t.Errorf("candidates = %v, want #10 only", got)
 	}
 }
