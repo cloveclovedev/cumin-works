@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
@@ -402,5 +403,28 @@ func TestQ1_AReadAtTheEndOfARunEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
 	}
 	if unread != 2 {
 		t.Errorf("%d notifications about an unread usage, want 2 (before and after the run)", unread)
+	}
+}
+
+// Q3: an older reading that arrives after a newer one never replaces it,
+// and the decision uses the newer one.
+func TestQ3_AnOlderReadingNeverReplacesANewerOne(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	withState(t, service)
+	reset := sceneNow.Add(2 * time.Hour)
+	newer := agent.QuotaUsage{
+		FiveHour: agent.QuotaWindow{Utilization: 0.90, ResetsAt: reset},
+		Weekly:   agent.QuotaWindow{Utilization: 0.20, ResetsAt: sceneNow.Add(time.Hour)},
+	}
+	older := newer
+	older.FiveHour.Utilization = 0.50
+	workflow.KeepUsage(service, newer)
+	got := workflow.KeepUsage(service, older)
+	if got.FiveHour.Utilization != 0.90 {
+		t.Errorf("the decision uses %v, want the newer reading 0.90", got.FiveHour.Utilization)
+	}
+	if stored, _ := service.State.Quota(); stored.FiveHour.Utilization != 0.90 {
+		t.Errorf("the state holds %v, want the newer reading 0.90", stored.FiveHour.Utilization)
 	}
 }

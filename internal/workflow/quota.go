@@ -89,12 +89,12 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		}
 		return false, nil
 	}
-	s.keepUsage(log, read)
-	decision := s.decideQuota(log, read)
+	usage := s.keepUsage(log, read)
+	decision := s.decideQuota(log, usage)
 	if decision.Allows() {
 		return true, nil
 	}
-	next, _ := quota.NextTry(toUsage(read), s.quotaSettings(), s.now())
+	next, _ := quota.NextTry(usage, s.quotaSettings(), s.now())
 	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 	return false, nil
@@ -107,8 +107,7 @@ func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Ta
 	if run == nil || !run.QuotaRead {
 		return
 	}
-	s.keepUsage(log, run.Quota)
-	decision := s.decideQuota(log, run.Quota)
+	decision := s.decideQuota(log, s.keepUsage(log, run.Quota))
 	if decision.Allows() {
 		return
 	}
@@ -116,11 +115,12 @@ func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Ta
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 }
 
-// keepUsage stores a usage that was read, and ends the silence after an
-// unread usage. The lock covers the read and the write of the state, so
+// keepUsage stores a usage that was read, ends the silence after an unread
+// usage, and returns the usage that the state now holds, which the caller
+// decides from. The lock covers the read and the write of the state, so
 // that two runs that end together do not lose a reading: a later read that fails is a new failure. A state that
 // cannot be saved costs only a minimal run after a restart.
-func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) {
+func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) quota.Usage {
 	s.quotaMu.Lock()
 	defer s.quotaMu.Unlock()
 	s.quota.unreadTold = false
@@ -144,6 +144,7 @@ func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) {
 	if err != nil {
 		log.Error("Q3: the quota usage was not kept", "error", err.Error())
 	}
+	return usage
 }
 
 // nextTry reports the next try time while the stored usage stops the
@@ -174,12 +175,12 @@ func (s *Service) quotaSettings() config.QuotaSettings {
 
 // decideQuota applies the limits of the Host settings to one usage. The
 // numbers go to the debug log only (designs/quota.md).
-func (s *Service) decideQuota(log *slog.Logger, read agent.QuotaUsage) quota.Decision {
-	decision := quota.Decide(toUsage(read), s.quotaSettings(), s.now())
+func (s *Service) decideQuota(log *slog.Logger, usage quota.Usage) quota.Decision {
+	decision := quota.Decide(usage, s.quotaSettings(), s.now())
 	s.forgetResumedWindows(decision)
 	log.Debug("Q1: quota usage",
-		"five_hour_utilization", read.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,
-		"weekly_utilization", read.Weekly.Utilization, "weekly_limit", decision.WeeklyLimit)
+		"five_hour_utilization", usage.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,
+		"weekly_utilization", usage.Weekly.Utilization, "weekly_limit", decision.WeeklyLimit)
 	return decision
 }
 
