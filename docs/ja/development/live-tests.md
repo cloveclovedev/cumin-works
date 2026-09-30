@@ -64,6 +64,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | `TestLive_AgentRunOnSandbox` (`internal/agent`) | 本物の Claude Code を `Service.Start` で起動し (使用率の最小実行と Implementer の実行の 2 回、利用枠を使う)、sandbox の worktree でファイルを 1 つ commit して push し、`gh pr create` で Pull Request を開かせる。Pull Request の作成者と commit の作者が Implementer App の bot であることを確かめる。起動の記録の確認 (`init` イベント) も本物の実行で通る。Pull Request は閉じ、ブランチと worktree は消す |
 | `TestLiveGitHubFacts` | cumin の実装が前提にする GitHub の事実。check run と commit status の読み取り、token の絞り込み、飛ばされた必須のcheckと merge、失敗したcheckについて読める範囲、レビューの `state` と `commit_id`、`Closes #N` で sub-issue が閉じること、GraphQL の項目、`rules/branches`、@メンション、Pull Request へのラベル |
 | `TestLiveDiagramsBranch` | Planner の App が書き込めるのは `cumin/diagrams` だけであること。Planner の App が `cumin/diagrams` にファイルを足せ、ほかのブランチの作成、既定のブランチの移動、タグの作成、`cumin/diagrams` の force push と削除を拒否されること。cumin-core の App も `cumin/diagrams` を削除できないこと。Implementer の App が今までどおりブランチを作って消せること。`scripts/setup-repo.sh` を `--core-app` と `--implementer-app` 付きで実行してあり、Planner の App の Contents の書き込みがインストールで承認されている必要がある。`cumin/diagrams` に `live/<日時>.svg` が1つ残る |
+| `TestLiveFollowUpFixture` | 場面 Follow-1 の準備だけを行う。`cumin/type/requirement` だけの要求Issue、その sub-issue、それを閉じる Implementer の App の Pull Request を作り、Reviewer の App が `(non-blocking)` の指摘を2つ書き、Implementer の App が1つに `Fixed` で返答する。何も閉じない。Owner が手で merge し、場面の手順で片付ける |
 
 ## `cumin run` を sandbox で動かすとき
 
@@ -417,6 +418,37 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
 
 10. `I3: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
 
+## 実機の場面 Follow-1
+
+Owner が merge した Pull Request の残りの作業が、フォローアップノートとして要求Issueに1つ付き、cumin を再起動しても増えないことを確かめる (I9、Core-10)。Claude Code は起動しないので、利用枠を使わない。要求Issueに状態ラベルを付けないので、cumin は分割 (R1)、着手 (R3)、受け入れの確認 (R4) のどれも行わない。
+
+### 準備
+
+1. `go build -o cumin ./cmd/cumin` でバイナリを作る。設定ファイルは Impl-1 の手順2と同じ形でよい。`work_dir` は捨ててよいディレクトリにする。
+2. sandbox に、`cumin/status/ready` の付いた Issue と、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueがないことを確かめる。あると、そちらに Agent を起動して利用枠を使う。
+3. 場面の準備を作る。Owner のターミナルで実行する。
+
+   ```sh
+   CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -run TestLiveFollowUpFixture -v ./internal/platform/github/
+   ```
+
+   最後に `Follow-1 is ready: requirement issue #<A>, sub-issue #<B>, pull request #<C>` が出る。作られるものと、作る App は次のとおりである。
+
+   | もの | 作る App | 内容 |
+   |---|---|---|
+   | 要求Issue #A | Planner | `cumin/type/requirement` だけ |
+   | sub-issue #B | Planner | #A の sub-issue |
+   | Pull Request #C | Implementer | `live/<日時>-follow-1.md` を足す。説明の `Follow-up` に1行、`Closes #B` |
+   | 指摘2つ | Reviewer | 1行目に `suggestion (non-blocking)`、2行目に `nitpick (non-blocking)` |
+   | 返答1つ | Implementer | `nitpick` に `Fixed` で始まる返答 |
+
+### 実行
+
+4. Owner が、Pull Request #C を squash で merge し、ブランチを消す。必須のレビューがないので、管理者として merge する。#B が閉じる。
+5. `./cumin run --config <設定ファイル>` を起動する。最初の定期確認で、ログに `I9: wrote the follow-up note` (`requirement_issue` が #A、`issue` が #B、`pull_request` が #C) が1行出る。
+6. 次の定期確認のログ (`poll`) が出たら、SIGTERM で止める。`stopped` の行が出る。
+7. もう一度 `./cumin run --config <設定ファイル>` を起動し、定期確認のログが2回出たら、SIGTERM で止める。`I9: wrote the follow-up note` は出ない。
+
 ### 確かめること
 
 | # | 確かめること | 見る場所 |
@@ -507,3 +539,20 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 ### 記録
 
 結果は #229 にコメントとして残す。書き方は場面 Review-1 と同じである。
+
+| 1 | #A に、cumin-core の App のコメントがちょうど1つある。1行目が `## Follow-up from #C (<#B の題>)` である | #A のコメント |
+| 2 | コメントの「From the pull request description:」の下に、#C の `Follow-up` の1行がそのままある | #A のコメント |
+| 3 | 「Open non-blocking review comments:」の下に、`suggestion` の指摘だけが1行あり、`<ファイル>:1` とリンクが付いている。`Fixed` の返答が付いた `nitpick` はない | #A のコメント |
+| 4 | コメントの最後に、目に見えない目印 `<!-- cumin:follow-up-note issue=B pull-request=C -->` がある | #A のコメントを編集画面か API で読む |
+| 5 | 手順7のあとも、#A のフォローアップノートは1つのままである | #A のコメント |
+| 6 | Agent が起動していない (`agent start` の行がない)。ログに token と秘密鍵が出ていない | cumin のログ |
+
+### 後片付け
+
+- 要求Issue #A を not planned で閉じる。#B は merge で閉じている。
+- main に merge した `live/<日時>-follow-1.md` は残してよい。
+- `work_dir` の一時ディレクトリを消す。
+
+### 記録
+
+結果は、この場面の Issue (#259) にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。
