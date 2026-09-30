@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 )
 
 // followUpLiveBody is the description of the pull request of Follow-1: the
@@ -50,6 +51,14 @@ func TestLiveFollowUpFixture(t *testing.T) {
 	})
 	var pull pullRequest
 	resp.mustJSON(t, http.StatusCreated, &pull)
+	// Since 2026-09-30, GitHub has created no closing link for a new pull
+	// request, in every repository that we checked. Without the link, the
+	// merge leaves the sub-issue open. The Owner then links the pull request
+	// to the sub-issue by hand before the merge (the procedure, step 4).
+	linked := l.waitForClosingLink(t, implementer, pull.Number, sub.Number)
+	if !linked {
+		t.Logf("GitHub made no closing link: link pull request #%d to issue #%d by hand before the merge", pull.Number, sub.Number)
+	}
 
 	// Official: REST "Create a review for a pull request". COMMENT needs a
 	// body; each comment names a line of the diff.
@@ -85,6 +94,41 @@ func TestLiveFollowUpFixture(t *testing.T) {
 	}
 
 	t.Logf("Follow-1 is ready: requirement issue #%d, sub-issue #%d, pull request #%d (branch %s)", requirement.Number, sub.Number, pull.Number, branch)
+}
+
+// waitForClosingLink waits up to 30 seconds until the pull request lists
+// the issue in closingIssuesReferences, the link that closes the issue at
+// the merge.
+func (l *live) waitForClosingLink(t *testing.T, token string, pull, issue int) bool {
+	t.Helper()
+	query := `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) { closingIssuesReferences(first: 10) { nodes { number } } }
+  }
+}`
+	for range 6 {
+		var resp struct {
+			Data struct {
+				Repository struct {
+					PullRequest struct {
+						ClosingIssuesReferences struct {
+							Nodes []struct {
+								Number int `json:"number"`
+							} `json:"nodes"`
+						} `json:"closingIssuesReferences"`
+					} `json:"pullRequest"`
+				} `json:"repository"`
+			} `json:"data"`
+		}
+		l.api(t, token, http.MethodPost, "/graphql", map[string]any{"query": query, "variables": map[string]any{"owner": l.owner, "name": l.repo, "number": pull}}).mustJSON(t, http.StatusOK, &resp)
+		for _, n := range resp.Data.Repository.PullRequest.ClosingIssuesReferences.Nodes {
+			if n.Number == issue {
+				return true
+			}
+		}
+		time.Sleep(5 * time.Second)
+	}
+	return false
 }
 
 // createFixtureIssue creates an issue that stays after the test.
