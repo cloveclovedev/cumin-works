@@ -10,24 +10,30 @@ import (
 // Defaults and limits of the quota settings, from the settings table.
 const (
 	defaultQuotaThreshold = 85 // percent
-	defaultResetNear      = 30 * time.Minute
-	fiveHourWindow        = 5 * time.Hour
+	defaultWeeklyTarget   = 85 // percent
+	defaultWeeklyLead     = 24 * time.Hour
+	weeklyWindow          = 7 * 24 * time.Hour
 )
 
-// QuotaSettings holds the thresholds that stop new starts. This package only
-// loads them. The quota rules (Q1 to Q3) use them.
+// QuotaSettings holds the settings of the limits that stop new starts. This
+// package only loads them. The quota rules (Q1 to Q3) use them.
 type QuotaSettings struct {
-	FiveHour QuotaWindow
-	Weekly   QuotaWindow
-	// ResetNear belongs to the 5h window: when less than this time is left
-	// before the reset, the quota rules treat the reset as near.
-	ResetNear time.Duration
+	FiveHour FiveHourQuota
+	Weekly   WeeklyQuota
 }
 
-// QuotaWindow holds the settings of one quota window.
-type QuotaWindow struct {
+// FiveHourQuota holds the thresholds of the 5h window.
+type FiveHourQuota struct {
 	Threshold int // percent. It applies outside every time band.
 	Bands     []TimeBand
+}
+
+// WeeklyQuota holds the pace limit of the weekly window: target x min(1,
+// (elapsed + lead) / 7 days). The weekly window has no time bands, and no
+// setting holds its reset: the week starts at its reset time minus 7 days.
+type WeeklyQuota struct {
+	Target int // percent
+	Lead   time.Duration
 }
 
 // TimeBand is a part of the day with its own threshold. The band starts at
@@ -45,18 +51,18 @@ type TimeOfDay int
 func (t TimeOfDay) String() string { return fmt.Sprintf("%02d:%02d", int(t)/60, int(t)%60) }
 
 type fileQuota struct {
-	FiveHour fileFiveHourWindow `toml:"five_hour"`
-	Weekly   fileQuotaWindow    `toml:"weekly"`
+	FiveHour fileFiveHourQuota `toml:"five_hour"`
+	Weekly   fileWeeklyQuota   `toml:"weekly"`
 }
 
-type fileQuotaWindow struct {
+type fileFiveHourQuota struct {
 	Threshold int        `toml:"threshold"`
 	Bands     []fileBand `toml:"bands"`
 }
 
-type fileFiveHourWindow struct {
-	fileQuotaWindow
-	ResetNear duration `toml:"reset_near"`
+type fileWeeklyQuota struct {
+	Target int      `toml:"target"`
+	Lead   duration `toml:"lead"`
 }
 
 type fileBand struct {
@@ -66,42 +72,46 @@ type fileBand struct {
 }
 
 func defaultQuota() fileQuota {
-	window := fileQuotaWindow{Threshold: defaultQuotaThreshold}
 	return fileQuota{
-		FiveHour: fileFiveHourWindow{fileQuotaWindow: window, ResetNear: duration(defaultResetNear)},
-		Weekly:   window,
+		FiveHour: fileFiveHourQuota{Threshold: defaultQuotaThreshold},
+		Weekly:   fileWeeklyQuota{Target: defaultWeeklyTarget, Lead: duration(defaultWeeklyLead)},
 	}
 }
 
 // settings checks the limits of the quota settings. fail records one problem
 // of one key.
 func (q fileQuota) settings(fail func(key, format string, args ...any)) QuotaSettings {
-	resetNear := time.Duration(q.FiveHour.ResetNear)
-	if resetNear < 0 || resetNear >= fiveHourWindow {
-		fail("quota.five_hour.reset_near", "must be 0 or more, and less than %d hours", int(fiveHourWindow.Hours()))
-	}
 	return QuotaSettings{
-		FiveHour:  q.FiveHour.settings("quota.five_hour", fail),
-		Weekly:    q.Weekly.settings("quota.weekly", fail),
-		ResetNear: resetNear,
+		FiveHour: q.FiveHour.settings("quota.five_hour", fail),
+		Weekly:   q.Weekly.settings("quota.weekly", fail),
 	}
 }
 
-func (w fileQuotaWindow) settings(key string, fail func(key, format string, args ...any)) QuotaWindow {
-	checkThreshold := func(key string, threshold int) {
-		if threshold < 1 || threshold > 100 {
-			fail(key, "must be from 1 to 100")
-		}
+func checkPercent(key string, percent int, fail func(key, format string, args ...any)) {
+	if percent < 1 || percent > 100 {
+		fail(key, "must be from 1 to 100")
 	}
-	checkThreshold(key+".threshold", w.Threshold)
+}
 
-	window := QuotaWindow{Threshold: w.Threshold}
+func (w fileWeeklyQuota) settings(key string, fail func(key, format string, args ...any)) WeeklyQuota {
+	checkPercent(key+".target", w.Target, fail)
+	lead := time.Duration(w.Lead)
+	if lead < 0 || lead >= weeklyWindow {
+		fail(key+".lead", "must be 0 or more, and less than 168h (7 days)")
+	}
+	return WeeklyQuota{Target: w.Target, Lead: lead}
+}
+
+func (w fileFiveHourQuota) settings(key string, fail func(key, format string, args ...any)) FiveHourQuota {
+	checkPercent(key+".threshold", w.Threshold, fail)
+
+	window := FiveHourQuota{Threshold: w.Threshold}
 	// positions[i] is the position in the file of window.Bands[i]. A band
 	// with a wrong time is not in window.Bands.
 	var positions []int
 	for i, b := range w.Bands {
 		bandKey := fmt.Sprintf("%s.bands[%d]", key, i)
-		checkThreshold(bandKey+".threshold", b.Threshold)
+		checkPercent(bandKey+".threshold", b.Threshold, fail)
 		from, fromOK := parseTimeOfDay(b.From)
 		if !fromOK {
 			fail(bandKey+".from", "%q must have the form HH:MM, from 00:00 to 23:59", b.From)

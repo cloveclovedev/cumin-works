@@ -12,14 +12,11 @@ func TestLoadAppliesQuotaDefaults(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	q := s.Quota
-	if q.FiveHour.Threshold != 85 || q.Weekly.Threshold != 85 {
-		t.Errorf("thresholds = %d and %d, want 85 and 85", q.FiveHour.Threshold, q.Weekly.Threshold)
+	if q.FiveHour.Threshold != 85 || len(q.FiveHour.Bands) != 0 {
+		t.Errorf("FiveHour = %+v, want threshold 85 and no bands", q.FiveHour)
 	}
-	if q.ResetNear != 30*time.Minute {
-		t.Errorf("ResetNear = %v, want 30m", q.ResetNear)
-	}
-	if len(q.FiveHour.Bands) != 0 || len(q.Weekly.Bands) != 0 {
-		t.Errorf("bands = %v and %v, want none", q.FiveHour.Bands, q.Weekly.Bands)
+	if q.Weekly.Target != 85 || q.Weekly.Lead != 24*time.Hour {
+		t.Errorf("Weekly = %+v, want target 85 and lead 24h", q.Weekly)
 	}
 }
 
@@ -27,7 +24,6 @@ func TestLoadReadsQuotaSettings(t *testing.T) {
 	s, err := Load(writeFile(t, required+`
 [quota.five_hour]
 threshold = 70
-reset_near = "0s"
 
 [[quota.five_hour.bands]]
 from = "23:00"
@@ -40,19 +36,14 @@ to = "09:30"
 threshold = 90
 
 [quota.weekly]
-threshold = 60
-
-# The same band in the other window is not an overlap.
-[[quota.weekly.bands]]
-from = "23:00"
-to = "06:00"
-threshold = 80
+target = 60
+lead = "0s"
 `))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	q := s.Quota
-	if q.FiveHour.Threshold != 70 || q.Weekly.Threshold != 60 || q.ResetNear != 0 {
+	if q.FiveHour.Threshold != 70 || q.Weekly.Target != 60 || q.Weekly.Lead != 0 {
 		t.Errorf("quota = %+v", q)
 	}
 	want := []TimeBand{
@@ -62,16 +53,13 @@ threshold = 80
 	if len(q.FiveHour.Bands) != 2 || q.FiveHour.Bands[0] != want[0] || q.FiveHour.Bands[1] != want[1] {
 		t.Errorf("FiveHour.Bands = %v, want %v", q.FiveHour.Bands, want)
 	}
-	if len(q.Weekly.Bands) != 1 || q.Weekly.Bands[0].Threshold != 80 {
-		t.Errorf("Weekly.Bands = %v", q.Weekly.Bands)
-	}
 }
 
 // Each case breaks one limit of the quota settings. The error must name the
 // full key, and the position of a time band.
 func TestLoadRejectsInvalidQuotaSettings(t *testing.T) {
-	band := func(window, from, to, threshold string) string {
-		return "[[quota." + window + ".bands]]\nfrom = \"" + from + "\"\nto = \"" + to + "\"\nthreshold = " + threshold + "\n"
+	band := func(from, to, threshold string) string {
+		return "[[quota.five_hour.bands]]\nfrom = \"" + from + "\"\nto = \"" + to + "\"\nthreshold = " + threshold + "\n"
 	}
 	tests := []struct {
 		name    string
@@ -80,33 +68,33 @@ func TestLoadRejectsInvalidQuotaSettings(t *testing.T) {
 	}{
 		{"5h threshold zero", "[quota.five_hour]\nthreshold = 0", "quota.five_hour.threshold:"},
 		{"5h threshold over 100", "[quota.five_hour]\nthreshold = 101", "quota.five_hour.threshold:"},
-		{"weekly threshold zero", "[quota.weekly]\nthreshold = 0", "quota.weekly.threshold:"},
-		{"weekly threshold over 100", "[quota.weekly]\nthreshold = 101", "quota.weekly.threshold:"},
-		{"reset_near negative", "[quota.five_hour]\nreset_near = \"-1m\"", "quota.five_hour.reset_near:"},
-		{"reset_near five hours", "[quota.five_hour]\nreset_near = \"5h\"", "quota.five_hour.reset_near:"},
-		{"reset_near on the weekly window", "[quota.weekly]\nreset_near = \"30m\"", "quota.weekly.reset_near: unknown key"},
-		{"band threshold over 100", band("five_hour", "01:00", "02:00", "101"), "quota.five_hour.bands[0].threshold:"},
-		{"band without threshold", "[[quota.weekly.bands]]\nfrom = \"01:00\"\nto = \"02:00\"", "quota.weekly.bands[0].threshold:"},
-		{"band from without leading zero", band("five_hour", "1:00", "02:00", "90"), "quota.five_hour.bands[0].from:"},
-		{"band to is 24:00", band("five_hour", "22:00", "24:00", "90"), "quota.five_hour.bands[0].to:"},
+		{"weekly target zero", "[quota.weekly]\ntarget = 0", "quota.weekly.target:"},
+		{"weekly target over 100", "[quota.weekly]\ntarget = 101", "quota.weekly.target:"},
+		{"weekly lead negative", "[quota.weekly]\nlead = \"-1m\"", "quota.weekly.lead:"},
+		{"weekly lead of 7 days", "[quota.weekly]\nlead = \"168h\"", "quota.weekly.lead:"},
+		{"weekly lead without a unit", "[quota.weekly]\nlead = 24", "quota.weekly.lead"},
+		{"band threshold over 100", band("01:00", "02:00", "101"), "quota.five_hour.bands[0].threshold:"},
+		{"band without threshold", "[[quota.five_hour.bands]]\nfrom = \"01:00\"\nto = \"02:00\"", "quota.five_hour.bands[0].threshold:"},
+		{"band from without leading zero", band("1:00", "02:00", "90"), "quota.five_hour.bands[0].from:"},
+		{"band to is 24:00", band("22:00", "24:00", "90"), "quota.five_hour.bands[0].to:"},
 		{"band without from", "[[quota.five_hour.bands]]\nto = \"02:00\"\nthreshold = 90", "quota.five_hour.bands[0].from:"},
-		{"band from equals to", band("weekly", "03:00", "03:00", "90"), "quota.weekly.bands[0]:"},
+		{"band from equals to", band("03:00", "03:00", "90"), "quota.five_hour.bands[0]:"},
 		{
 			"bands overlap",
-			band("five_hour", "01:00", "05:00", "90") + band("five_hour", "04:59", "06:00", "95"),
+			band("01:00", "05:00", "90") + band("04:59", "06:00", "95"),
 			"quota.five_hour.bands[1]: overlaps with quota.five_hour.bands[0]",
 		},
 		{
 			"band that passes midnight overlaps with an early band",
-			band("weekly", "22:00", "02:00", "90") + band("weekly", "01:00", "03:00", "95"),
-			"quota.weekly.bands[1]: overlaps with quota.weekly.bands[0]",
+			band("22:00", "02:00", "90") + band("01:00", "03:00", "95"),
+			"quota.five_hour.bands[1]: overlaps with quota.five_hour.bands[0]",
 		},
 		{
 			"overlap names the position in the file",
-			band("five_hour", "01:00", "02:00", "90") + band("five_hour", "9:00", "10:00", "90") + band("five_hour", "01:30", "03:00", "95"),
+			band("01:00", "02:00", "90") + band("9:00", "10:00", "90") + band("01:30", "03:00", "95"),
 			"quota.five_hour.bands[2]: overlaps with quota.five_hour.bands[0]",
 		},
-		{"unknown key in a band", band("five_hour", "01:00", "02:00", "90") + "until = \"03:00\"", "until: unknown key"},
+		{"unknown key in a band", band("01:00", "02:00", "90") + "until = \"03:00\"", "until: unknown key"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -116,6 +104,28 @@ func TestLoadRejectsInvalidQuotaSettings(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("error does not contain %q:\n%v", tt.want, err)
+			}
+		})
+	}
+}
+
+// The keys that #241 removed from the requirement stop cumin as unknown
+// keys, so that a settings file of an older cumin does not keep a rule that
+// no longer exists.
+func TestLoadRejectsRemovedQuotaKeys(t *testing.T) {
+	tests := []struct{ content, key string }{
+		{"[quota.five_hour]\nreset_near = \"30m\"", "quota.five_hour.reset_near"},
+		{"[quota.weekly]\nthreshold = 85", "quota.weekly.threshold"},
+		{"[[quota.weekly.bands]]\nfrom = \"23:00\"\nto = \"06:00\"\nthreshold = 100", "quota.weekly.bands"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			_, err := Load(writeFile(t, required+tt.content))
+			if err == nil {
+				t.Fatal("Load succeeded, want an error")
+			}
+			if !strings.Contains(err.Error(), tt.key) || !strings.Contains(err.Error(), "unknown key") {
+				t.Errorf("error does not name %s as an unknown key:\n%v", tt.key, err)
 			}
 		})
 	}
