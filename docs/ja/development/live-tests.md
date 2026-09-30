@@ -418,38 +418,6 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
 
 10. `I3: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
 
-## 実機の場面 Follow-1
-
-Owner が merge した Pull Request の残りの作業が、フォローアップノートとして要求Issueに1つ付き、cumin を再起動しても増えないことを確かめる (I9、Core-10)。Claude Code は起動しないので、利用枠を使わない。要求Issueに状態ラベルを付けないので、cumin は分割 (R1)、着手 (R3)、受け入れの確認 (R4) のどれも行わない。
-
-### 準備
-
-1. `go build -o cumin ./cmd/cumin` でバイナリを作る。設定ファイルは Impl-1 の手順2と同じ形でよい。`work_dir` は捨ててよいディレクトリにする。
-2. sandbox に、`cumin/status/ready` の付いた Issue と、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueがないことを確かめる。あると、そちらに Agent を起動して利用枠を使う。
-3. 場面の準備を作る。Owner のターミナルで実行する。
-
-   ```sh
-   CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -run TestLiveFollowUpFixture -v ./internal/platform/github/
-   ```
-
-   最後に `Follow-1 is ready: requirement issue #<A>, sub-issue #<B>, pull request #<C>` が出る。作られるものと、作る App は次のとおりである。
-
-   | もの | 作る App | 内容 |
-   |---|---|---|
-   | 要求Issue #A | Planner | `cumin/type/requirement` だけ |
-   | sub-issue #B | Planner | #A の sub-issue |
-   | Pull Request #C | Implementer | `live/<日時>-follow-1.md` を足す。説明の `Follow-up` に1行、`Closes #B` |
-   | 指摘2つ | Reviewer | 1行目に `suggestion (non-blocking)`、2行目に `nitpick (non-blocking)` |
-   | 返答1つ | Implementer | `nitpick` に `Fixed` で始まる返答 |
-
-### 実行
-
-4. Owner が、Pull Request #C を squash で merge し、ブランチを消す。必須のレビューがないので、管理者として merge する。#B が閉じる。閉じなければ、Owner が #B を手で閉じる。I9 は、誰が閉じたかを見ない。
-   - 手順3の出力に `GitHub made no closing link` があれば、merge の前に、Owner が #C を #B に手で結び付ける (Pull Request の画面の Development)。2026-09-30 から、GitHub は新しい Pull Request の `Closes #N` を結び付けていない。結び付けないと、merge しても #B は閉じず、ノートも付かない。
-5. `./cumin run --config <設定ファイル>` を起動する。最初の定期確認で、ログに `I9: wrote the follow-up note` (`requirement_issue` が #A、`issue` が #B、`pull_request` が #C) が1行出る。
-6. 次の定期確認のログ (`poll`) が出たら、SIGTERM で止める。`stopped` の行が出る。
-7. もう一度 `./cumin run --config <設定ファイル>` を起動し、定期確認のログが2回出たら、SIGTERM で止める。`I9: wrote the follow-up note` は出ない。
-
 ### 確かめること
 
 | # | 確かめること | 見る場所 |
@@ -541,19 +509,64 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 
 結果は #229 にコメントとして残す。書き方は場面 Review-1 と同じである。
 
-| 1 | #A に、cumin-core の App のコメントがちょうど1つある。1行目が `## Follow-up from #C (<#B の題>)` である | #A のコメント |
-| 2 | コメントの「From the pull request description:」の下に、#C の `Follow-up` の1行がそのままある | #A のコメント |
-| 3 | 「Open non-blocking review comments:」の下に、`suggestion` の指摘だけが1行あり、`<ファイル>:1` とリンクが付いている。`Fixed` の返答が付いた `nitpick` はない | #A のコメント |
-| 4 | コメントの最後に、目に見えない目印 `<!-- cumin:follow-up-note issue=B pull-request=C -->` がある | #A のコメントを編集画面か API で読む |
-| 5 | 手順7のあとも、#A のフォローアップノートは1つのままである | #A のコメント |
-| 6 | Agent が起動していない (`agent start` の行がない)。ログに token と秘密鍵が出ていない | cumin のログ |
+## 実機の場面 Follow-1
+
+Owner が merge した Pull Request の残りの作業が、フォローアップノートとして要求Issueに1つ付き、cumin を再起動しても増えないことを確かめる (I9、Core-10)。Claude Code は起動しないので、利用枠を使わない。要求Issueに状態ラベルを付けないので、cumin は分割 (R1)、着手 (R3)、受け入れの確認 (R4) のどれも行わない。
+
+### 準備
+
+1. `go build -o cumin ./cmd/cumin` でバイナリを作る。設定ファイルは Impl-1 の手順2と同じ形でよい。`work_dir` は捨ててよいディレクトリにする。
+2. sandbox に、`cumin/status/ready` の付いた Issue と、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueがないことを確かめる。あると、そちらに Agent を起動して利用枠を使う。
+3. 場面の準備を作る。Owner のターミナルで実行する。
+
+   ```sh
+   CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -run TestLiveFollowUpFixture -v ./internal/platform/github/
+   ```
+
+   最後に `Follow-1 is ready: requirement issue #<A>, sub-issue #<B>, pull request #<C>` が出る。作られるものと、作る App は次のとおりである。
+
+   | もの | 作る App | 内容 |
+   |---|---|---|
+   | 要求Issue #A | Planner | `cumin/type/requirement` だけ |
+   | sub-issue #B | Planner | #A の sub-issue |
+   | Pull Request #C | Implementer | `live/<日時>-follow-1.md` を足す。説明の `Follow-up` に1行、`Closes #B` |
+   | 指摘2つ | Reviewer | 1行目に `suggestion (non-blocking)`、2行目に `nitpick (non-blocking)` |
+   | 返答1つ | Implementer | `nitpick` に `Fixed` で始まる返答 |
+
+### 実行
+
+4. Owner が、Pull Request #C を squash で merge し、ブランチを消す。必須のレビューがないので、管理者として merge する。#B が閉じる。閉じなければ、Owner が #B を手で閉じる。I9 は、誰が閉じたかを見ない。
+   - 手順3の出力に `GitHub made no closing link` があれば、merge の前に、Owner が #C を #B に手で結び付ける (Pull Request の画面の Development)。2026-09-30 から、GitHub は新しい Pull Request の `Closes #N` を結び付けていない。結び付けないと、merge しても #B は閉じず、ノートも付かない。
+5. `./cumin run --config <設定ファイル>` を起動する。最初の定期確認で、ログに `I9: wrote the follow-up note` (`requirement_issue` が #A、`issue` が #B、`pull_request` が #C) が1行出る。
+6. 次の定期確認のログ (`poll`) が出たら、SIGTERM で止める。`stopped` の行が出る。
+7. もう一度 `./cumin run --config <設定ファイル>` を起動し、定期確認のログが2回出たら、SIGTERM で止める。`I9: wrote the follow-up note` は出ない。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`reviewing` の順に移り、`reviewing` のまま残った | Issue のイベント |
+| 2 | Pull Request に、Reviewer の App の bot のレビューがちょうど1つあり、結果が `APPROVED` で、対象のコミットが Pull Request の先頭のコミットである | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` の `user.login`、`state`、`commit_id` |
+| 3 | レビューの本文が `review.md` の形に従い、`Result: Approved (round 1 of 3)` と、実行したレビューの skill の行がある | レビューの本文 |
+| 4 | Reviewer は `<Issue番号>-reviewer` の worktree で動き、その HEAD は detached で、Pull Request の先頭のコミットだった | `git -C <work_dir>/<owner>/<repo>/<Issue番号>-reviewer rev-parse HEAD` と `git ... status` |
+| 5 | Reviewer に渡された skill の一覧に、`cumin-review` と `cumin-decision-request` があり、Implementer と Planner の skill はない。組み込みの `code-review` と `security-review` が一覧に載っているかを記録する | Claude Code のセッションの記録 (場面 Impl-1 の8と同じ見方)。worktree のディレクトリは `<Issue番号>-reviewer` である |
+| 6 | Reviewer が、レビューを出す前に `cumin-review` を呼んだ。組み込みの `code-review` と `security-review` を呼んだか、呼べなかったか (呼べなかったなら、そのときの応答の1文) を記録する。`--comment`、`--fix`、`ultra` を付けていない | 同じ記録の `Skill` のツールの呼び出し |
+| 7 | Reviewer は、コミットも push もしていない。Pull Request のコミットは Implementer のものだけである | Pull Request のコミット |
+| 8 | ログに token、秘密鍵、使用率の数値が出ていない | cumin のログ |
+
+5と6の結果は、組み込みのレビューの skill を1ラウンド目で使う決まり (Reviewerの要件の「ラウンドごとに見る範囲」) が、headless の実行で実際に効くかの記録である。呼べなかったときは、Reviewer は同じ観点を自分で確かめて続ける決まりなので、場面は失敗にしない。記録を #157 に残す。
 
 ### 後片付け
 
-- 要求Issue #A を not planned で閉じる。#B は merge で閉じている。
-- main に merge した `live/<日時>-follow-1.md` は残してよい。
+- Pull Request を閉じ、そのブランチを消す。
+- 実装Issueと要求Issueを閉じる。`cumin/status/reviewing` のまま残すと、同時に進めるIssueの数を1つ使い続け、次の場面に着手しない。
 - `work_dir` の一時ディレクトリを消す。
+- 手順3で launchd の cumin を止めたなら、戻す。
+
+### GitHub が紐づけを作らないとき
+
+2026-09-30 には、GitHub が `Closes #<番号>` の紐づけを作らなかった (#157 の decision request)。そのときは、1回目の I2 が「Issue を閉じる開いている Pull Request がない」で止まる。Owner が Pull Request のサイドバーの Development で実装Issueを紐づけると、API にすぐ現れる。紐づけたら、実装Issueに `cumin/status/ready` を付け直す。I1 が続きの依頼 (新しいセッション) で進める。Claude Code の起動が2回増える。記録には、手で紐づけたことを書く。
 
 ### 記録
 
-結果は、この場面の Issue (#259) にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。
+結果は #229 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、セッションの番号、手元の絶対パス、Client ID、App の名前は書かない。
