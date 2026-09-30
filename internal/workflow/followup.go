@@ -45,20 +45,31 @@ type ReviewComment struct {
 }
 
 // FollowUpMark is the marker of one follow-up note that cumin wrote: the
-// sub-issue, the pull request, and when the comment was written.
+// sub-issue, the pull request, when the comment was written, and the pull
+// requests of the sub-issue that needed a note when cumin wrote it.
 type FollowUpMark struct {
 	Issue       int
 	PullRequest int
 	At          time.Time
+	// Notes are the pull requests of the sub-issue that need a note: the
+	// merged ones that leave work, this one included, and the linked ones
+	// that were still open. The sub-issue is done when each of them has a
+	// note. A marker without the list names its own pull request only.
+	Notes []int
 }
 
 // followUpMarkerPattern matches the marker line that FollowUpNote writes.
-var followUpMarkerPattern = regexp.MustCompile(`(?m)^<!-- cumin:follow-up-note issue=(\d+) pull-request=(\d+) -->$`)
+var followUpMarkerPattern = regexp.MustCompile(`(?m)^<!-- cumin:follow-up-note issue=(\d+) pull-request=(\d+)(?: notes=(\d+(?:,\d+)*))? -->$`)
 
 // FollowUpMarker is the hidden last line of a follow-up note. It lets cumin
 // find its note after a restart, so that one pull request gets one note.
-func FollowUpMarker(issue, pullRequest int) string {
-	return fmt.Sprintf("<!-- cumin:follow-up-note issue=%d pull-request=%d -->", issue, pullRequest)
+// notes are the pull requests of the sub-issue that need a note.
+func FollowUpMarker(issue, pullRequest int, notes []int) string {
+	list := make([]string, 0, len(notes))
+	for _, n := range notes {
+		list = append(list, strconv.Itoa(n))
+	}
+	return fmt.Sprintf("<!-- cumin:follow-up-note issue=%d pull-request=%d notes=%s -->", issue, pullRequest, strings.Join(list, ","))
 }
 
 // FollowUpMarks returns the markers in the comments that cumin wrote. The
@@ -73,35 +84,54 @@ func FollowUpMarks(comments []Comment, cumin string) []FollowUpMark {
 		for _, m := range followUpMarkerPattern.FindAllStringSubmatch(c.Body, -1) {
 			issue, err1 := strconv.Atoi(m[1])
 			pr, err2 := strconv.Atoi(m[2])
-			if err1 == nil && err2 == nil {
-				marks = append(marks, FollowUpMark{Issue: issue, PullRequest: pr, At: c.CreatedAt})
+			if err1 != nil || err2 != nil {
+				continue
 			}
+			mark := FollowUpMark{Issue: issue, PullRequest: pr, At: c.CreatedAt, Notes: []int{pr}}
+			if m[3] != "" {
+				mark.Notes = nil
+				for _, n := range strings.Split(m[3], ",") {
+					if v, err := strconv.Atoi(n); err == nil {
+						mark.Notes = append(mark.Notes, v)
+					}
+				}
+			}
+			marks = append(marks, mark)
 		}
 	}
 	return marks
 }
 
 // FollowUpCandidates are the closed sub-issues of the requirement issue
-// that I9 must read: those with no note written at or after their last
-// close. A sub-issue that was opened again and closed by another pull
-// request is read again; HasFollowUpNote then tells the pull requests
-// apart.
+// that I9 must read. A sub-issue is done when notes were written at or
+// after its last close, and each pull request that those notes name as
+// needing a note has its own. A write that failed halfway leaves a pull
+// request without its note, so the sub-issue is read again. A sub-issue
+// that was opened again and closed later is read again too;
+// HasFollowUpNote then tells the pull requests apart.
 func FollowUpCandidates(requirement RequirementIssue, marks []FollowUpMark) []SubIssue {
 	var candidates []SubIssue
 	for _, sub := range requirement.SubIssues {
 		if !sub.Closed {
 			continue
 		}
-		noted := false
+		noted := map[int]bool{}
+		var needed []int
 		for _, m := range marks {
 			// Times of GitHub have a resolution of one second, so a note
 			// in the same second as the close counts.
 			if m.Issue == sub.Number && !m.At.Before(sub.ClosedAt) {
-				noted = true
-				break
+				noted[m.PullRequest] = true
+				needed = append(needed, m.Notes...)
 			}
 		}
-		if !noted {
+		done := len(noted) > 0
+		for _, n := range needed {
+			if !noted[n] {
+				done = false
+			}
+		}
+		if !done {
 			candidates = append(candidates, sub)
 		}
 	}
@@ -211,11 +241,16 @@ func OpenNonBlockingComments(threads []ReviewThread, reviewer string) []OpenNonB
 	return open
 }
 
-// FollowUpNote returns the follow-up note of a merged pull request that
-// closed the sub-issue, in the form of templates/follow-up-note.md, and
-// whether there is anything to list. With nothing to list, cumin writes no
-// note (Core-11).
-func FollowUpNote(sub SubIssue, pr MergedPullRequest, reviewer string) (string, bool) {
+// FollowUpNote returns the follow-up note of a merged pull request that is
+// linked to close the sub-issue, in the form of
+// templates/follow-up-note.md, and whether there is anything to list. With
+// nothing to list, cumin writes no note (Core-11). notes are the pull
+// requests of the sub-issue that need a note, for the marker; nil means
+// this one only.
+func FollowUpNote(sub SubIssue, pr MergedPullRequest, reviewer string, notes []int) (string, bool) {
+	if notes == nil {
+		notes = []int{pr.Number}
+	}
 	followUp := FollowUpSection(pr.Body)
 	open := OpenNonBlockingComments(pr.Threads, reviewer)
 	if followUp == "" && len(open) == 0 {
@@ -245,5 +280,5 @@ Open non-blocking review comments:
 To do any of this work: write a new requirement issue that names the items. This list is only a record.
 
 %s
-`, pr.Number, sub.Title, followUp, list.String(), FollowUpMarker(sub.Number, pr.Number)), true
+`, pr.Number, sub.Title, followUp, list.String(), FollowUpMarker(sub.Number, pr.Number, notes)), true
 }

@@ -50,7 +50,7 @@
 | | `users.go` | botのユーザの読み取り (`GET /users/{login}`) |
 | | `labels.go` | ラベルの一覧、作成、Issueのラベルの付け替え |
 | | `comments.go` | Issueへのコメントの投稿 |
-| | `closer.go` | Issueを閉じたPull Requestの読み取り (説明とレビューのスレッド。I9) |
+| | `closer.go` | Issueに結び付いたPull Requestの一覧と、1つのPull Requestの説明とレビューのスレッドの読み取り (I9) |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |

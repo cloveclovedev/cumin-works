@@ -54,9 +54,6 @@ type Issue struct {
 	Parent int
 	// BlockedBy holds the numbers of the issues that block this one.
 	BlockedBy []int
-	// ClosedBy is the pull request that closed the issue last, as the
-	// closer of its ClosedEvent. 0 answers a close by a person.
-	ClosedBy int
 	// LabelEvents are the times at which labels were added, oldest first,
 	// as GitHub records them in the timeline. A test adds the events of the
 	// past; the fake adds one for each label that "Set labels" adds.
@@ -1082,8 +1079,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			// that the client read last.
 			Last   int     `json:"last"`
 			Before *string `json:"before"`
-			// Threads belongs to the query of the pull request that
-			// closed one issue (I9).
+			// Linked belongs to the query of the linked pull requests of
+			// one issue, and Threads to the query of one pull request for
+			// the follow-up note (I9).
+			Linked  int `json:"linked"`
 			Threads int `json:"threads"`
 		} `json:"variables"`
 	}
@@ -1104,8 +1103,12 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 		return
 	}
 
+	if v.Number != 0 && v.Linked != 0 {
+		f.serveLinked(w, repo, v.Number, v.Linked)
+		return
+	}
 	if v.Number != 0 && v.Threads != 0 {
-		f.serveCloser(w, repo, v.Number, v.Threads)
+		f.servePullRequestNote(w, repo, v.Number, v.Threads)
 		return
 	}
 	if v.Number != 0 && v.Last != 0 {
@@ -1153,56 +1156,73 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	})
 }
 
-// serveCloser answers the query of the pull request that closed an issue:
-// the closer of its last ClosedEvent, with the description and the review
-// threads. Official: ClosedEvent.closer, PullRequest.reviewThreads.
-func (f *Fake) serveCloser(w http.ResponseWriter, repo *Repository, number, threads int) {
-	issue, ok := repo.Issues[number]
-	if !ok {
+// serveLinked answers the query of the pull requests that are linked to
+// close an issue, open, closed, and merged: every pull request whose Closes
+// holds the issue. Official: Issue.closedByPullRequestsReferences with
+// includeClosedPrs.
+func (f *Fake) serveLinked(w http.ResponseWriter, repo *Repository, number, first int) {
+	if _, ok := repo.Issues[number]; !ok {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
 			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an Issue with the number of %d.", number)}},
 		})
 		return
 	}
-	nodes := []any{}
-	if issue.Closed {
-		var closer any
-		if pr, ok := repo.PullRequests[issue.ClosedBy]; ok {
-			closer = map[string]any{
-				"__typename": "PullRequest",
-				"number":     pr.Number,
-				"merged":     pr.Merged,
-				"body":       pr.Body,
-				"reviewThreads": connection(pr.Threads, threads, func(t ReviewThread) any {
-					node := map[string]any{"path": t.Path, "line": nil, "originalLine": nil}
-					if t.Line != 0 {
-						node["line"] = t.Line
-					}
-					if t.OriginalLine != 0 {
-						node["originalLine"] = t.OriginalLine
-					}
-					node["comments"] = connection(t.Comments, threads, func(c ReviewComment) any {
-						var author any
-						if c.Author != "" {
-							typeName := "User"
-							if c.AuthorIsBot {
-								typeName = "Bot"
-							}
-							author = map[string]any{"__typename": typeName, "login": c.Author}
-						}
-						return map[string]any{"body": c.Body, "url": c.URL, "author": author}
-					})
-					return node
-				}),
-			}
+	var linked []*PullRequest
+	for _, pr := range sortedPullRequests(repo) {
+		if slices.Contains(pr.Closes, number) {
+			linked = append(linked, pr)
 		}
-		nodes = append(nodes, map[string]any{"closer": closer})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": map[string]any{"issue": map[string]any{
-			"timelineItems": map[string]any{"nodes": nodes},
+			"closedByPullRequestsReferences": connection(linked, first, func(pr *PullRequest) any {
+				return map[string]any{"number": pr.Number, "merged": pr.Merged, "closed": pr.Closed}
+			}),
 		}}, "rateLimit": rateLimit(1)},
+	})
+}
+
+// servePullRequestNote answers the query of one pull request for the
+// follow-up note: the description and the review threads. Official:
+// PullRequest.reviewThreads.
+func (f *Fake) servePullRequestNote(w http.ResponseWriter, repo *Repository, number, threads int) {
+	pr, ok := repo.PullRequests[number]
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":   map[string]any{"repository": map[string]any{"pullRequest": nil}, "rateLimit": rateLimit(1)},
+			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to a PullRequest with the number of %d.", number)}},
+		})
+		return
+	}
+	node := map[string]any{
+		"number": pr.Number,
+		"merged": pr.Merged,
+		"body":   pr.Body,
+		"reviewThreads": connection(pr.Threads, threads, func(t ReviewThread) any {
+			thread := map[string]any{"path": t.Path, "line": nil, "originalLine": nil}
+			if t.Line != 0 {
+				thread["line"] = t.Line
+			}
+			if t.OriginalLine != 0 {
+				thread["originalLine"] = t.OriginalLine
+			}
+			thread["comments"] = connection(t.Comments, threads, func(c ReviewComment) any {
+				var author any
+				if c.Author != "" {
+					typeName := "User"
+					if c.AuthorIsBot {
+						typeName = "Bot"
+					}
+					author = map[string]any{"__typename": typeName, "login": c.Author}
+				}
+				return map[string]any{"body": c.Body, "url": c.URL, "author": author}
+			})
+			return thread
+		}),
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"repository": map[string]any{"pullRequest": node}, "rateLimit": rateLimit(1)},
 	})
 }
 

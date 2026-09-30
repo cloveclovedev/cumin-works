@@ -1,14 +1,15 @@
 package workflow
 
-// This file applies I9: after a merged pull request closed a sub-issue of
-// an open requirement issue, cumin copies the work left into one follow-up
-// note on the requirement issue. It reads apart from the snapshot, and only
+// This file applies I9: when a sub-issue of an open requirement issue is
+// closed and a pull request linked to close it is merged, cumin copies the
+// work left into one follow-up note on the requirement issue. It reads apart from the snapshot, and only
 // for closed sub-issues without a note. docs/ja/designs/poll.md, the topic
 // on the follow-up notes.
 
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
@@ -73,41 +74,97 @@ func (s *Service) writeNotesOf(ctx context.Context, log *slog.Logger, token stri
 	marks := FollowUpMarks(comments, (*logins).cumin)
 	done := true
 	for _, sub := range FollowUpCandidates(requirement, marks) {
-		mark, err := s.writeFollowUpNote(ctx, log.With("issue", sub.Number), token, target, requirement.Number, sub, marks, (*logins).reviewer)
-		if err != nil {
-			done = false
-			continue
-		}
+		written, err := s.writeFollowUpNote(ctx, log.With("issue", sub.Number), token, target, requirement.Number, sub, marks, (*logins).reviewer)
 		// One pull request can close two sub-issues. The note written for
 		// the first one counts for the second in this poll too.
-		if mark != nil {
-			marks = append(marks, *mark)
+		marks = append(marks, written...)
+		if err != nil {
+			done = false
 		}
 	}
 	return done
 }
 
-// writeFollowUpNote reads the pull request that closed one sub-issue and
-// writes its note when it was merged, has no note yet, and leaves work. It
-// returns the marker of the note that it wrote, or nil when no note was
-// needed. An error means that a read or the write failed, and that the note
-// may still be missing.
-func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token string, target Target, requirement int, sub SubIssue, marks []FollowUpMark, reviewer string) (*FollowUpMark, error) {
+// writeFollowUpNote writes the notes of one closed sub-issue: one for each
+// merged pull request that is linked to close it, has no note yet, and
+// leaves work. Who closed the sub-issue does not matter (the Note of the
+// Owner-role session on #239). It reads every pull request before it
+// writes, and each marker names all the pull requests that need a note, so
+// that a write that fails halfway leaves the sub-issue to read again
+// (FollowUpCandidates). It returns the markers of the notes that it wrote.
+// An error means that a read or a write failed, and that a note may still
+// be missing.
+func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token string, target Target, requirement int, sub SubIssue, marks []FollowUpMark, reviewer string) ([]FollowUpMark, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	read, rate, err := s.GitHub.ReadClosingPullRequest(ctx, token, owner, repo, sub.Number)
+	linked, rate, err := s.GitHub.ReadLinkedPullRequests(ctx, token, owner, repo, sub.Number)
 	if err != nil {
-		log.Error("I9: the pull request that closed the issue was not read", "error", err.Error())
+		log.Error("I9: the linked pull requests were not read", "error", err.Error())
 		return nil, err
 	}
-	log.Debug("I9: read the pull request that closed the issue", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	if read == nil || !read.Merged {
-		log.Debug("I9: no merged pull request closed the issue")
-		return nil, nil
+	log.Debug("I9: read the linked pull requests", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	if len(linked) == 0 {
+		log.Debug("I9: no pull request is linked to the issue")
 	}
-	log = log.With("pull_request", read.Number)
-	if HasFollowUpNote(marks, read.Number) {
-		return nil, nil
+	// The pull requests that need a note: those with a note already, those
+	// that leave work now, and those that are still open.
+	var notes []int
+	for _, m := range marks {
+		if m.Issue == sub.Number && !m.At.Before(sub.ClosedAt) {
+			notes = append(notes, m.PullRequest)
+		}
 	}
+	type pending struct {
+		number int
+		pr     MergedPullRequest
+	}
+	var toWrite []pending
+	for _, l := range linked {
+		if !l.Closed {
+			// A linked pull request that is still open may be merged
+			// later. The marker names it, so that the sub-issue is read
+			// again until then.
+			notes = append(notes, l.Number)
+			continue
+		}
+		if !l.Merged || HasFollowUpNote(marks, l.Number) {
+			continue
+		}
+		pr, err := s.readPullRequestNote(ctx, log.With("pull_request", l.Number), token, target, l.Number)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := FollowUpNote(sub, pr, reviewer, nil); !ok {
+			log.Debug("I9: nothing is left to copy", "pull_request", l.Number)
+			continue
+		}
+		toWrite = append(toWrite, pending{number: l.Number, pr: pr})
+		notes = append(notes, l.Number)
+	}
+	slices.Sort(notes)
+	notes = slices.Compact(notes)
+	var written []FollowUpMark
+	for _, p := range toWrite {
+		note, _ := FollowUpNote(sub, p.pr, reviewer, notes)
+		comment, err := s.GitHub.CreateIssueComment(ctx, token, owner, repo, requirement, note)
+		if err != nil {
+			log.Error("I9: the follow-up note was not written", "pull_request", p.number, "error", err.Error())
+			return written, err
+		}
+		log.Info("I9: wrote the follow-up note", "pull_request", p.number, "comment", comment.URL)
+		written = append(written, FollowUpMark{Issue: sub.Number, PullRequest: p.number, At: time.Now(), Notes: notes})
+	}
+	return written, nil
+}
+
+// readPullRequestNote reads the description and the review threads of one
+// pull request.
+func (s *Service) readPullRequestNote(ctx context.Context, log *slog.Logger, token string, target Target, number int) (MergedPullRequest, error) {
+	read, rate, err := s.GitHub.ReadPullRequestNote(ctx, token, target.Repository.Owner, target.Repository.Name, number)
+	if err != nil {
+		log.Error("I9: the pull request was not read", "error", err.Error())
+		return MergedPullRequest{}, err
+	}
+	log.Debug("I9: read the pull request", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	pr := MergedPullRequest{Number: read.Number, Merged: read.Merged, Body: read.Body}
 	for _, t := range read.Threads {
 		thread := ReviewThread{Path: t.Path, Line: t.Line}
@@ -116,18 +173,7 @@ func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token
 		}
 		pr.Threads = append(pr.Threads, thread)
 	}
-	note, ok := FollowUpNote(sub, pr, reviewer)
-	if !ok {
-		log.Debug("I9: nothing is left to copy")
-		return nil, nil
-	}
-	comment, err := s.GitHub.CreateIssueComment(ctx, token, owner, repo, requirement, note)
-	if err != nil {
-		log.Error("I9: the follow-up note was not written", "error", err.Error())
-		return nil, err
-	}
-	log.Info("I9: wrote the follow-up note", "comment", comment.URL)
-	return &FollowUpMark{Issue: sub.Number, PullRequest: read.Number, At: time.Now()}, nil
+	return pr, nil
 }
 
 // followUpLogins returns the logins of cumin-core and of the Reviewer App.

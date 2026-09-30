@@ -31,8 +31,8 @@ Add the login screen.
 
 // followUpScene changes the scene of I9.
 type followUpScene struct {
-	// closedByPerson makes a person close the sub-issue instead of #21.
-	closedByPerson bool
+	// notLinked leaves #21 without the link that closes #10.
+	notLinked bool
 	// notMerged closes #21 without a merge.
 	notMerged bool
 	// requirementClosed closes the requirement issue #6.
@@ -40,8 +40,9 @@ type followUpScene struct {
 }
 
 // newFollowUpScene is the scene of I9: the sub-issue #10 of the open
-// requirement issue #6 was closed an hour ago by the merged pull request
-// #21. The fake CLI answers as a Planner that returned done, for the
+// requirement issue #6 was closed an hour ago, and the merged pull request
+// #21 is linked to close it. The fake does not say who closed #10: I9
+// decides from the link and the merge alone. The fake CLI answers as a Planner that returned done, for the
 // acceptance check that R4 asks for.
 func newFollowUpScene(t *testing.T, body string, threads []githubtest.ReviewThread, opts ...followUpScene) *scene {
 	t.Helper()
@@ -51,19 +52,19 @@ func newFollowUpScene(t *testing.T, body string, threads []githubtest.ReviewThre
 	}
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	sc.fake.SetCommentAuthor(cuminSlug)
-	closedBy := 21
-	if o.closedByPerson {
-		closedBy = 0
+	closes := []int{10}
+	if o.notLinked {
+		closes = nil
 	}
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: time.Now().Add(-time.Hour),
-		ClosedBy: closedBy, Labels: []string{"risk/low"},
+		Labels: []string{"risk/low"},
 	})
 	if o.requirementClosed {
 		sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Closed: true, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
 	}
 	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
-		Number: 21, Closed: true, Merged: !o.notMerged, Closes: []int{10}, Body: body, Threads: threads,
+		Number: 21, Closed: true, Merged: !o.notMerged, Closes: closes, Body: body, Threads: threads,
 	})
 	return sc
 }
@@ -90,7 +91,8 @@ func followUpNotes(sc *scene) []githubtest.Comment {
 	return notes
 }
 
-// closerReads counts the queries of the pull request that closed an issue.
+// closerReads counts the queries of I9 about pull requests: the linked
+// pull requests of an issue, and one pull request.
 func closerReads(t *testing.T, sc *scene) int {
 	t.Helper()
 	n := 0
@@ -104,7 +106,9 @@ func closerReads(t *testing.T, sc *scene) int {
 		if err := json.Unmarshal(r.Body, &body); err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := body.Variables["threads"]; ok {
+		_, linked := body.Variables["linked"]
+		_, threads := body.Variables["threads"]
+		if linked || threads {
 			n++
 		}
 	}
@@ -146,7 +150,7 @@ func TestCore10_ANoteInTheFixedFormOnceAcrossRestarts(t *testing.T) {
 		"Open non-blocking review comments:\n" +
 		"- `lib/login.dart:12` — suggestion (non-blocking): Move the validation into its own function. (https://example.test/c1)\n\n" +
 		"To do any of this work: write a new requirement issue that names the items. This list is only a record.\n\n" +
-		"<!-- cumin:follow-up-note issue=10 pull-request=21 -->\n"
+		"<!-- cumin:follow-up-note issue=10 pull-request=21 notes=21 -->\n"
 	if notes[0].Body != want {
 		t.Errorf("the note:\n%s\nwant:\n%s", notes[0].Body, want)
 	}
@@ -157,9 +161,10 @@ func TestCore10_ANoteInTheFixedFormOnceAcrossRestarts(t *testing.T) {
 	if n := len(followUpNotes(sc)); n != 1 {
 		t.Errorf("%d follow-up notes after a restart, want 1", n)
 	}
-	// With the note in place, the sub-issue is not read again.
-	if n := closerReads(t, sc); n != 1 {
-		t.Errorf("%d reads of the pull request, want 1", n)
+	// With the note in place, the sub-issue is not read again: one read
+	// of the linked pull requests and one of #21, in the first poll.
+	if n := closerReads(t, sc); n != 2 {
+		t.Errorf("%d reads of pull requests, want 2", n)
 	}
 }
 
@@ -198,15 +203,17 @@ func TestI9_AClosedRequirementIssueGetsNoNote(t *testing.T) {
 	}
 }
 
-// A sub-issue that a person closed, or that a pull request closed without a
-// merge, has no work to copy.
-func TestI9_ASubIssueClosedWithoutAMergeGetsNoNote(t *testing.T) {
+// A sub-issue without a linked pull request, or whose linked pull request
+// was not merged, has no work to copy. A sub-issue closed by hand with a
+// merged linked pull request gets its note: that is every other test of
+// this file, because the fake does not say who closed an issue.
+func TestI9_ASubIssueWithoutAMergedLinkedPullRequestGetsNoNote(t *testing.T) {
 	tests := []struct {
 		name  string
 		scene followUpScene
 	}{
-		{"closed by a person", followUpScene{closedByPerson: true}},
-		{"closed by a pull request that was not merged", followUpScene{notMerged: true}},
+		{"no linked pull request", followUpScene{notLinked: true}},
+		{"a linked pull request that was not merged", followUpScene{notMerged: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -226,7 +233,7 @@ func TestI9_AMarkerOfAnotherAuthorDoesNotStopTheNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
 		Author: "octocat", At: time.Now(),
-		Body: "Nothing here.\n\n" + workflow.FollowUpMarker(10, 21) + "\n",
+		Body: "Nothing here.\n\n" + workflow.FollowUpMarker(10, 21, []int{21}) + "\n",
 	})
 	sc.pollAndWait(t, sc.service())
 
@@ -261,7 +268,7 @@ func TestFollowUpNote_FollowsTheTemplate(t *testing.T) {
 	pr := workflow.MergedPullRequest{Number: 21, Merged: true, Body: followUpBody, Threads: []workflow.ReviewThread{
 		{Path: "a.go", Line: 3, Comments: []workflow.ReviewComment{{Author: "r[bot]", Body: "todo (non-blocking): Add a test.", URL: "https://example.test/c"}}},
 	}}
-	note, ok := workflow.FollowUpNote(workflow.SubIssue{Number: 10, Title: "Title"}, pr, "r[bot]")
+	note, ok := workflow.FollowUpNote(workflow.SubIssue{Number: 10, Title: "Title"}, pr, "r[bot]", nil)
 	if !ok {
 		t.Fatal("no note")
 	}
@@ -290,12 +297,12 @@ func TestFollowUpNote_FollowsTheTemplate(t *testing.T) {
 func TestFollowUpNote_AnEmptyPartSaysNone(t *testing.T) {
 	t.Parallel()
 	sub := workflow.SubIssue{Number: 10, Title: "Title"}
-	onlyText, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Body: followUpBody}, "r[bot]")
+	onlyText, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Body: followUpBody}, "r[bot]", nil)
 	if !ok || !strings.Contains(onlyText, "Open non-blocking review comments:\nNone\n") {
 		t.Errorf("a note without open comments:\n%s", onlyText)
 	}
 	threads := []workflow.ReviewThread{{Path: "a.go", Comments: []workflow.ReviewComment{{Author: "r[bot]", Body: "todo (non-blocking): Add a test.", URL: "u"}}}}
-	onlyComments, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Threads: threads}, "r[bot]")
+	onlyComments, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Threads: threads}, "r[bot]", nil)
 	if !ok || !strings.Contains(onlyComments, "From the pull request description:\nNone\n") {
 		t.Errorf("a note without follow-up text:\n%s", onlyComments)
 	}
@@ -376,7 +383,10 @@ func TestI9_OnePullRequestThatClosesTwoSubIssuesGetsOneNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 11, Parent: 6, Title: "Add the logout button", Closed: true, ClosedAt: time.Now().Add(-time.Hour),
-		ClosedBy: 21, Labels: []string{"risk/low"},
+		Labels: []string{"risk/low"},
+	})
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 21, Closed: true, Merged: true, Closes: []int{10, 11}, Body: followUpBody,
 	})
 	sc.pollAndWait(t, sc.service())
 
@@ -448,8 +458,8 @@ func TestR4_NoNoteNeededDoesNotWait(t *testing.T) {
 		scene followUpScene
 	}{
 		{"nothing to list", "## Follow-up\nNone\n", followUpScene{}},
-		{"closed by a person", followUpBody, followUpScene{closedByPerson: true}},
-		{"closed without a merge", followUpBody, followUpScene{notMerged: true}},
+		{"no linked pull request", followUpBody, followUpScene{notLinked: true}},
+		{"a linked pull request that was not merged", followUpBody, followUpScene{notMerged: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -479,5 +489,78 @@ func TestR4_AFailedReadOfTheCommentsWaits(t *testing.T) {
 	}
 	if !strings.Contains(sc.logs.String(), "R4: waits for the follow-up notes") {
 		t.Error("the log does not say that R4 waits")
+	}
+}
+
+// Two merged pull requests close the same sub-issue, and the second note
+// fails. The first marker names both, so the next poll reads the sub-issue
+// again and writes the second note; R4 waits until then.
+func TestI9_ANoteThatFailsHalfwayIsWrittenAtTheNextPoll(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 22, Closed: true, Merged: true, Closes: []int{10}, Body: followUpBody,
+	})
+	sc.fake.FailAfter("POST", "/repos/example-org/example-repo/issues/6/comments", 1, 500)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Fatalf("%d follow-up notes after the failure, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs with a note missing, want none", n)
+	}
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+	notes := followUpNotes(sc)
+	if len(notes) != 2 {
+		t.Fatalf("%d follow-up notes, want 2", len(notes))
+	}
+	for i, pr := range []string{"#21", "#22"} {
+		if !strings.HasPrefix(notes[i].Body, "## Follow-up from "+pr) || !strings.Contains(notes[i].Body, "notes=21,22 -->") {
+			t.Errorf("note %d:\n%s", i, notes[i].Body)
+		}
+	}
+}
+
+// A marker names the pull requests that need a note; the sub-issue is done
+// only when each has one. A marker without the list names its own pull
+// request only.
+func TestFollowUpCandidates_EveryNamedPullRequestNeedsItsNote(t *testing.T) {
+	t.Parallel()
+	closed := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	requirement := workflow.RequirementIssue{Number: 6, SubIssues: []workflow.SubIssue{
+		{Number: 10, Closed: true, ClosedAt: closed},
+		{Number: 11, Closed: true, ClosedAt: closed},
+	}}
+	comments := []workflow.Comment{
+		{Author: "cumin[bot]", CreatedAt: closed, Body: "x\n" + workflow.FollowUpMarker(10, 21, []int{21, 22}) + "\n"},
+		{Author: "cumin[bot]", CreatedAt: closed, Body: "x\n<!-- cumin:follow-up-note issue=11 pull-request=23 -->\n"},
+	}
+	marks := workflow.FollowUpMarks(comments, "cumin[bot]")
+	got := workflow.FollowUpCandidates(requirement, marks)
+	if len(got) != 1 || got[0].Number != 10 {
+		t.Errorf("candidates = %v, want #10 only", got)
+	}
+}
+
+// A linked pull request that is still open when the first note is written
+// may be merged later. The marker names it, so the sub-issue is read again,
+// and its note follows the merge.
+func TestI9_ALinkedPullRequestMergedLaterGetsItsNote(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	later := &githubtest.PullRequest{Number: 22, Closes: []int{10}, Body: followUpBody}
+	sc.fake.AddPullRequest(sc.repo, later)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Fatalf("%d follow-up notes, want 1", n)
+	}
+
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{Number: 22, Closed: true, Merged: true, Closes: []int{10}, Body: followUpBody})
+	sc.pollAndWait(t, service)
+	notes := followUpNotes(sc)
+	if len(notes) != 2 || !strings.HasPrefix(notes[1].Body, "## Follow-up from #22") {
+		t.Errorf("the notes after the later merge: %v", notes)
 	}
 }
