@@ -217,3 +217,14 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 115 | 親のない (orphan) ブランチ `cumin/diagrams` に置いたSVGを、`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>` の画像としてIssueとPull Requestに貼ると、Webでも Android のGitHubアプリでも表示される。本文のURLは書き換えられず (Camoを通らない)、`image/svg+xml` で200を返す。Mermaidの図は、Android のアプリでは "Loading" のまま表示されない | sandboxで実測 (2026-09-29、#198 の decision request) | 実測 |
 | 116 | PlantUMLは、SVGに埋め込むソースのコメント (`<!--SRC=[...]-->`) の中で、`--` を `- -` と書く。XMLのコメントは `--` を含めないためである。ソースを読み戻すときは、空白を除いてから読む | #231 で観測 (2026-09-30) | 実測 |
 | 117 | rulesetで作成を止めたブランチを、止められていないAppがGit Database API (`POST /repos/{owner}/{repo}/git/refs`) で作ろうとすると、422 ("Reference update failed") が返る | sandboxのlive check (`TestLiveDiagramsBranch`、#212) で実測 (2026-09-30) | 実測 |
+
+## 15. 閉じるリンクの実装で確かめたこと (2026-09-30、2026-10-01)
+
+要求Issue #272 の実装 (#278) と、その前後にGitHubで起きたことの記録。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 118 | cumin-coreのinstallation tokenで、GraphQLの `addCloseIssueReferences` を呼べる。張ったリンクは、すぐに実装Issueの `closedByPullRequestsReferences` に現れ、Issueにcumin-coreの `connected` のイベントが付く。公式のGraphQLのリファレンスは、このmutationに要る権限を書いていない | sandboxの `TestLiveCloseReferences` で実測 (#278、C1とC2、2026-09-30) | 実測 |
+| 119 | cumin-coreのtokenで、Issueを `state: closed`、`state_reason: completed` で閉じられる。閉じたIssueをもう一度閉じても200が返り、`closed` のイベントは1つのままである | 同上 (C3とC4) | 実測 |
+| 120 | 2026-09-30には、手で張ったリンク (画面の Development の欄、または `addCloseIssueReferences`) のPull Requestを既定のブランチにmergeしても、Issueは閉じなかった。cumin-coreのmergeで、1分待っても開いたままだった | 同上 (C5)。cumin-works #271 と #229 でも同じ | 実測 |
+| 121 | 2026-09-30の途中から、本文に `Closes #N` と書いたPull Requestに、作った直後は閉じるリンクが付かないことがある。数時間あとに付くこともある (cumin-works #268〜#270、sandbox #185 は作ってから3分はリンクがなく、2026-10-01には付いていた)。キーワードのリンクと手で張ったリンクは、`closingIssuesReferences(userLinkedOnly: true)` で見分けられる。GitHub Status に障害の表示はなく、community の discussions 209162 と 209148 に報告がある | cumin-works、sandbox、ほかの公開リポジトリで観測 (2026-09-30、2026-10-01) | 実測 |
