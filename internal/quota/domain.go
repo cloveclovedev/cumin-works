@@ -183,3 +183,20 @@ func weeklyNextTry(w Window, settings config.WeeklyQuota) time.Time {
 	}
 	return t
 }
+
+// Newer returns the newer of two readings of the same window, whatever
+// order they came in: runs that overlap can end in any order. A later
+// reset time is a newer window. In the same window, usage only rises, so
+// the higher usage is the newer reading.
+func Newer(a, b Window) Window {
+	switch {
+	case a.ResetsAt.After(b.ResetsAt):
+		return a
+	case b.ResetsAt.After(a.ResetsAt):
+		return b
+	case a.Utilization >= b.Utilization:
+		return a
+	default:
+		return b
+	}
+}

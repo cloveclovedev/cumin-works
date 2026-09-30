@@ -117,16 +117,29 @@ func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Ta
 }
 
 // keepUsage stores a usage that was read, and ends the silence after an
-// unread usage: a later read that fails is a new failure. A state that
+// unread usage. The lock covers the read and the write of the state, so
+// that two runs that end together do not lose a reading: a later read that fails is a new failure. A state that
 // cannot be saved costs only a minimal run after a restart.
 func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) {
 	s.quotaMu.Lock()
+	defer s.quotaMu.Unlock()
 	s.quota.unreadTold = false
-	s.quotaMu.Unlock()
+	// Runs that overlap can end in any order, so each window keeps the
+	// newer of the stored reading and this one. An older reading never
+	// makes the next try time earlier.
+	usage := toUsage(read)
+	readAt := read.ReadAt
+	if readAt.IsZero() {
+		readAt = s.now()
+	}
+	if stored, ok := s.State.Quota(); ok {
+		usage.FiveHour = quota.Newer(usage.FiveHour, quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt})
+		usage.Weekly = quota.Newer(usage.Weekly, quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt})
+	}
 	err := s.State.SetQuota(state.Quota{
-		FiveHour: state.QuotaWindow{Utilization: read.FiveHour.Utilization, ResetsAt: read.FiveHour.ResetsAt},
-		Weekly:   state.QuotaWindow{Utilization: read.Weekly.Utilization, ResetsAt: read.Weekly.ResetsAt},
-		ReadAt:   s.now(),
+		FiveHour: state.QuotaWindow{Utilization: usage.FiveHour.Utilization, ResetsAt: usage.FiveHour.ResetsAt},
+		Weekly:   state.QuotaWindow{Utilization: usage.Weekly.Utilization, ResetsAt: usage.Weekly.ResetsAt},
+		ReadAt:   readAt,
 	})
 	if err != nil {
 		log.Error("Q3: the quota usage was not kept", "error", err.Error())

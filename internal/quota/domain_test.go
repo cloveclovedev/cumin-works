@@ -204,3 +204,24 @@ func TestQ3_NextTry(t *testing.T) {
 		t.Error("NextTry without a stop reports a time")
 	}
 }
+
+// Readings that come in any order keep the newest one of each window.
+func TestNewerKeepsTheNewestReading(t *testing.T) {
+	reset := weeklyReset
+	older := Window{Utilization: 0.30, ResetsAt: reset}
+	newer := Window{Utilization: 0.40, ResetsAt: reset}
+	nextWindow := Window{Utilization: 0.05, ResetsAt: reset.Add(week)}
+	tests := []struct {
+		a, b, want Window
+	}{
+		{older, newer, newer},
+		{newer, older, newer},
+		{newer, nextWindow, nextWindow},
+		{nextWindow, newer, nextWindow},
+	}
+	for _, tt := range tests {
+		if got := Newer(tt.a, tt.b); got != tt.want {
+			t.Errorf("Newer(%+v, %+v) = %+v, want %+v", tt.a, tt.b, got, tt.want)
+		}
+	}
+}
