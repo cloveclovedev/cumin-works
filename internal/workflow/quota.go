@@ -70,9 +70,12 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		tell := !s.quota.unreadTold
 		s.quota.unreadTold = true
 		s.quotaMu.Unlock()
-		if tell {
-			s.notifyQuota(ctx, log, target, number,
-				"The quota usage was not read before a start ("+reason+"). cumin starts no new work until a read succeeds.")
+		if tell && !s.notifyQuota(ctx, log, target, number,
+			"The quota usage was not read before a start ("+reason+"). cumin starts no new work until a read succeeds.") {
+			// The channel failed: the next poll tries again.
+			s.quotaMu.Lock()
+			s.quota.unreadTold = false
+			s.quotaMu.Unlock()
 		}
 		return false, nil
 	}
@@ -122,7 +125,9 @@ func (s *Service) decideQuota(log *slog.Logger, read agent.QuotaUsage) quota.Dec
 }
 
 // tellQuotaLimit notifies the Owner once for each window that stops the
-// starts, until starts go on again.
+// starts, until starts go on again. The mark is set before the send, so
+// that a poll and the end of a run never send the same notification twice,
+// and taken back when the channel fails, so that a later check tries again.
 func (s *Service) tellQuotaLimit(ctx context.Context, log *slog.Logger, target Target, number int, decision quota.Decision) {
 	for _, window := range decision.Stopped {
 		s.quotaMu.Lock()
@@ -132,8 +137,10 @@ func (s *Service) tellQuotaLimit(ctx context.Context, log *slog.Logger, target T
 		}
 		s.quota.told[window] = true
 		s.quotaMu.Unlock()
-		if tell {
-			s.notifyQuota(ctx, log, target, number, limitReason(window))
+		if tell && !s.notifyQuota(ctx, log, target, number, limitReason(window)) {
+			s.quotaMu.Lock()
+			delete(s.quota.told, window)
+			s.quotaMu.Unlock()
 		}
 	}
 }
@@ -142,14 +149,15 @@ func limitReason(window quota.Name) string {
 	if window == quota.Weekly {
 		return "The weekly quota window reached its pace limit. cumin starts no new work until the pace limit rises above the usage or the window resets. Running issues go on."
 	}
-	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no new work until the window resets, a time band with a higher limit starts, or the Owner runs cumin quota allow. Running issues go on.", window)
+	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no new work until the window resets or a time band with a higher limit starts. Running issues go on.", window)
 }
 
 // notifyQuota sends one Q1 notification. The quota belongs to the account
 // of the Host, so the Host setting decides, as for a poll that keeps
-// failing. The issue whose start or run met the limit is the link.
-func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) {
-	s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
+// failing. The issue whose start or run met the limit is the link. It
+// reports false when the channel failed.
+func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) bool {
+	return s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        RowQ1,
 		Reason:     reason,
 		Repository: target.Repository.String(),

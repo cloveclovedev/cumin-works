@@ -216,3 +216,24 @@ func TestQ1_InfoLogsHoldNoUsageNumber(t *testing.T) {
 func bandOverTheWholeDay(threshold int) []config.TimeBand {
 	return []config.TimeBand{{From: 0, To: 23*60 + 59, Threshold: threshold}}
 }
+
+// Q1: a notification that the channel did not take is sent again at the
+// next poll that is still stopped, and then no more.
+func TestQ1_AFailedNotificationIsSentAgain(t *testing.T) {
+	sc := newScene(t)
+	sc.setQuota(t, 0.90, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	sc.webhook.fails(http.StatusBadRequest)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	failed := len(sc.q1Messages())
+	if failed == 0 {
+		t.Fatal("the first poll sent nothing")
+	}
+
+	sc.webhook.fails(0)
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+	if got := len(sc.q1Messages()) - failed; got != 1 {
+		t.Errorf("%d notifications after the channel recovered, want 1", got)
+	}
+}

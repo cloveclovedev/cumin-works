@@ -10,6 +10,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -122,16 +123,22 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 // notifyOwner sends one notification, when the repository wants one. The
 // caller reads the setting notify.discord.enabled of that repository. A
 // failure is logged at error level and undoes nothing.
-func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled bool, n notify.Notification) {
+//
+// It reports false only when a channel failed to take the notification, so
+// that a caller that sends a notification once (Q1) can try again later.
+// A notification that is off, or that has no channel, reports true: trying
+// again changes nothing.
+func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled bool, n notify.Notification) bool {
 	if !enabled {
 		log.Info("the notification is off for this repository")
-		return
+		return true
 	}
 	if err := s.Notify.Notify(ctx, n); err != nil {
 		log.Error("the Owner was not notified", "error", err.Error())
-		return
+		return errors.Is(err, notify.ErrNoSender)
 	}
 	log.Info("the Owner was notified")
+	return true
 }
 
 // subIssueNow reads one sub-issue from a new snapshot of the repository.
