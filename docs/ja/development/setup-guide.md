@@ -332,6 +332,16 @@ scripts/install.sh --restart
 - `--restart` を付けないと、動いている cumin は古いバイナリのままである。スクリプトがそう表示する。
 - ビルドが失敗したときは、置いてあるバイナリをそのまま残して止まる。
 
+## 対象のリポジトリを足す
+
+App を登録済みの Host に、同じ Organization のリポジトリを足すときの手順。
+
+1. 4つの App のインストールのそれぞれで、リポジトリを足す。Organization の設定の "GitHub Apps" で App の "Configure" を選び、"Only select repositories" にそのリポジトリを加える。
+2. そのリポジトリで、手順3の `scripts/setup-repo.sh` を実行する。`--core-app`、`--implementer-app`、そのリポジトリのCIの `--required-check` を付ける。
+3. 足された `.cumin/config.toml` の `protected_paths` を、そのリポジトリに合わせて直す。要件の文書など、Agent に変えさせないパスを足す。
+4. Host の設定ファイルの `repositories` に `"<owner>/<repo>"` を足し ([設定の一覧](configuration.md))、cumin を再起動する (手順4の表の「再起動する」)。
+5. 下の「セットアップのあとの確認」を、そのリポジトリで行う。
+
 ## セットアップのあとの確認
 
 セットアップが終わったら、保護が効いていることを1回確かめる。
