@@ -206,3 +206,14 @@ v2の要求整理の中で調べた事実だけを集める。設計上の決定
 | 111 | `init` のイベントの `skills` は、skillの名前の文字列の配列である (86で項目の名前だけを記録した) | #166 の記録 (2026-09-25、Claude Code 2.1.273) | 実測 |
 | 112 | Issues の書き込みだけを持ち、Pull requests の権限を持たないAppのinstallation tokenで、sub-issueの作成、マイルストーンと blocked by の設定、コメントができる。`GET /repos/{owner}/{repo}/issues/{number}` で、Pull Requestの本文も読める | 公式: Permissions required for GitHub Apps (Issues の項にこのendpointがある)。live scenario Accept-1 (#172) で実測 (2026-09-29、Claude Code 2.1.284) | 公式文書 + 実測 |
 | 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである | #221 で実測 (2026-09-29) | 実測 |
+
+## 14. 図の英語化と `cumin/diagrams` の実装で確かめたこと (2026-09-29、2026-09-30)
+
+要求Issue #198 の実装 (#212、#213、#215、#216、#231) と、その前の調べもので確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 114 | 画面でIssueに画像を添付するときのアップロード (`user-attachments`) は、GitHub Appのinstallation tokenを受け付けない。Contentsの書き込みを持つAppのtokenでも、SVGとPNGのどちらも、`token` と `Bearer` のどちらの形でも404になる。`gh` の添付の機能は、installation tokenでは送る前に拒否する。REST APIの文書にこのendpointはない | sandboxで実測 (2026-09-29、#198 の decision request) | 実測 |
+| 115 | 親のない (orphan) ブランチ `cumin/diagrams` に置いたSVGを、`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>` の画像としてIssueとPull Requestに貼ると、Webでも Android のGitHubアプリでも表示される。本文のURLは書き換えられず (Camoを通らない)、`image/svg+xml` で200を返す。Mermaidの図は、Android のアプリでは "Loading" のまま表示されない | sandboxで実測 (2026-09-29、#198 の decision request) | 実測 |
+| 116 | PlantUMLは、SVGに埋め込むソースのコメント (`<!--SRC=[...]-->`) の中で、`--` を `- -` と書く。XMLのコメントは `--` を含めないためである。ソースを読み戻すときは、空白を除いてから読む | #231 で観測 (2026-09-30) | 実測 |
+| 117 | rulesetで作成を止めたブランチを、止められていないAppがGit Database API (`POST /repos/{owner}/{repo}/git/refs`) で作ろうとすると、422 ("Reference update failed") が返る | sandboxのlive check (`TestLiveDiagramsBranch`、#212) で実測 (2026-09-30) | 実測 |
