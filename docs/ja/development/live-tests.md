@@ -71,7 +71,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 定期確認や着手を sandbox で確かめるときは、`go build -o cumin ./cmd/cumin` で組み込んだバイナリを動かす。`go run` で動かすと、親のプロセスに送った SIGTERM が `cumin` の子プロセスに届かず、止め方の確認にならない (2026-09-21 に確かめた)。launchd は組み込んだバイナリを起動するので、Host の運用には関係しない。
 
-`cumin run` は、`cumin/status/ready` の付いた sub-issue を見つけると本物の Implementer を、`cumin/status/ready` の付いた要求Issueか、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueを見つけると本物の Planner を起動する。どれも利用枠を使う (使用率の最小の実行と Agent の実行で2回)。Owner が同意したときだけ動かす。動かす前に確かめること。
+`cumin run` は、`cumin/status/ready` の付いた sub-issue を見つけると本物の Implementer を、`cumin/status/ready` の付いた要求Issueか、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueを見つけると本物の Planner を起動する。どれも利用枠を使う。新しい着手 (R1、I1) は使用率の最小の実行と Agent の実行で2回、受け入れの確認 (R4) と続きの依頼 (I4、I5、Reviewer) は Agent の実行の1回である。Owner が同意したときだけ動かす。動かす前に確かめること。
 
 - Host の設定ファイルに、sandbox のリポジトリと、4つの App (`cumin-core` と3つの role) の Client ID がある。秘密鍵が Keychain にある。
 - `work_dir` が、捨ててよいディレクトリを指している。cumin はその下に clone と worktree を作る。
@@ -116,10 +116,10 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
    | ログの行 | 意味 |
    |---|---|
+   | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1) |
    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
    | `clone created`、`worktree created` | 作業場所を用意した |
    | `I1: requested the work` | ブランチの名前を決めて、Implementer を起動した |
-   | `quota usage read` | 使用率の最小の実行が終わった |
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end` | Claude Code の実行の始まりと終わり |
    | `the agent run ended` | 結果 (`done` か `blocked`) とセッションの番号 |
@@ -303,10 +303,11 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 
    | ログの行 | 意味 |
    |---|---|
+   | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1) |
    | `R1: moved the requirement issue to planning` | ラベルを `cumin/status/planning` に替えた |
    | `clone created`、`worktree created` | 既定のブランチを detached で開いた |
    | `R1: requested the Planner` (`kind` が `plan`) | Planner を起動した |
-   | `quota usage read`、`agent token created`、`agent identity read` | 使用率の最小の実行と、roleのtokenとbotの身元 |
+   | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end`、`the agent run ended` | Claude Code の実行と、その結果 |
    | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-owner-review` に替えた |
    | `the Owner was notified` (`row` が `R2`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
@@ -562,3 +563,103 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 ### 記録
 
 結果は、この場面の Issue (#259) にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。
+
+## 実機の場面 Quota-1
+
+本物の Claude Code の使用率で、cumin が着手の前に止まり、Owner に1回だけ知らせ、`cumin quota allow` で再開するところを、1回通して確かめる (Q1、Q2、Q3、Core-6、Core-16)。前半は weekly 枠、後半は 5h 枠で止める。しきい値を今の使用率より低くして、止まる場面を作る。本物の Claude Code を、最小の実行で3回と、後半の Implementer の実行で1回起動するので、利用枠を使う。Owner が同意したときだけ行う。
+
+### 準備
+
+1. `go build -o cumin ./cmd/cumin` でバイナリを作る。
+2. Host で launchd の cumin が動いていれば止める (場面 Check-1 の手順4と同じ理由)。
+3. Host の状態ディレクトリ (`~/.local/state/cumin/`) の `state.json` と `quota-allowance.json` を、同じディレクトリの別の名前に移す (例: 末尾に `.before-quota-1` を付ける)。残した使用率があると、Q3 が最小の実行を飛ばし、止まる場面と通知が起きないためである。中身は開かない。
+4. 前半の設定ファイルを作る。Impl-1 の手順2の形に、次の表を足す。目標を1%にし、前倒しを0にすると、ペースの上限は1%以下になる。5h枠のしきい値は100%にして、5h枠では止まらないようにする。
+
+   ```toml
+   [quota.five_hour]
+   threshold = 100
+
+   [quota.weekly]
+   target = 1
+   lead = "0s"
+   ```
+
+5. 後半の設定ファイルを作る。Impl-1 の手順2の形に、次の表を足す。weekly枠は、目標を100%、前倒しを7日の直前にして、weekly枠では止まらないようにする。`cumin quota allow` は5h枠にしか効かないので、weekly枠で止まると手順19で着手しない。
+
+   ```toml
+   [quota.five_hour]
+   threshold = 1
+
+   [quota.weekly]
+   target = 100
+   lead = "167h"
+   ```
+
+6. sandbox に、Impl-1 の手順3と4と同じ要求Issueと実装Issueを作る。実装Issueは、数分で終わる内容にする。
+7. sandbox に、`cumin/status/ready` の付いた他の Issue と、同時に進めるIssueの数に数えられるIssueがないことを確かめる (「`cumin run` を sandbox で動かすとき」)。
+8. `./cumin status --config <前半の設定ファイル>` で、使用率の欄が `not read yet` であることを確かめる。手順3が効いている。
+
+### 実行: 前半 (weekly枠)
+
+9. 実装Issueに `cumin/status/ready` を付けてから、`./cumin run --config <前半の設定ファイル>` を起動する。先に起動すると、`cumin/status/ready` を付ける前の定期確認で Q4 (待ち状態) の通知が1件出る。
+10. 次の定期確認から、ログがこの順に出る。
+
+    | ログの行 | 意味 |
+    |---|---|
+    | `quota usage read` | 着手の前の最小の実行 |
+    | `Q1: no start; the quota limit is reached` (`windows` が `weekly`、`next_try` がweekly枠のリセット時刻) | 着手を止めた。ラベルは替えない |
+    | `the Owner was notified` | Q1の通知 |
+
+11. 定期確認を3回以上待つ。`quota usage read` は増えない (Q3: 次に試す時刻まで読まない)。
+12. `./cumin status --config <前半の設定ファイル>` を実行する。`new starts: stopped by the weekly window` が出る。
+13. `./cumin quota allow` を実行し、定期確認を2回待つ。着手は起きない (Core-16: 許可はweekly枠のペースの上限を上げない)。
+14. SIGTERM で止める。
+
+### 実行: 後半 (5h枠)
+
+15. 状態ディレクトリの `state.json` と `quota-allowance.json` を消す。どちらも前半で作られたものである。残すと、前半の使用率と許可が後半に効く。
+16. `./cumin run --config <後半の設定ファイル>` を起動する。実装Issueには `cumin/status/ready` が付いたままである。
+17. 次の定期確認から、ログがこの順に出る。
+
+    | ログの行 | 意味 |
+    |---|---|
+    | `quota usage read` | 着手の前の最小の実行 |
+    | `Q1: no start; the quota limit is reached` (`windows` が `5h`、`next_try` が5h枠のリセット時刻) | 着手を止めた |
+    | `the Owner was notified` | Q1の通知。本文に `cumin quota allow` がある |
+
+18. `./cumin quota allow` を実行する。5h枠のリセット時刻と、weekly枠の上限は変わらないことが表示される。
+19. 次の定期確認から、ログがこの順に出る。
+
+    | ログの行 | 意味 |
+    |---|---|
+    | `quota usage read` | 許可で次に試す時刻の待ちが終わり、読み直した (Q2) |
+    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+    | `I1: requested the work`、`agent start`、`agent end`、`the agent run ended` | Implementer の実行 |
+
+20. `the agent run ended` のあとの I2 の行が出たら、SIGTERM で止める。I2 の結果は、この場面では確かめない。GitHub が `Closes #<番号>` の紐づけを作らないと、I2 は「Issue を閉じる開いている Pull Request がない」で止まる (Review-1 の「GitHub が紐づけを作らないとき」)。利用枠とは関係がない。
+
+確かめる枠の使用率が1%未満のときは、1%のしきい値でも止まらない。リセットの直後に起きうる。そのときは、その枠の使用率が1%以上になってからやり直す。確かめない側の枠が100%に達しているとき (使い切ったとき) も、この場面は行えない。
+
+### 確かめること
+
+| # | 確かめること | 見る場所 |
+|---|---|---|
+| 1 | 前半で、実装Issueのラベルが `cumin/status/ready` のまま変わらない | Issue のイベント |
+| 2 | 前半の Q1 の通知は1件で、weekly枠の停止を知らせている | Discord |
+| 3 | 前半で、`quota usage read` は1行だけである。手順11と13の定期確認で増えていない | cumin のログ |
+| 4 | 前半で、`cumin quota allow` のあとも着手しない | cumin のログ、Issue のイベント |
+| 5 | 後半の Q1 の通知は1件で、5h枠の停止と `cumin quota allow` を知らせている | Discord |
+| 6 | 後半で、`cumin quota allow` のあとの定期確認で使用率を読み直して着手し、ラベルが `cumin/status/implementing` に替わった | cumin のログ、Issue のイベント |
+| 7 | `cumin status` の表示に、使用率を読んだ時刻、今の上限、止まっている枠が出た | ターミナル |
+| 8 | ログと通知に、token、秘密鍵、webhook のアドレス、使用率の数値が出ていない。`cumin status` の表示の数値は、記録に写さない | cumin のログ、Discord |
+
+### 後片付け
+
+- 状態ディレクトリの `state.json` と `quota-allowance.json` を消し、手順3で移したファイルを元の名前に戻す。移す前に `quota-allowance.json` がなかったなら、戻すものはない。
+- Pull Request を閉じ、そのブランチを消す。実装Issueと要求Issueを閉じる。
+- `work_dir` の一時ディレクトリを消す。
+- 手順2で launchd の cumin を止めたなら、戻す。
+
+### 記録
+
+結果は #252 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、リセット時刻、セッションの番号、手元の絶対パス、Client ID、App の名前、webhook のアドレスは書かない。
