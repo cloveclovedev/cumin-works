@@ -106,3 +106,80 @@ func reached(w Window, limit float64, now time.Time) bool {
 	}
 	return w.Utilization*100 >= limit-epsilon
 }
+
+// retryMargin is added to the time at which the pace limit meets the
+// usage: at that very time the usage is still at the limit, and a try then
+// would stop again.
+const retryMargin = time.Minute
+
+// NextTry is the earliest time at which the stored usage could pass the
+// limits that stop it now (Q3 of issue-states.md). Usage only rises until
+// a reset, so no earlier try can pass. For each window that stops:
+//
+//   - 5h: its reset, or the start of the first time band whose threshold
+//     is above the usage, whichever comes first.
+//   - weekly: the time at which the pace limit passes the usage, or its
+//     reset, whichever comes first.
+//
+// When both windows stop, the later of the two times counts. The second
+// value is false when nothing stops at now.
+func NextTry(usage Usage, settings config.QuotaSettings, now time.Time) (time.Time, bool) {
+	d := Decide(usage, settings, now)
+	if d.Allows() {
+		return time.Time{}, false
+	}
+	var next time.Time
+	for _, window := range d.Stopped {
+		var t time.Time
+		switch window {
+		case FiveHour:
+			t = fiveHourNextTry(usage.FiveHour, settings.FiveHour, now)
+		case Weekly:
+			t = weeklyNextTry(usage.Weekly, settings.Weekly)
+		}
+		if t.After(next) {
+			next = t
+		}
+	}
+	return next, true
+}
+
+func fiveHourNextTry(w Window, settings config.FiveHourQuota, now time.Time) time.Time {
+	next := w.ResetsAt
+	// The limit changes only where a band starts or ends. Each boundary
+	// comes once in the next 24 hours.
+	for _, band := range settings.Bands {
+		for _, boundary := range []config.TimeOfDay{band.From, band.To} {
+			t := nextClockTime(now, boundary)
+			if t.Before(next) && w.Utilization*100 < FiveHourLimit(settings, t)-epsilon {
+				next = t
+			}
+		}
+	}
+	return next
+}
+
+// nextClockTime is the first time after now at the clock time t, in the
+// time zone of now.
+func nextClockTime(now time.Time, t config.TimeOfDay) time.Time {
+	y, m, d := now.Date()
+	at := time.Date(y, m, d, int(t)/60, int(t)%60, 0, 0, now.Location())
+	if !at.After(now) {
+		at = time.Date(y, m, d+1, int(t)/60, int(t)%60, 0, 0, now.Location())
+	}
+	return at
+}
+
+func weeklyNextTry(w Window, settings config.WeeklyQuota) time.Time {
+	percent := w.Utilization * 100
+	if settings.Target <= 0 || percent >= float64(settings.Target)-epsilon {
+		return w.ResetsAt
+	}
+	// target x (e + lead) / 7 days = percent, so e = percent / target x 7 days - lead.
+	elapsed := time.Duration(percent/float64(settings.Target)*float64(week)) - settings.Lead
+	t := w.ResetsAt.Add(-week).Add(elapsed).Add(retryMargin)
+	if t.After(w.ResetsAt) {
+		return w.ResetsAt
+	}
+	return t
+}

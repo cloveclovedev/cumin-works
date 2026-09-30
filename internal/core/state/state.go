@@ -1,6 +1,6 @@
 // Package state keeps the small amount of state that cumin holds on the
 // Host: for each implementation issue, the session of the last agent run and
-// the number of check fix requests (I4). The requirement allows only what
+// the number of check fix requests (I4); and the latest quota usage (Q3). The requirement allows only what
 // cumin can lose without losing work (cumin-core.md, the section on what
 // cumin keeps): a lost file starts a new session and a count of zero.
 //
@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Version is the version of the file format. cumin reads its own version
@@ -44,11 +45,32 @@ type Issue struct {
 // empty reports whether the entry holds nothing, so that Set removes it.
 func (i Issue) empty() bool { return i == Issue{} }
 
-// file is the content of the state file.
+// QuotaWindow is the usage of one quota window.
+type QuotaWindow struct {
+	// Utilization is from 0 to 1.
+	Utilization float64   `json:"utilization"`
+	ResetsAt    time.Time `json:"resets_at"`
+}
+
+// Quota is the latest quota usage that cumin read, and when it read it.
+// While new starts stop, cumin decides from it when to try again, so that
+// a restart makes no minimal run before that time (Q3). The file keeps
+// only the numbers of the account; it holds no token.
+type Quota struct {
+	FiveHour QuotaWindow `json:"five_hour"`
+	Weekly   QuotaWindow `json:"weekly"`
+	ReadAt   time.Time   `json:"read_at"`
+}
+
+// file is the content of the state file. A file of this version without
+// the quota key is a file from before the quota was kept; it opens with no
+// usage.
 type file struct {
 	Version int `json:"version"`
 	// Issues are the entries, by "<owner>/<repo>#<number>".
 	Issues map[string]Issue `json:"issues,omitempty"`
+	// Quota is the latest quota usage, or nil.
+	Quota *Quota `json:"quota,omitempty"`
 }
 
 // Store reads and writes the state file. Every method is safe for
@@ -94,6 +116,7 @@ func Open(path string, logger *slog.Logger) *Store {
 			store.data.Issues[strings.ToLower(name)] = issue
 		}
 	}
+	store.data.Quota = read.Quota
 	return store
 }
 
@@ -150,6 +173,37 @@ func (s *Store) Set(repository string, number int, issue Issue) error {
 		} else {
 			delete(s.data.Issues, k)
 		}
+		return err
+	}
+	return nil
+}
+
+// Quota returns the latest quota usage, and false when none is kept.
+func (s *Store) Quota() (Quota, bool) {
+	if s == nil {
+		return Quota{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.data.Quota == nil {
+		return Quota{}, false
+	}
+	return *s.data.Quota, true
+}
+
+// SetQuota keeps the latest quota usage and saves the file. When the file
+// cannot be saved, the usage keeps its value from before, and the error
+// says why.
+func (s *Store) SetQuota(q Quota) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	before := s.data.Quota
+	s.data.Quota = &q
+	if err := s.save(); err != nil {
+		s.data.Quota = before
 		return err
 	}
 	return nil
