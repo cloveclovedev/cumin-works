@@ -1,0 +1,42 @@
+@startuml poll-merge
+' cumin works - the approved pull request (I6, I7) and the merge step that I12 reuses.
+' Document: poll.md, section on the merge step.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:The Reviewer approved the head commit;
+:Read the snapshot again
+and the required checks;
+if (Exactly one risk/* label
+on the issue? (DecideMerge)) then (no)
+  :Stop step of #81, row I6
+  (no or two risk labels);
+  stop
+elseif (Required checks pass
+on the head commit?) then (no)
+  :Back to cumin/status/awaiting-checks;
+  stop
+elseif (risk/low?) then (no)
+  :I7: cumin/status/awaiting-owner-review,
+  one notification with the pull request;
+  stop
+else (yes)
+endif
+partition "Merge step (I6, and I12)" {
+  :cumin-core merges with merge_method
+  and sha = the approved head commit;
+  if (Merged?) then (no)
+    :Stop step of #81: conflict (405, mergeable false),
+    head moved (409), or the answer of GitHub;
+    stop
+  endif
+  :Wait a short time (10 seconds);
+  if (Is the issue open?) then (yes)
+    :cumin-core closes it as completed, once
+    (a failure: stop step of #81);
+  endif
+}
+stop
+@enduml

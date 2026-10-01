@@ -54,6 +54,8 @@ type Issue struct {
 	Parent int
 	// BlockedBy holds the numbers of the issues that block this one.
 	BlockedBy []int
+	// StateReason is the reason of the last close through the REST API.
+	StateReason string
 	// LabelEvents are the times at which labels were added, oldest first,
 	// as GitHub records them in the timeline. A test adds the events of the
 	// past; the fake adds one for each label that "Set labels" adds.
@@ -95,6 +97,11 @@ type PullRequest struct {
 	// Threads are the review threads, as the follow-up note (I9) reads
 	// them.
 	Threads []ReviewThread
+	// Conflict makes a merge answer 405, and mergeable read false, as
+	// GitHub answers for a pull request that conflicts with its base.
+	Conflict bool
+	// MergeMethod is the method of the merge that merged it.
+	MergeMethod string
 }
 
 // ReviewThread is one thread of review comments on a line of a pull
@@ -278,6 +285,18 @@ type Fake struct {
 	// (addCloseIssueReferences), as SetLinkErrors and IgnoreLinks set them.
 	linkErrors   []string
 	linksIgnored bool
+	// closeOnMerge makes a merge close the issues that the pull request
+	// closes, as CloseIssuesOnMerge set it.
+	closeOnMerge bool
+}
+
+// CloseIssuesOnMerge makes a merge close the issues that the pull request
+// closes, as GitHub does when it closes them through the link. Without it,
+// a merge leaves them open, as GitHub did from 2026-09-30.
+func (f *Fake) CloseIssuesOnMerge() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closeOnMerge = true
 }
 
 // SetLinkErrors makes the closing link (addCloseIssueReferences) answer
@@ -458,6 +477,16 @@ func (f *Fake) PullRequestLabels(r *Repository, number int) []string {
 	return slices.Clone(pr.Labels)
 }
 
+// SetPullRequestConflict makes the pull request conflict with its base: a
+// merge answers 405, and mergeable reads false.
+func (f *Fake) SetPullRequestConflict(r *Repository, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if pr, ok := r.PullRequests[number]; ok {
+		pr.Conflict = true
+	}
+}
+
 // PullRequestCloses returns the numbers of the issues that the pull request
 // closes (its closing links).
 func (f *Fake) PullRequestCloses(r *Repository, number int) []int {
@@ -604,6 +633,9 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	reviews := reviewsPath.FindStringSubmatch(r.URL.Path)
 	moveHead := moveHeadPath.FindStringSubmatch(r.URL.Path)
 	pulls := pullsPath.FindStringSubmatch(r.URL.Path)
+	pull := pullPath.FindStringSubmatch(r.URL.Path)
+	merge := mergePath.FindStringSubmatch(r.URL.Path)
+	issue := issuePath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -639,6 +671,15 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && moveHead != nil:
 		number, _ := strconv.Atoi(moveHead[3])
 		f.serveMoveHead(w, body, moveHead[1], moveHead[2], number)
+	case r.Method == http.MethodPut && merge != nil:
+		number, _ := strconv.Atoi(merge[3])
+		f.serveMerge(w, body, merge[1], merge[2], number)
+	case r.Method == http.MethodGet && pull != nil:
+		number, _ := strconv.Atoi(pull[3])
+		f.servePull(w, pull[1], pull[2], number)
+	case (r.Method == http.MethodGet || r.Method == http.MethodPatch) && issue != nil:
+		number, _ := strconv.Atoi(issue[3])
+		f.serveIssue(w, r.Method, body, issue[1], issue[2], number)
 	case r.Method == http.MethodGet && pulls != nil:
 		f.serveListPulls(w, r, pulls[1], pulls[2])
 	case r.Method == http.MethodPost && reviews != nil:
@@ -662,6 +703,9 @@ var (
 	jobLogPath        = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/jobs/(\d+)/logs$`)
 	reviewsPath       = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/reviews$`)
 	pullsPath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls$`)
+	pullPath          = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)$`)
+	mergePath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/merge$`)
+	issuePath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)$`)
 	// moveHeadPath is not an endpoint of GitHub. A fake agent run calls it
 	// to move the head of a pull request while it runs, as a push would.
 	moveHeadPath = regexp.MustCompile(`^/_fake/repos/([^/]+)/([^/]+)/pulls/(\d+)/head$`)
@@ -1131,6 +1175,94 @@ func (f *Fake) serveListPulls(w http.ResponseWriter, r *http.Request, owner, nam
 	// GitHub lists the newest first.
 	slices.Reverse(list)
 	writeJSON(w, http.StatusOK, list)
+}
+
+// serveMerge answers PUT .../pulls/{n}/merge. Official: "Merge a pull
+// request": 409 when sha is not the head, 405 when the merge cannot be
+// performed (a conflict, measured in #286). A merge closes the issues of
+// the pull request only after CloseIssuesOnMerge.
+func (f *Fake) serveMerge(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	var request struct {
+		MergeMethod string `json:"merge_method"`
+		SHA         string `json:"sha"`
+	}
+	_ = json.Unmarshal(body, &request)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repositories[key(owner, name)]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	pr, ok := repo.PullRequests[number]
+	switch {
+	case !ok:
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+	case pr.Closed:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Pull Request is not mergeable"})
+	case request.SHA != "" && request.SHA != pr.HeadCommit:
+		writeJSON(w, http.StatusConflict, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
+	case pr.Conflict:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Pull Request has merge conflicts"})
+	default:
+		pr.Closed, pr.Merged, pr.MergeMethod = true, true, request.MergeMethod
+		if f.closeOnMerge {
+			for _, n := range pr.Closes {
+				if issue, ok := repo.Issues[n]; ok {
+					issue.Closed = true
+				}
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"sha": "merge-" + pr.HeadCommit, "merged": true, "message": "Pull Request successfully merged"})
+	}
+}
+
+// servePull answers GET .../pulls/{n} with the fields that cumin reads.
+func (f *Fake) servePull(w http.ResponseWriter, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repositories[key(owner, name)]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	pr, ok := repo.PullRequests[number]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	mergeableState := "blocked"
+	if pr.Conflict {
+		mergeableState = "dirty"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"number": pr.Number, "merged": pr.Merged, "mergeable": !pr.Conflict, "mergeable_state": mergeableState})
+}
+
+// serveIssue answers GET and PATCH .../issues/{n}: the state, and a close.
+func (f *Fake) serveIssue(w http.ResponseWriter, method string, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repositories[key(owner, name)]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	issue, ok := repo.Issues[number]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	if method == http.MethodPatch {
+		var request struct {
+			State       string `json:"state"`
+			StateReason string `json:"state_reason"`
+		}
+		_ = json.Unmarshal(body, &request)
+		if request.State == "closed" {
+			issue.Closed, issue.StateReason = true, request.StateReason
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"number": issue.Number, "state": strings.ToLower(state(issue.Closed)), "state_reason": issue.StateReason})
 }
 
 // serveAddClosingLink answers the mutation addCloseIssueReferences: each

@@ -198,9 +198,8 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		}
 		switch result {
 		case ReviewApprovedOnHead:
-			// The merge (I6, I7) is the next requirement. Until then the
-			// issue keeps cumin/status/reviewing.
 			log.Info("I3: the Reviewer approved the head commit", "round", req.review.Round)
+			s.afterApproval(ctx, log, target, settings, number, pr)
 			return
 		case ReviewChangesRequestedOnHead:
 			s.afterChangesRequested(ctx, log, target, settings, number, req, sub, pr, run.SessionID)

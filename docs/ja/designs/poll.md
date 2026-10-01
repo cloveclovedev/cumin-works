@@ -164,7 +164,7 @@ checkの結果の読み方:
 - 判定は `internal/workflow` の純粋関数である。スナップショットと、設定 (リポジトリごとに同時に進めるIssueの数) だけから、着手リストを返す。I/Oをしない。同じスナップショットからは、Issueの並び順によらず、同じ着手リストを返す。着手可能なIssue数は、定期確認のたびにラベルから数え直す。ファイルにもメモリにも持ち越さない。
 - 進行中として数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いているsub-issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。数えると、初期値の上限 (1) では、どのsub-issueにも着手できなくなる。
 - 動作の適用は、判定とは別の部分が行う。着手では、ラベルを替えてから依頼する (Issueのラベルと状態遷移の原則3)。ラベルを替えられなければ依頼せず、次の定期確認でやり直す。
-- 今の判定はR1、R3、R4、R6、R7、I1、I3、I4、I11である。I9は判定の前の別の手順である (「フォローアップノート (I9)」)。あとの行 (I5〜I10) は、同じ関数に分岐を足す。R2とI2は、実行の終わりに判定する。
+- 今の判定はR1、R3、R4、R6、R7、I1、I3、I4、I11である。I9は判定の前の別の手順である (「フォローアップノート (I9)」)。R2、I2、I5〜I8、I10は、実行の終わりに判定する。
 - R3、R6、R7は、要求Issueのラベルを替えるだけで、Agentを起動しない。そのため一番先に決め、上限の空きを使わない。R4は、R1、I1と同じく上限の空きを分け合い、Issueの番号の順に着手する。
 - R4の依頼中は、要求Issueのラベルが `cumin/status/implementing` のまま変わらない。そのため、Plannerが動いていることは、cuminが手元に持つ実行中のIssueの集合で判定に渡す (`Snapshot.Running`)。実行中の受け入れの確認は、同時に進めるIssueの数にも数える。cuminが再起動すると集合は空になり、コメントがなければR4がもう一度依頼する。Plannerは、同じ回の自分のコメントを書き直すので、コメントは増えない (Plannerの要件の「やり直しに備えること」)。R3は、要求Issueに状態ラベルがないときは `cumin/status/ready` の付いた開いているsub-issueがあれば成り立ち、`cumin/status/awaiting-owner-review` のときは、そのラベルよりあとに `cumin/status/ready` が付いたsub-issueがあれば成り立つ。R6は、`cumin/status/implementing` の要求Issueに開いているsub-issueがあり、その全てに状態ラベルがないときに成り立つ。`cumin/type/owner-task` のsub-issueも、状態ラベルがないので数える。
 - R6の通知は、ラベルを替えたあとに1回だけ出す。次の定期確認では要求Issueがもう `cumin/status/implementing` ではないので、同じ通知を繰り返さない。ラベルを替えられなければ通知せず、次の定期確認でやり直す。
@@ -238,7 +238,7 @@ checkの結果の読み方:
 - 依頼文 (「review」) に入れるのは、リポジトリ、実装Issue、Pull Request、先頭のコミット、ラウンドと上限、作業場所と、2ラウンド目以降では前のラウンドでレビューしたコミットである。ラウンドごとに見る範囲は、roleの指示にある (Reviewerの要件の「ラウンドごとに見る範囲」)。
 - 実行が `done` で終わったら、スナップショットを読み直し、ReviewerのAppのbotが最後に出したレビューを確かめる (純粋関数 `CheckReview`)。それが今の先頭のコミットに対する `APPROVE` か `REQUEST_CHANGES` なら、レビューが出たとみなす。そうでなければ、同じセッションで1回だけ依頼し直す。依頼文には、何が見つからなかったかだけを書く。2回目も見つからなければ、行の番号I5 (I5の「うまくいかないとき」) で「Ownerに戻す道」の手順を呼ぶ。
 - 読み直したPull Requestの先頭のコミットが、依頼したときと違えば (Reviewerの実行中にOwnerがpushしたときなど)、レビューを確かめずに、ラベルを `cumin/status/awaiting-checks` に戻す。必須のcheckが通ったのは古いコミットだけだからである。新しいコミットでcheckが走り、I3かI4がもう一度決める。古いコミットに出たレビューは、GitHubにあるとおりにラウンドに数える。
-- `APPROVE` なら、ログに出すだけで、ラベルは `cumin/status/reviewing` のままにする。mergeは後の要求Issue (I6、I7) が足す。それまでは、この実装Issueが同時に進めるIssueの数を1つ使い続ける。`REQUEST_CHANGES` なら、「指摘の修正の依頼 (I5)」に進む。
+- `APPROVE` なら、「mergeの手順 (I6、I7)」に進む。`REQUEST_CHANGES` なら、「指摘の修正の依頼 (I5)」に進む。
 - `blocked` なら、I10である。やり直さず、行の番号I10で「Ownerに戻す道」の手順を呼ぶ。コメントは、Reviewerが書いた `blocked_reason` である。
 - 異常終了は、I1の依頼と同じく、同じ作業場所の新しいセッションで1回だけやり直す。2回目も異常終了なら、行の番号I3でOwnerに戻す。
 - 採らなかった案: レビューが見つからないときに、すぐOwnerに戻す。Reviewerの要件の「完了の条件」は、1回だけ依頼し直すと決めている。
@@ -252,6 +252,24 @@ checkの結果の読み方:
 - 依頼文 (「指摘の修正」) に入れるのは、リポジトリ、実装Issue、Pull Request、ブランチ、作業場所と、レビューのアドレスである。指摘そのものは依頼文に写さない。Implementerが、GitHubで指摘を読み、スレッドごとに返答するためである (返答のテンプレートはskill `cumin-review-reply`)。
 - Implementerの依頼は、Reviewerの実行と同じgoroutineで続けて行う。同じIssueのAgentは、いつも1つだけである。
 - 上限に達していれば、Implementerには依頼せず、「上限での原因の整理 (I8)」に進む。
+
+### mergeの手順 (I6、I7)
+
+![承認されたPull Requestとmergeの手順](poll-merge.svg)
+
+図の元ファイル: [poll-merge.puml](poll-merge.puml)
+
+- Reviewerが今の先頭のコミットを承認したら、スナップショットと必須のcheckの一覧を読み直し、純粋関数 `DecideMerge` で決める。riskは実装Issueのラベルから読む (原則5)。riskのラベルがちょうど1つでなければ、行の番号I6でOwnerに戻す。riskを先に確かめるのは、ラベルの誤りが、checkの状態によらず必ず止まるようにするためである。
+- 必須のcheckが先頭のコミットで通っていなければ、ラベルを `cumin/status/awaiting-checks` に戻す。Reviewerの実行中に先頭のコミットが動いたとき (「Reviewerへの依頼」) と同じ扱いで、I3かI4が次の定期確認で決め直す。
+- `risk/low` ならmergeの手順に進む (I6)。それ以外の `risk/*` は、ラベルを `cumin/status/awaiting-owner-review` に替えて、Pull Requestのアドレスを入れた通知を1回出す (I7)。ラベルを替えられなくても、通知は出す。実行の終わりは1回しか起きないので、Ownerが知る機会はそこだけだからである。
+- mergeの手順は、I6とI12の両方が使う。行の番号は引数で受け取る。
+  - `cumin-core` が `PUT /repos/{owner}/{repo}/pulls/{n}/merge` を呼ぶ。`merge_method` はリポジトリの設定、`sha` は承認された先頭のコミットである。承認のあとにpushされたコミットは、mergeしない (409。実測は #286 の M2)。
+  - 405は、衝突とrulesetの拒否の両方で返る (実測 62、#286 の M4)。405のあとにPull Requestを読み直し、`mergeable` が `false` なら衝突とみなす。merge の前に読んだ `mergeable` は古いことがある (#286 の M4、M5) ので、mergeの前には読まない。
+  - mergeが失敗したら、衝突、先頭のコミットが動いた、それ以外 (GitHubの答えを入れる) の1文で、Ownerに戻す。
+  - mergeが通ったら、10秒待ってから実装Issueを読む (`DefaultCloseWait`)。開いていれば、`cumin-core` が完了として閉じる。GitHubはリンクしたIssueを数秒で閉じていた (実測 60) が、2026-09-30から閉じないことがある (#276 の C5)。待つ時間は設定の表にないので、コードに置く。
+  - 閉じるのは、この手順の中の1回だけである。読み取りか閉じる操作が失敗したら、Ownerに戻す。あとの定期確認では閉じないので、Ownerが開き直したIssueは開いたままになる。
+  - mergeのあと、実装Issueのラベルは替えない。Issueが閉じれば、定期確認の対象から外れる。
+- 採らなかった案: mergeの前に `mergeable` を読み、衝突なら呼ばない。読んだ値が古く、衝突を見落とす (#286 の M4)。呼んでから読むほうが、1回の読み取りで確かに分かる。
 
 ### 上限での原因の整理 (I8)
 

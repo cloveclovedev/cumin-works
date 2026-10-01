@@ -319,6 +319,9 @@ func (sc *scene) service() *workflow.Service {
 		SettingsDir: sc.settingsDir,
 		Logger:      logger,
 		Now:         sc.clock.Now,
+		// The merge step waits for GitHub to close the issue; the fake
+		// answers at once.
+		CloseWait: time.Millisecond,
 	}
 }
 
@@ -1909,11 +1912,12 @@ func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 		}
 	}
 	// The issue leaves awaiting-checks, so the next poll asks for nothing.
+	// The approval reads the required checks once more, for I6.
 	if err := service.Poll(context.Background()); err != nil {
 		t.Fatalf("second poll: %v", err)
 	}
-	if n := sc.fake.CountRequests(http.MethodGet, branchRulesPath); n != 1 {
-		t.Errorf("%d reads of the required checks, want 1", n)
+	if n := sc.fake.CountRequests(http.MethodGet, branchRulesPath); n != 2 {
+		t.Errorf("%d reads of the required checks, want 2 (I3 and I6)", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
 		t.Errorf("%d label changes, want 1", n)
