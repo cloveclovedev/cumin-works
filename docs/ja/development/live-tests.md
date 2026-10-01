@@ -797,7 +797,8 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run Te
 | 5 | Reviewer の App の最後のレビューが、先頭のコミットへの `APPROVED` である | レビュー |
 | 6 | merge したのが cumin-core の App で、merge のコミットの親が1つである。merge の方法は squash である。実装Issueが `completed` で閉じた | Pull Request、コミット、Issue、ログの `merge_method` |
 | 7 | `risk/medium` の Pull Request は、Owner が承認するまで merge されず、merge は先頭のコミットへの Owner の承認のあとである | Pull Request、レビューの時刻 |
-| 8 | Pull Request ごとに、cumin-core の App のフォローアップノートが目印付きで1つあり、受け入れの確認より前に書かれている | 要求Issueのコメント |
+| 8 | Pull Request ごとに、cumin-core の App のフォローアップノートが目印付きで1つあり、受け入れの確認より前に書かれている。ノートにあるのは `Follow-up` の1行だけで、CLI の署名は入っていない | 要求Issueのコメント |
+| 8a | 分割の全体像、レビューの本文、受け入れの確認が、テンプレートの `###` の見出しを持っている | コメント、レビュー |
 | 9 | `## Acceptance check` で始まる Planner の App のコメントが1つあり、最後の実装Issueが閉じたあとに書かれている。要求Issueが `awaiting-owner-review` に移ったのは、そのあとである | 要求Issueのコメント、イベント |
 | 10 | cumin のログに、Issue ごとの動作の行がこの順にある | `~/.local/state/cumin/cumin.log` の、テストの開始よりあとの行 |
 | 11 | 通知の行 (`the Owner was notified`) が、分割結果の確認 (R2)、merge の判断 (I7)、受け入れ (R7) で1行ずつある | 同じログ |

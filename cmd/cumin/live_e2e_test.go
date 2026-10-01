@@ -263,6 +263,7 @@ type e2ePull struct {
 }
 
 type e2eReview struct {
+	Body        string  `json:"body"`
 	State       string  `json:"state"`
 	CommitID    string  `json:"commit_id"`
 	SubmittedAt string  `json:"submitted_at"`
@@ -290,6 +291,18 @@ func (e *e2e) linkedPulls(t *testing.T, issue int) []int {
 		numbers = append(numbers, n)
 	}
 	return numbers
+}
+
+// checkHeadings checks that a comment of an agent shows the parts of its
+// template as headings.
+func checkHeadings(t *testing.T, what, body string, headings ...string) {
+	t.Helper()
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	for _, heading := range headings {
+		if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), heading) }) {
+			t.Errorf("%s has no heading %q", what, heading)
+		}
+	}
 }
 
 // logLine is one line of the log of cumin, as far as the test reads it.
@@ -511,6 +524,7 @@ func TestLiveE2E(t *testing.T) {
 	if len(plans) != 1 {
 		t.Fatalf("the requirement issue has %d plan summaries of the Planner, want 1", len(plans))
 	}
+	checkHeadings(t, "the plan summary", plans[0].Body, "### Summary", "### Requirement coverage", "### To approve")
 	e.record("Start the split, verify the split (R1, R2)", fmt.Sprintf("states of #%d: %s; sub-issues of the Planner: %s; plan summary %s",
 		requirement, path, strings.Join(planned, ", "), plans[0].HTMLURL))
 
@@ -594,6 +608,9 @@ func TestLiveE2E(t *testing.T) {
 		if reviewer == nil || reviewer.State != "APPROVED" || reviewer.CommitID != pull.Head.SHA {
 			t.Errorf("pull request #%d: the last review of the Reviewer App is not APPROVED on the head commit: %+v", pull.Number, reviewer)
 		}
+		if reviewer != nil {
+			checkHeadings(t, fmt.Sprintf("the review of pull request #%d", pull.Number), reviewer.Body, "### Blocking comments", "### Acceptance criteria")
+		}
 		if !pull.Merged || !pull.MergedBy.isApp("core") {
 			t.Fatalf("pull request #%d: merged %v by %s, want a merge by the cumin-core App", pull.Number, pull.Merged, pull.MergedBy.Login)
 		}
@@ -650,13 +667,24 @@ func TestLiveE2E(t *testing.T) {
 			t.Errorf("pull request #%d has %d follow-up notes on the requirement issue, want 1", pulls[number].Number, len(found))
 			continue
 		}
+		// The note holds the one line of "Follow-up" and nothing that the
+		// CLI added after the section, such as its signature.
+		text, _, _ := strings.Cut(found[0].Body, "### Open non-blocking review comments")
+		_, text, ok := strings.Cut(text, "### From the pull request description")
+		if lines := strings.Fields(strings.ReplaceAll(strings.TrimSpace(text), " ", "_")); !ok || len(lines) != 1 || !strings.Contains(text, "README.md") {
+			t.Errorf("the follow-up note of #%d does not hold exactly the one line of \"Follow-up\": %q", pulls[number].Number, text)
+		}
+		if strings.Contains(found[0].Body, "Generated with") {
+			t.Errorf("the follow-up note of #%d holds the signature of the CLI", pulls[number].Number)
+		}
 		if found[0].CreatedAt > checks[0].CreatedAt {
 			t.Errorf("the follow-up note of #%d at %s is after the acceptance check at %s", pulls[number].Number, found[0].CreatedAt, checks[0].CreatedAt)
 		}
 		notes = append(notes, found[0].HTMLURL)
 	}
-	e.record("Follow-up notes (I9)", "one note of cumin-core for each pull request, before the acceptance check: "+strings.Join(notes, ", "))
+	e.record("Follow-up notes (I9)", "one note of cumin-core for each pull request, with the one line of \"Follow-up\" and no signature, before the acceptance check: "+strings.Join(notes, ", "))
 
+	checkHeadings(t, "the acceptance check", checks[0].Body, "### Constraints", "### Left after this requirement", "### To accept")
 	path = e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-owner-review", "implementing", "awaiting-owner-review"}, "awaiting-owner-review")
 	events := e.statusEvents(t, requirement)
 	if last := events[len(events)-1]; last.CreatedAt < checks[0].CreatedAt {
