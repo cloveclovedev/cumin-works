@@ -2,10 +2,12 @@ package workflow_test
 
 import (
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
@@ -194,15 +196,51 @@ func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
 	}
 }
 
-// A conflict is told apart from the other 405 answers by mergeable.
-func TestI6_AConflictStopsTheIssueWithItsOwnSentence(t *testing.T) {
+// A conflict (405, and mergeable false) goes back to the Implementer: the
+// label becomes cumin/status/implementing, and exactly one resolution
+// request resumes the Implementer session on the branch of the pull
+// request. After done, I2 runs again (failure column of I6).
+func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	sc := approved(t, "risk/low")
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
 	service := sc.service()
+	service.State = state.Open(filepath.Join(t.TempDir(), "state.json"), nil)
+	if err := service.State.Set("example-org/example-repo", 10, state.Issue{SessionID: "implementer-session"}); err != nil {
+		t.Fatal(err)
+	}
 
 	sc.pollAndWait(t, service)
 
-	sc.assertStoppedAtI6(t, workflow.MergeConflictReason(21))
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want the review and one resolution", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
+		t.Errorf("%d merge requests, want 1", n)
+	}
+	args := sc.record(t, "agent.args")
+	if got := argumentOf(t, args, "--resume"); got != "implementer-session" {
+		t.Errorf("--resume = %q, want the Implementer session", got)
+	}
+	text := promptOf(t, args)
+	for _, want := range []string{"Request: conflict resolution", "Pull request: #21", "Branch: cumin/10-add-the-login-screen",
+		"Default branch: main", "git merge origin/main", "do not force-push"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	// The fake CLI pushes nothing new, so I2 passes on the same head.
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	}
+	if sc.fake.Issue(sc.repo, 10).Closed || len(sc.fake.Comments(sc.repo, 10)) != 0 {
+		t.Error("the conflict closed or commented on #10")
+	}
+	for _, want := range []string{`"msg":"I6: the merge conflicts; the issue goes back to the Implementer"`,
+		`"msg":"I6: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
 }
 
 // A close after the merge that fails stops the issue once; the Owner
