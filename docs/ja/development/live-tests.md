@@ -32,6 +32,8 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> CUMIN_LIVE_OWNER=<login> go test -co
 CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive_AgentEnvironment -v ./internal/agent/
 # 本物の Claude Code に commit、push、Pull Request をさせる確認 (利用枠を使う)
 CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive_AgentRunOnSandbox -v ./internal/agent/
+# 場面 E2E-1 (利用枠を使い、1時間ほどかかる。先に「実機の場面 E2E-1」の準備をする)
+CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run TestLiveE2E -v ./cmd/cumin/
 ```
 
 | 環境変数 | 内容 |
@@ -68,6 +70,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | `TestLiveMergeFacts` | merge (I6、I12) が前提にする事実。cumin-core の App で、Owner、Implementer の bot、協力者でない人の権限 (`permission`、`user.type`) を読めること。`sha` が先頭と違う merge は 409 になること。衝突のない Pull Request の `sha` 付きの merge が 200 になること。衝突する Pull Request の merge の返事 (405) と、そのあとの `mergeable` が `false` になること。Agent も利用枠も使わない。main に小さなファイル (`live/<日時>-conflict.md`) が1つ残る |
 | `TestLiveDiagramsBranch` | Planner の App が書き込めるのは `cumin/diagrams` だけであること。Planner の App が `cumin/diagrams` にファイルを足せ、ほかのブランチの作成、既定のブランチの移動、タグの作成、`cumin/diagrams` の force push と削除を拒否されること。cumin-core の App も `cumin/diagrams` を削除できないこと。Implementer の App が今までどおりブランチを作って消せること。`scripts/setup-repo.sh` を `--core-app` と `--implementer-app` 付きで実行してあり、Planner の App の Contents の書き込みがインストールで承認されている必要がある。`cumin/diagrams` に `live/<日時>.svg` が1つ残る |
 | `TestLiveFollowUpFixture` | 場面 Follow-1 の準備だけを行う。`cumin/type/requirement` だけの要求Issue、その sub-issue、それを閉じる Implementer の App の Pull Request を作り、Reviewer の App が `(non-blocking)` の指摘を2つ書き、Implementer の App が1つに `Fixed` で返答する。何も閉じない。Owner が手で merge し、場面の手順で片付ける |
+| `TestLiveE2E` (`cmd/cumin`) | 場面 E2E-1 の全体。launchd で動く cumin に、1つの要求Issueを分割から受け入れの確認まで通させ、Owner の操作を `gh` のログインで代わりに行い、各段階を GitHub の事実と cumin のログで確かめる。利用枠を使い、1時間ほどかかる。下の「実機の場面 E2E-1」に従って実行する |
 
 ## `cumin run` を sandbox で動かすとき
 
@@ -734,3 +737,88 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 ### 記録
 
 結果は #252 にコメントとして残す。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、リセット時刻、セッションの番号、手元の絶対パス、Client ID、App の名前、webhook のアドレスは書かない。
+
+## 実機の場面 E2E-1
+
+1つの要求Issueを、Owner の ready から受け入れの確認まで、launchd で動く cumin に最後まで通させる。分割 (R1、R2)、着手 (R3、I1)、検証 (I2)、レビュー (I3)、`risk/low` の merge (I6)、`risk/medium` の Owner への確認と承認のあとの merge (I7、I12)、フォローアップノート (I9)、受け入れの確認 (R4、R7)、通知を、この順に1回で確かめる。
+
+ほかの場面と違い、手順書ではなく Go のテスト `TestLiveE2E` (`cmd/cumin/live_e2e_test.go`) が全体を動かす。テストは Owner の代わりをする。要求Issueを書き、risk を確定し、`cumin/status/ready` を付け、`risk/medium` の Pull Request を承認する。それ以外は全て cumin の仕事で、テストはほかの状態ラベルを替えず、merge もコメントもしない。
+
+本物の Claude Code を、Planner で2回、Implementer で2回、Reviewer で2回以上起動する。着手 (R1、I1) の前には、使用率の最小の実行も入る。1回の実行は1時間ほどかかる。
+
+### Owner の操作に使う認証
+
+- テストは、Host の `gh` のログインで Owner の操作を行う。sandbox に write 以上の権限を持つ、人のアカウントでなければならない ([cumin本体の要件](../requirements/cumin-core.md) の「Owner」)。テストは最初にこれを確かめる。
+- このログインは、テストが起動する `gh` のプロセスの中だけで使う。cumin と Agent には渡らない。cumin は launchd が起動した別のプロセスで、App の token だけを使う。
+- 実行の間、人もチャットも、cumin の代わりにラベルを替えたり、merge したり、コメントしたり、リンクを張ったり、Issue を閉じたりしない。cumin が先に進めなければ、テストは失敗する。それは不具合として記録し、直してからもう一度通す。
+
+### Host の準備
+
+1. Host の設定ファイルの `repositories` を sandbox だけにし、`work_dir` を捨ててよいディレクトリにする。`poll_interval` は初期値のままでよい。
+2. webhook のアドレスを Keychain に入れ、`notify.discord.enabled` を `true` のままにする (場面 Fail-1 の手順2)。
+3. cumin を置き、launchd で起動する ([セットアップの手順](setup-guide.md) の手順4)。
+
+   ```sh
+   scripts/install.sh
+   ~/.local/bin/cumin setup launchd
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cloveclove.cumin.plist
+   ```
+
+   既に動いているなら、`scripts/install.sh --restart` で新しいバイナリに入れ替える。
+4. sandbox に、`cumin/status/ready`、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の付いた開いている Issue がないことを確かめる。あれば、テストは何も作らずに止まる。
+
+テストは launchd の job を入れることも、止めることもしない。動いていることを確かめるだけである。
+
+### 実行
+
+```sh
+CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run TestLiveE2E -v ./cmd/cumin/
+```
+
+テストがすること:
+
+1. 要求Issueを作り、`cumin/type/requirement` と `cumin/status/ready` を付ける。内容は、`live/e2e-<日時>/` の下の小さなファイル2つである。どちらの Pull Request にも `Follow-up` に1行を残させるので、フォローアップノートが必ず2つ付く。
+2. 分割を待ち、sub-issue が2つで、risk が1つずつ付いていることを確かめる。
+3. Owner として risk を確定する。Planner が `risk/low` と `risk/medium` を1つずつ付けていれば、そのままにする。そうでなければ、番号の小さいほうを `risk/medium`、大きいほうを `risk/low` にする。そのあと、2つに `cumin/status/ready` を付ける。
+4. `risk/medium` の実装Issueが `cumin/status/awaiting-owner-review` に移ったら、Pull Request がまだ merge されていないことを確かめてから、`gh pr review --approve` で承認する。
+5. 2つの実装Issueが閉じ、受け入れの確認のコメントが付き、要求Issueが `cumin/status/awaiting-owner-review` に移るのを待つ。
+6. 最後に、段階ごとの証拠の表を Markdown で出力する。
+
+途中でどれかの Issue が `cumin/status/awaiting-owner-decision` に移ったら、テストはそこで失敗する。
+
+### テストが確かめること
+
+| # | 確かめること | 見る事実 |
+|---|---|---|
+| 1 | 要求Issueの状態が `ready`、`planning`、`awaiting-owner-review`、`implementing`、`awaiting-owner-review` の順に移った。`ready` を付けたのは Owner で、ほかは cumin-core の App である | Issue のイベント |
+| 2 | sub-issue が2つで、作成者が Planner の App である。risk が1つずつ付いている。`## Plan for approval` のコメントが1つある | sub-issue の一覧、コメント |
+| 3 | 実装Issueの状態が `ready`、`implementing`、`awaiting-checks`、`reviewing` の順に始まる。`risk/medium` は最後に `awaiting-owner-review` に移る | Issue のイベント |
+| 4 | 実装Issueごとに Pull Request がちょうど1つある。作成者は Implementer の App、ブランチは `cumin/<Issue番号>-...`、本文に `Closes #<Issue番号>` がある | 閉じるリンク、Pull Request |
+| 5 | Reviewer の App の最後のレビューが、先頭のコミットへの `APPROVED` である | レビュー |
+| 6 | merge したのが cumin-core の App で、merge のコミットの親が1つ (squash) である。実装Issueが `completed` で閉じた | Pull Request、コミット、Issue |
+| 7 | `risk/medium` の Pull Request は、Owner が承認するまで merge されず、merge は先頭のコミットへの Owner の承認のあとである | Pull Request、レビューの時刻 |
+| 8 | Pull Request ごとに、cumin-core の App のフォローアップノートが目印付きで1つあり、受け入れの確認より前に書かれている | 要求Issueのコメント |
+| 9 | `## Acceptance check` で始まる Planner の App のコメントが1つあり、最後の実装Issueが閉じたあとに書かれている。要求Issueが `awaiting-owner-review` に移ったのは、そのあとである | 要求Issueのコメント、イベント |
+| 10 | cumin のログに、Issue ごとの動作の行がこの順にある | `~/.local/state/cumin/cumin.log` の、テストの開始よりあとの行 |
+| 11 | 通知の行 (`the Owner was notified`) が、分割結果の確認 (R2)、merge の判断 (I7)、受け入れ (R7) で1行ずつある | 同じログ |
+| 12 | ログに token、秘密鍵、webhook のアドレス、使用率の数値がない | 同じログ |
+| 13 | launchd の job のプロセスが、最初から最後まで同じである | `launchctl print` |
+
+### 手で見ること
+
+人の判断が要るものだけを、実行のあとに目で見る。
+
+- 分割の質。sub-issue の本文、図、完了条件が、実装できる内容になっている。
+- レビューの質と、受け入れの確認の根拠。
+- Discord に通知が届き、リンクが対象の Issue か Pull Request を開く。
+- 受け入れ。Owner が要求Issueを閉じる (R5)。
+
+### 後片付け
+
+- 要求Issueを閉じる。2つのファイルは main に残る。名前に日時があるので、次の実行の邪魔にならない。
+- 途中で失敗したときは、開いたままの sub-issue、要求Issue、Pull Request を閉じ、ブランチを消す。作業中のラベルのまま残すと、次の実行の最初の確認で止まる。
+- launchd の cumin を残さないなら、`cumin setup launchd --remove` で外す。
+
+### 記録
+
+結果は #292 にコメントとして残す。テストが出力した表をそのまま貼る。書き方は [Agentの実機の確認](agent-live-check.md) の「記録の決まり」に従う。使用率の数値、token、webhook のアドレス、セッションの番号、手元の絶対パス、Client ID は書かない。
