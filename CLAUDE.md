@@ -17,7 +17,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 
 ## Rules that you must not break
 
-- Do not change anything under `docs/ja/requirements/` without the Owner's approval: in the conversation, or on GitHub (a decision comment of the Owner, or the Owner's approving review of the pull request). If the implementation needs a requirement change, stop and ask first. `overview.md` is written by the Owner only.
+- Do not change anything under `docs/ja/requirements/` without the Owner's approval in the conversation. If the implementation needs a requirement change, stop and ask first. `overview.md` is written by the Owner only.
 - This repository is public. Do not write employer information, personal circumstances, concrete quota numbers, or local absolute paths in documents, code, tests, fixtures, commit messages, or pull requests.
 - Do not commit to `main`. Create a branch from `main` for every change.
 - Do not read or print secret values: Keychain items, private keys, tokens, webhook URLs, `.env` files. Tests generate their own keys.
