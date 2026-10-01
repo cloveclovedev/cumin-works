@@ -27,7 +27,7 @@
 ## 実行のしかた
 
 ```sh
-CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -run TestLive -v ./internal/platform/github/
+CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> CUMIN_LIVE_OWNER=<login> go test -count=1 -run TestLive -v ./internal/platform/github/
 # Agent の環境の確認 (internal/agent。Claude Code は起動しない)
 CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive_AgentEnvironment -v ./internal/agent/
 # 本物の Claude Code に commit、push、Pull Request をさせる確認 (利用枠を使う。Owner が同意したときだけ)

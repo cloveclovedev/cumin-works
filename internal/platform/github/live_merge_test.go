@@ -34,10 +34,15 @@ func TestLiveMergeFacts(t *testing.T) {
 
 	// Fact M1: the permission of three accounts, with the token of
 	// cumin-core.
-	for i, account := range []struct{ login, what string }{
-		{owner, "the Owner"},
-		{botLogin, "the bot of the Implementer App"},
-		{"octocat", "an account that is not a collaborator"},
+	// Only the Owner is a user with admin or write; the bot and the account
+	// that is not a collaborator must never read as an Owner.
+	for i, account := range []struct {
+		login, what, userType string
+		isOwner               bool
+	}{
+		{owner, "the Owner", "User", true},
+		{botLogin, "the bot of the Implementer App", "Bot", false},
+		{"octocat", "an account that is not a collaborator", "User", false},
 	} {
 		resp := l.api(t, core, http.MethodGet, "/repos/{repo}/collaborators/"+account.login+"/permission", nil)
 		var body struct {
@@ -57,8 +62,9 @@ func TestLiveMergeFacts(t *testing.T) {
 		}
 		l.record(fmt.Sprintf("M1.%d", i+1), "`collaborators/{username}/permission` with the token of cumin-core, for "+account.what, "Readable; the Owner is admin or write",
 			fmt.Sprintf("Status %d: %s. `permission` `%s`, `role_name` `%s`, `user.type` `%s`", resp.status, resp.message(), body.Permission, body.RoleName, userType))
-		if i == 0 && (resp.status != http.StatusOK || (body.Permission != "admin" && body.Permission != "write") || userType != "User") {
-			t.Errorf("fact M1: the Owner %s: status %d, permission %q, type %q", owner, resp.status, body.Permission, userType)
+		writes := body.Permission == "admin" || body.Permission == "write"
+		if resp.status != http.StatusOK || userType != account.userType || writes != account.isOwner {
+			t.Errorf("fact M1.%d: %s: status %d, permission %q, type %q", i+1, account.what, resp.status, body.Permission, userType)
 		}
 	}
 
