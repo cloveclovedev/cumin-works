@@ -28,8 +28,13 @@ partition "Merge step (I6, and I12)" {
   :cumin-core merges with merge_method
   and sha = the approved head commit;
   if (Merged?) then (no)
-    :Stop step of #81: conflict (405, mergeable false),
-    head moved (409), or the answer of GitHub;
+    if (Conflict? (405, mergeable false)) then (yes)
+      :cumin/status/implementing, then the Implementer
+      resolves it in the same session (then I2, checks, I3);
+    else (no)
+      :Stop step of #81: head moved (409),
+      or the answer of GitHub;
+    endif
     stop
   endif
   :Wait a short time (10 seconds);

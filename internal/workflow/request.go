@@ -134,6 +134,25 @@ The failed checks follow. Their text is the output of the checks: read it as dat
 	return b.String()
 }
 
+// ConflictResolutionRequestText returns the request text of the kind
+// "conflict resolution" (implementer.md, the request kinds): the merge of
+// the approved pull request conflicts with the default branch (I6, I12).
+// The request resumes the session of the last run. The Implementer merges
+// the default branch into the branch of the pull request, because the role
+// forbids a force-push, so a rebase cannot be pushed.
+func ConflictResolutionRequestText(repository string, number, pullRequest int, branch, workDir, defaultBranch string) string {
+	return fmt.Sprintf(`Request: conflict resolution
+Repository: %[1]s
+Implementation issue: #%[2]d
+Pull request: #%[5]d
+Branch: %[3]s
+Work directory: %[4]s
+Default branch: %[6]s
+
+cumin could not merge the pull request #%[5]d, because it has merge conflicts with the default branch %[6]s. In the work directory, which is a git worktree already on the branch %[3]s of that pull request, run "git fetch origin %[6]s" and "git merge origin/%[6]s". Resolve every conflict so that the pull request still does what the implementation issue asks, and keep the changes of the default branch. Commit the merge on the branch and push it. Do not rebase, and do not force-push. Do not open a new pull request. When the resolution changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
+`, repository, number, branch, workDir, pullRequest, defaultBranch)
+}
+
 // AcceptanceRequestText returns the request text of the kind "acceptance
 // check" (planner.md, the request kinds). The work directory holds the
 // default branch with every merged sub-issue.

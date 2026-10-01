@@ -79,7 +79,7 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 	log.Info("I6: decided on the approved pull request", "decision", decision.String(), "pull_request", pr.Number)
 	switch decision {
 	case MergeNow:
-		s.mergeStep(ctx, log, target, settings, RowI6, sub, pr)
+		s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, snapshot.DefaultBranch)
 	case MergeAskOwner:
 		s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr)
 	case MergeChecksNotPassed:
@@ -128,10 +128,11 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 // log and the stop step.
 //
 // The sha of the merge is the approved head commit, so a commit that was
-// pushed after the approval is never merged. Every failure stops the issue
-// for the Owner with one sentence: a conflict, a head that moved, any other
-// answer of GitHub, and a close that failed.
-func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest) {
+// pushed after the approval is never merged. A conflict goes back to the
+// Implementer (resolveConflict). Every other failure stops the issue for
+// the Owner with one sentence: a head that moved, any other answer of
+// GitHub, and a close that failed.
+func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	stopIssue := func(reason string) {
 		s.stopForOwner(ctx, log, target, settings, stop{
@@ -149,7 +150,7 @@ func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target
 		log.Warn(row+": the pull request was not merged", "pull_request", pr.Number, "error", err.Error())
 		switch {
 		case errors.Is(err, github.ErrConflict):
-			stopIssue(MergeConflictReason(pr.Number))
+			s.resolveConflict(ctx, log, target, settings, row, sub, pr, defaultBranch)
 		case errors.Is(err, github.ErrHeadMoved):
 			stopIssue(MergeHeadMovedReason(pr.Number))
 		default:
@@ -195,4 +196,37 @@ func statusAnswer(err error) string {
 		return fmt.Sprintf("status %d: %s", status.Status, status.Message)
 	}
 	return err.Error()
+}
+
+// resolveConflict handles a merge that conflicts with the default branch
+// (the failure column of I6): the label becomes cumin/status/implementing
+// first (principle 3), then the Implementer resolves the conflict in the
+// session of its last run, on the branch of the pull request. The end of
+// that run is the end of any Implementer run: I2 verifies it, then the
+// checks and the review follow. The review counts its rounds again from
+// the last APPROVE (issue-states.md, the rounds), and the new head needs a
+// new approval.
+func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error(row+": no token; the issue keeps its label", "error", err.Error())
+		return
+	}
+	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
+		log.Error(row+": the label was not changed; nothing is requested", "error", err.Error())
+		return
+	}
+	log.Info(row+": the merge conflicts; the issue goes back to the Implementer", "pull_request", pr.Number, "labels", labels)
+	repository := target.Repository.String()
+	branch := pr.HeadBranch
+	s.runImplementer(ctx, target, settings, sub.Number, implementerRequest{
+		row: row, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
+		sessionID:    s.State.Issue(repository, sub.Number).SessionID,
+		conflictHead: pr.HeadCommit,
+		text: func(workDir string) string {
+			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)
+		},
+	})
 }

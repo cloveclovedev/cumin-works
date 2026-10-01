@@ -481,6 +481,11 @@ type implementerRequest struct {
 	sessionID string
 	// text builds the request text once the work directory is known.
 	text func(workDir string) string
+	// conflictHead is the head commit that conflicted with the default
+	// branch, for a conflict resolution (I6); empty otherwise. After done,
+	// a head that is still this commit stops the issue instead of I2, so
+	// that the same conflict does not go round the review again.
+	conflictHead string
 }
 
 // fixChecks applies I4: a required check failed on the head commit of the
@@ -711,7 +716,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
 				return
 			}
-			s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin)
+			s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin, req.conflictHead)
 			return
 		}
 	}
@@ -780,7 +785,7 @@ func labelsNow(sub SubIssue, ok bool) []string {
 // failed link, and a link that is still missing hand the issue back to the
 // Owner through the stop step, with one sentence. Nothing here is retried:
 // the Owner decides what to do next.
-func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin string) {
+func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin, conflictHead string) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -827,6 +832,15 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		log.Warn("I2: the verification failed", "failure", verification.Failure.String(),
 			"branch", branch, "pull_request", verification.PullRequest)
 		stopI2(VerificationReason(verification.Failure), verification.PullRequest)
+		return
+	}
+	if conflictHead != "" && head == conflictHead {
+		// The pull request passed, so its head is the head of the worktree.
+		log.Warn("I6: the head did not change after the conflict resolution", "pull_request", verification.PullRequest)
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row: RowI6, issue: number, labels: sub.Labels, reason: ConflictNotResolvedReason(verification.PullRequest),
+			comment: StopNote(RowI6, ConflictNotResolvedReason(verification.PullRequest), verification.PullRequest, false),
+		})
 		return
 	}
 	if verification.AddLink {
