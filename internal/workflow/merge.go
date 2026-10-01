@@ -223,7 +223,8 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 	branch := pr.HeadBranch
 	s.runImplementer(ctx, target, settings, sub.Number, implementerRequest{
 		row: row, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
-		sessionID: s.State.Issue(repository, sub.Number).SessionID,
+		sessionID:    s.State.Issue(repository, sub.Number).SessionID,
+		conflictHead: pr.HeadCommit,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)
 		},

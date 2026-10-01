@@ -241,6 +241,13 @@ func RiskLabelReason(decision MergeDecision) string {
 	return "The pull request is approved, but this issue has no risk label, so cumin does not merge it."
 }
 
+// ConflictNotResolvedReason is the sentence of a conflict resolution that
+// ended with done, but left the head of the pull request at the commit
+// that conflicted.
+func ConflictNotResolvedReason(pullRequest int) string {
+	return fmt.Sprintf("The Implementer reported done after the conflict resolution, but the head of the pull request #%d is still the commit that conflicted with the default branch.", pullRequest)
+}
+
 // MergeHeadMovedReason is the sentence of a merge whose head is no longer
 // the approved commit.
 func MergeHeadMovedReason(pullRequest int) string {

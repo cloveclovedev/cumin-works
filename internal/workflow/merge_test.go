@@ -199,15 +199,11 @@ func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
 // A conflict (405, and mergeable false) goes back to the Implementer: the
 // label becomes cumin/status/implementing, and exactly one resolution
 // request resumes the Implementer session on the branch of the pull
-// request. After done, I2 runs again (failure column of I6).
+// request. The run pushes a new head, so after done I2 runs again
+// (failure column of I6).
 func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
-	sc := approved(t, "risk/low")
-	sc.fake.SetPullRequestConflict(sc.repo, 21)
-	service := sc.service()
-	service.State = state.Open(filepath.Join(t.TempDir(), "state.json"), nil)
-	if err := service.State.Set("example-org/example-repo", 10, state.Issue{SessionID: "implementer-session"}); err != nil {
-		t.Fatal(err)
-	}
+	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 2})
+	service := sc.serviceWithSession(t)
 
 	sc.pollAndWait(t, service)
 
@@ -228,7 +224,6 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
 		}
 	}
-	// The fake CLI pushes nothing new, so I2 passes on the same head.
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
 	}
@@ -241,6 +236,43 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 			t.Errorf("the log has no %s", want)
 		}
 	}
+}
+
+// A resolution that ends with done and leaves the head at the commit that
+// conflicted stops the issue, so that the same conflict does not go round
+// the review again.
+func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
+	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}})
+	service := sc.serviceWithSession(t)
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want the review and one resolution", n)
+	}
+	sc.assertStoppedAtI6(t, workflow.ConflictNotResolvedReason(21))
+}
+
+// conflicting is approved with risk/low, and the pull request #21
+// conflicts with the default branch.
+func conflicting(t *testing.T, opts cliOptions) *scene {
+	t.Helper()
+	sc := newScene(t, opts)
+	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
+	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	return sc
+}
+
+// serviceWithSession is the service with a state file that holds the
+// Implementer session of #10.
+func (sc *scene) serviceWithSession(t *testing.T) *workflow.Service {
+	t.Helper()
+	service := sc.service()
+	service.State = state.Open(filepath.Join(t.TempDir(), "state.json"), nil)
+	if err := service.State.Set("example-org/example-repo", 10, state.Issue{SessionID: "implementer-session"}); err != nil {
+		t.Fatal(err)
+	}
+	return service
 }
 
 // A close after the merge that fails stops the issue once; the Owner

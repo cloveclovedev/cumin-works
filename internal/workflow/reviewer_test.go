@@ -262,7 +262,7 @@ func TestI3_TheReviewIsRequestedOnceAcrossPolls(t *testing.T) {
 // and nothing is reviewed on the new head yet (review of #244): the checks
 // run on it, and I3 or I4 decides again.
 func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
-	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}, movesHead: true})
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 1})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
 
