@@ -13,6 +13,7 @@ Read by: the Reviewer and the Owner.
 - Under "How it was checked", write one row for each thing that changed: what it is, how you checked it, and the result. Put the command output in a `<details>` block. Do not only say that the tests pass.
 - Update the description when you push more commits, so that it still describes the whole change.
 - Under "Follow-up", write only work that you noticed yourself and that is outside the scope of the issue. cumin copies this section to the requirement issue after the merge. Do not create issues.
+- End the description with a line `---` after "Follow-up", with an empty line before it, as the template shows. cumin copies "Follow-up" up to that line. Write nothing below "Follow-up" except the follow-up text; a signature that your CLI adds belongs after the line.
 - If someone must do something after the merge, write it under "Follow-up", and nowhere else. cumin reads only "Follow-up". Text under "Notes for the reviewer" is lost after the merge.
 
 ## Template
@@ -55,6 +56,8 @@ $ go test -race ./...
 
 ## Follow-up
 <!-- Work outside the scope of the issue that you noticed, with the reason. Or "None". Do not copy review comments here. -->
+
+---
 ```
 
 ## Example
@@ -104,4 +107,6 @@ ok  (every package)
 
 ## Follow-up
 - The retry after an abnormal end is the next issue; it calls the same step with `Retried: once`.
+
+---
 ````

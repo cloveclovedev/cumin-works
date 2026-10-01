@@ -162,8 +162,8 @@ func HasFollowUpNote(marks []FollowUpMark, pullRequest int) bool {
 }
 
 // FollowUpSection returns the text of the "## Follow-up" section of a pull
-// request description, as it is, without the HTML comments of the
-// template. It is empty when the section is missing, empty, or "None".
+// request description, as it is, up to the next heading or horizontal
+// rule, without the HTML comments of the template. It is empty when the section is missing, empty, or "None".
 func FollowUpSection(body string) string {
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	start := -1
@@ -176,9 +176,19 @@ func FollowUpSection(body string) string {
 	if start < 0 {
 		return ""
 	}
+	// The section ends at the next heading or at the next horizontal rule.
+	// "Follow-up" is the last section of the template, so the rule is the
+	// only mark between its text and what a CLI adds at the end of the
+	// description, such as a signature. A rule inside a fenced code block is
+	// part of the text.
 	end := len(lines)
+	fenced := false
 	for i := start; i < len(lines); i++ {
-		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") {
+		line := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
+			fenced = !fenced
+		}
+		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") || (!fenced && horizontalRule.MatchString(line)) {
 			end = i
 			break
 		}
@@ -189,6 +199,10 @@ func FollowUpSection(body string) string {
 	}
 	return text
 }
+
+// horizontalRule matches a line of three or more hyphens, the rule that
+// templates/pull-request.md puts after the "Follow-up" section.
+var horizontalRule = regexp.MustCompile(`^-{3,}$`)
 
 // htmlComment matches an HTML comment, such as the hints of the template.
 var htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
