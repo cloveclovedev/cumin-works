@@ -272,10 +272,10 @@ func FollowUpNote(sub SubIssue, pr MergedPullRequest, reviewer string, notes []i
 	}
 	return fmt.Sprintf(`## Follow-up from #%d (%s)
 
-From the pull request description:
+### From the pull request description
 %s
 
-Open non-blocking review comments:
+### Open non-blocking review comments
 %s
 To do any of this work: write a new requirement issue that names the items. This list is only a record.
 

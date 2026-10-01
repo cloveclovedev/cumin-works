@@ -17,10 +17,10 @@ cumin writes this comment after a pull request of an implementation issue is mer
 ```markdown
 ## Follow-up from #<pull request> (<implementation issue title>)
 
-From the pull request description:
+### From the pull request description
 <the text of the "Follow-up" section, or "None">
 
-Open non-blocking review comments:
+### Open non-blocking review comments
 - `<path>:<line>` — <the first line of the comment> (<link>)
 - ...
 
