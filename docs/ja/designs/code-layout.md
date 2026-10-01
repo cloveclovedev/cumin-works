@@ -36,6 +36,7 @@
 | | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
 | | `status.go` | `cumin status` (GitHubのラベル、最新の使用率、今の上限の表示) と `cumin --version` (Goのビルド情報)。表示の中身は `writeStatus` にまとめ、Keychainなしでテストする |
 | | `quota.go` | `cumin quota allow` (Q2)。状態ファイルの最新の5h枠のリセット時刻を、許可のファイルに書く |
+| | `live_e2e_test.go` | 実機の場面 E2E-1。launchd で動く cumin を外から確かめるので、組み立てたバイナリの隣に置く。Owner の操作は `gh` で行う |
 | `internal/core/config` | `config.go` | Hostの設定ファイル (TOML) の読み込み、初期値、制限、既定のパス |
 | | `repository.go` | 対象のリポジトリの `.cumin/config.toml` を、Hostの設定に重ねる |
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
