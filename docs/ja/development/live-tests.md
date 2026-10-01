@@ -523,41 +523,40 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 
 1. 場面 Review-1 の手順1〜3と同じ。ほかに、場面 Fail-1 の手順2と同じく webhook のアドレスを Keychain に入れ、`notify.discord.enabled` を `true` のままにする。
 2. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける。
-3. その sub-issue として、実装Issueを2つ作る。どちらも本文の完了条件には「`live/<ファイル>` を作り、場面 Merge-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。
-   - A: 題は `Describe the merge of risk/low in Merge-1`、ファイルは `live/merge-1-low.md`、`risk/low` を付ける。
+3. その sub-issue として、実装Issueを2つ作る。この順に作り、B の番号を小さくする。番号の小さい B から進むので、Owner の作業 (手順8) が早く来る。B が `cumin/status/awaiting-owner-review` で待つ間は、同時に進めるIssueの数に数えないので、A がその間に進む。どちらも本文の完了条件には「`live/<ファイル>` を作り、場面 Merge-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。
    - B: 題は `Describe the merge of risk/medium in Merge-1`、ファイルは `live/merge-1-medium.md`、`risk/medium` を付ける。
+   - A: 題は `Describe the merge of risk/low in Merge-1`、ファイルは `live/merge-1-low.md`、`risk/low` を付ける。
 4. sandbox に2つのファイルがまだないことと、`cumin/status/ready` の付いた他の sub-issue がなく、同時に進めるIssueの数に数えられるIssueもないことを確かめる (「`cumin run` を sandbox で動かすとき」)。
 
 ### 実行
 
-5. `./cumin run --config <設定ファイル>` を起動し、ログをファイルにも書く。起動のログの `notifications` が `discord` であることを確かめる。
-6. 2つの実装Issueに `cumin/status/ready` を付ける。同時に進めるIssueの数は初期値の1なので、番号の小さい A から進む。
-7. A のログがこの順に出る。I11 と I2 のリンクのログは間に入る。
+5. `./cumin run --config <設定ファイル>` を起動し、ログをファイルにも書く。起動のログの `notifications` が `discord` であることを確かめる。同時に、2つの実装Issueが両方閉じたら SIGTERM を送る小さなループを動かす (3秒ごとに `gh api repos/<owner>/<repo>/issues/<番号> --jq .state` を読む)。両方閉じると、次の定期確認で受け入れの確認 (R4) が Planner を起動する。この場面では要らないので、その前に止める。
+6. 2つの実装Issueに `cumin/status/ready` を付ける。
+7. B のログがこの順に出る。I11 と I2 のログは間に入る。
 
    | ログの行 | 意味 |
    |---|---|
    | `I3: the Reviewer approved the head commit` | Reviewer が先頭のコミットを承認した |
-   | `I6: decided on the approved pull request` | `decision` が `merge` |
-   | `I6: merged the pull request` | `merge_method` が `squash` |
-   | `I6: GitHub closed the issue` か `I6: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
-
-8. A が閉じると、B に着手する。B のログがこの順に出る。
-
-   | ログの行 | 意味 |
-   |---|---|
    | `I6: decided on the approved pull request` | `decision` が `ask the Owner` |
    | `I7: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-owner-review` に替えた |
    | `the Owner was notified` | `row` が `I7`。Discord に1件届く |
 
-9. 実装Issueが2つとも閉じると、次の定期確認で受け入れの確認 (R4) が Planner を起動する。この場面では要らないので、手順10の前に、ログを1秒ごとに見て、`I12: GitHub closed the issue` か `I12: closed the issue that GitHub left open after the merge` が出たら SIGTERM を送る小さなループを動かしておく。
-10. Owner が B の Pull Request の先頭のコミットを、GitHub のレビューで承認 (Approve) する。
-11. 次の定期確認で、ログがこの順に出る。そのあと、手順9のループが cumin を止める。
+8. Owner が B の Pull Request を開き、GitHub のレビューで承認 (Approve) する。Reviewers に Owner を足す必要はない。
+9. その間に A が進み、ログがこの順に出る。
+
+   | ログの行 | 意味 |
+   |---|---|
+   | `I6: decided on the approved pull request` | `decision` が `merge` |
+   | `I6: merged the pull request` | `merge_method` が `squash` |
+   | `I6: GitHub closed the issue` か `I6: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
+
+10. Owner の承認のあとの定期確認で、B のログがこの順に出る。両方閉じると、手順5のループが cumin を止める。
 
    | ログの行 | 意味 |
    |---|---|
    | `I12: the Owner approved the head commit` | Owner の権限を読み、最新の判断のレビューが承認だった |
    | `I12: merged the pull request` | `merge_method` が `squash` |
-   | `I12: GitHub closed the issue` か `I12: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた |
+   | `I12: GitHub closed the issue` か `I12: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。止める合図が merge のあとの待ちの間に届いたときは、その前に `I12: cumin is stopping; the issue is checked without the wait` が出る |
 
 ### 確かめること
 
