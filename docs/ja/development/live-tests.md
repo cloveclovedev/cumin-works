@@ -619,8 +619,8 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 | # | 確かめること | 見る場所 |
 |---|---|---|
 | 1 | #A に、cumin-core の App のコメントがちょうど1つある。1行目が `## Follow-up from #C (<#B の題>)` である | #A のコメント |
-| 2 | コメントの「From the pull request description:」の下に、#C の `Follow-up` の1行がそのままある | #A のコメント |
-| 3 | 「Open non-blocking review comments:」の下に、`suggestion` の指摘だけが1行あり、`<ファイル>:1` とリンクが付いている。`Fixed` の返答が付いた `nitpick` はない | #A のコメント |
+| 2 | コメントの見出し「From the pull request description」の下に、#C の `Follow-up` の1行がそのままある | #A のコメント |
+| 3 | 見出し「Open non-blocking review comments」の下に、`suggestion` の指摘だけが1行あり、`<ファイル>:1` とリンクが付いている。`Fixed` の返答が付いた `nitpick` はない | #A のコメント |
 | 4 | コメントの最後に、目に見えない目印 `<!-- cumin:follow-up-note issue=B pull-request=C notes=C -->` がある | #A のコメントを編集画面か API で読む |
 | 5 | 手順7のあとも、#A のフォローアップノートは1つのままである | #A のコメント |
 | 6 | Agent が起動していない (`agent start` の行がない)。ログに token と秘密鍵が出ていない | cumin のログ |
