@@ -195,7 +195,7 @@ func FollowUpSection(body string) string {
 				fence = ""
 			}
 		}
-		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") || (fence == "" && horizontalRule.MatchString(line)) {
+		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") || (fence == "" && horizontalRule.MatchString(lines[i])) {
 			end = i
 			break
 		}
@@ -208,8 +208,9 @@ func FollowUpSection(body string) string {
 }
 
 // horizontalRule matches a line of three or more hyphens, the rule that
-// templates/pull-request.md puts after the "Follow-up" section.
-var horizontalRule = regexp.MustCompile(`^-{3,}$`)
+// templates/pull-request.md puts after the "Follow-up" section. Markdown
+// allows up to three spaces before it; with four, the line is code.
+var horizontalRule = regexp.MustCompile(`^ {0,3}-{3,}[ \t]*$`)
 
 // codeFence matches the marker of a fenced code block at the start of a
 // line: three or more backticks or tildes.
