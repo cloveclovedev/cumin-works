@@ -182,13 +182,20 @@ func FollowUpSection(body string) string {
 	// description, such as a signature. A rule inside a fenced code block is
 	// part of the text.
 	end := len(lines)
-	fenced := false
+	fence := "" // the marker that opened the code block, or empty outside one
 	for i := start; i < len(lines); i++ {
 		line := strings.TrimSpace(lines[i])
-		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
-			fenced = !fenced
+		if marker := codeFence.FindString(line); marker != "" {
+			switch {
+			case fence == "":
+				fence = marker
+			case marker[0] == fence[0] && len(marker) >= len(fence) && marker == line:
+				// Only a fence of the same character, at least as long, with
+				// nothing after it, closes the block.
+				fence = ""
+			}
 		}
-		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") || (!fenced && horizontalRule.MatchString(line)) {
+		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") || (fence == "" && horizontalRule.MatchString(line)) {
 			end = i
 			break
 		}
@@ -203,6 +210,10 @@ func FollowUpSection(body string) string {
 // horizontalRule matches a line of three or more hyphens, the rule that
 // templates/pull-request.md puts after the "Follow-up" section.
 var horizontalRule = regexp.MustCompile(`^-{3,}$`)
+
+// codeFence matches the marker of a fenced code block at the start of a
+// line: three or more backticks or tildes.
+var codeFence = regexp.MustCompile("^(`{3,}|~{3,})")
 
 // htmlComment matches an HTML comment, such as the hints of the template.
 var htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
