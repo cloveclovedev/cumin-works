@@ -58,11 +58,12 @@ Result: Changes requested (round <n> of <limit>)
 Blocking: <count>. Non-blocking: <count>.
 Review skills: <the review skills that ran, or None>
 
-Blocking comments:
+### Blocking comments
 1. `<path>:<line>` — <the problem in one sentence>
 2. ...
 
-Acceptance criteria: <x> of <y> are met. Not met: <list, or "None">.
+### Acceptance criteria
+<x> of <y> are met. Not met: <list, or "None">.
 ```
 
-When the result is approval, write `Result: Approved (round <n> of <limit>)` and "Blocking comments: None". The request gives the round and the limit.
+When the result is approval, write `Result: Approved (round <n> of <limit>)` and "None" under "Blocking comments". Keep the first three lines as lines and the two `###` headings as headings. The request gives the round and the limit.
