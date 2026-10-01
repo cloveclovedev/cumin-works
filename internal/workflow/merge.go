@@ -23,8 +23,10 @@ import (
 const DefaultCloseWait = 10 * time.Second
 
 // closeTimeLimit bounds the read and the close after a merge, which run
-// even while cumin stops.
-const closeTimeLimit = 30 * time.Second
+// even while cumin stops. It is shorter than the time that the stop waits
+// for the requests that run (DefaultStopGrace), so that both end before
+// the process does.
+const closeTimeLimit = 10 * time.Second
 
 func (s *Service) closeWait() time.Duration {
 	if s.CloseWait > 0 {
@@ -165,9 +167,9 @@ func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target
 		log.Info(row + ": cumin is stopping; the issue is checked without the wait")
 	case <-time.After(s.closeWait()):
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeLimit)
+	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeLimit)
 	defer cancel()
-	open, err := s.GitHub.IssueIsOpen(ctx, token, owner, repo, sub.Number)
+	open, err := s.GitHub.IssueIsOpen(closeCtx, token, owner, repo, sub.Number)
 	if err != nil {
 		log.Warn(row+": the issue was not read after the merge", "error", err.Error())
 		stopIssue(CloseFailedReason(pr.Number, statusAnswer(err)))
@@ -177,7 +179,7 @@ func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target
 		log.Info(row + ": GitHub closed the issue")
 		return
 	}
-	if err := s.GitHub.CloseIssueAsCompleted(ctx, token, owner, repo, sub.Number); err != nil {
+	if err := s.GitHub.CloseIssueAsCompleted(closeCtx, token, owner, repo, sub.Number); err != nil {
 		log.Warn(row+": the issue was not closed after the merge", "error", err.Error())
 		stopIssue(CloseFailedReason(pr.Number, statusAnswer(err)))
 		return
