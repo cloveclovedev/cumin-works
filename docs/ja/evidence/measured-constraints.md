@@ -228,3 +228,14 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 119 | cumin-coreのtokenで、Issueを `state: closed`、`state_reason: completed` で閉じられる。閉じたIssueをもう一度閉じても200が返り、`closed` のイベントは1つのままである | 同上 (C3とC4) | 実測 |
 | 120 | 2026-09-30には、手で張ったリンク (画面の Development の欄、または `addCloseIssueReferences`) のPull Requestを既定のブランチにmergeしても、Issueは閉じなかった。cumin-coreのmergeで、1分待っても開いたままだった | 同上 (C5)。cumin-works #271 と #229 でも同じ | 実測 |
 | 121 | 2026-09-30の途中から、本文に `Closes #N` と書いたPull Requestに、作った直後は閉じるリンクが付かないことがある。数時間あとに付くこともある (cumin-works #268〜#270、sandbox #185 は作ってから3分はリンクがなく、2026-10-01には付いていた)。キーワードのリンクと手で張ったリンクは、`closingIssuesReferences(userLinkedOnly: true)` で見分けられる。GitHub Status に障害の表示はなく、community の discussions 209162 と 209148 に報告がある | cumin-works、sandbox、ほかの公開リポジトリで観測 (2026-09-30、2026-10-01) | 実測 |
+
+## 16. mergeの実装で確かめたこと (2026-10-01)
+
+要求Issue #222 の実装 (#293) で確かめた事実。sandboxの `TestLiveMergeFacts` で実測した。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 122 | cumin-coreのinstallation tokenで、`GET /repos/{owner}/{repo}/collaborators/{username}/permission` を呼べ、どのアカウントの権限も読める。人のアカウントは `User`、botは `Bot` と分かる。公開リポジトリでは、協力者でない人も `read` と答える | 公式: Get repository permissions for a user (Metadata の読み取り)。#293 の M1 | 公式文書 + 実測 |
+| 123 | Pull Requestのmergeで、`sha` に先頭でないコミットを渡すと、409 ("Head branch was modified") が返り、何もmergeされない | 公式: Merge a pull request。#293 の M2 | 公式文書 + 実測 |
+| 124 | 衝突するPull Requestのmergeは、405 ("Pull Request has merge conflicts") になる。rulesetに止められたmergeも405である (62)。mergeの直前に読んだ `mergeable` は、mainが動いた直後だと古い `true` のことがある | #293 の M4 | 実測 |
+| 125 | mergeが405で失敗した直後に読み直すと、衝突のときだけ `mergeable` が `false`、`mergeable_state` が `dirty` になる。衝突とrulesetの拒否は、これで見分けられる | 公式: Get a pull request。#293 の M5 | 公式文書 + 実測 |
