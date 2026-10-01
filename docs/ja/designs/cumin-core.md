@@ -2,7 +2,7 @@
 
 - 状態: Approved
 - 要件: [cumin本体の要件](../requirements/cumin-core.md)、[Issueのラベルと状態遷移](../requirements/workflow/issue-states.md)
-- 事実の出どころ: [調査・実測で確定した制約](../requirements/evidence/measured-constraints.md) の行の番号 (「実測 N」と書く) か、公式ドキュメントのページの名前で示す。
+- 事実の出どころ: [調査・実測で確定した制約](../evidence/measured-constraints.md) の行の番号 (「実測 N」と書く) か、公式ドキュメントのページの名前で示す。
 
 上の2つの要件を実装するときに、プログラム全体にまたがる設計上の決定を書く。定期確認の1回分 (読む内容、判定、依頼、実行の終わり) は [定期確認の設計](poll.md) に、1回のAgentの実行は [Agentの実行の設計](agent-run.md) に、パッケージとファイルの受け持ちは [コードの構成の設計](code-layout.md) にある。
 

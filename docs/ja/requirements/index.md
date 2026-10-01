@@ -26,6 +26,3 @@ cumin works v2 の要求と要件の文書の入口。
 - [実装Issueの分割基準](policies/issue-sizing.md): Plannerが要求Issueを分割するときの基準
 - [GitHubに残す文章のテンプレート](policies/writing-templates.md): 要求Issue、実装Issue、Pull Requestの説明、レビュー、返答、Ownerに判断を求める文章の型
 
-## 調査と実測
-
-- [調査・実測で確定した制約](evidence/measured-constraints.md): Claude Codeの利用枠、GitHub上の身元について調べた事実
