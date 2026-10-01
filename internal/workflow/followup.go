@@ -184,7 +184,12 @@ func FollowUpSection(body string) string {
 	end := len(lines)
 	fence := "" // the marker that opened the code block, or empty outside one
 	for i := start; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
+		// Markdown allows up to three spaces before a fence; with four, the
+		// line is indented code.
+		line := strings.TrimRight(lines[i], " \t")
+		if indent := len(line) - len(strings.TrimLeft(line, " ")); indent <= 3 {
+			line = line[indent:]
+		}
 		if marker := codeFence.FindString(line); marker != "" {
 			switch {
 			case fence == "":
