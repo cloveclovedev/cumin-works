@@ -754,7 +754,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 ### Host の準備
 
-1. Host の設定ファイルの `repositories` を sandbox だけにし、`work_dir` を捨ててよいディレクトリにする。`poll_interval` は初期値のままでよい。
+1. Host の設定ファイル (LaunchAgent に `--config` で渡したもの。テストは plist からそのパスを読む) の `repositories` を sandbox だけにし、`work_dir` を捨ててよいディレクトリにする。`poll_interval` は初期値のままでよい。
 2. webhook のアドレスを Keychain に入れ、`notify.discord.enabled` を `true` のままにする (場面 Fail-1 の手順2)。
 3. cumin を置き、launchd で起動する ([セットアップの手順](setup-guide.md) の手順4)。
 

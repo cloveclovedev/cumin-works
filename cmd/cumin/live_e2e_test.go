@@ -359,6 +359,31 @@ func launchdPID(t *testing.T) int {
 	return pid
 }
 
+// launchdConfigPath returns the settings file that the LaunchAgent passes
+// to cumin: the argument after --config in its plist. It is the file that
+// the running cumin reads, which --config can move away from the default.
+func launchdConfigPath(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plist := filepath.Join(home, "Library", "LaunchAgents", setup.LaunchAgentLabel+".plist")
+	out, err := exec.Command("plutil", "-extract", "ProgramArguments", "json", "-o", "-", plist).Output()
+	if err != nil {
+		t.Fatalf("read the arguments of the LaunchAgent from its plist: %v", err)
+	}
+	var args []string
+	if err := json.Unmarshal(out, &args); err != nil {
+		t.Fatalf("decode the arguments of the LaunchAgent: %v", err)
+	}
+	if i := slices.Index(args, "--config"); i >= 0 && i+1 < len(args) {
+		return args[i+1]
+	}
+	t.Fatalf("the LaunchAgent has no --config argument: %d arguments", len(args))
+	return ""
+}
+
 // newE2E checks everything that must hold before the test creates an issue.
 func newE2E(t *testing.T) *e2e {
 	t.Helper()
@@ -374,11 +399,7 @@ func newE2E(t *testing.T) *e2e {
 	if launchdPID(t) == 0 {
 		t.Fatalf("the LaunchAgent %s is not running. Start it by docs/ja/development/live-tests.md (E2E-1)", setup.LaunchAgentLabel)
 	}
-	path, err := config.DefaultPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	settings, err := config.Load(path)
+	settings, err := config.Load(launchdConfigPath(t))
 	if err != nil {
 		t.Fatal(err)
 	}
