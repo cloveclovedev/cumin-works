@@ -73,3 +73,19 @@ func TestCloseIssueAsCompleted_ClosesAnOpenIssue(t *testing.T) {
 		t.Errorf("PullRequestURL = %q", got)
 	}
 }
+
+func TestRepositoryPermission_ReadsThePermissionAndTheType(t *testing.T) {
+	fake, _, client := mergeScene(t)
+	fake.SetPermission("the-owner", "admin", "User")
+	ctx := context.Background()
+	for _, tc := range []struct{ login, permission, userType string }{
+		{"the-owner", "admin", "User"},
+		{"someone", "read", "User"},
+		{"example-implementer[bot]", "none", "Bot"},
+	} {
+		permission, userType, err := client.RepositoryPermission(ctx, githubtest.Token, "example-org", "example-repo", tc.login)
+		if err != nil || permission != tc.permission || userType != tc.userType {
+			t.Errorf("RepositoryPermission(%s) = %q, %q, %v; want %q, %q", tc.login, permission, userType, err, tc.permission, tc.userType)
+		}
+	}
+}

@@ -164,7 +164,7 @@ checkの結果の読み方:
 - 判定は `internal/workflow` の純粋関数である。スナップショットと、設定 (リポジトリごとに同時に進めるIssueの数) だけから、着手リストを返す。I/Oをしない。同じスナップショットからは、Issueの並び順によらず、同じ着手リストを返す。着手可能なIssue数は、定期確認のたびにラベルから数え直す。ファイルにもメモリにも持ち越さない。
 - 進行中として数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いているsub-issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。数えると、初期値の上限 (1) では、どのsub-issueにも着手できなくなる。
 - 動作の適用は、判定とは別の部分が行う。着手では、ラベルを替えてから依頼する (Issueのラベルと状態遷移の原則3)。ラベルを替えられなければ依頼せず、次の定期確認でやり直す。
-- 今の判定はR1、R3、R4、R6、R7、I1、I3、I4、I11である。I9は判定の前の別の手順である (「フォローアップノート (I9)」)。R2、I2、I5〜I8、I10は、実行の終わりに判定する。
+- 今の判定はR1、R3、R4、R6、R7、I1、I3、I4、I11、I12である。I9は判定の前の別の手順である (「フォローアップノート (I9)」)。R2、I2、I5〜I8、I10は、実行の終わりに判定する。
 - R3、R6、R7は、要求Issueのラベルを替えるだけで、Agentを起動しない。そのため一番先に決め、上限の空きを使わない。R4は、R1、I1と同じく上限の空きを分け合い、Issueの番号の順に着手する。
 - R4の依頼中は、要求Issueのラベルが `cumin/status/implementing` のまま変わらない。そのため、Plannerが動いていることは、cuminが手元に持つ実行中のIssueの集合で判定に渡す (`Snapshot.Running`)。実行中の受け入れの確認は、同時に進めるIssueの数にも数える。cuminが再起動すると集合は空になり、コメントがなければR4がもう一度依頼する。Plannerは、同じ回の自分のコメントを書き直すので、コメントは増えない (Plannerの要件の「やり直しに備えること」)。R3は、要求Issueに状態ラベルがないときは `cumin/status/ready` の付いた開いているsub-issueがあれば成り立ち、`cumin/status/awaiting-owner-review` のときは、そのラベルよりあとに `cumin/status/ready` が付いたsub-issueがあれば成り立つ。R6は、`cumin/status/implementing` の要求Issueに開いているsub-issueがあり、その全てに状態ラベルがないときに成り立つ。`cumin/type/owner-task` のsub-issueも、状態ラベルがないので数える。
 - R6の通知は、ラベルを替えたあとに1回だけ出す。次の定期確認では要求Issueがもう `cumin/status/implementing` ではないので、同じ通知を繰り返さない。ラベルを替えられなければ通知せず、次の定期確認でやり直す。
@@ -275,6 +275,16 @@ checkの結果の読み方:
   - 閉じるのは、この手順の中の1回だけである。読み取りか閉じる操作が失敗したら、Ownerに戻す。あとの定期確認では閉じないので、Ownerが開き直したIssueは開いたままになる。
   - mergeのあと、実装Issueのラベルは替えない。Issueが閉じれば、定期確認の対象から外れる。
 - 採らなかった案: mergeの前に `mergeable` を読み、衝突なら呼ばない。読んだ値が古く、衝突を見落とす (#286 の M4)。呼んでから読むほうが、1回の読み取りで確かに分かる。
+
+### Ownerの承認のあとのmerge (I12)
+
+- 定期確認の判定 (純粋関数) が、候補を集める。`cumin/status/awaiting-owner-review` の開いた実装Issueで、Pull Requestの今の先頭のコミットに、人 (botでないアカウント) の `APPROVED` のレビューがあるものである。実行中のIssueは除く。候補には、判断のレビュー (`APPROVED` か `CHANGES_REQUESTED`) を出した人を全て入れる。
+- 候補ごとに、その人たちの権限を `cumin-core` で読む (`GET /repos/{owner}/{repo}/collaborators/{username}/permission`。公式: Get repository permissions for a user。要る権限は Metadata の read。実測は #286 の M1)。`permission` が `admin` か `write` で、`user.type` が `User` の人がOwnerである ([cumin本体の要件](../requirements/cumin-core.md) の「Owner」。maintainは `write` として返る)。候補がなければ、権限も必須のcheckも読まない。
+- Ownerのレビューのうち、最新の判断のレビューが今の先頭のコミットへの `APPROVED` なら、I12が成り立つ (純粋関数 `OwnerApproved`)。古いコミットへの承認、botの承認、Ownerでない人の承認は数えない。あとから出したOwnerの `CHANGES_REQUESTED` は、承認を取り消す。
+- 「最新のレビュー」に、`COMMENTED` は数えない。GitHubも、mergeの判断には `APPROVED` と `CHANGES_REQUESTED` だけを使う。Ownerが承認のあとに質問のコメントを書いても、承認は残る。
+- 次に、I6と同じ `DecideMerge` で、riskのラベルと必須のcheckを確かめる。riskのラベルがちょうど1つでなければ、行の番号I12でOwnerに戻す。checkが通っていなければ、何もしない。通れば、次の定期確認でI12がまた成り立つ。riskの値では分けない。Ownerが判断したからである。
+- mergeは、「mergeの手順 (I6、I7)」と同じ手順を、行の番号I12で通る。衝突、失敗、閉じ方も同じである。手順は別のgoroutineで動き、実行中のIssueとして数える。手順が実装Issueを閉じるのを待つ間に、次の定期確認が同じIssueを候補にしないためである。
+- 採らなかった案: Ownerの一覧をHostの設定に持つ。要求のbacklogにある。権限はGitHubにあり、設定と二重に持たないほうがよい。
 
 ### 上限での原因の整理 (I8)
 

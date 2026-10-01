@@ -333,9 +333,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result 
 	}
 	// The required checks are a REST call of their own, so the poll makes
 	// it only when an issue of this repository waits for the checks (I3,
-	// I4). Its budget is not the one of the snapshot query.
+	// I4) or has an approval of a person to check (I12). Its budget is not
+	// the one of the snapshot query.
 	var required []RequiredCheck
-	if snapshot.HasIssueAwaitingChecks() {
+	if snapshot.HasIssueAwaitingChecks() || snapshot.HasOwnerApprovalCandidate() {
 		read, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
 		if err != nil {
 			return err
@@ -404,6 +405,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result 
 			}
 		case CopyLabels:
 			if err := s.copyLabels(ctx, token, target, a); err != nil {
+				errs = append(errs, err)
+			}
+		case MergeOwnerApproval:
+			if err := s.mergeOwnerApproval(ctx, token, target, snapshot, settings, required, a); err != nil {
 				errs = append(errs, err)
 			}
 		default:

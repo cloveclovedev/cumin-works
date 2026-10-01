@@ -230,3 +230,62 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 		},
 	})
 }
+
+// mergeOwnerApproval applies I12 to a candidate: it reads the permission of
+// each person whose review decides, keeps the Owners (IsOwner), and checks
+// that the latest review of an Owner is APPROVED on the head commit
+// (OwnerApproved). Then the risk label and the required checks decide as
+// for I6 (DecideMerge); the risk does not choose between the Owner and
+// cumin here, because the Owner already decided. The merge step runs in its
+// own goroutine, marked as running, so that the next poll does not take the
+// same issue again while the step waits for GitHub to close it.
+//
+// A permission that cannot be read is an error of the poll; the next poll
+// tries again. Checks that do not pass leave the issue as it is: I12
+// applies again when they pass.
+func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, required []RequiredCheck, a MergeOwnerApproval) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number)
+	sub, ok := snapshot.SubIssue(a.Number)
+	if !ok {
+		return fmt.Errorf("I12: issue #%d is not in the snapshot", a.Number)
+	}
+	pr, ok := sub.LatestPullRequest()
+	if !ok || pr.Number != a.PullRequest {
+		return fmt.Errorf("I12: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
+	}
+	owners := map[string]bool{}
+	for _, login := range a.Reviewers {
+		permission, userType, err := s.GitHub.RepositoryPermission(ctx, token, owner, repo, login)
+		if err != nil {
+			return fmt.Errorf("I12: issue #%d: %w", a.Number, err)
+		}
+		owners[login] = IsOwner(permission, userType)
+	}
+	if !OwnerApproved(pr.Reviews, pr.HeadCommit, owners) {
+		log.Debug("I12: no approval of an Owner on the head commit", "pull_request", pr.Number)
+		return nil
+	}
+	decision := DecideMerge(sub.Labels, required, pr.Checks)
+	switch decision {
+	case MergeChecksNotPassed:
+		log.Info("I12: the Owner approved; the merge waits for the required checks", "pull_request", pr.Number)
+		return nil
+	case MergeNoRiskLabel, MergeTwoRiskLabels:
+		reason := RiskLabelReason(decision)
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row: RowI12, issue: a.Number, labels: sub.Labels, reason: reason,
+			comment: StopNote(RowI12, reason, pr.Number, false),
+		})
+		return nil
+	}
+	log.Info("I12: the Owner approved the head commit", "pull_request", pr.Number, "head_commit", pr.HeadCommit)
+	done := s.markInProgress(ctx, target.Repository.String(), a.Number)
+	s.running.Add(1)
+	go func() {
+		defer s.running.Done()
+		defer done()
+		s.mergeStep(ctx, log, target, settings, RowI12, sub, pr, snapshot.DefaultBranch)
+	}()
+	return nil
+}
