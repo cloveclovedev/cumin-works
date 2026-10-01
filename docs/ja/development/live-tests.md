@@ -515,7 +515,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 
 ## 実機の場面 Merge-1
 
-Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge して実装Issueが閉じること (I6)、`risk/medium` の Pull Request は merge せずに Owner に1回だけ知らせること (I7)、Owner が先頭のコミットをレビューで承認すると cumin-core が merge すること (I12) を、1回通して確かめる。本物の Claude Code を8回起動する (使用率の最小の実行と Agent の実行を、2つの実装Issueの Implementer と Reviewer で1組ずつ)。途中で Owner が GitHub でレビューを1つ出す。
+Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge して実装Issueが閉じること (I6)、`risk/medium` の Pull Request は merge せずに Owner に1回だけ知らせること (I7)、Owner が先頭のコミットをレビューで承認すると cumin-core が merge すること (I12) を、1回通して確かめる。本物の Claude Code を6回起動する (2つの実装Issueごとに、着手 (I1) の使用率の最小の実行、Implementer の実行、Reviewer の実行)。Reviewer への依頼は着手ではないので、使用率を読み直さない。途中で Owner が GitHub でレビューを1つ出す。
 
 受け入れテストは偽の GitHub で merge するので、本物の ruleset のもとで cumin-core の merge が通ること、GitHub がリンクした実装Issueを閉じるかどうかと cumin の閉じ方、Owner のレビューを権限で見分けることは、この場面でだけ分かる。
 
@@ -574,6 +574,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 ### 後片付け
 
 - 要求Issueを閉じる。2つのファイルは main に残る。名前に日時があるので、次の実行の邪魔にならない。
+- 途中で止まったときは、開いたままの実装Issueと Pull Request を閉じ、そのブランチを消す。`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` のまま残すと、同時に進めるIssueの数を使い続け、次の実行が着手しない。
 - `work_dir` の一時ディレクトリを消す。
 - launchd の cumin を止めたなら、戻す。
 
