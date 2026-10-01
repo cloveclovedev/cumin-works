@@ -108,7 +108,7 @@ I7のあと、OwnerはPull RequestをGitHubのレビューで判断する。
 
 - 承認するときは、今の先頭のコミットに `APPROVE` のレビューを出す。I12が成り立ち、cuminがmergeする。古いコミットへの承認は数えない。承認のあとにOwnerが `REQUEST_CHANGES` を出すと、最新のレビューが承認でなくなるので、mergeしない。衝突の解消などで新しいコミットがpushされたら、Ownerはもう一度承認する
 - 差し戻すときは、今までどおり、コメントを書いて実装Issueに `cumin/status/ready` を付ける。I1が成り立つ
-- 自分でmergeしてもよい。そのあとの扱いは、cuminがmergeしたときと同じである (I9)。ただし、GitHubが実装Issueを閉じなければ、Ownerが閉じる。cuminが閉じるのは、自分のmergeの直後だけである
+- Ownerのうちadminのアカウントは、自分でmergeしてもよい。mainのrulesetを迂回できるのは、adminと `cumin-core` だけだからである ([セットアップの手順](../../development/setup-guide.md))。そのあとの扱いは、cuminがmergeしたときと同じである (I9)。ただし、GitHubが実装Issueを閉じなければ、Ownerが閉じる。cuminが閉じるのは、自分のmergeの直後だけである
 
 mergeのあとにcuminが実装Issueを閉じるのは、GitHubの動作に合わせるためである。2026-09-30から、GitHubは、手で付けたリンクや `addCloseIssueReferences` で付けたリンクのPull Requestをmergeしても、Issueを閉じないことがある。cuminは、mergeの手順の中で少し待ってから実装Issueを読み、開いていれば1回だけ閉じる。あとの定期確認では閉じないので、Ownerが開き直したIssueは開いたままになる。mergeと閉じる操作の間でcuminが止まったときも、あとで閉じ直さない。そのIssueは、下の「v0.1では実装しないこと」の辻褄の合わないIssueと同じく、Ownerが閉じる。
 
