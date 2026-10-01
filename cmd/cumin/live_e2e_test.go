@@ -35,9 +35,11 @@ const (
 	e2eStatusPrefix = "cumin/status/"
 	e2eRiskPrefix   = "risk/"
 	e2ePollEvery    = 20 * time.Second
-	e2eSplitLimit   = 45 * time.Minute
-	e2eWorkLimit    = 150 * time.Minute
-	e2eAcceptLimit  = 45 * time.Minute
+	// The limits sum to three hours, under the -timeout 4h of the documented
+	// command, so that a slow step fails with its own message.
+	e2eSplitLimit  = 30 * time.Minute
+	e2eWorkLimit   = 120 * time.Minute
+	e2eAcceptLimit = 30 * time.Minute
 )
 
 // e2eRequirement is the requirement issue of the scenario. Each pull request
@@ -298,6 +300,7 @@ type logLine struct {
 	Issue            int    `json:"issue"`
 	RequirementIssue int    `json:"requirement_issue"`
 	Row              string `json:"row"`
+	MergeMethod      string `json:"merge_method"`
 	raw              string
 }
 
@@ -591,7 +594,7 @@ func TestLiveE2E(t *testing.T) {
 			t.Fatalf("pull request #%d: merged %v by %s, want a merge by the cumin-core App", pull.Number, pull.Merged, pull.MergedBy.Login)
 		}
 		if parents := e.gh(t, "api", "repos/"+e.repo+"/commits/"+pull.MergeCommitSHA, "--jq", ".parents | length"); parents != "1" {
-			t.Errorf("pull request #%d: the merge commit has %s parents, want 1 (squash)", pull.Number, parents)
+			t.Errorf("pull request #%d: the merge commit has %s parents, want 1", pull.Number, parents)
 		}
 		issue := e.issue(t, number)
 		if issue.StateReason != "completed" {
@@ -600,7 +603,7 @@ func TestLiveE2E(t *testing.T) {
 		if closed, _ := time.Parse(time.RFC3339, issue.ClosedAt); closed.After(lastClose) {
 			lastClose = closed
 		}
-		evidence := fmt.Sprintf("states of #%d: %s; pull request #%d by the Implementer App on `%s`; Reviewer App APPROVED the head commit; merged by cumin-core at %s (squash); issue closed as completed at %s",
+		evidence := fmt.Sprintf("states of #%d: %s; pull request #%d by the Implementer App on `%s`; Reviewer App APPROVED the head commit; merged by cumin-core at %s (one commit on the default branch); issue closed as completed at %s",
 			number, path, pull.Number, pull.Head.Ref, pull.MergedAt, issue.ClosedAt)
 		if number == medium {
 			if owner == nil || owner.State != "APPROVED" || owner.CommitID != pull.Head.SHA || owner.SubmittedAt > pull.MergedAt {
@@ -684,6 +687,21 @@ func TestLiveE2E(t *testing.T) {
 		"I1: claimed the issue", "I2: verified the pull request", "I3: the pull request is ready for review",
 		"I3: the Reviewer approved the head commit", "I7: the merge waits for the Owner",
 		"I12: the Owner approved the head commit", "I12: merged the pull request"))
+	// One parent does not tell a squash from a rebase; the log names the
+	// method that cumin asked for.
+	merges := 0
+	for _, line := range lines {
+		if line.Repository == e.repo && (line.Issue == low || line.Issue == medium) && strings.HasSuffix(line.Msg, ": merged the pull request") {
+			merges++
+			if line.MergeMethod != "squash" {
+				t.Errorf("issue #%d: merged with the method %q, want squash", line.Issue, line.MergeMethod)
+			}
+		}
+	}
+	if merges != 2 {
+		t.Errorf("the log has %d merges of cumin, want 2", merges)
+	}
+	e.record("Merge method", "log: `merge_method` is `squash` in both `merged the pull request` lines")
 	for _, n := range []struct {
 		row   string
 		issue int

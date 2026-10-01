@@ -795,7 +795,7 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run Te
 | 3 | 実装Issueの状態が `ready`、`implementing`、`awaiting-checks`、`reviewing` の順に始まる。`risk/medium` は最後に `awaiting-owner-review` に移る | Issue のイベント |
 | 4 | 実装Issueごとに Pull Request がちょうど1つある。作成者は Implementer の App、ブランチは `cumin/<Issue番号>-...`、本文に `Closes #<Issue番号>` がある | 閉じるリンク、Pull Request |
 | 5 | Reviewer の App の最後のレビューが、先頭のコミットへの `APPROVED` である | レビュー |
-| 6 | merge したのが cumin-core の App で、merge のコミットの親が1つ (squash) である。実装Issueが `completed` で閉じた | Pull Request、コミット、Issue |
+| 6 | merge したのが cumin-core の App で、merge のコミットの親が1つである。merge の方法は squash である。実装Issueが `completed` で閉じた | Pull Request、コミット、Issue、ログの `merge_method` |
 | 7 | `risk/medium` の Pull Request は、Owner が承認するまで merge されず、merge は先頭のコミットへの Owner の承認のあとである | Pull Request、レビューの時刻 |
 | 8 | Pull Request ごとに、cumin-core の App のフォローアップノートが目印付きで1つあり、受け入れの確認より前に書かれている | 要求Issueのコメント |
 | 9 | `## Acceptance check` で始まる Planner の App のコメントが1つあり、最後の実装Issueが閉じたあとに書かれている。要求Issueが `awaiting-owner-review` に移ったのは、そのあとである | 要求Issueのコメント、イベント |
