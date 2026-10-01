@@ -162,8 +162,8 @@ func HasFollowUpNote(marks []FollowUpMark, pullRequest int) bool {
 }
 
 // FollowUpSection returns the text of the "## Follow-up" section of a pull
-// request description, as it is, without the HTML comments of the
-// template. It is empty when the section is missing, empty, or "None".
+// request description, as it is, up to the next heading or horizontal
+// rule, without the HTML comments of the template. It is empty when the section is missing, empty, or "None".
 func FollowUpSection(body string) string {
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	start := -1
@@ -176,9 +176,31 @@ func FollowUpSection(body string) string {
 	if start < 0 {
 		return ""
 	}
+	// The section ends at the next heading or at the next horizontal rule.
+	// "Follow-up" is the last section of the template, so the rule is the
+	// only mark between its text and what a CLI adds at the end of the
+	// description, such as a signature. A rule inside a fenced code block is
+	// part of the text.
 	end := len(lines)
+	fence := "" // the marker that opened the code block, or empty outside one
 	for i := start; i < len(lines); i++ {
-		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") {
+		// Markdown allows up to three spaces before a fence; with four, the
+		// line is indented code.
+		line := strings.TrimRight(lines[i], " \t")
+		if indent := len(line) - len(strings.TrimLeft(line, " ")); indent <= 3 {
+			line = line[indent:]
+		}
+		if marker := codeFence.FindString(line); marker != "" {
+			switch {
+			case fence == "":
+				fence = marker
+			case marker[0] == fence[0] && len(marker) >= len(fence) && marker == line:
+				// Only a fence of the same character, at least as long, with
+				// nothing after it, closes the block.
+				fence = ""
+			}
+		}
+		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") || (fence == "" && horizontalRule.MatchString(lines[i])) {
 			end = i
 			break
 		}
@@ -189,6 +211,15 @@ func FollowUpSection(body string) string {
 	}
 	return text
 }
+
+// horizontalRule matches a line of three or more hyphens, the rule that
+// templates/pull-request.md puts after the "Follow-up" section. Markdown
+// allows up to three spaces before it; with four, the line is code.
+var horizontalRule = regexp.MustCompile(`^ {0,3}-{3,}[ \t]*$`)
+
+// codeFence matches the marker of a fenced code block at the start of a
+// line: three or more backticks or tildes.
+var codeFence = regexp.MustCompile("^(`{3,}|~{3,})")
 
 // htmlComment matches an HTML comment, such as the hints of the template.
 var htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
@@ -272,10 +303,10 @@ func FollowUpNote(sub SubIssue, pr MergedPullRequest, reviewer string, notes []i
 	}
 	return fmt.Sprintf(`## Follow-up from #%d (%s)
 
-From the pull request description:
+### From the pull request description
 %s
 
-Open non-blocking review comments:
+### Open non-blocking review comments
 %s
 To do any of this work: write a new requirement issue that names the items. This list is only a record.
 

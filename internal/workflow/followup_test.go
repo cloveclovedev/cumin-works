@@ -146,8 +146,8 @@ func TestCore10_ANoteInTheFixedFormOnceAcrossRestarts(t *testing.T) {
 		t.Fatalf("%d follow-up notes, want 1", len(notes))
 	}
 	want := "## Follow-up from #21 (" + subIssueTitle + ")\n\n" +
-		"From the pull request description:\n- The error text of the login screen is not translated yet.\n\n" +
-		"Open non-blocking review comments:\n" +
+		"### From the pull request description\n- The error text of the login screen is not translated yet.\n\n" +
+		"### Open non-blocking review comments\n" +
 		"- `lib/login.dart:12` — suggestion (non-blocking): Move the validation into its own function. (https://example.test/c1)\n\n" +
 		"To do any of this work: write a new requirement issue that names the items. This list is only a record.\n\n" +
 		"<!-- cumin:follow-up-note issue=10 pull-request=21 notes=21 -->\n"
@@ -272,7 +272,7 @@ func TestFollowUpNote_FollowsTheTemplate(t *testing.T) {
 	if !ok {
 		t.Fatal("no note")
 	}
-	fields := []string{"## Follow-up from #", "From the pull request description:", "Open non-blocking review comments:", "- `", "To do any of this work: write a new requirement issue that names the items. This list is only a record.", "<!-- cumin:follow-up-note issue="}
+	fields := []string{"## Follow-up from #", "### From the pull request description", "### Open non-blocking review comments", "- `", "To do any of this work: write a new requirement issue that names the items. This list is only a record.", "<!-- cumin:follow-up-note issue="}
 	at := -1
 	for _, field := range fields {
 		if !strings.Contains(template, field) {
@@ -298,12 +298,12 @@ func TestFollowUpNote_AnEmptyPartSaysNone(t *testing.T) {
 	t.Parallel()
 	sub := workflow.SubIssue{Number: 10, Title: "Title"}
 	onlyText, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Body: followUpBody}, "r[bot]", nil)
-	if !ok || !strings.Contains(onlyText, "Open non-blocking review comments:\nNone\n") {
+	if !ok || !strings.Contains(onlyText, "### Open non-blocking review comments\nNone\n") {
 		t.Errorf("a note without open comments:\n%s", onlyText)
 	}
 	threads := []workflow.ReviewThread{{Path: "a.go", Comments: []workflow.ReviewComment{{Author: "r[bot]", Body: "todo (non-blocking): Add a test.", URL: "u"}}}}
 	onlyComments, ok := workflow.FollowUpNote(sub, workflow.MergedPullRequest{Number: 21, Threads: threads}, "r[bot]", nil)
-	if !ok || !strings.Contains(onlyComments, "From the pull request description:\nNone\n") {
+	if !ok || !strings.Contains(onlyComments, "### From the pull request description\nNone\n") {
 		t.Errorf("a note without follow-up text:\n%s", onlyComments)
 	}
 	// A thread without a line names the file only.
@@ -326,6 +326,17 @@ func TestFollowUpSection(t *testing.T) {
 		{"no section", "## What\nX\n", ""},
 		{"a deeper heading stays", "## Follow-up\n### Later\nOne.\n", "### Later\nOne."},
 		{"Windows line ends", "## Follow-up\r\nOne.\r\n", "One."},
+		{"a rule ends the section", "## Follow-up\nOne.\n\n---\nGenerated with a CLI\n", "One."},
+		{"a longer rule ends the section", "## Follow-up\nOne.\n\n-----\nSigned.\n", "One."},
+		{"None before a rule and a signature", "## Follow-up\nNone\n\n---\n\nGenerated with a CLI\n", ""},
+		{"only the hint before a rule", "## Follow-up\n<!-- hint -->\n\n---\nSigned.\n", ""},
+		{"a rule in a code block stays", "## Follow-up\nOne.\n```yaml\n---\nkey: value\n```\nTwo.\n\n---\nSigned.\n", "One.\n```yaml\n---\nkey: value\n```\nTwo."},
+		{"a shorter fence inside a code block does not close it", "## Follow-up\n````markdown\n```\n---\n```\n````\nTwo.\n\n---\nSigned.\n", "````markdown\n```\n---\n```\n````\nTwo."},
+		{"a rule in indented code stays", "## Follow-up\nOne.\n\n    ---\n    key: value\n\nTwo.\n\n---\nSigned.\n", "One.\n\n    ---\n    key: value\n\nTwo."},
+		{"a rule with three spaces ends the section", "## Follow-up\nOne.\n\n   --- \nSigned.\n", "One."},
+		{"a fence in indented code opens no block", "## Follow-up\nOne.\n\n    ```\n\nTwo.\n\n---\nSigned.\n", "One.\n\n    ```\n\nTwo."},
+		{"a signature without a rule is copied, as before", "## Follow-up\nOne.\n\nGenerated with a CLI\n", "One.\n\nGenerated with a CLI"},
+		{"a list item is no rule", "## Follow-up\n- One.\n-- Two.\n", "- One.\n-- Two."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
