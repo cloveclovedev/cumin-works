@@ -2,7 +2,7 @@
 
 - 状態: Approved
 - 要件: [Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) のQ1〜Q4と「使用率の読み方」「上限の決め方」、[cumin本体の要件](../requirements/cumin-core.md) の「利用枠の守り方」「状態の持ち方」「設定」
-- 事実の出どころ: [調査・実測で確定した制約](../requirements/evidence/measured-constraints.md) の行の番号 (「実測 N」と書く) か、公式ドキュメントのページの名前で示す。
+- 事実の出どころ: [調査・実測で確定した制約](../evidence/measured-constraints.md) の行の番号 (「実測 N」と書く) か、公式ドキュメントのページの名前で示す。
 
 新しい着手 (R1、I1) を止めるかどうかを、使用率からどう決めるかを書く。使用率を読む最小の実行そのもの (CLIの引数、作業ディレクトリ、読み取れないときの扱い) は、[cumin本体の設計メモ](cumin-core.md) の「起動前の使用率の確認」にある。
 

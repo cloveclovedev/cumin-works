@@ -173,4 +173,4 @@ cuminは、mainに適用されるrulesetに登録された必須のcheckが全�
 - JWTの生成: https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app
 - installation access tokenの発行: https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app
 
-調査で分かった制約の一覧は [measured-constraints.md](../requirements/evidence/measured-constraints.md) にある。
+調査で分かった制約の一覧は [measured-constraints.md](../evidence/measured-constraints.md) にある。
