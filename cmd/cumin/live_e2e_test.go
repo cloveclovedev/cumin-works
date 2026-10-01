@@ -406,9 +406,13 @@ func newE2E(t *testing.T) *e2e {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.ContainsFunc(settings.Repositories, func(r config.Repository) bool { return strings.EqualFold(r.String(), e.repo) }) {
-		t.Fatalf("the Host settings do not list %s under repositories", e.repo)
+	// The sandbox must be the only target: the same cumin would also start
+	// agents on any other repository during the run. The spelling of the
+	// settings is the one in the log lines.
+	if len(settings.Repositories) != 1 || !strings.EqualFold(settings.Repositories[0].String(), e.repo) {
+		t.Fatalf("the settings of the LaunchAgent must list %s as the only repository", e.repo)
 	}
+	e.repo = settings.Repositories[0].String()
 	state, err := config.DefaultStateDir()
 	if err != nil {
 		t.Fatal(err)
