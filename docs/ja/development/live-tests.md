@@ -524,8 +524,9 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 1. 場面 Review-1 の手順1〜3と同じ。ほかに、場面 Fail-1 の手順2と同じく webhook のアドレスを Keychain に入れ、`notify.discord.enabled` を `true` のままにする。
 2. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける。
 3. その sub-issue として、実装Issueを2つ作る。この順に作り、B の番号を小さくする。番号の小さい B から進むので、Owner の作業 (手順8) が早く来る。B が `cumin/status/awaiting-owner-review` で待つ間は、同時に進めるIssueの数に数えないので、A がその間に進む。どちらも本文の完了条件には「`live/<ファイル>` を作り、場面 Merge-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。
-   - B: 題は `Describe the merge of risk/medium in Merge-1`、ファイルは `live/merge-1-medium.md`、`risk/medium` を付ける。
-   - A: 題は `Describe the merge of risk/low in Merge-1`、ファイルは `live/merge-1-low.md`、`risk/low` を付ける。
+   - B: 題は `Describe the merge of risk/medium in Merge-1`、ファイルは `live/merge-1-<日時>-medium.md`、`risk/medium` を付ける。
+   - A: 題は `Describe the merge of risk/low in Merge-1`、ファイルは `live/merge-1-<日時>-low.md`、`risk/low` を付ける。
+   - `<日時>` は `20261001-1635` の形の、この実行の日時である。前の実行のファイルは main に残るので、実行ごとに名前を変える。
 4. sandbox に2つのファイルがまだないことと、`cumin/status/ready` の付いた他の sub-issue がなく、同時に進めるIssueの数に数えられるIssueもないことを確かめる (「`cumin run` を sandbox で動かすとき」)。
 
 ### 実行
@@ -572,7 +573,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 
 ### 後片付け
 
-- 要求Issueを閉じる。2つのファイルは main に残る。
+- 要求Issueを閉じる。2つのファイルは main に残る。名前に日時があるので、次の実行の邪魔にならない。
 - `work_dir` の一時ディレクトリを消す。
 - launchd の cumin を止めたなら、戻す。
 
