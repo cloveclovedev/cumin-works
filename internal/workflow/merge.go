@@ -22,6 +22,10 @@ import (
 // since 2026-09-30 it does not always close it (#276, C5).
 const DefaultCloseWait = 10 * time.Second
 
+// closeTimeLimit bounds the read and the close after a merge, which run
+// even while cumin stops.
+const closeTimeLimit = 30 * time.Second
+
 func (s *Service) closeWait() time.Duration {
 	if s.CloseWait > 0 {
 		return s.CloseWait
@@ -56,7 +60,20 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 		log.Error("I6: the required checks were not read; the issue keeps its label", "error", err.Error())
 		return
 	}
-	decision := DecideMerge(sub.Labels, toRequiredChecks(required), pr.Checks)
+	// The checks come from this read, not from the read that found the
+	// review: a check can run again in between. A pull request that is gone
+	// or whose head moved is treated as checks that do not pass.
+	approved := pr
+	found := false
+	for _, now := range sub.PullRequests {
+		if now.Number == approved.Number {
+			pr, found = now, true
+		}
+	}
+	decision := MergeChecksNotPassed
+	if found && pr.HeadCommit == approved.HeadCommit {
+		decision = DecideMerge(sub.Labels, toRequiredChecks(required), pr.Checks)
+	}
 	log.Info("I6: decided on the approved pull request", "decision", decision.String(), "pull_request", pr.Number)
 	switch decision {
 	case MergeNow:
@@ -140,11 +157,16 @@ func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target
 	}
 	log.Info(row+": merged the pull request", "pull_request", pr.Number, "merge_method", method, "head_commit", pr.HeadCommit)
 
+	// The merge cannot be undone, and no later poll comes back to this
+	// issue: its pull request is no longer open. So a stop of cumin ends
+	// the wait early, and the close still runs, with its own time limit.
 	select {
 	case <-ctx.Done():
-		return
+		log.Info(row + ": cumin is stopping; the issue is checked without the wait")
 	case <-time.After(s.closeWait()):
 	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeLimit)
+	defer cancel()
 	open, err := s.GitHub.IssueIsOpen(ctx, token, owner, repo, sub.Number)
 	if err != nil {
 		log.Warn(row+": the issue was not read after the merge", "error", err.Error())
