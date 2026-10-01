@@ -233,3 +233,42 @@ func TestOwnerApproved_I12(t *testing.T) {
 		}
 	}
 }
+
+// A candidate that is not an approval of an Owner does nothing, so Q4 still
+// tells the Owner once that cumin waits.
+func TestI12_ACandidateThatDoesNothingLeavesQ4ToNotify(t *testing.T) {
+	sc := awaitingOwner(t)
+	sc.review("someone", false, "APPROVED", sc.remoteHead, 5)
+	service := sc.service()
+
+	for range 2 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := len(sc.q4Messages()); n != 1 {
+		t.Errorf("%d Q4 notifications, want 1", n)
+	}
+}
+
+// A conflict of the merge of I12 goes to the Implementer as for I6. A
+// resolution that leaves the head stops the issue with the row I12.
+func TestI12_AConflictThatStaysStopsTheIssueWithTheRowI12(t *testing.T) {
+	sc := awaitingOwner(t)
+	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	service := sc.serviceWithSession(t)
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one resolution", n)
+	}
+	if !strings.Contains(promptOf(t, sc.record(t, "agent.args")), "Request: conflict resolution") {
+		t.Error("the run was not a conflict resolution")
+	}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I12") ||
+		!strings.Contains(comments[0].Body, workflow.ConflictNotResolvedReason(21)) {
+		t.Errorf("comments of #10 = %+v, want one stop note of I12", comments)
+	}
+}
