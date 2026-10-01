@@ -2,7 +2,7 @@
 
 cumin-works is a workflow engine written in Go. It polls GitHub, moves issues between states by changing labels, and starts agents (headless Claude Code) to plan, implement, and review. The engine follows fixed rules only. It contains no AI judgment. Every judgment belongs to an agent or to the Owner.
 
-The product name is cumin-works. The command name is `cumin`. The requirement documents call the running engine "cumin". The Owner is defined in `docs/ja/requirements/cumin-core.md`.
+The product name is cumin-works. The command name is `cumin`. The requirement documents call the running engine "cumin".
 
 The first goal is that the rebuild of the `peppercheck` product runs on this engine.
 
@@ -63,7 +63,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 
 - Acceptance tests run with `go test ./...` and need no network and no quota. They use a fake GitHub (`httptest`) behind the real client and a fake agent CLI executable.
 - Name each acceptance test by what it proves, for example `TestReadyIssueIsRequestedOnce`.
-- Do not make a test wait on wall-clock time to pass. Control time from the test.
+- Make every test give the same result on any machine, at any time, and in any order.
 - Live tests (real GitHub Apps, real Claude Code) run only against the sandbox repository and only when an environment variable enables them. They may use quota without asking; ask the Owner first only for a run that takes hours.
 
 ## Commands
