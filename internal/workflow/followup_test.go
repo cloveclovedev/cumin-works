@@ -326,6 +326,17 @@ func TestFollowUpSection(t *testing.T) {
 		{"no section", "## What\nX\n", ""},
 		{"a deeper heading stays", "## Follow-up\n### Later\nOne.\n", "### Later\nOne."},
 		{"Windows line ends", "## Follow-up\r\nOne.\r\n", "One."},
+		{"a rule ends the section", "## Follow-up\nOne.\n\n---\nGenerated with a CLI\n", "One."},
+		{"a longer rule ends the section", "## Follow-up\nOne.\n\n-----\nSigned.\n", "One."},
+		{"None before a rule and a signature", "## Follow-up\nNone\n\n---\n\nGenerated with a CLI\n", ""},
+		{"only the hint before a rule", "## Follow-up\n<!-- hint -->\n\n---\nSigned.\n", ""},
+		{"a rule in a code block stays", "## Follow-up\nOne.\n```yaml\n---\nkey: value\n```\nTwo.\n\n---\nSigned.\n", "One.\n```yaml\n---\nkey: value\n```\nTwo."},
+		{"a shorter fence inside a code block does not close it", "## Follow-up\n````markdown\n```\n---\n```\n````\nTwo.\n\n---\nSigned.\n", "````markdown\n```\n---\n```\n````\nTwo."},
+		{"a rule in indented code stays", "## Follow-up\nOne.\n\n    ---\n    key: value\n\nTwo.\n\n---\nSigned.\n", "One.\n\n    ---\n    key: value\n\nTwo."},
+		{"a rule with three spaces ends the section", "## Follow-up\nOne.\n\n   --- \nSigned.\n", "One."},
+		{"a fence in indented code opens no block", "## Follow-up\nOne.\n\n    ```\n\nTwo.\n\n---\nSigned.\n", "One.\n\n    ```\n\nTwo."},
+		{"a signature without a rule is copied, as before", "## Follow-up\nOne.\n\nGenerated with a CLI\n", "One.\n\nGenerated with a CLI"},
+		{"a list item is no rule", "## Follow-up\n- One.\n-- Two.\n", "- One.\n-- Two."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
