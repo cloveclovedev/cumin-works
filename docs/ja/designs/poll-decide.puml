@@ -35,12 +35,16 @@ partition "Decision (pure function, no I/O)" {
   - every blocked-by issue closed;
   :Sort the R1 and I1 candidates by issue number
   and keep as many as the free slots;
+  :Collect I12 candidates
+  - open sub-issues with cumin/status/awaiting-owner-review
+  - an APPROVED review of a person
+    on the head commit of the pull request;
   :Collect I11 copies
   - each open pull request that closes an issue
   - its cumin/status/* and risk/* differ
     from the issue in this snapshot;
   :Return the list of actions
-  (I3, I4, R1 and I1, I11, in this order);
+  (I3, I4, R1 and I1, I12, I11, in this order);
 }
 partition "Apply (in the order of the list)" {
   :I3: change the label to cumin/status/reviewing;
@@ -57,6 +61,9 @@ partition "Apply (in the order of the list)" {
   then ask the Implementer
   If a label does not change,
   try again at the next poll;
+  :I12: read the permission of each reviewer,
+  and when the latest review of an Owner approves
+  the head commit, run the merge step;
   :I11: make the labels of the pull request
   the same as the issue;
 }

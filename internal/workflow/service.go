@@ -333,9 +333,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result 
 	}
 	// The required checks are a REST call of their own, so the poll makes
 	// it only when an issue of this repository waits for the checks (I3,
-	// I4). Its budget is not the one of the snapshot query.
+	// I4) or has an approval of a person to check (I12). Its budget is not
+	// the one of the snapshot query.
 	var required []RequiredCheck
-	if snapshot.HasIssueAwaitingChecks() {
+	if snapshot.HasIssueAwaitingChecks() || snapshot.HasOwnerApprovalCandidate() {
 		read, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
 		if err != nil {
 			return err
@@ -363,7 +364,11 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result 
 	// issue would stay in awaiting-owner-review while its work goes on.
 	notStarted := map[int]bool{}
 	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
-		result.note(action)
+		// An I12 candidate is only a check; it counts as progress for Q4
+		// when it merges or stops the issue.
+		if _, check := action.(MergeOwnerApproval); !check {
+			result.note(action)
+		}
 		switch a := action.(type) {
 		case StartRequirement:
 			if err := s.startRequirement(ctx, token, target, snapshot, a); err != nil {
@@ -405,6 +410,14 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result 
 		case CopyLabels:
 			if err := s.copyLabels(ctx, token, target, a); err != nil {
 				errs = append(errs, err)
+			}
+		case MergeOwnerApproval:
+			acted, err := s.mergeOwnerApproval(ctx, token, target, snapshot, settings, required, a)
+			if err != nil {
+				errs = append(errs, err)
+			}
+			if acted {
+				result.note(action)
 			}
 		default:
 			errs = append(errs, fmt.Errorf("unknown action %T", action))
@@ -716,7 +729,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
 				return
 			}
-			s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin, req.conflictHead)
+			s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin, req.conflictHead, req.row)
 			return
 		}
 	}
@@ -785,7 +798,7 @@ func labelsNow(sub SubIssue, ok bool) []string {
 // failed link, and a link that is still missing hand the issue back to the
 // Owner through the stop step, with one sentence. Nothing here is retried:
 // the Owner decides what to do next.
-func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin, conflictHead string) {
+func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin, conflictHead, row string) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -836,10 +849,11 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 	}
 	if conflictHead != "" && head == conflictHead {
 		// The pull request passed, so its head is the head of the worktree.
-		log.Warn("I6: the head did not change after the conflict resolution", "pull_request", verification.PullRequest)
+		// row is the row of the merge that conflicted: I6 or I12.
+		log.Warn(row+": the head did not change after the conflict resolution", "pull_request", verification.PullRequest)
 		s.stopForOwner(ctx, log, target, settings, stop{
-			row: RowI6, issue: number, labels: sub.Labels, reason: ConflictNotResolvedReason(verification.PullRequest),
-			comment: StopNote(RowI6, ConflictNotResolvedReason(verification.PullRequest), verification.PullRequest, false),
+			row: row, issue: number, labels: sub.Labels, reason: ConflictNotResolvedReason(verification.PullRequest),
+			comment: StopNote(row, ConflictNotResolvedReason(verification.PullRequest), verification.PullRequest, false),
 		})
 		return
 	}

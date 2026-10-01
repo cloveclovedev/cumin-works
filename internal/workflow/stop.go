@@ -46,6 +46,9 @@ const (
 	// RowI7 asks the Owner for the merge decision. It does not stop the
 	// issue; it notifies.
 	RowI7 = "I7"
+	// RowI12 is the merge after the approval of the Owner: a risk label
+	// that is not exactly one, a merge that failed, or a close that failed.
+	RowI12 = "I12"
 )
 
 // The rows that start the Planner (R1, R4) and that move a requirement

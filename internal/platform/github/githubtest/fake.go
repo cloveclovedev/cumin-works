@@ -288,6 +288,27 @@ type Fake struct {
 	// closeOnMerge makes a merge close the issues that the pull request
 	// closes, as CloseIssuesOnMerge set it.
 	closeOnMerge bool
+	// permissions are the answers of the permission endpoint, by login, as
+	// SetPermission set them.
+	permissions map[string]Permission
+}
+
+// Permission is the answer of "Get repository permissions for a user".
+type Permission struct {
+	Permission string
+	UserType   string
+}
+
+// SetPermission sets the permission of an account on every repository of
+// the fake. An account without one reads "read", as any account reads on a
+// public repository (measured in #286, M1).
+func (f *Fake) SetPermission(login, permission, userType string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.permissions == nil {
+		f.permissions = map[string]Permission{}
+	}
+	f.permissions[login] = Permission{Permission: permission, UserType: userType}
 }
 
 // CloseIssuesOnMerge makes a merge close the issues that the pull request
@@ -636,6 +657,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	pull := pullPath.FindStringSubmatch(r.URL.Path)
 	merge := mergePath.FindStringSubmatch(r.URL.Path)
 	issue := issuePath.FindStringSubmatch(r.URL.Path)
+	permission := permissionPath.FindStringSubmatch(r.URL.Path)
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/app":
 		f.serveApp(w)
@@ -671,6 +693,8 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && moveHead != nil:
 		number, _ := strconv.Atoi(moveHead[3])
 		f.serveMoveHead(w, body, moveHead[1], moveHead[2], number)
+	case r.Method == http.MethodGet && permission != nil:
+		f.servePermission(w, permission[3])
 	case r.Method == http.MethodPut && merge != nil:
 		number, _ := strconv.Atoi(merge[3])
 		f.serveMerge(w, body, merge[1], merge[2], number)
@@ -706,6 +730,7 @@ var (
 	pullPath          = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)$`)
 	mergePath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/merge$`)
 	issuePath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/issues/(\d+)$`)
+	permissionPath    = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/collaborators/([^/]+)/permission$`)
 	// moveHeadPath is not an endpoint of GitHub. A fake agent run calls it
 	// to move the head of a pull request while it runs, as a push would.
 	moveHeadPath = regexp.MustCompile(`^/_fake/repos/([^/]+)/([^/]+)/pulls/(\d+)/head$`)
@@ -1215,6 +1240,21 @@ func (f *Fake) serveMerge(w http.ResponseWriter, body []byte, owner, name string
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"sha": "merge-" + pr.HeadCommit, "merged": true, "message": "Pull Request successfully merged"})
 	}
+}
+
+// servePermission answers GET .../collaborators/{username}/permission.
+func (f *Fake) servePermission(w http.ResponseWriter, login string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, ok := f.permissions[login]
+	if !ok {
+		p = Permission{Permission: "read", UserType: "User"}
+		if strings.HasSuffix(login, "[bot]") {
+			p = Permission{Permission: "none", UserType: "Bot"}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"permission": p.Permission, "role_name": p.Permission,
+		"user": map[string]any{"login": login, "type": p.UserType}})
 }
 
 // servePull answers GET .../pulls/{n} with the fields that cumin reads.

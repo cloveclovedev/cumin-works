@@ -64,6 +64,10 @@ func (s Snapshot) HasIssueAwaitingChecks() bool {
 	return false
 }
 
+// HasOwnerApprovalCandidate reports whether a sub-issue is a candidate of
+// I12, so that the poll reads the required checks for it.
+func (s Snapshot) HasOwnerApprovalCandidate() bool { return len(ownerApprovals(s)) > 0 }
+
 // RequirementIssue is an open issue with cumin/type/requirement.
 type RequirementIssue struct {
 	Number    int
@@ -275,20 +279,33 @@ type Accept struct {
 	Number int
 }
 
+// MergeOwnerApproval is the candidate of I12: an implementation issue in
+// cumin/status/awaiting-owner-review whose pull request has an APPROVED
+// review of a person on its head commit. Reviewers are the people whose
+// reviews decide (APPROVED or CHANGES_REQUESTED); the caller reads their
+// permission, and only then knows which of them is an Owner
+// (OwnerApproved).
+type MergeOwnerApproval struct {
+	Number      int
+	PullRequest int
+	Reviewers   []string
+}
+
 // Action is one thing that cumin does after a poll. Later rules add types.
 type Action interface {
 	isAction()
 }
 
-func (Claim) isAction()            {}
-func (StartReview) isAction()      {}
-func (FixChecks) isAction()        {}
-func (CopyLabels) isAction()       {}
-func (Plan) isAction()             {}
-func (StartRequirement) isAction() {}
-func (ReviewRemaining) isAction()  {}
-func (CheckAcceptance) isAction()  {}
-func (Accept) isAction()           {}
+func (Claim) isAction()              {}
+func (StartReview) isAction()        {}
+func (FixChecks) isAction()          {}
+func (CopyLabels) isAction()         {}
+func (Plan) isAction()               {}
+func (StartRequirement) isAction()   {}
+func (ReviewRemaining) isAction()    {}
+func (CheckAcceptance) isAction()    {}
+func (Accept) isAction()             {}
+func (MergeOwnerApproval) isAction() {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -331,6 +348,7 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Ac
 	for _, s := range starts[:max(0, min(room, len(starts)))] {
 		actions = append(actions, s.action)
 	}
+	actions = append(actions, ownerApprovals(snapshot)...)
 	return append(actions, labelCopies(snapshot)...)
 }
 
@@ -1300,4 +1318,82 @@ func DecideMerge(labels []string, required []RequiredCheck, checks []CheckResult
 		return MergeNow
 	}
 	return MergeAskOwner
+}
+
+// isBot reports whether a login is the bot of a GitHub App: the client
+// gives a Bot as "<slug>[bot]".
+func isBot(login string) bool { return strings.HasSuffix(login, "[bot]") }
+
+// decides reports whether a review state counts for a merge decision.
+// GitHub decides on APPROVED and CHANGES_REQUESTED; a comment changes
+// neither.
+func decides(state ReviewState) bool {
+	return state == ReviewApproved || state == ReviewChangesRequested
+}
+
+// ownerApprovals returns the candidates of I12, lowest issue number first:
+// open sub-issues in cumin/status/awaiting-owner-review, not running now,
+// whose open pull request has an APPROVED review of a person on its head
+// commit. The candidate names every person whose review decides, because
+// the latest review of any Owner among them counts.
+func ownerApprovals(snapshot Snapshot) []Action {
+	var actions []Action
+	for _, requirement := range snapshot.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingOwnerReview) || snapshot.Running[sub.Number] {
+				continue
+			}
+			pr, ok := sub.LatestPullRequest()
+			if !ok {
+				continue
+			}
+			candidate := false
+			var reviewers []string
+			for _, review := range pr.Reviews {
+				if review.Author == "" || isBot(review.Author) || !decides(review.State) {
+					continue
+				}
+				if !slices.Contains(reviewers, review.Author) {
+					reviewers = append(reviewers, review.Author)
+				}
+				if review.State == ReviewApproved && review.Commit == pr.HeadCommit {
+					candidate = true
+				}
+			}
+			if candidate {
+				slices.Sort(reviewers)
+				actions = append(actions, MergeOwnerApproval{Number: sub.Number, PullRequest: pr.Number, Reviewers: reviewers})
+			}
+		}
+	}
+	slices.SortFunc(actions, func(a, b Action) int {
+		return a.(MergeOwnerApproval).Number - b.(MergeOwnerApproval).Number
+	})
+	return actions
+}
+
+// OwnerApproved applies the check of I12: of the reviews of the Owners
+// (owners holds their logins), the latest one that decides is APPROVED on
+// the head commit. An approval on an older commit does not count, and a
+// later CHANGES_REQUESTED of an Owner takes the approval back. A review of
+// a bot never counts, whatever owners says.
+func OwnerApproved(reviews []Review, head string, owners map[string]bool) bool {
+	var latest Review
+	found := false
+	for _, review := range reviews {
+		if !owners[review.Author] || isBot(review.Author) || !decides(review.State) {
+			continue
+		}
+		if !found || !review.SubmittedAt.Before(latest.SubmittedAt) {
+			latest, found = review, true
+		}
+	}
+	return found && latest.State == ReviewApproved && head != "" && latest.Commit == head
+}
+
+// IsOwner applies the definition of the Owner (cumin-core.md): a person,
+// not a bot, with write or admin permission on the repository. GitHub
+// reports maintain as write ("Get repository permissions for a user").
+func IsOwner(permission, userType string) bool {
+	return userType == "User" && (permission == "admin" || permission == "write")
 }
