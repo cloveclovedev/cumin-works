@@ -162,6 +162,20 @@ func signJWT(cred AppCredentials, now time.Time) (string, error) {
 	return signingInput + "." + encode(signature), nil
 }
 
+// StatusError is the answer of GitHub with a status code other than the one
+// that a request wanted. It holds the "message" field of the error body
+// only, so it never holds a token. A caller tells the answers apart with
+// errors.As, for example the merge of a pull request (405 or 409).
+type StatusError struct {
+	Method, Label string
+	Status        int
+	Message       string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s %s: status %d: %s", e.Method, e.Label, e.Status, e.Message)
+}
+
 // do sends one request. An empty jwt sends no Authorization header. An error
 // never holds the JWT, the address of the request, or a response body that
 // could hold a token: it holds only the label, the status code, and the
@@ -207,7 +221,7 @@ func (c *AppClient) do(ctx context.Context, jwt, method, path, label string, bod
 			Message string `json:"message"`
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, maxErrorBody)).Decode(&apiError)
-		return fmt.Errorf("%s %s: status %d: %s", method, label, resp.StatusCode, apiError.Message)
+		return &StatusError{Method: method, Label: label, Status: resp.StatusCode, Message: apiError.Message}
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

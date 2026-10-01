@@ -40,6 +40,12 @@ const (
 	// RowI8 is the round limit of the review: the Reviewer explained the
 	// cause, or could not.
 	RowI8 = "I8"
+	// RowI6 is the merge after the approval of the Reviewer: a risk label
+	// that is not exactly one, a merge that failed, or a close that failed.
+	RowI6 = "I6"
+	// RowI7 asks the Owner for the merge decision. It does not stop the
+	// issue; it notifies.
+	RowI7 = "I7"
 )
 
 // The rows that start the Planner (R1, R4) and that move a requirement
@@ -224,6 +230,39 @@ func LinkFailedReason(pullRequest int, answer string) string {
 // link, but the issue does not show it when cumin reads it again.
 func LinkMissingReason(pullRequest int) string {
 	return fmt.Sprintf("cumin-core linked the pull request #%d to this issue, but the issue does not show the closing link when cumin reads it again.", pullRequest)
+}
+
+// RiskLabelReason is the sentence of I6 when the issue has no risk label,
+// or more than one: cumin reads the risk from the issue only (principle 5).
+func RiskLabelReason(decision MergeDecision) string {
+	if decision == MergeTwoRiskLabels {
+		return "The pull request is approved, but this issue has more than one risk label, so cumin does not merge it."
+	}
+	return "The pull request is approved, but this issue has no risk label, so cumin does not merge it."
+}
+
+// MergeConflictReason is the sentence of a merge that conflicts with the
+// default branch.
+func MergeConflictReason(pullRequest int) string {
+	return fmt.Sprintf("cumin-core could not merge the pull request #%d, because it has merge conflicts with the default branch.", pullRequest)
+}
+
+// MergeHeadMovedReason is the sentence of a merge whose head is no longer
+// the approved commit.
+func MergeHeadMovedReason(pullRequest int) string {
+	return fmt.Sprintf("cumin-core did not merge the pull request #%d, because its head is no longer the approved commit.", pullRequest)
+}
+
+// MergeFailedReason is the sentence of any other failure of the merge, with
+// the answer of GitHub.
+func MergeFailedReason(pullRequest int, answer string) string {
+	return fmt.Sprintf("cumin-core could not merge the pull request #%d; GitHub answered: %s.", pullRequest, strings.TrimSuffix(answer, "."))
+}
+
+// CloseFailedReason is the sentence of a close after the merge that
+// failed. The pull request is merged; the Owner closes the issue.
+func CloseFailedReason(pullRequest int, answer string) string {
+	return fmt.Sprintf("cumin-core merged the pull request #%d, but could not close this issue; GitHub answered: %s. Close this issue by hand.", pullRequest, strings.TrimSuffix(answer, "."))
 }
 
 // SplitReason is the sentence of one failed check of R2, for the comment

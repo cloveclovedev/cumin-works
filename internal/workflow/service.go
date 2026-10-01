@@ -67,6 +67,10 @@ type Service struct {
 	// after SIGINT or SIGTERM ended the context. Zero means
 	// DefaultStopGrace. Tests shorten it.
 	StopGrace time.Duration
+	// CloseWait is how long the merge step waits for GitHub to close the
+	// implementation issue before cumin reads it (I6, I12). Zero means
+	// DefaultCloseWait. Tests shorten it.
+	CloseWait time.Duration
 	// Labels are the labels that Run creates in each target repository when
 	// they are missing. RepositoryLabels gives the list of cumin.
 	Labels []github.Label

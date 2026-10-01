@@ -54,6 +54,8 @@
 | | `closer.go` | Issueに結び付いたPull Requestの一覧と、1つのPull Requestの説明とレビューのスレッドの読み取り (I9) |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
+| | `closinglink.go` | ブランチの開いているPull Requestの一覧と、閉じるリンクの追加 (I2) |
+| | `merge.go` | Pull Requestのmerge (衝突と先頭のコミットの移動の見分け)、Issueの開閉の読み取りと、完了として閉じること (I6、I12) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
@@ -61,11 +63,12 @@
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
 | `internal/notify` | `domain.go` | 純粋。通知の内容と、その文章 |
 | | `notify.go` | 通知を送る入口 `Notifier` と、手段を表す `Sender` |
-| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、必須のcheckの判定、実行終了の判定 (I2) |
+| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、必須のcheckの判定、実行終了の判定 (I2)、承認のあとの判定 (I6、I7) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
+| | `merge.go` | 承認されたPull Requestの扱い (I6、I7) と、I12も使うmergeの手順 |
 | | `cleanup.go` | 閉じたsub-issueの片付け (worktree、ローカルのブランチ、状態ファイルの項目) |
 | | `followup.go` | 純粋。フォローアップノートを読むsub-issue、拾うもの、ノートの文章と目印 (I9) |
 | | `followupnote.go` | フォローアップノートの読み取りと書き込み (I9) |

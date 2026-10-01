@@ -1239,3 +1239,65 @@ func firstBodyLine(body string) string {
 	line, _, _ := strings.Cut(strings.TrimLeft(body, "\r\n"), "\n")
 	return strings.TrimSpace(line)
 }
+
+// MergeDecision is what cumin does after the Reviewer approved the head
+// commit of the pull request (I6, I7). I12 uses the same decision after the
+// approval of the Owner.
+type MergeDecision int
+
+const (
+	// MergeNow: risk/low; cumin merges (I6).
+	MergeNow MergeDecision = iota
+	// MergeAskOwner: risk/medium or risk/high; the Owner decides (I7).
+	MergeAskOwner
+	// MergeNoRiskLabel: the issue has no risk/* label; cumin stops it.
+	MergeNoRiskLabel
+	// MergeTwoRiskLabels: the issue has more than one risk/* label; cumin
+	// stops it.
+	MergeTwoRiskLabels
+	// MergeChecksNotPassed: a required check does not pass on the head
+	// commit; the issue waits for the checks again, as after a head that
+	// moved during the review.
+	MergeChecksNotPassed
+)
+
+func (d MergeDecision) String() string {
+	switch d {
+	case MergeNow:
+		return "merge"
+	case MergeAskOwner:
+		return "ask the Owner"
+	case MergeNoRiskLabel:
+		return "no risk label"
+	case MergeTwoRiskLabels:
+		return "more than one risk label"
+	case MergeChecksNotPassed:
+		return "the required checks do not pass"
+	}
+	return fmt.Sprintf("MergeDecision(%d)", int(d))
+}
+
+// DecideMerge decides on an approved pull request from the labels of its
+// implementation issue and the checks on its head commit. The risk is read
+// from the issue, never from the pull request (principle 5); an issue
+// without exactly one risk/* label is an unexpected state. The risk comes
+// before the checks, so that a wrong label always stops the issue.
+func DecideMerge(labels []string, required []RequiredCheck, checks []CheckResult) MergeDecision {
+	var risks []string
+	for _, label := range labels {
+		if strings.HasPrefix(label, riskLabelPrefix) {
+			risks = append(risks, label)
+		}
+	}
+	switch {
+	case len(risks) == 0:
+		return MergeNoRiskLabel
+	case len(risks) > 1:
+		return MergeTwoRiskLabels
+	case ChecksOf(required, checks) != ChecksPassed:
+		return MergeChecksNotPassed
+	case risks[0] == "risk/low":
+		return MergeNow
+	}
+	return MergeAskOwner
+}
