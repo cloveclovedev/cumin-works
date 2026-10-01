@@ -123,15 +123,17 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   end
 
   alt approved, risk/low
-    Cumin -> Repo : merge (the implementation issue closes)
+    Cumin -> Repo : merge (I6)
+    Cumin -> Tracker : close the implementation issue once, when GitHub did not
   else approved, risk/medium or risk/high
     Cumin -> Tracker : change the label to cumin/status/awaiting-owner-review
     Cumin -> Owner : notify: the merge needs a decision
-    Owner -> Repo : check and merge (the implementation issue closes)
+    Owner -> Repo : approve the head commit with a review
+    Cumin -> Repo : merge at the next poll (I12)
+    Cumin -> Tracker : close the implementation issue once, when GitHub did not
     note right of Owner
       To send it back, comment on the pull request and add cumin/status/ready to the implementation issue again.
       Whether risk/medium can move to an automatic merge is decided while running.
-      The Owner merges risk/high for now.
     end note
   else blocking comments left after 3 rounds
     Cumin -> Rev : request: sort out what is not decided
@@ -144,7 +146,8 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   Cumin -> Tracker : after the merge, copy the remaining work (Follow-up and suggestions not taken) to the requirement issue as a follow-up note
   note over Owner, Cumin
     While waiting for the Owner, cumin goes on with other issues that do not depend on it.
-    The Owner's "go ahead" is always adding cumin/status/ready.
+    The Owner's "go ahead" for work is adding cumin/status/ready.
+    The Owner's "merge it" is an approving review of the head commit (I12).
   end note
 end
 

@@ -9,6 +9,16 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 
 この文書では、cumin本体を単にcuminと書く。
 
+## Owner
+
+cuminが判定に使うOwnerは、対象のリポジトリに write 以上 (write、maintain、admin) の権限を持つ、人のアカウントである。botのアカウントは、権限があってもOwnerではない。cuminのGitHub AppはOwnerにならないので、ReviewerのAppの承認は、Ownerの承認に数えない。
+
+- adminだけに絞らないのは、リポジトリにadminを増やさずにOwnerを置けるようにするためである
+- 「write以上」だけにしないのは、cuminのGitHub Appもwriteの権限を持つためである
+- Ownerの一覧は設定に持たない。GitHub上の権限から、その都度決める
+
+ほかの文書で「Owner」と書くときは、この定義に従う。
+
 ## 受け持つこと
 
 | 受け持つこと | 内容 |
@@ -17,7 +27,7 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 | 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う。実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestにもコピーする |
 | Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
 | 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
-| merge | `risk/low` で、承認され、必須のcheckが通ったPull Requestをmergeする。mergeの方法は設定で選べる (初期値はsquash) |
+| merge | `risk/low` で、Reviewerが承認し、必須のcheckが通ったPull Requestをmergeする (I6)。`risk/medium` と `risk/high` は、Ownerが承認したあとにmergeする (I12)。mergeの方法は設定で選べる (初期値はsquash)。mergeのあと、GitHubが実装Issueを閉じなければ、そのmergeの手順の中で1回だけ閉じる |
 | フォローアップノート | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、フォローアップノートとして要求Issueに転記する。フォローアップノートは、要求Issueに付ける1つのコメントである。AIの判断は使わず、決まった形式から機械的に拾う |
 | 通知 | Ownerの対応が要るとき、Discordのwebhookで知らせる |
 | 利用枠の管理 | 使用率を読み、上限に達している間は新しい着手を止める。weekly枠は週を通して配分し、5h枠はOwnerの分を時間帯ごとに残す |
@@ -28,11 +38,11 @@ cuminの動作ごとのきっかけと、動く前に確かめることは、[Is
 ## 受け持たないこと
 
 - コードを書かない。レビューしない。要求を解釈しない。riskを判断しない
-- `risk/medium` と `risk/high` のPull Requestをmergeしない
+- `risk/medium` と `risk/high` のPull Requestを、Ownerの承認なしにmergeしない
 - `cumin/type/requirement` と `cumin/status/ready` を付けない。この2つはOwnerの意思表示である。例外として、着手のときに `cumin/status/ready` を外す
 - mainに直接pushしない。強制pushしない。mainへの変更は、Pull Requestのmergeだけで行う
 - Ownerの認証情報と、リポジトリの管理者の権限 (Administration) を使わない。rulesetなどの、管理者の権限が要る準備は、管理者が自分の `gh` でスクリプトを実行して行う
-- Issueを閉じない。実装Issueは、Pull RequestのmergeによってGitHubが閉じる。要求Issueは、Ownerが閉じる
+- 自分のmergeの手順の外で、Issueを閉じない。実装Issueは、Pull RequestのmergeによってGitHubが閉じる。GitHubが閉じなかったときだけ、cuminがmergeの直後に1回だけ閉じる。あとの定期確認では閉じないので、Ownerが開き直した実装Issueは開いたままになる。要求Issueは、Ownerが閉じる
 
 ## 動かし方
 
@@ -123,7 +133,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | 残りのsub-issueの確認が必要 | R6 |
 | 要求が受け入れ可能になった | R7 |
 | mergeの判断が必要 | I7 |
-| Agentが先に進めない。指摘が残った | I2、I4、I8、I10、R2、R4 |
+| Agentが先に進めない。指摘が残った。mergeできない、またはmergeのあとに実装Issueを閉じられない | I2、I4、I6、I8、I10、I12、R2、R4 |
 | 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
 | 進められるIssueがなくなり、動いているAgentもいない | Q4 |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
@@ -199,3 +209,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 15 | weekly枠の使用率が変わらないまま、週の始め、中ごろ、終わりに、着手できるIssueがある | 週の始めは着手を止めて、1回だけ通知する。経過時間とともにペースの上限が上がり、使用率を上回ったあとの定期確認で、自動で再開する。上限は目標を超えない |
 | 16 | weekly枠の使用率がペースの上限に達していて、Ownerが `cumin quota allow` を実行する | 着手を再開しない |
 | 17 | 着手の直前の確認で、使用率を読み取れない | 着手せずに、1回だけ通知する |
+| 18 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestを、Ownerが今の先頭のコミットでGitHubのレビューにより承認する | cuminがmergeし、実装Issueが閉じる。古いコミットへの承認、botの承認、writeの権限のないアカウントの承認、あとから `REQUEST_CHANGES` で覆された承認では、mergeしない |
+| 19 | cuminがmergeしたあと、GitHubが実装Issueを閉じない | cuminが1回だけ閉じる。Ownerがそれを開き直しても、あとの定期確認では閉じない |
