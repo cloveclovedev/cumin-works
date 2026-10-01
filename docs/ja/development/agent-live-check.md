@@ -26,7 +26,7 @@
 
 ## 動かし方
 
-利用枠を使うので、Ownerが同意したときだけ動かす。
+利用枠を使う。Ownerに聞かずに動かしてよい。何時間もかかる実行だけは、先にOwnerに確かめる。
 
 ```sh
 CUMIN_LIVE=1 go test -race -count=1 -run TestLive -v ./internal/agent/

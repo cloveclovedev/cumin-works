@@ -112,7 +112,7 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 | 層 | 走らせ方 | 使うもの |
 |---|---|---|
 | 受け入れテスト | `go test ./...`。CIでも走る。ネットワークも利用枠も使わない | 偽GitHub (`httptest`) と、偽CLI (テストが用意する実行ファイル) |
-| 実機の場面 | 環境変数 `CUMIN_LIVE=1` を付けたときだけ走る。Ownerが同意したときだけ行う | sandbox のリポジトリ、本物の GitHub App、本物の Claude Code |
+| 実機の場面 | 環境変数 `CUMIN_LIVE=1` を付けたときだけ走る。何時間もかかる実行だけ、先にOwnerに確かめる | sandbox のリポジトリ、本物の GitHub App、本物の Claude Code |
 
 - 受け入れテストは、各要件文書の「上位要件のテスト」の行から作り、`TestCore01_...` のように行の番号を名前に入れる。
 - 本物のGitHubクライアントを、偽GitHubに向けて動かす。クライアントの要求の組み立て方の間違いも、受け入れテストで見つけるためである。偽GitHubは、テストが使うendpointだけを持つ。
