@@ -35,7 +35,7 @@ Implementerが自分で読むもの:
 
 - 実装Issueと、その上の要求Issue。Issueからリンクされた文書
 - リポジトリの中身。リポジトリにある指示 (`CLAUDE.md`、`AGENTS.md`、skillなど) を含む
-- 続きの依頼では、Pull Request、レビュー、Ownerのコメント
+- 続きの依頼では、Pull Request、レビュー、Ownerのコメント (Ownerは、起動の依頼の「Ownerのログイン名」のアカウント)
 
 ## 出力
 
@@ -62,7 +62,7 @@ GitHub上では `cumin-implementer` として振る舞う。持っている権�
 
 - mainに直接pushしない。Pull Requestをmergeしない (rulesetでも止める)
 - Issueの本文を書き換えない
-- 保護されたパスを変更しない。保護されたパスはリポジトリの `.cumin/` で指定する。変更が必要だと分かったら、変更せずに `blocked` を返す
+- 保護されたパスを変更しない。保護されたパスとその照合の決まりは、起動の依頼にある。変更が必要だと分かったら、変更せずに `blocked` を返す
 - `.github/workflows` を変更しない (権限でも止める)
 - 実装Issueに書かれていない範囲に手を広げない。必要だと分かったら、Pull Requestの本文に書いて知らせる
 - レビューを待たない。checkの完了を待たない。どちらもcuminが受け持つ
