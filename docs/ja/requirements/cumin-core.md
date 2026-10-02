@@ -173,7 +173,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
 | riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、PlannerとReviewerへの指示にそのまま入れる | `disciplines/software-engineering/risk-criteria.md` | できる |
 
-保護されたパスは、`.cumin/config.toml` の `protected_paths` に、文字列の配列で書く。照合の決まりは、`.gitignore` の一部と同じである。
+保護されたパスは、`.cumin/config.toml` の `protected_paths` に、文字列の配列で書く。照合の決まりは、`.gitignore` の一部と同じである。cuminは、この一覧を読み、照合の決まりとともに、起動の依頼のデータとしてAgentに渡す ([Agentに共通の要件](agents/common.md) の「起動の依頼の事実」)。
 
 - 末尾のほかに `/` を含まない項目 (例: `CLAUDE.md`、`.claude/`) は、どの階層にあっても当たる
 - 先頭が `/` の項目、または途中に `/` を含む項目は、リポジトリの直下から数えた位置にだけ当たる
