@@ -91,6 +91,10 @@ type scene struct {
 	quota config.QuotaSettings
 }
 
+// sceneZone is the time zone of the time bands in these tests. Its offset
+// is not a full hour.
+var sceneZone = time.FixedZone("UTC+05:30", 5*3600+30*60)
+
 // sceneNow is the default time of the quota decisions: one hour before the
 // weekly reset of the fixtures of internal/agent, so that the pace limit is
 // the target and their usage stops nothing. Their 5h window reset earlier,
@@ -323,6 +327,7 @@ func (sc *scene) service() *workflow.Service {
 		SettingsDir: sc.settingsDir,
 		Logger:      logger,
 		Now:         sc.clock.Now,
+		Location:    sceneZone,
 		// The merge step waits for GitHub to close the issue; the fake
 		// answers at once.
 		CloseWait: time.Millisecond,

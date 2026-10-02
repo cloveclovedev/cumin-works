@@ -50,6 +50,14 @@ func (s *Service) now() time.Time {
 	return time.Now()
 }
 
+// location is the time zone of the time bands. Tests set Service.Location.
+func (s *Service) location() *time.Location {
+	if s.Location != nil {
+		return s.Location
+	}
+	return time.Local
+}
+
 // quotaAllowsStart applies Q1 before a new start: one minimal run reads the
 // usage, and the limits decide. It runs before the label changes, so that
 // a stopped start leaves every label as it was and the next poll decides
@@ -97,7 +105,7 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 	if decision.Allows() {
 		return true, nil
 	}
-	next, _ := quota.NextTry(usage, s.quotaSettings(), s.allowance(log), s.now())
+	next, _ := quota.NextTry(usage, s.quotaSettings(), s.allowance(log), s.now(), s.location())
 	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 	return false, nil
@@ -167,7 +175,7 @@ func (s *Service) nextTry() (time.Time, bool) {
 		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
 	}
 	now := s.now()
-	next, stopped := quota.NextTry(usage, s.quotaSettings(), s.allowance(s.logger()), now)
+	next, stopped := quota.NextTry(usage, s.quotaSettings(), s.allowance(s.logger()), now, s.location())
 	if !stopped || !now.Before(next) {
 		return time.Time{}, false
 	}
@@ -207,7 +215,7 @@ func (s *Service) quotaSettings() config.QuotaSettings {
 // decideQuota applies the limits of the Host settings to one usage. The
 // numbers go to the debug log only (designs/quota.md).
 func (s *Service) decideQuota(log *slog.Logger, usage quota.Usage) quota.Decision {
-	decision := quota.Decide(usage, s.quotaSettings(), s.allowance(log), s.now())
+	decision := quota.Decide(usage, s.quotaSettings(), s.allowance(log), s.now(), s.location())
 	s.forgetResumedWindows(decision)
 	log.Debug("Q1: quota usage",
 		"five_hour_utilization", usage.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,

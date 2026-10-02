@@ -313,8 +313,8 @@ func TestQ3_AFiveHourStopWaitsForItsResetWithoutAMinimalRun(t *testing.T) {
 func TestQ3_AHigherTimeBandEndsTheWait(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
-	local := sceneNow.Local()
-	start := time.Date(local.Year(), local.Month(), local.Day(), local.Hour()+1, 0, 0, 0, time.Local)
+	local := sceneNow.In(sceneZone)
+	start := time.Date(local.Year(), local.Month(), local.Day(), local.Hour()+1, 0, 0, 0, sceneZone)
 	from := config.TimeOfDay(start.Hour() * 60)
 	sc.quota.FiveHour.Bands = []config.TimeBand{{From: from, To: (from + 120) % (24 * 60), Threshold: 95}}
 	sc.setQuota(t, 0.90, sceneNow.Add(4*time.Hour), 0.10, sceneNow.Add(time.Hour))
