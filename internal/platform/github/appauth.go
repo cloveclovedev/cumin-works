@@ -31,6 +31,10 @@ const (
 	jwtLifetime = 9 * time.Minute
 	// An error body from GitHub is small. Do not read more than this.
 	maxErrorBody = 64 << 10
+	// defaultTimeout is how long one call may take, from the connection to
+	// the end of the body. A stalled connection must not stop the poll of
+	// every repository. An answer of GitHub takes a few seconds at most.
+	defaultTimeout = 30 * time.Second
 )
 
 // AppCredentials identify one GitHub App.
@@ -70,10 +74,10 @@ type AppClient struct {
 }
 
 // NewAppClient returns a client for the API at baseURL. Tests pass the address
-// of a fake GitHub. A nil httpClient means http.DefaultClient.
+// of a fake GitHub. A nil httpClient means a client with defaultTimeout.
 func NewAppClient(baseURL string, httpClient *http.Client) *AppClient {
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: defaultTimeout}
 	}
 	return &AppClient{baseURL: strings.TrimRight(baseURL, "/"), http: httpClient, now: time.Now}
 }

@@ -362,6 +362,8 @@ type failure struct {
 	status       int
 	// skip is how many matching requests are answered as usual first.
 	skip int
+	// hang leaves the request without an answer, as HangNext set it.
+	hang bool
 }
 
 // New starts the fake. The server closes when the test ends.
@@ -593,6 +595,16 @@ func (f *Fake) FailAfter(method, path string, skip, status int) {
 	f.failNext = &failure{method: method, path: path, status: status, skip: skip}
 }
 
+// HangNext makes the fake leave the next request with the method and the
+// path without an answer, once, as a stalled connection. The request is
+// recorded and changes nothing. The fake holds the request until the client
+// gives up, so the client needs a timeout or a context with a deadline.
+func (f *Fake) HangNext(method, path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failNext = &failure{method: method, path: path, hang: true}
+}
+
 // Requests returns the requests that the fake received, in order.
 func (f *Fake) Requests() []Request {
 	f.mu.Lock()
@@ -627,6 +639,12 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		fail = nil
 	}
 	f.mu.Unlock()
+	if fail != nil && fail.hang {
+		// The context ends when the client closes the connection. Without
+		// this return, the Close of the server waits forever.
+		<-r.Context().Done()
+		return
+	}
 	if fail != nil {
 		writeJSON(w, fail.status, map[string]any{"message": "Failure requested by the test"})
 		return

@@ -60,8 +60,11 @@ var testKey = sync.OnceValue(func() *rsa.PrivateKey {
 type scene struct {
 	fake   *githubtest.Fake
 	client *github.AppClient
-	repo   *githubtest.Repository
-	logs   *bytes.Buffer
+	// serverURL is the address of the fake GitHub, for a test that builds
+	// its own client.
+	serverURL string
+	repo      *githubtest.Repository
+	logs      *bytes.Buffer
 	// remote is the bare repository that the clone of the work directory
 	// reads, in place of GitHub. remoteHead is the commit at its main.
 	remote     string
@@ -231,7 +234,7 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	remote, head := newRemote(t)
 	webhook := newFakeWebhook(t)
 	return &scene{
-		fake: fake, client: github.NewAppClient(server.URL, server.Client()), repo: repo,
+		fake: fake, client: github.NewAppClient(server.URL, server.Client()), serverURL: server.URL, repo: repo,
 		logs: &bytes.Buffer{}, remote: remote, remoteHead: head, cliDir: cliDir,
 		workRoot: t.TempDir(), cliPath: cliPath, settingsDir: t.TempDir(),
 		webhook: webhook, notifier: webhook.notifier(), notifications: true,
@@ -1292,6 +1295,43 @@ func TestPoll_OneFailedRepositoryDoesNotStopTheOthers(t *testing.T) {
 	service.Wait()
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1 for the good repository", n)
+	}
+}
+
+// A stalled connection: the fake never answers the snapshot read. The
+// timeout of the client ends the call, the poll logs the failed read, and
+// the next poll reads the repository.
+func TestPoll_StalledGitHubCallEndsAtTheTimeoutAndTheNextPollRuns(t *testing.T) {
+	sc := newScene(t)
+	sc.client = github.NewAppClient(sc.serverURL, &http.Client{Timeout: time.Second})
+	service := sc.service()
+	sc.fake.HangNext(http.MethodPost, "/graphql")
+
+	done := make(chan error, 1)
+	go func() { done <- service.Poll(context.Background()) }()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "Client.Timeout") {
+			t.Fatalf("err = %v, want the timeout of the client", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Poll did not return after the timeout of the client")
+	}
+	service.Wait()
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs after the stalled poll, want 0", n)
+	}
+	logs := sc.logs.String()
+	if !strings.Contains(logs, `"msg":"poll failed"`) || !strings.Contains(logs, "Client.Timeout") {
+		t.Errorf("the log has no failed poll with the timeout:\n%s", logs)
+	}
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("the next Poll: %v", err)
+	}
+	service.Wait()
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs after the next poll, want 1", n)
 	}
 }
 
