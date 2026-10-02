@@ -95,13 +95,56 @@ type Settings struct {
 	MaxReviewRounds     int
 	MaxCheckFixRequests int
 	MergeMethod         MergeMethod
-	Roles               map[Role]RoleSettings
-	Quota               QuotaSettings
-	Notify              NotifySettings
+	// PriorityLabels are the labels that order the starts, highest
+	// priority first. Nil means that no settings file names them: the
+	// labels are then DefaultPriorityLabels, and cumin creates them
+	// (PriorityLabelNames). A list of a settings file names labels of the
+	// organization, which cumin never creates or changes.
+	PriorityLabels []string
+	Roles          map[Role]RoleSettings
+	Quota          QuotaSettings
+	Notify         NotifySettings
 	// GitHubApps maps an organization to the Client ID of each GitHub App.
 	// The inner key is AppCuminCore or a Role. `cumin setup` writes the
 	// table, so it can be empty.
 	GitHubApps map[string]map[string]string
+}
+
+// DefaultPriorityLabels are the priority labels of a repository whose
+// settings name none, highest priority first. cumin creates them when they
+// are missing, as it creates its other labels.
+func DefaultPriorityLabels() []string {
+	return []string{"cumin/priority/P0", "cumin/priority/P1", "cumin/priority/P2", "cumin/priority/P3"}
+}
+
+// PriorityLabelNames returns the priority labels that apply, highest
+// priority first: the list of the settings, or the default labels.
+func (s *Settings) PriorityLabelNames() []string {
+	if s.PriorityLabels == nil {
+		return DefaultPriorityLabels()
+	}
+	return s.PriorityLabels
+}
+
+// checkPriorityLabels returns what is wrong with a list of priority labels
+// of a settings file, or an empty string. GitHub label names ignore case,
+// so two names that differ only in case are the same label.
+func checkPriorityLabels(labels []string) string {
+	if len(labels) == 0 {
+		return "must name one label or more, highest priority first. Remove the key to use the default labels"
+	}
+	seen := map[string]bool{}
+	for _, label := range labels {
+		lower := strings.ToLower(label)
+		switch {
+		case label == "" || strings.TrimSpace(label) != label:
+			return fmt.Sprintf("%q is not a label name: it is empty, or it starts or ends with a space", label)
+		case seen[lower]:
+			return fmt.Sprintf("%q is listed more than once", label)
+		}
+		seen[lower] = true
+	}
+	return ""
 }
 
 // Repository is a target repository.
@@ -174,7 +217,9 @@ type file struct {
 	MaxReviewRounds     int      `toml:"max_review_rounds"`
 	MaxCheckFixRequests int      `toml:"max_check_fix_requests"`
 	MergeMethod         string   `toml:"merge_method"`
-	Roles               struct {
+	// A pointer, so that a file without the key keeps the default labels.
+	PriorityLabels *[]string `toml:"priority_labels"`
+	Roles          struct {
 		Planner     fileRole `toml:"planner"`
 		Implementer fileRole `toml:"implementer"`
 		Reviewer    fileRole `toml:"reviewer"`
@@ -302,6 +347,13 @@ func (f file) settings() (*Settings, error) {
 	case MergeSquash, MergeMerge, MergeRebase:
 	default:
 		fail("merge_method", limitMergeMethod, f.MergeMethod)
+	}
+	if f.PriorityLabels != nil {
+		if reason := checkPriorityLabels(*f.PriorityLabels); reason != "" {
+			fail("priority_labels", "%s", reason)
+		} else {
+			s.PriorityLabels = *f.PriorityLabels
+		}
 	}
 
 	workDir, err := expandHome(f.WorkDir)

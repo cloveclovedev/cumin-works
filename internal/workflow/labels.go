@@ -23,3 +23,16 @@ func RepositoryLabels() []github.Label {
 		{Name: "risk/high", Color: "F9D0C4", Description: "Cannot be undone by a revert; the Owner merges"},
 	}
 }
+
+// DefaultPriorityLabels returns the priority labels that cumin creates in a
+// target repository whose settings name none (names are
+// config.DefaultPriorityLabels, highest priority first). Labels that a
+// settings file names belong to the organization: cumin never creates or
+// changes them.
+func DefaultPriorityLabels(names []string) []github.Label {
+	labels := make([]github.Label, 0, len(names))
+	for _, name := range names {
+		labels = append(labels, github.Label{Name: name, Color: "D4C5F9", Description: "The Owner says: start this before a lower priority"})
+	}
+	return labels
+}

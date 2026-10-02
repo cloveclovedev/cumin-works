@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -265,5 +266,61 @@ func TestWithRepository_DoesNotChangeTheHostSettings(t *testing.T) {
 	}
 	if s.Roles[RoleImplementer].Model != "sonnet" {
 		t.Errorf("the repository role = %+v, want sonnet", s.Roles[RoleImplementer])
+	}
+}
+
+// The priority labels: the defaults when no file names them, the Host file
+// over the defaults, and the repository file over both.
+func TestWithRepository_PriorityLabelsOfTheThreeLevels(t *testing.T) {
+	tests := []struct {
+		name       string
+		host, file string
+		want       []string
+		// set says that a settings file named the labels, so cumin does
+		// not create them.
+		set bool
+	}{
+		{"the defaults", "", "", DefaultPriorityLabels(), false},
+		{"the Host file", "priority_labels = [\"P0\", \"P1\"]\n", "", []string{"P0", "P1"}, true},
+		{"the repository file over the Host file", "priority_labels = [\"P0\", \"P1\"]\n",
+			"priority_labels = [\"priority/P0\", \"priority/P1\", \"priority/P2\"]\n", []string{"priority/P0", "priority/P1", "priority/P2"}, true},
+		{"the repository file over the defaults", "", "priority_labels = [\"priority: high\"]\n", []string{"priority: high"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := withRepository(t, hostSettings(t, tt.host), tt.file)
+			if got := s.PriorityLabelNames(); !slices.Equal(got, tt.want) {
+				t.Errorf("priority labels = %q, want %q", got, tt.want)
+			}
+			if set := s.PriorityLabels != nil; set != tt.set {
+				t.Errorf("named by a settings file = %v, want %v", set, tt.set)
+			}
+		})
+	}
+}
+
+// A list of priority labels that is empty, repeats a label, or holds a name
+// that is not a label name is an error that names the key, in both files.
+func TestPriorityLabels_AWrongListNamesTheKey(t *testing.T) {
+	tests := []struct {
+		name, value, want string
+	}{
+		{"an empty list", "[]", "must name one label or more"},
+		{"the same label twice in another case", `["P0", "p0"]`, `"p0" is listed more than once`},
+		{"an empty name", `["P0", ""]`, "is not a label name"},
+		{"a name that ends with a space", `["P0 "]`, "is not a label name"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			line := "priority_labels = " + tt.value + "\n"
+			_, err := hostSettings(t, "").WithRepository([]byte(line))
+			if err == nil || !strings.Contains(err.Error(), "priority_labels: ") || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("repository file: err = %v, want one that names priority_labels and says %q", err, tt.want)
+			}
+			_, err = Load(writeFile(t, required+line))
+			if err == nil || !strings.Contains(err.Error(), "priority_labels: ") || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Host file: err = %v, want one that names priority_labels and says %q", err, tt.want)
+			}
+		})
 	}
 }

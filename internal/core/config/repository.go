@@ -49,6 +49,7 @@ type repositoryFile struct {
 	MaxReviewRounds     *int                      `toml:"max_review_rounds"`
 	MaxCheckFixRequests *int                      `toml:"max_check_fix_requests"`
 	MergeMethod         *string                   `toml:"merge_method"`
+	PriorityLabels      *[]string                 `toml:"priority_labels"`
 	Roles               map[string]repositoryRole `toml:"roles"`
 	Notify              *repositoryNotify         `toml:"notify"`
 	ProtectedPaths      []string                  `toml:"protected_paths"`
@@ -115,6 +116,13 @@ func (s *Settings) WithRepository(data []byte) (*Settings, error) {
 			effective.MergeMethod = method
 		default:
 			fail("merge_method", limitMergeMethod, *f.MergeMethod)
+		}
+	}
+	if f.PriorityLabels != nil {
+		if reason := checkPriorityLabels(*f.PriorityLabels); reason != "" {
+			fail("priority_labels", "%s", reason)
+		} else {
+			effective.PriorityLabels = *f.PriorityLabels
 		}
 	}
 	if f.Notify != nil && f.Notify.Discord != nil && f.Notify.Discord.Enabled != nil {

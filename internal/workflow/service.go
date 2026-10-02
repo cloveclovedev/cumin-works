@@ -115,6 +115,10 @@ type Service struct {
 	// test may poll from more than one goroutine.
 	settingsMu         sync.Mutex
 	repositorySettings map[string]*RepositorySettings
+	// priorityLabelsDone says, for each repository, that its default
+	// priority labels exist or that its settings name its own. settingsMu
+	// guards it.
+	priorityLabelsDone map[string]bool
 
 	// pollFailures counts the consecutive failed polls of each repository,
 	// so that a failure that repeats reaches the Owner once
@@ -324,6 +328,42 @@ func (s *Service) ensureLabels(ctx context.Context) {
 	}
 }
 
+// ensurePriorityLabels creates the default priority labels of a repository
+// whose settings name none, when they are missing, as ensureLabels does for
+// the other labels of cumin. The settings of the repository decide it, so
+// it runs in the poll: once after each read of the settings, and again at
+// the next poll after a failure. Labels that a settings file names belong
+// to the organization, and cumin never creates or changes them.
+func (s *Service) ensurePriorityLabels(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, readAgain bool) {
+	key := repositoryKey(target.Repository)
+	s.settingsMu.Lock()
+	if readAgain {
+		delete(s.priorityLabelsDone, key)
+	}
+	done := s.priorityLabelsDone[key]
+	s.settingsMu.Unlock()
+	if done {
+		return
+	}
+	if settings.Settings.PriorityLabels == nil {
+		labels := DefaultPriorityLabels(config.DefaultPriorityLabels())
+		created, err := s.GitHub.EnsureLabels(ctx, token, target.Repository.Owner, target.Repository.Name, labels)
+		for _, name := range created {
+			log.Info("created the label", "label", name)
+		}
+		if err != nil {
+			log.Error("create the missing priority labels failed", "error", err.Error())
+			return
+		}
+	}
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	if s.priorityLabelsDone == nil {
+		s.priorityLabelsDone = map[string]bool{}
+	}
+	s.priorityLabelsDone[key] = true
+}
+
 // Poll does one poll of every target repository: read the snapshot, decide,
 // and apply the actions. A failure in one repository does not stop the
 // others, and a failure that repeats tells the Owner (pollFailed). The
@@ -386,6 +426,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		log.Info("the settings of the repository were read",
 			"from_repository", settings.FromRepository, "risk_criteria", settings.RiskCriteriaSource)
 	}
+	s.ensurePriorityLabels(ctx, log, token, target, settings, readAgain)
 	// The required checks are a REST call of their own, so the poll makes
 	// it only when an issue of this repository waits for the checks (I3,
 	// I4) or has an approval of a person to check (I12). Its budget is not
@@ -418,7 +459,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// the sub-issue, and R3 would then never apply again: the requirement
 	// issue would stay in awaiting-owner-review while its work goes on.
 	notStarted := map[int]bool{}
-	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required)
+	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames())
 	if finishing {
 		// The work that is held back waits under its label for the next
 		// start of cumin.

@@ -169,6 +169,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | checkの修正を依頼する回数の上限 | これを超えたら、Ownerに回す | 3 | できる |
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
+| 優先度のラベル | 着手の順番を決めるラベルの一覧。優先度の高い順に書く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「着手の順番」)。設定に書いたラベルはOrganizationのものなので、cuminは作らず、変えない。足りないラベルは、リポジトリの準備のスクリプトが、実行した人に尋ねてから作る。設定に書かなければ初期値のラベルを使い、足りないものをcuminが作る | `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` | できる |
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
 | riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、PlannerとReviewerへの指示にそのまま入れる | `disciplines/software-engineering/risk-criteria.md` | できる |
 
@@ -213,3 +214,4 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 17 | 着手の直前の確認で、使用率を読み取れない | 着手せずに、1回だけ通知する |
 | 18 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestを、Ownerが今の先頭のコミットでGitHubのレビューにより承認する | cuminがmergeし、実装Issueが閉じる。古いコミットへの承認、botの承認、writeの権限のないアカウントの承認、あとから `REQUEST_CHANGES` で覆された承認では、mergeしない |
 | 19 | cuminがmergeしたあと、GitHubが実装Issueを閉じない | cuminが1回だけ閉じる。Ownerがそれを開き直しても、あとの定期確認では閉じない |
+| 20 | 着手できるIssueが2つあり、番号の大きいほうに、より高い優先度のラベルが付いている | 優先度の高いほうから着手する。同じ優先度なら、番号の小さいほうから着手する。優先度のラベルがないIssueは、最後に着手する。設定でラベルの名前を変えると、その名前で順番が決まる |

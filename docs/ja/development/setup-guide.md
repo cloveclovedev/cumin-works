@@ -34,7 +34,7 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 gh auth refresh -h github.com -s workflow
 ```
 
-- ラベルは用意しなくてよい。cumin が起動のときに、足りないラベルを作る。
+- ラベルは用意しなくてよい。cumin が起動のときに、足りないラベルを作る。優先度のラベルだけは、名前を設定で決められる。Organization のラベルを使うときは、手順3のスクリプトが、足りないラベルを作るかどうかを尋ねる。
 - 対象のリポジトリの持ち主は、Organization である。v0.1 の `cumin setup github-apps` は、個人アカウントの GitHub App を登録しない。
 
 個人アカウントのリポジトリから始める場合:
@@ -194,7 +194,12 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 2. 既定のブランチに、次の2つのファイルを足す。
    - `.github/workflows/cumin-protected-paths.yml`: 保護されたパスのcheck。作成者が bot (GitHub App) の Pull Request で動き、作成者が人の Pull Request では飛ばされる。App の名前は条件に書かない。名前を間違えるとcheckが飛ばされ、飛ばされたcheckは通った扱いになるためである。
    - `.cumin/config.toml`: 保護されたパスの一覧 (`protected_paths`) のひな形。
-3. 次の ruleset を作る。
+3. 既定のブランチの `.cumin/config.toml` が `priority_labels` (優先度のラベル。[設定の一覧](configuration.md)) を持っていれば、そのうちリポジトリにないラベルを一覧にして、作るかどうかを尋ねる。
+   - `y` と答えたときだけ作る。ほかの答えと、答えがないとき (入力が端末でないとき) は、何も作らない。`--dry-run` は、一覧を表示するだけで尋ねない。
+   - 尋ねるのは、ラベルが Organization のものだからである。cumin は、設定に書かれたラベルを作らず、変えない。作らなかったラベルは、付けられないだけで、cumin の動きは変わらない。
+   - `priority_labels` がなければ、何も尋ねない。cumin が初期値のラベル (`cumin/priority/P0` 〜 `cumin/priority/P3`) を自分で作る。
+   - ひな形を足したばかりのリポジトリには `priority_labels` がない。Organization のラベルを使うときは、`priority_labels` を足す Pull Request を merge してから、スクリプトをもう一度実行する。
+4. 次の ruleset を作る。
 
 | ruleset | 対象 | 内容 | bypass list |
 |---|---|---|---|
