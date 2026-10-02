@@ -100,6 +100,9 @@ type Service struct {
 	inProgress map[inProgressKey]bool
 	// started counts the runs that cumin started. progressMu guards it.
 	started int
+	// startedAt is when Run started. A drain request from before it is
+	// for an earlier process (drain.go). Only Run and its polls use it.
+	startedAt time.Time
 	// draining says that a poll read a drain request. It stays true until
 	// cumin exits.
 	draining atomic.Bool

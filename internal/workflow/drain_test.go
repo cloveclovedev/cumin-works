@@ -3,6 +3,7 @@ package workflow_test
 import (
 	"context"
 	"net/http"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -215,5 +216,49 @@ func TestDrain_TheStopSignalStillStopsAtOnce(t *testing.T) {
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelImplementing) {
 		t.Errorf("labels of #10 = %v, want cumin/status/implementing", got)
+	}
+}
+
+// A request of before the start that cannot be removed does not stop the
+// new process either: every start would otherwise exit at once, and launchd
+// leaves a process that exits with 0 stopped.
+func TestDrain_ARequestThatCannotBeRemovedAtTheStartIsPassedOver(t *testing.T) {
+	sc := newScene(t, cliOptions{sleeps: true})
+	service := sc.service()
+	service.PollInterval = 10 * time.Millisecond
+	dir := t.TempDir()
+	service.DrainPath = filepath.Join(dir, state.DrainFileName)
+	requestDrain(t, service.DrainPath)
+	// The directory cannot be written, so the file cannot be removed.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	returned := make(chan error, 1)
+	go func() { returned <- service.Run(ctx) }()
+	// The claim and the agent run show that the polls did not drain.
+	waitForAgentRun(t, sc)
+	waitForPolls(t, sc, 2)
+	select {
+	case err := <-returned:
+		t.Fatalf("Run returned %v on the request of before the start:\n%s", err, sc.logs.String())
+	default:
+	}
+	cancel()
+	if err := <-returned; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if !drainFileExists(t, service.DrainPath) {
+		t.Fatal("the request was removed; the test did not reach the case")
+	}
+	logs := sc.logs.String()
+	if !strings.Contains(logs, `"msg":"the drain request of an earlier start was not removed"`) {
+		t.Errorf("the log has no warning for the request that stays:\n%s", logs)
+	}
+	if strings.Contains(logs, `"msg":"drain: no new work starts`) {
+		t.Errorf("cumin drained on the request of before the start:\n%s", logs)
 	}
 }

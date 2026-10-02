@@ -6,13 +6,21 @@ package workflow
 // the Host. docs/ja/designs/cumin-core.md, the topic on the stop.
 
 import (
+	"time"
+
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 )
 
 // dropDrainRequest removes a drain request that was written before this
 // start of cumin run. A request is for the process that ran when the Owner
 // asked; it never reaches the next start.
+//
+// It also keeps the time of the start. A request that could not be removed
+// here, for example in a state directory that cannot be written, is older
+// than that time, and drainRequested passes over it. Without that, every
+// start would read the same request and exit at once.
 func (s *Service) dropDrainRequest() {
+	s.startedAt = time.Now()
 	if s.DrainPath == "" {
 		return
 	}
@@ -40,7 +48,7 @@ func (s *Service) drainRequested() bool {
 		s.logger().Warn("the drain request was not read; cumin goes on as usual", "error", err.Error())
 		return false
 	}
-	if !found {
+	if !found || request.RequestedAt.Before(s.startedAt) {
 		return false
 	}
 	s.draining.Store(true)
