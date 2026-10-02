@@ -35,6 +35,8 @@ func TestSetupRepoScript_ReadsThePriorityLabelsThatCuminReads(t *testing.T) {
 		{"more lines, with comments and a trailing comma",
 			"max_review_rounds = 2\npriority_labels = [\n  \"priority/P0\",  # the top\n  \"priority/P1\",\n]\nprotected_paths = [\".cumin/\"]\n"},
 		{"names with a space, a colon, and a number sign", "priority_labels = [\"priority: high\", 'P#1', \"low\"]\n"},
+		{"the key in quotes", "\"priority_labels\" = [\"P0\"]\n"},
+		{"the key in single quotes", "'priority_labels' = [\"P0\", \"P1\"]\n"},
 		{"a key that is only in a comment", "# priority_labels = [\"no\"]\nprotected_paths = [\".cumin/\"]\n"},
 		{"the starter file", string(starter)},
 	}

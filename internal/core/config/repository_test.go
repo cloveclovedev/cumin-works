@@ -269,38 +269,45 @@ func TestWithRepository_DoesNotChangeTheHostSettings(t *testing.T) {
 	}
 }
 
-// The priority labels: the defaults when no file names them, the Host file
-// over the defaults, and the repository file over both.
-func TestWithRepository_PriorityLabelsOfTheThreeLevels(t *testing.T) {
+// The priority labels: the defaults when the repository names none, and
+// the list of the repository file.
+func TestWithRepository_PriorityLabels(t *testing.T) {
 	tests := []struct {
-		name       string
-		host, file string
+		name, file string
 		want       []string
-		// set says that a settings file named the labels, so cumin does
-		// not create them.
+		// set says that the repository named the labels, so cumin does not
+		// create them.
 		set bool
 	}{
-		{"the defaults", "", "", DefaultPriorityLabels(), false},
-		{"the Host file", "priority_labels = [\"P0\", \"P1\"]\n", "", []string{"P0", "P1"}, true},
-		{"the repository file over the Host file", "priority_labels = [\"P0\", \"P1\"]\n",
-			"priority_labels = [\"priority/P0\", \"priority/P1\", \"priority/P2\"]\n", []string{"priority/P0", "priority/P1", "priority/P2"}, true},
-		{"the repository file over the defaults", "", "priority_labels = [\"priority: high\"]\n", []string{"priority: high"}, true},
+		{"the defaults", "", DefaultPriorityLabels(), false},
+		{"the repository file", "priority_labels = [\"priority/P0\", \"priority/P1\", \"priority/P2\"]\n", []string{"priority/P0", "priority/P1", "priority/P2"}, true},
+		{"one label with a space and a colon", "priority_labels = [\"priority: high\"]\n", []string{"priority: high"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := withRepository(t, hostSettings(t, tt.host), tt.file)
+			s := withRepository(t, hostSettings(t, ""), tt.file)
 			if got := s.PriorityLabelNames(); !slices.Equal(got, tt.want) {
 				t.Errorf("priority labels = %q, want %q", got, tt.want)
 			}
 			if set := s.PriorityLabels != nil; set != tt.set {
-				t.Errorf("named by a settings file = %v, want %v", set, tt.set)
+				t.Errorf("named by the repository = %v, want %v", set, tt.set)
 			}
 		})
 	}
 }
 
+// The Host file does not take priority_labels: the labels live in the
+// repository, and only its file is read by scripts/setup-repo.sh, which
+// offers the missing labels.
+func TestLoad_PriorityLabelsIsNotAKeyOfTheHostFile(t *testing.T) {
+	_, err := Load(writeFile(t, required+"priority_labels = [\"P0\"]\n"))
+	if err == nil || !strings.Contains(err.Error(), "priority_labels: unknown key") {
+		t.Errorf("err = %v, want one that names priority_labels as an unknown key", err)
+	}
+}
+
 // A list of priority labels that is empty, repeats a label, or holds a name
-// that is not a label name is an error that names the key, in both files.
+// that is not a label name is an error that names the key.
 func TestPriorityLabels_AWrongListNamesTheKey(t *testing.T) {
 	tests := []struct {
 		name, value, want string
@@ -312,14 +319,9 @@ func TestPriorityLabels_AWrongListNamesTheKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			line := "priority_labels = " + tt.value + "\n"
-			_, err := hostSettings(t, "").WithRepository([]byte(line))
+			_, err := hostSettings(t, "").WithRepository([]byte("priority_labels = " + tt.value + "\n"))
 			if err == nil || !strings.Contains(err.Error(), "priority_labels: ") || !strings.Contains(err.Error(), tt.want) {
-				t.Errorf("repository file: err = %v, want one that names priority_labels and says %q", err, tt.want)
-			}
-			_, err = Load(writeFile(t, required+line))
-			if err == nil || !strings.Contains(err.Error(), "priority_labels: ") || !strings.Contains(err.Error(), tt.want) {
-				t.Errorf("Host file: err = %v, want one that names priority_labels and says %q", err, tt.want)
+				t.Errorf("err = %v, want one that names priority_labels and says %q", err, tt.want)
 			}
 		})
 	}

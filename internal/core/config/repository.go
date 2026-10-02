@@ -42,6 +42,9 @@ const (
 // pointer is empty when the file does not hold the key, so that the Host
 // value stays.
 //
+// priority_labels is a key of the repository only: the Host file does not
+// take it.
+//
 // protected_paths is a valid key that cumin ignores: the check of GitHub
 // Actions and the Implementer instruction use it, and the starter file of
 // scripts/setup-repo.sh holds only this key.

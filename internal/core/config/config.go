@@ -96,10 +96,13 @@ type Settings struct {
 	MaxCheckFixRequests int
 	MergeMethod         MergeMethod
 	// PriorityLabels are the labels that order the starts, highest
-	// priority first. Nil means that no settings file names them: the
-	// labels are then DefaultPriorityLabels, and cumin creates them
-	// (PriorityLabelNames). A list of a settings file names labels of the
-	// organization, which cumin never creates or changes.
+	// priority first. Only the .cumin/config.toml of a repository sets
+	// them (WithRepository): the labels live in the repository, and
+	// scripts/setup-repo.sh reads that file to offer the missing ones. Nil
+	// means that the repository names none: the labels are then
+	// DefaultPriorityLabels, and cumin creates them (PriorityLabelNames).
+	// A list of the file names labels of the organization, which cumin
+	// never creates or changes.
 	PriorityLabels []string
 	Roles          map[Role]RoleSettings
 	Quota          QuotaSettings
@@ -127,7 +130,7 @@ func (s *Settings) PriorityLabelNames() []string {
 }
 
 // checkPriorityLabels returns what is wrong with a list of priority labels
-// of a settings file, or an empty string. GitHub label names ignore case,
+// of a repository file, or an empty string. GitHub label names ignore case,
 // so two names that differ only in case are the same label.
 func checkPriorityLabels(labels []string) string {
 	if len(labels) == 0 {
@@ -217,9 +220,7 @@ type file struct {
 	MaxReviewRounds     int      `toml:"max_review_rounds"`
 	MaxCheckFixRequests int      `toml:"max_check_fix_requests"`
 	MergeMethod         string   `toml:"merge_method"`
-	// A pointer, so that a file without the key keeps the default labels.
-	PriorityLabels *[]string `toml:"priority_labels"`
-	Roles          struct {
+	Roles               struct {
 		Planner     fileRole `toml:"planner"`
 		Implementer fileRole `toml:"implementer"`
 		Reviewer    fileRole `toml:"reviewer"`
@@ -347,13 +348,6 @@ func (f file) settings() (*Settings, error) {
 	case MergeSquash, MergeMerge, MergeRebase:
 	default:
 		fail("merge_method", limitMergeMethod, f.MergeMethod)
-	}
-	if f.PriorityLabels != nil {
-		if reason := checkPriorityLabels(*f.PriorityLabels); reason != "" {
-			fail("priority_labels", "%s", reason)
-		} else {
-			s.PriorityLabels = *f.PriorityLabels
-		}
 	}
 
 	workDir, err := expandHome(f.WorkDir)

@@ -28,7 +28,6 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `max_review_rounds` | レビューのラウンドの上限 | `3` | 1以上 |
 | `max_check_fix_requests` | checkの修正を依頼する回数の上限 | `3` | 1以上 |
 | `merge_method` | cuminがPull Requestをmergeするときの方法 | `"squash"` | `"squash"`、`"merge"`、`"rebase"` のどれか |
-| `priority_labels` | 着手の順番を決める優先度のラベルの一覧。優先度の高い順に書く。下の「優先度のラベル」を参照 | 書かなければ `cumin/priority/P0` 〜 `cumin/priority/P3` | 1つ以上。空の名前、前後に空白のある名前、同じ名前 (大文字と小文字は区別しない) は書けない |
 | `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
 | `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
 | `roles.<role>.cli_path` | CLIの実行ファイル。ディレクトリを含まない名前は、`PATH` から探す。受け入れテストは、偽のCLIの実行ファイルを指す | `"claude"` | 空にできない |
@@ -116,7 +115,9 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 
 - Organizationが既に使っているラベルの名前を、そのまま書く。段の数は自由である。
 - 書いたラベルを、cuminは作らず、変えない。足りないラベルは、`scripts/setup-repo.sh` が一覧にして、実行した人が `y` と答えたときだけ作る ([セットアップの手順](setup-guide.md) の手順3)。
-- Hostの設定ファイルにもリポジトリの設定ファイルにも書かなければ、ラベルは `cumin/priority/P0` 〜 `cumin/priority/P3` になる。このときは、足りないラベルを、cuminがそのリポジトリの最初の定期確認で作る。
+- 書けるのは、リポジトリの設定ファイルだけである。Hostの設定ファイルに書くと、知らないキーのエラーになる。ラベルはリポジトリにあり、足りないラベルを作るスクリプトがリポジトリのファイルを読むためである。
+- 制限: 1つ以上。空の名前、前後に空白のある名前、同じ名前は書けない。
+- 書かなければ、ラベルは `cumin/priority/P0` 〜 `cumin/priority/P3` になる。このときは、足りないラベルを、cuminがそのリポジトリの最初の定期確認で作る。
 - 一覧にないラベルは、優先度として数えない。初期値の名前のラベルも、一覧を書いたリポジトリでは数えない。
 - ラベルの名前は、GitHubと同じく、大文字と小文字を区別しない。
 
@@ -124,14 +125,14 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 
 対象のリポジトリは、一部の設定を自分で決められる。場所は、そのリポジトリの既定のブランチの `.cumin/config.toml` である。cuminは既定のブランチからだけ読む。Pull Requestのブランチの内容は効かない。
 
-書けるキーは、上の表で「リポジトリで上書き」ができるものと、`protected_paths` だけである。
+書けるキーは、上の表で「リポジトリで上書き」ができるものと、`protected_paths`、`priority_labels` だけである。
 
 | キー | 内容 |
 |---|---|
 | `max_review_rounds` | Hostの設定と同じ |
 | `max_check_fix_requests` | Hostの設定と同じ |
 | `merge_method` | Hostの設定と同じ |
-| `priority_labels` | Hostの設定と同じ。書くと、Hostの一覧を丸ごと置き換える |
+| `priority_labels` | 着手の順番を決める優先度のラベルの一覧。優先度の高い順に書く。リポジトリの設定ファイルにだけ書ける。下の「優先度のラベル」を参照 |
 | `roles.<role>.cli` | Hostの設定と同じ |
 | `roles.<role>.model` | Hostの設定と同じ |
 | `notify.discord.enabled` | Hostの設定と同じ。そのリポジトリのIssueについて通知を出すかどうかを、リポジトリが選ぶ。webhookのアドレスはHostのもの1つで、リポジトリからは変えられない |

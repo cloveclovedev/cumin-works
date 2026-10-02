@@ -223,7 +223,8 @@ put_file "$config_path" "$work/config.toml" keep
 # the one that cumin reads.
 priority_labels_of() {
   awk '
-    !inside && /^[ \t]*priority_labels[ \t]*=/ { inside = 1; sub(/^[^=]*=/, "") }
+    # TOML allows the key bare or in quotes.
+    !inside && /^[ \t]*("priority_labels"|\047priority_labels\047|priority_labels)[ \t]*=/ { inside = 1; sub(/^[^=]*=/, "") }
     inside {
       line = $0
       while (match(line, /"[^"]*"|\047[^\047]*\047|#|\]/)) {

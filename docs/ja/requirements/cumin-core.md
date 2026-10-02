@@ -152,7 +152,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 
 - Hostに属する設定は、Hostの設定ファイルにだけ書ける。利用枠はアカウントのものであり、作業場所や秘密の値はHostのものなので、リポジトリからは変えられない
 - リポジトリごとに変えてよい設定は、Hostの設定ファイルに書いた値を、対象のリポジトリの `.cumin/` で上書きできる。優先順位は、初期値、Hostの設定ファイル、リポジトリの `.cumin/` の順に強くなる
-- 保護されたパスだけは、リポジトリの `.cumin/config.toml` だけで決める。強制するのがGitHub Actionsのcheckであり、Hostの設定ファイルはそこから見えないためである
+- 保護されたパスと優先度のラベルは、リポジトリの `.cumin/config.toml` だけで決める。保護されたパスは、強制するのがGitHub Actionsのcheckであり、Hostの設定ファイルはそこから見えないためである。優先度のラベルは、ラベルがリポジトリにあり、足りないラベルを作るスクリプトがリポジトリのファイルを読むためである
 
 | 設定 | 内容 | 初期値 | リポジトリで上書き |
 |---|---|---|---|
@@ -169,7 +169,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | checkの修正を依頼する回数の上限 | これを超えたら、Ownerに回す | 3 | できる |
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
-| 優先度のラベル | 着手の順番を決めるラベルの一覧。優先度の高い順に書く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「着手の順番」)。設定に書いたラベルはOrganizationのものなので、cuminは作らず、変えない。足りないラベルは、リポジトリの準備のスクリプトが、実行した人に尋ねてから作る。設定に書かなければ初期値のラベルを使い、足りないものをcuminが作る | `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` | できる |
+| 優先度のラベル | 着手の順番を決めるラベルの一覧。優先度の高い順に書く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「着手の順番」)。設定に書いたラベルはOrganizationのものなので、cuminは作らず、変えない。足りないラベルは、リポジトリの準備のスクリプトが、実行した人に尋ねてから作る。設定に書かなければ初期値のラベルを使い、足りないものをcuminが作る | `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` | リポジトリだけで決める |
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
 | riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、PlannerとReviewerへの指示にそのまま入れる | `disciplines/software-engineering/risk-criteria.md` | できる |
 
