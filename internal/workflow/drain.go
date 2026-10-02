@@ -66,12 +66,17 @@ func (s *Service) drainRequested() bool {
 // drained ends the run after a drain: it removes the request and logs the
 // line of the stop. Nothing is in progress, so no issue is named.
 func (s *Service) drained() {
-	if _, err := state.RemoveDrain(s.DrainPath); err != nil {
-		// The next start removes it, so the request still ends here.
-		s.logger().Error("the drain request was not removed", "error", err.Error())
-	}
+	s.removeDrainRequest()
 	s.logger().Info("stopped", "reason", "drain: the agent runs have ended",
 		"in_progress", []string{}, "ended_within_grace", true, "grace", s.stopGrace().String())
+}
+
+// removeDrainRequest removes the request when cumin run exits. A failure is
+// logged: the next start removes the request, so it still ends here.
+func (s *Service) removeDrainRequest() {
+	if _, err := state.RemoveDrain(s.DrainPath); err != nil {
+		s.logger().Error("the drain request was not removed", "error", err.Error())
+	}
 }
 
 // runsStarted is how many runs cumin has started since it started itself:

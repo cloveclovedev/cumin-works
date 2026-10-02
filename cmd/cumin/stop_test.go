@@ -11,8 +11,8 @@ import (
 )
 
 // cumin stop --after-current-runs writes the drain request with the time of
-// the request, and a second call changes nothing.
-func TestStopAfterCurrentRunsWritesTheDrainRequestOnce(t *testing.T) {
+// the request, and a second call writes it again with its own time.
+func TestStopAfterCurrentRunsWritesTheDrainRequest(t *testing.T) {
 	dir := quotaHome(t, time.Time{})
 	at := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
 	fixedNow(t, at)
@@ -35,11 +35,10 @@ func TestStopAfterCurrentRunsWritesTheDrainRequestOnce(t *testing.T) {
 	if code := runCLI([]string{"stop", "--after-current-runs"}, &stdout, &stderr); code != exitOK {
 		t.Fatalf("second call: exit code = %d, stderr = %s", code, stderr.String())
 	}
-	if got, _, _ := state.ReadDrain(path); !got.RequestedAt.Equal(at) {
-		t.Errorf("the second call changed the time of the request to %v", got.RequestedAt)
-	}
-	if !strings.Contains(stdout.String(), "already requested") {
-		t.Errorf("stdout of the second call = %q", stdout.String())
+	// The request is one of now: a request that an earlier process left
+	// behind must not make this one look old.
+	if got, _, _ := state.ReadDrain(path); !got.RequestedAt.Equal(at.Add(time.Hour)) {
+		t.Errorf("the request after the second call is of %v, want the time of that call", got.RequestedAt)
 	}
 }
 

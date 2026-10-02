@@ -217,6 +217,9 @@ func TestDrain_TheStopSignalStillStopsAtOnce(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelImplementing) {
 		t.Errorf("labels of #10 = %v, want cumin/status/implementing", got)
 	}
+	if drainFileExists(t, service.DrainPath) {
+		t.Error("the drain request is still there after the stop")
+	}
 }
 
 // A request of before the start that cannot be removed does not stop the

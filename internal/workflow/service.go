@@ -206,6 +206,10 @@ func (s *Service) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			s.stop(context.Cause(ctx).Error())
+			if draining {
+				// The drain ends with the process, however it stops.
+				s.removeDrainRequest()
+			}
 			return nil
 		case <-ticker.C:
 		case <-runEnded:

@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
@@ -56,13 +55,10 @@ func runStop(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "cumin stop: %v\n", err)
 		return exitFailure
 	}
-	// A request that is already there keeps its time: cumin run may have
-	// read it, and cumin status shows when the drain began.
-	if request, found, err := state.ReadDrain(path); err == nil && found {
-		fmt.Fprintf(stdout, "A drain was already requested at %s. Nothing was changed.\n", stamp(request.RequestedAt, time.Local))
-		fmt.Fprintln(stdout, "Watch it with: cumin status")
-		return exitOK
-	}
+	// A request that is already there gets the time of now. A cumin run
+	// that drains goes on draining. A request that an earlier process left
+	// behind becomes one of now, so the start of cumin run that removes
+	// the requests of before it does not take this one for an old one.
 	if err := state.WriteDrain(path, state.Drain{RequestedAt: now()}); err != nil {
 		fmt.Fprintf(stderr, "cumin stop: %v\n", err)
 		return exitFailure
