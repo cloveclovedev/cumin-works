@@ -28,7 +28,8 @@ import (
 // runRun is `cumin run`: the resident program. It loads the Host settings,
 // reads the private key of every GitHub App of each target repository owner
 // from the Keychain, creates the missing labels, and polls until SIGINT or
-// SIGTERM. launchd starts and restarts it.
+// SIGTERM, or until the stop after the current runs that the Owner asked for. launchd
+// starts and restarts it.
 func runRun(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cumin run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -120,6 +121,11 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "cumin run: %v\n", err)
 		return exitFailure
 	}
+	stopRequestPath, err := stopRequestFile()
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin run: %v\n", err)
+		return exitFailure
+	}
 	service := &workflow.Service{
 		GitHub:       client,
 		Agents:       agents,
@@ -133,6 +139,8 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		Logger:       logger,
 		// cumin quota allow writes it; each check before a start reads it (Q2).
 		AllowancePath: allowancePath,
+		// cumin stop --after-current-runs writes it; each poll reads it.
+		StopRequestPath: stopRequestPath,
 	}
 	var names []string
 	for _, repo := range settings.Repositories {

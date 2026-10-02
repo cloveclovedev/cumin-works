@@ -35,7 +35,7 @@ CI (GitHub Actions) も、Pull Requestとmainへのpushのたびに、同じ4つ
 go run ./cmd/cumin --help
 ```
 
-サブコマンドの一覧 (`run`、`status`、`quota allow`、`setup`) が表示される。`setup` には `github-apps` と `launchd` がある。それぞれの役割は [cumin本体の要件](requirements/cumin-core.md) の「動かし方」にある。
+サブコマンドの一覧 (`run`、`status`、`quota allow`、`stop`、`setup`) が表示される。`setup` には `github-apps` と `launchd` がある。それぞれの役割は [cumin本体の要件](requirements/cumin-core.md) の「動かし方」にある。
 
 実行ファイルを作るときは、次のようにする。リポジトリの直下にできる `cumin` は、gitの管理から外してある。
 
@@ -75,13 +75,15 @@ Implementer の実行は、本物の Claude Code を起動し、利用枠を使�
 
 止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。cumin は新しい着手をやめ、実行中の依頼を取り消し、猶予の間だけ終わるのを待つ。猶予は、Agent の猶予 (10秒) に、そのあとの後始末の分 (5秒) を足した値である。最後に `stopped` のログを1行出して、終了コード0で終わる。ログには、進行中だったIssueの一覧が入る。ラベルは変わらないので、途中で止まったIssueは `cumin/status/implementing` のまま残る。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す。
 
+実行中のAgentを途中で止めたくないときは、Hostで `cumin stop --after-current-runs` を実行する。コマンドは、止める予約 (`~/.local/state/cumin/stop-request.json`) を書いてすぐ終わる。`cumin run` は、次の定期確認から新しい依頼 (分割、受け入れの確認、実装、レビュー、checkの修正) を始めず、実行中の実行と、その終わりに続く動作を済ませる。その間も、Agentの要らない動作 (ラベルの付け替え、Ownerの承認のあとのmerge、フォローアップノート) は続く。実行中のものがなくなると、定期確認をもう1回行い、予約を消し、`stopped` のログ (理由は、止める予約のあとに実行が終わったこと) を出して、終了コード0で終わる。作業中のラベルのまま残るIssueはないので、起動し直せば続きから進む。途中で SIGTERM を送ると、上のとおりすぐに止まる。予約は次の起動に残らない。決まりは [cumin本体の設計メモ](designs/cumin-core.md) の「実行を待ってから止める」にある。
+
 `--config` を省くと、`~/.config/cumin/config.toml` を読む。cumin を止めたときに `cumin/status/implementing` のまま残ったIssueは、自動では回収されない。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す ([Issueのラベルと状態遷移](requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
 
 常駐させるときは、ターミナルではなく launchd から起動する。`cumin setup launchd` が、今のユーザの LaunchAgent を書き出し、`launchctl` のコマンドを表示する。手順は [セットアップの手順](development/setup-guide.md) の手順4にある。launchd から動かすと、ログは標準出力ではなく `~/.local/state/cumin/cumin.log` に出る。
 
 5h枠のしきい値で着手が止まったとき、その5h枠を使い切ってよければ、Hostで `cumin quota allow` を実行する (Q2)。`cumin run` が最後に読んだ5h枠のリセット時刻を、`~/.local/state/cumin/quota-allowance.json` に書く。次の定期確認から、その時刻まで5h枠のしきい値が100%になる。weekly枠のペースの上限は変わらない。`cumin run` がまだ使用率を読んでいないとき、または最後に読んだ5h枠が既にリセットされたときは、何も書かずに0以外の終了コードで終わる。
 
-`cumin status` は、今の状態を表示する。Agentが動いているIssueとOwnerの対応を待つIssue (GitHubのラベルから読む)、`cumin run` が最後に読んだ両方の枠の使用率とその時刻、今の上限、許可、新しい着手が止まっているかどうかと次に試す時刻である。使用率の数値はターミナルにだけ出し、ログには出さない。`cumin run` と同じく `--config` で設定ファイルを変えられる。Keychainの秘密鍵を読むので、`cumin run` と同じユーザで実行する。
+`cumin status` は、今の状態を表示する。Agentが動いているIssueとOwnerの対応を待つIssue (GitHubのラベルから読む)、`cumin run` が最後に読んだ両方の枠の使用率とその時刻、今の上限、許可、新しい着手が止まっているかどうかと次に試す時刻である。`cumin stop --after-current-runs` の予約があるあいだは、止まる途中であることと、予約した時刻も表示する。使用率の数値はターミナルにだけ出し、ログには出さない。`cumin run` と同じく `--config` で設定ファイルを変えられる。Keychainの秘密鍵を読むので、`cumin run` と同じユーザで実行する。
 
 `cumin --version` は、cuminの版と、ビルドしたコミットを表示する。
 

@@ -56,8 +56,9 @@ Ownerが使うコマンド:
 | コマンド | 内容 |
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
-| `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限 |
+| `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、実行が終わるのを待って止まる途中かどうか |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
+| `cumin stop --after-current-runs` | 実行中のAgentの実行が終わるのを待ってから、cuminを止める。新しい依頼は始めない。Agentの要らない動作は、止まるまで続ける |
 | `cumin --version` | cuminの版を表示する |
 | `cumin setup github-apps` | 導入のときに、Hostで実行する。roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないroleだけを登録する |
 
@@ -83,11 +84,12 @@ v0.1では、次のように割り切る。Hostが常時動くMac miniになれ�
 - スリープから戻ると、cuminも実行中のAgentも続きから動く。ただし、次のことが起こりうる。通信の途中だった要求が失敗する。Agentに渡したGitHub Appのtokenが、時間切れになっている (tokenは発行から1時間で失効する)。時間で区切る打ち切りが、戻った直後に働く
 - どれが起きても、Agentの異常終了として扱う。同じ依頼を1回だけやり直し、それでも駄目ならOwnerに知らせる
 - cuminを止めたときに作業中のラベルのまま残ったIssueは、Ownerが `cumin/status/ready` を付け直して再開する。`cumin/status/awaiting-checks` のIssueは、Agentが動いていない状態なので、cuminを起動し直せば続きから進む
+- `cumin stop --after-current-runs` で止めたときは、実行中のAgentの実行と、その終わりに続く動作を済ませてから止まる。作業中のラベルのまま残るIssueを作らないので、cuminを起動し直せば続きから進む。止める予約は、次の起動には残らない。SIGTERMは、今までどおりすぐに止める
 
 ## 状態の持ち方
 
 - 作業の状態は、GitHubに置く。Issue、ラベル、Pull Request、レビュー、コメントが、状態の全てである
-- cuminが手元に持つのは、失っても作業をやり直せるものだけにする。Agentのセッションの番号、checkの修正を依頼した回数、枠ごとの最新の使用率とリセット時刻とそれを読んだ時刻、使い切りの許可がこれに当たる
+- cuminが手元に持つのは、失っても作業をやり直せるものだけにする。Agentのセッションの番号、checkの修正を依頼した回数、枠ごとの最新の使用率とリセット時刻とそれを読んだ時刻、使い切りの許可、止める予約がこれに当たる
 - レビューのラウンド数は、手元に持たずに、Pull Requestに出ている `cumin-reviewer` のレビューの数から数える
 - cuminが再起動しても、GitHubを確かめ直せば、続きから動ける。ただし、作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。Ownerが `cumin/status/ready` を付け直せば再開する
 

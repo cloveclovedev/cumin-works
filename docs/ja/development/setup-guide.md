@@ -305,13 +305,16 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 | したいこと | コマンド |
 |---|---|
 | 登録して起動する (以後はログインで起動する) | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cloveclove.cumin.plist` |
-| 止める | `launchctl kill SIGTERM gui/$(id -u)/dev.cloveclove.cumin` |
+| 実行中のAgentが終わるのを待って止める | `cumin stop --after-current-runs` |
+| すぐに止める | `launchctl kill SIGTERM gui/$(id -u)/dev.cloveclove.cumin` |
 | 再起動する | `launchctl kickstart -k gui/$(id -u)/dev.cloveclove.cumin` |
 | 外す (ログインでも起動しなくなる) | `cumin setup launchd --remove` |
 | 動いているか見る | `launchctl print gui/$(id -u)/dev.cloveclove.cumin` |
 | ログを見る | `tail -f ~/.local/state/cumin/cumin.log` |
 
-- 0以外の終了コードで終わったときだけ、launchd が起動し直す。`launchctl kill SIGTERM` で止めた cumin は 0 で終わるので、止めたままになる。
+- 0以外の終了コードで終わったときだけ、launchd が起動し直す。`launchctl kill SIGTERM` で止めた cumin も、`cumin stop --after-current-runs` で止めた cumin も 0 で終わるので、止めたままになる。
+- `cumin stop --after-current-runs` は、予約を書いてすぐ終わる。cumin は、次の定期確認から新しい依頼を始めず、実行中のAgentの実行と、その終わりに続く動作を済ませてから終わる。Agent の実行は1時間近くかかることがある。止まる途中かどうかは `cumin status` の `Stop:` の行で分かり、終わるとその行が消える。ログには `stopped` (理由は、止める予約のあとに実行が終わったこと) が出る。待てないときは、「すぐに止める」のコマンドを使う。
+- 「すぐに止める」は、実行中のAgentを取り消す。作業中のラベルのまま残ったIssueは、Owner が `cumin/status/ready` を付け直して再開する。
 - Host が再起動したあとは、Owner がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
 - ログのファイルは入れ替わらない。大きくなったら、止めてから消す。
 - plist を書き直したら、`launchctl bootout` してから `launchctl bootstrap` し直す。
@@ -321,14 +324,18 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 - 古い名前の LaunchAgent (`dev.cumin-works.cumin`) が残っている Host では、先にそれを外す。`launchctl bootout gui/$(id -u)/dev.cumin-works.cumin` と、`~/Library/LaunchAgents/dev.cumin-works.cumin.plist` の `rm` である。そのあとで `cumin setup launchd` を実行すると、新しい名前で入る。
 - macOS には、LaunchAgent を出し入れする純正の画面はない。システム設定の「ログイン項目と機能拡張」で止めることはできるが、plist のファイルは残る。
 
-cumin を新しくするときは、ビルドして置いて、動いている job を入れ替える。次の1コマンドで済む。
+cumin を新しくするときは、先に実行中のAgentが終わるのを待って止め、それからビルドして置いて、job を起動し直す。
 
 ```sh
+cumin stop --after-current-runs
+cumin status                      # "Stop:" の行が消えるまで待つ
 scripts/install.sh --restart
 ```
 
+- 先に止めずに `scripts/install.sh --restart` を実行すると、実行中のAgentが取り消される。Agent が動いていないと分かっているときは、3行めだけでよい。
+
 - plist には cumin のパスがそのまま入っているので、同じ場所に置き直すなら plist を書き直さなくてよい。
-- `--restart` は、job が読み込まれているときだけ `launchctl kickstart -k` を実行する。読み込まれていなければ、その旨を表示して何もしない。
+- `--restart` は、job が読み込まれているときだけ `launchctl kickstart -k` を実行する。止まっている job は、これで起動する。読み込まれていなければ、その旨を表示して何もしない。
 - `--restart` を付けないと、動いている cumin は古いバイナリのままである。スクリプトがそう表示する。
 - ビルドが失敗したときは、置いてあるバイナリをそのまま残して止まる。
 
@@ -347,7 +354,7 @@ App を登録済みの Host に、同じ Organization のリポジトリを足�
 cumin-worksを、cumin自身で開発するときの決まり。cumin-worksをforkして、cuminで手を入れるときも同じである。手順は上の「対象のリポジトリを足す」と同じで、次の2つが違う。
 
 - 保護されたパスに、Agentの指示 (`roles/`、`disciplines/`、`templates/`) を入れない。開発の対象だからである。動いているcuminは、これらをバイナリに埋め込んで使うので、リポジトリで変わっても、バイナリを入れ替えるまで指示は変わらない。要件の文書 (`docs/ja/requirements/`) は入れる。
-- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Ownerが、mergeされた変更を確かめてから、`scripts/install.sh --restart` で入れ替える。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
+- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Ownerが、mergeされた変更を確かめてから、`cumin stop --after-current-runs` で実行中のAgentが終わるのを待ち、`scripts/install.sh --restart` で入れ替える (手順4)。cuminは自分のリポジトリでAgentを動かしているので、待たずに入れ替えると、その実行が取り消される。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
 
 ## セットアップのあとの確認
 

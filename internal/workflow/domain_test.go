@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"math/rand/v2"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -680,5 +681,36 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 	}
 	if n := claims(Decide(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingOwnerDecision}), 1, nil)); n != 1 {
 		t.Errorf("%d claims for a ready issue, want 1", n)
+	}
+}
+
+// While cumin stops after its runs, the actions that ask an agent for new work are held
+// back, and the ones that need no agent stay, in their order.
+func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
+	t.Parallel()
+	all := []Action{
+		StartRequirement{Number: 1},
+		ReviewRemaining{Number: 2},
+		Accept{Number: 3},
+		StartReview{Number: 10, PullRequest: 20},
+		FixChecks{Number: 11, PullRequest: 21},
+		Plan{Number: 4},
+		CheckAcceptance{Number: 5},
+		Claim{Number: 12, RequirementIssue: 1},
+		MergeOwnerApproval{Number: 13, PullRequest: 23},
+		CopyLabels{Issue: 10, PullRequest: 20},
+	}
+	want := []Action{
+		StartRequirement{Number: 1},
+		ReviewRemaining{Number: 2},
+		Accept{Number: 3},
+		MergeOwnerApproval{Number: 13, PullRequest: 23},
+		CopyLabels{Issue: 10, PullRequest: 20},
+	}
+	if got := WithoutNewWork(all); !reflect.DeepEqual(got, want) {
+		t.Errorf("WithoutNewWork = %#v, want %#v", got, want)
+	}
+	if got := WithoutNewWork(nil); len(got) != 0 {
+		t.Errorf("WithoutNewWork(nil) = %#v, want none", got)
 	}
 }

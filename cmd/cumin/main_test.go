@@ -19,7 +19,7 @@ func TestHelpListsSubcommands(t *testing.T) {
 			if code != 0 {
 				t.Errorf("exit code = %d, want 0", code)
 			}
-			for _, name := range []string{"run", "status", "quota allow", "setup"} {
+			for _, name := range []string{"run", "status", "quota allow", "stop", "setup"} {
 				if !strings.Contains(stdout.String(), "\n  "+name+" ") {
 					t.Errorf("help does not list %q:\n%s", name, stdout.String())
 				}
