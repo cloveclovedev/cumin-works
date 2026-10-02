@@ -794,6 +794,16 @@ func readySubIssues(snapshot Snapshot) []Claim {
 	return claims
 }
 
+// MovesWithoutOwner reports whether an issue exists that cumin moves on
+// without the Owner, so that cumin is not waiting (issue-states.md, the
+// table under Q4): an open sub-issue that waits for the required checks,
+// or a ready issue that can start and waits only for room under the limit.
+// A ready issue with an open blocked-by issue, an issue that waits for the
+// Owner, and an issue whose agent no longer runs do not count.
+func (s Snapshot) MovesWithoutOwner() bool {
+	return s.HasIssueAwaitingChecks() || len(readyRequirementIssues(s)) > 0 || len(readySubIssues(s)) > 0
+}
+
 // ReplaceStatusLabel returns the labels of an issue with every
 // cumin/status/* label removed and status added. The other labels
 // (risk/*, ...) stay. A status label is always exactly one
