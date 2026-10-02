@@ -102,7 +102,7 @@ func TestI3_Round2ResumesTheReviewerSessionAndNamesTheLastReviewedCommit(t *test
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session", ReviewerSessionID: "reviewer-session"})
-	readyAt := time.Now().Add(-time.Hour)
+	readyAt := sceneNow.Add(-time.Hour)
 	issue := sc.repo.Issues[10]
 	issue.LabelEvents = []githubtest.LabelEvent{{Label: workflow.LabelReady, At: readyAt}}
 	const older = "1111111111111111111111111111111111111111"
@@ -135,7 +135,7 @@ func TestI3_AReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
 	sc.reviewing(t, service, state.Issue{})
 	// An APPROVE of the Reviewer on an older commit is not a review of the
 	// head commit.
-	sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "APPROVED", Commit: "1111111111111111111111111111111111111111", SubmittedAt: time.Now().Add(-time.Hour)})
+	sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "APPROVED", Commit: "1111111111111111111111111111111111111111", SubmittedAt: sceneNow.Add(-time.Hour)})
 
 	sc.pollAndWait(t, service)
 
@@ -343,7 +343,7 @@ func (sc *scene) atTheLimit(t *testing.T) {
 	t.Helper()
 	for i, commit := range []string{"1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"} {
 		sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "CHANGES_REQUESTED",
-			Commit: commit, SubmittedAt: time.Now().Add(time.Duration(i-10) * time.Minute)})
+			Commit: commit, SubmittedAt: sceneNow.Add(time.Duration(i-10) * time.Minute)})
 	}
 }
 

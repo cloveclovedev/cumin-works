@@ -57,6 +57,17 @@ type fakeGitHub struct {
 	failNextToken bool
 }
 
+// testNow is the fixed time of the clock of the client and of the fake: one
+// hour before the fixed expiry of the tokens of the fake.
+var testNow = time.Date(2026, 9, 20, 9, 0, 0, 0, time.UTC)
+
+// newClientForTest returns a client of the fake whose clock reads testNow.
+func newClientForTest(server *httptest.Server) *AppClient {
+	client := NewAppClient(server.URL, server.Client())
+	client.now = func() time.Time { return testNow }
+	return client
+}
+
 func newFakeGitHub(t *testing.T) (*fakeGitHub, *httptest.Server) {
 	t.Helper()
 	fake := &fakeGitHub{t: t, publicKey: &testKey().PublicKey}
@@ -129,7 +140,7 @@ func (f *fakeGitHub) validJWT(jwt string) bool {
 	if claims.Iss != testClientID {
 		f.t.Errorf("JWT iss = %q, want the client ID", claims.Iss)
 	}
-	now := time.Now().Unix()
+	now := testNow.Unix()
 	if claims.Iat > now {
 		f.t.Errorf("JWT iat is %d seconds in the future", claims.Iat-now)
 	}
@@ -174,7 +185,7 @@ func TestAppToken_IsLimitedToOneRepositoryAndToThePermissionsOfTheApp(t *testing
 	for _, app := range allApps {
 		t.Run(app, func(t *testing.T) {
 			fake, server := newFakeGitHub(t)
-			client := NewAppClient(server.URL, server.Client())
+			client := newClientForTest(server)
 
 			token, err := client.CreateInstallationToken(context.Background(), testCredentials(), app, "example-org", "example-repo")
 			if err != nil {
@@ -240,7 +251,7 @@ func TestAppPermissions_ReturnsACopy(t *testing.T) {
 
 func TestAppToken_UnknownAppMakesNoRequest(t *testing.T) {
 	fake, server := newFakeGitHub(t)
-	client := NewAppClient(server.URL, server.Client())
+	client := newClientForTest(server)
 
 	_, err := client.CreateInstallationToken(context.Background(), testCredentials(), "owner", "example-org", "example-repo")
 	if err == nil || !strings.Contains(err.Error(), `unknown app "owner"`) {
@@ -253,7 +264,7 @@ func TestAppToken_UnknownAppMakesNoRequest(t *testing.T) {
 
 func TestAppToken_ErrorNamesTheStatusCodeAndHidesTheJWT(t *testing.T) {
 	fake, server := newFakeGitHub(t)
-	client := NewAppClient(server.URL, server.Client())
+	client := newClientForTest(server)
 
 	// The App is not installed on this repository.
 	_, err := client.CreateInstallationToken(context.Background(), testCredentials(), config.AppCuminCore, "example-org", "other-repo")

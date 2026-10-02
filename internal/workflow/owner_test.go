@@ -32,7 +32,7 @@ func awaitingOwner(t *testing.T) *scene {
 func (sc *scene) review(author string, bot bool, state, commit string, minutesAgo int) {
 	pr := sc.repo.PullRequests[21]
 	pr.Reviews = append(pr.Reviews, githubtest.Review{Author: author, AuthorIsBot: bot, State: state, Commit: commit,
-		SubmittedAt: time.Now().Add(-time.Duration(minutesAgo) * time.Minute)})
+		SubmittedAt: sceneNow.Add(-time.Duration(minutesAgo) * time.Minute)})
 }
 
 func permissionReads(sc *scene) int {

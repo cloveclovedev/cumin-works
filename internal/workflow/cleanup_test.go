@@ -26,7 +26,7 @@ func newCleanupScene(t *testing.T, closed bool) (*scene, *workflow.Service) {
 	t.Helper()
 	sc := newScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
-		Number: 10, Parent: 6, Title: subIssueTitle, Closed: closed, ClosedAt: time.Now().Add(-time.Hour),
+		Number: 10, Parent: 6, Title: subIssueTitle, Closed: closed, ClosedAt: sceneNow.Add(-time.Hour),
 		Labels: []string{"cumin/status/awaiting-checks", "risk/low"},
 	})
 	service := sc.service()

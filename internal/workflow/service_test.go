@@ -88,7 +88,7 @@ type scene struct {
 	notifier *notify.Notifier
 	// notifications is the Host setting notify.discord.enabled.
 	notifications bool
-	// clock is the time of the quota decisions (Q1).
+	// clock is the time of the quota decisions (Q1) and of the fake GitHub.
 	clock *testClock
 	// quota are the Host settings of the quota limits: the defaults of the
 	// settings table.
@@ -99,10 +99,11 @@ type scene struct {
 // is not a full hour.
 var sceneZone = time.FixedZone("UTC+05:30", 5*3600+30*60)
 
-// sceneNow is the default time of the quota decisions: one hour before the
-// weekly reset of the fixtures of internal/agent, so that the pace limit is
-// the target and their usage stops nothing. Their 5h window reset earlier,
-// so it stops nothing either.
+// sceneNow is the default time of the scene, for the quota decisions and for
+// the fake GitHub: one hour before the weekly reset of the fixtures of
+// internal/agent, so that the pace limit is the target and their usage stops
+// nothing. Their 5h window reset earlier, so it stops nothing either. Every
+// fixture time of a test derives from it.
 var sceneNow = time.Unix(1900300000, 0).Add(-time.Hour)
 
 // testClock is a clock that a test moves between polls.
@@ -241,12 +242,16 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	cliPath, cliDir := fakeCLI(t, options)
 	remote, head := newRemote(t)
 	webhook := newFakeWebhook(t)
+	// The fake GitHub stamps its comments, reviews, and label events from
+	// the clock of the scene.
+	clock := &testClock{now: sceneNow}
+	fake.SetClock(clock.Now)
 	return &scene{
 		fake: fake, client: github.NewAppClient(server.URL, server.Client()), serverURL: server.URL, repo: repo,
 		logs: &bytes.Buffer{}, remote: remote, remoteHead: head, cliDir: cliDir,
 		workRoot: t.TempDir(), cliPath: cliPath, settingsDir: t.TempDir(),
 		webhook: webhook, notifier: webhook.notifier(), notifications: true,
-		clock: &testClock{now: sceneNow},
+		clock: clock,
 		quota: config.QuotaSettings{
 			FiveHour: config.FiveHourQuota{Threshold: 85},
 			Weekly:   config.WeeklyQuota{Target: 85, Lead: 24 * time.Hour},
