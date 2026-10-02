@@ -17,6 +17,10 @@
 - [Agentの実行の設計](designs/agent-run.md)
 - [利用枠の設計](designs/quota.md)
 
+## ガイド
+
+- [既存のプロダクトにcuminを入れる](guides/adoption.md): 入れる前とあとで決めること
+
 ## 開発の手順
 
 - [はじめに](getting-started.md)

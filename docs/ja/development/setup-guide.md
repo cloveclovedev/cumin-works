@@ -334,9 +334,9 @@ scripts/install.sh --restart
 
 ## 対象のリポジトリを足す
 
-App を登録済みの Host に、同じ Organization のリポジトリを足すときの手順。
+App を登録済みの Host に、同じ Organization のリポジトリを足すときの手順。何を決めてから足すかは [既存のプロダクトにcuminを入れる](../guides/adoption.md) にある。
 
-1. 4つの App のインストールのそれぞれで、リポジトリを足す。Organization の設定の "GitHub Apps" で App の "Configure" を選び、"Only select repositories" にそのリポジトリを加える。
+1. 4つの App のインストールのそれぞれで、リポジトリを足す。Organization の設定の "GitHub Apps" で App の "Configure" を選び、"Only select repositories" にそのリポジトリを加える。APIでは足せない。リポジトリを足すAPIは classic personal access token でしか使えない ([調査・実測で確定した制約](../evidence/measured-constraints.md) の126)。
 2. そのリポジトリで、手順3の `scripts/setup-repo.sh` を実行する。`--core-app`、`--implementer-app`、そのリポジトリのCIの `--required-check` を付ける。
 3. 足された `.cumin/config.toml` の `protected_paths` を、そのリポジトリに合わせて直す。要件の文書など、Agent に変えさせないパスを足す。
 4. Host の設定ファイルの `repositories` に `"<owner>/<repo>"` を足し ([設定の一覧](configuration.md))、cumin を再起動する (手順4の表の「再起動する」)。
