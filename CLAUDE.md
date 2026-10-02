@@ -43,7 +43,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 
 ## Code
 
-- Go, standard library first. Do not rebuild a large or security-sensitive component that a well-maintained library already provides: propose the library with your reasons and ask before you add it. The TOML parser is the only third-party dependency today.
+- Go, standard library first. Do not rebuild a large or security-sensitive component that a well-maintained library already provides: propose the library with your reasons and ask before you add it. The dependencies today are the TOML parser and the JWT library of the GitHub App authentication; `go.mod` is the list.
 - Module path: `github.com/cloveclovedev/cumin-works`.
 - The architecture is a lightweight clean architecture, organized by feature. Dependencies point inward: I/O adapters depend on the rules, and the rules depend on nothing external. Keep it lighter than a textbook clean architecture: no use-case classes, no repository interfaces, and no mapping layers unless a real need exists. The next rules say how to apply this.
 - Where shared code goes. Apply the questions in this order:
