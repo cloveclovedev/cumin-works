@@ -38,6 +38,20 @@ func TestSetupRepoScript_ReadsThePriorityLabelsThatCuminReads(t *testing.T) {
 		{"a key that is only in a comment", "# priority_labels = [\"no\"]\nprotected_paths = [\".cumin/\"]\n"},
 		{"the starter file", string(starter)},
 	}
+	// The function does not decode the escapes of TOML. It must stop on a
+	// name that has one, and never print another name than cumin reads.
+	t.Run("an escape stops the function", func(t *testing.T) {
+		for _, file := range []string{"priority_labels = [\"P\\u0030\"]\n", "priority_labels = [\"a\\\"b\", \"c\"]\n"} {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, err := exec.Command("sh", "-c", string(function)+"priority_labels_of \"$1\"", "sh", path).CombinedOutput()
+			if err == nil || len(out) != 0 {
+				t.Errorf("%q: the function printed %q and returned %v, want nothing and a failure", file, out, err)
+			}
+		}
+	})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			settings := withRepository(t, hostSettings(t, ""), tt.file)

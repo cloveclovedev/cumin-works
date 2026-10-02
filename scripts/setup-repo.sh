@@ -217,7 +217,10 @@ put_file "$config_path" "$work/config.toml" keep
 
 # priority_labels_of <file>
 # Prints the names in the array of the key priority_labels, one for each line.
-# It reads only quoted strings, on one line or on more lines, and no escapes.
+# It reads only quoted strings, on one line or on more lines. It does not
+# decode the escapes of TOML: a name with a backslash in double quotes ends the
+# function with status 4, so that the script never works on another name than
+# the one that cumin reads.
 priority_labels_of() {
   awk '
     !inside && /^[ \t]*priority_labels[ \t]*=/ { inside = 1; sub(/^[^=]*=/, "") }
@@ -228,6 +231,7 @@ priority_labels_of() {
         # A comment ends the line, and "]" ends the array.
         if (token == "#") break
         if (token == "]") exit
+        if (substr(token, 1, 1) == "\"" && index(token, "\\") > 0) exit 4
         print substr(token, 2, length(token) - 2)
         line = substr(line, RSTART + RLENGTH)
       }
@@ -235,9 +239,13 @@ priority_labels_of() {
   ' "$1"
 }
 
-if gh api --method GET -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$config_path" -f ref="$branch" >"$work/config-now" 2>/dev/null; then
-  priority_labels_of "$work/config-now" >"$work/priority-labels"
+if gh api --method GET -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$config_path" -f ref="$branch" >"$work/config-now" 2>"$work/read-error"; then
+  priority_labels_of "$work/config-now" >"$work/priority-labels" ||
+    die "cannot read priority_labels of $config_path: a label name uses a backslash. Write the names without escapes, or create the labels by hand"
 else
+  # Only a confirmed 404 means that the file does not exist (a dry run of a
+  # new repository). Any other failure must not pass as "no priority labels".
+  grep -q "HTTP 404" "$work/read-error" || die "cannot read $config_path from $branch: $(head -n 1 "$work/read-error")"
   : >"$work/priority-labels"
 fi
 if [ -s "$work/priority-labels" ]; then
