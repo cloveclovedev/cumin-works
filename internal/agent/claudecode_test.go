@@ -205,28 +205,23 @@ func TestRun_AbnormalEnds(t *testing.T) {
 func TestRun_CancelIsTimeLimit(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fake-claude")
-	started := filepath.Join(dir, "started")
+	started, wasStarted := fakePipe(t, dir, "started")
 	// The script prints the init event, then marks that it started. The
 	// child keeps no pipe open, so the read ends when sh is killed.
 	// Children of the real CLI are the subject of #41.
-	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\",\"plugins\":[],\"mcp_servers\":[],\"skills\":[]}'\n: > " + started + "\nsleep 60 >/dev/null 2>&1\n"
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"" + fixtureSessionID + "\",\"plugins\":[],\"mcp_servers\":[],\"skills\":[]}'\necho started > " + started + "\nsleep 60 >/dev/null 2>&1\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		deadline := time.Now().Add(10 * time.Second)
-		for time.Now().Before(deadline) {
-			if _, err := os.Stat(started); err == nil {
-				break
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
+		<-wasStarted
 		cancel()
 	}()
 
-	_, err := quiet(path).Run(ctx, request(t))
+	var err error
+	guardAgainstHang(t, func() { _, err = quiet(path).Run(ctx, request(t)) })
 	end := abnormalEnd(t, err)
 	if end.Kind != EndTimeLimit {
 		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
@@ -318,54 +313,150 @@ func TestRun_ResumeAndModel(t *testing.T) {
 // The tests below cover the sixth requirement of #7: a run over the time
 // limit is stopped, is an abnormal end, and leaves no child process.
 
+// The tests of a stopped run assert events, not how long the run takes: the kind of
+// the end, the signal that the fake CLI recorded, and that no child is
+// left. A slow machine changes the time of an event, not the event.
+
+// hangGuard is the one deadline of such a test. It only ends a test that
+// hangs; no test passes or fails by how long a run takes below it.
+const hangGuard = time.Minute
+
+// farAboveHangGuard is a grace period or a time limit that cannot pass in
+// a test. A run that ends below the hang guard ended before it.
+const farAboveHangGuard = 10 * hangGuard
+
+// timeLimitTestLimit is the time limit of the tests in which the limit
+// must pass. The fake CLI sets its trap and starts its child before it.
+const timeLimitTestLimit = 3 * time.Second
+
+// guardAgainstHang runs the call and fails the test when the call does
+// not return before the hang guard.
+func guardAgainstHang(t *testing.T, call func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		call()
+	}()
+	select {
+	case <-done:
+	case <-time.After(hangGuard):
+		t.Fatalf("the call did not return within the hang guard of %s", hangGuard)
+	}
+}
+
+// fakePipe makes a named pipe for a fake CLI to write. The channel gives
+// what was written when every writer has closed the pipe, so a process
+// that holds the pipe open is alive until then.
+func fakePipe(t *testing.T, dir, name string) (path string, written <-chan string) {
+	t.Helper()
+	path = filepath.Join(dir, name)
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ch := make(chan string, 1)
+	go func() {
+		// Open waits for the writer, and ReadAll for the end of the last
+		// writer.
+		f, err := os.Open(path)
+		if err != nil {
+			close(ch)
+			return
+		}
+		defer f.Close()
+		data, _ := io.ReadAll(f)
+		ch <- string(data)
+	}()
+	t.Cleanup(func() {
+		// A fake CLI that never opened the pipe leaves the reader in Open.
+		// A writer that does not wait lets it go.
+		if f, err := os.OpenFile(path, os.O_WRONLY|syscall.O_NONBLOCK, 0); err == nil {
+			f.Close()
+		}
+	})
+	return path, ch
+}
+
+// Shell text for the prologue of neverEndingCLI. Each trap records SIGTERM
+// in the file of recordedSignals.
+const (
+	// exitOnTerm ends the CLI on SIGTERM. The child gets the signal of the
+	// process group.
+	exitOnTerm = `trap 'echo TERM >> "$signals"; exit 143' TERM`
+	// endChildOnTerm ends the child and exits on SIGTERM, as Claude Code
+	// does.
+	endChildOnTerm = `trap 'echo TERM >> "$signals"; kill $child; exit 143' TERM`
+	// ignoreTerm keeps the CLI and its child alive after SIGTERM, so only
+	// SIGKILL ends them.
+	ignoreTerm = `trap 'echo TERM >> "$signals"' TERM` + "\n" + `child_command="trap '' TERM; exec sleep 300"`
+)
+
 // neverEndingCLI writes a fake CLI that prints the init event, starts a
-// child, records the child's process ID in the returned file, and waits.
+// child, and waits. The child holds the write end of a named pipe; the
+// returned channel gives the child's process ID when the child is gone.
 // prologue is shell text that runs first (for example a trap).
-func neverEndingCLI(t *testing.T, prologue string) (path, childPID string) {
+func neverEndingCLI(t *testing.T, prologue string) (path string, child <-chan string) {
 	t.Helper()
 	return neverEndingCLIWithInit(t, prologue, `{"type":"system","subtype":"init","session_id":"`+fixtureSessionID+`","plugins":[],"mcp_servers":[],"skills":[]}`)
 }
 
 // neverEndingCLIWithInit is neverEndingCLI with the given init line.
-func neverEndingCLIWithInit(t *testing.T, prologue, initLine string) (path, childPID string) {
+func neverEndingCLIWithInit(t *testing.T, prologue, initLine string) (path string, child <-chan string) {
 	t.Helper()
 	dir := t.TempDir()
 	path = filepath.Join(dir, "fake-claude")
-	childPID = filepath.Join(dir, "child.pid")
+	childPipe, child := fakePipe(t, dir, "child")
 	// The child starts before the init line, so that a run that is
-	// stopped at the init event has a recorded child to check.
-	script := "#!/bin/sh\n" + prologue + "\n" +
-		"sleep 300 &\n" +
-		"echo $! > " + childPID + "\n" +
+	// stopped at the init event has a recorded child to check. The loop
+	// waits again after a trap that does not exit.
+	script := "#!/bin/sh\n" +
+		"signals=" + path + ".signals\n" +
+		"child_command='exec sleep 300'\n" +
+		prologue + "\n" +
+		startChild(childPipe, `eval "$child_command"`) +
 		"printf '%s\\n' '" + initLine + "'\n" +
-		"wait\n"
+		"while kill -0 $child 2>/dev/null; do wait; done\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return path, childPID
+	return path, child
 }
 
-// processGone reports whether the process in the file is gone, waiting
-// a short time for the kernel to reap it.
-func processGone(t *testing.T, pidFile string) bool {
+// startChild is shell text that starts the command in the background as
+// $child, with the write end of the pipe of fakePipe open in the child
+// only, and writes the child's process ID to the pipe.
+func startChild(pipe, command string) string {
+	return "exec 3> " + pipe + "\n" +
+		command + " &\n" +
+		"child=$!\n" +
+		"echo $child >&3\n" +
+		"exec 3>&-\n"
+}
+
+// recordedSignals returns the signals that the fake CLI of neverEndingCLI
+// recorded in its traps, one name for each line.
+func recordedSignals(t *testing.T, path string) string {
 	t.Helper()
-	data, err := os.ReadFile(pidFile)
-	if err != nil {
-		t.Fatalf("the fake CLI did not record its child: %v", err)
-	}
-	var pid int
-	if _, err := fmt.Sscan(string(data), &pid); err != nil {
+	data, err := os.ReadFile(path + ".signals")
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
-			return true
+	return string(data)
+}
+
+// processGone reports whether the child of the fake CLI is gone: the
+// child has closed its end of the pipe of startChild.
+func processGone(t *testing.T, child <-chan string) bool {
+	t.Helper()
+	select {
+	case pid := <-child:
+		if strings.TrimSpace(pid) == "" {
+			t.Fatal("the fake CLI did not record its child")
 		}
-		time.Sleep(50 * time.Millisecond)
+		return true
+	case <-time.After(hangGuard):
+		return false
 	}
-	syscall.Kill(pid, syscall.SIGKILL) // do not leave it behind
-	return false
 }
 
 // The tests below cover the check of the init event (#68): user-level
@@ -447,24 +538,25 @@ func TestUserContext_MemoryPathsAgainstTheWorkDirectory(t *testing.T) {
 // running is stopped at the result, not at the time limit.
 func TestRun_ResultWithoutInitStopsTheRunAtOnce(t *testing.T) {
 	result := `{"type":"result","subtype":"success","is_error":false,"session_id":"` + fixtureSessionID + `","structured_output":{"result":"done","summary":"x","blocked_reason":""}}`
-	path, childPID := neverEndingCLIWithInit(t, "", result)
+	path, child := neverEndingCLIWithInit(t, exitOnTerm, result)
 	c := quiet(path)
-	c.Grace = time.Second
+	// Neither the time limit nor the grace period can pass, so a run that
+	// ends was stopped at the result.
+	c.Grace = farAboveHangGuard
 	req := request(t)
-	req.TimeLimit = 30 * time.Second
+	req.TimeLimit = farAboveHangGuard
 
-	start := time.Now()
-	_, err := c.Run(context.Background(), req)
-	elapsed := time.Since(start)
+	var err error
+	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
 
 	end := abnormalEnd(t, err)
 	if end.Kind != EndUserContext || !strings.Contains(end.Detail, "no init event") {
 		t.Errorf("AbnormalEnd = %+v, want %s without an init event", end, EndUserContext)
 	}
-	if elapsed > c.Grace+3*time.Second {
-		t.Errorf("Run took %v, want a stop well before the time limit", elapsed)
+	if got := recordedSignals(t, path); got != "TERM\n" {
+		t.Errorf("the fake CLI recorded the signals %q, want one SIGTERM", got)
 	}
-	if !processGone(t, childPID) {
+	if !processGone(t, child) {
 		t.Error("the child of the fake CLI is still alive")
 	}
 }
@@ -473,15 +565,16 @@ func TestRun_ResultWithoutInitStopsTheRunAtOnce(t *testing.T) {
 // stopped at once, and its child is gone.
 func TestRun_UserContextStopsTheRunAtOnce(t *testing.T) {
 	init := `{"type":"system","subtype":"init","session_id":"` + fixtureSessionID + `","plugins":[{"name":"example-plugin"}],"mcp_servers":[]}`
-	path, childPID := neverEndingCLIWithInit(t, "", init)
+	path, child := neverEndingCLIWithInit(t, exitOnTerm, init)
 	c := quiet(path)
-	c.Grace = time.Second
+	// Neither the time limit nor the grace period can pass, so a run that
+	// ends was stopped at the init event.
+	c.Grace = farAboveHangGuard
 	req := request(t)
-	req.TimeLimit = 30 * time.Second
+	req.TimeLimit = farAboveHangGuard
 
-	start := time.Now()
-	_, err := c.Run(context.Background(), req)
-	elapsed := time.Since(start)
+	var err error
+	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
 
 	end := abnormalEnd(t, err)
 	if end.Kind != EndUserContext || !strings.Contains(end.Detail, "plugins") {
@@ -490,10 +583,10 @@ func TestRun_UserContextStopsTheRunAtOnce(t *testing.T) {
 	if end.SessionID != fixtureSessionID {
 		t.Errorf("SessionID = %q, want the one from the init event", end.SessionID)
 	}
-	if elapsed > c.Grace+3*time.Second {
-		t.Errorf("Run took %v, want a stop well before the time limit", elapsed)
+	if got := recordedSignals(t, path); got != "TERM\n" {
+		t.Errorf("the fake CLI recorded the signals %q, want one SIGTERM", got)
 	}
-	if !processGone(t, childPID) {
+	if !processGone(t, child) {
 		t.Error("the child of the fake CLI is still alive")
 	}
 }
@@ -503,12 +596,12 @@ func TestRun_UserContextStopsTheRunAtOnce(t *testing.T) {
 func TestRun_NormalEndLeavesNoChild(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "fake-claude")
-	childPID := filepath.Join(dir, "child.pid")
+	childPipe, child := fakePipe(t, dir, "child")
 	fixture, err := filepath.Abs(filepath.Join("testdata", "done.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\nsleep 300 >/dev/null 2>&1 &\necho $! > " + childPID + "\ncat " + fixture + "\nexit 0\n"
+	script := "#!/bin/sh\n" + startChild(childPipe, "sleep 300 >/dev/null 2>&1") + "cat " + fixture + "\nexit 0\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -519,34 +612,21 @@ func TestRun_NormalEndLeavesNoChild(t *testing.T) {
 	if run.Result.Result != ResultDone {
 		t.Errorf("Result = %+v", run.Result)
 	}
-	if !processGone(t, childPID) {
+	if !processGone(t, child) {
 		t.Error("the background child of the fake CLI is still alive after a normal end")
 	}
 }
 
-// The two tests of the time limit measure a run that is stopped. They
-// flapped in both directions on a busy machine with one second each, so
-// the limit, the grace, and the slack are wider here.
-const (
-	timeLimitTestLimit = 3 * time.Second
-	timeLimitTestGrace = 3 * time.Second
-	timeLimitTestSlack = 5 * time.Second
-)
-
 func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
-	path, childPID := neverEndingCLI(t, "")
+	path, child := neverEndingCLI(t, exitOnTerm)
 	c := quiet(path)
-	// The limit and the grace are longer than the test needs, and the
-	// slack below is wider, so that a busy machine does not fail the test:
-	// what is measured is that the run ends around the limit, not how fast
-	// the Host is.
-	c.Grace = timeLimitTestGrace
+	// The grace period cannot pass, so SIGTERM alone ends the run.
+	c.Grace = farAboveHangGuard
 	req := request(t)
 	req.TimeLimit = timeLimitTestLimit
 
-	start := time.Now()
-	_, err := c.Run(context.Background(), req)
-	elapsed := time.Since(start)
+	var err error
+	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
 
 	end := abnormalEnd(t, err)
 	if end.Kind != EndTimeLimit {
@@ -555,67 +635,58 @@ func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
 	if !strings.Contains(end.Detail, "time limit") || end.PID == 0 || end.SessionID != fixtureSessionID {
 		t.Errorf("AbnormalEnd = %+v", end)
 	}
-	if elapsed > req.TimeLimit+c.Grace+timeLimitTestSlack {
-		t.Errorf("Run took %v, want about the limit plus the grace period", elapsed)
+	if got := recordedSignals(t, path); got != "TERM\n" {
+		t.Errorf("the fake CLI recorded the signals %q, want one SIGTERM", got)
 	}
-	if !processGone(t, childPID) {
+	if !processGone(t, child) {
 		t.Error("the child of the fake CLI is still alive")
 	}
 }
 
 func TestRun_TimeLimitKillsAfterGraceWhenTermIsIgnored(t *testing.T) {
-	// The child inherits the ignored SIGTERM, so only SIGKILL ends it.
-	path, childPID := neverEndingCLI(t, "trap '' TERM")
+	// The CLI records SIGTERM and stays, and its child ignores SIGTERM, so
+	// only SIGKILL ends them.
+	path, child := neverEndingCLI(t, ignoreTerm)
 	c := quiet(path)
-	c.Grace = timeLimitTestGrace
+	// The grace period must pass here. The CLI records SIGTERM within it.
+	c.Grace = 3 * time.Second
 	req := request(t)
 	req.TimeLimit = timeLimitTestLimit
 
-	start := time.Now()
-	_, err := c.Run(context.Background(), req)
-	elapsed := time.Since(start)
+	var err error
+	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
 
 	if end := abnormalEnd(t, err); end.Kind != EndTimeLimit {
 		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
 	}
-	if elapsed < req.TimeLimit+c.Grace {
-		t.Errorf("Run took %v, want at least the limit plus the grace period", elapsed)
+	// The CLI is dead when Run returns, so it recorded SIGTERM before the
+	// run ended, and SIGTERM did not end the run.
+	if got := recordedSignals(t, path); got != "TERM\n" {
+		t.Errorf("the fake CLI recorded the signals %q, want one SIGTERM before SIGKILL", got)
 	}
-	if elapsed > req.TimeLimit+c.Grace+timeLimitTestSlack {
-		t.Errorf("Run took %v, want about the limit plus the grace period", elapsed)
-	}
-	if !processGone(t, childPID) {
+	if !processGone(t, child) {
 		t.Error("the child of the fake CLI is still alive after SIGKILL")
 	}
 }
 
 func TestRun_ExitOnTermEndsBeforeTheGracePeriod(t *testing.T) {
-	// The CLI ends its child and exits on SIGTERM, as Claude Code does.
-	path, childPID := neverEndingCLI(t, "trap 'kill $child; exit 143' TERM")
-	script, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	script = bytes.Replace(script, []byte("echo $! > "), []byte("child=$!\necho $child > "), 1)
-	if err := os.WriteFile(path, script, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	path, child := neverEndingCLI(t, endChildOnTerm)
 	c := quiet(path)
-	c.Grace = 5 * time.Second
+	// The grace period cannot pass, so a run that ends did not wait for it.
+	c.Grace = farAboveHangGuard
 	req := request(t)
-	req.TimeLimit = time.Second
+	req.TimeLimit = timeLimitTestLimit
 
-	start := time.Now()
-	_, err = c.Run(context.Background(), req)
-	elapsed := time.Since(start)
+	var err error
+	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
 
 	if end := abnormalEnd(t, err); end.Kind != EndTimeLimit {
 		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
 	}
-	if elapsed > req.TimeLimit+c.Grace/2 {
-		t.Errorf("Run took %v, want well under the limit plus the grace period", elapsed)
+	if got := recordedSignals(t, path); got != "TERM\n" {
+		t.Errorf("the fake CLI recorded the signals %q, want one SIGTERM", got)
 	}
-	if !processGone(t, childPID) {
+	if !processGone(t, child) {
 		t.Error("the child of the fake CLI is still alive")
 	}
 }
