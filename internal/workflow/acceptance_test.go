@@ -53,6 +53,7 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 	if !strings.Contains(text, "Request: acceptance check") || !strings.Contains(text, "#6") {
 		t.Errorf("the request text is not an acceptance check of #6:\n%s", text)
 	}
+	requireIssueOfTheRun(t, text, 6, "requirement issue")
 
 	// The Planner wrote the comment during its run. A restart polls again.
 	acceptanceComment(sc, closedAt.Add(30*time.Minute), plannerLogin)

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestFactsBlock_NamesTheTimeLimitAndTheEndTimeInUTC(t *testing.T) {
+func TestFactsBlock_NamesTheIssueTheTimeLimitAndTheEndTimeInUTC(t *testing.T) {
 	tokyo := time.FixedZone("UTC+9", 9*60*60)
 	tests := []struct {
 		name  string
@@ -25,6 +25,24 @@ func TestFactsBlock_NamesTheTimeLimitAndTheEndTimeInUTC(t *testing.T) {
 			want: "Facts of this run (data from cumin):\n" +
 				"- Time limit of the run: 1h30m0s\n" +
 				"- End time of the run: 2026-12-31T23:59:59Z\n",
+		},
+		{
+			name: "a requirement issue",
+			facts: runFacts{Facts: Facts{IssueNumber: 7, IssueKind: IssueKindRequirement},
+				TimeLimit: 20 * time.Minute, End: time.Date(2026, 10, 3, 1, 20, 0, 0, time.UTC)},
+			want: "Facts of this run (data from cumin):\n" +
+				"- Issue of the run: #7 (requirement issue)\n" +
+				"- Time limit of the run: 20m0s\n" +
+				"- End time of the run: 2026-10-03T01:20:00Z\n",
+		},
+		{
+			name: "an implementation issue",
+			facts: runFacts{Facts: Facts{IssueNumber: 12, IssueKind: IssueKindImplementation},
+				TimeLimit: 50 * time.Minute, End: time.Date(2026, 10, 3, 1, 50, 0, 0, time.UTC)},
+			want: "Facts of this run (data from cumin):\n" +
+				"- Issue of the run: #12 (implementation issue)\n" +
+				"- Time limit of the run: 50m0s\n" +
+				"- End time of the run: 2026-10-03T01:50:00Z\n",
 		},
 		{
 			name:  "a time in another location is written in UTC",

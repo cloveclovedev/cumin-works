@@ -72,6 +72,7 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 
 	args := sc.record(t, "agent.args")
 	text := promptOf(t, args)
+	requireIssueOfTheRun(t, text, 6, "requirement issue")
 	for _, want := range []string{"Request: plan", "example-org/example-repo", "Requirement issue: #6"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
