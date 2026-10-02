@@ -3,7 +3,7 @@ package main
 // This file is `cumin status` and `cumin --version`. `cumin status` shows
 // the Owner what cumin does now: the issues with an agent at work and the
 // issues that wait for the Owner, read from the labels on GitHub, and the
-// latest quota usage with the limits of now, and whether cumin drains. It
+// latest quota usage with the limits of now, and whether cumin stops after its runs. It
 // makes no minimal run and writes no file (docs/ja/designs/quota.md, the
 // topic on cumin status).
 // The usage numbers go to the terminal only, never to a log.
@@ -136,7 +136,7 @@ var ownerLabels = []string{workflow.LabelAwaitingOwnerReview, workflow.LabelAwai
 // report use loc; cumin status passes the time zone of the Host.
 func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, stateDir string, at time.Time, loc *time.Location, read readRepository) error {
 	writeQuota(w, settings, stateDir, at, loc)
-	writeDrain(w, stateDir, loc)
+	writeStopRequest(w, stateDir, loc)
 
 	var working, waiting, failed []string
 	for _, repo := range settings.Repositories {
@@ -174,19 +174,19 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 	return nil
 }
 
-// writeDrain says that cumin drains, when the Owner asked for it with
+// writeStopRequest says that cumin stops after its runs, when the Owner asked for it with
 // `cumin stop --after-current-runs`. cumin run removes the request when it
-// exits, so the lines are there only while a drain is asked for or going
-// on. The runs that the drain waits for are the agents at work below.
-func writeDrain(w io.Writer, stateDir string, loc *time.Location) {
-	request, found, err := state.ReadDrain(filepath.Join(stateDir, state.DrainFileName))
+// exits, so the lines are there only while that stop is asked for or going
+// on. The runs that it waits for are the agents at work below.
+func writeStopRequest(w io.Writer, stateDir string, loc *time.Location) {
+	request, found, err := state.ReadStopRequest(filepath.Join(stateDir, state.StopRequestFileName))
 	switch {
 	case err != nil:
 		fmt.Fprintln(w)
-		fmt.Fprintf(w, "Stop:\n  the drain request file was not read: %v\n", err)
+		fmt.Fprintf(w, "Stop:\n  the stop request file was not read: %v\n", err)
 	case found:
 		fmt.Fprintln(w)
-		fmt.Fprintf(w, "Stop:\n  draining, requested at %s: cumin starts no new work and exits when the agents at work have ended\n", stamp(request.RequestedAt, loc))
+		fmt.Fprintf(w, "Stop:\n  stopping after the current runs, requested at %s: cumin starts no new work and exits when the agents at work have ended\n", stamp(request.RequestedAt, loc))
 	}
 }
 

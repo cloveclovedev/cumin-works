@@ -75,7 +75,7 @@ Implementer の実行は、本物の Claude Code を起動し、利用枠を使�
 
 止めるには、Ctrl-C (SIGINT) か SIGTERM を送る。cumin は新しい着手をやめ、実行中の依頼を取り消し、猶予の間だけ終わるのを待つ。猶予は、Agent の猶予 (10秒) に、そのあとの後始末の分 (5秒) を足した値である。最後に `stopped` のログを1行出して、終了コード0で終わる。ログには、進行中だったIssueの一覧が入る。ラベルは変わらないので、途中で止まったIssueは `cumin/status/implementing` のまま残る。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す。
 
-実行中のAgentを途中で止めたくないときは、Hostで `cumin stop --after-current-runs` を実行する。コマンドは、止める予約 (`~/.local/state/cumin/drain-request.json`) を書いてすぐ終わる。`cumin run` は、次の定期確認から新しい依頼 (分割、受け入れの確認、実装、レビュー、checkの修正) を始めず、実行中の実行と、その終わりに続く動作を済ませる。その間も、Agentの要らない動作 (ラベルの付け替え、Ownerの承認のあとのmerge、フォローアップノート) は続く。実行中のものがなくなると、定期確認をもう1回行い、予約を消し、`stopped` のログ (理由は drain) を出して、終了コード0で終わる。作業中のラベルのまま残るIssueはないので、起動し直せば続きから進む。途中で SIGTERM を送ると、上のとおりすぐに止まる。予約は次の起動に残らない。決まりは [cumin本体の設計メモ](designs/cumin-core.md) の「実行を待ってから止める」にある。
+実行中のAgentを途中で止めたくないときは、Hostで `cumin stop --after-current-runs` を実行する。コマンドは、止める予約 (`~/.local/state/cumin/stop-request.json`) を書いてすぐ終わる。`cumin run` は、次の定期確認から新しい依頼 (分割、受け入れの確認、実装、レビュー、checkの修正) を始めず、実行中の実行と、その終わりに続く動作を済ませる。その間も、Agentの要らない動作 (ラベルの付け替え、Ownerの承認のあとのmerge、フォローアップノート) は続く。実行中のものがなくなると、定期確認をもう1回行い、予約を消し、`stopped` のログ (理由は、止める予約のあとに実行が終わったこと) を出して、終了コード0で終わる。作業中のラベルのまま残るIssueはないので、起動し直せば続きから進む。途中で SIGTERM を送ると、上のとおりすぐに止まる。予約は次の起動に残らない。決まりは [cumin本体の設計メモ](designs/cumin-core.md) の「実行を待ってから止める」にある。
 
 `--config` を省くと、`~/.config/cumin/config.toml` を読む。cumin を止めたときに `cumin/status/implementing` のまま残ったIssueは、自動では回収されない。Ownerが `cumin/status/ready` を付け直すと、次の定期確認で着手し直す ([Issueのラベルと状態遷移](requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
 

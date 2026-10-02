@@ -45,7 +45,7 @@
 | | `quota.go` | 利用枠の設定 (5h枠のしきい値と時間帯、weekly枠の目標と前倒し) の読み込み |
 | `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、最新の使用率 (Q3)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (Q2) |
-| | `drain.go` | 止める予約のファイル (`drain-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
+| | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
 | | `roles.go` | AppごとのGitHubの権限の表 |
@@ -73,7 +73,7 @@
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
-| | `drain.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
+| | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
 | | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、分割の確かめ (R2)、受け入れの確認の依頼とその結果 (R4、R7) |
 | | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。そのためのラベルの時刻の読み取り |
 | | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |

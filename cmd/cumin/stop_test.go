@@ -10,9 +10,9 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 )
 
-// cumin stop --after-current-runs writes the drain request with the time of
+// cumin stop --after-current-runs writes the stop request with the time of
 // the request, and a second call writes it again with its own time.
-func TestStopAfterCurrentRunsWritesTheDrainRequest(t *testing.T) {
+func TestStopAfterCurrentRunsWritesTheStopRequest(t *testing.T) {
 	dir := quotaHome(t, time.Time{})
 	at := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
 	fixedNow(t, at)
@@ -21,10 +21,10 @@ func TestStopAfterCurrentRunsWritesTheDrainRequest(t *testing.T) {
 	if code := runCLI([]string{"stop", "--after-current-runs"}, &stdout, &stderr); code != exitOK {
 		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
 	}
-	path := filepath.Join(dir, state.DrainFileName)
-	got, found, err := state.ReadDrain(path)
+	path := filepath.Join(dir, state.StopRequestFileName)
+	got, found, err := state.ReadStopRequest(path)
 	if err != nil || !found || !got.RequestedAt.Equal(at) {
-		t.Errorf("drain request = %+v, %v, %v, want one requested at %v", got, found, err, at)
+		t.Errorf("stop request = %+v, %v, %v, want one requested at %v", got, found, err, at)
 	}
 	if !strings.Contains(stdout.String(), "starts no new work") {
 		t.Errorf("stdout = %q", stdout.String())
@@ -37,7 +37,7 @@ func TestStopAfterCurrentRunsWritesTheDrainRequest(t *testing.T) {
 	}
 	// The request is one of now: a request that an earlier process left
 	// behind must not make this one look old.
-	if got, _, _ := state.ReadDrain(path); !got.RequestedAt.Equal(at.Add(time.Hour)) {
+	if got, _, _ := state.ReadStopRequest(path); !got.RequestedAt.Equal(at.Add(time.Hour)) {
 		t.Errorf("the request after the second call is of %v, want the time of that call", got.RequestedAt)
 	}
 }
@@ -55,14 +55,14 @@ func TestStopNeedsTheFlag(t *testing.T) {
 			t.Errorf("%v: stderr = %q, want the usage", args, stderr.String())
 		}
 	}
-	if _, found, _ := state.ReadDrain(filepath.Join(dir, state.DrainFileName)); found {
-		t.Error("a drain request was written")
+	if _, found, _ := state.ReadStopRequest(filepath.Join(dir, state.StopRequestFileName)); found {
+		t.Error("a stop request was written")
 	}
 }
 
-// cumin status says that cumin drains while the request is there, above the
-// agents at work that the drain waits for.
-func TestStatusShowsTheDrain(t *testing.T) {
+// cumin status says that cumin stops after its runs while the request is there, above the
+// agents at work that it waits for.
+func TestStatusShowsTheStopAfterTheRuns(t *testing.T) {
 	dir := t.TempDir()
 	at := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
 	read := readFake(t)
@@ -75,7 +75,7 @@ func TestStatusShowsTheDrain(t *testing.T) {
 		t.Errorf("the report names a stop without a request:\n%s", out.String())
 	}
 
-	if err := state.WriteDrain(filepath.Join(dir, state.DrainFileName), state.Drain{RequestedAt: at}); err != nil {
+	if err := state.WriteStopRequest(filepath.Join(dir, state.StopRequestFileName), state.StopRequest{RequestedAt: at}); err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()
@@ -83,9 +83,9 @@ func TestStatusShowsTheDrain(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	want := "Stop:\n  draining, requested at " + stamp(at, statusZone) + ": cumin starts no new work and exits when the agents at work have ended\n"
-	drain, agents := strings.Index(text, want), strings.Index(text, "Agents at work")
-	if drain < 0 || agents < drain || !strings.Contains(text, "#10 cumin/status/reviewing") {
-		t.Errorf("the report does not show the drain above the agents at work:\n%s", text)
+	want := "Stop:\n  stopping after the current runs, requested at " + stamp(at, statusZone) + ": cumin starts no new work and exits when the agents at work have ended\n"
+	request, agents := strings.Index(text, want), strings.Index(text, "Agents at work")
+	if request < 0 || agents < request || !strings.Contains(text, "#10 cumin/status/reviewing") {
+		t.Errorf("the report does not show the stop request above the agents at work:\n%s", text)
 	}
 }

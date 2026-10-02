@@ -2,7 +2,7 @@ package main
 
 // This file is `cumin stop --after-current-runs`: the Owner asks the
 // running cumin to start no new work, to let the agent runs that are going
-// on end, and then to exit. The command writes the drain request file and
+// on end, and then to exit. The command writes the stop request file and
 // returns; cumin run reads the file at its next poll and removes it when it
 // exits (docs/ja/designs/cumin-core.md, the topic on the stop). Nothing
 // leaves the Host.
@@ -18,13 +18,13 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 )
 
-// drainFile is the path of the drain request file in the state directory.
-func drainFile() (string, error) {
+// stopRequestFile is the path of the stop request file in the state directory.
+func stopRequestFile() (string, error) {
 	dir, err := config.DefaultStateDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, state.DrainFileName), nil
+	return filepath.Join(dir, state.StopRequestFileName), nil
 }
 
 const stopUsage = "usage: cumin stop --after-current-runs"
@@ -50,16 +50,16 @@ func runStop(args []string, stdout, stderr io.Writer) int {
 		return exitBadUsage
 	}
 
-	path, err := drainFile()
+	path, err := stopRequestFile()
 	if err != nil {
 		fmt.Fprintf(stderr, "cumin stop: %v\n", err)
 		return exitFailure
 	}
 	// A request that is already there gets the time of now. A cumin run
-	// that drains goes on draining. A request that an earlier process left
+	// that already stops after its runs goes on. A request that an earlier process left
 	// behind becomes one of now, so the start of cumin run that removes
 	// the requests of before it does not take this one for an old one.
-	if err := state.WriteDrain(path, state.Drain{RequestedAt: now()}); err != nil {
+	if err := state.WriteStopRequest(path, state.StopRequest{RequestedAt: now()}); err != nil {
 		fmt.Fprintf(stderr, "cumin stop: %v\n", err)
 		return exitFailure
 	}

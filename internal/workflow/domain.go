@@ -353,7 +353,7 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Ac
 }
 
 // WithoutNewWork returns the actions that cumin still applies while it
-// drains: the ones that ask no agent for new work. A requirement issue
+// stops after its runs: the ones that ask no agent for new work. A requirement issue
 // still changes its label, a pull request still gets the labels of its
 // issue, and an approval of an Owner still merges. The split, the
 // acceptance check, the claim, the review, and the check fix wait for the

@@ -313,7 +313,7 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 | ログを見る | `tail -f ~/.local/state/cumin/cumin.log` |
 
 - 0以外の終了コードで終わったときだけ、launchd が起動し直す。`launchctl kill SIGTERM` で止めた cumin も、`cumin stop --after-current-runs` で止めた cumin も 0 で終わるので、止めたままになる。
-- `cumin stop --after-current-runs` は、予約を書いてすぐ終わる。cumin は、次の定期確認から新しい依頼を始めず、実行中のAgentの実行と、その終わりに続く動作を済ませてから終わる。Agent の実行は1時間近くかかることがある。止まる途中かどうかは `cumin status` の `Stop:` の行で分かり、終わるとその行が消える。ログには `stopped` (理由は drain) が出る。待てないときは、「すぐに止める」のコマンドを使う。
+- `cumin stop --after-current-runs` は、予約を書いてすぐ終わる。cumin は、次の定期確認から新しい依頼を始めず、実行中のAgentの実行と、その終わりに続く動作を済ませてから終わる。Agent の実行は1時間近くかかることがある。止まる途中かどうかは `cumin status` の `Stop:` の行で分かり、終わるとその行が消える。ログには `stopped` (理由は、止める予約のあとに実行が終わったこと) が出る。待てないときは、「すぐに止める」のコマンドを使う。
 - 「すぐに止める」は、実行中のAgentを取り消す。作業中のラベルのまま残ったIssueは、Owner が `cumin/status/ready` を付け直して再開する。
 - Host が再起動したあとは、Owner がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
 - ログのファイルは入れ替わらない。大きくなったら、止めてから消す。

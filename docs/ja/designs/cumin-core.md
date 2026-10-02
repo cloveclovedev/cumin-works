@@ -28,7 +28,7 @@
 | riskの基準 (任意) | 設定ファイルと同じディレクトリの `risk-criteria.md`。決まりは cumin本体の要件にある | Owner |
 | 手元の状態 | `~/.local/state/cumin/state.json` | `cumin run` だけ |
 | 使い切りの許可 | `~/.local/state/cumin/quota-allowance.json` | `cumin quota allow` だけ |
-| 止める予約 | `~/.local/state/cumin/drain-request.json` | `cumin stop --after-current-runs` が書き、`cumin run` が消す |
+| 止める予約 | `~/.local/state/cumin/stop-request.json` | `cumin stop --after-current-runs` が書き、`cumin run` が消す |
 | ログ | `~/.local/state/cumin/cumin.log` (標準出力) と `cumin.err.log` (標準エラー出力) | launchd |
 | LaunchAgent | `~/Library/LaunchAgents/dev.cloveclove.cumin.plist` | `cumin setup launchd` |
 | Agentのskill | `~/.local/state/cumin/skills/.claude/skills/<名前>/SKILL.md`。起動時に毎回上書きする ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」) | `cumin run` だけ |
@@ -114,9 +114,9 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 
 Ownerが `cumin stop --after-current-runs` を実行すると、動いている `cumin run` は、新しい依頼を始めずに、実行中のAgentの実行が終わるのを待ってから終わる。バイナリを入れ替える前に使う。
 
-![実行を待ってから止める](cumin-drain.svg)
+![実行を待ってから止める](cumin-stop-after-runs.svg)
 
-図の元ファイル: [cumin-drain.puml](cumin-drain.puml)
+図の元ファイル: [cumin-stop-after-runs.puml](cumin-stop-after-runs.puml)
 
 - コマンドは、止める予約のファイル (「Hostに置くファイル」) を書いて、すぐ終わる。`cumin run` が終わるのを待たない。予約が既にあれば、今の時刻で書き直す。前のプロセスが残した予約を、起動より前の予約として消させないためである。
 - `--after-current-runs` を付けない `cumin stop` は、使い方の誤りにする。すぐに止めるのはSIGTERMで、このコマンドは送らない。
@@ -126,7 +126,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 - 実行中の実行は、最後まで進める。実行の終わりに続く動作は、Agentへの依頼 (異常終了のあとのやり直し、指摘の修正、衝突の解消、上限での原因の整理) も含めて行う。Reviewerが修正を求めた直後には、Agentが動いていない待ちのラベルがない。そこでやめると、Issueが `cumin/status/reviewing` のまま残り、次の起動が拾えない。続く実行が終われば、Issueは待ちのラベル (`cumin/status/awaiting-checks` など) に着く。そのあとのレビューは定期確認が決める依頼なので、始めない。1つのIssueで続くのは、Implementerの実行1回までである。
 - 「待ち状態になった」の通知 (Q4) は出さない。依頼を落としているので、することがないのは知らせることではない。
 - 終わるのは、定期確認の前にもあとにも実行中のものがなく、その定期確認が何も始めなかったときである。この最後の定期確認が、終わった実行の結果を、Agentなしで進める先まで運ぶ。待っている間は、実行が終わるたびに、間隔を待たずに定期確認を行う。最後の定期確認が失敗しても終わる。残りはGitHubの事実から決まるので、次の起動が続ける。
-- 終わるときに、予約のファイルを消し、`stopped` のログを1行出す (理由は drain、進行中のIssueは空)。終了コードは0なので、launchdは起動し直さない。
+- 終わるときに、予約のファイルを消し、`stopped` のログを1行出す (理由は、止める予約のあとに実行が終わったこと、進行中のIssueは空)。終了コードは0なので、launchdは起動し直さない。
 - `cumin run` は、起動時に、予約した時刻が起動より前の予約のファイルを消す。起動と同時に書かれた予約は、この起動へのものなので残す。予約は、頼んだときに動いていたプロセスへのものである。`cumin run` が動いていないときに書かれた予約も、ここで消える。消せなかった予約 (状態のディレクトリに書けないときなど) は、警告をログに出して、読み飛ばす。予約した時刻が起動より前の予約は、数えない。数えると、起動のたびにその予約を読んですぐ終わり、終了コードが0なのでlaunchdも起動し直さない。
 - 待っている間にSIGTERMを受けたら、上の「止め方」のとおり、すぐに止まる。このときも、予約のファイルを消す。
 - `cumin status` は、予約のファイルがあれば、止まる途中であることと予約した時刻を表示する。待っている実行は、GitHubのラベルから読む一覧 (Agents at work) で示す。ラベルに出ない実行 (受け入れの確認、mergeの手順) は、一覧に載らない。

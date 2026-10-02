@@ -1,5 +1,5 @@
-@startuml cumin-drain
-' cumin works - the drain: cumin finishes the agent runs and starts no new work before it exits.
+@startuml cumin-stop-after-runs
+' cumin works - the stop after the current runs: cumin finishes the agent runs and starts no new work before it exits.
 ' Document: cumin-core.md, topic on the stop after the runs.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -7,7 +7,7 @@ skinparam defaultFontName sans-serif
 
 start
 :Owner: cumin stop --after-current-runs;
-:write drain-request.json
+:write stop-request.json
 (state directory of the Host);
 repeat
   :poll: read the request;
@@ -27,7 +27,7 @@ repeat
   end note
 repeat while (a run in progress before or after the poll,\nor one that the poll started?) is (yes: wait for the end\nof a run or the interval)
 ->no;
-:remove drain-request.json;
+:remove stop-request.json;
 :log "stopped", exit code 0;
 stop
 

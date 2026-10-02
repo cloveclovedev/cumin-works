@@ -684,7 +684,7 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 	}
 }
 
-// While cumin drains, the actions that ask an agent for new work are held
+// While cumin stops after its runs, the actions that ask an agent for new work are held
 // back, and the ones that need no agent stay, in their order.
 func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
 	t.Parallel()
