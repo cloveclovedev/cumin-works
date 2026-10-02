@@ -289,6 +289,12 @@ type cliOptions struct {
 	// entry for each run in order: DECISION writes a decision request, NONE
 	// writes nothing, as the Reviewer does for I8.
 	comments []string
+	// holds makes the agent run wait until the test releases it
+	// (scene.release), and then end as the fixture says: a run that is
+	// going on while the test does something else. The run first writes
+	// one line to the named pipe "started", as a run that sleeps does, and
+	// then reads the named pipe "release".
+	holds bool
 	// serverURL is the address of the fake GitHub; newScene sets it.
 	serverURL string
 }
@@ -359,6 +365,22 @@ func (sc *scene) settings() *config.Settings {
 		},
 		Notify: config.NotifySettings{DiscordEnabled: sc.notifications},
 		Quota:  sc.quota,
+	}
+}
+
+// release lets the agent run that holds (cliOptions.holds) end: the run
+// reads the named pipe "release", and the write returns when it did.
+func (sc *scene) release(t *testing.T) {
+	t.Helper()
+	released := make(chan error, 1)
+	go func() { released <- os.WriteFile(filepath.Join(sc.cliDir, "release"), []byte("go\n"), 0o600) }()
+	select {
+	case err := <-released:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(hangGuard):
+		t.Fatal("the agent run did not take the release")
 	}
 }
 
@@ -490,6 +512,16 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 			o.serverURL + "/repos/example-org/example-repo/issues/21/comments 1>&2\n" +
 			"fi\nfi\n"
 	}
+	hold := ""
+	if o.holds {
+		started, release := filepath.Join(dir, "started"), filepath.Join(dir, "release")
+		for _, pipe := range []string{started, release} {
+			if err := syscall.Mkfifo(pipe, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		hold = "if [ $n = agent ]; then\necho started > " + started + "\ncat " + release + " > /dev/null\nfi\n"
+	}
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
@@ -506,6 +538,7 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		"git branch --list 'cumin/*' > " + filepath.Join(dir, "$n.branches") + " 2>/dev/null\n" +
 		commit +
 		review +
+		hold +
 		"cat $f\n" +
 		sleep
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {

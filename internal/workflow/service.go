@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
@@ -85,6 +86,10 @@ type Service struct {
 	// Nil means time.Local, the zone of the Host. Tests set it, so that
 	// the zone of the machine does not change a result.
 	Location *time.Location
+	// DrainPath is the drain request file that `cumin stop
+	// --after-current-runs` writes (drain.go). Each poll reads it. Empty
+	// means that cumin never drains.
+	DrainPath string
 
 	// running counts the agent runs that the polls started. Each run has
 	// its own goroutine, so that the poll goes on while an agent works.
@@ -93,6 +98,14 @@ type Service struct {
 	// the stop.
 	progressMu sync.Mutex
 	inProgress map[inProgressKey]bool
+	// started counts the runs that cumin started. progressMu guards it.
+	started int
+	// draining says that a poll read a drain request. It stays true until
+	// cumin exits.
+	draining atomic.Bool
+	// runEnded wakes Run when a run ends, so that a drain does not wait for
+	// the next tick. Run makes it; without Run, nothing is sent.
+	runEnded chan struct{}
 
 	// repositorySettings keeps what each repository's .cumin/ decided,
 	// until a blob of those files changes. Poll reads and writes it, and a
@@ -153,6 +166,13 @@ type inProgressKey struct {
 // cumin/status/implementing, and the Owner restarts it with
 // cumin/status/ready (issue-states.md, the section on what v0.1 does not
 // build).
+//
+// A drain request (drain.go) ends Run in another way: the polls go on and
+// ask no agent for new work, the runs that are going on end by themselves,
+// and Run returns nil after a poll that began and ended with no run in
+// progress and started none. That last poll carries what the last run left
+// to its next state, as far as no agent is needed. A stop signal during a
+// drain stops at once, as above.
 func (s *Service) Run(ctx context.Context) error {
 	if s.PollInterval <= 0 {
 		return errors.New("workflow: the poll interval must be more than 0")
@@ -160,17 +180,32 @@ func (s *Service) Run(ctx context.Context) error {
 	if s.Settings == nil {
 		return errors.New("workflow: no Host settings are configured")
 	}
+	s.dropDrainRequest()
+	s.runEnded = make(chan struct{}, 1)
 	s.ensureLabels(ctx)
 	ticker := time.NewTicker(s.PollInterval)
 	defer ticker.Stop()
 	for {
+		started, idle := s.runsStarted(), len(s.inProgressIssues()) == 0
 		// Poll logs its own failures. Run keeps the loop.
 		_ = s.Poll(ctx)
+		draining := s.draining.Load()
+		if draining && ctx.Err() == nil && idle && s.runsStarted() == started && len(s.inProgressIssues()) == 0 {
+			s.drained()
+			return nil
+		}
+		// Only a drain polls at the end of a run: the usual pace of the
+		// polls stays the interval.
+		var runEnded <-chan struct{}
+		if draining {
+			runEnded = s.runEnded
+		}
 		select {
 		case <-ctx.Done():
 			s.stop(context.Cause(ctx).Error())
 			return nil
 		case <-ticker.C:
+		case <-runEnded:
 		}
 	}
 }
@@ -246,6 +281,7 @@ func (s *Service) markInProgress(ctx context.Context, repository string, issue i
 		s.inProgress = map[inProgressKey]bool{}
 	}
 	s.inProgress[key] = true
+	s.started++
 	return func() {
 		s.progressMu.Lock()
 		defer s.progressMu.Unlock()
@@ -253,6 +289,10 @@ func (s *Service) markInProgress(ctx context.Context, repository string, issue i
 			return
 		}
 		delete(s.inProgress, key)
+		select {
+		case s.runEnded <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -284,13 +324,14 @@ func (s *Service) ensureLabels(ctx context.Context) {
 func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
 	var all pollResult
+	draining := s.drainRequested()
 	for _, target := range s.Targets {
 		// The stop signal came while this poll was running. Start nothing
 		// more: the requests that are going on are the ones to wait for.
 		if ctx.Err() != nil {
 			return errors.Join(errs...)
 		}
-		result, err := s.pollRepository(ctx, target)
+		result, err := s.pollRepository(ctx, target, draining)
 		all.decided = all.decided || result.decided
 		if err == nil {
 			s.pollSucceeded(target.Repository)
@@ -301,18 +342,21 @@ func (s *Service) Poll(ctx context.Context) error {
 		s.pollFailed(ctx, target.Repository, err)
 	}
 	// Q4 sends only after a poll that read every repository; a decided
-	// action ends the silence even when another repository failed.
-	s.waitingCheck(ctx, all, len(errs) == 0)
+	// action ends the silence even when another repository failed. A drain
+	// holds work back, so having nothing to do is not news then.
+	if !draining {
+		s.waitingCheck(ctx, all, len(errs) == 0)
+	}
 	return errors.Join(errs...)
 }
 
-func (s *Service) pollRepository(ctx context.Context, target Target) (pollResult, error) {
+func (s *Service) pollRepository(ctx context.Context, target Target, draining bool) (pollResult, error) {
 	var result pollResult
-	err := s.pollRepositoryInto(ctx, target, &result)
+	err := s.pollRepositoryInto(ctx, target, draining, &result)
 	return result, err
 }
 
-func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result *pollResult) error {
+func (s *Service) pollRepositoryInto(ctx context.Context, target Target, draining bool, result *pollResult) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -367,7 +411,17 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, result 
 	// the sub-issue, and R3 would then never apply again: the requirement
 	// issue would stay in awaiting-owner-review while its work goes on.
 	notStarted := map[int]bool{}
-	for _, action := range Decide(snapshot, s.Settings.MaxIssuesInProgress, required) {
+	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required)
+	if draining {
+		// The work that is held back waits under its label for the next
+		// start of cumin.
+		kept := WithoutNewWork(actions)
+		if held := len(actions) - len(kept); held > 0 {
+			log.Info("drain: new work is held back", "actions", held)
+		}
+		actions = kept
+	}
+	for _, action := range actions {
 		// An I12 candidate is only a check; it counts as progress for Q4
 		// when it merges or stops the issue.
 		if _, check := action.(MergeOwnerApproval); !check {

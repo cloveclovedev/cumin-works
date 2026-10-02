@@ -352,6 +352,26 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Ac
 	return append(actions, labelCopies(snapshot)...)
 }
 
+// WithoutNewWork returns the actions that cumin still applies while it
+// drains: the ones that ask no agent for new work. A requirement issue
+// still changes its label, a pull request still gets the labels of its
+// issue, and an approval of an Owner still merges. The split, the
+// acceptance check, the claim, the review, and the check fix wait for the
+// next start of cumin; each of them starts from a label that no agent
+// works under, so nothing is lost (designs/cumin-core.md, the topic on the
+// stop).
+func WithoutNewWork(actions []Action) []Action {
+	kept := make([]Action, 0, len(actions))
+	for _, action := range actions {
+		switch action.(type) {
+		case Plan, CheckAcceptance, Claim, StartReview, FixChecks:
+		default:
+			kept = append(kept, action)
+		}
+	}
+	return kept
+}
+
 // requirementMoves returns the actions of R3 and R6, lowest requirement
 // issue number first.
 func requirementMoves(snapshot Snapshot) []Action {

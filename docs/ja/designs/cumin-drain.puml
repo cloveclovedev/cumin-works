@@ -1,0 +1,40 @@
+@startuml cumin-drain
+' cumin works - the drain: cumin finishes the agent runs and starts no new work before it exits.
+' Document: cumin-core.md, topic on the stop after the runs.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:Owner: cumin stop --after-current-runs;
+:write drain-request.json
+(state directory of the Host);
+repeat
+  :poll: read the request;
+  :apply the actions that need no agent
+  (requirement issue labels, labels of the pull request,
+  merge after an approval of an Owner,
+  follow-up notes, cleanup);
+  note right
+    Held back until the next start:
+    plan, acceptance check, claim,
+    review, check fix.
+    ----
+    The agent runs that are going on end
+    by themselves. What follows the end
+    of a run still runs: verify done, merge,
+    and the fix that a review asked for.
+  end note
+repeat while (a run in progress before or after the poll,\nor one that the poll started?) is (yes: wait for the end\nof a run or the interval)
+->no;
+:remove drain-request.json;
+:log "stopped", exit code 0;
+stop
+
+note right
+  SIGTERM keeps its meaning at any time:
+  cancel the runs and stop at once.
+  A request that is found at the start
+  of cumin run is removed.
+end note
+@enduml
