@@ -262,3 +262,29 @@ func TestDrain_ARequestThatCannotBeRemovedAtTheStartIsPassedOver(t *testing.T) {
 		t.Errorf("cumin drained on the request of before the start:\n%s", logs)
 	}
 }
+
+// A request that is not older than the start is for the process that is
+// starting: the start keeps it, and the first poll drains.
+func TestDrain_ARequestOfTheStartIsKept(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	service.PollInterval = 10 * time.Millisecond
+	service.DrainPath = filepath.Join(t.TempDir(), state.DrainFileName)
+	// The time of a request that comes just after the start.
+	if err := state.WriteDrain(service.DrainPath, state.Drain{RequestedAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none: the first poll drains", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of #10 = %v, want cumin/status/ready untouched", got)
+	}
+	if drainFileExists(t, service.DrainPath) {
+		t.Error("the drain request is still there after the exit")
+	}
+}

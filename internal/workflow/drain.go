@@ -24,6 +24,12 @@ func (s *Service) dropDrainRequest() {
 	if s.DrainPath == "" {
 		return
 	}
+	// A request that is not older than this start is for this process: the
+	// Owner asked while cumin run was starting. It stays. A file that
+	// cannot be read is no request, and goes.
+	if request, found, err := state.ReadDrain(s.DrainPath); err == nil && (!found || !request.RequestedAt.Before(s.startedAt)) {
+		return
+	}
 	removed, err := state.RemoveDrain(s.DrainPath)
 	switch {
 	case err != nil:
