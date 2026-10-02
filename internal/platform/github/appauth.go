@@ -3,12 +3,8 @@ package github
 import (
 	"bytes"
 	"context"
-	"crypto"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -19,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // DefaultBaseURL is the address of the GitHub REST API.
@@ -147,23 +145,16 @@ func (c *AppClient) CreateInstallationToken(ctx context.Context, cred AppCredent
 
 // signJWT signs the JSON Web Token that authenticates a GitHub App.
 func signJWT(cred AppCredentials, now time.Time) (string, error) {
-	header := `{"alg":"RS256","typ":"JWT"}`
-	claims, err := json.Marshal(struct {
-		IssuedAt  int64  `json:"iat"`
-		ExpiresAt int64  `json:"exp"`
-		Issuer    string `json:"iss"`
-	}{now.Add(-jwtBackdate).Unix(), now.Add(jwtLifetime).Unix(), cred.ClientID})
-	if err != nil {
-		return "", err
-	}
-	encode := base64.RawURLEncoding.EncodeToString
-	signingInput := encode([]byte(header)) + "." + encode(claims)
-	digest := sha256.Sum256([]byte(signingInput))
-	signature, err := rsa.SignPKCS1v15(rand.Reader, cred.PrivateKey, crypto.SHA256, digest[:])
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.RegisteredClaims{
+		IssuedAt:  jwt.NewNumericDate(now.Add(-jwtBackdate)),
+		ExpiresAt: jwt.NewNumericDate(now.Add(jwtLifetime)),
+		Issuer:    cred.ClientID,
+	})
+	signed, err := token.SignedString(cred.PrivateKey)
 	if err != nil {
 		return "", errors.New("github: sign the JWT: " + err.Error())
 	}
-	return signingInput + "." + encode(signature), nil
+	return signed, nil
 }
 
 // StatusError is the answer of GitHub with a status code other than the one

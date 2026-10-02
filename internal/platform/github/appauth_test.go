@@ -16,6 +16,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -206,6 +207,34 @@ func TestAppToken_IsLimitedToOneRepositoryAndToThePermissionsOfTheApp(t *testing
 
 // The values come from the table in docs/ja/development/github-app-setup.md.
 // Change the document and this test together.
+func TestSignJWT_HoldsExactlyTheThreeClaimsOfGitHub(t *testing.T) {
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	signed, err := signJWT(testCredentials(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(signed, ".")
+	if len(parts) != 3 {
+		t.Fatalf("the JWT has %d parts, want 3", len(parts))
+	}
+
+	var header, claims map[string]any
+	decodeSegment(t, parts[0], &header)
+	decodeSegment(t, parts[1], &claims)
+	wantHeader := map[string]any{"alg": "RS256", "typ": "JWT"}
+	if !reflect.DeepEqual(header, wantHeader) {
+		t.Errorf("JWT header = %v, want %v", header, wantHeader)
+	}
+	wantClaims := map[string]any{
+		"iat": float64(now.Unix() - 60),
+		"exp": float64(now.Unix() + 9*60),
+		"iss": testClientID,
+	}
+	if !reflect.DeepEqual(claims, wantClaims) {
+		t.Errorf("JWT claims = %v, want %v", claims, wantClaims)
+	}
+}
+
 func TestAppPermissions_MatchTheSetupDocument(t *testing.T) {
 	want := map[string]map[string]string{
 		"cumin-core":  {"contents": "write", "pull_requests": "write", "issues": "write"},
