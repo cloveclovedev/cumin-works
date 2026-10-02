@@ -56,8 +56,9 @@ Ownerが使うコマンド:
 | コマンド | 内容 |
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
-| `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限 |
+| `cumin status` | 今の状態を表示する。実行中のAgent、Ownerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、実行が終わるのを待って止まる途中かどうか |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
+| `cumin stop --after-current-runs` | 実行中のAgentの実行が終わるのを待ってから、cuminを止める。新しい依頼は始めない。Agentの要らない動作は、止まるまで続ける |
 | `cumin --version` | cuminの版を表示する |
 | `cumin setup github-apps` | 導入のときに、Hostで実行する。roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないroleだけを登録する |
 
@@ -83,11 +84,12 @@ v0.1では、次のように割り切る。Hostが常時動くMac miniになれ�
 - スリープから戻ると、cuminも実行中のAgentも続きから動く。ただし、次のことが起こりうる。通信の途中だった要求が失敗する。Agentに渡したGitHub Appのtokenが、時間切れになっている (tokenは発行から1時間で失効する)。時間で区切る打ち切りが、戻った直後に働く
 - どれが起きても、Agentの異常終了として扱う。同じ依頼を1回だけやり直し、それでも駄目ならOwnerに知らせる
 - cuminを止めたときに作業中のラベルのまま残ったIssueは、Ownerが `cumin/status/ready` を付け直して再開する。`cumin/status/awaiting-checks` のIssueは、Agentが動いていない状態なので、cuminを起動し直せば続きから進む
+- `cumin stop --after-current-runs` で止めたときは、実行中のAgentの実行と、その終わりに続く動作を済ませてから止まる。作業中のラベルのまま残るIssueを作らないので、cuminを起動し直せば続きから進む。止める予約は、次の起動には残らない。SIGTERMは、今までどおりすぐに止める
 
 ## 状態の持ち方
 
 - 作業の状態は、GitHubに置く。Issue、ラベル、Pull Request、レビュー、コメントが、状態の全てである
-- cuminが手元に持つのは、失っても作業をやり直せるものだけにする。Agentのセッションの番号、checkの修正を依頼した回数、枠ごとの最新の使用率とリセット時刻とそれを読んだ時刻、使い切りの許可がこれに当たる
+- cuminが手元に持つのは、失っても作業をやり直せるものだけにする。Agentのセッションの番号、checkの修正を依頼した回数、枠ごとの最新の使用率とリセット時刻とそれを読んだ時刻、使い切りの許可、止める予約がこれに当たる
 - レビューのラウンド数は、手元に持たずに、Pull Requestに出ている `cumin-reviewer` のレビューの数から数える
 - cuminが再起動しても、GitHubを確かめ直せば、続きから動ける。ただし、作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。Ownerが `cumin/status/ready` を付け直せば再開する
 
@@ -135,7 +137,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | mergeの判断が必要 | I7 |
 | Agentが先に進めない。指摘が残った。mergeできない、またはmergeのあとに実装Issueを閉じられない | I2、I4、I6、I8、I10、I12、R2、R4 |
 | 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
-| 進められるIssueがなくなり、動いているAgentもいない | Q4 |
+| Ownerが動かなければ何も進まない (進められるIssueがなく、動いているAgentもなく、check待ちのIssueもない) | Q4 |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
 
 通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
@@ -150,7 +152,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 
 - Hostに属する設定は、Hostの設定ファイルにだけ書ける。利用枠はアカウントのものであり、作業場所や秘密の値はHostのものなので、リポジトリからは変えられない
 - リポジトリごとに変えてよい設定は、Hostの設定ファイルに書いた値を、対象のリポジトリの `.cumin/` で上書きできる。優先順位は、初期値、Hostの設定ファイル、リポジトリの `.cumin/` の順に強くなる
-- 保護されたパスだけは、リポジトリの `.cumin/config.toml` だけで決める。強制するのがGitHub Actionsのcheckであり、Hostの設定ファイルはそこから見えないためである
+- 保護されたパスと優先度のラベルは、リポジトリの `.cumin/config.toml` だけで決める。保護されたパスは、強制するのがGitHub Actionsのcheckであり、Hostの設定ファイルはそこから見えないためである。優先度のラベルは、ラベルがリポジトリにあり、足りないラベルを作るスクリプトがリポジトリのファイルを読むためである
 
 | 設定 | 内容 | 初期値 | リポジトリで上書き |
 |---|---|---|---|
@@ -167,6 +169,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | checkの修正を依頼する回数の上限 | これを超えたら、Ownerに回す | 3 | できる |
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
+| 優先度のラベル | 着手の順番を決めるラベルの一覧。優先度の高い順に書く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「着手の順番」)。設定に書いたラベルはOrganizationのものなので、cuminは作らず、変えない。足りないラベルは、リポジトリの準備のスクリプトが、実行した人に尋ねてから作る。設定に書かなければ初期値のラベルを使い、足りないものをcuminが作る | `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` | リポジトリだけで決める |
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
 | riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、PlannerとReviewerへの指示にそのまま入れる | `disciplines/software-engineering/risk-criteria.md` | できる |
 
@@ -211,3 +214,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 17 | 着手の直前の確認で、使用率を読み取れない | 着手せずに、1回だけ通知する |
 | 18 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestを、Ownerが今の先頭のコミットでGitHubのレビューにより承認する | cuminがmergeし、実装Issueが閉じる。古いコミットへの承認、botの承認、writeの権限のないアカウントの承認、あとから `REQUEST_CHANGES` で覆された承認では、mergeしない |
 | 19 | cuminがmergeしたあと、GitHubが実装Issueを閉じない | cuminが1回だけ閉じる。Ownerがそれを開き直しても、あとの定期確認では閉じない |
+| 20 | 着手できるIssueが2つあり、番号の大きいほうに、より高い優先度のラベルが付いている | 優先度の高いほうから着手する。同じ優先度なら、番号の小さいほうから着手する。優先度のラベルがないIssueは、最後に着手する。設定でラベルの名前を変えると、その名前で順番が決まる |
+| 21 | 必須のcheckを待つ実装Issueが1つだけあり、動いているAgentもいない | 待ち状態の通知 (Q4) を出さない。checkが終わって進み、Ownerの対応だけが残ったときに、1回だけ通知する |

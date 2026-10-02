@@ -1,0 +1,91 @@
+package main
+
+import (
+	"bytes"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
+)
+
+// cumin stop --after-current-runs writes the stop request with the time of
+// the request, and a second call writes it again with its own time.
+func TestStopAfterCurrentRunsWritesTheStopRequest(t *testing.T) {
+	dir := quotaHome(t, time.Time{})
+	at := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
+	fixedNow(t, at)
+
+	var stdout, stderr bytes.Buffer
+	if code := runCLI([]string{"stop", "--after-current-runs"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
+	}
+	path := filepath.Join(dir, state.StopRequestFileName)
+	got, found, err := state.ReadStopRequest(path)
+	if err != nil || !found || !got.RequestedAt.Equal(at) {
+		t.Errorf("stop request = %+v, %v, %v, want one requested at %v", got, found, err, at)
+	}
+	if !strings.Contains(stdout.String(), "starts no new work") {
+		t.Errorf("stdout = %q", stdout.String())
+	}
+
+	fixedNow(t, at.Add(time.Hour))
+	stdout.Reset()
+	if code := runCLI([]string{"stop", "--after-current-runs"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("second call: exit code = %d, stderr = %s", code, stderr.String())
+	}
+	// The request is one of now: a request that an earlier process left
+	// behind must not make this one look old.
+	if got, _, _ := state.ReadStopRequest(path); !got.RequestedAt.Equal(at.Add(time.Hour)) {
+		t.Errorf("the request after the second call is of %v, want the time of that call", got.RequestedAt)
+	}
+}
+
+// cumin stop alone does nothing: the flag says what the command does, and a
+// stop at once stays SIGTERM.
+func TestStopNeedsTheFlag(t *testing.T) {
+	dir := quotaHome(t, time.Time{})
+	for _, args := range [][]string{{"stop"}, {"stop", "now"}, {"stop", "--after-current-runs", "now"}} {
+		var stdout, stderr bytes.Buffer
+		if code := runCLI(args, &stdout, &stderr); code != exitBadUsage {
+			t.Errorf("%v: exit code = %d, want %d", args, code, exitBadUsage)
+		}
+		if !strings.Contains(stderr.String(), "usage: cumin stop --after-current-runs") {
+			t.Errorf("%v: stderr = %q, want the usage", args, stderr.String())
+		}
+	}
+	if _, found, _ := state.ReadStopRequest(filepath.Join(dir, state.StopRequestFileName)); found {
+		t.Error("a stop request was written")
+	}
+}
+
+// cumin status says that cumin stops after its runs while the request is there, above the
+// agents at work that it waits for.
+func TestStatusShowsTheStopAfterTheRuns(t *testing.T) {
+	dir := t.TempDir()
+	at := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
+	read := readFake(t)
+
+	var out bytes.Buffer
+	if err := writeStatus(t.Context(), &out, statusSettings(), dir, at, statusZone, read); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Stop:") {
+		t.Errorf("the report names a stop without a request:\n%s", out.String())
+	}
+
+	if err := state.WriteStopRequest(filepath.Join(dir, state.StopRequestFileName), state.StopRequest{RequestedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := writeStatus(t.Context(), &out, statusSettings(), dir, at, statusZone, read); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	want := "Stop:\n  stopping after the current runs, requested at " + stamp(at, statusZone) + ": cumin starts no new work and exits when the agents at work have ended\n"
+	request, agents := strings.Index(text, want), strings.Index(text, "Agents at work")
+	if request < 0 || agents < request || !strings.Contains(text, "#10 cumin/status/reviewing") {
+		t.Errorf("the report does not show the stop request above the agents at work:\n%s", text)
+	}
+}

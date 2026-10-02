@@ -194,7 +194,7 @@ func TestDecide_I3(t *testing.T) {
 			// issue is already counted in it.
 			// I4 and I11 are other rules (TestDecide_I4, TestDecide_I11).
 			var got []Action
-			for _, action := range Decide(snapshot, 1, tt.required) {
+			for _, action := range Decide(snapshot, 1, tt.required, nil) {
 				if _, ok := action.(StartReview); ok {
 					got = append(got, action)
 				}
@@ -282,7 +282,7 @@ func TestDecide_I4(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
 			var got []Action
-			for _, action := range Decide(snapshot, 1, required) {
+			for _, action := range Decide(snapshot, 1, required, nil) {
 				if _, ok := action.(FixChecks); ok {
 					got = append(got, action)
 				}

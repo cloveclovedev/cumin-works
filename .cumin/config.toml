@@ -25,3 +25,10 @@ protected_paths = [
   ".claude/",
   "docs/ja/requirements/",
 ]
+
+# Labels that order the work, highest priority first. cumin starts a ready
+# issue with a higher label before one with a lower label, and an issue with
+# no such label last. A sub-issue without one takes the label of its
+# requirement issue. cumin never creates or changes these labels;
+# scripts/setup-repo.sh asks before it creates the missing ones.
+priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]

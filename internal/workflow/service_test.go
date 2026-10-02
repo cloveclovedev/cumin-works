@@ -89,7 +89,7 @@ type scene struct {
 	notifier *notify.Notifier
 	// notifications is the Host setting notify.discord.enabled.
 	notifications bool
-	// clock is the time of the quota decisions (Q1).
+	// clock is the time of the quota decisions (Q1) and of the fake GitHub.
 	clock *testClock
 	// quota are the Host settings of the quota limits: the defaults of the
 	// settings table.
@@ -100,10 +100,11 @@ type scene struct {
 // is not a full hour.
 var sceneZone = time.FixedZone("UTC+05:30", 5*3600+30*60)
 
-// sceneNow is the default time of the quota decisions: one hour before the
-// weekly reset of the fixtures of internal/agent, so that the pace limit is
-// the target and their usage stops nothing. Their 5h window reset earlier,
-// so it stops nothing either.
+// sceneNow is the default time of the scene, for the quota decisions and for
+// the fake GitHub: one hour before the weekly reset of the fixtures of
+// internal/agent, so that the pace limit is the target and their usage stops
+// nothing. Their 5h window reset earlier, so it stops nothing either. Every
+// fixture time of a test derives from it.
 var sceneNow = time.Unix(1900300000, 0).Add(-time.Hour)
 
 // testClock is a clock that a test moves between polls.
@@ -242,12 +243,16 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	cliPath, cliDir := fakeCLI(t, options)
 	remote, head := newRemote(t)
 	webhook := newFakeWebhook(t)
+	// The fake GitHub stamps its comments, reviews, and label events from
+	// the clock of the scene.
+	clock := &testClock{now: sceneNow}
+	fake.SetClock(clock.Now)
 	return &scene{
 		fake: fake, client: github.NewAppClient(server.URL, server.Client()), serverURL: server.URL, repo: repo,
 		logs: &bytes.Buffer{}, remote: remote, remoteHead: head, cliDir: cliDir,
 		workRoot: t.TempDir(), cliPath: cliPath, settingsDir: t.TempDir(),
 		webhook: webhook, notifier: webhook.notifier(), notifications: true,
-		clock: &testClock{now: sceneNow},
+		clock: clock,
 		quota: config.QuotaSettings{
 			FiveHour: config.FiveHourQuota{Threshold: 85},
 			Weekly:   config.WeeklyQuota{Target: 85, Lead: 24 * time.Hour},
@@ -290,6 +295,12 @@ type cliOptions struct {
 	// entry for each run in order: DECISION writes a decision request, NONE
 	// writes nothing, as the Reviewer does for I8.
 	comments []string
+	// holds makes the agent run wait until the test releases it
+	// (scene.release), and then end as the fixture says: a run that is
+	// going on while the test does something else. The run first writes
+	// one line to the named pipe "started", as a run that sleeps does, and
+	// then reads the named pipe "release".
+	holds bool
 	// serverURL is the address of the fake GitHub; newScene sets it.
 	serverURL string
 }
@@ -360,6 +371,22 @@ func (sc *scene) settings() *config.Settings {
 		},
 		Notify: config.NotifySettings{DiscordEnabled: sc.notifications},
 		Quota:  sc.quota,
+	}
+}
+
+// release lets the agent run that holds (cliOptions.holds) end: the run
+// reads the named pipe "release", and the write returns when it did.
+func (sc *scene) release(t *testing.T) {
+	t.Helper()
+	released := make(chan error, 1)
+	go func() { released <- os.WriteFile(filepath.Join(sc.cliDir, "release"), []byte("go\n"), 0o600) }()
+	select {
+	case err := <-released:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(hangGuard):
+		t.Fatal("the agent run did not take the release")
 	}
 }
 
@@ -491,6 +518,16 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 			o.serverURL + "/repos/example-org/example-repo/issues/21/comments 1>&2\n" +
 			"fi\nfi\n"
 	}
+	hold := ""
+	if o.holds {
+		started, release := filepath.Join(dir, "started"), filepath.Join(dir, "release")
+		for _, pipe := range []string{started, release} {
+			if err := syscall.Mkfifo(pipe, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		hold = "if [ $n = agent ]; then\necho started > " + started + "\ncat " + release + " > /dev/null\nfi\n"
+	}
 	script := "#!/bin/sh\n" +
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
@@ -507,6 +544,7 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		"git branch --list 'cumin/*' > " + filepath.Join(dir, "$n.branches") + " 2>/dev/null\n" +
 		commit +
 		review +
+		hold +
 		"cat $f\n" +
 		sleep
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
@@ -1377,10 +1415,12 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n < 3 {
 		t.Errorf("%d snapshot reads, want 3 or more", n)
 	}
-	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 12 {
-		t.Errorf("%d labels created, want 12", n)
+	// The 12 labels of the start, and the 4 default priority labels of the
+	// first poll: the settings of the repository name no priority labels.
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 16 {
+		t.Errorf("%d labels created, want 16", n)
 	}
-	if got := sc.fake.LabelNames(sc.repo); len(got) != 12 || !slices.Contains(got, "cumin/status/ready") {
+	if got := sc.fake.LabelNames(sc.repo); len(got) != 16 || !slices.Contains(got, "cumin/status/ready") || !slices.Contains(got, "cumin/priority/P0") {
 		t.Errorf("labels of the repository = %v", got)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/implementing") {
@@ -1419,8 +1459,8 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	if err := second.Run(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 12 {
-		t.Errorf("%d labels created after the second start, want 12 still", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 16 {
+		t.Errorf("%d labels created after the second start, want 16 still", n)
 	}
 }
 

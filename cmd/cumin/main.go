@@ -31,6 +31,7 @@ var commands = []command{
 	{"run", "Run as a resident program. launchd starts this command.", runRun},
 	{"status", "Show running agents, issues that wait for the Owner, and the quota usage.", runStatus},
 	{"quota allow", "Allow cumin to use all of the current 5h quota window.", runQuotaAllow},
+	{"stop", "Ask the running cumin to finish its agent runs, start no new work, and exit: \"stop --after-current-runs\".", runStop},
 	{"setup", "Set up cumin on the Host: \"setup github-apps\" registers the GitHub App of each role, \"setup launchd\" makes launchd run cumin.", runSetup},
 }
 

@@ -21,7 +21,7 @@ const plannerLogin = implementerSlug
 func newAcceptanceScene(t *testing.T, fixture string) (*scene, time.Time) {
 	t.Helper()
 	sc := newScene(t, cliOptions{fixture: fixture})
-	closedAt := time.Now().Add(-time.Hour)
+	closedAt := sceneNow.Add(-time.Hour)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}})
 	return sc, closedAt
 }
@@ -152,10 +152,13 @@ func TestR4_TheCheckReadsTheMergedWork(t *testing.T) {
 		t.Fatalf("the split ran at %s, want %s", got, sc.remoteHead)
 	}
 
-	// The sub-issue merged a commit and closed.
+	// The sub-issue merged a commit and closed: after what the split wrote
+	// on GitHub, and before what the acceptance check writes.
 	merged := pushCommit(t, sc.remote)
+	closedAt := sceneNow.Add(time.Minute)
+	sc.clock.Set(closedAt.Add(time.Minute))
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: time.Now(), Labels: []string{"risk/low"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}})
 	sc.pollAndWait(t, sc.service())
 
 	if got := strings.TrimSpace(sc.record(t, "agent.head")); got != merged {

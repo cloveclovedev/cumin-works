@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"math/rand/v2"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -136,13 +137,13 @@ func TestDecide_I1(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Decide(tt.snapshot, tt.maxInProgress, nil)
+			got := Decide(tt.snapshot, tt.maxInProgress, nil, nil)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
 			// The same snapshot in another order gives the same actions.
 			shuffled := shuffle(tt.snapshot)
-			if again := Decide(shuffled, tt.maxInProgress, nil); !slices.Equal(again, tt.want) {
+			if again := Decide(shuffled, tt.maxInProgress, nil, nil); !slices.Equal(again, tt.want) {
 				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
 			}
 		})
@@ -219,11 +220,11 @@ func TestDecide_R1(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Decide(tt.snapshot, tt.maxInProgress, nil)
+			got := Decide(tt.snapshot, tt.maxInProgress, nil, nil)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
-			if again := Decide(shuffle(tt.snapshot), tt.maxInProgress, nil); !slices.Equal(again, tt.want) {
+			if again := Decide(shuffle(tt.snapshot), tt.maxInProgress, nil, nil); !slices.Equal(again, tt.want) {
 				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
 			}
 		})
@@ -300,7 +301,7 @@ func TestDecide_R3AndR6(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Decide(Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}}, 0, nil)
+			got := Decide(Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}}, 0, nil, nil)
 			if !slices.EqualFunc(got, tt.want, func(a, b Action) bool { return a == b }) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
@@ -313,12 +314,12 @@ func TestDecide_R3AndR6(t *testing.T) {
 func TestDecide_ClaimsWaitForTheLabelTimes(t *testing.T) {
 	requirement := RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelAwaitingOwnerReview},
 		SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelReady, "risk/low"}}}}
-	if got := Decide(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil); len(got) != 0 {
+	if got := Decide(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil); len(got) != 0 {
 		t.Errorf("Decide without the label times = %+v, want no action", got)
 	}
 	requirement.LabelTimesRead = true
 	want := []Action{Claim{Number: 10, RequirementIssue: 6}}
-	if got := Decide(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
+	if got := Decide(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
 		t.Errorf("Decide with the label times = %+v, want %+v", got, want)
 	}
 }
@@ -367,7 +368,7 @@ func TestDecide_R4AndR7(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Decide(tt.snapshot, tt.room, nil)
+			got := Decide(tt.snapshot, tt.room, nil, nil)
 			if !slices.EqualFunc(got, tt.want, func(a, b Action) bool { return a == b }) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
@@ -385,7 +386,7 @@ func TestDecide_ARunningAcceptanceCheckFillsTheLimit(t *testing.T) {
 		},
 		Running: map[int]bool{6: true},
 	}
-	if got := Decide(snapshot, 1, nil); len(got) != 0 {
+	if got := Decide(snapshot, 1, nil, nil); len(got) != 0 {
 		t.Errorf("Decide = %+v, want no action while the acceptance check runs", got)
 	}
 }
@@ -414,14 +415,14 @@ func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
 	ready := SubIssue{Number: 11, Labels: []string{LabelReady, "risk/low"}}
 	snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{ownerTask, ready}}}}
 	want := []Action{Claim{Number: 11, RequirementIssue: 6}}
-	if got := Decide(snapshot, 1, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
+	if got := Decide(snapshot, 1, nil, nil); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
 		t.Errorf("Decide = %+v, want %+v", got, want)
 	}
 
 	// An issue that became an owner task while an agent works on it still
 	// counts by its status label: an agent may run or start for it (I4).
 	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelAwaitingChecks, "risk/high"}
-	if got := Decide(snapshot, 1, nil); len(got) != 0 {
+	if got := Decide(snapshot, 1, nil, nil); len(got) != 0 {
 		t.Errorf("Decide with an owner task in awaiting-checks = %+v, want no claim", got)
 	}
 }
@@ -640,7 +641,7 @@ func TestDecide_I11(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []Action
-			for _, action := range Decide(tt.snapshot, 1, nil) {
+			for _, action := range Decide(tt.snapshot, 1, nil, nil) {
 				if _, ok := action.(CopyLabels); ok {
 					got = append(got, action)
 				}
@@ -675,10 +676,41 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 		}
 		return n
 	}
-	if n := claims(Decide(sub([]string{LabelAwaitingOwnerReview, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil)); n != 0 {
+	if n := claims(Decide(sub([]string{LabelAwaitingOwnerReview, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil, nil)); n != 0 {
 		t.Errorf("%d claims for a ready pull request of an issue in review, want 0", n)
 	}
-	if n := claims(Decide(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingOwnerDecision}), 1, nil)); n != 1 {
+	if n := claims(Decide(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingOwnerDecision}), 1, nil, nil)); n != 1 {
 		t.Errorf("%d claims for a ready issue, want 1", n)
+	}
+}
+
+// While cumin stops after its runs, the actions that ask an agent for new work are held
+// back, and the ones that need no agent stay, in their order.
+func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
+	t.Parallel()
+	all := []Action{
+		StartRequirement{Number: 1},
+		ReviewRemaining{Number: 2},
+		Accept{Number: 3},
+		StartReview{Number: 10, PullRequest: 20},
+		FixChecks{Number: 11, PullRequest: 21},
+		Plan{Number: 4},
+		CheckAcceptance{Number: 5},
+		Claim{Number: 12, RequirementIssue: 1},
+		MergeOwnerApproval{Number: 13, PullRequest: 23},
+		CopyLabels{Issue: 10, PullRequest: 20},
+	}
+	want := []Action{
+		StartRequirement{Number: 1},
+		ReviewRemaining{Number: 2},
+		Accept{Number: 3},
+		MergeOwnerApproval{Number: 13, PullRequest: 23},
+		CopyLabels{Issue: 10, PullRequest: 20},
+	}
+	if got := WithoutNewWork(all); !reflect.DeepEqual(got, want) {
+		t.Errorf("WithoutNewWork = %#v, want %#v", got, want)
+	}
+	if got := WithoutNewWork(nil); len(got) != 0 {
+		t.Errorf("WithoutNewWork(nil) = %#v, want none", got)
 	}
 }

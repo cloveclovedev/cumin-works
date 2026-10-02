@@ -18,10 +18,10 @@ import (
 func newTokenSourceForTest(t *testing.T) (*fakeGitHub, *TokenSource, *time.Time) {
 	t.Helper()
 	fake, server := newFakeGitHub(t)
-	client := NewAppClient(server.URL, server.Client())
-	// The fake checks the JWT against the real clock, so only the clock of
-	// the source moves.
-	now := time.Now()
+	client := newClientForTest(server)
+	// The fake checks the JWT against the fixed clock of the client, so
+	// only the clock of the source moves.
+	now := testNow
 	fake.expiresAt = now.Add(time.Hour)
 	source := NewTokenSource(client, testCredentials(), config.AppCuminCore, "example-org", "example-repo")
 	source.now = func() time.Time { return now }

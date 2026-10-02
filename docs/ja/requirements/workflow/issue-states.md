@@ -6,11 +6,12 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 
 ## ラベルの一覧
 
-ラベルには3つの種類があり、名前の前半で見分けられる。
+ラベルには4つの種類がある。優先度のラベルのほかは、名前の前半で見分けられる。
 
 - `cumin/type/*`: Issueの種類を表す。`cumin/type/requirement` は要求Issue、`cumin/type/owner-task` はOwnerが手で行う作業のIssueを表す。状態ではないので、閉じるまで付けたままにする。
 - `cumin/status/*`: Issueの状態を表す。1つのIssueに常に1つだけ付く。
 - `risk/*`: mergeのriskを表す。実装Issueに常に1つだけ付く。
+- 優先度のラベル: 着手の順番を表す。名前と順番は、リポジトリの設定で決まる ([cumin本体の要件](../cumin-core.md) の「設定」)。設定がなければ、`cumin/priority/P0` 〜 `cumin/priority/P3` である。付けなくてもよい。決まりは下の「着手の順番」にある。
 
 したがって要求Issueには、`cumin/type/requirement` と `cumin/status/*` の2つが付く。
 
@@ -26,6 +27,7 @@ cuminの動作のきっかけは、この文書の表を正とする。[cumin本
 | `cumin/status/awaiting-owner-review` | 実装Issue、要求Issue | Ownerが見て承認するのを待っている。実装Issueでは、Pull RequestのmergeをOwnerが判断する。OwnerがGitHubのレビューで承認すると、cuminがmergeする (I12)。要求Issueでは、分割結果と受け入れ | cumin |
 | `cumin/status/awaiting-owner-decision` | 実装Issue、要求Issue | Agentが先に進めない。Ownerの回答を待っている | cumin |
 | `risk/low`、`risk/medium`、`risk/high` | 実装Issue | mergeのrisk。Plannerが仮に付け、Ownerが確定する | Planner、Owner |
+| 優先度のラベル (初期値は `cumin/priority/P0` 〜 `cumin/priority/P3`) | 要求Issue、実装Issue | 先に着手してほしい順番。`P0` が最も高い | Owner |
 
 cuminは、実装Issueの `cumin/status/*` と `risk/*` を、そのIssueを閉じるPull Requestにもコピーする (原則5)。
 
@@ -131,6 +133,19 @@ Ownerが `cumin/status/awaiting-owner-review` や `cumin/status/awaiting-owner-d
 
 Implementerが `blocked` を返したとき (I2) は、やり直さずに、1回目から `cumin/status/awaiting-owner-decision` に替える。実装に必要な要件が足りない、という場合が多いためである。Ownerは実装Issueか、その上の要求Issueを書き直して進められる状態にしてから、実装Issueに `cumin/status/ready` を付け直す。Reviewerが `blocked` を返したとき (I10) も、同じ扱いにする。
 
+## 着手の順番
+
+Agentを起動する着手 (R1、R4、I1) は、同時に進めるIssueの数の上限を分け合う。空きより多くの着手が成り立つときは、次の順に着手する。
+
+1. 優先度の高い順。優先度は、優先度のラベルで表す。ラベルの名前と、高い順の並びは、リポジトリの設定で決まる。
+2. 同じ優先度なら、Issueの番号の小さい順。
+
+- 優先度のラベルがないIssueは、どの優先度のラベルが付いたIssueよりもあとに着手する。ラベルのないIssueどうしは、番号の小さい順である。
+- 優先度のラベルがない実装Issueは、その要求Issueの優先度を引き継ぐ。Ownerは、要求Issueに1回付ければよい。実装Issueに優先度のラベルがあれば、そちらを使う。
+- 1つのIssueに優先度のラベルが2つ以上付いているときは、高いほうを使う。
+- 優先度のラベルを付けるのは、Ownerである。cuminとAgentは、付けも外しもしない。Pull Requestにもコピーしない。
+- 優先度は、着手できるIssueの間の順番だけを決める。blocked by のIssueが開いているIssue、同時に進めるIssueの数の上限、利用枠の上限を越えて着手することはない。実行中のAgentを、優先度の高いIssueのために止めることもない。
+
 ## Agentのセッションの扱い
 
 - Ownerが介入したあと (`cumin/status/ready` の付け直し) は、Agentのセッションを新しくする。新しいセッションのAgentは、Issue、Pull Request、レビュー、Ownerのコメントを GitHub から読み直して、続きから進める。
@@ -146,7 +161,19 @@ Implementerが `blocked` を返したとき (I2) は、やり直さずに、1回
 | Q1 | 新しい着手 (R1、I1) を止め、Ownerに通知する。実行中のIssueは最後まで進める | 実行終了、または着手の直前の確認: 5h枠の使用率が今のしきい値以上になった。weekly枠の使用率がペースの上限以上になった。または、着手の直前の確認で使用率を読み取れなかった | 止めてから再開するまでに、この枠について (読み取れなかったときは、そのことについて) まだ通知していない |
 | Q2 | 着手を再開する | Host上のコマンドで、Ownerが5h枠の使い切りを許可した。許可はその5h枠のリセットまで有効 | weekly枠の使用率がペースの上限未満である |
 | Q3 | 着手を再開する | 定期確認: 手元に残した使用率から決めた、次に試す時刻を過ぎた | 着手の直前の確認で、どちらの枠も上限未満である |
-| Q4 | Ownerに「待ち状態になった」と通知する | 定期確認: R1もI1も成り立たず、実行中のAgentもいない。利用枠だけで止まっている着手 (Q1) は、成り立つものとして数える。Q1が原因を知らせているためである | 前回の通知のあとに、cuminが何か動作をした (同じ通知を繰り返さない) |
+| Q4 | Ownerに「待ち状態になった」と通知する | 定期確認: Ownerが動かなければ何も進まない。次の全てが成り立つときである。実行中のAgentがいない。R1もI1も成り立たない (利用枠だけで止まっている着手 (Q1) は、成り立つものとして数える。Q1が原因を知らせているためである)。cuminがOwnerなしで次に進めるIssueがない (下の表) | 前回の通知のあとに、cuminが何か動作をした (同じ通知を繰り返さない) |
+
+Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
+
+| Issueの状態 | 数えるか | 理由 |
+|---|---|---|
+| `cumin/status/awaiting-checks` | 数える。Q4を出さない | 必須のcheckが終われば、cuminがI3かI4で進める。checkがいつまでも結果を返さないときも数えるので、その間Q4は出ない。そのIssueは `cumin status` に見える |
+| `cumin/status/ready` で、着手できるのに、同時に進めるIssueの数の上限だけで待っている | 数える。Q4を出さない | 空きができれば、cuminがR1かI1で着手する |
+| `cumin/status/ready` で、blocked by のIssueが開いている | 数えない | 前のIssueが閉じるまで動けない。前のIssueがcuminの作業中なら、そちらがQ4を止める |
+| `cumin/status/ready` で、利用枠だけで止まっている | (Q1に任せる) | 上の行のとおり、R1とI1が成り立つものとして数える |
+| `cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing` | 実行中のAgentがいれば、Q4を出さない | Agentがいないまま残ったもの (cuminの再起動のあとなど) は、Ownerが `cumin/status/ready` を付け直すまで進まないので、数えない |
+| `cumin/status/awaiting-owner-review`、`cumin/status/awaiting-owner-decision` | 数えない | Ownerの判断を待っている |
+| `cumin/type/owner-task`、状態ラベルのないIssue | 数えない | Ownerが動くまで進まない |
 
 使用率の読み方:
 

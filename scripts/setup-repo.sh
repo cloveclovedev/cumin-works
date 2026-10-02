@@ -1,13 +1,16 @@
 #!/bin/sh
 # Prepare a target repository for cumin with the administrator's own gh login:
-# the protected-path workflow, a starter .cumin/config.toml, and the rulesets.
+# the protected-path workflow, a starter .cumin/config.toml, the rulesets, and
+# the priority labels that .cumin/config.toml names.
 # cumin itself never uses administrator permissions, so a person runs this.
 #
 # Usage:
 #   scripts/setup-repo.sh <owner>/<repo> [--core-app <slug>]
 #       [--implementer-app <slug>] [--required-check <name>]... [--dry-run]
 #
-# Running the script again with the same arguments changes nothing.
+# The script asks before it creates a priority label, and creates none without
+# the answer "y". Running the script again with the same arguments changes
+# nothing.
 # It needs only gh (logged in, with the "workflow" scope) and standard tools.
 set -eu
 
@@ -203,6 +206,85 @@ put_file() {
 
 put_file "$workflow_path" "$work/workflow.yml" report
 put_file "$config_path" "$work/config.toml" keep
+
+# --- The priority labels ------------------------------------------------------------
+
+# The labels that priority_labels of .cumin/config.toml names belong to the
+# organization, so cumin never creates them. The script lists the ones that
+# the repository does not have, and creates them only when the person who
+# runs it agrees. Without the key, cumin uses its default labels and creates
+# them itself.
+
+# priority_labels_of <file>
+# Prints the names in the array of the key priority_labels, one for each line.
+# It reads only quoted strings, on one line or on more lines. It does not
+# decode the escapes of TOML: a name with a backslash in double quotes ends the
+# function with status 4, so that the script never works on another name than
+# the one that cumin reads.
+priority_labels_of() {
+  awk '
+    # TOML allows the key bare or in quotes.
+    !inside && /^[ \t]*("priority_labels"|\047priority_labels\047|priority_labels)[ \t]*=/ { inside = 1; sub(/^[^=]*=/, "") }
+    inside {
+      line = $0
+      while (match(line, /"[^"]*"|\047[^\047]*\047|#|\]/)) {
+        token = substr(line, RSTART, RLENGTH)
+        # A comment ends the line, and "]" ends the array.
+        if (token == "#") break
+        if (token == "]") exit
+        if (substr(token, 1, 1) == "\"" && index(token, "\\") > 0) exit 4
+        print substr(token, 2, length(token) - 2)
+        line = substr(line, RSTART + RLENGTH)
+      }
+    }
+  ' "$1"
+}
+
+if gh api --method GET -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$config_path" -f ref="$branch" >"$work/config-now" 2>"$work/read-error"; then
+  priority_labels_of "$work/config-now" >"$work/priority-labels" ||
+    die "cannot read priority_labels of $config_path: a label name uses a backslash. Write the names without escapes, or create the labels by hand"
+else
+  # Only a confirmed 404 means that the file does not exist (a dry run of a
+  # new repository). Any other failure must not pass as "no priority labels".
+  grep -q "HTTP 404" "$work/read-error" || die "cannot read $config_path from $branch: $(head -n 1 "$work/read-error")"
+  : >"$work/priority-labels"
+fi
+if [ -s "$work/priority-labels" ]; then
+  gh api --paginate "repos/$repo/labels" --jq '.[].name' >"$work/labels" || die "cannot list the labels of $repo"
+  # GitHub label names ignore case.
+  tr '[:upper:]' '[:lower:]' <"$work/labels" >"$work/labels-lower"
+  : >"$work/missing-labels"
+  while IFS= read -r label; do
+    [ -n "$label" ] || continue
+    printf '%s\n' "$label" | tr '[:upper:]' '[:lower:]' | grep -Fxq -f - "$work/labels-lower" ||
+      printf '%s\n' "$label" >>"$work/missing-labels"
+  done <"$work/priority-labels"
+  if [ ! -s "$work/missing-labels" ]; then
+    echo "unchanged  the priority labels of $config_path exist"
+  else
+    echo "missing    priority labels that $config_path names:"
+    sed 's/^/           /' "$work/missing-labels"
+    if [ "$dry_run" -eq 1 ]; then
+      echo "would ask  whether to create them"
+    else
+      printf 'Create these labels in %s? [y/N] ' "$repo"
+      answer=""
+      # No answer (the end of the input) creates nothing.
+      IFS= read -r answer || answer=""
+      case "$answer" in
+        y|Y|yes|YES|Yes)
+          while IFS= read -r label; do
+            gh api -X POST "repos/$repo/labels" -f name="$label" -f color="D4C5F9" \
+              -f description="The Owner says: start this before a lower priority" >/dev/null ||
+              die "cannot create the label $label"
+            echo "created    label $label"
+          done <"$work/missing-labels"
+          ;;
+        *) echo "kept       no label was created. cumin treats an issue without a priority label as the lowest priority" ;;
+      esac
+    fi
+  fi
+fi
 
 # --- The rulesets ---------------------------------------------------------------
 

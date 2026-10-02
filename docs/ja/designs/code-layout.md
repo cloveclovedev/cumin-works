@@ -34,8 +34,9 @@
 | `cmd/cumin` | `main.go` | サブコマンドの一覧と振り分け。終了コード |
 | | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、Hostの状態ファイルを開き、`agent.Service` と `workflow.Service` を組み立てて動かす |
 | | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
-| | `status.go` | `cumin status` (GitHubのラベル、最新の使用率、今の上限の表示) と `cumin --version` (Goのビルド情報)。表示の中身は `writeStatus` にまとめ、Keychainなしでテストする |
+| | `status.go` | `cumin status` (GitHubのラベル、最新の使用率、今の上限、止める予約の表示) と `cumin --version` (Goのビルド情報)。表示の中身は `writeStatus` にまとめ、Keychainなしでテストする |
 | | `quota.go` | `cumin quota allow` (Q2)。状態ファイルの最新の5h枠のリセット時刻を、許可のファイルに書く |
+| | `stop.go` | `cumin stop --after-current-runs`。止める予約のファイルを書く |
 | | `live_e2e_test.go` | 実機の場面 E2E-1。launchd で動く cumin を外から確かめるので、組み立てたバイナリの隣に置く。Owner の操作は `gh` で行う |
 | `internal/core/config` | `config.go` | Hostの設定ファイル (TOML) の読み込み、初期値、制限、既定のパス |
 | | `repository.go` | 対象のリポジトリの `.cumin/config.toml` を、Hostの設定に重ねる |
@@ -44,6 +45,7 @@
 | | `quota.go` | 利用枠の設定 (5h枠のしきい値と時間帯、weekly枠の目標と前倒し) の読み込み |
 | `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、最新の使用率 (Q3)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (Q2) |
+| | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
@@ -68,10 +70,11 @@
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
 | `internal/notify` | `domain.go` | 純粋。通知の内容と、その文章 |
 | | `notify.go` | 通知を送る入口 `Notifier` と、手段を表す `Sender` |
-| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、必須のcheckの判定、実行終了の判定 (I2)、承認のあとの判定 (I6、I7)、Ownerの承認の判定 (I12) |
+| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、着手の順番 (優先度のラベル、Issueの番号)、実行を待って止める間に落とす動作、必須のcheckの判定、実行終了の判定 (I2)、承認のあとの判定 (I6、I7)、Ownerの承認の判定 (I12) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
-| | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧 |
+| | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧。初期値の優先度のラベルは、設定が名前を決めていないリポジトリにだけ作る |
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
+| | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
 | | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、分割の確かめ (R2)、受け入れの確認の依頼とその結果 (R4、R7) |
 | | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。そのためのラベルの時刻の読み取り |
 | | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |
