@@ -59,6 +59,9 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
     - 連結するのは `internal/agent` である。`roles`、`disciplines`、`templates` は、どれも自分のMarkdownを読むだけで、互いを知らない。riskの基準は、呼び出し処理が3段を解決したうえで、起動の依頼のデータとして渡す。1か所で連結するので、外から差し替えられる部分が増えても、変わるのはその1か所である (disciplineを外から読む仕組みは [要求のbacklog](../requirements/backlog.md) の「roleとdisciplineの分離」)。
   - `--add-dir <そのroleのskillのディレクトリ>`: 1つの行動のためのテンプレート (Pull Requestの説明、レビューの指摘への返答、Ownerに判断を求める文章) は、システムプロンプトではなくskillとして渡す。長い実装のあとにシステムプロンプトの末尾を忘れないように、行動の直前に読ませるためである。`cumin run` が起動時に、`templates/` の文面を本文にしたskillを、Hostの状態のディレクトリの `skills/<role>/.claude/skills/<名前>/SKILL.md` に書く。roleごとにディレクトリを分け、そのroleが受け取るskillだけを入れる。起動では自分のroleのディレクトリだけを渡すので、roleは自分の仕事のskillしか見ない。毎回、roleのディレクトリごと作り直すので、ファイルはバイナリと一致し、roleの間で移したskillが古い側に残らない。Claude Codeは `--add-dir` のディレクトリの `.claude/skills/` からskillを読み、起動時には名前と説明だけを文脈に入れ、本文は呼ばれたときに読む (公式: Skills)。`--setting-sources project` でも読まれる (公式: Skills、`project` のsetting sourceに依存する)。テンプレートの文面は `templates/` にだけ置く。
   - `-p <依頼文>`: 依頼文はプロンプトの引数で渡す。
+    - 依頼文の先頭には、その実行の事実を、ラベルを付けた行のかたまりとして置く。1行目は、cuminからのデータであることを示す。続く2行は、実行時間の上限 (その実行に使う設定の `roles.<role>.time_limit`) と、実行が終わる時刻 (起動の時刻に上限を足した時刻。UTCのRFC 3339) である。かたまりのあとに空行を1つ置き、呼び出し処理の依頼文を続ける。決まりは [Agentに共通の要件](../requirements/agents/common.md) の「プロセスとセッション」にある。
+    - 事実は実行のたびに変わるので、roleの指示ではなく依頼文に入れる。どのroleの、どの種類の依頼にも入れる。続きの依頼 (`--resume`) にも入れ、終わる時刻はその実行のものになる。
+    - かたまりを作るのは `internal/agent` の純粋な関数である。起動の入口が、時計と設定を読んで値を渡す。呼び出し処理は何も渡さない。時計は入口が持ち、テストが差し替える。
   - `--setting-sources project`: ユーザアカウントの設定と `CLAUDE.md` を読ませない (実測 6e、27)。
   - `--permission-mode bypassPermissions`: 全てのツールを許可する。headlessの実行では、許可を求められても答える人がいない。`--dangerously-skip-permissions` と同じ意味である (CLI reference)。
   - `--json-schema <結果のスキーマ>`: 結果を [共通の形式](../requirements/agents/common.md) に従わせる。スキーマの文字列は、コードの側で要件文書と同じに保つ。
@@ -122,6 +125,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 ### 実行時間の上限
 
 - 依頼ごとの上限は、設定 `roles.<role>.time_limit` の値である。上限を過ぎたら打ち切り、異常終了 (種類は「実行時間の上限」) として返す。呼び出し処理が依頼を取り消したときも、同じ種類にする。
+- Agentは、この上限と、実行が終わる時刻を、依頼文の先頭で受け取る (「Claude Codeの起動」)。長い確認を、終わる時刻より前に終えるためである。
 - 打ち切りは2段階で行う。まずCLIのプロセスグループにSIGTERMを送る。SIGTERMを受けたCLIは終了コード143で終わり、実行中のBashコマンドのプロセスツリーも止める (公式: Run Claude Code programmatically の "Stop a run with SIGTERM"、実測 32)。猶予 (10秒) のうちに終わらなければ、プロセスグループにSIGKILLを送る。
 - CLIは自分のプロセスグループで起動する (`Setpgid`)。Agentが起動したコマンドも同じグループに入るので、シグナルがそこまで届く。
 - 実装にはGoの `os/exec` の `Cmd.Cancel` と `Cmd.WaitDelay` を使う。`Cancel` がSIGTERMを送り、`WaitDelay` (猶予と同じ値) を過ぎると `os/exec` がCLIを止めてパイプを閉じる。その後、cuminがグループにSIGKILLを送り、残ったものを消す。
@@ -135,7 +139,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - 呼び出し処理は、1回の依頼を `internal/agent` の1つの入口 (起動) に渡すだけでよい。入口は次の順に進める。
   1. roleのAppのinstallation tokenを、対象のリポジトリ1つに絞って発行する。tokenは依頼のたびに新しく発行し、使い回さない。実行は最長55分続くのに対し、tokenは発行から1時間で失効するからである (cumin-coreのtokenの使い回しとは別の話である)。
   2. botの身元を読む。`GET /app` でAppのslugを、`GET /users/<slug>[bot]` でbotユーザのidを読み、作者の名前とメールアドレスを組み立てる (「Agentの環境」)。読むのはroleごとに1回だけで、以後はメモリに持つ。変わらない値なので、失っても読み直せばよい。
-  3. worktreeでCLIを起動する (「Claude Codeの起動」)。tokenと身元は実行の環境変数にだけ入れ、ログにも戻り値にも手元の状態にも入れない。
+  3. worktreeでCLIを起動する (「Claude Codeの起動」)。起動の直前に時計を読み、実行時間の上限と終わる時刻を依頼文の先頭に置く。tokenと身元は実行の環境変数にだけ入れ、ログにも戻り値にも手元の状態にも入れない。
 - 入口は、結果と一緒に、roleのAppのbotのlogin (`<slug>[bot]`) を返す。呼び出し処理が、Pull Requestの作成者と比べるためである (I2)。2で読んだ身元をそのまま返すので、読み取りは増えない。
 - 起動の入口は、使用率を読まない。着手でない依頼 (I4、I5、Reviewerへの依頼) は、上限に達していても進めるためである。使用率を読む最小の実行は、別の入口 (使用率の読み取り) にあり、呼び出し処理が新しい着手 (R1、I1) の前にだけ呼ぶ ([利用枠の設計](quota.md) の「着手の前の確認」)。この入口はtokenを発行しない。
 - roleごとの設定 (CLI、実行ファイル、モデル、時間の上限) と、リポジトリの持ち主とroleの組ごとのAppの認証情報 (設定 `github_apps.<organization>.<role>`) は、起動時に入口へ渡す。設定を読むのは `cmd/cumin` の役目である。身元も、持ち主とroleの組ごとに持つ。

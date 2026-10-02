@@ -1106,8 +1106,9 @@ func TestI2_TheRetryIsTheSameRequestInANewSession(t *testing.T) {
 	}
 	// The request text is the one of the first run: the same kind, the
 	// same issue, the same branch, and the same work directory that cumin
-	// prepared (which the Workspace gives without resolving symlinks).
-	if got, want := promptOf(t, args), workflow.ImplementRequestText("example-org/example-repo", 10, wantBranch, wantDir); got != want {
+	// prepared (which the Workspace gives without resolving symlinks). The
+	// facts of the run stand before it, with the end time of the retry.
+	if got, want := promptOf(t, args), workflow.ImplementRequestText("example-org/example-repo", 10, wantBranch, wantDir); !strings.HasSuffix(got, "\n\n"+want) {
 		t.Errorf("the request text of the retry = %q, want %q", got, want)
 	}
 }
