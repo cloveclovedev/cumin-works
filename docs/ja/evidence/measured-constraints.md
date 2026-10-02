@@ -239,3 +239,11 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 123 | Pull Requestのmergeで、`sha` に先頭でないコミットを渡すと、409 ("Head branch was modified") が返り、何もmergeされない | 公式: Merge a pull request。#293 の M2 | 公式文書 + 実測 |
 | 124 | 衝突するPull Requestのmergeは、405 ("Pull Request has merge conflicts") になる。rulesetに止められたmergeも405である (62)。mergeの直前に読んだ `mergeable` は、mainが動いた直後だと古い `true` のことがある | #293 の M4 | 実測 |
 | 125 | mergeが405で失敗した直後に読み直すと、衝突のときだけ `mergeable` が `false`、`mergeable_state` が `dirty` になる。衝突とrulesetの拒否は、これで見分けられる | 公式: Get a pull request。#293 の M5 | 公式文書 + 実測 |
+
+## 17. 対象のリポジトリを足したときに確かめたこと (2026-10-02)
+
+cumin-worksを対象のリポジトリにしたときに確かめた事実。
+
+| # | 制約 | 根拠 | 確度 |
+|---|---|---|---|
+| 126 | GitHub Appのインストールにリポジトリを足す `PUT /user/installations/{installation_id}/repositories/{repository_id}` は、`gh` のログインのtoken (OAuth、`gho_`) では、4つのAppのどれでも404になる。`GET /user/installations` は403で、「GitHub Appに認可されたtokenで認証する」よう求められる。公式文書は、このendpointを classic personal access token (`repo` の scope) でだけ使えるとしている | 公式: REST API endpoints for GitHub App installations ("Add a repository to an app installation")。Hostで実測 | 公式文書 + 実測 |
