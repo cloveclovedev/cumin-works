@@ -856,7 +856,7 @@ func (s ChecksState) String() string {
 //     names an App is met only by the results of that App; GitHub counts a
 //     check of another App as missing.
 //   - A required check passes when every result of it passed. Passed means
-//     success, skipped, or neutral (rows 20 and 51 of
+//     success, skipped, or neutral (row 51 of
 //     measured-constraints.md); the caller receives them folded already.
 //   - A failed result decides the whole answer, even when another required
 //     check has not reported yet: the fix of I4 comes before the wait.

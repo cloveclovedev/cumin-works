@@ -38,7 +38,7 @@ func TestChecksOf(t *testing.T) {
 			want: ChecksPassed,
 		},
 		{
-			name:     "skipped and neutral are passed (rows 20 and 51)",
+			name:     "skipped and neutral are passed (row 51)",
 			required: []RequiredCheck{{Name: "protected-paths"}, {Name: "flaky"}},
 			results: []CheckResult{
 				{Name: "protected-paths", Conclusion: CheckPassed},

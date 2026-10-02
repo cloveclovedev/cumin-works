@@ -91,7 +91,7 @@ type event struct {
 	// Field of the rate_limit_event.
 	RateLimitInfo *rateLimitInfo `json:"rate_limit_info"`
 	// Fields of the init event that show user-level context
-	// (measured-constraints.md rows 27, 28; the live record of #67).
+	// (measured-constraints.md rows 27, 86; the live record of #67).
 	Plugins     json.RawMessage `json:"plugins"`
 	MCPServers  json.RawMessage `json:"mcp_servers"`
 	MemoryPaths json.RawMessage `json:"memory_paths"`
@@ -453,7 +453,7 @@ const builtinSuffix = "@builtin"
 // work directory, or "" when it shows none. Checked: plugins that are not
 // built in (builtinSuffix) and MCP servers (empty with --setting-sources project,
 // row 27), and
-// memory_paths (absent when auto memory is off, row 28; the live record
+// memory_paths (absent when auto memory is off, row 86; the live record
 // of #67). plugins and mcp_servers must be present: a record without
 // them cannot confirm that nothing was loaded. The init event lists no
 // instruction files, so instructions cannot be checked here. The reason

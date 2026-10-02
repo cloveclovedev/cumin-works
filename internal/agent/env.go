@@ -58,7 +58,7 @@ func baseEnvironment() []string {
 	}
 	return append(env,
 		// --setting-sources project does not stop auto memory. The
-		// variable does (measured-constraints.md row 28; Claude Code
+		// variable does (measured-constraints.md row 86; Claude Code
 		// "Environment variables").
 		"CLAUDE_CODE_DISABLE_AUTO_MEMORY=1",
 		// The MCP servers of the claude.ai account (connectors) are

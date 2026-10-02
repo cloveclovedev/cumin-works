@@ -1,6 +1,6 @@
 # 調査・実測で確定した制約
 
-Claude Code と GitHub について、公式文書と実機で確かめた事実だけを集める。設計上の決定は含まない。要件の文書ではなく、事実の記録である。行は主題ごとの9つの表に分かれ、表の中では番号の順に並ぶ。番号は確かめた順に付けたもので、文書の全体で一意である。
+Claude Code と GitHub について、公式文書と実機で確かめた事実だけを集める。設計上の決定は含まない。要件の文書ではなく、事実の記録である。行は主題ごとの9つの表に分かれ、表の中では番号の順に並ぶ。番号は確かめた順に付けたもので、文書の全体で一意である。1つの事実は1つの行に書く。別の行にまとめてなくした番号は、最後の「引退した番号」の表にある。
 
 確度の凡例: 実測 = このホストで実際に動かして観測した、公式文書 = 公式ドキュメントで確認した、未確認 = 公式文書に記載が見つからず、まだ試していない。「日付と版」の列は、その行を確かめた日付と、そのときの道具の版である。根拠の「答えた行」は、その行が確かめた、先に未確認だった行である。
 
@@ -9,7 +9,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
 | 1 | headless実行 (`claude -p ... --output-format stream-json --verbose`) の出力に `rate_limit_event` が含まれ、5h枠とweekly枠の使用率とリセット時刻を機械可読で読める | `rate_limit_info.unifiedWindows.five_hour` と `seven_day` のそれぞれに、`utilization` (0から1の使用率) と `resetsAt` (Unix秒) がある。`status: "allowed"` も返る。同時刻の `/usage` の表示と値が一致した | 実測 | 2026-09-19、Claude Code 2.1.267 |
-| 2 | `rate_limit_event` の仕様は、確認した公式文書 (headless、Agent SDK TypeScriptリファレンス) には見つからなかった。バージョンアップで変わりうる | 同左 | 未確認 | 2026-09-19、Claude Code 2.1.267 |
+| 2 | `rate_limit_event` は、Agent SDKの文書に `SDKRateLimitEvent` として記述がある。`rate_limit_info` の `status`、`utilization`、`resetsAt`、`rateLimitType` (`five_hour`、`seven_day`、`seven_day_opus`、`seven_day_sonnet`、`overage`) があり、イベントは利用枠の状態が変わったときに出る、とある。`unifiedWindows` は記述がない。headlessの文書には、このイベントの記述がない。バージョンアップで変わりうる | 公式: Agent SDK のTypeScriptリファレンス (2026-09-21)、headless | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 3 | `claude -p "/usage"` はheadlessで動き、使用率とリセット時刻を人間向けテキストで返す。`--output-format json` でもテキストが `result` に入るだけ | 出力例: `Current session: <N>% used · resets <日時> (<タイムゾーン>)` | 実測 + 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 4 | statuslineスクリプトへのJSONには `rate_limits.five_hour.used_percentage` と `resets_at` (Unix秒) などがある。Pro/Max加入者のみ、セッション内の最初のAPI応答後にだけ現れる | https://code.claude.com/docs/en/statusline.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 5 | Anthropic APIのRate Limits API、Usage & Cost APIはAPI組織向けで、サブスクリプションの5h枠・weekly枠は返さない | https://platform.claude.com/docs/en/manage-claude/rate-limits-api.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
@@ -20,23 +20,18 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 6d | Agentの最後の応答をJSON Schemaに従わせる機能は、Claude CodeにもCodexにもある。Claude Codeは `claude -p --output-format json --json-schema <schema>` で、結果は `structured_output` に入る。Codexは `codex exec --output-schema <file>` で、`-o` で最後の応答をファイルに書ける | https://code.claude.com/docs/en/headless.md、https://learn.chatgpt.com/docs/non-interactive-mode | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6e | `claude -p` に `--setting-sources project` を付けると、ユーザアカウントの `~/.claude/CLAUDE.md` が読み込まれなくなる。サブスクリプションのログインはそのまま使える | 同じ質問を2回実行した。オプションなしでは `~/.claude/CLAUDE.md` の内容を答え、オプションありでは「その指示はない」と答えた。どちらもサブスクリプションで実行できた (Claude Code 2.1.267) | 実測 | 2026-09-19、Claude Code 2.1.267 |
 | 26 | `--json-schema` は `--output-format stream-json --verbose` と併用できる。1回の実行で、`rate_limit_event` と、`result` のイベントの `structured_output`、`session_id`、`subtype`、`is_error` が取れる | 公式文書は `--output-format json` との組み合わせしか説明していない。実際に併用して、両方が出力されることを確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 |
-| 27 | `--setting-sources project` を付けると、実行の最初に出る `system` / `init` のイベントで、`plugins` と `mcp_servers` が空になり、`skills` は組み込みのものだけになる | ユーザアカウントにplugin、MCPサーバ、skillを入れてあるHostで確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 |
-| 28 | `--setting-sources project` を付けても、自動メモリは止まらない。`init` のイベントの `memory_paths.auto` が、ユーザアカウントの下にある、作業ディレクトリごとのメモリを指す。環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`memory_paths` は null になる。設定の `autoMemoryEnabled: false` でも止められる | https://code.claude.com/docs/en/memory.md と、環境変数の有無で `init` のイベントを比べた結果 | 実測 + 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 29 | `claude -p "/usage"` はモデルを呼ばず (`num_turns` が0、`total_cost_usd` が0)、利用枠を使わない。ただし `rate_limit_event` は出ず、人間向けの文章だけが返る。使用率を機械可読で返すサブコマンドは、`claude --help` にない。機械可読の使用率を読むには、モデルを呼ぶ実行が要る | `rate_limit_event` は、モデルへの要求に対する応答に付いてくる情報である | 実測 | 2026-09-20、Claude Code 2.1.267 |
+| 27 | `--setting-sources project` を付けると、実行の最初に出る `system` / `init` のイベントで、`skills` は組み込みのものだけになる。`plugins` に載るのは、バイナリに入ったpluginだけである (107を参照)。`mcp_servers` は、claude.aiのアカウントのコネクタを除いて空になる (91を参照) | ユーザアカウントにplugin、MCPサーバ、skillを入れてあるHostで確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 |
+| 29 | `claude -p "/usage"` はモデルを呼ばず (`num_turns` が0、`total_cost_usd` が0)、利用枠を使わない。ただし `rate_limit_event` は出ず、人間向けの文章だけが返る。使用率を機械可読で返すサブコマンドは、`claude --help` にない。機械可読の使用率を読むには、モデルを呼ぶ実行が要る。CLIのサブコマンド、フラグ、hook、statuslineの項目、SDKの呼び出しのどれも、モデルを呼ばずにサブスクリプションの使用率を返さない。`/usage` は、文書にないendpointをログインのOAuthのtokenで呼んでいる | `rate_limit_event` は、モデルへの要求に対する応答に付いてくる情報である。公式文書 (2026-09-21) と公開の報告 | 実測 + 公式文書 (不在の確認) | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 30 | システムプロンプトを `--system-prompt` で短いものに置き換え、1語だけ答えさせる最小の実行でも、`rate_limit_event` は出る。実行は1〜2秒で終わる。入力のほとんどは、CLIが毎回送る定型の部分である | 同左 | 実測 | 2026-09-20、Claude Code 2.1.267 |
 | 31 | `-p` でも `--resume <session_id>` でセッションを再開できる。2.1.223以降は、別のディレクトリからでも再開できる | https://code.claude.com/docs/en/sessions.md | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限は、起動する側で持つ必要がある。`-p` の実行は、SIGTERMを受けると終了コード143で終わる | https://code.claude.com/docs/en/headless.md、手元の `--help` | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
+| 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限は、起動する側で持つ必要がある。`-p` の実行は、SIGTERMを受けると終了コード143で終わる。Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない | https://code.claude.com/docs/en/headless.md、手元の `--help`。プロセスグループへのSIGTERMは #42 の実機の確認で、打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 公式文書 + 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
 | 74 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した。cuminは標準入力をnullデバイスにして起動する | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
-| 75 | `rate_limit_event` には、`rate_limit_info.unifiedWindows` (1を参照) のほかに、`session_id` と `uuid` があり、`rate_limit_info` には `status`、`resetsAt`、`rateLimitType`、overageの項目がある。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。値は記録していない | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
-| 76 | Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない (32の続き) | #42 の実機の確認。打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
 | 85 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` は、Bashツール、hook、MCPサーバの環境から認証情報を取り除く。cuminは使わない。AgentがBashツールでroleのtokenを使うためである | 公式: Environment variables | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
-| 86 | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`init` のイベントに `memory_paths` の項目そのものがない (28は null と書いたが、項目がない)。`init` には、指示のファイルの一覧を返す項目がない。ある項目は `plugins`、`mcp_servers`、`skills`、`agents`、`slash_commands`、`tools` など | #76 で実測。項目の全体は #67 に記録 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
-| 87 | `rate_limit_info` の項目は `status`、`resetsAt`、`rateLimitType`、`unifiedWindows`、`isUsingOverage`、`overageStatus`、`overageDisabledReason` である。通常の実行では `status` は `allowed` になる (75の続き) | #76 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
-| 88 | Agent SDKの文書は `SDKRateLimitEvent` を記述しており、`rate_limit_info` の `status`、`utilization`、`resetsAt`、`rateLimitType` (`five_hour`、`seven_day`、`seven_day_opus`、`seven_day_sonnet`、`overage`) がある。イベントは利用枠の状態が変わったときに出る、とある。`unifiedWindows` は記述がない (2の更新) | 公式: Agent SDK のTypeScriptリファレンス (2026-09-21) | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
-| 89 | CLIのサブコマンド、フラグ、hook、statuslineの項目、SDKの呼び出しのどれも、モデルを呼ばずにサブスクリプションの使用率を返さない。`/usage` は文章を返し、文書にないendpointをログインのOAuthのtokenで呼んでいる | 公式文書 (2026-09-21) と公開の報告 | 公式文書 (不在の確認) | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
-| 91 | `--setting-sources project` を付けた `-p` の実行でも、claude.aiのアカウントのコネクタが `init` の `mcp_servers` に現れる。worktreeに `.mcp.json` がなくても同じである。`ENABLE_CLAUDEAI_MCP_SERVERS=false` を付けると消える (27の追記) | #93 で実測 (2026-09-22) | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 86 | `--setting-sources project` を付けても、自動メモリは止まらない。`init` のイベントの `memory_paths.auto` が、ユーザアカウントの下にある、作業ディレクトリごとのメモリを指す。環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`init` のイベントに `memory_paths` の項目そのものがない。設定の `autoMemoryEnabled: false` でも止められる。`init` には、指示のファイルの一覧を返す項目がない。ある項目は `plugins`、`mcp_servers`、`skills`、`agents`、`slash_commands`、`tools` など | https://code.claude.com/docs/en/memory.md。環境変数の有無で `init` のイベントを比べた。#76 で実測。項目の全体は #67 に記録 | 実測 + 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 87 | `rate_limit_event` には、`rate_limit_info` のほかに、`session_id` と `uuid` がある。`rate_limit_info` の項目は `status`、`resetsAt`、`rateLimitType`、`unifiedWindows` (1を参照)、`isUsingOverage`、`overageStatus`、`overageDisabledReason` である。通常の実行では `status` は `allowed` になる。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。#76 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 91 | `--setting-sources project` を付けた `-p` の実行でも、claude.aiのアカウントのコネクタが `init` の `mcp_servers` に現れる。worktreeに `.mcp.json` がなくても同じである。`ENABLE_CLAUDEAI_MCP_SERVERS=false` を付けると消える | #93 で実測 (2026-09-22) | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 97 | `--setting-sources project` と `--add-dir <ディレクトリ>` を付けた `-p` の実行で、Agentに見えるskillは、そのディレクトリのskillと、CLIに組み込みのskillだけである。Hostのユーザの `~/.claude/skills/` のskillは見えない | live scenario Impl-1 (#101) の記録 | 実測 | 2026-09-22、Claude Code 2.1.267 |
-| 107 | `--setting-sources project` を付けても、`init` の `plugins` に、バイナリに入ったpluginが載る。2.1.284 では `agents-md@builtin` と `telemetry@builtin` で、`path` は `builtin` である。claude.aiから同期したpluginではないので、`syncClaudeAiPlugins` では消えない。27の「`plugins` が空になる」は、この版では成り立たない (27の更新) | Hostで実測 (2026-09-29)。公式: `anthropics/claude-code` の `mods/` | 実測 + 公式文書 | 2026-09-25、2026-09-29、Claude Code 2.1.284 |
+| 107 | `--setting-sources project` を付けても、`init` の `plugins` に、バイナリに入ったpluginが載る。2.1.284 では `agents-md@builtin` と `telemetry@builtin` で、`path` は `builtin` である。claude.aiから同期したpluginではないので、`syncClaudeAiPlugins` では消えない | Hostで実測 (2026-09-29)。公式: `anthropics/claude-code` の `mods/` | 実測 + 公式文書 | 2026-09-25、2026-09-29、Claude Code 2.1.284 |
 | 108 | `builtin` は予約されたmarketplaceの名前で、Claude Codeはバイナリに入ったpluginにだけ使う。marketplace、claude.ai、skillsのディレクトリから来たpluginの `source` が `<名前>@builtin` になることはない | 公式: Marketplace reference の "Reserved names" (#207 で確認) | 公式文書 | 2026-09-25、2026-09-29、Claude Code 2.1.284 |
 | 111 | `init` のイベントの `skills` は、skillの名前の文字列の配列である (86で項目の名前だけを記録した) | #166 の記録 (2026-09-25、Claude Code 2.1.273) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
 
@@ -46,22 +41,16 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 |---|---|---|---|---|
 | 7 | 無料のmachine accountは、個人アカウントに加えて1つまで。roleごとに4つの無料アカウントを作ることはできない | GitHub利用規約 B.3: "You may maintain no more than one free machine account in addition to your free Personal Account." | 公式文書 | 2026-09-19 |
 | 8 | GitHub Appは1つの所有者につき100個まで登録できる。seatを消費しない。privateなAppは所有アカウントにだけインストールできる | docs.github.com: registering-a-github-app、deciding-when-to-build-a-github-app、making-a-github-app-public-or-private | 公式文書 | 2026-09-19 |
-| 9 | Appの操作はそのAppの名義になる。installation access tokenは1時間で失効し、発行時にリポジトリと権限を絞れる | docs.github.com: authenticating-as-a-github-app-installation、generating-an-installation-access-token-for-a-github-app | 公式文書 | 2026-09-19 |
 | 10 | Issue作成、ラベル、sub-issue、依存関係 (blocked by)、Pull Request作成、レビュー (APPROVE)、mergeは、すべてinstallation tokenで呼べる。mergeに要る権限は `Contents: write` | docs.github.com: permissions-required-for-github-apps | 公式文書 | 2026-09-19 |
-| 18 | Appの表示名が `<slug>[bot]` になること、コミットのメールアドレスが `<bot-user-id>+<slug>[bot]@users.noreply.github.com` であること | 広く観測されている慣習。公式文書には記載なし | 未確認。49で実測した | 2026-09-19 |
-| 19 | AppのコメントでOwnerを@メンションすると、Ownerに通知が届くこと | 一般の@メンションの規則からの推論 | 未確認。50で実測した | 2026-09-19 |
+| 19 | Appは、人を@メンションするコメントを投稿できる (201)。メンションされた人に通知が届く | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。通知が届くことは、Ownerが2026-09-21に確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 33 | installation access tokenの期限は、発行から1時間で固定である。発行のAPIで指定できるのは `repositories`、`repository_ids`、`permissions` だけで、期限を変える項目はない | docs.github.com: rest/apps/apps | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 38 | GitHub Appは、manifestから登録できる (GitHub App Manifest flow)。名前や権限を書いたmanifestを `https://github.com/organizations/<org>/settings/apps/new` に渡し、人が "Create GitHub App" を押すと、`redirect_url` にcodeが戻る。1時間以内に `POST /app-manifests/{code}/conversions` を呼ぶと、`id` や `pem` (秘密鍵) が返る。`redirect_url` に手元のアドレスを使えるかは、文書に記載がない | docs.github.com: registering-a-github-app-from-a-manifest | 公式文書 (手元のアドレスへのredirectは未確認)。44で実測した | 2026-09-20、Claude Code 2.1.267 |
-| 42 | GitHub Appが作ったPull Requestでは、作成者の種類 (`pull_request.user.type`) が `Bot` になる見込みである。保護されたパスのcheckは、これを条件に使う | 広く観測されている振る舞い。公式文書には、Appが作ったPull Requestについての明記を見つけていない。使い捨てのリポジトリで確かめる | 未確認。48で実測した | 2026-09-20、Claude Code 2.1.267 |
-| 43 | `GET /apps/{app_slug}` で、privateなGitHub Appを、Organizationの管理者のtokenで読めるかどうか | 公式文書 (rest/apps/apps) に記載がない。保護されたパスのcheckがAppの名前を使わなくなったので、cuminは、この呼び出しに頼らない | 未確認。47で実測した | 2026-09-20、Claude Code 2.1.267 |
-| 44 | GitHub App Manifest flowは、`redirect_url` に `http://127.0.0.1:<port>` を受け付ける。`hook_attributes` のないmanifestも受け付ける | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 38 | 実測 | 2026-09-20、2026-09-21 |
+| 44 | GitHub Appは、manifestから登録できる (GitHub App Manifest flow)。名前や権限を書いたmanifestを `https://github.com/organizations/<org>/settings/apps/new` に渡し、人が "Create GitHub App" を押すと、`redirect_url` にcodeが戻る。1時間以内に `POST /app-manifests/{code}/conversions` を呼ぶと、`id` や `pem` (秘密鍵) が返る。`redirect_url` に `http://127.0.0.1:<port>` を受け付ける。`hook_attributes` のないmanifestも受け付ける | docs.github.com: registering-a-github-app-from-a-manifest。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
 | 45 | Manifest flowでAppが登録されるのは、人が "Create GitHub App" を押したときではなく、codeを交換したとき (`POST /app-manifests/{code}/conversions`) である。交換の前に止まった流れは、Appを残さない | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 46 | 登録されたAppの権限は、manifestに書いた権限に、GitHubが自分で足す `metadata: read` を加えたものになる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
-| 47 | Organizationのownerは、自分のtokenで、privateなAppを `GET /apps/{slug}` で読める。認証なしでは404が返る | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 43 | 実測 | 2026-09-20、2026-09-21 |
-| 48 | Appが作ったPull Requestの作成者は、`user.type` が `Bot` になる。APIでも、workflowの中の `github.event.pull_request.user.type` でも同じである | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 42 | 実測 | 2026-09-20、2026-09-21 |
-| 49 | Appのloginは `<slug>[bot]` である。メールアドレスが `<botのuser id>+<slug>[bot]@users.noreply.github.com` のコミットは、そのbotのユーザに結び付く | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 18 | 実測 | 2026-09-20、2026-09-21 |
-| 50 | Appが、人を@メンションするコメントを投稿できる (201)。通知が届くことを、Ownerが2026-09-21に確かめた | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 19 | 実測 | 2026-09-20、2026-09-21 |
-| 57 | Appより狭い権限で発行したtokenは、その外の操作を拒否される (403)。Appが持っていない権限を求めると、発行が422で失敗する | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 9、33 | 実測 | 2026-09-20、2026-09-21 |
+| 47 | Organizationのownerは、自分のtokenで、privateなAppを `GET /apps/{slug}` で読める。認証なしでは404が返る | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 48 | Appが作ったPull Requestの作成者は、`user.type` が `Bot` になる。APIでも、workflowの中の `github.event.pull_request.user.type` でも同じである | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 49 | Appの操作は、そのAppの名義になる。Appのloginは `<slug>[bot]` である。メールアドレスが `<botのuser id>+<slug>[bot]@users.noreply.github.com` のコミットは、そのbotのユーザに結び付く | docs.github.com: authenticating-as-a-github-app-installation。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 57 | Appより狭い権限で発行したtokenは、その外の操作を拒否される (403)。Appが持っていない権限を求めると、発行が422で失敗する | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 58 | 公開リポジトリでは、Issuesが読み取りだけのtokenでも、Issueを作り、コメントを書ける (201)。GitHubのアカウントなら誰でもできる操作だからである。Issuesの権限で止められるのは、ラベルの付け替え、本文の編集、Issueを閉じることなどである | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 61 | cumin-coreのAppは、今の権限のままで、ImplementerのAppが作ったPull Requestにラベルを付け、外せる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 84 | `GH_CONFIG_DIR` に存在しないディレクトリを指定し、`GH_TOKEN` を渡すと、ghは既定の設定 (`git_protocol` は `https`) で動き、ディレクトリを作らない | #74 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
@@ -75,15 +64,11 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
-| 11 | sub-issueの追加と依存関係の追加は、Issue番号ではなくIssueの `id` を渡す | `POST .../issues/{n}/sub_issues` の `sub_issue_id`、`POST .../issues/{n}/dependencies/blocked_by` の `issue_id` | 公式文書 | 2026-09-19 |
 | 16 | REST APIの上限は、installation tokenがインストールごとに毎時5,000以上、個人のtokenはユーザーごとに毎時5,000 (全token共有)。内容を作る操作には毎分80・毎時500の二次制限がある | docs.github.com: rate-limits-for-the-rest-api | 公式文書 | 2026-09-19 |
-| 22 | Issueを作るREST APIには `parent_issue_id` があり、sub-issueを1回の呼び出しで作れる。テンプレートや入力フォームを指定する項目はない。Issueのテンプレートと入力フォームは、画面でIssueを作るときだけ働く | docs.github.com: rest/issues/issues、syntax-for-issue-forms | 公式文書 | 2026-09-19 |
-| 23 | レビューを出すREST APIの `event` は `APPROVE`、`REQUEST_CHANGES`、`COMMENT` のどれかで、`REQUEST_CHANGES` と `COMMENT` には本文が要る。レビューのコメントへの返答は、スレッドの最初のコメントに対してだけできる | docs.github.com: rest/pulls/reviews、rest/pulls/comments | 公式文書 | 2026-09-19 |
-| 25 | AgentがAPIで作ったPull Requestに、`.github/pull_request_template.md` が自動で使われるか | 公式文書に記載なし | 未確認。52で実測した | 2026-09-19 |
 | 37 | sub-issueの一覧と、blocked by の一覧は、Issueのオブジェクト (ラベルと状態を含む) を返す。親のIssueを返す `GET /repos/{owner}/{repo}/issues/{issue_number}/parent` もある | docs.github.com: rest/issues/sub-issues、rest/issues/issue-dependencies | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 52 | AppがAPIで作ったPull Requestには、`.github/pull_request_template.md` が使われない。本文を渡さなければ、本文は空になる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 25 | 実測 | 2026-09-20、2026-09-21 |
-| 56 | `POST /repos/{owner}/{repo}/issues` に `parent_issue_id` を渡すと、Appのtokenでも、1回の呼び出しでsub-issueを作れる。blocked by の追加は201を返す | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 11、22 | 実測 | 2026-09-20、2026-09-21 |
-| 59 | レビューの一覧 (`GET /pulls/{n}/reviews`) では、`REQUEST_CHANGES` と `APPROVE` のレビューの `state` が、`CHANGES_REQUESTED` と `APPROVED` になる。`commit_id` は、レビューしたコミットの完全なSHAである | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 23 | 実測 | 2026-09-20、2026-09-21 |
+| 52 | AppがAPIで作ったPull Requestには、`.github/pull_request_template.md` が使われない。本文を渡さなければ、本文は空になる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 56 | `POST /repos/{owner}/{repo}/issues` に `parent_issue_id` を渡すと、Appのtokenでも、1回の呼び出しでsub-issueを作れる。blocked by の追加は201を返す。sub-issueの追加と blocked by の追加は、Issue番号ではなくIssueの `id` を渡す (`POST .../issues/{n}/sub_issues` の `sub_issue_id`、`POST .../issues/{n}/dependencies/blocked_by` の `issue_id`)。Issueを作るREST APIに、テンプレートや入力フォームを指定する項目はない。Issueのテンプレートと入力フォームは、画面でIssueを作るときだけ働く | docs.github.com: rest/issues/issues、rest/issues/sub-issues、rest/issues/issue-dependencies、syntax-for-issue-forms。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 59 | レビューを出すREST APIの `event` は `APPROVE`、`REQUEST_CHANGES`、`COMMENT` のどれかで、`REQUEST_CHANGES` と `COMMENT` には本文が要る。レビューのコメントへの返答は、スレッドの最初のコメントに対してだけできる。レビューの一覧 (`GET /pulls/{n}/reviews`) では、`REQUEST_CHANGES` と `APPROVE` のレビューの `state` が、`CHANGES_REQUESTED` と `APPROVED` になる。`commit_id` は、レビューしたコミットの完全なSHAである | docs.github.com: rest/pulls/reviews、rest/pulls/comments。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
 | 69 | リポジトリをOrganizationに移しても、Issue、Pull Request、webhook、secret、releaseは保たれ、古いアドレスは転送される | 公式文書による。実測していない | 公式文書 | 2026-09-20、2026-09-21 |
 | 78 | `PUT /repos/{owner}/{repo}/issues/{n}/labels` に、リポジトリにないラベルの名前を渡すと、そのラベルが既定の色 (`ededed`) で作られ、付け替えは失敗しない | sandboxで `cumin/status/implementing` のラベルを消してから、着手させた | 実測 | 2026-09-21 |
 | 90 | `GET /users/{username}` は、installation tokenを `Authorization: Bearer` で渡しても、botのユーザ (`<slug>[bot]`) の数値の `id` を返す | 公式: Get a user。#70 の実機の確認で実測 | 公式文書 + 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
@@ -95,17 +80,13 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
-| 36 | GraphQLに、IssueとPull Requestの紐づけを読む項目がある。`Issue.closedByPullRequestsReferences` (既定は開いているPull Requestだけ。`includeClosedPrs` でmerge済みも含む) と、`PullRequest.closingIssuesReferences` である。`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary` もある。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection | 実測 (installation tokenでは未確認)。55で実測した | 2026-09-20、Claude Code 2.1.267 |
 | 39 | GraphQLのAPIは、installation tokenに、1時間あたり5,000ポイントを割り当てる。同じインストールの対象のリポジトリ全てで、この枠を分け合う。1つの問い合わせは1ポイント以上かかる。`first` と `last` に指定できるのは1から100までである | docs.github.com: rate-limits-and-query-limits-for-the-graphql-api | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 40 | GraphQLに、ラベルが付いた時刻と、レビューとcheckの状態を読む項目がある。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`、`statusCheckRollup`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt`。installation tokenで読めるかは、確かめていない | GraphQLのスキーマのintrospection (2026-09-20) | 実測 (installation tokenでは未確認)。55で実測した | 2026-09-20、Claude Code 2.1.267 |
-| 55 | installation tokenで、設計メモが使うGraphQLの項目を全て読める。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup` | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 36、40 | 実測 | 2026-09-20、2026-09-21 |
-| 77 | GraphQLの問い合わせのポイントは、経路に沿った `first` の積を100で割った値で決まる。定期確認の問い合わせ (要求Issueを10件ずつ、sub-issueを30件、ラベルを10件、blocked by のIssueを20件) は、`rateLimit.cost` が6だった | 公式: Rate limits and node limits for the GraphQL API。開いている要求Issueが4つあるリポジトリで実測 | 公式文書 + 実測 | 2026-09-21 |
+| 55 | installation tokenで、設計メモが使うGraphQLの項目を全て読める。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup`。`closedByPullRequestsReferences` の既定は開いているPull Requestだけで、`includeClosedPrs` でmerge済みも含む。スキーマには、ラベルが付いた時刻と、レビューとcheckの状態を読む項目もある。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`、`statusCheckRollup`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt` | GraphQLのスキーマのintrospection (2026-09-20)。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 94 | GitHub Appが作ったPull Requestの GraphQL の `author` は `Bot` 型で、`login` に `[bot]` が付かない。RESTの `user.login` には付く (49を参照) | sandboxで実測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
-| 95 | 定期確認の問い合わせに `closedByPullRequestsReferences(first: 5)` を足すと、`rateLimit.cost` は6から9になる。`first` を3にしても、`includeClosedPrs: true` を付けても9で変わらない。77の積の式どおりには増えない | sandboxで実測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
 | 98 | GraphQLの `Repository.object(expression: "HEAD:<path>")` は、ファイルがなければ `null` を返す。`HEAD:` はそのリポジトリの既定のブランチを指す。`Blob` には `oid`、`text`、`byteSize`、`isBinary`、`isTruncated` があり、1MiBを超えるファイルは `isTruncated` になる。接続 (connection) でない項目 (`object`、`defaultBranchRef`) は、問い合わせのポイントを変えない (足す前も足したあとも `cost` は6) | GraphQLのスキーマのintrospectionと、sandboxでの実測 | 実測 | 2026-09-22 |
-| 105 | 定期確認の問い合わせの1ページのポイントは「要求Issue × sub-issue × k ÷ 100」で決まる。k は接続の数で、sub-issueの下のラベルと blocked by で2、Pull Requestで1、Pull Requestの下の接続 (ラベル、check) ごとにPull Requestの件数を足す。接続の中のページサイズ (checkやラベルの件数) はポイントを変えない (95の続き) | sandboxで実測 (2026-09-25) | 実測 | 2026-09-22、Claude Code 2.1.267 |
-| 106 | Pull Requestのラベルとcheckを足した問い合わせは、sub-issue 30件・Pull Request 5件で39ポイント、15件・2件で11ポイントだった。60秒の間隔で1リポジトリが毎時660ポイント使う | sandboxで実測 (2026-09-25) | 実測 | 2026-09-22、Claude Code 2.1.267 |
+| 105 | 定期確認の問い合わせの1ページのポイントは「要求Issue × sub-issue × k ÷ 100」で決まる。k は接続の数で、sub-issueの下のラベルと blocked by で2、Pull Requestで1、Pull Requestの下の接続 (ラベル、check) ごとにPull Requestの件数を足す。接続の中のページサイズ (checkやラベルの件数) はポイントを変えない。公式文書の、経路に沿った `first` の積を100で割る式どおりには増えない | 公式: Rate limits and node limits for the GraphQL API。sandboxで実測 (2026-09-25) | 公式文書 + 実測 | 2026-09-25 |
 | 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである | #221 で実測 (2026-09-29) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
+| 127 | 定期確認の問い合わせの1ページ (sub-issueを15件、Pull Requestを2件まで。Pull Requestの下の接続は、ラベル、check、レビュー) は、14ポイントである。レビューの接続を足す前は11ポイントで、105の式のとおり3ポイント増えた。60秒の間隔で、1リポジトリが毎時840ポイントを使う | sandboxで実測 (2026-09-30) | 実測 | 2026-09-30 |
 
 ## rulesetとcheck
 
@@ -113,18 +94,15 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 |---|---|---|---|---|
 | 12 | Pull Requestの作成者は自分のPull Requestをapproveできない。作成者とレビュー者の身元が同じだとapproveが成立しない | docs.github.com: approving-a-pull-request-with-required-reviews | 公式文書 | 2026-09-19 |
 | 13 | rulesetとbranch protectionは、Freeプラン (個人・Organizationとも) では公開リポジトリでしか使えない。非公開リポジトリで使うには個人はPro、OrganizationはTeamが要る | docs.github.com: about-rulesets、about-protected-branches | 公式文書 | 2026-09-19 |
-| 14 | rulesetのbypass listにGitHub Appを入れられる。必須status checkは「このAppが出したものだけ有効」と発行元を固定できる | docs.github.com: creating-rulesets-for-a-repository、available-rules-for-rulesets | 公式文書 | 2026-09-19 |
 | 15 | ラベルを条件にしたruleは、ruleの一覧に存在しない (「risk/mediumならOwnerの承認が必須」をGitHubだけでは書けない) | docs.github.com: available-rules-for-rulesets に記載なし | 公式文書 (不在の確認) | 2026-09-19 |
 | 17 | GitHub Appのapproveが「必須承認数」に数えられるか | 公式文書に記載なし。コミュニティでは「数えられる」との報告がある | 未確認 | 2026-09-19 |
-| 20 | 必須のcheckになっているGitHub Actionsのjobが、`if` の条件で飛ばされたときは、成功として扱われ、mergeを止めない。workflow全体が飛ばされたとき (パスやブランチの絞り込みなど) は、checkが保留のまま残り、mergeを止める | docs.github.com: troubleshooting-required-status-checks | 公式文書。51で実測した | 2026-09-19 |
 | 21 | ファイルのパスを制限するrule (push ruleset) は、Teamプランの非公開または内部リポジトリでしか使えない。Freeプランの公開リポジトリでは使えない | docs.github.com: about-rulesets | 公式文書 | 2026-09-19 |
 | 24 | secret scanning、push protection、code scanning、dependency reviewは、公開リポジトリでは無料で使える。Dependabotは全てのプランで使える | docs.github.com: code-security/getting-started/github-security-features | 公式文書 | 2026-09-19 |
-| 34 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べる。要る権限は Metadata: Read-only である | docs.github.com: permissions-required-for-github-apps | 公式文書。53で実測した | 2026-09-20、Claude Code 2.1.267 |
 | 35 | check runの一覧を読むには Checks: Read-only、commit statusを読むには Commit statuses: Read-only が要る、と書かれている。公開リポジトリなら権限なしで読めるかは、確かめていない | 同上 | 公式文書 (公開リポジトリでの要否は未確認)。54で実測した | 2026-09-20、Claude Code 2.1.267 |
-| 51 | `if` の条件で飛ばされたjobのcheck runは、`status: completed`、`conclusion: skipped` になる。必須のcheckであっても、mergeを止めない。cuminは、必須のcheckの `skipped` を、通ったものとして数える必要がある | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 20 | 実測 | 2026-09-20、2026-09-21 |
-| 53 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べて、必須のcheckの一覧が返る | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 34 | 実測 | 2026-09-20、2026-09-21 |
+| 51 | `if` の条件で飛ばされたjobのcheck runは、`status: completed`、`conclusion: skipped` になる。必須のcheckであっても、mergeを止めない。cuminは、必須のcheckの `skipped` を、通ったものとして数える必要がある。workflow全体が飛ばされたとき (パスやブランチの絞り込みなど) は、checkが保留のまま残り、mergeを止める | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。workflow全体が飛ばされた場合は、docs.github.com: troubleshooting-required-status-checks | 実測 (workflow全体が飛ばされた場合は公式文書) | 2026-09-20、2026-09-21 |
+| 53 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べて、必須のcheckの一覧が返る。要る権限は Metadata: Read-only である | docs.github.com: permissions-required-for-github-apps。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
 | 54 | 公開リポジトリでは、installation tokenは、Checks、Commit statuses、Actions の権限がなくても、check run、commit status、check runのannotation、jobのログを読める。jobのログは、認証なしでは読めない (403)。jobのIDは、check runの `details_url` の最後の部分である。失敗したGitHub Actionsのcheck runは、`output.title` が空で、内容はannotationに入る | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 35 | 実測 | 2026-09-20、2026-09-21 |
-| 62 | "Restrict updates" のruleがあるブランチへのPull Requestは、mergeの状態が常に `blocked` になる (`mergeable_state`、GraphQLでは `BLOCKED`)。bypass listにいる相手から見ても、必須のcheckが全て通っていても、同じである。それでも、bypass listにいる相手のmergeの呼び出しは成功する (200)。bypass listにいないAppは、405 (`Repository rule violations found`) を受け取る。`gh pr merge` には `--admin` が要る。cuminは、`clean` になるのを待ってはいけない | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 14 | 実測 | 2026-09-20、2026-09-21 |
+| 62 | rulesetのbypass listにGitHub Appを入れられる。必須status checkは「このAppが出したものだけ有効」と発行元を固定できる。"Restrict updates" のruleがあるブランチへのPull Requestは、mergeの状態が常に `blocked` になる (`mergeable_state`、GraphQLでは `BLOCKED`)。bypass listにいる相手から見ても、必須のcheckが全て通っていても、同じである。それでも、bypass listにいる相手のmergeの呼び出しは成功する (200)。bypass listにいないAppは、405 (`Repository rule violations found`) を受け取る。`gh pr merge` には `--admin` が要る。cuminは、`clean` になるのを待ってはいけない | docs.github.com: creating-rulesets-for-a-repository、available-rules-for-rulesets。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
 | 68 | rulesetのbypassの相手の種類 `RepositoryRole` で、`actor_id: 5` は `admin` のroleである。同じ内容でrulesetを `PUT` しても、履歴の版は増えない。OAuthのtoken (`gh`) でworkflowのファイルをpushするには、`workflow` のscopeが要る。既定のブランチのworkflowを変えたあと、開いているPull Requestを閉じて開き直しても、古いworkflowが動く。"Update branch" か新しいコミットで、新しいworkflowが動く | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 79 | 公開リポジトリでは、標準のGitHub-hosted runner (macOSを含む) の利用は無料である。Freeプランの同時実行は、全体で20 job、macOSは5 jobまで。`macos-latest` はarm64である | 公式: About billing for GitHub Actions、Usage limits for GitHub Actions、GitHub-hosted runners reference | 公式文書 | 2026-09-21 |
 | 80 | `POST /repos/{owner}/{repo}/rulesets` に、そのリポジトリにある ruleset と同じ名前を渡すと、422 "Name must be unique" が返る。同じリポジトリに、同じ名前の ruleset は2つ作れない | sandboxで実測 | 実測 | 2026-09-21 |
@@ -137,7 +115,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
-| 60 | Appが作った、本文に `Closes #N` のあるPull Requestを、別のAppがmergeすると、sub-issueである #N が数秒で閉じる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 60 | Appが作った、本文に `Closes #N` のあるPull Requestを、別のAppがmergeすると、Pull Requestに閉じるリンクが付いていれば、sub-issueである #N が数秒で閉じる。2026-09-30の途中からは、作った直後に閉じるリンクが付かないことがある (121を参照) | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 118 | cumin-coreのinstallation tokenで、GraphQLの `addCloseIssueReferences` を呼べる。張ったリンクは、すぐに実装Issueの `closedByPullRequestsReferences` に現れ、Issueにcumin-coreの `connected` のイベントが付く。公式のGraphQLのリファレンスは、このmutationに要る権限を書いていない | sandboxの `TestLiveCloseReferences` で実測 (#278、C1とC2、2026-09-30) | 実測 | 2026-09-30、2026-10-01 |
 | 119 | cumin-coreのtokenで、Issueを `state: closed`、`state_reason: completed` で閉じられる。閉じたIssueをもう一度閉じても200が返り、`closed` のイベントは1つのままである | 同上 (C3とC4) | 実測 | 2026-09-30、2026-10-01 |
 | 120 | 2026-09-30には、手で張ったリンク (画面の Development の欄、または `addCloseIssueReferences`) のPull Requestを既定のブランチにmergeしても、Issueは閉じなかった。cumin-coreのmergeで、1分待っても開いたままだった | 同上 (C5)。cumin-works #271 と #229 でも同じ | 実測 | 2026-09-30、2026-10-01 |
@@ -163,19 +141,49 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
-| 41 | macOSの `security find-generic-password -s <service> -a <account> -w` は、項目のパスワードだけを出力する。改行を含む値を読むと形が変わる、という報告があるが、確かめていない | `man security` | 公式文書 (改行を含む値は未確認)。63で実測した | 2026-09-20、Claude Code 2.1.267 |
-| 63 | `security find-generic-password -w` は、改行を含む値を16進で返す。1行の値は、そのまま返す | Hostで確かめた。答えた行: 41 | 実測 | 2026-09-20、2026-09-21 |
+| 63 | macOSの `security find-generic-password -s <service> -a <account> -w` は、項目のパスワードだけを出力する。1行の値は、そのまま返す。改行を含む値は、16進で返す | `man security`。Hostで確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
 | 64 | `security -i` は、コマンドを標準入力から読む。秘密の値を、引数に出さずに渡せる。失敗したコマンドの終了コードを返す。項目がないときの終了コードは44である。保存に失敗しても、値を出力しない | Hostで確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 65 | `security add-generic-password` に、存在しないkeychainのファイルのパスを渡すと、成功を報告して、既定のkeychainに書く | Hostで確かめた | 実測 | 2026-09-20、2026-09-21 |
-| 66 | keychainを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧にある全てのkeychainを探す。`security default-keychain` は、既定のkeychainのパスを出力する | Hostで確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 67 | launchdが起動したプロセス (ログイン中のユーザのLaunchAgent) は、`security` が作ったKeychainの項目を、確認のダイアログなしで `security` から読める | Hostで確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 100 | `man launchd.plist`: `KeepAlive` の `SuccessfulExit` は、終了コードが0かどうかの逆の条件で起動し直す意味で、`KeepAlive` は `RunAtLoad` を含意する。`ProcessType` の `Standard` は書かないのと同じで、`Background` はCPUとI/Oを絞る。`ExitTimeOut` はSIGTERMからSIGKILLまでの時間で、初期値はシステムが決める。launchdはjobのプロセスグループに残ったプロセスを止めるが、CLIは自分のプロセスグループで動くので届かない | `man launchd.plist` | 公式文書 | 2026-09-22 |
 | 101 | ログイン中のユーザの LaunchAgent は `gui/<uid>` の domain にある。Appleが求めるのは一意な `Label` だけで、逆ドメインの形は例の慣習である。launchdから起動したcuminは、Keychainの項目を確認の画面なしで読み、`kill -9` のあと11秒で起動し直され、`launchctl kill SIGTERM` で終了コード0で止まった | `man launchctl`。Hostでの実測 (#112 の記録) | 公式文書 + 実測 | 2026-09-22 |
 | 103 | `security add-generic-password ... -w` は、次の引数を値として取る。`-w` のあとにkeychainのパスを書くと、パスが秘密の値として保存され、コマンドは成功を報告する。`-w` を付けない、または `-w` を最後に置いてkeychainのパスを書かないと、値を標準入力から2回読む | Hostで、一時的なkeychainと作り物の値で実測 (2026-09-22) | 実測 | 2026-09-22、2026-09-23 |
-| 104 | keychainのパスを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧の全体を探す。cuminは既定のkeychainをパスで指定して読むので、手順書の `security` のコマンドもkeychainを指定する (66の続き) | `man security` と、Hostでの実測 | 公式文書 + 実測 | 2026-09-22、2026-09-23 |
+| 104 | keychainのパスを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧にある全てのkeychainを探す。`security default-keychain` は、既定のkeychainのパスを出力する。cuminは既定のkeychainをパスで指定して読むので、手順書の `security` のコマンドもkeychainを指定する | `man security` と、Hostでの実測 | 公式文書 + 実測 | 2026-09-22、2026-09-23 |
 
 ## Discord
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
 | 102 | Discordのwebhookは `POST /webhooks/{webhook.id}/{webhook.token}` で実行する。本文には `content`、`embeds`、`components`、`file`、`poll` のどれかが要り、`content` は2000文字まで。既定の応答は `204 No Content` で、メッセージの保存に失敗してもエラーにならない。`wait=true` を付けると、作られたメッセージが返る。Allowed Mentions Object の `parse` を空の配列にすると、全てのメンションが抑えられる | 公式: Execute Webhook (2026-09-22) | 公式文書 | 2026-09-22、2026-09-23 |
+
+## 引退した番号 (Retired numbers)
+
+次の番号の行は、同じ事実の別の行にまとめた。番号は使い回さない。前の文面は、gitの履歴にある。
+
+| 引退した番号 | いま事実を持つ行 |
+|---|---|
+| 9 | 33、57。Appの名義は49 |
+| 11 | 56 |
+| 14 | 62 |
+| 18 | 49 |
+| 20 | 51 |
+| 22 | 56 |
+| 23 | 59 |
+| 25 | 52 |
+| 28 | 86 |
+| 34 | 53 |
+| 36 | 55 |
+| 38 | 44 |
+| 40 | 55 |
+| 41 | 63 |
+| 42 | 48 |
+| 43 | 47 |
+| 50 | 19 |
+| 66 | 104 |
+| 75 | 87 |
+| 76 | 32 |
+| 77 | 105 |
+| 88 | 2 |
+| 89 | 29 |
+| 95 | 105 |
+| 106 | 127 |

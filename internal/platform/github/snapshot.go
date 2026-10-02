@@ -171,7 +171,7 @@ const (
 	// CheckPending: the check has not finished, or has not reported yet.
 	CheckPending CheckConclusion = iota
 	// CheckPassed: success, skipped, or neutral. GitHub treats these three
-	// as not blocking a merge (rows 20 and 51).
+	// as not blocking a merge (row 51).
 	CheckPassed
 	// CheckFailed: the check finished with any other conclusion.
 	CheckFailed
