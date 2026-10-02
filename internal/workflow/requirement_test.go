@@ -32,7 +32,7 @@ func requirementLabels(t *testing.T, sc *scene) []string {
 // before the review label does not move the requirement issue; a
 // cumin/status/ready that the Owner adds afterwards does.
 func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing.T) {
-	review := time.Now().Add(-time.Hour)
+	review := sceneNow.Add(-time.Hour)
 	sc := newRequirementScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"},
 		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/awaiting-owner-review", At: review}}})
@@ -116,7 +116,7 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 
 	// The Owner lets the remaining sub-issue start.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"cumin/status/ready", "risk/low"},
-		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/ready", At: time.Now().Add(time.Minute)}}})
+		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/ready", At: sceneNow.Add(time.Minute)}}})
 	sc.pollAndWait(t, service)
 
 	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {

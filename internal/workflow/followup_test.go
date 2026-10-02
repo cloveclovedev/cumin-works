@@ -57,7 +57,7 @@ func newFollowUpScene(t *testing.T, body string, threads []githubtest.ReviewThre
 		closes = nil
 	}
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
-		Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: time.Now().Add(-time.Hour),
+		Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: sceneNow.Add(-time.Hour),
 		Labels: []string{"risk/low"},
 	})
 	if o.requirementClosed {
@@ -232,7 +232,7 @@ func TestI9_ASubIssueWithoutAMergedLinkedPullRequestGetsNoNote(t *testing.T) {
 func TestI9_AMarkerOfAnotherAuthorDoesNotStopTheNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
-		Author: "octocat", At: time.Now(),
+		Author: "octocat", At: sceneNow.Add(-time.Minute),
 		Body: "Nothing here.\n\n" + workflow.FollowUpMarker(10, 21, []int{21}) + "\n",
 	})
 	sc.pollAndWait(t, sc.service())
@@ -393,7 +393,7 @@ func TestI9_AThreadOnMovedCodeNamesItsOriginalLine(t *testing.T) {
 func TestI9_OnePullRequestThatClosesTwoSubIssuesGetsOneNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
-		Number: 11, Parent: 6, Title: "Add the logout button", Closed: true, ClosedAt: time.Now().Add(-time.Hour),
+		Number: 11, Parent: 6, Title: "Add the logout button", Closed: true, ClosedAt: sceneNow.Add(-time.Hour),
 		Labels: []string{"risk/low"},
 	})
 	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{

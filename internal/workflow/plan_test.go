@@ -318,7 +318,7 @@ func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
 // asks for the acceptance check at the next poll.
 func TestR2_EverySubIssueClosedSendsTheIssueBackToTheAcceptanceCheck(t *testing.T) {
 	sc := newPlanScene(t)
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: time.Now().Add(-time.Hour), Labels: []string{"risk/low"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: sceneNow.Add(-time.Hour), Labels: []string{"risk/low"}})
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
