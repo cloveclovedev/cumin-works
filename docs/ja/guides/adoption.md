@@ -45,8 +45,6 @@ cuminは、必須のcheckが先頭のコミットで全て通るのを待って�
 
 `.github/workflows/` は、一覧になくても、ImplementerのAppの権限で変えられない。
 
-cumin-works自身を対象にするときは、Agentの指示 (`roles/`、`disciplines/`、`templates/`) を保護しない。動いているcuminは、これらをバイナリに埋め込んで使うので、リポジトリで変わっても、Ownerがバイナリを入れ替えるまで指示は変わらない。
-
 ## 4. 既存のrulesetと突き合わせる
 
 `scripts/setup-repo.sh` は、名前で探したrulesetを作るか、内容を合わせる。同じブランチに、別の名前の既存のrulesetがあると、両方が効く。
@@ -67,11 +65,3 @@ cumin-works自身を対象にするときは、Agentの指示 (`roles/`、`disci
 - 最初の要求Issueは、Ownerが書く。[要求Issueのテンプレート](../../../templates/requirement-issue.md) に従い、`cumin/type/requirement` と `cumin/status/ready` を付ける。
 - 最初は、小さく、結果を確かめやすいものにする。Plannerの分割、Implementerの実装、Reviewerのレビュー、mergeまでの流れを、1回通して見るためである。
 - 要求Issueどうしの順番は、blocked by で決める。先の要求Issueが閉じるまで、後の分割は始まらない。
-
-## cumin-works自身を対象にするとき
-
-cuminが自分のコードを変えるので、Hostで動くcuminの入れ替えを分ける。
-
-- mergeされても、Hostのcuminは古いバイナリのまま動く。
-- Ownerが、mergeされた変更を確かめてから、`scripts/install.sh --restart` で入れ替える。
-- cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。

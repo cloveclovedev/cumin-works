@@ -342,6 +342,13 @@ App を登録済みの Host に、同じ Organization のリポジトリを足�
 4. Host の設定ファイルの `repositories` に `"<owner>/<repo>"` を足し ([設定の一覧](configuration.md))、cumin を再起動する (手順4の表の「再起動する」)。
 5. 下の「セットアップのあとの確認」を、そのリポジトリで行う。
 
+## cumin-works自身を対象にするとき
+
+cumin-worksを、cumin自身で開発するときの決まり。cumin-worksをforkして、cuminで手を入れるときも同じである。手順は上の「対象のリポジトリを足す」と同じで、次の2つが違う。
+
+- 保護されたパスに、Agentの指示 (`roles/`、`disciplines/`、`templates/`) を入れない。開発の対象だからである。動いているcuminは、これらをバイナリに埋め込んで使うので、リポジトリで変わっても、バイナリを入れ替えるまで指示は変わらない。要件の文書 (`docs/ja/requirements/`) は入れる。
+- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Ownerが、mergeされた変更を確かめてから、`scripts/install.sh --restart` で入れ替える。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
+
 ## セットアップのあとの確認
 
 セットアップが終わったら、保護が効いていることを1回確かめる。
