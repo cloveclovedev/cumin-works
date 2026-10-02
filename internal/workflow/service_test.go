@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -42,6 +43,9 @@ const (
 	subIssueTitle   = "Add the login screen"
 	wantBranch      = "cumin/10-add-the-login-screen"
 	implementerSlug = "example-implementer"
+	// hangGuard is how long a test waits on a signal of a fake. It is only a
+	// guard against a hang: no test passes or fails by how long a step took.
+	hangGuard = time.Minute
 )
 
 // testKey is the private key of the Implementer App of the fake. The fake
@@ -90,6 +94,10 @@ type scene struct {
 	// settings table.
 	quota config.QuotaSettings
 }
+
+// sceneZone is the time zone of the time bands in these tests. Its offset
+// is not a full hour.
+var sceneZone = time.FixedZone("UTC+05:30", 5*3600+30*60)
 
 // sceneNow is the default time of the scene, for the quota decisions and for
 // the fake GitHub: one hour before the weekly reset of the fixtures of
@@ -260,7 +268,9 @@ type cliOptions struct {
 	// not push it, as an Implementer that forgot to push.
 	commit bool
 	// sleeps makes the agent run wait instead of ending, so that a test can
-	// stop cumin while a request is going on.
+	// stop cumin while a request is going on. The run first writes one line
+	// to the named pipe "started", and waits there until a test reads it
+	// (waitForAgentRun) or a signal ends the run.
 	sleeps bool
 	// ignoresTerm makes the sleeping agent run ignore SIGTERM, as a CLI
 	// that does not end by itself. The adapter then sends SIGKILL after its
@@ -328,6 +338,7 @@ func (sc *scene) service() *workflow.Service {
 		SettingsDir: sc.settingsDir,
 		Logger:      logger,
 		Now:         sc.clock.Now,
+		Location:    sceneZone,
 		// The merge step waits for GitHub to close the issue; the fake
 		// answers at once.
 		CloseWait: time.Millisecond,
@@ -433,7 +444,11 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		if o.ignoresTerm {
 			trap = "trap '' TERM\n"
 		}
-		sleep = "if [ $n = agent ]; then\n" + trap + "sleep 600\nfi\n"
+		started := filepath.Join(dir, "started")
+		if err := syscall.Mkfifo(started, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		sleep = "if [ $n = agent ]; then\n" + trap + "echo started > " + started + "\nsleep 600\nfi\n"
 	}
 	// The second agent run prints another fixture, so that a test can let
 	// the retry end differently from the first run.
@@ -1352,17 +1367,14 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- service.Run(ctx) }()
 
-	deadline := time.Now().Add(5 * time.Second)
-	for sc.fake.CountRequests(http.MethodPost, "/graphql") < 3 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
+	sc.fake.WaitForRequests(http.MethodPost, "/graphql", 3, hangGuard)
 	cancel()
 	select {
 	case err := <-done:
 		if err != nil {
 			t.Errorf("Run: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(hangGuard):
 		t.Fatal("Run did not return after the cancel")
 	}
 
@@ -1645,17 +1657,24 @@ func TestPoll_LogsWhereTheRiskCriteriaCameFrom(t *testing.T) {
 	}
 }
 
-// waitForAgentRun waits until the fake CLI of the agent has started.
+// waitForAgentRun waits until the fake CLI of the agent has started: the
+// sleeping run writes to the named pipe "started" after it set its trap,
+// and the read returns when it did.
 func waitForAgentRun(t *testing.T, sc *scene) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if sc.agentRuns(t) > 0 {
-			return
+	started := make(chan error, 1)
+	go func() {
+		_, err := os.ReadFile(filepath.Join(sc.cliDir, "started"))
+		started <- err
+	}()
+	select {
+	case err := <-started:
+		if err != nil {
+			t.Fatal(err)
 		}
-		time.Sleep(10 * time.Millisecond)
+	case <-time.After(hangGuard):
+		t.Fatalf("the agent run did not start:\n%s", sc.logs.String())
 	}
-	t.Fatalf("the agent run did not start:\n%s", sc.logs.String())
 }
 
 // The stop of cumin: SIGINT or SIGTERM ends the context, the request that
@@ -1669,24 +1688,22 @@ func TestCore_StopCancelsTheRunningRequestAndLogsTheIssue(t *testing.T) {
 	sc := newScene(t, cliOptions{sleeps: true, ignoresTerm: true})
 	service := sc.service()
 	service.PollInterval = 10 * time.Millisecond
-	service.StopGrace = 3 * time.Second
+	// The grace is far above the hang guard: a Run that returns in the test
+	// returned because the request ended, which the stop log says too.
+	service.StopGrace = 10 * hangGuard
 
 	ctx, cancel := context.WithCancel(context.Background())
 	returned := make(chan error, 1)
 	go func() { returned <- service.Run(ctx) }()
 	waitForAgentRun(t, sc)
 
-	start := time.Now()
 	cancel()
 	select {
 	case err := <-returned:
 		if err != nil {
 			t.Fatalf("Run returned %v, want nil so that the command exits with 0", err)
 		}
-		if elapsed := time.Since(start); elapsed > service.StopGrace {
-			t.Errorf("Run returned after %s, want less than the grace (%s)", elapsed, service.StopGrace)
-		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(hangGuard):
 		t.Fatalf("Run did not return after the stop:\n%s", sc.logs.String())
 	}
 
@@ -1713,24 +1730,22 @@ func TestRun_StopReturnsAsSoonAsTheRequestEnds(t *testing.T) {
 	sc := newScene(t, cliOptions{sleeps: true})
 	service := sc.service()
 	service.PollInterval = 10 * time.Millisecond
-	service.StopGrace = 30 * time.Second
+	// The grace is far above the hang guard: a Run that returns in the test
+	// did not wait for the whole grace.
+	service.StopGrace = 10 * hangGuard
 
 	ctx, cancel := context.WithCancel(context.Background())
 	returned := make(chan error, 1)
 	go func() { returned <- service.Run(ctx) }()
 	waitForAgentRun(t, sc)
 
-	start := time.Now()
 	cancel()
 	select {
 	case err := <-returned:
 		if err != nil {
 			t.Fatalf("Run: %v", err)
 		}
-		if elapsed := time.Since(start); elapsed > 10*time.Second {
-			t.Errorf("Run returned after %s, want as soon as the request ended", elapsed)
-		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(hangGuard):
 		t.Fatalf("Run did not return after the stop:\n%s", sc.logs.String())
 	}
 	logs := sc.logs.String()

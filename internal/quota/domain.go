@@ -4,7 +4,8 @@
 // window stops a new start. docs/ja/designs/quota.md records the design.
 //
 // Nothing here reads a clock, a file, or a CLI. The caller gives the usage,
-// the settings, and the time, so that a test can try any time of a week.
+// the settings, the time, and the location of the clock time, so that a test
+// can try any time of a week in any time zone.
 package quota
 
 import (
@@ -62,12 +63,12 @@ type Decision struct {
 func (d Decision) Allows() bool { return len(d.Stopped) == 0 }
 
 // Decide compares the usage with the limit of each window at now. The time
-// bands of the 5h window use the clock time of now, so now carries the
-// local time zone of the Host. A window whose reset time has passed stops
+// bands of the 5h window use the clock time of now in loc; cumin passes the
+// time zone of the Host. A window whose reset time has passed stops
 // nothing: its usage is from before the reset. An allowance that holds at
 // now makes the 5h limit 100%.
-func Decide(usage Usage, settings config.QuotaSettings, allowance Allowance, now time.Time) Decision {
-	fiveHourLimit := FiveHourLimit(settings.FiveHour, now)
+func Decide(usage Usage, settings config.QuotaSettings, allowance Allowance, now time.Time, loc *time.Location) Decision {
+	fiveHourLimit := FiveHourLimit(settings.FiveHour, now, loc)
 	if now.Before(allowance.FiveHourUntil) {
 		fiveHourLimit = 100
 	}
@@ -84,10 +85,11 @@ func Decide(usage Usage, settings config.QuotaSettings, allowance Allowance, now
 	return d
 }
 
-// FiveHourLimit is the threshold of the time band that holds now, or the
-// default threshold outside every band, in percent.
-func FiveHourLimit(settings config.FiveHourQuota, now time.Time) float64 {
-	at := config.TimeOfDay(now.Hour()*60 + now.Minute())
+// FiveHourLimit is the threshold of the time band that holds the clock time
+// of now in loc, or the default threshold outside every band, in percent.
+func FiveHourLimit(settings config.FiveHourQuota, now time.Time, loc *time.Location) float64 {
+	local := now.In(loc)
+	at := config.TimeOfDay(local.Hour()*60 + local.Minute())
 	for _, band := range settings.Bands {
 		if band.Contains(at) {
 			return float64(band.Threshold)
@@ -129,15 +131,16 @@ const retryMargin = time.Minute
 // a reset, so no earlier try can pass. For each window that stops:
 //
 //   - 5h: its reset, or the start of the first time band whose threshold
-//     is above the usage, whichever comes first.
+//     is above the usage, whichever comes first. The bands start at
+//     their clock time in loc.
 //   - weekly: the time at which the pace limit passes the usage, or its
 //     reset, whichever comes first.
 //
 // When both windows stop, the later of the two times counts. The second
 // value is false when nothing stops at now, an allowance included: a new
 // allowance ends the wait at once.
-func NextTry(usage Usage, settings config.QuotaSettings, allowance Allowance, now time.Time) (time.Time, bool) {
-	d := Decide(usage, settings, allowance, now)
+func NextTry(usage Usage, settings config.QuotaSettings, allowance Allowance, now time.Time, loc *time.Location) (time.Time, bool) {
+	d := Decide(usage, settings, allowance, now, loc)
 	if d.Allows() {
 		return time.Time{}, false
 	}
@@ -146,7 +149,7 @@ func NextTry(usage Usage, settings config.QuotaSettings, allowance Allowance, no
 		var t time.Time
 		switch window {
 		case FiveHour:
-			t = fiveHourNextTry(usage.FiveHour, settings.FiveHour, now)
+			t = fiveHourNextTry(usage.FiveHour, settings.FiveHour, now, loc)
 		case Weekly:
 			t = weeklyNextTry(usage.Weekly, settings.Weekly)
 		}
@@ -157,14 +160,14 @@ func NextTry(usage Usage, settings config.QuotaSettings, allowance Allowance, no
 	return next, true
 }
 
-func fiveHourNextTry(w Window, settings config.FiveHourQuota, now time.Time) time.Time {
+func fiveHourNextTry(w Window, settings config.FiveHourQuota, now time.Time, loc *time.Location) time.Time {
 	next := w.ResetsAt
 	// The limit changes only where a band starts or ends. Each boundary
 	// comes once in the next 24 hours.
 	for _, band := range settings.Bands {
 		for _, boundary := range []config.TimeOfDay{band.From, band.To} {
-			t := nextClockTime(now, boundary)
-			if t.Before(next) && w.Utilization*100 < FiveHourLimit(settings, t)-epsilon {
+			t := nextClockTime(now, boundary, loc)
+			if t.Before(next) && w.Utilization*100 < FiveHourLimit(settings, t, loc)-epsilon {
 				next = t
 			}
 		}
@@ -172,13 +175,12 @@ func fiveHourNextTry(w Window, settings config.FiveHourQuota, now time.Time) tim
 	return next
 }
 
-// nextClockTime is the first time after now at the clock time t, in the
-// time zone of now.
-func nextClockTime(now time.Time, t config.TimeOfDay) time.Time {
-	y, m, d := now.Date()
-	at := time.Date(y, m, d, int(t)/60, int(t)%60, 0, 0, now.Location())
+// nextClockTime is the first time after now at the clock time t in loc.
+func nextClockTime(now time.Time, t config.TimeOfDay, loc *time.Location) time.Time {
+	y, m, d := now.In(loc).Date()
+	at := time.Date(y, m, d, int(t)/60, int(t)%60, 0, 0, loc)
 	if !at.After(now) {
-		at = time.Date(y, m, d+1, int(t)/60, int(t)%60, 0, 0, now.Location())
+		at = time.Date(y, m, d+1, int(t)/60, int(t)%60, 0, 0, loc)
 	}
 	return at
 }

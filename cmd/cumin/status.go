@@ -86,7 +86,7 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 		}
 		return client.ReadSnapshot(ctx, token, repo.Owner, repo.Name)
 	}
-	if err := writeStatus(ctx, stdout, settings, dir, now(), read); err != nil {
+	if err := writeStatus(ctx, stdout, settings, dir, now(), time.Local, read); err != nil {
 		fmt.Fprintf(stderr, "cumin status: %v\n", err)
 		return exitFailure
 	}
@@ -131,9 +131,10 @@ var ownerLabels = []string{workflow.LabelAwaitingOwnerReview, workflow.LabelAwai
 
 // writeStatus writes the whole report. A repository that cannot be read
 // is named with the reason, and the report goes on; the error then says
-// that the report is not complete.
-func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, stateDir string, at time.Time, read readRepository) error {
-	writeQuota(w, settings, stateDir, at)
+// that the report is not complete. The time bands and the times of the
+// report use loc; cumin status passes the time zone of the Host.
+func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, stateDir string, at time.Time, loc *time.Location, read readRepository) error {
+	writeQuota(w, settings, stateDir, at, loc)
 
 	var working, waiting, failed []string
 	for _, repo := range settings.Repositories {
@@ -185,7 +186,7 @@ func writeList(w io.Writer, heading string, lines []string) {
 
 // writeQuota writes the latest usage that cumin run kept, the limits at
 // the time of the report, and the allowance.
-func writeQuota(w io.Writer, settings *config.Settings, stateDir string, at time.Time) {
+func writeQuota(w io.Writer, settings *config.Settings, stateDir string, at time.Time, loc *time.Location) {
 	fmt.Fprintln(w, "Quota:")
 	stored, ok := state.Open(filepath.Join(stateDir, stateFileName), nil).Quota()
 	if !ok {
@@ -202,14 +203,14 @@ func writeQuota(w io.Writer, settings *config.Settings, stateDir string, at time
 		FiveHour: quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt},
 		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
 	}
-	decision := quota.Decide(usage, settings.Quota, allowance, at)
-	fmt.Fprintf(w, "  read at %s\n", stamp(stored.ReadAt))
+	decision := quota.Decide(usage, settings.Quota, allowance, at, loc)
+	fmt.Fprintf(w, "  read at %s\n", stamp(stored.ReadAt, loc))
 	fmt.Fprintf(w, "  5h window:     %s used, limit %s, resets at %s\n",
-		percent(stored.FiveHour.Utilization), percentOf(decision.FiveHourLimit), stamp(stored.FiveHour.ResetsAt))
+		percent(stored.FiveHour.Utilization), percentOf(decision.FiveHourLimit), stamp(stored.FiveHour.ResetsAt, loc))
 	fmt.Fprintf(w, "  weekly window: %s used, pace limit %s, resets at %s\n",
-		percent(stored.Weekly.Utilization), percentOf(decision.WeeklyLimit), stamp(stored.Weekly.ResetsAt))
+		percent(stored.Weekly.Utilization), percentOf(decision.WeeklyLimit), stamp(stored.Weekly.ResetsAt, loc))
 	if at.Before(allowance.FiveHourUntil) {
-		fmt.Fprintf(w, "  allowance: the 5h limit is 100%% until %s\n", stamp(allowance.FiveHourUntil))
+		fmt.Fprintf(w, "  allowance: the 5h limit is 100%% until %s\n", stamp(allowance.FiveHourUntil, loc))
 	}
 	if decision.Allows() {
 		fmt.Fprintln(w, "  new starts: go on")
@@ -220,8 +221,8 @@ func writeQuota(w io.Writer, settings *config.Settings, stateDir string, at time
 		names[i] = string(name)
 	}
 	line := "  new starts: stopped by the " + strings.Join(names, " and the ") + " window"
-	if next, ok := quota.NextTry(usage, settings.Quota, allowance, at); ok {
-		line += ", next try at " + stamp(next)
+	if next, ok := quota.NextTry(usage, settings.Quota, allowance, at, loc); ok {
+		line += ", next try at " + stamp(next, loc)
 	}
 	fmt.Fprintln(w, line)
 }
@@ -230,7 +231,7 @@ func percent(utilization float64) string { return percentOf(utilization * 100) }
 
 func percentOf(p float64) string { return fmt.Sprintf("%.1f%%", p) }
 
-func stamp(t time.Time) string { return t.Local().Format(time.DateTime) }
+func stamp(t time.Time, loc *time.Location) string { return t.In(loc).Format(time.DateTime) }
 
 // version returns the version of the binary from the build information of
 // Go: the version of the main module, and the commit when the build ran in

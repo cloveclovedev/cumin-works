@@ -25,6 +25,13 @@ func statusSettings() *config.Settings {
 	}
 }
 
+// statusZone is the time zone of the report in these tests. Its offset is
+// not a full hour.
+var statusZone = time.FixedZone("UTC-03:30", -(3*3600 + 30*60))
+
+// statusAt is the time of a report whose time does not matter.
+var statusAt = time.Date(2026, 10, 1, 10, 0, 0, 0, statusZone)
+
 // readFake reads the snapshot from the fake GitHub, as cumin status does
 // with the token of cumin-core.
 func readFake(t *testing.T) readRepository {
@@ -46,7 +53,7 @@ func readFake(t *testing.T) readRepository {
 // usage with its time and the limits of now.
 func TestStatusShowsTheWorkTheWaitingIssuesAndTheQuota(t *testing.T) {
 	dir := t.TempDir()
-	at := time.Date(2026, 10, 1, 10, 0, 0, 0, time.Local)
+	at := time.Date(2026, 10, 1, 10, 0, 0, 0, statusZone)
 	store := state.Open(filepath.Join(dir, stateFileName), nil)
 	if err := store.SetQuota(state.Quota{
 		FiveHour: state.QuotaWindow{Utilization: 0.9, ResetsAt: at.Add(2 * time.Hour)},
@@ -57,15 +64,15 @@ func TestStatusShowsTheWorkTheWaitingIssuesAndTheQuota(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeStatus(t.Context(), &out, statusSettings(), dir, at, readFake(t)); err != nil {
+	if err := writeStatus(t.Context(), &out, statusSettings(), dir, at, statusZone, readFake(t)); err != nil {
 		t.Fatalf("writeStatus: %v", err)
 	}
 	text := out.String()
 	for _, want := range []string{
-		"read at " + stamp(at.Add(-time.Minute)),
+		"read at " + stamp(at.Add(-time.Minute), statusZone),
 		"5h window:     90.0% used, limit 85.0%",
 		"weekly window: 20.0% used, pace limit 85.0%",
-		"new starts: stopped by the 5h window, next try at " + stamp(at.Add(2*time.Hour)),
+		"new starts: stopped by the 5h window, next try at " + stamp(at.Add(2*time.Hour), statusZone),
 		"Agents at work (from the labels on GitHub):\n  example-org/example-repo #6 cumin/status/planning\n  example-org/example-repo #10 cumin/status/reviewing\n",
 		"Waiting for the Owner:\n  example-org/example-repo #11 cumin/status/awaiting-owner-decision\n",
 	} {
@@ -83,7 +90,7 @@ func TestStatusShowsTheWorkTheWaitingIssuesAndTheQuota(t *testing.T) {
 // allowance shows its end.
 func TestStatusWithoutAUsageStillListsTheIssues(t *testing.T) {
 	var out bytes.Buffer
-	if err := writeStatus(t.Context(), &out, statusSettings(), t.TempDir(), time.Now(), readFake(t)); err != nil {
+	if err := writeStatus(t.Context(), &out, statusSettings(), t.TempDir(), statusAt, statusZone, readFake(t)); err != nil {
 		t.Fatalf("writeStatus: %v", err)
 	}
 	if !strings.Contains(out.String(), "not read yet") || !strings.Contains(out.String(), "#11 cumin/status/awaiting-owner-decision") {
@@ -93,7 +100,7 @@ func TestStatusWithoutAUsageStillListsTheIssues(t *testing.T) {
 
 func TestStatusShowsTheAllowance(t *testing.T) {
 	dir := t.TempDir()
-	at := time.Date(2026, 10, 1, 10, 0, 0, 0, time.Local)
+	at := time.Date(2026, 10, 1, 10, 0, 0, 0, statusZone)
 	until := at.Add(2 * time.Hour)
 	store := state.Open(filepath.Join(dir, stateFileName), nil)
 	if err := store.SetQuota(state.Quota{
@@ -106,10 +113,10 @@ func TestStatusShowsTheAllowance(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := writeStatus(t.Context(), &out, statusSettings(), dir, at, readFake(t)); err != nil {
+	if err := writeStatus(t.Context(), &out, statusSettings(), dir, at, statusZone, readFake(t)); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"limit 100.0%", "allowance: the 5h limit is 100% until " + stamp(until), "new starts: go on"} {
+	for _, want := range []string{"limit 100.0%", "allowance: the 5h limit is 100% until " + stamp(until, statusZone), "new starts: go on"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the report has no %q:\n%s", want, out.String())
 		}
@@ -123,7 +130,7 @@ func TestStatusNamesARepositoryThatWasNotRead(t *testing.T) {
 	fail := func(context.Context, config.Repository) (github.RepositorySnapshot, error) {
 		return github.RepositorySnapshot{}, errors.New("no token")
 	}
-	err := writeStatus(t.Context(), &out, statusSettings(), t.TempDir(), time.Now(), fail)
+	err := writeStatus(t.Context(), &out, statusSettings(), t.TempDir(), statusAt, statusZone, fail)
 	if err == nil || !strings.Contains(out.String(), "example-org/example-repo: not read: no token") {
 		t.Errorf("err = %v, report:\n%s", err, out.String())
 	}

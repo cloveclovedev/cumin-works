@@ -81,6 +81,10 @@ type Service struct {
 	// Now is the clock of the quota decisions (Q1). Nil means time.Now.
 	// Tests set it, so that a week passes without waiting.
 	Now func() time.Time
+	// Location is the time zone of the time bands of the 5h quota window.
+	// Nil means time.Local, the zone of the Host. Tests set it, so that
+	// the zone of the machine does not change a result.
+	Location *time.Location
 
 	// running counts the agent runs that the polls started. Each run has
 	// its own goroutine, so that the poll goes on while an agent works.
