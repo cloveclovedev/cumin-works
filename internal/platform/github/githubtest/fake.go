@@ -275,7 +275,10 @@ type Fake struct {
 	app          *App
 	users        map[string]int64
 	requests     []Request
-	failNext     *failure
+	// received is closed, and replaced, each time a request arrives, so
+	// that WaitForRequests wakes.
+	received chan struct{}
+	failNext *failure
 	// lastCommentID is the id of the comment that was created last.
 	lastCommentID int64
 	// commentAuthor is the author of the comments that the REST API
@@ -369,7 +372,7 @@ type failure struct {
 // New starts the fake. The server closes when the test ends.
 func New(t *testing.T) (*Fake, *httptest.Server) {
 	t.Helper()
-	f := &Fake{t: t, repositories: map[string]*Repository{}, users: map[string]int64{}}
+	f := &Fake{t: t, repositories: map[string]*Repository{}, users: map[string]int64{}, received: make(chan struct{})}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	return f, server
@@ -623,12 +626,34 @@ func (f *Fake) CountRequests(method, path string) int {
 	return n
 }
 
+// WaitForRequests waits until the fake has received n requests with the
+// method and the path. It returns false when the guard passes first; the
+// guard is only there against a hang.
+func (f *Fake) WaitForRequests(method, path string, n int, guard time.Duration) bool {
+	timeout := time.After(guard)
+	for {
+		f.mu.Lock()
+		received := f.received
+		f.mu.Unlock()
+		if f.CountRequests(method, path) >= n {
+			return true
+		}
+		select {
+		case <-received:
+		case <-timeout:
+			return false
+		}
+	}
+}
+
 func key(owner, name string) string { return strings.ToLower(owner + "/" + name) }
 
 func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	body, _ := readBody(r)
 	f.mu.Lock()
 	f.requests = append(f.requests, Request{Method: r.Method, Path: r.URL.Path, Body: body})
+	close(f.received)
+	f.received = make(chan struct{})
 	fail := f.failNext
 	if fail != nil && fail.method == r.Method && fail.path == r.URL.Path && fail.skip > 0 {
 		fail.skip--
