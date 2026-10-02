@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -180,10 +181,14 @@ func TestStoreNotifyAddress_Failures(t *testing.T) {
 }
 
 // The command against a real Keychain: a temporary one, never the login
-// keychain. The test is skipped where the security command does not exist.
+// keychain. The test is skipped on a system other than macOS. On macOS a
+// missing security command fails the test.
 func TestStoreNotifyAddress_RealKeychain(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("the Keychain is a macOS feature")
+	}
 	if _, err := os.Stat("/usr/bin/security"); err != nil {
-		t.Skip("/usr/bin/security does not exist: the Keychain is a macOS feature")
+		t.Fatalf("/usr/bin/security does not exist on macOS: %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "notify-test.keychain-db")
 	// The password protects only this throwaway keychain.

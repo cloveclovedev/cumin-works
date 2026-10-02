@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/testenv"
 )
 
 const settingsWithComments = `# Host settings of cumin. A person edits this file.
@@ -272,7 +274,7 @@ func TestCheckGitHubAppClientIDWritable_ProbesTheDirectory(t *testing.T) {
 
 	// A directory that cannot be written: the check fails, and names it.
 	if os.Geteuid() == 0 {
-		t.Skip("root ignores the permission bits of a directory")
+		testenv.SkipOrFail(t, "the test user is root, and root ignores the permission bits of a directory")
 	}
 	readOnly := filepath.Dir(path)
 	if err := os.Chmod(readOnly, 0o500); err != nil {

@@ -149,7 +149,7 @@ func resolvedTemp(t *testing.T, parts ...string) string {
 	t.Helper()
 	dir, err := filepath.EvalSymlinks(os.TempDir())
 	if err != nil {
-		t.Skipf("resolve the temporary directory: %v", err)
+		t.Fatalf("resolve the temporary directory: %v", err)
 	}
 	return filepath.Join(append([]string{dir}, parts...)...)
 }
