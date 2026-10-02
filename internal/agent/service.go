@@ -42,6 +42,9 @@ type Service struct {
 	// its defaults. Tests shorten them.
 	Grace          time.Duration
 	QuotaTimeLimit time.Duration
+	// Now is the clock that gives the start of a run, for the end time
+	// that the agent receives. Nil means time.Now. Tests set it.
+	Now func() time.Time
 
 	mu         sync.Mutex
 	identities map[appKey]identity
@@ -136,6 +139,8 @@ func (s *Service) ReadQuota(ctx context.Context, role config.Role) (QuotaUsage, 
 // repository;
 // the bot identity of the role is read, once; then the CLI runs with the
 // token and the identity. The token lives only in the request of the run.
+// The request text of the run starts with the facts of the run (facts.go):
+// the time limit of the settings that the run uses, and the end time.
 // An error from the run is an *AbnormalEnd.
 func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	settings, ok := s.Roles[req.Role]
@@ -177,11 +182,14 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	}
 
 	// 3. The run. The login of the bot goes with the result, so that the
-	// caller can compare it with the author of a pull request (I2).
+	// caller can compare it with the author of a pull request (I2). The
+	// clock is read right before the run, so that the end time that the
+	// agent receives is not later than the time at which the run is cut.
+	facts := runFacts{TimeLimit: settings.TimeLimit, End: s.now().Add(settings.TimeLimit)}
 	run, err := cli.Run(ctx, Request{
 		Role:            req.Role,
 		RoleInstruction: roleInstruction,
-		Text:            req.Text,
+		Text:            requestWithFacts(facts, req.Text),
 		WorkDir:         req.WorkDir,
 		SessionID:       req.SessionID,
 		SkillsDir:       s.skillsDir(req.Role),
@@ -309,6 +317,14 @@ func (s *Service) logger() *slog.Logger {
 		return s.Logger
 	}
 	return slog.Default()
+}
+
+// now returns the time of the clock of the Service.
+func (s *Service) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
 }
 
 // skillsDir is the directory of skills that a run of the role passes with

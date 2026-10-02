@@ -434,3 +434,115 @@ func TestStart_PassesTheSkillsDirectoryOfTheRole(t *testing.T) {
 		t.Errorf("the arguments name the directory of another role: %q", args)
 	}
 }
+
+// promptOfRun returns the request text that the fake CLI received: the
+// value of -p.
+func promptOfRun(t *testing.T, dir string) string {
+	t.Helper()
+	args := recordedArgs(t, filepath.Join(dir, "agent.args"))
+	i := indexOf(args, "-p")
+	if i < 0 || i+1 >= len(args) {
+		t.Fatalf("the agent run has no -p: %q", args)
+	}
+	return args[i+1]
+}
+
+// fixedClock returns a clock that always gives the same time.
+func fixedClock(now time.Time) func() time.Time {
+	return func() time.Time { return now }
+}
+
+// The start request of every role names the time limit of that role and
+// the end time of the run, before the request text
+// (docs/ja/requirements/agents/common.md, the test of the time limit).
+func TestStart_ThePromptOfEveryRoleNamesTheTimeLimitAndTheEndTime(t *testing.T) {
+	tests := []struct {
+		role    config.Role
+		fixture string
+		limit   time.Duration
+		want    string
+	}{
+		{config.RolePlanner, "planner-done.jsonl", 20 * time.Minute,
+			"- Time limit of the run: 20m0s\n- End time of the run: 2026-10-03T01:20:00Z\n"},
+		{config.RoleImplementer, "done.jsonl", 50 * time.Minute,
+			"- Time limit of the run: 50m0s\n- End time of the run: 2026-10-03T01:50:00Z\n"},
+		{config.RoleReviewer, "done.jsonl", 30 * time.Minute,
+			"- Time limit of the run: 30m0s\n- End time of the run: 2026-10-03T01:30:00Z\n"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			_, client := newFakeGitHub(t)
+			path, dir := serviceCLI(t, "quota-run.jsonl", tt.fixture)
+			s := newService(t, path, client, nil)
+			// The fake knows one App, so every role runs with its
+			// credentials.
+			s.Roles[tt.role] = config.RoleSettings{TimeLimit: tt.limit, CLI: config.CLIClaudeCode, CLIPath: path}
+			s.Apps["example-org"][tt.role] = s.Apps["example-org"][config.RoleImplementer]
+			s.Now = fixedClock(time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC))
+			request := startRequest(t)
+			request.Role = tt.role
+
+			if _, err := s.Start(context.Background(), request); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			want := "Facts of this run (data from cumin):\n" + tt.want + "\n" + request.Text
+			if got := promptOfRun(t, dir); got != want {
+				t.Errorf("prompt = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// With settings in the request, the time limit and the end time are the
+// ones of those settings: they are the settings that cut the run.
+func TestStart_TheTimeLimitOfThePromptIsTheOneOfTheSettingsOfTheRequest(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+	s.Now = fixedClock(time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC))
+
+	settings := s.Roles[config.RoleImplementer]
+	settings.TimeLimit = 45 * time.Minute
+	request := startRequest(t)
+	request.Settings = &settings
+
+	if _, err := s.Start(context.Background(), request); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	want := "- Time limit of the run: 45m0s\n- End time of the run: 2026-10-03T01:45:00Z\n"
+	if got := promptOfRun(t, dir); !strings.Contains(got, want) {
+		t.Errorf("prompt = %q, want the lines %q", got, want)
+	}
+}
+
+// A resumed session receives the two lines again, with the end time of the
+// new run and not the one of the run that it continues.
+func TestStart_AResumedSessionReceivesANewEndTime(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
+	s := newService(t, path, client, nil)
+
+	s.Now = fixedClock(time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC))
+	first, err := s.Start(context.Background(), startRequest(t))
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if got := promptOfRun(t, dir); !strings.Contains(got, "- End time of the run: 2026-10-03T01:01:00Z\n") {
+		t.Errorf("first prompt = %q, want the end time 01:01:00Z", got)
+	}
+
+	s.Now = fixedClock(time.Date(2026, 10, 3, 2, 30, 0, 0, time.UTC))
+	request := startRequest(t)
+	request.SessionID = first.SessionID
+	if _, err := s.Start(context.Background(), request); err != nil {
+		t.Fatalf("Start of the resumed session: %v", err)
+	}
+	args := recordedArgs(t, filepath.Join(dir, "agent.args"))
+	if i := indexOf(args, "--resume"); i < 0 || args[i+1] != first.SessionID {
+		t.Fatalf("the second run does not resume the session: %q", args)
+	}
+	want := "Facts of this run (data from cumin):\n- Time limit of the run: 1m0s\n- End time of the run: 2026-10-03T02:31:00Z\n\n" + request.Text
+	if got := promptOfRun(t, dir); got != want {
+		t.Errorf("resumed prompt = %q, want %q", got, want)
+	}
+}
