@@ -8,6 +8,7 @@
 package workflow
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -320,31 +321,44 @@ func (MergeOwnerApproval) isAction() {}
 // first never takes room from a start.
 //
 // R1 and I1 both start an agent, so they share the room under the limit.
-// The starts are taken lowest issue number first, whichever row they
-// belong to.
+// The starts are taken highest priority first and then lowest issue number
+// first, whichever row they belong to. priority are the priority labels of
+// the repository, highest first (PriorityRank). The priority only orders
+// the starts that can begin: an open blocked-by issue and the limit decide
+// before it, and the quota decides when a start is applied.
 //
 // R3 and R6 move a requirement issue and start no agent, so they come
 // first and take no room.
-func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck) []Action {
+func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string) []Action {
 	actions := requirementMoves(snapshot)
 	actions = append(actions, reviewableSubIssues(snapshot, required)...)
 	actions = append(actions, failedSubIssues(snapshot, required)...)
 	room := maxInProgress - inProgress(snapshot)
 	type start struct {
+		rank   int
 		number int
 		action Action
 	}
+	// A start on a requirement issue has the priority of that issue.
+	requirementRank := func(number int) int {
+		requirement, _ := snapshot.RequirementIssue(number)
+		return PriorityRank(requirement.Labels, nil, priority)
+	}
 	var starts []start
 	for _, plan := range readyRequirementIssues(snapshot) {
-		starts = append(starts, start{plan.Number, plan})
+		starts = append(starts, start{requirementRank(plan.Number), plan.Number, plan})
 	}
 	for _, check := range acceptanceChecks(snapshot) {
-		starts = append(starts, start{check.Number, check})
+		starts = append(starts, start{requirementRank(check.Number), check.Number, check})
 	}
 	for _, claim := range readySubIssues(snapshot) {
-		starts = append(starts, start{claim.Number, claim})
+		sub, _ := snapshot.SubIssue(claim.Number)
+		requirement, _ := snapshot.RequirementIssue(claim.RequirementIssue)
+		starts = append(starts, start{PriorityRank(sub.Labels, requirement.Labels, priority), claim.Number, claim})
 	}
-	slices.SortFunc(starts, func(a, b start) int { return a.number - b.number })
+	slices.SortFunc(starts, func(a, b start) int {
+		return cmp.Or(a.rank-b.rank, a.number-b.number)
+	})
 	for _, s := range starts[:max(0, min(room, len(starts)))] {
 		actions = append(actions, s.action)
 	}
@@ -370,6 +384,25 @@ func WithoutNewWork(actions []Action) []Action {
 		}
 	}
 	return kept
+}
+
+// PriorityRank returns the place of an issue in the order of the starts: 0
+// is the highest priority. priority are the priority labels of the
+// repository, highest first. An issue with two of them has the higher one.
+// An issue without one takes the rank of parent, the labels of its
+// requirement issue; a requirement issue has no parent. An issue with no
+// priority label at either place comes after every label (issue-states.md,
+// the order of the starts). GitHub label names ignore case, so the
+// comparison does too.
+func PriorityRank(labels, parent, priority []string) int {
+	for _, own := range [][]string{labels, parent} {
+		for rank, name := range priority {
+			if slices.ContainsFunc(own, func(label string) bool { return strings.EqualFold(label, name) }) {
+				return rank
+			}
+		}
+	}
+	return len(priority)
 }
 
 // requirementMoves returns the actions of R3 and R6, lowest requirement

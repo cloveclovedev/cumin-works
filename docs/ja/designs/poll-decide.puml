@@ -33,7 +33,9 @@ partition "Decision (pure function, no I/O)" {
   - open sub-issues
   - with cumin/status/ready
   - every blocked-by issue closed;
-  :Sort the R1 and I1 candidates by issue number
+  :Sort the R1, R4, and I1 candidates
+  by priority label (highest first; no label last),
+  then by issue number,
   and keep as many as the free slots;
   :Collect I12 candidates
   - open sub-issues with cumin/status/awaiting-owner-review

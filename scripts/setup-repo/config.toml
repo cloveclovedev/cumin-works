@@ -24,3 +24,12 @@ protected_paths = [
   "AGENTS.md",
   ".claude/",
 ]
+
+# Labels that order the work, highest priority first. cumin starts a ready
+# issue with a higher label before one with a lower label, and an issue with
+# no such label last. A sub-issue without one takes the label of its
+# requirement issue. Without this key, the labels are cumin/priority/P0 to
+# cumin/priority/P3, and cumin creates them. Name the labels that the
+# organization already uses; cumin never creates or changes those, and
+# scripts/setup-repo.sh asks before it creates the missing ones.
+# priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]

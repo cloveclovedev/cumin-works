@@ -42,6 +42,9 @@ const (
 // pointer is empty when the file does not hold the key, so that the Host
 // value stays.
 //
+// priority_labels is a key of the repository only: the Host file does not
+// take it.
+//
 // protected_paths is a valid key that cumin ignores: the check of GitHub
 // Actions and the Implementer instruction use it, and the starter file of
 // scripts/setup-repo.sh holds only this key.
@@ -49,6 +52,7 @@ type repositoryFile struct {
 	MaxReviewRounds     *int                      `toml:"max_review_rounds"`
 	MaxCheckFixRequests *int                      `toml:"max_check_fix_requests"`
 	MergeMethod         *string                   `toml:"merge_method"`
+	PriorityLabels      *[]string                 `toml:"priority_labels"`
 	Roles               map[string]repositoryRole `toml:"roles"`
 	Notify              *repositoryNotify         `toml:"notify"`
 	ProtectedPaths      []string                  `toml:"protected_paths"`
@@ -115,6 +119,13 @@ func (s *Settings) WithRepository(data []byte) (*Settings, error) {
 			effective.MergeMethod = method
 		default:
 			fail("merge_method", limitMergeMethod, *f.MergeMethod)
+		}
+	}
+	if f.PriorityLabels != nil {
+		if reason := checkPriorityLabels(*f.PriorityLabels); reason != "" {
+			fail("priority_labels", "%s", reason)
+		} else {
+			effective.PriorityLabels = *f.PriorityLabels
 		}
 	}
 	if f.Notify != nil && f.Notify.Discord != nil && f.Notify.Discord.Enabled != nil {
