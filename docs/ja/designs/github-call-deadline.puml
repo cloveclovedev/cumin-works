@@ -1,0 +1,25 @@
+@startuml github-call-deadline
+' cumin works - every call of the GitHub client ends after a deadline.
+' Document: cumin-core.md, topic on the GitHub client.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+rectangle "cumin run\n(poll, actions)" as run
+rectangle "cumin status" as status
+rectangle "cumin setup" as setup
+rectangle "AppClient\ninternal/platform/github\nREST and GraphQL" as client
+cloud "GitHub API" as api
+
+run --> client
+status --> client
+setup --> client
+client -[#red,bold]-> api : <color:red>every call ends\n<color:red>after 30 seconds</color>
+
+note right of client
+  A call that gets no answer
+  returns an error at the deadline.
+  The poll logs it and runs again
+  at the next interval.
+end note
+@enduml
