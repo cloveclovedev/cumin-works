@@ -117,6 +117,8 @@ func TestFake_HangNextHoldsTheRequestUntilTheClientGivesUp(t *testing.T) {
 	for _, c := range calls {
 		t.Run(c.name, func(t *testing.T) {
 			fake.HangNext(c.method, c.path)
+			// The real time of the call: the timeout of the client is a
+			// timer of the real clock.
 			start := time.Now()
 			err := c.call()
 			if err == nil || !strings.Contains(err.Error(), "Client.Timeout") {
