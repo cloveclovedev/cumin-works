@@ -161,7 +161,19 @@ Agentを起動する着手 (R1、R4、I1) は、同時に進めるIssueの数の
 | Q1 | 新しい着手 (R1、I1) を止め、Ownerに通知する。実行中のIssueは最後まで進める | 実行終了、または着手の直前の確認: 5h枠の使用率が今のしきい値以上になった。weekly枠の使用率がペースの上限以上になった。または、着手の直前の確認で使用率を読み取れなかった | 止めてから再開するまでに、この枠について (読み取れなかったときは、そのことについて) まだ通知していない |
 | Q2 | 着手を再開する | Host上のコマンドで、Ownerが5h枠の使い切りを許可した。許可はその5h枠のリセットまで有効 | weekly枠の使用率がペースの上限未満である |
 | Q3 | 着手を再開する | 定期確認: 手元に残した使用率から決めた、次に試す時刻を過ぎた | 着手の直前の確認で、どちらの枠も上限未満である |
-| Q4 | Ownerに「待ち状態になった」と通知する | 定期確認: R1もI1も成り立たず、実行中のAgentもいない。利用枠だけで止まっている着手 (Q1) は、成り立つものとして数える。Q1が原因を知らせているためである | 前回の通知のあとに、cuminが何か動作をした (同じ通知を繰り返さない) |
+| Q4 | Ownerに「待ち状態になった」と通知する | 定期確認: Ownerが動かなければ何も進まない。次の全てが成り立つときである。実行中のAgentがいない。R1もI1も成り立たない (利用枠だけで止まっている着手 (Q1) は、成り立つものとして数える。Q1が原因を知らせているためである)。cuminがOwnerなしで次に進めるIssueがない (下の表) | 前回の通知のあとに、cuminが何か動作をした (同じ通知を繰り返さない) |
+
+Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
+
+| Issueの状態 | 数えるか | 理由 |
+|---|---|---|
+| `cumin/status/awaiting-checks` | 数える。Q4を出さない | 必須のcheckが終われば、cuminがI3かI4で進める。checkがいつまでも結果を返さないときも数えるので、その間Q4は出ない。そのIssueは `cumin status` に見える |
+| `cumin/status/ready` で、着手できるのに、同時に進めるIssueの数の上限だけで待っている | 数える。Q4を出さない | 空きができれば、cuminがR1かI1で着手する |
+| `cumin/status/ready` で、blocked by のIssueが開いている | 数えない | 前のIssueが閉じるまで動けない。前のIssueがcuminの作業中なら、そちらがQ4を止める |
+| `cumin/status/ready` で、利用枠だけで止まっている | (Q1に任せる) | 上の行のとおり、R1とI1が成り立つものとして数える |
+| `cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing` | 実行中のAgentがいれば、Q4を出さない | Agentがいないまま残ったもの (cuminの再起動のあとなど) は、Ownerが `cumin/status/ready` を付け直すまで進まないので、数えない |
+| `cumin/status/awaiting-owner-review`、`cumin/status/awaiting-owner-decision` | 数えない | Ownerの判断を待っている |
+| `cumin/type/owner-task`、状態ラベルのないIssue | 数えない | Ownerが動くまで進まない |
 
 使用率の読み方:
 
