@@ -291,6 +291,20 @@ type Fake struct {
 	// permissions are the answers of the permission endpoint, by login, as
 	// SetPermission set them.
 	permissions map[string]Permission
+	// now is the clock that stamps new comments, reviews, and label
+	// events, as SetClock set it.
+	now func() time.Time
+}
+
+// DefaultNow is the time of the clock of a fake whose test set no clock.
+var DefaultNow = time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+
+// SetClock sets the clock that stamps new comments, reviews, and label
+// events. Without it, the clock always reads DefaultNow.
+func (f *Fake) SetClock(now func() time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.now = now
 }
 
 // Permission is the answer of "Get repository permissions for a user".
@@ -369,7 +383,8 @@ type failure struct {
 // New starts the fake. The server closes when the test ends.
 func New(t *testing.T) (*Fake, *httptest.Server) {
 	t.Helper()
-	f := &Fake{t: t, repositories: map[string]*Repository{}, users: map[string]int64{}}
+	f := &Fake{t: t, repositories: map[string]*Repository{}, users: map[string]int64{},
+		now: func() time.Time { return DefaultNow }}
 	server := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(server.Close)
 	return f, server
@@ -942,6 +957,8 @@ func (f *Fake) serveAccessToken(w http.ResponseWriter, id int64) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 		return
 	}
+	// The client compares the expiry with the real clock and takes no clock
+	// from a test, so the expiry is one hour after the real time.
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"token":      Token,
 		"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
@@ -1052,7 +1069,7 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 		return
 	}
 	if isIssue {
-		now := time.Now()
+		now := f.now()
 		for _, label := range *request.Labels {
 			if !slices.Contains(issue.Labels, label) {
 				issue.LabelEvents = append(issue.LabelEvents, LabelEvent{Label: label, At: now})
@@ -1092,7 +1109,7 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 	}
 	// The ids grow over the whole fake, as they do on GitHub.
 	f.lastCommentID++
-	comment := Comment{ID: f.lastCommentID, Body: *request.Body, At: time.Now(), Author: f.commentAuthor, AuthorIsBot: f.commentAuthor != ""}
+	comment := Comment{ID: f.lastCommentID, Body: *request.Body, At: f.now(), Author: f.commentAuthor, AuthorIsBot: f.commentAuthor != ""}
 	// The token of the fake is the same for cumin and for the agents. In the
 	// tests only an agent comments on a pull request (the Reviewer of I8),
 	// and cumin comments on issues; so a comment on a pull request is by
@@ -1169,7 +1186,7 @@ func (f *Fake) serveCreateReview(w http.ResponseWriter, body []byte, owner, name
 	if state != "PENDING" {
 		// Each review is later than the one before, even within the same
 		// clock tick, as on GitHub.
-		review.SubmittedAt = time.Now().UTC()
+		review.SubmittedAt = f.now().UTC()
 		for _, before := range pr.Reviews {
 			if !review.SubmittedAt.After(before.SubmittedAt) {
 				review.SubmittedAt = before.SubmittedAt.Add(time.Millisecond)
