@@ -61,38 +61,89 @@ func TestPaceLimitWithoutLead(t *testing.T) {
 // later, by time alone.
 func TestCore15_TheSameWeeklyUsageStopsEarlyAndPassesLater(t *testing.T) {
 	usage := Usage{Weekly: Window{Utilization: 0.40, ResetsAt: weeklyReset}}
-	early := Decide(usage, defaults, Allowance{}, weekStart().Add(24*time.Hour))
+	early := Decide(usage, defaults, Allowance{}, weekStart().Add(24*time.Hour), time.UTC)
 	if early.Allows() || len(early.Stopped) != 1 || early.Stopped[0] != Weekly {
 		t.Errorf("early in the week: %+v, want stopped by the weekly window", early)
 	}
 	// 85 x (e + 1 day) / 7 days > 40 from e = 40/85 x 7 - 1 days, about 2.29 days.
-	late := Decide(usage, defaults, Allowance{}, weekStart().Add(56*time.Hour))
+	late := Decide(usage, defaults, Allowance{}, weekStart().Add(56*time.Hour), time.UTC)
 	if !late.Allows() {
 		t.Errorf("later in the week: %+v, want a start", late)
 	}
 }
 
+// zones are fixed time zones of these tests. Two of them have an offset
+// that is not a full hour.
+var zones = map[string]*time.Location{
+	"UTC":       time.UTC,
+	"UTC+05:30": time.FixedZone("UTC+05:30", 5*3600+30*60),
+	"UTC-03:30": time.FixedZone("UTC-03:30", -(3*3600 + 30*60)),
+	"UTC+09:00": time.FixedZone("UTC+09:00", 9*3600),
+}
+
+// The time bands use the clock time in the location that the caller gives,
+// whatever the zone of the time value and of the machine.
 func TestFiveHourLimitByTimeBand(t *testing.T) {
 	settings := config.FiveHourQuota{Threshold: 85, Bands: []config.TimeBand{
 		{From: 23 * 60, To: 6 * 60, Threshold: 100},
 		{From: 12 * 60, To: 13 * 60, Threshold: 95},
 	}}
-	day := func(hour, minute int) time.Time { return time.Date(2026, 10, 1, hour, minute, 0, 0, time.Local) }
 	tests := []struct {
-		at   time.Time
-		want float64
+		hour, minute int
+		want         float64
 	}{
-		{day(23, 0), 100},
-		{day(2, 30), 100},
-		{day(6, 0), 85},
-		{day(12, 59), 95},
-		{day(13, 0), 85},
-		{day(18, 0), 85},
+		{23, 0, 100},
+		{2, 30, 100},
+		{6, 0, 85},
+		{12, 59, 95},
+		{13, 0, 85},
+		{18, 0, 85},
 	}
-	for _, tt := range tests {
-		if got := FiveHourLimit(settings, tt.at); got != tt.want {
-			t.Errorf("FiveHourLimit at %s = %v, want %v", tt.at.Format("15:04"), got, tt.want)
-		}
+	for name, loc := range zones {
+		t.Run(name, func(t *testing.T) {
+			for _, tt := range tests {
+				at := time.Date(2026, 10, 1, tt.hour, tt.minute, 0, 0, loc)
+				// The same instant in another zone gives the same limit.
+				for _, now := range []time.Time{at, at.UTC()} {
+					if got := FiveHourLimit(settings, now, loc); got != tt.want {
+						t.Errorf("FiveHourLimit at %02d:%02d = %v, want %v", tt.hour, tt.minute, got, tt.want)
+					}
+				}
+			}
+		})
+	}
+}
+
+// The same instant is in a band in one location and outside it in another.
+func TestFiveHourLimitFollowsTheLocation(t *testing.T) {
+	settings := config.FiveHourQuota{Threshold: 85, Bands: []config.TimeBand{{From: 12 * 60, To: 13 * 60, Threshold: 95}}}
+	now := time.Date(2026, 10, 1, 7, 0, 0, 0, time.UTC) // 12:30 at UTC+05:30
+	if got := FiveHourLimit(settings, now, zones["UTC+05:30"]); got != 95 {
+		t.Errorf("FiveHourLimit at UTC+05:30 = %v, want 95", got)
+	}
+	if got := FiveHourLimit(settings, now, time.UTC); got != 85 {
+		t.Errorf("FiveHourLimit at UTC = %v, want 85", got)
+	}
+}
+
+// Q3: the next try time is the start of the band at its clock time in the
+// location, also when the offset is not a full hour.
+func TestQ3_NextTryAtTheStartOfABandInTheLocation(t *testing.T) {
+	settings := defaults
+	settings.FiveHour.Bands = []config.TimeBand{{From: 23 * 60, To: 6 * 60, Threshold: 95}}
+	for name, loc := range zones {
+		t.Run(name, func(t *testing.T) {
+			now := time.Date(2026, 10, 2, 22, 15, 0, 0, loc).UTC()
+			usage := Usage{
+				FiveHour: Window{Utilization: 0.90, ResetsAt: now.Add(3 * time.Hour)},
+				Weekly:   Window{Utilization: 0.10, ResetsAt: now.Add(24 * time.Hour)},
+			}
+			want := time.Date(2026, 10, 2, 23, 0, 0, 0, loc)
+			got, ok := NextTry(usage, settings, Allowance{}, now, loc)
+			if !ok || !got.Equal(want) {
+				t.Errorf("NextTry = %v, %v, want %v", got, ok, want)
+			}
+		})
 	}
 }
 
@@ -117,7 +168,7 @@ func TestDecideStopsAtOrAboveTheLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := Decide(tt.usage, defaults, Allowance{}, now)
+			d := Decide(tt.usage, defaults, Allowance{}, now, time.UTC)
 			if len(d.Stopped) != len(tt.want) {
 				t.Fatalf("Stopped = %v, want %v", d.Stopped, tt.want)
 			}
@@ -139,7 +190,7 @@ func TestDecideAbsorbsTheRoundingOfAPercent(t *testing.T) {
 	settings := defaults
 	settings.FiveHour.Threshold = 29
 	now := weeklyReset.Add(-time.Hour)
-	d := Decide(Usage{FiveHour: Window{Utilization: 0.29, ResetsAt: now.Add(time.Hour)}}, settings, Allowance{}, now)
+	d := Decide(Usage{FiveHour: Window{Utilization: 0.29, ResetsAt: now.Add(time.Hour)}}, settings, Allowance{}, now, time.UTC)
 	if d.Allows() {
 		t.Errorf("0.29 against 29: %+v, want stopped", d)
 	}
@@ -152,7 +203,7 @@ func TestDecideIgnoresAWindowWhoseResetHasPassed(t *testing.T) {
 		FiveHour: Window{Utilization: 1, ResetsAt: now.Add(-time.Minute)},
 		Weekly:   Window{Utilization: 1, ResetsAt: weeklyReset},
 	}
-	if d := Decide(usage, defaults, Allowance{}, now); !d.Allows() {
+	if d := Decide(usage, defaults, Allowance{}, now, time.UTC); !d.Allows() {
 		t.Errorf("Decide = %+v, want a start", d)
 	}
 }
@@ -187,20 +238,20 @@ func TestQ3_NextTry(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := NextTry(tt.usage, tt.settings, Allowance{}, now)
+			got, ok := NextTry(tt.usage, tt.settings, Allowance{}, now, time.UTC)
 			if diff := got.Sub(tt.want); !ok || diff < -time.Second || diff > time.Second {
 				t.Errorf("NextTry = %v, %v, want %v", got, ok, tt.want)
 			}
 			// No try before that time can pass, and a try then does.
-			if d := Decide(tt.usage, tt.settings, Allowance{}, got.Add(-time.Minute)); d.Allows() && got.Sub(now) > time.Minute {
+			if d := Decide(tt.usage, tt.settings, Allowance{}, got.Add(-time.Minute), time.UTC); d.Allows() && got.Sub(now) > time.Minute {
 				t.Errorf("a try one minute earlier passes: %+v", d)
 			}
-			if d := Decide(tt.usage, tt.settings, Allowance{}, got); !d.Allows() && got.Before(weeklyReset) && !got.Equal(fiveHourReset) {
+			if d := Decide(tt.usage, tt.settings, Allowance{}, got, time.UTC); !d.Allows() && got.Before(weeklyReset) && !got.Equal(fiveHourReset) {
 				t.Errorf("a try at the next try time stops: %+v", d)
 			}
 		})
 	}
-	if _, ok := NextTry(usage(0.10, 0.10), defaults, Allowance{}, now); ok {
+	if _, ok := NextTry(usage(0.10, 0.10), defaults, Allowance{}, now, time.UTC); ok {
 		t.Error("NextTry without a stop reports a time")
 	}
 }
@@ -238,16 +289,16 @@ func TestQ2_AnAllowanceLiftsOnlyTheFiveHourLimit(t *testing.T) {
 			Weekly:   Window{Utilization: weekly, ResetsAt: weeklyReset},
 		}
 	}
-	if d := Decide(usage(0.95, 0.10), defaults, allowance, now); !d.Allows() || d.FiveHourLimit != 100 {
+	if d := Decide(usage(0.95, 0.10), defaults, allowance, now, time.UTC); !d.Allows() || d.FiveHourLimit != 100 {
 		t.Errorf("5h over its threshold with an allowance: %+v, want a start at a limit of 100", d)
 	}
-	if d := Decide(usage(0.95, 0.90), defaults, allowance, now); d.Allows() || d.Stopped[0] != Weekly {
+	if d := Decide(usage(0.95, 0.90), defaults, allowance, now, time.UTC); d.Allows() || d.Stopped[0] != Weekly {
 		t.Errorf("weekly over its pace with an allowance: %+v, want stopped by the weekly window", d)
 	}
-	if d := Decide(usage(0.95, 0.10), defaults, Allowance{FiveHourUntil: now}, now); d.Allows() {
+	if d := Decide(usage(0.95, 0.10), defaults, Allowance{FiveHourUntil: now}, now, time.UTC); d.Allows() {
 		t.Errorf("an allowance that ended: %+v, want stopped", d)
 	}
-	if _, ok := NextTry(usage(0.95, 0.10), defaults, allowance, now); ok {
+	if _, ok := NextTry(usage(0.95, 0.10), defaults, allowance, now, time.UTC); ok {
 		t.Error("a new allowance does not end the wait")
 	}
 }
