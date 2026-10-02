@@ -24,6 +24,7 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
+	"github.com/cloveclovedev/cumin-works/internal/core/testenv"
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/discord"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -1926,7 +1927,7 @@ func TestI1_AStateThatCannotBeClearedStopsTheClaim(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 	store := state.Open(filepath.Join(dir, "state.json"), nil)
 	if err := store.Set("example-org/example-repo", 10, state.Issue{SessionID: "old-session"}); err == nil {
-		t.Skip("the test user can write in a directory with mode 500")
+		testenv.SkipOrFail(t, "the test user can write in a directory with mode 500")
 	}
 	service := sc.service()
 	service.State = store

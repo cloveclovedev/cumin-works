@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/core/testenv"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/keychain"
 )
@@ -852,7 +853,7 @@ func TestCheckNames(t *testing.T) {
 // not writable. It must find that out before GitHub registers an App.
 func TestSetupGitHubApps_SettingsDirectoryThatCannotBeWrittenStopsBeforeAnyRegistration(t *testing.T) {
 	if os.Geteuid() == 0 {
-		t.Skip("root ignores the permission bits of a directory")
+		testenv.SkipOrFail(t, "the test user is root, and root ignores the permission bits of a directory")
 	}
 	var out bytes.Buffer
 	browser := &fakeBrowser{org: "example-org"}

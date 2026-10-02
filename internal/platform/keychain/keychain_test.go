@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -27,11 +28,21 @@ func newTestKeychain(t *testing.T) *Keychain {
 	return newTestKeychainIn(t, t.TempDir())
 }
 
+// needSecurity skips the test on a system other than macOS. On macOS a
+// missing security command fails the test.
+func needSecurity(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("the Keychain is a macOS feature")
+	}
+	if _, err := os.Stat(securityPath); err != nil {
+		t.Fatalf("%s does not exist on macOS: %v", securityPath, err)
+	}
+}
+
 func newTestKeychainIn(t *testing.T, dir string) *Keychain {
 	t.Helper()
-	if _, err := os.Stat(securityPath); err != nil {
-		t.Skipf("%s does not exist: the Keychain is a macOS feature", securityPath)
-	}
+	needSecurity(t)
 	before := searchList(t)
 
 	path := filepath.Join(dir, "test.keychain-db")
@@ -213,9 +224,7 @@ func TestParseDefaultKeychain(t *testing.T) {
 
 // Default only asks for the path. It reads and writes no item.
 func TestDefault_ReturnsAnExistingKeychainFile(t *testing.T) {
-	if _, err := os.Stat(securityPath); err != nil {
-		t.Skipf("%s does not exist: the Keychain is a macOS feature", securityPath)
-	}
+	needSecurity(t)
 	k, err := Default(context.Background())
 	if err != nil {
 		t.Fatalf("Default: %v", err)

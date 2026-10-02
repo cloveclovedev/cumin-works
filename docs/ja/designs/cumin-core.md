@@ -145,6 +145,15 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 - 偽CLIは、決まった `stream-json` の出力を返すだけの実行ファイルである。打ち切りの場面では、終わらないものを使う。
 - 判定のロジックは、GitHubの事実のスナップショットから動作への純粋な関数にする。細かい分岐は、この関数の表形式のテストで確かめる。
 - 実機の場面の記録には、使用率の数値を書かない。
+- マシンにあるものに頼るテスト (`gh`、rootでないユーザー、ディレクトリのmode) は、それがないとき、`internal/core/testenv` の `SkipOrFail` を呼ぶ。手元ではskipし、CIでは失敗して、足りないものの名前を出す。
+  - 理由: CIでのskipは成功に見える。runnerが道具を失っても、誰も気づかない。
+  - CIかどうかは、環境変数 `CI` が `true` かどうかで決める。GitHub Actions が、この変数をいつも `true` にする (公式: Variables reference の Default environment variables)。`.github/workflows/ci.yml` には何も足さない。
+  - `t.Skip` を直接呼んでよいのは、そのテストがそこに属さないときだけである: `CUMIN_LIVE=1` のない実機の場面と、macOS以外で走るmacOSのテスト (`runtime.GOOS` の確認の後ろ)。macOSのテストは、macOSの上で道具 (`security`、`plutil`) がなければ失敗する。
+  - 採らなかった案: `go test -json` の出力からskipを数える手順をCIに足す。workflowの変更が要り、どのskipが正しいかの一覧をテストの外に持つことになる。
+
+![マシンに足りないものがあるテストの扱い](test-skip-guard.svg)
+
+図の元ファイル: [test-skip-guard.puml](test-skip-guard.puml)
 
 ### GitHubクライアント
 

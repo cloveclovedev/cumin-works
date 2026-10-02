@@ -46,6 +46,7 @@
 | `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、最新の使用率 (Q3)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (Q2) |
 | | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
+| `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
 | | `roles.go` | AppごとのGitHubの権限の表 |

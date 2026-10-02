@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/testenv"
 )
 
 // The tests below run the real git and gh in the environment that cumin
@@ -95,7 +97,7 @@ func TestEnv_RealGitReadsNoHostSettingsAndCommitsAsTheBot(t *testing.T) {
 
 func TestEnv_RealGhUsesTheTokenOfTheRequest(t *testing.T) {
 	if _, err := exec.LookPath("gh"); err != nil {
-		t.Skip("gh is not installed")
+		testenv.SkipOrFail(t, "gh is not installed")
 	}
 	fakeHome(t)
 	ghConfigDir := t.TempDir()

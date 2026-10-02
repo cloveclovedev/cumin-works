@@ -1,0 +1,33 @@
+@startuml test-skip-guard
+' cumin works - a test that would skip on CI fails.
+' Document: cumin-core.md, topic on the two layers of tests.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:a test needs something of the machine
+(gh, a user that is not root, a macOS tool);
+if (a live test without CUMIN_LIVE=1,\nor a macOS test on Linux?) then (yes)
+  :skip (the test does not belong there);
+  stop
+else (no)
+endif
+if (the machine has it?) then (yes)
+  :the test runs;
+  stop
+else (no)
+endif
+if (a macOS tool on macOS?) then (yes)
+  :the test fails;
+  stop
+else (no)
+endif
+if (the environment variable CI is "true"?) then (yes)
+  :the test fails, and names what is missing;
+  stop
+else (no)
+  :skip (a machine of a developer);
+  stop
+endif
+@enduml
