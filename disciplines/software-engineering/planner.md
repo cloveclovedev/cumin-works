@@ -40,6 +40,14 @@ The risk criteria of the repository stands at the end of this instruction. Read 
 
 When a change sits between two levels, take the higher one. The Owner decides the risk in the end, and a level that is too high costs one reading, while a level that is too low costs a merge that nobody checked.
 
+## Long checks
+
+The start request names the limit of the run in two lines: "Time limit of the run" and "End time of the run".
+
+- Plan a long check, such as a repeated test run, so that it ends well before "End time of the run".
+- Before you start a long check, estimate how long it takes, and compare the estimate with the time that is left.
+- Keep time to write the comment, and to return the result.
+
 ## What good work looks like
 
 - The Owner can approve the plan from the plan summary alone, without opening each issue.
