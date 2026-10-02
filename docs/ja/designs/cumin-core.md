@@ -149,9 +149,11 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 ### GitHubクライアント
 
 - cuminは、GitHub App としてだけ認証する。GitHubへの操作には installation token を使う。installation token の発行にだけ、Appの秘密鍵で署名したJWTを使う (公式: Generating an installation access token for a GitHub App)。Ownerの認証情報と、リポジトリの管理者の権限 (Administration) は使わない。
-- 標準ライブラリ (`net/http`、`encoding/json`、`crypto/rsa`) だけで書く。
+- クライアントは、標準ライブラリ (`net/http`、`encoding/json`) で書く。JWTの署名だけは、ライブラリ `github.com/golang-jwt/jwt/v5` (MIT) に任せる (`signJWT`)。
+  - 理由: 署名は、セキュリティに関わる部分である。手で書いたものより、保守されているライブラリのほうが、間違いが入りにくく、直しも届く。
+  - JWTの中身は、ヘッダーの `alg` (`RS256`) と `typ` (`JWT`)、クレームの `iat` (今の60秒前)、`exp` (今の9分後)、`iss` (AppのクライアントID) だけである。
 - installation token は、期限 (発行から1時間) の5分前まで使い回す。定期確認は60秒ごとなので、1つのtokenで50回以上の定期確認をまかなえる。発行のたびにJWTの署名と2回の要求が要るので、毎回発行すると無駄が大きい。5分の余裕は、定期確認1回分と時計のずれを見込んだ値で、設定にはしない。Agentに渡すtokenは、実行が55分まで続くので、依頼のたびに発行する。
-- 採らなかった案: SDK。使うendpointが少なく、依存を増やす理由がない。
+- 採らなかった案: GitHubのクライアント全体をライブラリ (SDK) にする。使うendpointが少なく、署名のほかに依存を増やす理由がない。
 - 1回の呼び出しは、30秒で打ち切る (定数 `defaultTimeout`)。接続から応答の本文を読み終えるまでの時間である。`NewAppClient` に `httpClient` を渡さないときのクライアントが、この期限を持つ。`cumin run`、`cumin status`、`cumin setup` は、どれもこのクライアントを使う。
   - 理由: 期限がないと、応答の返らない接続が1つあるだけで、cuminを起動し直すまで全てのリポジトリの定期確認が止まる。GitHubの応答は長くても数秒なので、30秒あれば正常な呼び出しを打ち切らない。定期確認の間隔 (60秒) より短いので、1つの呼び出しが止まっても、次の定期確認までに終わる。
   - 期限で終わった呼び出しは、失敗した呼び出しの1つとして扱う。定期確認はログに出して、次の定期確認でやり直す。1回の定期確認の中でのやり直しはしない。
