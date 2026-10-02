@@ -315,3 +315,10 @@ func TestParsePrivateKey(t *testing.T) {
 		}
 	}
 }
+
+func TestNewAppClient_NilHTTPClientHasTheTimeoutOfOneCall(t *testing.T) {
+	client := NewAppClient(DefaultBaseURL, nil)
+	if got := client.http.Timeout; got != 30*time.Second {
+		t.Errorf("timeout = %v, want 30s", got)
+	}
+}

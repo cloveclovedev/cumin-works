@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -86,5 +88,49 @@ func TestFake_UnknownRepositoryAndUserAre404(t *testing.T) {
 	// bearer; a wrong installation token is refused elsewhere.
 	if _, err := client.GetUser(ctx, "ghs_wrongToken", "example-implementer[bot]"); err == nil || !strings.Contains(err.Error(), "401") {
 		t.Errorf("wrong token: err = %v, want 401", err)
+	}
+}
+
+// A fake that never answers is a stalled connection. The timeout of the
+// client ends a REST call and a GraphQL call with an error, and the fake
+// answers the call after it.
+func TestFake_HangNextHoldsTheRequestUntilTheClientGivesUp(t *testing.T) {
+	fake, server := githubtest.New(t)
+	fake.AddRepository("example-org", "example-repo")
+	client := github.NewAppClient(server.URL, &http.Client{Timeout: 200 * time.Millisecond})
+	ctx := context.Background()
+	labels := []github.Label{{Name: "risk/low", Color: "C2E0C6"}}
+
+	calls := []struct {
+		name, method, path string
+		call               func() error
+	}{
+		{"REST", http.MethodGet, "/repos/example-org/example-repo/labels", func() error {
+			_, err := client.EnsureLabels(ctx, githubtest.Token, "example-org", "example-repo", labels)
+			return err
+		}},
+		{"GraphQL", http.MethodPost, "/graphql", func() error {
+			_, err := client.ReadSnapshot(ctx, githubtest.Token, "example-org", "example-repo")
+			return err
+		}},
+	}
+	for _, c := range calls {
+		t.Run(c.name, func(t *testing.T) {
+			fake.HangNext(c.method, c.path)
+			start := time.Now()
+			err := c.call()
+			if err == nil || !strings.Contains(err.Error(), "Client.Timeout") {
+				t.Fatalf("err = %v, want the timeout of the client", err)
+			}
+			if strings.Contains(err.Error(), server.URL) {
+				t.Errorf("err = %v, holds the address of the request", err)
+			}
+			if took := time.Since(start); took > 5*time.Second {
+				t.Errorf("the call took %v, want the timeout of the client", took)
+			}
+			if err := c.call(); err != nil {
+				t.Errorf("the call after the timeout: %v", err)
+			}
+		})
 	}
 }
