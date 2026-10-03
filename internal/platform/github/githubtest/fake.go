@@ -62,10 +62,14 @@ type Issue struct {
 	LabelEvents []LabelEvent
 }
 
-// LabelEvent is one LabeledEvent of the timeline of an issue.
+// LabelEvent is one LabeledEvent of the timeline of an issue. Actor is the
+// login of the account that added the label and ActorType its type in
+// GraphQL ("User", "Bot"); an empty Actor answers a null actor.
 type LabelEvent struct {
-	Label string
-	At    time.Time
+	Label     string
+	At        time.Time
+	Actor     string
+	ActorType string
 }
 
 // PullRequest is one pull request of the fake repository.
@@ -1629,9 +1633,10 @@ func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, numbe
 	})
 }
 
-// serveLabelTimes answers the query of the label times: the newest label
-// events of the issue and of each of its sub-issues. Official: the
-// LabeledEvent of the timeline of an Issue.
+// serveLabelTimes answers the query of the label times and the query of
+// the actor of a label: the newest label events of the issue and of each of
+// its sub-issues, each with its actor. Official: the LabeledEvent of the
+// timeline of an Issue.
 func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, subIssues, events int) {
 	issue, ok := repo.Issues[number]
 	if !ok {
@@ -1648,7 +1653,11 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 		}
 		nodes := []any{}
 		for _, event := range list {
-			nodes = append(nodes, map[string]any{"createdAt": event.At.UTC().Format(time.RFC3339Nano), "label": map[string]any{"name": event.Label}})
+			actor := any(nil)
+			if event.Actor != "" {
+				actor = map[string]any{"__typename": event.ActorType, "login": event.Actor}
+			}
+			nodes = append(nodes, map[string]any{"createdAt": event.At.UTC().Format(time.RFC3339Nano), "label": map[string]any{"name": event.Label}, "actor": actor})
 		}
 		return map[string]any{"nodes": nodes}
 	}

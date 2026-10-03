@@ -493,7 +493,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 				errs = append(errs, err)
 			}
 		case CheckAcceptance:
-			if err := s.checkAcceptance(ctx, target, settings, a); err != nil {
+			if err := s.checkAcceptance(ctx, token, target, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Plan:
@@ -561,6 +561,13 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
 		return fmt.Errorf("I1: clear the state of issue #%d: %w", c.Number, err)
 	}
+	// The login of the Owner is read before the label changes: a failed
+	// read leaves cumin/status/ready, so the next poll claims the issue
+	// again.
+	ownerLogin, err := s.readOwnerLogin(ctx, token, target, c.Number)
+	if err != nil {
+		return fmt.Errorf("I1: read the login of the Owner of issue #%d: %w", c.Number, err)
+	}
 	labels := LabelsAfterClaim(sub.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, c.Number, labels); err != nil {
 		return fmt.Errorf("I1: claim issue #%d: %w", c.Number, err)
@@ -568,7 +575,7 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	log := s.logger().With("repository", target.Repository.String(), "issue", c.Number)
 	log.Info("I1: claimed the issue",
 		"requirement_issue", c.RequirementIssue, "labels", labels)
-	if err := s.startImplementer(ctx, target, settings, sub); err != nil {
+	if err := s.startImplementer(ctx, target, settings, sub, ownerLogin); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
@@ -601,6 +608,9 @@ type implementerRequest struct {
 	pullRequest int
 	// sessionID resumes that session. Empty starts a new session.
 	sessionID string
+	// ownerLogin is the login of the Owner for the facts of the request,
+	// read before the label changed. Empty says that there is none.
+	ownerLogin string
 	// text builds the request text once the work directory is known.
 	text func(workDir string) string
 	// conflictHead is the head commit that conflicted with the default
@@ -662,6 +672,10 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		return nil
 	}
 
+	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	if err != nil {
+		return fmt.Errorf("I4: read the login of the Owner of issue #%d: %w", a.Number, err)
+	}
 	counted := stored
 	counted.CheckFixRequests++
 	if err := s.State.Set(repository, a.Number, counted); err != nil {
@@ -695,6 +709,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	}
 	return s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		row: "I4", kind: "check fix", branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
+		ownerLogin: ownerLogin,
 		text: func(workDir string) string {
 			return CheckFixRequestText(repository, a.Number, pr.Number, branch, workDir, texts)
 		},
@@ -706,11 +721,11 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 // already closes the issue; the work then goes on on the branch of that
 // pull request (ClaimBranch). The session is new in both cases
 // (issue-states.md, the section on the sessions of an agent).
-func (s *Service) startImplementer(ctx context.Context, target Target, settings *RepositorySettings, sub SubIssue) error {
+func (s *Service) startImplementer(ctx context.Context, target Target, settings *RepositorySettings, sub SubIssue, ownerLogin string) error {
 	branch, pullRequest := ClaimBranch(sub)
 	repository := target.Repository.String()
 	req := implementerRequest{
-		row: "I1", kind: "implement", branch: branch,
+		row: "I1", kind: "implement", branch: branch, ownerLogin: ownerLogin,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, sub.Number, branch, workDir)
 		},
@@ -747,6 +762,36 @@ func (s *Service) goImplementer(ctx context.Context, target Target, settings *Re
 // abnormal ends). The count lives here, in the run, so a new claim (I1)
 // always starts at zero.
 const agentAttempts = 2
+
+// readOwnerLogin reads the login of the Owner for the facts of a start
+// request (docs/ja/requirements/agents/common.md, the facts of the start
+// request): the account that added the newest cumin/status/ready to the
+// issue of the run, or to a sub-issue when a requirement issue has no such
+// event. The login is passed only when that account is the Owner (IsOwner).
+// The empty login says that there is no Owner login. A GitHub App is never
+// the Owner, so its permission is not read. A failed read is an error: the
+// caller reads before it changes the label, changes nothing, and sends no
+// request, so the next poll tries again.
+func (s *Service) readOwnerLogin(ctx context.Context, token string, target Target, number int) (string, error) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	actor, rate, err := s.GitHub.ReadLabelActor(ctx, token, owner, repo, number, LabelReady)
+	if err != nil {
+		return "", err
+	}
+	s.logger().Debug("read the actor of the newest "+LabelReady, "repository", target.Repository.String(), "issue", number,
+		"actor", actor.Login, "actor_type", actor.Type, "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	if actor.Login == "" || actor.Type != "User" {
+		return "", nil
+	}
+	permission, userType, err := s.GitHub.RepositoryPermission(ctx, token, owner, repo, actor.Login)
+	if err != nil {
+		return "", err
+	}
+	if !IsOwner(permission, userType) {
+		return "", nil
+	}
+	return actor.Login, nil
+}
 
 // runImplementer prepares the worktree and runs one Implementer request to
 // its end. The end of the run is the trigger of I2, whatever the row of the
@@ -800,7 +845,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		Repo:         target.Repository.Name,
 		Role:         config.RoleImplementer,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, ProtectedPaths: settings.ProtectedPaths},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin, ProtectedPaths: settings.ProtectedPaths},
 		Text:         req.text(workDir),
 		WorkDir:      workDir,
 		Settings:     &role,

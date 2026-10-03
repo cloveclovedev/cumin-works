@@ -256,6 +256,7 @@ func TestI12_AConflictThatStaysStopsTheIssueWithTheRowI12(t *testing.T) {
 	sc := awaitingOwner(t)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
 	service := sc.serviceWithSession(t)
 
 	sc.pollAndWait(t, service)
@@ -263,12 +264,48 @@ func TestI12_AConflictThatStaysStopsTheIssueWithTheRowI12(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Fatalf("%d agent runs, want one resolution", n)
 	}
-	if !strings.Contains(promptOf(t, sc.record(t, "agent.args")), "Request: conflict resolution") {
+	text := promptOf(t, sc.record(t, "agent.args"))
+	if !strings.Contains(text, "Request: conflict resolution") {
 		t.Error("the run was not a conflict resolution")
+	}
+	if !strings.Contains(text, ownerLoginLine) {
+		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I12") ||
 		!strings.Contains(comments[0].Body, workflow.ConflictNotResolvedReason(21)) {
 		t.Errorf("comments of #10 = %+v, want one stop note of I12", comments)
+	}
+}
+
+// A failed read of the login of the Owner at a conflict of the merge of I12
+// sends no request and changes no label, so I12 applies again at the next
+// poll.
+func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *testing.T) {
+	sc := awaitingOwner(t)
+	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
+	service := sc.serviceWithSession(t)
+	// The first read of the permission is the one of the reviewer for I12;
+	// the second one is the read of the login of the Owner.
+	sc.fake.FailAfter(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 1, http.StatusBadGateway)
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs, want none after a failed read", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerReview) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-review: a failed read changes nothing", got)
+	}
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one resolution after the next poll", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, ownerLoginLine) {
+		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
 	}
 }

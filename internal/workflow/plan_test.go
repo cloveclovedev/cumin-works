@@ -223,10 +223,10 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
 	}
-	// One poll, and one read again after the run: R2 judges on the facts
-	// of that moment.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
-		t.Errorf("%d snapshot reads, want 2", n)
+	// One poll, the read of the login of the Owner before the start, and
+	// one read again after the run: R2 judges on the facts of that moment.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
+		t.Errorf("%d GraphQL requests, want 3", n)
 	}
 	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split waits for the Owner"`) {
 		t.Error("the log does not say that the split waits for the Owner")
