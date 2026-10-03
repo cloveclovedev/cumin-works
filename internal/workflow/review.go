@@ -240,9 +240,9 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 // notification alike.
 const MissingReviewReason = "The Reviewer reported done twice, but its latest review is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
 
-// checkReview reads the snapshot again and checks the latest review of the
+// checkReview reads the issue again and checks the latest review of the
 // Reviewer on the pull request of the request. The last value is false
-// when the snapshot or the pull request could not be read; that is logged,
+// when the issue or the pull request could not be read; that is logged,
 // and the issue keeps its label.
 func (s *Service) checkReview(ctx context.Context, log *slog.Logger, target Target, number int, req reviewerRequest) (ReviewResult, SubIssue, PullRequest, bool) {
 	sub, ok := s.subIssueNow(ctx, log, target, number)

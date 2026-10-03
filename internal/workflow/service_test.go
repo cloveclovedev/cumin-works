@@ -743,7 +743,7 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2 (the claim and I2)", n)
 	}
-	// The end of the run reads the snapshot again, so that a pull request
+	// The end of the run reads the issue again, so that a pull request
 	// that the agent opened just before it ended is seen.
 	// The read of the login of the Owner before the start is one more
 	// GraphQL request.

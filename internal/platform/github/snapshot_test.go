@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -455,5 +456,165 @@ func TestReadSnapshot_TheHeadCommitTimeIsZeroWhenTheLastCommitIsNotTheHead(t *te
 				t.Errorf("head commit time = %v, want %v", pr.HeadCommittedAt, tt.want)
 			}
 		})
+	}
+}
+
+// The read of one sub-issue returns the facts that the poll returns for the
+// same sub-issue, in one query.
+func TestReadSubIssue_ReturnsTheFactsOfThePollForOneIssue(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", "cumin/status/implementing"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Title: "Add the login screen", Parent: 6, Labels: []string{"cumin/status/reviewing", "risk/low"}, BlockedBy: []int{11}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Parent: 6, Closed: true, Labels: []string{"risk/high"}})
+	fake.AddPullRequest(repo, &githubtest.PullRequest{
+		Number: 21, HeadCommit: "2222222222222222222222222222222222222222", HeadBranch: "cumin/10-add-the-login-screen",
+		Author: "example-implementer", AuthorIsBot: true, Closes: []int{10}, Labels: []string{"risk/low"},
+		Checks:  []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}},
+		Reviews: []githubtest.Review{{Author: "example-reviewer", AuthorIsBot: true, State: "APPROVED", Commit: "2222222222222222222222222222222222222222"}},
+	})
+	// Many other requirement issues: the read of one issue does not page.
+	for n := 30; n <= 55; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Labels: []string{"cumin/type/requirement"}})
+	}
+	client := github.NewAppClient(server.URL, server.Client())
+	ctx := context.Background()
+
+	snapshot, err := client.ReadSnapshot(ctx, githubtest.Token, "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	before := fake.CountRequests(http.MethodPost, "/graphql")
+	read, err := client.ReadSubIssue(ctx, githubtest.Token, "example-org", "example-repo", 10)
+	if err != nil {
+		t.Fatalf("ReadSubIssue: %v", err)
+	}
+	if n := fake.CountRequests(http.MethodPost, "/graphql") - before; n != 1 {
+		t.Errorf("%d GraphQL requests, want 1", n)
+	}
+	want := snapshot.RequirementIssues[0].SubIssues[0]
+	if len(want.PullRequests) != 1 || len(want.PullRequests[0].Checks) != 1 || len(want.PullRequests[0].Reviews) != 1 {
+		t.Fatalf("the poll read %+v, want one pull request with one check and one review", want)
+	}
+	if !reflect.DeepEqual(read.Issue, want) {
+		t.Errorf("issue = %+v, want the sub-issue of the poll %+v", read.Issue, want)
+	}
+	if read.DefaultBranch != "main" || read.DefaultBranch != snapshot.DefaultBranch {
+		t.Errorf("default branch = %q, want main as in the poll (%q)", read.DefaultBranch, snapshot.DefaultBranch)
+	}
+	if read.RateLimit.Cost != 1 {
+		t.Errorf("cost = %d, want 1", read.RateLimit.Cost)
+	}
+}
+
+// The read of one requirement issue returns the facts that the poll returns
+// for the same requirement issue, with its sub-issues.
+func TestReadRequirementIssue_ReturnsTheFactsOfThePollForOneIssue(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 5, Closed: true})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", "cumin/status/planning"}, BlockedBy: []int{5}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Title: "First", Parent: 6, Labels: []string{"risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Title: "Second", Parent: 6, Closed: true, Labels: []string{"risk/high"}, BlockedBy: []int{10}})
+	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 21, HeadCommit: "2222222222222222222222222222222222222222", Author: "octocat", Closes: []int{10}})
+	client := github.NewAppClient(server.URL, server.Client())
+	ctx := context.Background()
+
+	snapshot, err := client.ReadSnapshot(ctx, githubtest.Token, "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	before := fake.CountRequests(http.MethodPost, "/graphql")
+	read, err := client.ReadRequirementIssue(ctx, githubtest.Token, "example-org", "example-repo", 6)
+	if err != nil {
+		t.Fatalf("ReadRequirementIssue: %v", err)
+	}
+	if n := fake.CountRequests(http.MethodPost, "/graphql") - before; n != 1 {
+		t.Errorf("%d GraphQL requests, want 1", n)
+	}
+	want := snapshot.RequirementIssues[0]
+	if len(want.SubIssues) != 2 || len(want.SubIssues[0].PullRequests) != 1 {
+		t.Fatalf("the poll read %+v, want two sub-issues and one pull request", want)
+	}
+	if !reflect.DeepEqual(read.Issue, want) {
+		t.Errorf("issue = %+v, want the requirement issue of the poll %+v", read.Issue, want)
+	}
+}
+
+// An issue over a limit of the query is an error that names the issue, as
+// in the poll.
+func TestReadOneIssue_AnIssueOverALimitIsAnErrorThatNamesTheIssue(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	// One more sub-issue than the page size, and one of them with three
+	// open closing pull requests.
+	for n := 2; n <= 18; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1})
+	}
+	for n := 30; n <= 32; n++ {
+		fake.AddPullRequest(repo, &githubtest.PullRequest{Number: n, Author: "octocat", Closes: []int{2}})
+	}
+	client := github.NewAppClient(server.URL, server.Client())
+	ctx := context.Background()
+
+	_, err := client.ReadRequirementIssue(ctx, githubtest.Token, "example-org", "example-repo", 1)
+	if err == nil || !strings.Contains(err.Error(), "read issue #1 of example-org/example-repo: issue #1 has more than 15 sub-issues") {
+		t.Errorf("err = %v, want an error that names issue #1", err)
+	}
+	_, err = client.ReadSubIssue(ctx, githubtest.Token, "example-org", "example-repo", 2)
+	if err == nil || !strings.Contains(err.Error(), "read issue #2 of example-org/example-repo: issue #2 has more than 2 open closing pull requests") {
+		t.Errorf("err = %v, want an error that names issue #2", err)
+	}
+}
+
+// An issue that does not exist is an error that names the issue.
+func TestReadSubIssue_AnIssueThatDoesNotExistIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	fake.AddRepository("example-org", "example-repo")
+	client := github.NewAppClient(server.URL, server.Client())
+
+	_, err := client.ReadSubIssue(context.Background(), githubtest.Token, "example-org", "example-repo", 7)
+	if err == nil || !strings.Contains(err.Error(), "read issue #7 of example-org/example-repo: Could not resolve to an Issue with the number of 7.") {
+		t.Errorf("err = %v, want an error that names issue #7", err)
+	}
+}
+
+// The read of one issue returns an issue only when a poll reads it too
+// (issue-states.md, principle 6): a sub-issue needs an open parent with the
+// requirement label, and a requirement issue is open and has that label.
+func TestReadOneIssue_AnIssueThatThePollDoesNotReadIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	// #3 is a closed requirement issue, #5 has no requirement label, and
+	// #9 has no parent.
+	fake.AddIssue(repo, &githubtest.Issue{Number: 3, Closed: true, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 4, Parent: 3, Labels: []string{"risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 5, Labels: []string{"question"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 7, Parent: 5, Labels: []string{"risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 9, Labels: []string{"risk/low"}})
+	client := github.NewAppClient(server.URL, server.Client())
+	ctx := context.Background()
+
+	for number, want := range map[int]string{
+		4: "read issue #4 of example-org/example-repo: the parent of issue #4 is not a requirement issue of the poll: issue #3 is not open",
+		7: "read issue #7 of example-org/example-repo: the parent of issue #7 is not a requirement issue of the poll: issue #5 has no label cumin/type/requirement",
+		9: "read issue #9 of example-org/example-repo: issue #9 has no parent issue",
+	} {
+		if _, err := client.ReadSubIssue(ctx, githubtest.Token, "example-org", "example-repo", number); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("ReadSubIssue(%d): err = %v, want %q", number, err, want)
+		}
+	}
+	for number, want := range map[int]string{
+		3: "read issue #3 of example-org/example-repo: issue #3 is not open",
+		5: "read issue #5 of example-org/example-repo: issue #5 has no label cumin/type/requirement",
+	} {
+		if _, err := client.ReadRequirementIssue(ctx, githubtest.Token, "example-org", "example-repo", number); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("ReadRequirementIssue(%d): err = %v, want %q", number, err, want)
+		}
+	}
+	snapshot, err := client.ReadSnapshot(ctx, githubtest.Token, "example-org", "example-repo")
+	if err != nil || len(snapshot.RequirementIssues) != 0 {
+		t.Errorf("ReadSnapshot = %+v, %v; want no requirement issue, as the reads of one issue say", snapshot.RequirementIssues, err)
 	}
 }

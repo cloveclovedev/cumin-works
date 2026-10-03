@@ -162,29 +162,26 @@ func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled boo
 	return true
 }
 
-// subIssueNow reads one sub-issue from a new snapshot of the repository.
-// A rule that the end of a run triggers judges on the facts of that
-// moment (cumin-core.md, the topic on the GitHub client). The second
-// value is false when the snapshot could not be read; the caller then
-// leaves the labels alone, because writing a list without the risk label
-// would remove it.
+// subIssueNow reads one sub-issue again, and only that issue. A rule that
+// the end of a run triggers judges on the facts of that moment
+// (cumin-core.md, the topic on the GitHub client). The second value is
+// false when the issue could not be read, or when a poll does not read it
+// (its requirement issue is closed, issue-states.md, principle 6); the
+// caller then leaves the labels alone, because writing a list without the
+// risk label would remove it.
 func (s *Service) subIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (SubIssue, bool) {
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("the issue was not read again: no token", "error", err.Error())
 		return SubIssue{}, false
 	}
-	read, err := s.GitHub.ReadSnapshot(ctx, token, target.Repository.Owner, target.Repository.Name)
+	read, err := s.GitHub.ReadSubIssue(ctx, token, target.Repository.Owner, target.Repository.Name, number)
 	if err != nil {
 		log.Error("the issue was not read again", "error", err.Error())
 		return SubIssue{}, false
 	}
-	sub, ok := toSnapshot(read).SubIssue(number)
-	if !ok {
-		log.Error("the issue was not read again: it is not in the snapshot")
-		return SubIssue{}, false
-	}
-	return sub, true
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
+	return toSubIssue(read.Issue), true
 }
 
 // StopNote is the comment that cumin writes when the reason is its own: a

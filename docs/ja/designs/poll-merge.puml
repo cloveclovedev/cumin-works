@@ -7,7 +7,7 @@ skinparam defaultFontName sans-serif
 
 start
 :The Reviewer approved the head commit;
-:Read the snapshot again
+:Read the issue of the run again
 and the required checks;
 if (Exactly one risk/* label
 on the issue? (DecideMerge)) then (no)

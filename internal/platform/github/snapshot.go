@@ -57,6 +57,11 @@ const (
 	snapshotReviews = 100
 )
 
+// requirementLabel marks a requirement issue (issue-states.md). The poll
+// reads the open issues with this label, and the read of one issue refuses
+// an issue that the poll does not read.
+const requirementLabel = "cumin/type/requirement"
+
 // Paths of the files that a target repository keeps on its default branch.
 // cumin reads them with the poll query, never from a pull request branch
 // (cumin-core.md, the topic on settings).
@@ -257,52 +262,9 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
     defaultBranchRef @include(if: $repositoryFiles) { name target { oid } }
     cuminConfig: object(expression: "HEAD:` + CuminConfigPath + `") @include(if: $repositoryFiles) { ...cuminFile }
     cuminRiskCriteria: object(expression: "HEAD:` + CuminRiskCriteriaPath + `") @include(if: $repositoryFiles) { ...cuminFile }
-    issues(states: [OPEN], labels: ["cumin/type/requirement"], first: $first, after: $after) {
+    issues(states: [OPEN], labels: ["` + requirementLabel + `"], first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
-      nodes {
-        number
-        state
-        labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
-        blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
-        subIssues(first: $subIssues) {
-          pageInfo { hasNextPage }
-          nodes {
-            number
-            id
-            title
-            state
-            closedAt
-            labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
-            blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
-            closedByPullRequestsReferences(first: $pullRequests) {
-              pageInfo { hasNextPage }
-              nodes {
-                number
-                headRefOid
-                headRefName
-                mergeable
-                commits(last: 1) { nodes { commit { oid committedDate } } }
-                author { __typename login }
-                labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
-                statusCheckRollup {
-                  contexts(first: $checks) {
-                    pageInfo { hasNextPage }
-                    nodes {
-                      __typename
-                      ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }
-                      ... on StatusContext { context state }
-                    }
-                  }
-                }
-                reviews(first: $reviews) {
-                  pageInfo { hasNextPage }
-                  nodes { author { __typename login } state submittedAt url commit { oid } }
-                }
-              }
-            }
-          }
-        }
-      }
+      nodes { ...requirementIssueFields }
     }
   }
   rateLimit { cost remaining }
@@ -310,7 +272,124 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
 
 fragment cuminFile on GitObject {
   ... on Blob { oid text byteSize isBinary isTruncated }
-}`
+}
+` + requirementIssueFields + subIssueFields
+
+// requirementIssueFields and subIssueFields are the fields of an issue that
+// cumin reads. The poll query and the queries of one issue are built from
+// these two fragments, so that a rule gets the same facts from either read.
+const requirementIssueFields = `
+fragment requirementIssueFields on Issue {
+  number
+  state
+  labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+  blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
+  subIssues(first: $subIssues) {
+    pageInfo { hasNextPage }
+    nodes { ...subIssueFields }
+  }
+}
+`
+
+const subIssueFields = `
+fragment subIssueFields on Issue {
+  number
+  id
+  title
+  state
+  closedAt
+  labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+  blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
+  closedByPullRequestsReferences(first: $pullRequests) {
+    pageInfo { hasNextPage }
+    nodes {
+      number
+      headRefOid
+      headRefName
+      mergeable
+      commits(last: 1) { nodes { commit { oid committedDate } } }
+      author { __typename login }
+      labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+      statusCheckRollup {
+        contexts(first: $checks) {
+          pageInfo { hasNextPage }
+          nodes {
+            __typename
+            ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }
+            ... on StatusContext { context state }
+          }
+        }
+      }
+      reviews(first: $reviews) {
+        pageInfo { hasNextPage }
+        nodes { author { __typename login } state submittedAt url commit { oid } }
+      }
+    }
+  }
+}
+`
+
+// requirementIssueQuery and subIssueQuery read one issue by its number, with
+// the fields and the limits of the poll query. A rule that the end of an
+// agent run triggers reads the facts of one issue only, so it does not read
+// every page of the repository again. The default branch is a scalar path:
+// the merge reads the required checks of that branch.
+//
+// The read returns an issue only when a poll reads it too: a requirement
+// issue is open and has the requirement label, and a sub-issue has such a
+// parent (issue-states.md, principle 6: closed requirement issues and their
+// sub-issues are not read). subIssueQuery reads the state and the labels of
+// the parent for that. Any other issue is an error, so that a rule of the
+// run end acts only when the poll would act.
+//
+// Measured on cumin-works on 2026-10-03 with rateLimit { cost }: 2 points for
+// a requirement issue with its sub-issues, and 1 point for a sub-issue.
+const requirementIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef { name }
+    issue(number: $number) { ...requirementIssueFields }
+  }
+  rateLimit { cost remaining }
+}
+` + requirementIssueFields + subIssueFields
+
+const subIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef { name }
+    issue(number: $number) {
+      ...subIssueFields
+      parent { number state labels(first: $labels) { pageInfo { hasNextPage } nodes { name } } }
+    }
+  }
+  rateLimit { cost remaining }
+}
+` + subIssueFields
+
+// IssueRead is what the read of one issue returns: the issue, the name of
+// the default branch, and the rate limit of the call.
+type IssueRead struct {
+	DefaultBranch string
+	Issue         Issue
+	RateLimit     RateLimit
+}
+
+type issueResponse struct {
+	Data struct {
+		Repository *struct {
+			DefaultBranchRef *struct {
+				Name string `json:"name"`
+			} `json:"defaultBranchRef"`
+			Issue *issueNode `json:"issue"`
+		} `json:"repository"`
+		RateLimit struct {
+			Cost      int `json:"cost"`
+			Remaining int `json:"remaining"`
+		} `json:"rateLimit"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
 
 // The GraphQL response. It stops in this package.
 type snapshotResponse struct {
@@ -398,6 +477,26 @@ type issueNode struct {
 		PageInfo pageInfo          `json:"pageInfo"`
 		Nodes    []pullRequestNode `json:"nodes"`
 	} `json:"closedByPullRequestsReferences"`
+	// Parent is read by the query of one sub-issue only.
+	Parent *issueNode `json:"parent"`
+}
+
+// polledAsRequirement says why a poll does not read the node as a
+// requirement issue, or nil when it does: the poll reads the open issues
+// with the requirement label.
+func (n issueNode) polledAsRequirement() error {
+	if n.State != "OPEN" {
+		return fmt.Errorf("issue #%d is not open", n.Number)
+	}
+	if n.Labels.PageInfo.HasNextPage {
+		return fmt.Errorf("issue #%d has more than %d labels", n.Number, snapshotLabels)
+	}
+	for _, label := range n.Labels.Nodes {
+		if label.Name == requirementLabel {
+			return nil
+		}
+	}
+	return fmt.Errorf("issue #%d has no label %s", n.Number, requirementLabel)
 }
 
 type pullRequestNode struct {
@@ -708,4 +807,71 @@ func (n issueNode) issue() (Issue, error) {
 		issue.PullRequests = append(issue.PullRequests, pr)
 	}
 	return issue, errors.Join(errs...)
+}
+
+// ReadRequirementIssue reads one requirement issue with its sub-issues, as
+// one poll reads it, in one GraphQL query. An issue over a limit of the
+// query is an error that names the issue. An issue that a poll does not read
+// (closed, or without the requirement label) is an error too.
+func (c *AppClient) ReadRequirementIssue(ctx context.Context, token, owner, repo string, number int) (IssueRead, error) {
+	return c.readIssue(ctx, token, owner, repo, number, requirementIssueQuery, map[string]any{"subIssues": snapshotSubIssues},
+		func(n issueNode) error { return n.polledAsRequirement() })
+}
+
+// ReadSubIssue reads one sub-issue with its open closing pull requests, as
+// one poll reads it, in one GraphQL query. An issue over a limit of the
+// query is an error that names the issue. An issue that a poll does not read
+// (no parent, or a parent that is closed or has no requirement label) is an
+// error too.
+func (c *AppClient) ReadSubIssue(ctx context.Context, token, owner, repo string, number int) (IssueRead, error) {
+	return c.readIssue(ctx, token, owner, repo, number, subIssueQuery, map[string]any{}, func(n issueNode) error {
+		if n.Parent == nil {
+			return fmt.Errorf("issue #%d has no parent issue", n.Number)
+		}
+		if err := n.Parent.polledAsRequirement(); err != nil {
+			return fmt.Errorf("the parent of issue #%d is not a requirement issue of the poll: %w", n.Number, err)
+		}
+		return nil
+	})
+}
+
+// readIssue runs one of the two queries. polled says why a poll does not
+// read the issue, or nil when it does.
+func (c *AppClient) readIssue(ctx context.Context, token, owner, repo string, number int, query string, variables map[string]any, polled func(issueNode) error) (IssueRead, error) {
+	for name, value := range map[string]any{
+		"owner": owner, "name": repo, "number": number,
+		"labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
+		"pullRequests": snapshotPullRequests,
+		"checks":       snapshotChecks,
+		"reviews":      snapshotReviews,
+	} {
+		variables[name] = value
+	}
+	var resp issueResponse
+	request := map[string]any{"query": query, "variables": variables}
+	if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
+	}
+	if len(resp.Errors) > 0 {
+		var messages []string
+		for _, e := range resp.Errors {
+			messages = append(messages, e.Message)
+		}
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %s", number, owner, repo, strings.Join(messages, "; "))
+	}
+	if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: the response has no issue", number, owner, repo)
+	}
+	if err := polled(*resp.Data.Repository.Issue); err != nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
+	}
+	issue, err := resp.Data.Repository.Issue.issue()
+	if err != nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
+	}
+	read := IssueRead{Issue: issue, RateLimit: RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}}
+	if ref := resp.Data.Repository.DefaultBranchRef; ref != nil {
+		read.DefaultBranch = ref.Name
+	}
+	return read, nil
 }

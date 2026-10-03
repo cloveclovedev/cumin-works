@@ -8,8 +8,8 @@ skinparam defaultFontName sans-serif
 start
 :The Implementer run ends;
 if (Result?) then (done)
-  :Read the snapshot again
-  (the facts right after the run);
+  :Read the issue of the run again
+  (one issue, the facts right after the run);
   :List the open pull requests of the branch
   that cumin chose (REST);
   :Read the head commit of the worktree;
@@ -32,7 +32,7 @@ if (Result?) then (done)
     if (Add the link?) then (yes)
       :cumin-core adds the link
       (GraphQL addCloseIssueReferences);
-      :Read the snapshot again;
+      :Read the issue of the run again;
     endif
   endif
   if (Passed, and the link is there?) then (yes)
