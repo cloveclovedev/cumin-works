@@ -119,6 +119,7 @@ I7のあと、OwnerはPull RequestをGitHubのレビューで判断する。
 
 - 承認するときは、今の先頭のコミットに `APPROVE` のレビューを出す。I12が成り立ち、cuminがmergeする。古いコミットへの承認は数えない。承認のあとにOwnerが `REQUEST_CHANGES` を出すと、最新のレビューが承認でなくなるので、mergeしない。衝突の解消などで新しいコミットがpushされたら、Ownerはもう一度承認する
 - Ownerの判断を待つ間に、ほかのPull Requestのmergeで衝突したら、Ownerが承認する前に、I14がImplementerに解消させる。解消のあと、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。Ownerは、mergeできる先頭のコミットだけを判断すればよい
+- 衝突した先頭のコミットにOwnerのレビューがあるときは、そのレビューが先に決める。`REQUEST_CHANGES` ならI13が成り立ち、Implementerが指摘に対応する。そのあと、衝突は `cumin/status/awaiting-checks` のI14で解消される。承認ならI12が成り立ち、mergeの衝突からImplementerが解消する。I12もI13も動かなかったIssueだけに、同じ定期確認でI14を適用する
 - 差し戻すときは、今の先頭のコミットに `REQUEST_CHANGES` のレビューを出す。I13が成り立ち、cuminがImplementerに直させる。Implementerが `done` を返すと、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。Reviewerのレビューのラウンドは、Reviewerの最後の `APPROVE` のあとから数え直すので、差し戻しのあとは1ラウンド目から始まる
 - 1つの `REQUEST_CHANGES` で差し戻すのは1回だけである。Ownerが質問だけをして、Implementerがコミットせずに答えると、先頭のコミットは変わらず、Ownerの `REQUEST_CHANGES` はそのコミットに残る。I13は、実装Issueが最後に `cumin/status/awaiting-owner-review` になったあとのレビューだけで成り立つので、Issueはそのまま、Ownerの判断に戻る。Ownerは答えを読んで、承認するか、もう一度 `REQUEST_CHANGES` を出す
 - コメントを書いて実装Issueに `cumin/status/ready` を付けて差し戻すこともできる。I1が成り立ち、続きの依頼になる
