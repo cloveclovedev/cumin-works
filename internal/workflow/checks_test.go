@@ -3,7 +3,9 @@ package workflow
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 )
 
 // The App that reports the checks of GitHub Actions on the sandbox.
@@ -194,7 +196,7 @@ func TestDecide_I3(t *testing.T) {
 			// issue is already counted in it.
 			// I4 and I11 are other rules (TestDecide_I4, TestDecide_I11).
 			var got []Action
-			for _, action := range Decide(snapshot, 1, tt.required, nil) {
+			for _, action := range Decide(snapshot, 1, tt.required, nil, time.Time{}, 0) {
 				if _, ok := action.(StartReview); ok {
 					got = append(got, action)
 				}
@@ -282,7 +284,7 @@ func TestDecide_I4(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
 			var got []Action
-			for _, action := range Decide(snapshot, 1, required, nil) {
+			for _, action := range Decide(snapshot, 1, required, nil, time.Time{}, 0) {
 				if _, ok := action.(FixChecks); ok {
 					got = append(got, action)
 				}
@@ -363,7 +365,7 @@ func TestDecide_I14(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
 			// I11 is another rule (TestDecide_I11).
 			var got []Action
-			for _, action := range Decide(snapshot, 1, required, nil) {
+			for _, action := range Decide(snapshot, 1, required, nil, time.Time{}, 0) {
 				switch action.(type) {
 				case ResolveConflict, StartReview, FixChecks:
 					got = append(got, action)
@@ -373,6 +375,164 @@ func TestDecide_I14(t *testing.T) {
 				t.Errorf("Decide = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestDecide_I15 covers which issues the poll stops for the Owner because a
+// required check did not report in time: only after the wait time, counted
+// from the later one of the label time and the commit time of the head
+// commit, and only after the rows of the conflict (I14) and of the checks
+// (I3, I4).
+func TestDecide_I15(t *testing.T) {
+	required := []RequiredCheck{{Name: "ci"}, {Name: "lint"}, {Name: "unit"}}
+	labeled := time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC)
+	wait := time.Hour
+	results := func(ci, lint CheckConclusion) []CheckResult {
+		return []CheckResult{{Name: "ci", Conclusion: ci}, {Name: "lint", Conclusion: lint}, {Name: "unit", Conclusion: CheckPassed}}
+	}
+	waiting := func(number int, mergeable MergeableState, checks []CheckResult) SubIssue {
+		return SubIssue{Number: number, Labels: []string{LabelAwaitingChecks, "risk/low"}, AwaitingChecksAt: labeled,
+			PullRequests: []PullRequest{{Number: number + 10, HeadCommit: "abc", HeadCommittedAt: labeled.Add(-time.Minute), Mergeable: mergeable, Checks: checks}}}
+	}
+	pushed := func(sub SubIssue, at time.Time) SubIssue {
+		sub.PullRequests[0].HeadCommittedAt = at
+		return sub
+	}
+	stopped := func(number int, waited time.Duration, unreported ...RequiredCheck) StopForUnreportedChecks {
+		return StopForUnreportedChecks{Number: number, PullRequest: number + 10, HeadCommit: "abc", Unreported: unreported, Waited: waited}
+	}
+	ci, lint := RequiredCheck{Name: "ci"}, RequiredCheck{Name: "lint"}
+
+	tests := []struct {
+		name string
+		subs []SubIssue
+		now  time.Time
+		want []Action
+	}{
+		{
+			name: "before the wait time is over, nothing",
+			subs: []SubIssue{waiting(10, Mergeable, nil)},
+			now:  labeled.Add(wait - time.Second),
+		},
+		{
+			name: "at the wait time, a check without a result stops the issue",
+			subs: []SubIssue{waiting(10, Mergeable, []CheckResult{{Name: "unit", Conclusion: CheckPassed}})},
+			now:  labeled.Add(wait),
+			want: []Action{stopped(10, wait, ci, lint)},
+		},
+		{
+			name: "a check that has not finished has not reported",
+			subs: []SubIssue{waiting(10, Mergeable, results(CheckPassed, CheckPending))},
+			now:  labeled.Add(90 * time.Minute),
+			want: []Action{stopped(10, 90*time.Minute, lint)},
+		},
+		{
+			name: "unknown mergeability does not hold the stop back",
+			subs: []SubIssue{waiting(10, MergeableUnknown, results(CheckPending, CheckPassed))},
+			now:  labeled.Add(2 * wait),
+			want: []Action{stopped(10, 2*wait, ci)},
+		},
+		{
+			name: "checks that passed go to the review, however late",
+			subs: []SubIssue{waiting(10, Mergeable, results(CheckPassed, CheckPassed))},
+			now:  labeled.Add(2 * wait),
+			want: []Action{StartReview{Number: 10, PullRequest: 20}},
+		},
+		{
+			name: "a failed check goes to the check fix, even with another one not reported",
+			subs: []SubIssue{waiting(10, Mergeable, []CheckResult{{Name: "ci", Conclusion: CheckFailed}})},
+			now:  labeled.Add(2 * wait),
+			want: []Action{FixChecks{Number: 10, PullRequest: 20, Failed: []RequiredCheck{ci}}},
+		},
+		{
+			name: "a conflict comes first",
+			subs: []SubIssue{waiting(10, Conflicting, nil)},
+			now:  labeled.Add(2 * wait),
+			want: []Action{ResolveConflict{Number: 10, PullRequest: 20}},
+		},
+		{
+			name: "a newer head commit starts the wait time again",
+			subs: []SubIssue{pushed(waiting(10, Mergeable, results(CheckPending, CheckPassed)), labeled.Add(30*time.Minute))},
+			now:  labeled.Add(wait + 29*time.Minute),
+		},
+		{
+			name: "the wait time after a newer head commit is counted from its commit time",
+			subs: []SubIssue{pushed(waiting(10, Mergeable, results(CheckPending, CheckPassed)), labeled.Add(30*time.Minute))},
+			now:  labeled.Add(wait + 30*time.Minute),
+			want: []Action{stopped(10, wait, ci)},
+		},
+		{
+			name: "a head commit older than the label counts from the label",
+			subs: []SubIssue{pushed(waiting(10, Mergeable, results(CheckPending, CheckPassed)), labeled.Add(-3*time.Hour))},
+			now:  labeled.Add(wait - time.Minute),
+		},
+		{
+			name: "a label time that was not read gives nothing",
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks},
+				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
+			now: labeled.Add(2 * wait),
+		},
+		{
+			name: "a head commit time that was not read gives nothing",
+			subs: []SubIssue{pushed(waiting(10, Mergeable, results(CheckPending, CheckPassed)), time.Time{})},
+			now:  labeled.Add(2 * wait),
+		},
+		{
+			name: "another status label is not I15",
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelReviewing}, AwaitingChecksAt: labeled,
+				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
+			now: labeled.Add(2 * wait),
+		},
+		{
+			name: "a closed issue is not I15",
+			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}, AwaitingChecksAt: labeled,
+				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
+			now: labeled.Add(2 * wait),
+		},
+		{
+			name: "lowest issue number first",
+			subs: []SubIssue{waiting(12, Mergeable, results(CheckPending, CheckPassed)), waiting(10, Mergeable, results(CheckPending, CheckPassed))},
+			now:  labeled.Add(wait),
+			want: []Action{stopped(10, wait, ci), stopped(12, wait, ci)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, LabelTimesRead: true, SubIssues: tt.subs}}}
+			decide := func() []Action {
+				// I11 is another rule (TestDecide_I11).
+				var got []Action
+				for _, action := range Decide(snapshot, 1, required, nil, tt.now, wait) {
+					switch action.(type) {
+					case ResolveConflict, StartReview, FixChecks, StopForUnreportedChecks:
+						got = append(got, action)
+					}
+				}
+				return got
+			}
+			got := decide()
+			if fmt.Sprint(got) != fmt.Sprint(tt.want) {
+				t.Errorf("Decide = %v, want %v", got, tt.want)
+			}
+			// The same snapshot, time, and setting give the same actions.
+			if again := decide(); fmt.Sprint(again) != fmt.Sprint(got) {
+				t.Errorf("Decide again = %v, want %v", again, got)
+			}
+		})
+	}
+}
+
+// The sentence of I15 names the head commit, each required check that has
+// not reported, and the time that cumin waited.
+func TestUnreportedChecksReason_I15(t *testing.T) {
+	got := UnreportedChecksReason(StopForUnreportedChecks{
+		Number: 10, PullRequest: 21, HeadCommit: "0123abcd",
+		Unreported: []RequiredCheck{{Name: "ci"}, {Name: "lint"}}, Waited: 61*time.Minute + 400*time.Millisecond,
+	})
+	for _, want := range []string{"(ci, lint)", "head commit 0123abcd", "pull request #21", "waited 1h1m0s", "checks_wait_time"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the reason has no %q: %s", want, got)
+		}
 	}
 }
 

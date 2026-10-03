@@ -462,7 +462,8 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// An issue that cumin moves on without the Owner keeps Q4 silent, even
 	// when this poll decides nothing for it.
 	result.movesOn = snapshot.MovesWithoutOwner()
-	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames())
+	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames(),
+		s.now(), settings.Settings.ChecksWaitTime)
 	if finishing {
 		// The work that is held back waits under its label for the next
 		// start of cumin.
@@ -520,6 +521,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			}
 		case ResolveConflict:
 			if err := s.resolveConflictBeforeChecks(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
+		case StopForUnreportedChecks:
+			if err := s.stopForUnreportedChecks(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case CopyLabels:
@@ -632,6 +637,44 @@ type implementerRequest struct {
 	// a head that is still this commit stops the issue instead of I2, so
 	// that the same conflict does not go round the review again.
 	conflictHead string
+}
+
+// stopForUnreportedChecks applies I15: a required check has not reported on
+// the head commit of the pull request within the wait time of the
+// repository. The issue goes to the Owner through the stop step with the
+// row I15. No agent starts: cumin writes what it sees, and the Owner finds
+// the cause.
+//
+// The label changes first: until it changes, the next poll decides the same
+// stop, and must not post the comment and notify again (principle 3).
+func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a StopForUnreportedChecks) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "pull_request", a.PullRequest)
+	sub, ok := snapshot.SubIssue(a.Number)
+	if !ok {
+		return fmt.Errorf("I15: issue #%d is not in the snapshot", a.Number)
+	}
+	names := make([]string, 0, len(a.Unreported))
+	for _, check := range a.Unreported {
+		names = append(names, check.Name)
+	}
+	log.Warn("I15: the required checks did not report within the wait time",
+		"head_commit", a.HeadCommit, "unreported", names, "waited", a.Waited.String())
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerDecision)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+		return fmt.Errorf("I15: stop issue #%d for the Owner: %w", a.Number, err)
+	}
+	log.Info("I15: the issue waits for the Owner", "labels", labels)
+	reason := UnreportedChecksReason(a)
+	s.stopForOwner(ctx, log, target, settings, stop{
+		row:       RowI15,
+		issue:     a.Number,
+		labels:    labels,
+		reason:    reason,
+		comment:   StopNote(RowI15, reason, a.PullRequest, false),
+		labelDone: true,
+	})
+	return nil
 }
 
 // fixChecks applies I4: a required check failed on the head commit of the
