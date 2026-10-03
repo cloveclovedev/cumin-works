@@ -1,7 +1,8 @@
 @startuml github-call-deadline
 ' cumin works - every call of the GitHub client ends after a deadline,
 ' a read that fails for a reason that passes is sent again, and no call
-' leaves before the reset time of a full primary rate limit.
+' leaves before the reset time of a full primary rate limit or during the
+' wait of a secondary rate limit.
 ' Document: cumin-core.md, topic on the GitHub client.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -38,6 +39,19 @@ note left of client
   of x-ratelimit-reset, and one warn log line.
   It is not sent again at once.
   Until the reset time, a call of the same
+  installation returns that error
+  and sends nothing.
+end note
+
+note bottom of client
+  An answer of a secondary rate limit
+  (REST: 403 or 429, GraphQL: 200 or 403,
+  with a message "secondary rate limit"
+  or the header retry-after)
+  returns a RateLimitError at once,
+  and one warn log line.
+  The wait is retry-after, else 1 minute.
+  During the wait, a call of the same
   installation returns that error
   and sends nothing.
 end note

@@ -49,7 +49,7 @@
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `retry.go` | 一時的な失敗 (ネットワークの誤り、5xxの応答) をした読み取りのやり直し。`TemporaryError` と `IsTemporary` |
-| | `ratelimit.go` | 一次のレート制限の使い切りの見分けと、リセットの時刻まで同じinstallationの呼び出しを送らないこと。`RateLimitError` |
+| | `ratelimit.go` | 一次のレート制限の使い切りと二次のレート制限の見分けと、リセットの時刻 (二次は待ちの終わりの時刻) まで同じinstallationの呼び出しを送らないこと。`RateLimitError` |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
 | | `roles.go` | AppごとのGitHubの権限の表 |
 | | `installations.go` | Appの情報とインストールの確認 (`GET /app` など) |

@@ -168,7 +168,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
   - 期限で終わった呼び出しは、ネットワークの誤りの1つとして扱う。下のやり直しの対象である。
   - 設定にはしない。対象ごとに変える理由がないためである。
 - 一時的な失敗をした読み取りは、クライアントの中でやり直す (`retry.go`。要件: [cumin本体の要件](../requirements/cumin-core.md) の一時的な失敗のやり直し)。
-  - 一時的な失敗は、ネットワークの誤り (期限、接続の切断など。応答の本文の途中で切れた場合を含む) と、5xxの応答である。一次のレート制限の使い切りは、やり直さない (下の項目)。
+  - 一時的な失敗は、ネットワークの誤り (期限、接続の切断など。応答の本文の途中で切れた場合を含む) と、5xxの応答である。一次のレート制限の使い切りと、二次のレート制限は、やり直さない (下の項目)。
   - 読み取りは、RESTの `GET` と、GraphQLのquery (本文の `query` が `query` で始まる要求) である。それ以外 (`POST`、`PUT`、`PATCH`、GraphQLのmutation) は書き込みで、1回だけ送る。
   - やり直しは3回まで (定数 `maxRetries`)、2秒あけて行う (定数 `retryWait`)。最初の1回と合わせて、1つの読み取りは最大4回送る。毎回、新しい要求を作るので、どの回も30秒の期限を持つ。応答が返らないGitHubに対する1つの読み取りは、最長で約2分かかる。
   - 待つ間に呼び出し元のcontextが終わると、待ちをすぐにやめて、失敗を返す。この失敗は一時的な失敗としない。
@@ -186,7 +186,15 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
   - installationは、tokenから決める。クライアントは、installation token を発行したときに、tokenとinstallationの番号の組を覚える (期限が過ぎた組は、次の発行のときに捨てる)。同じinstallationの別のリポジトリのtokenも、同じ制限を分け合うためである。クライアントが発行していないtokenは、そのtokenだけを1つの単位とする。AppのJWTは呼び出しごとに新しいので、JWTの呼び出し (tokenの発行など) は止めない。
   - 呼び出しの中では待たない。`cumin status` と `cumin setup` は、すぐにこの失敗を返す。リセットのあとにやり直すのは、定期確認と、持っておいた手順である。
   - 使い切りを見つけたときに、warnのログを1行出す。要求のラベル (`request`)、枠の名前 (`resource`)、リセットの時刻 (`reset`) を持つ。tokenは持たない。送らなかった呼び出しでは、ログを出さない。
-  - 二次のレート制限は、まだ扱わない。
+- 二次のレート制限の応答を受けたら、GitHubが求める時間が過ぎるまで、そのinstallationの呼び出しを送らない (`ratelimit.go`。要件: 同じ節のレート制限の規則)。覚え方、installationの決め方、呼び出しの中で待たないことは、一次のレート制限と同じである。
+  - 見分け方は、公式の文書のとおりである (公式: Rate limits for the REST API の「Exceeding the rate limit」、Rate limits and query limits for the GraphQL API の「Secondary rate limits」と「Exceeding the rate limit」)。RESTは、403か429の応答で、二次のレート制限を示すエラーメッセージを持つ。GraphQLは、statusが200か403で、同じメッセージを持つ。200のときは、本文の `errors` の中にある。ヘッダー `retry-after` があれば、待つ秒数である。
+  - 待つ時間は、公式の文書の順に決める。403か429の応答に、ヘッダー `retry-after` (1以上の秒数) があれば、二次のレート制限として、その秒数だけ待つ。なければ、`x-ratelimit-remaining` が `0` のときは、一次のレート制限として `x-ratelimit-reset` まで待つ (上の項目)。どちらでもなく、メッセージが `secondary rate limit` を含むときは、1分待つ (定数 `secondaryWait`)。
+    - メッセージの文言は、公式の文書にはない。GitHubが実際に返す文 (`You have exceeded a secondary rate limit.` で始まる) から決めた、cuminの判断である。
+  - GraphQLの200の応答は、本文を全て読み、`secondary rate limit` を含むとき (または `x-ratelimit-remaining` が `0` のとき) だけ `errors` を調べる。`errors` があれば、そのメッセージとヘッダーで、同じ順に決める。
+  - どの合図もない403は、今までどおり `StatusError` である。
+  - 応答は、一次と同じ `RateLimitError` を返す。`Resource` は `secondary` で、`Reset` は待ちの終わりの時刻 (差し込んだ `now` に待つ時間を足した値) である。`github.IsTemporary(err)` は真を返す。読み取りも書き込みも、呼び出しの中ではやり直さない。
+  - 見つけたときに、warnのログを1行出す (`GitHub answered a secondary rate limit`)。要求のラベル (`request`)、種類 (`resource`: `secondary`)、待ちの終わりの時刻 (`reset`) を持つ。tokenは持たない。送らなかった呼び出しでは、ログを出さない。
+  - 1分は、設定にはしない。公式の文書が決めている値で、対象ごとに変える理由がないためである。
 
 ![GitHubへの呼び出しの期限](github-call-deadline.svg)
 
