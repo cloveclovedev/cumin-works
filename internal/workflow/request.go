@@ -170,8 +170,9 @@ Every sub-issue of the requirement issue #%[2]d of %[1]s is closed. Check each r
 
 // ReviewRequest is what a request of the kind "review" names
 // (reviewer.md, the request kinds): the pull request, the head commit that
-// the work directory holds, the round and its limit, and from round 2 the
-// commit of the last review.
+// the work directory holds, the round and its limit, from round 2 the
+// commit of the last review, and the commit that the Reviewer approved last
+// when it is not the head commit.
 type ReviewRequest struct {
 	Repository   string
 	Issue        int
@@ -179,6 +180,7 @@ type ReviewRequest struct {
 	HeadCommit   string
 	Round        int
 	Limit        int
+	Approved     string
 	LastReviewed string
 	WorkDir      string
 }
@@ -186,8 +188,9 @@ type ReviewRequest struct {
 // ReviewRequestText returns the request text of the kind "review" (I3).
 // Round 1 reviews the whole change; round 2 and later check the fixes
 // since the commit of the last review (agents/reviewer.md, the scope of
-// each round). The rules of each round are in the instruction; the text
-// names what differs.
+// each round). Round 1 after an approval of the Reviewer reviews only the
+// diff from the approved commit. The rules of each round are in the
+// instruction; the text names what differs.
 func ReviewRequestText(r ReviewRequest) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `Request: review
@@ -197,13 +200,19 @@ Pull request: #%d
 Head commit: %s
 Round: %d of %d
 `, r.Repository, r.Issue, r.PullRequest, r.HeadCommit, r.Round, r.Limit)
+	if r.Approved != "" {
+		fmt.Fprintf(&b, "Approved commit: %s\n", r.Approved)
+	}
 	if r.LastReviewed != "" {
 		fmt.Fprintf(&b, "Last reviewed commit: %s\n", r.LastReviewed)
 	}
 	fmt.Fprintf(&b, "Work directory: %s\n\n", r.WorkDir)
-	if r.LastReviewed == "" {
+	switch {
+	case r.LastReviewed == "" && r.Approved != "":
+		fmt.Fprintf(&b, "Review the pull request #%d against the implementation issue #%d. This is round 1 after your approval of %s: review only the diff from that commit to the head commit, with the depth of round 1.", r.PullRequest, r.Issue, r.Approved)
+	case r.LastReviewed == "":
 		fmt.Fprintf(&b, "Review the pull request #%d against the implementation issue #%d. This is round 1: find as much as you can.", r.PullRequest, r.Issue)
-	} else {
+	default:
 		fmt.Fprintf(&b, "Review the pull request #%d again. This is round %d: check that your earlier blocking comments are fixed, in the diff from %s to the head commit.", r.PullRequest, r.Round, r.LastReviewed)
 	}
 	fmt.Fprintf(&b, " The work directory is a checkout of the head commit %s with no branch; change nothing in it. Invoke the skill cumin-review, then submit one review on that commit with APPROVE or REQUEST_CHANGES. Then return the result.\n", r.HeadCommit)

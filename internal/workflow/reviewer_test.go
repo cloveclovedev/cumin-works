@@ -68,6 +68,9 @@ func TestI3_Round1StartsANewSessionAtTheHeadCommit(t *testing.T) {
 	if strings.Contains(text, "Last reviewed commit") {
 		t.Errorf("round 1 names a last reviewed commit:\n%s", text)
 	}
+	if strings.Contains(text, "Approved commit") {
+		t.Errorf("the request names an approved commit, and the Reviewer approved none:\n%s", text)
+	}
 	wantDir := filepath.Join(sc.workRoot, "example-org", "example-repo", "10-reviewer")
 	if got := strings.TrimSpace(sc.record(t, "agent.cwd")); got != realPath(t, wantDir) {
 		t.Errorf("the CLI ran in %q, want %q", got, realPath(t, wantDir))
@@ -124,6 +127,63 @@ func TestI3_Round2ResumesTheReviewerSessionAndNamesTheLastReviewedCommit(t *test
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
 		}
+	}
+}
+
+// I3, round 1 after an approval: the rounds start again at 1 in a new
+// session, and the request names the commit that the Reviewer approved
+// last, so that the Reviewer looks only at the diff from it. A dismissed
+// review and an approval of a person are not named.
+func TestI3_Round1AfterAnApprovalNamesTheApprovedCommit(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session", ReviewerSessionID: "old-reviewer-session"})
+	readyAt := sceneNow.Add(-time.Hour)
+	issue := sc.repo.Issues[10]
+	issue.LabelEvents = []githubtest.LabelEvent{{Label: workflow.LabelReady, At: readyAt}}
+	const first = "1111111111111111111111111111111111111111"
+	const second = "2222222222222222222222222222222222222222"
+	const other = "3333333333333333333333333333333333333333"
+	sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "CHANGES_REQUESTED", Commit: first, SubmittedAt: readyAt.Add(time.Minute)})
+	sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "APPROVED", Commit: first, SubmittedAt: readyAt.Add(2 * time.Minute)})
+	sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "APPROVED", Commit: second, SubmittedAt: readyAt.Add(3 * time.Minute)})
+	sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "DISMISSED", Commit: other, SubmittedAt: readyAt.Add(4 * time.Minute)})
+	sc.addReview(t, githubtest.Review{Author: "octocat", State: "APPROVED", Commit: other, SubmittedAt: readyAt.Add(5 * time.Minute)})
+
+	sc.pollAndWait(t, service)
+
+	args := sc.record(t, "agent.args")
+	if strings.Contains(args, "--resume") {
+		t.Errorf("round 1 after an approval resumed a session:\n%q", args)
+	}
+	text := promptOf(t, args)
+	for _, want := range []string{"Round: 1 of 3\nApproved commit: " + second + "\n",
+		"review only the diff from that commit to the head commit, with the depth of round 1"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "Last reviewed commit") {
+		t.Errorf("round 1 names a last reviewed commit:\n%s", text)
+	}
+}
+
+// An approval of the head commit leaves no diff to review, so the request
+// names no approved commit.
+func TestI3_AnApprovalOfTheHeadCommitIsNotNamed(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{})
+	sc.addReview(t, githubtest.Review{Author: implementerSlug, AuthorIsBot: true, State: "APPROVED", Commit: sc.remoteHead, SubmittedAt: sceneNow.Add(-time.Hour)})
+
+	sc.pollAndWait(t, service)
+
+	text := promptOf(t, sc.record(t, "agent.args"))
+	if !strings.Contains(text, "Round: 1 of 3") || !strings.Contains(text, "find as much as you can") {
+		t.Errorf("the request is not the one of round 1:\n%s", text)
+	}
+	if strings.Contains(text, "Approved commit") {
+		t.Errorf("the request names the head commit as the approved commit:\n%s", text)
 	}
 }
 

@@ -4,7 +4,8 @@ package workflow
 // sub-issues: R3 (a sub-issue may start) and R6 (only sub-issues without a
 // status label are left), and reads the label times that R3, a sub-issue
 // that waits for its checks, and the send-back after a request for changes
-// of the Owner (I13) need.
+// of the Owner (I13) need, and the Owner of the newest cumin/status/ready
+// that R1 and I1 need.
 // docs/ja/designs/poll.md, the topics on the label times and on the
 // decision of the poll.
 
@@ -12,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -43,6 +45,86 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 			sub.AwaitingOwnerReviewAt = times[sub.Number][LabelAwaitingOwnerReview]
 		}
 	}
+}
+
+// readReadyOwners reads, for the candidates of R1 and of I1, who added the
+// newest cumin/status/ready, and stores in the snapshot whether that
+// account is the Owner (issue-states.md, the ready of the Owner). It reads
+// only when a slot is free, in the order of the starts, and stops when it
+// has as many candidates of the Owner as free slots (ReadyActorReads). Only
+// an event of the issue itself answers: a candidate carries the label, so
+// no ready event among the events that are read means "not the Owner". A
+// failed read is logged and leaves ReadyRead false, so the issue waits for
+// the next poll and the other rules go on.
+func (s *Service) readReadyOwners(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
+	numbers, room := ReadyActorReads(*snapshot, s.Settings.MaxIssuesInProgress, settings.Settings.PriorityLabelNames())
+	for _, number := range numbers {
+		if room == 0 {
+			return
+		}
+		actor, isOwner, err := s.readReadyActor(ctx, token, target, number, false)
+		if err != nil {
+			log.Error("the actor of the newest "+LabelReady+" was not read", "issue", number, "error", err.Error())
+			continue
+		}
+		login := ""
+		if isOwner {
+			login = actor.Login
+			room--
+		} else {
+			s.tellReadyOfAnother(ctx, log, target, settings, *snapshot, number, actor)
+		}
+		for i := range snapshot.RequirementIssues {
+			requirement := &snapshot.RequirementIssues[i]
+			if requirement.Number == number {
+				requirement.ReadyRead, requirement.ReadyOwner = true, login
+			}
+			for j := range requirement.SubIssues {
+				if sub := &requirement.SubIssues[j]; sub.Number == number {
+					sub.ReadyRead, sub.ReadyOwner = true, login
+				}
+			}
+		}
+	}
+}
+
+// tellReadyOfAnother logs, and tells the Owner, that another account than
+// the Owner added the newest cumin/status/ready of the issue, so cumin
+// starts nothing for it. It does so once for one such event, not at every
+// poll: the time of the event names it.
+func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, snapshot Snapshot, number int, actor github.LabelActor) {
+	key := fmt.Sprintf("%s#%d", repositoryKey(target.Repository), number)
+	s.readyMu.Lock()
+	told, ok := s.readyTold[key]
+	if s.readyTold == nil {
+		s.readyTold = map[string]time.Time{}
+	}
+	s.readyTold[key] = actor.At
+	s.readyMu.Unlock()
+	if ok && told.Equal(actor.At) {
+		return
+	}
+	row := RowR1
+	if _, isSub := snapshot.SubIssue(number); isSub {
+		row = "I1"
+	}
+	log = log.With("row", row, "issue", number)
+	log.Warn("the newest "+LabelReady+" is not of the Owner: nothing starts until the Owner adds the label again",
+		"actor", actor.Login, "actor_type", actor.Type)
+	by := "an account that cumin could not find among the newest label events"
+	switch {
+	case actor.Login != "":
+		by = actor.Login
+	case !actor.At.IsZero():
+		by = "an account that no longer exists"
+	}
+	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		Row:        row,
+		Reason:     fmt.Sprintf("%s was added by %s, who is not the Owner. cumin starts nothing until the Owner adds the label again.", LabelReady, by),
+		Repository: target.Repository.String(),
+		Subject:    fmt.Sprintf("issue #%d", number),
+		Link:       github.IssueURL(target.Repository.Owner, target.Repository.Name, number),
+	})
 }
 
 // startRequirement applies R3: the requirement issue moves to

@@ -392,6 +392,10 @@ type failure struct {
 	hang bool
 	// closed closes the connection without an answer, as CloseTimes set it.
 	closed bool
+	// limited answers a full primary rate limit with the reset time, as
+	// LimitTimes set it.
+	limited bool
+	reset   time.Time
 	// times is how many matching requests fail.
 	times int
 	// then is the failure that follows when this one is used up.
@@ -664,6 +668,17 @@ func (f *Fake) CloseTimes(method, path string, times int) {
 	f.failThen(&failure{method: method, path: path, closed: true, times: times})
 }
 
+// LimitTimes makes the fake answer the next times requests with the method
+// and the path as GitHub answers a full primary rate limit: the header
+// x-ratelimit-remaining with 0, and the reset time in x-ratelimit-reset. A
+// REST request gets the status (403 or 429). A GraphQL request gets the
+// status 200 and an error, whatever the status is. The requests are
+// recorded and change nothing. A failure of FailTimes or CloseTimes that
+// still waits comes first.
+func (f *Fake) LimitTimes(method, path string, times, status int, reset time.Time) {
+	f.failThen(&failure{method: method, path: path, status: status, limited: true, reset: reset, times: times})
+}
+
 // failThen adds a failure after the failures that still wait.
 func (f *Fake) failThen(next *failure) {
 	f.mu.Lock()
@@ -764,6 +779,21 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	if fail != nil && fail.closed {
 		// net/http closes the connection without an answer.
 		panic(http.ErrAbortHandler)
+	}
+	if fail != nil && fail.limited {
+		const message = "API rate limit exceeded for installation ID 1."
+		w.Header().Set("x-ratelimit-limit", "5000")
+		w.Header().Set("x-ratelimit-remaining", "0")
+		w.Header().Set("x-ratelimit-used", "5000")
+		w.Header().Set("x-ratelimit-reset", strconv.FormatInt(fail.reset.Unix(), 10))
+		if r.URL.Path == "/graphql" {
+			w.Header().Set("x-ratelimit-resource", "graphql")
+			writeJSON(w, http.StatusOK, map[string]any{"errors": []any{map[string]any{"type": "RATE_LIMITED", "message": message}}})
+			return
+		}
+		w.Header().Set("x-ratelimit-resource", "core")
+		writeJSON(w, fail.status, map[string]any{"message": message})
+		return
 	}
 	if fail != nil {
 		writeJSON(w, fail.status, map[string]any{"message": "Failure requested by the test"})
@@ -1392,6 +1422,9 @@ func (f *Fake) servePermission(w http.ResponseWriter, login string) {
 		if strings.HasSuffix(login, "[bot]") {
 			p = Permission{Permission: "none", UserType: "Bot"}
 		}
+		if login == SeedActor {
+			p = Permission{Permission: "admin", UserType: "User"}
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"permission": p.Permission, "role_name": p.Permission,
 		"user": map[string]any{"login": login, "type": p.UserType}})
@@ -1797,6 +1830,26 @@ func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, numbe
 	})
 }
 
+// SeedActor is the account of the label events that the fake answers for
+// the labels that a test gave an issue without an event. On GitHub every
+// label of an issue has an event, so the fake answers one for each such
+// label: at the zero time, before every other event, by this account. Its
+// permission is admin until a test sets another one, so it is an Owner.
+const SeedActor = "seed-owner"
+
+// withSeededLabelEvents returns the label events of the issue, with one
+// event of SeedActor first for each label that the issue carries and that
+// no event added.
+func withSeededLabelEvents(issue *Issue) []LabelEvent {
+	var list []LabelEvent
+	for _, label := range issue.Labels {
+		if !slices.ContainsFunc(issue.LabelEvents, func(e LabelEvent) bool { return e.Label == label }) {
+			list = append(list, LabelEvent{Label: label, Actor: SeedActor, ActorType: "User"})
+		}
+	}
+	return append(list, issue.LabelEvents...)
+}
+
 // serveLabelTimes answers the query of the label times and the query of
 // the actor of a label: the newest label events of the issue and of each of
 // its sub-issues, each with its actor. Official: the LabeledEvent of the
@@ -1811,7 +1864,7 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 		return
 	}
 	timeline := func(issue *Issue) map[string]any {
-		list := issue.LabelEvents
+		list := withSeededLabelEvents(issue)
 		if len(list) > events {
 			list = list[len(list)-events:]
 		}

@@ -78,7 +78,7 @@ Return `blocked` instead of guessing when:
 - The issue is too large for one pull request.
 - Work that should be done before this issue (a blocking issue) is not done.
 
-Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the issue, and the Owner answers there. cumin does not start you again until the Owner adds `cumin/status/ready` to the issue.
+Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the stopped issue, and the Owner answers there. cumin does not start you again until the Owner adds `cumin/status/ready` to the stopped issue.
 
 ## The result
 

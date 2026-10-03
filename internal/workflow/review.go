@@ -80,6 +80,11 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 		return fmt.Errorf("I3: read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
 	round := ReviewRounds(pr.Reviews, reviewer, readyAt) + 1
+	// An approval of the head commit leaves no diff to name.
+	approved := LastApprovedCommit(pr.Reviews, reviewer)
+	if approved == pr.HeadCommit {
+		approved = ""
+	}
 	req := reviewerRequest{
 		review: ReviewRequest{
 			Repository:   repository,
@@ -88,6 +93,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 			HeadCommit:   pr.HeadCommit,
 			Round:        round,
 			Limit:        settings.Settings.MaxReviewRounds,
+			Approved:     approved,
 			LastReviewed: LastReviewedCommit(pr.Reviews, reviewer, readyAt),
 		},
 		reviewer:   reviewer,

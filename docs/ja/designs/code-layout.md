@@ -49,6 +49,7 @@
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `retry.go` | 一時的な失敗 (ネットワークの誤り、5xxの応答) をした読み取りのやり直し。`TemporaryError` と `IsTemporary` |
+| | `ratelimit.go` | 一次のレート制限の使い切りの見分けと、リセットの時刻まで同じinstallationの呼び出しを送らないこと。`RateLimitError` |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
 | | `roles.go` | AppごとのGitHubの権限の表 |
 | | `installations.go` | Appの情報とインストールの確認 (`GET /app` など) |
@@ -58,7 +59,7 @@
 | | `comments.go` | Issueへのコメントの投稿 |
 | | `issuecomments.go` | IssueかPull Requestの最新のコメントの読み取り (受け入れの確認のコメント、原因の説明のコメントを探す) |
 | | `labeltimes.go` | 要求Issueとsub-issueに、ラベルが付いた時刻の読み取り (R3: sub-issueに `cumin/status/ready` が付いたか) |
-| | `labelactor.go` | Issueに最新のラベルを付けたアカウントの読み取り。Issueにイベントがなければsub-issueから読む (起動の依頼の事実: Ownerのログイン名) |
+| | `labelactor.go` | Issueに最新のラベルを付けたアカウントの読み取り。Issueにイベントがなければsub-issueから読む (R1とI1のOwnerのreadyの確認、起動の依頼の事実: Ownerのログイン名) |
 | | `closer.go` | Issueに結び付いたPull Requestの一覧と、1つのPull Requestの説明とレビューのスレッドの読み取り (I9) |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む。実行終了のあとに1つのIssueだけを読む問い合わせも、同じ項目で持つ |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
@@ -66,7 +67,7 @@
 | | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (I12のOwnerの判定、起動の依頼のOwnerのログイン名) |
 | | `merge.go` | Pull Requestのmerge (衝突と先頭のコミットの移動の見分け)、Issueの開閉の読み取りと、完了として閉じること (I6、I12) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
-| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
+| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし、一次のレート制限の使い切り)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
@@ -78,7 +79,7 @@
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。必須のcheckが待ち時間を過ぎても結果を返さないIssueをOwnerに戻す (I15)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
 | | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、分割の確かめ (R2)、受け入れの確認の依頼とその結果 (R4、R7) |
-| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り |
+| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り。R1とI1のための、Ownerのreadyの確認と、Ownerでないreadyのログと通知 |
 | | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
 | | `merge.go` | 承認されたPull Requestの扱い (I6、I7)、Ownerの承認のあとのmerge (I12)、2つが使うmergeの手順、Ownerのレビューへの対応の依頼 (I13)、checkまたはOwnerの判断を待つ間の衝突の解消の依頼 (I14) |
