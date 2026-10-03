@@ -1,5 +1,5 @@
 @startuml poll-verify
-' cumin works - the end of a run (I2): the checks after an Implementer run, and the way back to the Owner.
+' cumin works - the end of a run (I2): the checks after an Implementer run, the kept step after a temporary failure, and the way back to the Owner.
 ' Document: poll.md, sections on the end of a run and the way back to the Owner.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -8,10 +8,17 @@ skinparam defaultFontName sans-serif
 start
 :The Implementer run ends;
 if (Result?) then (done)
-  :Read the issue of the run again
-  (one issue, the facts right after the run);
-  :List the open pull requests of the branch
-  that cumin chose (REST);
+  repeat
+    :Read the issue of the run again
+    (one issue, the facts right after the run);
+    :List the open pull requests of the branch
+    that cumin chose (REST);
+    backward :Keep the step (in memory).
+    The issue stays in work, with its label.
+    A poll 5 minutes later runs it again;
+  repeat while (A call to GitHub of this step failed
+  with a temporary failure? (a read, or
+  the label change below)) is (yes) not (no)
   :Read the head commit of the worktree;
   partition "Decision (pure function, no I/O)" {
     if (An open pull request

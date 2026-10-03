@@ -174,7 +174,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
   - 待つ間に呼び出し元のcontextが終わると、待ちをすぐにやめて、失敗を返す。この失敗は一時的な失敗としない。
   - 最後の回も一時的な失敗で終わった読み取りと、一時的な失敗をした書き込みは、`TemporaryError` を返す。呼び出し元は `github.IsTemporary(err)` で、続く失敗と区別する。5xxの応答では、`errors.As` で今までどおり `StatusError` を取り出せる。4xxの応答は1回だけ送り、`StatusError`、`ErrConflict`、`ErrHeadMoved` は変わらない。
   - やり直しのたびに、warnのログを1行出す。要求のラベル (`request`)、何回目か (`try`)、理由 (`reason`: `status 502`、`time-out` など) を持つ。tokenとアドレスは持たない。`cumin run` は自分のloggerを渡す (`SetLogger`)。
-  - テストは、待ちを差し替えて眠らない (`SetRetryWait`)。
+  - テストは、待ちを差し替えて眠らない (`SetRetryWait`)。 レート制限のリセットの時刻を待たずに確かめるテストは、クライアントの時計を差し替える (`SetNow`)。
   - 設定にはしない。回数と間隔は要件が決めていて、対象ごとに変える理由がないためである。
 - 一次のレート制限を使い切ったら、リセットの時刻まで、そのinstallationの呼び出しを送らない (`ratelimit.go`。要件: 同じ節のレート制限の規則)。
   - 見分け方は、公式の文書のとおりである (公式: Rate limits for the REST API、Rate limits and query limits for the GraphQL API の「Exceeding the rate limit」)。RESTは、403か429の応答で、ヘッダー `x-ratelimit-remaining` が `0` である。GraphQLは、statusが200のまま、本文に `errors` があり、同じヘッダーが `0` である。リセットの時刻は、ヘッダー `x-ratelimit-reset` (UTCのエポック秒) で読む。
