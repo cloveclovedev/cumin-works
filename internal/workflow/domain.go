@@ -332,9 +332,14 @@ type ResolveConflict struct {
 // StopForUnreportedChecks is the action of I15: a required check has not
 // reported on the head commit of the pull request, and the wait time of the
 // repository is over, so the issue stops for the Owner. It carries the facts
-// that cumin sees; it names no cause.
+// that cumin sees; it names no cause. The row also holds when no open pull
+// request closes the issue, for example after someone closed it: the wait
+// then counts from the label alone.
 type StopForUnreportedChecks struct {
-	Number      int
+	Number int
+	// PullRequest is the number of the open pull request, or 0 when no
+	// open pull request closes the issue. HeadCommit and Unreported are
+	// then empty.
 	PullRequest int
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
@@ -892,7 +897,8 @@ func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 // issue number first. A pull request that conflicts belongs to I14, and a
 // failed required check belongs to I4. A sub-issue whose label time or
 // whose head commit time was not read gives no action: a later poll decides.
-// A commit time that was not read can hide a new head commit.
+// A commit time that was not read can hide a new head commit. A sub-issue
+// with no open pull request stops too, after the wait time since the label.
 func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.Time, checksWait time.Duration) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
@@ -901,7 +907,13 @@ func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.T
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
-			if !ok || pr.Mergeable == Conflicting || ChecksOf(required, pr.Checks) != ChecksWaiting {
+			if !ok {
+				if waited := now.Sub(sub.AwaitingChecksAt); waited >= checksWait {
+					actions = append(actions, StopForUnreportedChecks{Number: sub.Number, Waited: waited})
+				}
+				continue
+			}
+			if pr.Mergeable == Conflicting || ChecksOf(required, pr.Checks) != ChecksWaiting {
 				continue
 			}
 			if pr.HeadCommittedAt.IsZero() {

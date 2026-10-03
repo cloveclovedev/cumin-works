@@ -261,8 +261,13 @@ func ConflictNotResolvedReason(pullRequest int) string {
 
 // UnreportedChecksReason is the sentence of I15: the facts that cumin sees,
 // without a cause. It names the head commit, each required check that has
-// not reported, and the time that cumin waited.
+// not reported, and the time that cumin waited. With no open pull request,
+// it says that, and the time that cumin waited.
 func UnreportedChecksReason(a StopForUnreportedChecks) string {
+	if a.PullRequest == 0 {
+		return fmt.Sprintf("No open pull request closes this issue, so no required check can report. cumin waited %s, longer than the wait time of this repository (checks_wait_time).",
+			a.Waited.Round(time.Second))
+	}
 	names := make([]string, 0, len(a.Unreported))
 	for _, check := range a.Unreported {
 		names = append(names, check.Name)
