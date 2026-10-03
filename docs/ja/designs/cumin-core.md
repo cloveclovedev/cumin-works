@@ -172,7 +172,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 
 図の元ファイル: [github-call-deadline.puml](github-call-deadline.puml)
 
-- 読み取りは、定期確認の1回分を、リポジトリごとに1つのGraphQLの問い合わせで読む。Issue、sub-issue、ラベル、blocked by、Pull Request、レビュー、checkは入れ子の関係にあり、RESTだとIssueの数に比例して要求が増えるためである。1回で読めば、判定に使うスナップショットの時点も揃う。
+- 読み取りは、定期確認の1回分を、リポジトリごとに2つのGraphQLの問い合わせで読む。1つ目は要求Issueとsub-issueを読み、2つ目は選んだsub-issueのPull Requestを読む。Issue、sub-issue、ラベル、blocked by、Pull Request、レビュー、checkは入れ子の関係にあり、RESTだとIssueの数に比例して要求が増えるためである。2つの読み取りから1つのスナップショットを作る。読む時点が2つでも判定が正しい理由は、[定期確認の設計](poll.md) の「2つの問い合わせ」にある。
 - Agentの実行が終わった直後には、その実行のIssueだけを、番号で指定する1つのGraphQLの問い合わせで読み直す。項目と上限は、定期確認の問い合わせと同じである。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。リポジトリの全ページは読み直さない。これらの判定が使うのは、1つのIssueの事実だけだからである ([定期確認の設計](poll.md) の「実行終了の判定」)。
 - 書き込みは、全てRESTで行う。ラベル、コメント、merge、sub-issue、tokenの発行がこれに当たる。GitHub App に要る権限が、RESTのendpointごとに公式ドキュメントに書かれているためである (実測 10、33)。
 - 例外として、必須のcheckの一覧はRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。
