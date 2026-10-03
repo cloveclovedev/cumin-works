@@ -82,6 +82,8 @@ func TestInstruction_ImplementerHoldsTheWritingRulesAndNamesItsSkills(t *testing
 		"`Closes #<issue number>`",
 		"Never open a second pull request",
 		"Do not wait for checks or for reviews",
+		"When the request is `owner review fix`",
+		"Address every comment of that review, and reply to each one with the skill `cumin-review-reply`",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the Implementer instruction does not say: %s", want)

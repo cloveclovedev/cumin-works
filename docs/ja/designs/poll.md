@@ -260,6 +260,14 @@ checkの結果の読み方:
 - Implementerの依頼は、Reviewerの実行と同じgoroutineで続けて行う。同じIssueのAgentは、いつも1つだけである。
 - 上限に達していれば、Implementerには依頼せず、「上限での原因の整理 (I8)」に進む。
 
+### Ownerのレビューへの対応の依頼 (I13)
+
+- 今あるのは、依頼文と、Implementerのroleの指示の決まりである。判定、ラベルの付け替え、依頼の開始は、まだない。
+- 依頼文 (「Ownerのレビューへの対応」、`Request: owner review fix`) は、`internal/workflow` の純粋関数 `OwnerReviewFixRequestText` が組み立てる。入れるのは、リポジトリ、実装Issue、Pull Request、ブランチ、作業場所と、Ownerのレビューのアドレスである。
+- 依頼文は、そのレビューとコメントをGitHubで読むこと、Pull Requestのブランチで直すこと、新しいPull Requestを作らないことを伝える。コメントそのものは依頼文に写さない。Implementerが、GitHubでコメントを読み、スレッドごとに返答するためである (返答のテンプレートはskill `cumin-review-reply`)。
+- 「指摘の修正」(I5) と別の種類にするのは、Ownerのコメントに `(blocking)` の印がないためである。roleの指示は、指摘の修正では blocking のコメントにだけ返答すると決めている。この依頼では、Ownerのレビューの全てのコメントに対応し、それぞれに返答する。これは依頼文と `roles/implementer.md` の両方に書く。
+- セッションは、Implementerの直前のセッションの続きである (Implementerの要件の「いつ起動されるか」)。
+
 ### mergeの手順 (I6、I7)
 
 ![承認されたPull Requestとmergeの手順](poll-merge.svg)

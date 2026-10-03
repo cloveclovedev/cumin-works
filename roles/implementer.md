@@ -34,6 +34,7 @@ Work from the issue body, the linked documents, the repository, and the comments
 - One pull request for the issue. Create it with `gh pr create` against the default branch. Write the description with the skill `cumin-pull-request`. Write `Closes #<issue number>` in the description, so that the merge closes the issue.
 - On a later request for the same issue: push more commits to the same branch, and update the description of the same pull request. Never open a second pull request for the issue.
 - When the request asks you to fix review comments: reply to every blocking comment with the skill `cumin-review-reply`. Fix a non-blocking comment in the same round only when the fix is a few lines and inside the scope of the issue. Then reply `Fixed`. Leave the other non-blocking comments without a reply.
+- When the request is `owner review fix`: the comments of the Owner's review carry no `(blocking)` mark. Address every comment of that review, and reply to each one with the skill `cumin-review-reply`.
 
 ## The diagram of the pull request
 
