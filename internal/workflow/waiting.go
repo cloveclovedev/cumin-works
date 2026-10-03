@@ -28,8 +28,9 @@ type pollResult struct {
 	// and still it is not waiting for the Owner.
 	movesOn bool
 	// issueInWork says that an issue of the repository is in work
-	// (Snapshot.HasIssueInWork). Q4 does not read it: the poll loop does,
-	// to pick the interval of the next poll of the repository.
+	// (Snapshot.HasIssueInWork). The waiting notification to the Owner (Q4)
+	// does not read it: the poll loop does, to pick the interval of the
+	// next poll of the repository.
 	issueInWork bool
 }
 

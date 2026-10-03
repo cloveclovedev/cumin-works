@@ -312,8 +312,10 @@ func (s *Service) markInProgress(ctx context.Context, repository string, issue i
 		if ctx.Err() != nil {
 			return
 		}
-		delete(s.inProgress, key)
+		// The note comes first, so that a poll never sees neither the run
+		// nor its end.
 		s.noteRunEnded(repository)
+		delete(s.inProgress, key)
 		select {
 		case s.runEnded <- struct{}{}:
 		default:
