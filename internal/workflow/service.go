@@ -104,6 +104,9 @@ type Service struct {
 	inProgress map[inProgressKey]bool
 	// started counts the runs that cumin started. progressMu guards it.
 	started int
+	// keptSteps holds the steps after an agent run that wait for their next
+	// try (keptstep.go). progressMu guards it.
+	keptSteps map[inProgressKey]*keptStep
 	// startedAt is when Run started. A stop request from before it is
 	// for an earlier process (stopafterruns.go). Only Run and its polls use it.
 	startedAt time.Time
@@ -282,7 +285,8 @@ func (s *Service) stopGrace() time.Duration {
 	}
 }
 
-// inProgressIssues returns the issues whose agent is running, as
+// inProgressIssues returns the issues whose agent is running or whose step
+// after the run is kept, as
 // "<owner>/<repo>#<number>", in a fixed order.
 func (s *Service) inProgressIssues() []string {
 	s.progressMu.Lock()
@@ -296,7 +300,8 @@ func (s *Service) inProgressIssues() []string {
 }
 
 // markInProgress records that the agent of an issue is running, and
-// returns the function that removes it when the run ends.
+// returns the function that removes it when the run ends. An issue whose
+// step after the run is kept stays: the kept step removes it when it ends.
 //
 // After the stop signal the entry stays, even when the run ends at once
 // because its CLI follows SIGTERM. The issue keeps
@@ -315,17 +320,23 @@ func (s *Service) markInProgress(ctx context.Context, repository string, issue i
 	return func() {
 		s.progressMu.Lock()
 		defer s.progressMu.Unlock()
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || s.keptSteps[key] != nil {
 			return
 		}
-		// The note comes first, so that a poll never sees neither the run
-		// nor its end.
-		s.noteRunEnded(repository)
-		delete(s.inProgress, key)
-		select {
-		case s.runEnded <- struct{}{}:
-		default:
-		}
+		s.endInProgress(key)
+	}
+}
+
+// endInProgress removes an issue from the set of issues in work, and wakes
+// Run. The caller holds progressMu.
+func (s *Service) endInProgress(key inProgressKey) {
+	// The note comes first, so that a poll never sees neither the run
+	// nor its end.
+	s.noteRunEnded(key.repository)
+	delete(s.inProgress, key)
+	select {
+	case s.runEnded <- struct{}{}:
+	default:
 	}
 }
 
@@ -394,6 +405,8 @@ func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
 	var all pollResult
 	finishing := s.stopRequested()
+	// The kept steps come first, so that the poll reads what they wrote.
+	s.runKeptSteps(ctx)
 	for _, target := range s.Targets {
 		// The stop signal came while this poll was running. Start nothing
 		// more: the requests that are going on are the ones to wait for.
@@ -1110,7 +1123,17 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
 				return
 			}
-			s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin, req.conflictHead, req.row)
+			// The first try runs here. A try of the kept step runs in a poll.
+			kept := false
+			step := &keptStep{name: "verify done", log: log}
+			step.run = func(ctx context.Context) error {
+				again := kept
+				kept = true
+				return s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin, req.conflictHead, req.row, again)
+			}
+			if err := step.run(ctx); err != nil && ctx.Err() == nil {
+				s.keepStep(inProgressKey{repository: target.Repository.String(), issue: number}, step, err)
+			}
 			return
 		}
 	}
@@ -1177,26 +1200,37 @@ func labelsNow(sub SubIssue, ok bool) []string {
 // cumin-core adds it and reads the issue once more to see it; then the
 // status label becomes cumin/status/awaiting-checks. A failed check, a
 // failed link, and a link that is still missing hand the issue back to the
-// Owner through the stop step, with one sentence. Nothing here is retried:
-// the Owner decides what to do next.
-func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin, conflictHead, row string) {
+// Owner through the stop step, with one sentence. Nothing of that is
+// retried: the Owner decides what to do next.
+//
+// A temporary failure of a call to GitHub (the token, a read, the label) is
+// returned, and the caller keeps the step (keptstep.go). The step then runs
+// again from its start, with again set: when the issue of the new read has
+// left cumin/status/implementing, the label was already changed, and the
+// step changes nothing. Every other failure is logged and returns nil, as
+// before.
+func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin, conflictHead, row string, again bool) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("I2: no token", "error", err.Error())
-		return
+		return temporary(err)
 	}
 	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
 		log.Error("I2: the issue was not read again", "error", err.Error())
-		return
+		return temporary(err)
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
+	if again && !slices.Contains(sub.Labels, LabelImplementing) {
+		log.Info("I2: the issue left cumin/status/implementing while verify done was kept; nothing changes", "labels", sub.Labels)
+		return nil
+	}
 	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, branch)
 	if err != nil {
 		log.Error("I2: the open pull requests of the branch were not read", "branch", branch, "error", err.Error())
-		return
+		return temporary(err)
 	}
 	onBranch := make([]PullRequest, 0, len(listed))
 	nodeIDs := map[int]string{}
@@ -1207,7 +1241,7 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 	head, err := s.Workspace.Head(ctx, workDir)
 	if err != nil {
 		log.Error("I2: the head commit of the work directory was not read", "error", err.Error())
-		return
+		return nil
 	}
 	verification := VerifyDone(sub, branch, onBranch, botLogin, head, github.MaxOpenClosingPullRequests)
 	stopI2 := func(reason string, pullRequest int) {
@@ -1223,7 +1257,7 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		log.Warn("I2: the verification failed", "failure", verification.Failure.String(),
 			"branch", branch, "pull_request", verification.PullRequest)
 		stopI2(VerificationReason(verification.Failure), verification.PullRequest)
-		return
+		return nil
 	}
 	if conflictHead != "" && head == conflictHead {
 		// The pull request passed, so its head is the head of the worktree.
@@ -1233,35 +1267,45 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 			row: row, issue: number, labels: sub.Labels, reason: ConflictNotResolvedReason(verification.PullRequest),
 			comment: StopNote(row, ConflictNotResolvedReason(verification.PullRequest), verification.PullRequest, false),
 		})
-		return
+		return nil
 	}
 	if verification.AddLink {
 		pr := verification.PullRequest
 		if err := s.GitHub.AddClosingLink(ctx, token, sub.NodeID, nodeIDs[pr]); err != nil {
 			log.Warn("I2: the closing link was not added", "pull_request", pr, "error", err.Error())
 			stopI2(LinkFailedReason(pr, githubAnswer(err)), pr)
-			return
+			return nil
 		}
 		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 		if err != nil {
 			log.Error("I2: the issue was not read after the closing link", "error", err.Error())
-			return
+			return temporary(err)
 		}
 		log.Debug("read the issue again", "issue", number, "rate_limit_cost", again.RateLimit.Cost, "rate_limit_remaining", again.RateLimit.Remaining)
 		sub = toSubIssue(again.Issue)
 		if !linksPullRequest(sub, pr) {
 			log.Warn("I2: the closing link is missing after cumin-core added it", "pull_request", pr)
 			stopI2(LinkMissingReason(pr), pr)
-			return
+			return nil
 		}
 		log.Info("I2: added the closing link", "pull_request", pr)
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingChecks)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
 		log.Error("I2: the label was not changed", "error", err.Error())
-		return
+		return temporary(err)
 	}
 	log.Info("I2: verified the pull request", "pull_request", verification.PullRequest, "labels", labels)
+	return nil
+}
+
+// temporary returns err when it is a temporary failure of a call to GitHub,
+// and nil otherwise: only a temporary failure keeps a step.
+func temporary(err error) error {
+	if github.IsTemporary(err) {
+		return err
+	}
+	return nil
 }
 
 // githubAnswer is the answer of GitHub in an error of AddClosingLink: the

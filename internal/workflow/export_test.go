@@ -32,3 +32,7 @@ func decideReadyOfOwner(snapshot Snapshot, maxInProgress int, required []Require
 	}
 	return Decide(copied, maxInProgress, required, priority, now, checksWait)
 }
+
+// InProgressIssues returns the issues in work of the service: an agent
+// runs, or a step after the run is kept.
+func InProgressIssues(s *Service) []string { return s.inProgressIssues() }

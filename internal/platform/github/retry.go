@@ -51,6 +51,12 @@ func (c *AppClient) SetRetryWait(wait func(ctx context.Context, d time.Duration)
 	c.wait = wait
 }
 
+// SetNow replaces the clock of the client. Tests pass a clock that they
+// move, so that the reset time of a rate limit comes without waiting.
+func (c *AppClient) SetNow(now func() time.Time) {
+	c.now = now
+}
+
 // sleep waits for d. A cancelled context ends the wait at once.
 func sleep(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
