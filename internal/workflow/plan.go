@@ -340,6 +340,7 @@ func (s *Service) requirementIssueNow(ctx context.Context, log *slog.Logger, tar
 		log.Error("the issue was not read again", "error", err.Error())
 		return RequirementIssue{}, false
 	}
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	if read.Issue.Closed {
 		log.Error("the issue was not read again: it is closed")
 		return RequirementIssue{}, false

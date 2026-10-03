@@ -179,6 +179,7 @@ func (s *Service) subIssueNow(ctx context.Context, log *slog.Logger, target Targ
 		log.Error("the issue was not read again", "error", err.Error())
 		return SubIssue{}, false
 	}
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	return toSubIssue(read.Issue), true
 }
 

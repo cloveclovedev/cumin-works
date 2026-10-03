@@ -56,6 +56,7 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 		log.Error("I6: the issue was not read again; the issue keeps its label", "error", err.Error())
 		return
 	}
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
 	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
 	if err != nil {

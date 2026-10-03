@@ -1022,6 +1022,7 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		log.Error("I2: the issue was not read again", "error", err.Error())
 		return
 	}
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
 	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, branch)
 	if err != nil {
@@ -1077,6 +1078,7 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 			log.Error("I2: the issue was not read after the closing link", "error", err.Error())
 			return
 		}
+		log.Debug("read the issue again", "issue", number, "rate_limit_cost", again.RateLimit.Cost, "rate_limit_remaining", again.RateLimit.Remaining)
 		sub = toSubIssue(again.Issue)
 		if !linksPullRequest(sub, pr) {
 			log.Warn("I2: the closing link is missing after cumin-core added it", "pull_request", pr)
