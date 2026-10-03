@@ -379,7 +379,7 @@ func (s *Service) Poll(ctx context.Context) error {
 			return errors.Join(errs...)
 		}
 		result, err := s.pollRepository(ctx, target, finishing)
-		all.decided = all.decided || result.decided
+		all.add(result)
 		if err == nil {
 			s.pollSucceeded(target.Repository)
 			continue
@@ -459,6 +459,9 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// the sub-issue, and R3 would then never apply again: the requirement
 	// issue would stay in awaiting-owner-review while its work goes on.
 	notStarted := map[int]bool{}
+	// An issue that cumin moves on without the Owner keeps Q4 silent, even
+	// when this poll decides nothing for it.
+	result.movesOn = snapshot.MovesWithoutOwner()
 	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames())
 	if finishing {
 		// The work that is held back waits under its label for the next

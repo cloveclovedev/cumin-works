@@ -714,3 +714,52 @@ func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
 		t.Errorf("WithoutNewWork(nil) = %#v, want none", got)
 	}
 }
+
+// Q4 (issue-states.md, the table under Q4): which states mean that cumin
+// moves an issue on without the Owner. One case for each row of the table.
+func TestSnapshot_MovesWithoutOwner(t *testing.T) {
+	sub := func(number int, labels ...string) SubIssue { return SubIssue{Number: number, Labels: labels} }
+	requirement := func(status string, subs ...SubIssue) Snapshot {
+		labels := []string{LabelRequirement}
+		if status != "" {
+			labels = append(labels, status)
+		}
+		return Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: labels, SubIssues: subs}}}
+	}
+	open, closed := []BlockedBy{{Number: 9}}, []BlockedBy{{Number: 9, Closed: true}}
+	blocked := func(by []BlockedBy) SubIssue {
+		return SubIssue{Number: 10, Labels: []string{LabelReady}, BlockedBy: by}
+	}
+
+	tests := []struct {
+		name     string
+		snapshot Snapshot
+		want     bool
+	}{
+		{"no issue", Snapshot{}, false},
+		{"awaiting-checks counts", requirement(LabelImplementing, sub(10, LabelAwaitingChecks)), true},
+		{"a closed issue in awaiting-checks does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}}), false},
+		{"a ready sub-issue that waits for room under the limit counts", requirement(LabelImplementing,
+			sub(10, LabelImplementing), sub(11, LabelReady)), true},
+		{"a ready sub-issue whose blocked-by issues are closed counts", requirement(LabelImplementing, blocked(closed)), true},
+		{"a ready requirement issue counts", requirement(LabelReady), true},
+		{"a ready sub-issue with an open blocked-by issue does not count", requirement(LabelImplementing, blocked(open)), false},
+		{"a ready requirement issue with an open blocked-by issue does not count", Snapshot{RequirementIssues: []RequirementIssue{
+			{Number: 6, Labels: []string{LabelRequirement, LabelReady}, BlockedBy: open}}}, false},
+		{"planning without an agent does not count", requirement(LabelPlanning), false},
+		{"implementing without an agent does not count", requirement(LabelImplementing, sub(10, LabelImplementing)), false},
+		{"reviewing without an agent does not count", requirement(LabelImplementing, sub(10, LabelReviewing)), false},
+		{"awaiting-owner-review does not count", requirement(LabelAwaitingOwnerReview, sub(10, LabelAwaitingOwnerReview)), false},
+		{"awaiting-owner-decision does not count", requirement(LabelImplementing, sub(10, LabelAwaitingOwnerDecision)), false},
+		{"a ready owner task does not count", requirement(LabelImplementing, sub(10, LabelOwnerTask, LabelReady)), false},
+		{"an issue with no status label does not count", requirement("", sub(10, "risk/low")), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.snapshot.MovesWithoutOwner(); got != tt.want {
+				t.Errorf("MovesWithoutOwner = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

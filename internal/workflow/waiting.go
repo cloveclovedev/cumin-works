@@ -1,10 +1,12 @@
 package workflow
 
-// This file applies Q4 of issue-states.md: when cumin has nothing to do,
-// the Owner hears it once. Nothing to do means that no R1 (split) and no I1
-// (implement) holds in any target repository, and that no agent runs. A
-// start that only the quota stops (Q1) is work left: Q1 already named that
-// cause (the Owner's decision on #234).
+// This file applies Q4 of issue-states.md: when nothing moves on without
+// the Owner, the Owner hears it once. That means that no R1 (split) and no
+// I1 (implement) holds in any target repository, that no agent runs, and
+// that no issue exists that cumin itself moves on later (an issue that
+// waits for the required checks, or a ready issue that waits for room
+// under the limit). A start that only the quota stops (Q1) is work left:
+// Q1 already named that cause (the Owner's decision on #234).
 
 import (
 	"context"
@@ -21,6 +23,17 @@ type pollResult struct {
 	// something, or R1 or I1 holds: a start that only the quota stops is
 	// still a decided Plan or Claim. Both mean that cumin is not waiting.
 	decided bool
+	// movesOn says that an issue exists that cumin moves on without the
+	// Owner (Snapshot.MovesWithoutOwner). cumin did nothing in this poll,
+	// and still it is not waiting for the Owner.
+	movesOn bool
+}
+
+// add joins the result of one more repository: one repository with work
+// that goes on means that cumin is not waiting.
+func (r *pollResult) add(other pollResult) {
+	r.decided = r.decided || other.decided
+	r.movesOn = r.movesOn || other.movesOn
 }
 
 // note records one decided action.
@@ -29,8 +42,10 @@ func (r *pollResult) note(Action) { r.decided = true }
 // waitingCheck applies Q4 after a poll. A decided action or a running agent
 // ends the silence whatever else happened in the poll. The notification
 // goes out only after a poll that read every repository (complete), since
-// a repository that was not read may hold work. The mark lives in memory:
-// a restart may send the notification once more.
+// a repository that was not read may hold work. An issue that cumin moves
+// on without the Owner keeps the notification back and leaves the mark as
+// it is: cumin did nothing. The mark lives in memory: a restart may send
+// the notification once more.
 func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete bool) {
 	running := len(s.inProgressIssues()) > 0
 	s.quotaMu.Lock()
@@ -41,7 +56,7 @@ func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete 
 		s.quotaMu.Unlock()
 		return
 	}
-	if !complete {
+	if !complete || result.movesOn {
 		s.quotaMu.Unlock()
 		return
 	}

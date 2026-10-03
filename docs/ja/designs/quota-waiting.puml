@@ -1,0 +1,37 @@
+@startuml quota-waiting
+' cumin works - the waiting check after a poll (Q4).
+' Document: quota.md, section on how cumin avoids a repeated notification.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:poll of every target repository ends;
+if (cumin stops after the current runs?) then (yes)
+  :no check;
+  stop
+else (no)
+endif
+if (the poll decided an action in any repository\n(a start that only the quota stops counts, Q1)\nor an agent runs?) then (yes)
+  :clear the mark:\na later wait is new;
+  stop
+else (no)
+endif
+if (the poll of every repository succeeded?) then (no)
+  :no notification:\na repository that was not read may hold work;
+  stop
+else (yes)
+endif
+if (an issue that cumin moves on without the Owner\nexists in any repository?\n(awaiting-checks, or ready and waiting\nonly for room under the limit)) then (yes)
+  :no notification;\nthe mark stays as it is;
+  stop
+else (no)
+endif
+if (the mark is set?) then (yes)
+  :no notification:\nthe Owner already heard;
+  stop
+else (no)
+endif
+:Q4: notify the Owner that cumin waits;\nset the mark\n(clear it again when the channel fails);
+stop
+@enduml
