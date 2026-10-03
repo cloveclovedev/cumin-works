@@ -97,7 +97,12 @@ func TestFake_UnknownRepositoryAndUserAre404(t *testing.T) {
 func TestFake_HangNextHoldsTheRequestUntilTheClientGivesUp(t *testing.T) {
 	fake, server := githubtest.New(t)
 	fake.AddRepository("example-org", "example-repo")
-	client := github.NewAppClient(server.URL, &http.Client{Timeout: 200 * time.Millisecond})
+	// The stalled call runs with a short timeout, so that the test stays
+	// fast. The call after it runs with a long one, only against a hang: a
+	// loaded machine must not fail it.
+	const stalledTimeout, hangGuard = 200 * time.Millisecond, time.Minute
+	httpClient := &http.Client{}
+	client := github.NewAppClient(server.URL, httpClient)
 	client.SetRetryWait(func(context.Context, time.Duration) error { return nil })
 	ctx := context.Background()
 	labels := []github.Label{{Name: "risk/low", Color: "C2E0C6"}}
@@ -117,6 +122,7 @@ func TestFake_HangNextHoldsTheRequestUntilTheClientGivesUp(t *testing.T) {
 	}
 	for _, c := range calls {
 		t.Run(c.name, func(t *testing.T) {
+			httpClient.Timeout = stalledTimeout
 			// Both calls are reads, so the client sends them 4 times.
 			fake.HangTimes(c.method, c.path, 4)
 			// The real time of the call: the timeout of the client is a
@@ -132,6 +138,8 @@ func TestFake_HangNextHoldsTheRequestUntilTheClientGivesUp(t *testing.T) {
 			if took := time.Since(start); took > 5*time.Second {
 				t.Errorf("the call took %v, want the timeout of the client", took)
 			}
+			// No request runs at this moment.
+			httpClient.Timeout = hangGuard
 			if err := c.call(); err != nil {
 				t.Errorf("the call after the timeout: %v", err)
 			}
