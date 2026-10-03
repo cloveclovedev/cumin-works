@@ -98,6 +98,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
    repositories = ["<owner>/<repo>"]
    work_dir = "<捨ててよい一時ディレクトリ>"
    poll_interval = "20s"
+   idle_poll_interval = "20s"
 
    [roles.implementer]
    time_limit = "20m"

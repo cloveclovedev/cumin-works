@@ -127,16 +127,17 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 	service := &workflow.Service{
-		GitHub:       client,
-		Agents:       agents,
-		Notify:       notifier,
-		State:        states,
-		Workspace:    agent.Workspace{Root: settings.WorkDir, Logger: logger},
-		Settings:     settings,
-		SettingsDir:  filepath.Dir(path),
-		PollInterval: settings.PollInterval,
-		Labels:       workflow.RepositoryLabels(),
-		Logger:       logger,
+		GitHub:           client,
+		Agents:           agents,
+		Notify:           notifier,
+		State:            states,
+		Workspace:        agent.Workspace{Root: settings.WorkDir, Logger: logger},
+		Settings:         settings,
+		SettingsDir:      filepath.Dir(path),
+		PollInterval:     settings.PollInterval,
+		IdlePollInterval: settings.IdlePollInterval,
+		Labels:           workflow.RepositoryLabels(),
+		Logger:           logger,
 		// cumin quota allow writes it; each check before a start reads it (Q2).
 		AllowancePath: allowancePath,
 		// cumin stop --after-current-runs writes it; each poll reads it.
@@ -155,6 +156,7 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		names = append(names, repo.String())
 	}
 	logger.Info("cumin run starts", "repositories", names, "poll_interval", settings.PollInterval.String(),
+		"idle_poll_interval", settings.IdlePollInterval.String(),
 		"work_dir", settings.WorkDir, "notifications", destination)
 	if err := service.Run(ctx); err != nil {
 		fmt.Fprintf(stderr, "cumin run: %v\n", err)

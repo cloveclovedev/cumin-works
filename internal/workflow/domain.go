@@ -65,6 +65,62 @@ func (s Snapshot) HasIssueAwaitingChecks() bool {
 	return false
 }
 
+// HasIssueInWork reports whether an issue of the repository is in work:
+// an open requirement issue with cumin/status/ready or
+// cumin/status/planning, or an open sub-issue with cumin/status/ready,
+// cumin/status/implementing, cumin/status/awaiting-checks, or
+// cumin/status/reviewing. An issue that waits for the Owner is not in work.
+func (s Snapshot) HasIssueInWork() bool {
+	for _, requirement := range s.RequirementIssues {
+		if slices.Contains(requirement.Labels, LabelReady) || slices.Contains(requirement.Labels, LabelPlanning) {
+			return true
+		}
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed {
+				continue
+			}
+			for _, label := range []string{LabelReady, LabelImplementing, LabelAwaitingChecks, LabelReviewing} {
+				if slices.Contains(sub.Labels, label) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// LastPoll is what the last poll of a repository left for the decision on
+// its next poll. The zero value means that no poll ran yet.
+type LastPoll struct {
+	// Ran says that a poll of the repository ran.
+	Ran bool
+	// Failed says that the poll, or one of its actions, failed.
+	Failed bool
+	// Acted says that the poll took an action.
+	Acted bool
+	// IssueInWork is Snapshot.HasIssueInWork of the snapshot of the poll.
+	IssueInWork bool
+}
+
+// RepositoryInWork decides whether a repository is in work, so that cumin
+// polls it at every poll interval. agentRun says that an agent run of the
+// repository is in progress, or that one ended since the last poll. A
+// repository that is not in work has only issues that wait for the Owner,
+// and cumin polls it at the idle poll interval.
+func RepositoryInWork(last LastPoll, agentRun bool) bool {
+	return agentRun || !last.Ran || last.Failed || last.Acted || last.IssueInWork
+}
+
+// PollIsDue decides, at a tick of the poll interval, whether cumin polls a
+// repository now. A repository in work is polled at every tick. A
+// repository that is not in work is polled at the tick that is nearest to
+// the idle poll interval after its last poll: half a poll interval of
+// tolerance keeps a tick that comes a moment early from waiting one more
+// tick.
+func PollIsDue(inWork bool, sinceLastPoll, pollInterval, idlePollInterval time.Duration) bool {
+	return inWork || sinceLastPoll >= idlePollInterval-pollInterval/2
+}
+
 // HasOwnerApprovalCandidate reports whether a sub-issue is a candidate of
 // I12, so that the poll reads the required checks for it.
 func (s Snapshot) HasOwnerApprovalCandidate() bool { return len(ownerApprovals(s)) > 0 }

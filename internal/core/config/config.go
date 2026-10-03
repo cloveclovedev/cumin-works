@@ -22,6 +22,7 @@ import (
 // Defaults and limits from the settings table.
 const (
 	defaultPollInterval        = 60 * time.Second
+	defaultIdlePollInterval    = 5 * time.Minute
 	defaultMaxIssuesInProgress = 1
 	defaultMaxReviewRounds     = 3
 	defaultMaxCheckFixRequests = 3
@@ -65,6 +66,7 @@ func AllApps() []string {
 const (
 	limitAtLeastOne   = "must be 1 or more"
 	limitMoreThanZero = "must be more than 0"
+	limitIdleInterval = "must not be less than poll_interval"
 	limitMergeMethod  = "%q must be one of squash, merge, rebase"
 	limitCLI          = "%q is not supported: use %q"
 )
@@ -90,8 +92,11 @@ const (
 
 // Settings holds the Host settings after defaults and limit checks.
 type Settings struct {
-	Repositories        []Repository
-	PollInterval        time.Duration
+	Repositories []Repository
+	PollInterval time.Duration
+	// IdlePollInterval is how often cumin polls a repository with no issue
+	// in work. It is never less than PollInterval.
+	IdlePollInterval    time.Duration
 	MaxIssuesInProgress int // for each repository
 	WorkDir             string
 	MaxReviewRounds     int
@@ -244,6 +249,7 @@ func (d *duration) UnmarshalText(text []byte) error {
 type file struct {
 	Repositories        []string `toml:"repositories"`
 	PollInterval        duration `toml:"poll_interval"`
+	IdlePollInterval    duration `toml:"idle_poll_interval"`
 	MaxIssuesInProgress int      `toml:"max_issues_in_progress"`
 	WorkDir             string   `toml:"work_dir"`
 	MaxReviewRounds     int      `toml:"max_review_rounds"`
@@ -279,6 +285,7 @@ func defaults() file {
 	role := fileRole{TimeLimit: duration(defaultAgentTimeLimit), CLI: CLIClaudeCode, CLIPath: defaultCLIPath}
 	f := file{
 		PollInterval:        duration(defaultPollInterval),
+		IdlePollInterval:    duration(defaultIdlePollInterval),
 		MaxIssuesInProgress: defaultMaxIssuesInProgress,
 		MaxReviewRounds:     defaultMaxReviewRounds,
 		MaxCheckFixRequests: defaultMaxCheckFixRequests,
@@ -333,6 +340,7 @@ func (f file) settings() (*Settings, error) {
 
 	s := &Settings{
 		PollInterval:        time.Duration(f.PollInterval),
+		IdlePollInterval:    time.Duration(f.IdlePollInterval),
 		MaxIssuesInProgress: f.MaxIssuesInProgress,
 		MaxReviewRounds:     f.MaxReviewRounds,
 		MaxCheckFixRequests: f.MaxCheckFixRequests,
@@ -366,6 +374,9 @@ func (f file) settings() (*Settings, error) {
 
 	if s.PollInterval <= 0 {
 		fail("poll_interval", limitMoreThanZero)
+	}
+	if s.IdlePollInterval < s.PollInterval {
+		fail("idle_poll_interval", limitIdleInterval)
 	}
 	if s.MaxIssuesInProgress < 1 {
 		fail("max_issues_in_progress", limitAtLeastOne)

@@ -840,3 +840,82 @@ func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t 
 		})
 	}
 }
+
+// An issue is in work when cumin or an agent moves it on without the Owner.
+func TestHasIssueInWork(t *testing.T) {
+	requirement := func(labels []string, subs ...SubIssue) Snapshot {
+		return Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: labels, SubIssues: subs}}}
+	}
+	tests := []struct {
+		name     string
+		snapshot Snapshot
+		want     bool
+	}{
+		{"no requirement issue", Snapshot{}, false},
+		{"requirement issue with no status label", requirement(nil), false},
+		{"ready requirement issue", requirement([]string{LabelReady}), true},
+		{"planning requirement issue", requirement([]string{LabelPlanning}), true},
+		{"implementing requirement issue with no sub-issue in work", requirement([]string{LabelImplementing},
+			SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerReview}}), false},
+		{"requirement issue that waits for the Owner", requirement([]string{LabelAwaitingOwnerReview}), false},
+		{"ready sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReady}}), true},
+		{"implementing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelImplementing}}), true},
+		{"sub-issue that waits for the checks", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingChecks}}), true},
+		{"reviewing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReviewing}}), true},
+		{"sub-issue that waits for the Owner", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerDecision}}), false},
+		{"closed sub-issue", requirement(nil, SubIssue{Number: 10, Closed: true, Labels: []string{LabelImplementing}}), false},
+	}
+	for _, tt := range tests {
+		if got := tt.snapshot.HasIssueInWork(); got != tt.want {
+			t.Errorf("%s: HasIssueInWork = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// A repository is in work until a poll that succeeded found nothing to do.
+func TestRepositoryInWork(t *testing.T) {
+	tests := []struct {
+		name     string
+		last     LastPoll
+		agentRun bool
+		want     bool
+	}{
+		{"no poll ran yet", LastPoll{}, false, true},
+		{"the last poll failed", LastPoll{Ran: true, Failed: true}, false, true},
+		{"the last poll took an action", LastPoll{Ran: true, Acted: true}, false, true},
+		{"an issue is in work", LastPoll{Ran: true, IssueInWork: true}, false, true},
+		{"an agent run", LastPoll{Ran: true}, true, true},
+		{"nothing to do", LastPoll{Ran: true}, false, false},
+	}
+	for _, tt := range tests {
+		if got := RepositoryInWork(tt.last, tt.agentRun); got != tt.want {
+			t.Errorf("%s: RepositoryInWork = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// A repository that is not in work is polled at the tick nearest to the
+// idle poll interval after its last poll.
+func TestPollIsDue(t *testing.T) {
+	const poll, idle = time.Minute, 5 * time.Minute
+	tests := []struct {
+		name   string
+		inWork bool
+		since  time.Duration
+		want   bool
+	}{
+		{"in work, one tick later", true, time.Minute, true},
+		{"idle, one tick later", false, time.Minute, false},
+		{"idle, one tick before the idle poll interval", false, 4*time.Minute + time.Second, false},
+		{"idle, a tick that comes a moment early", false, 5*time.Minute - time.Millisecond, true},
+		{"idle, the idle poll interval is over", false, 5 * time.Minute, true},
+	}
+	for _, tt := range tests {
+		if got := PollIsDue(tt.inWork, tt.since, poll, idle); got != tt.want {
+			t.Errorf("%s: PollIsDue = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+	if !PollIsDue(false, time.Minute, time.Minute, time.Minute) {
+		t.Error("equal intervals: PollIsDue = false, want a poll at every tick")
+	}
+}

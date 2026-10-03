@@ -23,7 +23,7 @@ import (
 // the GitHub Apps whose private keys live on the Host. A name here covers
 // its whole table.
 var hostOnlySettings = []string{
-	"repositories", "work_dir", "poll_interval", "max_issues_in_progress",
+	"repositories", "work_dir", "poll_interval", "idle_poll_interval", "max_issues_in_progress",
 	"quota", "github_apps",
 }
 
