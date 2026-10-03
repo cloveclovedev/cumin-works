@@ -217,4 +217,4 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 19 | cuminがmergeしたあと、GitHubが実装Issueを閉じない | cuminが1回だけ閉じる。Ownerがそれを開き直しても、あとの定期確認では閉じない |
 | 20 | 着手できるIssueが2つあり、番号の大きいほうに、より高い優先度のラベルが付いている | 優先度の高いほうから着手する。同じ優先度なら、番号の小さいほうから着手する。優先度のラベルがないIssueは、最後に着手する。設定でラベルの名前を変えると、その名前で順番が決まる |
 | 21 | 必須のcheckを待つ実装Issueが1つだけあり、動いているAgentもいない | 待ち状態の通知 (Q4) を出さない。checkが終わって進み、Ownerの対応だけが残ったときに、1回だけ通知する |
-| 22 | triageの権限のアカウント、bot、またはwriteの権限のないアカウントが、Issueに `cumin/status/ready` を付ける | 着手しない。ラベルは替えない。Ownerに1回だけ通知する。Ownerが `cumin/status/ready` を付け直すと着手する |
+| 22 | botのアカウント、またはwrite以上の権限のないアカウント (triageの権限など) が、Issueに `cumin/status/ready` を付ける | 着手しない。ラベルは替えない。Ownerに1回だけ通知する。Ownerが `cumin/status/ready` を付け直すと着手する |
