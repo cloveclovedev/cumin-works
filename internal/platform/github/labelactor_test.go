@@ -29,7 +29,7 @@ func TestReadLabelActor_TheActorOfTheNewestEventOfTheLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadLabelActor: %v", err)
 	}
-	if want := (github.LabelActor{Login: "second-owner", Type: "User"}); actor != want {
+	if want := (github.LabelActor{Login: "second-owner", Type: "User", At: t0.Add(time.Hour)}); actor != want {
 		t.Errorf("actor = %+v, want %+v", actor, want)
 	}
 	if rate.Cost == 0 {
@@ -86,7 +86,7 @@ func TestReadLabelActor_TheEventOfTheIssueWinsOverItsSubIssues(t *testing.T) {
 }
 
 // With no event of the label, and with an event whose account no longer
-// exists, the actor is the zero value.
+// exists, the actor has no login and no type.
 func TestReadLabelActor_NoEventIsNoActor(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
@@ -100,7 +100,7 @@ func TestReadLabelActor_NoEventIsNoActor(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReadLabelActor of #%d: %v", number, err)
 		}
-		if actor != (github.LabelActor{}) {
+		if actor.Login != "" || actor.Type != "" {
 			t.Errorf("actor of #%d = %+v, want none", number, actor)
 		}
 	}

@@ -17,6 +17,21 @@ partition "Poll (each repository)" {
   else (no)
   endif
   :Build one snapshot from the two reads;
+  :Name the R1 and I1 candidates in the order
+  of the starts, none without a free slot
+  (pure function);
+  while (a candidate is left, and fewer\nOwner candidates than free slots?) is (yes)
+    :Read the actor of the newest
+    cumin/status/ready (1 point), and the
+    permission of a person (1 REST call);
+    if (the actor is the Owner?) then (yes)
+      :Store the Owner in the snapshot;
+    else (no)
+      :Store "not the Owner" in the snapshot,
+      log and notify the Owner once
+      for this ready event;
+    endif
+  endwhile (no)
 }
 partition "Decision (pure function, no I/O)" {
   :Collect I14 candidates
@@ -52,11 +67,15 @@ partition "Decision (pure function, no I/O)" {
   :Collect R1 candidates
   - open requirement issues
   - with cumin/status/ready
-  - every blocked-by issue closed;
+  - every blocked-by issue closed
+  - the Owner added the newest cumin/status/ready
+    (not the Owner, or not read: skipped);
   :Collect I1 candidates
   - open sub-issues
   - with cumin/status/ready
-  - every blocked-by issue closed;
+  - every blocked-by issue closed
+  - the Owner added the newest cumin/status/ready
+    (not the Owner, or not read: skipped);
   :Sort the R1, R4, and I1 candidates
   by priority label (highest first; no label last),
   then by issue number,

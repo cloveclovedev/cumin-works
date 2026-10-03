@@ -56,7 +56,7 @@
 | sub-issueの題。依頼のブランチの名前に使う | `Issue.title` | I1 |
 | sub-issueのGraphQLのid。I2がリンクを付けるときに使う。スカラーなので、問い合わせのコストは変わらない | `Issue.id` | I2 |
 | 状態ラベルが付いた時刻。定期確認の問い合わせとは別の、小さな問い合わせで読む (「ラベルの時刻の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt` と `label` | R3、レビューのラウンド、I13、I15 |
-| 最新の `cumin/status/ready` を付けたアカウント。Agentを起動する前に、別の小さな問い合わせで読む (「Ownerのログイン名の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt`、`label`、`actor { __typename login }` | 起動の依頼の事実 (どのroleでも) |
+| 最新の `cumin/status/ready` を付けたアカウント。着手の候補 (R1、I1) では判定の前に、ほかの起動ではAgentを起動する前に、別の小さな問い合わせで読む (「Ownerのreadyの確認 (R1、I1)」「Ownerのログイン名の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt`、`label`、`actor { __typename login }` | R1とI1の条件 (Ownerのready)、起動の依頼の事実 (どのroleでも) |
 | blocked by のIssueの開閉。要求Issueとsub-issueの両方 | `Issue.blockedBy` | R1、I1 |
 | Issueを閉じる、開いているPull Request。番号、作成者、先頭のコミット、ブランチの名前 | `Issue.closedByPullRequestsReferences`、`author { __typename login }`、`headRefOid`、`headRefName` | I1、I2 (リンクがあるか)、I4、I6、I7、I11 |
 | 開いているPull Requestの、今のラベル | `PullRequest.labels` | I11 |
@@ -187,13 +187,30 @@ checkの結果の読み方:
 - 起動の依頼の事実「Ownerのログイン名」([Agentに共通の要件](../requirements/agents/common.md) の「起動の依頼の事実」) のために、Agentを起動する前に、その実行が扱うIssueに最新の `cumin/status/ready` を付けたアカウントを読む。GitHubがIssueのタイムラインに残す `LabeledEvent` の `actor` から読む。
 - 問い合わせは、ラベルの時刻の問い合わせと同じ形に `actor { __typename login }` を足したものである (`ReadLabelActor`)。1回で、そのIssueと、そのsub-issue (15件まで) のタイムラインを、新しいほうから100件ずつ読む。Issue自身にイベントがあれば、その中で一番新しいものを使う。なければ、sub-issueのイベントの中で一番新しいものを使う (イベントのない要求Issue)。実装Issueにはsub-issueがないので、同じ問い合わせで足りる。
 - そのアカウントがOwnerかどうかは、I12と同じ読み取り (`RepositoryPermission`) と同じ判定 (`IsOwner`) で決める。Ownerの定義は [cumin本体の要件](../requirements/cumin-core.md) の「Owner」だけにある。次のどれかのときは、Ownerのログイン名はない: イベントがない、`actor` がnull (アカウントがもうない)、`actor` が人ではない (`__typename` が `User` でない。GitHub Appは `Bot`)、権限がwrite未満である。人ではないときは、権限を読まない。
-- コストは、GraphQLが1ポイント (2026-10-03にcumin-worksで実測。`LabeledEvent` に `actor` があることも、スキーマで確かめた) と、人のときのRESTの呼び出し1回である。起動のたびに増えるだけで、ふだんの定期確認のコストは変わらない。
+- コストは、GraphQLが1ポイント (2026-10-03にcumin-worksで実測。`LabeledEvent` に `actor` があることも、スキーマで確かめた) と、人のときのRESTの呼び出し1回である。起動のたびに増えるだけで、ふだんの定期確認のコストは変わらない。R1とI1の着手では、判定の前の読み取りを使うので、起動のときには増えない。
+- R1とI1では、判定の前の読み取り (「Ownerのreadyの確認 (R1、I1)」) がスナップショットに入れた名前を使い、読み直さない。ほかの起動では、次のとおりに読む。
 - 読むのは、ラベルを替える前である。順は、ログイン名を読む、ラベルを替える、依頼する、になる。読めなければ、ラベルを替えず、依頼もしない。次の定期確認でやり直す (I3のラウンドの読み取りと同じ形)。ラベルを依頼より先に替えることは変わらない (原則3)。
-- 読む場所は、定期確認が起動を決める所である: I1 (着手)、R1 (分割)、R4 (受け入れの確認)、I3 (review)、I4 (checkの修正)、I14 (checkまたはOwnerの判断を待つ間の衝突の解消)、I13 (Ownerのレビューへの対応)、I12 (Ownerの承認のあとのmerge) の衝突の解消。I12では、mergeが衝突したときだけ、ラベルを替える前に読む。読めなければ、Issueは `cumin/status/awaiting-owner-review` のままなので、次の定期確認でI12がもう一度成り立つ。
+- 読む場所は、定期確認が起動を決める所である: R4 (受け入れの確認)、I3 (review)、I4 (checkの修正)、I14 (checkまたはOwnerの判断を待つ間の衝突の解消)、I13 (Ownerのレビューへの対応)、I12 (Ownerの承認のあとのmerge) の衝突の解消。I12では、mergeが衝突したときだけ、ラベルを替える前に読む。読めなければ、Issueは `cumin/status/awaiting-owner-review` のままなので、次の定期確認でI12がもう一度成り立つ。
 - 1つの実行の続きで出す依頼は、その実行の前に読んだ名前を使い、読み直さない: 異常終了のあとのやり直し、I5の指摘の修正、I8の原因の整理、I6 (Reviewerの承認のあとのmerge) の衝突の解消。I6で読み直さないのは、そこで読めないと、Issueが `cumin/status/reviewing` のまま残り、どの定期確認もやり直さないためである。
-- 読むのは、各Issueの新しいほうから100件のラベルのイベントだけである。最新の `cumin/status/ready` のあとに100件を超えるラベルのイベントがあると、そのイベントはないものとして扱う (要求Issueはsub-issueから読み、実装Issueは「ない」になる)。
+- 読むのは、各Issueの新しいほうから100件のラベルのイベントだけである。最新の `cumin/status/ready` のあとに100件を超えるラベルのイベントがあると、そのイベントはないものとして扱う (要求Issueはsub-issueから読み、実装Issueは「ない」になる)。sub-issueから読むのは、依頼に書くログイン名だけである。R1とI1の条件の確認 (「Ownerのreadyの確認 (R1、I1)」) は、sub-issueから読まず、「Ownerでない」にする。
 - 読んだ名前は、`internal/agent` が事実のかたまりに書く ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」)。
 - 採らなかった案: ラベルの時刻の問い合わせに `actor` を足して、1つの問い合わせにまとめる。R3とラウンドの読み取りは `actor` を使わず、2つの読み取りは使う場面も違うので、分けたままにした。
+
+### Ownerのreadyの確認 (R1、I1)
+
+- R1とI1は、そのIssueに最新の `cumin/status/ready` を付けたのがOwnerであるときだけ成り立つ ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「Ownerのready」)。そのため、判定の前に、着手の候補ごとに、付けたアカウントとその権限を読み、結果をスナップショットに入れる (`readReadyOwners`)。
+- 読むIssueは、純粋関数 `ReadyActorReads` が決める。R1とI1の候補 (開いていて、`cumin/status/ready` が付き、blocked by が全て閉じている。I1では `cumin/type/owner-task` がない) を、着手の順 (優先度、Issueの番号) に並べて返す。同時に進めるIssueの数に空きがなければ、1つも返さない。着手の候補がない定期確認と、空きがない定期確認では、アカウントも権限も読まない。
+- 読み取りは、「Ownerのログイン名の読み取り」と同じ問い合わせである。ただし、そのIssue自身のイベントだけを使い、sub-issueのイベントには頼らない (`ReadOwnLabelActor`、`RepositoryPermission`、`IsOwner`)。候補には `cumin/status/ready` が付いているので、読んだ100件のイベントの中にreadyのイベントがなければ、「Ownerでない」として扱う。sub-issueから読むと、triageのアカウントが要求Issueにreadyを付け、ほかのラベルを100回付け外ししてイベントを読む範囲の外に出すだけで、sub-issueのOwnerのreadyで分割を始められてしまうためである。Ownerの定義は、I12と同じ `IsOwner` だけにある。人ではないアカウントの権限は読まない。
+- 着手の順に読み、Ownerのreadyが空きの数だけ見つかったら、そこで止める。それよりあとの候補は、この定期確認では着手できないためである。
+- スナップショットには、Issueごとに「読んだ」(`ReadyRead`) と、Ownerのログイン名 (`ReadyOwner`。Ownerでなければ空) を入れる。判定 (`readyRequirementIssues`、`readySubIssues`) は、Ownerのreadyと読めた候補だけを残す。Ownerでない候補と、読んでいない候補は飛ばす。飛ばした候補は空きを使わないので、同じ定期確認で、ほかのOwnerのreadyに着手する。
+- Ownerでないアカウントのreadyには、ラベルを替えず、依頼もしない。ログに1行 (warn) 残し、Ownerに1回通知する。同じreadyのイベントについては、定期確認のたびに繰り返さない。伝えたイベントの時刻を、Issueごとにメモリに持つ (`readyTold`)。通知は多くても1回である: 送れなかったときも、ログにエラーを残すだけで、送り直さない。同じIssueに、Ownerでないアカウントが新しくreadyを付けたときは、別のイベントなので、もう一度伝える。cuminが再起動すると、もう一度だけ伝える (失っても作業を失わない手元の状態)。
+- 読めなかったときは、ログにエラーを出し、そのIssueは「読んでいない」のままにする。その定期確認では着手せず、次の定期確認で読み直す。ほかの行は進める。
+- 待ち状態の通知 (Q4) では、Ownerでないreadyと読めたIssueを「Ownerなしで進めるIssue」に数えない。読んでいないready (空きがない、読めなかった) は、これまでどおり数える (`MovesWithoutOwner`)。
+- 実行を待ってから止める間は、新しい着手をしないので、読まない。
+- コストは、読む候補1つにつき、GraphQLが1ポイントと、人のときのRESTの呼び出し1回である (「Ownerのログイン名の読み取り」の実測)。着手するIssueでは、これまで起動の前に読んでいた分が判定の前に移るだけで、増えない。増えるのは、候補が着手できないまま残る間である: Ownerでないready、利用枠で止まっている着手 (Q1)、読み取りの失敗。その間は、定期確認のたびに、読む候補1つにつき同じコストがかかる。Ownerのreadyが空きの数だけ見つかれば止めるので、1回の定期確認で読む数は、空きの数と、その前に並ぶOwnerでないreadyの数の和までである。
+- 確かめた公式のページ: GraphQLの [LabeledEvent](https://docs.github.com/en/graphql/reference/objects#labeledevent) (`actor`、`createdAt`、`label`)。2026-10-04に、スキーマの問い合わせ (`__type(name: "LabeledEvent")`) でも、`actor` が `Actor` (nullになりうる) であることを確かめた。権限は、RESTの [Get repository permissions for a user](https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user) である (I12と同じ)。
+- 採らなかった案: 着手を適用するとき (ラベルを替える直前) に確かめる。判定が、Ownerでないreadyに空きを割り当ててしまい、同じ定期確認でほかのIssueに着手できない。判定の前に読めば、判定は純粋関数のままで、空きを正しく分けられる。
+- 採らなかった案: 読んだ結果を、次の定期確認まで持ち越す。readyを付け直したことは、イベントを読まないと分からないので、候補であるあいだは毎回読む。
 
 ### 要求Issueのコメントの読み取り
 
@@ -275,6 +292,7 @@ checkの結果の読み方:
 - I1は、`cumin/type/owner-task` の付いたsub-issueに着手しない。`cumin/status/ready` が付いていても同じである。同時に進めるIssueの数は、ほかのIssueと同じく状態ラベルで数える。Ownerの作業のIssueはふつう状態ラベルを持たないので、数に入らない。作業の途中で `cumin/type/owner-task` が付いたIssueは、そのラベルのあいだAgentが動きうるので、数に入れたままにする。
 - R1とI1は、どちらもAgentを起動するので、同じ上限の空きを分け合う。候補を合わせて、優先度の高い順、同じ優先度ならIssueの番号の昇順に並べ、先頭から空きの数だけ着手する。どちらかの行を先にする決まりは置かない。優先度が同じなら、Ownerが先に書いたものが先に進み、表形式のテストで結果が1つに決まる。
 - 優先度は、純粋関数 `PriorityRank` が、Issueのラベルと設定の一覧から順位 (0が最も高い) にする。R1とR4は要求Issueのラベルで、I1はsub-issueのラベルで決め、sub-issueに優先度のラベルがなければ要求Issueのラベルで決める。どちらにもなければ、一覧の長さを順位にするので、どのラベルよりもあとになる。ラベルの名前は、GitHubと同じく大文字と小文字を区別せずに比べる。
+- R1とI1の候補は、最新の `cumin/status/ready` を付けたのがOwnerであると、判定の前に読めたものだけである (「Ownerのreadyの確認 (R1、I1)」)。Ownerでない候補と、読んでいない候補は、着手リストに入れず、空きも使わない。
 - 並べ替えるのは、着手できる候補だけである。blocked by のIssueが開いている候補は先に落ちていて、空きの数は並べ替えのあとで当てるので、優先度はどちらも越えない。利用枠は、着手を適用するときに確かめる (次の項目)。
 - 優先度のラベルの一覧は、リポジトリの設定を重ねたあとの値を渡す。`priority_labels` はリポジトリの設定ファイルにだけ書ける。Hostの設定に書けるようにすると、cuminは初期値のラベルを作らず、`scripts/setup-repo.sh` もHostの設定を読まないので、ラベルを用意する人がいなくなる。書かれていないリポジトリでは、初期値のラベルを使い、足りないものをcuminが作る。作るのは、起動時ではなく定期確認の中である。設定に書かれているかどうかは、リポジトリの `.cumin/config.toml` を読むまで分からないためである。設定を読み直すたびに1回だけ確かめ、失敗したら次の定期確認でやり直す。設定に書かれたラベルはOrganizationのものなので、cuminは作らず、変えない。
 - R1とI1は、ラベルを替える前に、使用率を読んで上限と比べる (Q1)。上限に達していれば、ラベルも手元の状態も変えずに、その着手を飛ばす。次の定期確認で、判定からやり直す。手順は [利用枠の設計](quota.md) の「着手の前の確認」にある。
@@ -298,7 +316,7 @@ checkの結果の読み方:
 - 依頼は、いつも新しいセッションで始める。Plannerのセッションは手元に残さない。分割 (R1) も受け入れの確認 (R4) も、新しいセッションで始まるためである (Plannerの要件の「いつ起動されるか」)。
 - 「分割」の依頼文に入れるのは、依頼の種類、リポジトリ、要求Issueの番号、作業場所と、分割して計画をコメントする短い指示である。skillの名前、GitHubに残すもの、やり直しへの備えは、roleの指示にある。
 - riskの基準は、I1と同じく、リポジトリの3段を解決した本文を起動の依頼で渡す。
-- 扱うIssueの事実は、分割 (R1) でも受け入れの確認 (R4) でも、要求Issueの番号と、種類「requirement issue」と、Ownerのログイン名である。I1と同じく、起動の依頼で渡す。Ownerのログイン名は、R1ではラベルを替える前に、R4では依頼の前に読む。読めなければ依頼せず、次の定期確認でやり直す (「Ownerのログイン名の読み取り」)。
+- 扱うIssueの事実は、分割 (R1) でも受け入れの確認 (R4) でも、要求Issueの番号と、種類「requirement issue」と、Ownerのログイン名である。I1と同じく、起動の依頼で渡す。Ownerのログイン名は、R1では判定の前の読み取り (「Ownerのreadyの確認 (R1、I1)」) の名前を使い、R4では依頼の前に読む。R4で読めなければ依頼せず、次の定期確認でやり直す (「Ownerのログイン名の読み取り」)。
 - 分割の実行の終わりは、R2のきっかけになる。判定は「実行終了の判定」にある。受け入れの確認の実行の終わりは、`done` ならラベルを替えない。次の定期確認で、コメントがあればR7、なければR4が成り立つ。`blocked` と2回目の異常終了は、行の番号をR4にして、R2と同じ手順でOwnerに戻す。
 
 ### Agentの実行の並行化

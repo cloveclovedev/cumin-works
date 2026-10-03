@@ -134,11 +134,11 @@ func TestDecide_StartsTheHighestPriorityFirst(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := Decide(tt.snapshot, tt.room, nil, tt.priority, time.Time{}, 0); !slices.Equal(got, tt.want) {
+			if got := decideReadyOfOwner(tt.snapshot, tt.room, nil, tt.priority, time.Time{}, 0); !slices.Equal(got, tt.want) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
 			// The same snapshot in another order gives the same actions.
-			if again := Decide(shuffle(tt.snapshot), tt.room, nil, tt.priority, time.Time{}, 0); !slices.Equal(again, tt.want) {
+			if again := decideReadyOfOwner(shuffle(tt.snapshot), tt.room, nil, tt.priority, time.Time{}, 0); !slices.Equal(again, tt.want) {
 				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
 			}
 		})

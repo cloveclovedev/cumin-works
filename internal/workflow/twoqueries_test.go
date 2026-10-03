@@ -197,7 +197,7 @@ func TestDecide_EachRuleThatReadsAPullRequestDecidesOnTheSnapshotOfTheTwoQueries
 		t.Errorf("pull requests of #18 = %+v, want none", sub.PullRequests)
 	}
 	required := []RequiredCheck{{Name: "ci"}}
-	actions := Decide(snapshot, 20, required, nil, t0.Add(2*time.Hour), time.Hour)
+	actions := decideReadyOfOwner(snapshot, 20, required, nil, t0.Add(2*time.Hour), time.Hour)
 	want := []Action{
 		ResolveConflict{Number: 13, PullRequest: 113},
 		StartReview{Number: 11, PullRequest: 111},
