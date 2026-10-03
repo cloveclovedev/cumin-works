@@ -99,7 +99,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   Impl --> Cumin : implementation done (the agent run ended)
   Cumin -> Repo : check that the pull request is open
   Cumin -> Tracker : change the label to cumin/status/awaiting-checks
-  Cumin -> Repo : wait until every required check passes (on a failure, ask the Implementer for a fix; with no required check, it passes at once)
+  Cumin -> Repo : wait until every required check passes (on a failure, ask the Implementer for a fix; on a conflict, ask the Implementer to resolve it; when the checks do not report in time, ask the Owner; with no required check, it passes at once)
   note right of Cumin
     An open pull request alone does not mean the implementation is done.
     cumin decides from facts on GitHub, not from what an agent reports.

@@ -104,6 +104,8 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | I11 | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする | 定期確認: 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | — | — |
 | I12 | Pull Requestをmergeする。mergeの手順と、うまくいかないときの扱いは、I6と同じ | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) が出したレビューのうち最新のものが、Pull Requestの今の先頭のコミットに対する `APPROVE` である | 必須のcheckが、その先頭のコミットで全て通っている。riskのラベルがちょうど1つである | I6と同じ |
 | I13 | ラベルを `cumin/status/implementing` に替え、Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) が出したレビューのうち最新のもの (コメントだけのレビューは除く) が、Pull Requestの今の先頭のコミットに対する `REQUEST_CHANGES` である | — | 異常終了なら1回だけやり直し、それでも駄目なら `cumin/status/awaiting-owner-decision` に替えて通知する |
+| I14 | ラベルを `cumin/status/implementing` に替え、Implementerの直前のセッションで、衝突の解消を依頼する。依頼はI6の衝突の解消と同じである | 定期確認: `cumin/status/awaiting-checks` の開いた実装Issueで、GitHubがPull Requestを既定のブランチと衝突していると返した (GraphQLの `mergeable` が `CONFLICTING`) | — | 解消のあとも先頭のコミットが変わらなければ、`cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら1回だけやり直し、それでも駄目なら同じ扱いにする |
+| I15 | ラベルを `cumin/status/awaiting-owner-decision` に替え、Ownerに「必須のcheckが結果を返さない」と通知する。通知には、Pull Requestの先頭のコミット、まだ結果を返していない必須のcheck、待った時間を書く | 定期確認: `cumin/status/awaiting-checks` の開いた実装Issueで、checkの待ち時間 ([cumin本体の要件](../cumin-core.md) の「設定」) を過ぎても、必須のcheckのどれかが、先頭のコミットで結果を返していない | I14、I3、I4のどれも成り立たない | — |
 
 Ownerのready:
 
@@ -128,6 +130,14 @@ mergeのあとにcuminが実装Issueを閉じるのは、GitHubの動作に合�
 - checkは、結論が `success`、`skipped`、`neutral` のどれかのとき、通ったとみなす。GitHubも、この3つをmergeを止めない結論として扱う。条件で飛ばされたjob (例えば、人が作ったPull Requestでの、保護されたパスのcheck) は、`skipped` になる。
 - 一覧が空でなければ、その全てがPull Requestの先頭のコミットで通るまで待つ。
 - 「今そのコミットに付いているcheckの一覧」で判定しないのは、pushの直後はcheckがまだ1つも現れておらず、「checkがない」のか「これから現れる」のかを区別できないためである。必須のcheckの一覧は、pushの前から決まっている。
+
+checkを待つ間の行 (I3、I4、I14、I15):
+
+- 1つの定期確認では、I14、I3とI4、I15の順に判定し、最初に成り立った行だけを動かす
+- I14は、`mergeable` が `CONFLICTING` のときだけ成り立つ。GitHubは、Pull Requestに衝突があると `pull_request` のワークフローを動かさないので、衝突したままではcheckがいつまでも結果を返さない。`UNKNOWN` は、GitHubがまだ計算している印である。既定のブランチに何かがmergeされるたびに、開いているPull Requestはしばらく `UNKNOWN` になる。そのため、`UNKNOWN` ではその定期確認でI14を判定せず、Ownerにも回さない。`UNKNOWN` のまま待ち時間を過ぎたら、I15が成り立つ
+- I14は、checkの修正を依頼した回数に数えない。衝突はImplementerの誤りではなく、並行して進むほかのPull Requestのmergeで起きるためである
+- I15の待ち時間は、実装Issueに最新の `cumin/status/awaiting-checks` が付いた時刻と、先頭のコミットの時刻 (`committedDate`) の、遅いほうから数える。ふつうはI2が先頭のコミットのpushを確かめてからラベルを替えるので、ラベルの時刻になる。先頭のコミットの時刻が効くのは、待っている間に誰かがブランチにpushしたときである。GitHubはpushの時刻を返さない (GraphQLの `Commit.pushedDate` は使えない) ので、コミットの時刻で代える。コミットの時刻はpushより前なので、そのぶん早く止まりうるが、差はコミットからpushまでの間だけである
+- I15は、checkが結果を返さない理由を調べない。ワークフローの誤り、どのワークフローも報告しない必須のcheckの名前、無効にしたワークフロー、GitHub Actionsの障害などがある。cuminは見える事実だけを書き、理由はOwnerが調べる
 
 `cumin/status/awaiting-checks` を置くのは、「Implementerの実行が終わり、checkを待っている」ことをGitHubに残すためである。`cumin/status/implementing` のままだと、Implementerが修正の途中なのか、checkを待っているのかを、GitHub上の事実から区別できない。必須のcheckが1つもないリポジトリでも、この状態を必ず通る。次の定期確認で、すぐにI3が成り立つ。
 
@@ -176,7 +186,7 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 
 | Issueの状態 | 数えるか | 理由 |
 |---|---|---|
-| `cumin/status/awaiting-checks` | 数える。Q4を出さない | 必須のcheckが終われば、cuminがI3かI4で進める。checkがいつまでも結果を返さないときも数えるので、その間Q4は出ない。そのIssueは `cumin status` に見える |
+| `cumin/status/awaiting-checks` | 数える。Q4を出さない | 必須のcheckが終われば、cuminがI3かI4で進める。衝突すればI14で、checkの待ち時間を過ぎればI15で進める。待ち時間の間はQ4を出さない。そのIssueは `cumin status` に見える |
 | `cumin/status/ready` で、着手できるのに、同時に進めるIssueの数の上限だけで待っている | 数える。Q4を出さない | 空きができれば、cuminがR1かI1で着手する |
 | `cumin/status/ready` で、blocked by のIssueが開いている | 数えない | 前のIssueが閉じるまで動けない。前のIssueがcuminの作業中なら、そちらがQ4を止める |
 | `cumin/status/ready` で、利用枠だけで止まっている | (Q1に任せる) | 上の行のとおり、R1とI1が成り立つものとして数える |
@@ -208,7 +218,7 @@ Agentの実行が異常終了したとき (プロセスの失敗、タイムア�
 
 ## v0.1では実装しないこと
 
-- 辻褄の合わないIssueの回収。cuminが再起動すると、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing` のまま、実行中のAgentがいないIssueが残りうる。`cumin/status/awaiting-checks` のIssueは、Agentが動いていない状態なので、再起動のあともI3とI4で続きから進む。将来は、ラベルとcuminの動作状態を突き合わせて、適切な状態まで戻す機能を作る。v0.1では、OwnerがそのIssueに `cumin/status/ready` を付け直せば、I1により続きから再開する。
+- 辻褄の合わないIssueの回収。cuminが再起動すると、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing` のまま、実行中のAgentがいないIssueが残りうる。`cumin/status/awaiting-checks` のIssueは、Agentが動いていない状態なので、再起動のあともI3、I4、I14、I15で続きから進む。将来は、ラベルとcuminの動作状態を突き合わせて、適切な状態まで戻す機能を作る。v0.1では、OwnerがそのIssueに `cumin/status/ready` を付け直せば、I1により続きから再開する。
 - mergeの前にmainの最新を取り込んでcheckをやり直すこと (I6、I12)。v0.1では、衝突がなく、実装時点の必須のcheckが通っていればmergeする。将来は、rulesetの "Require branches to be up to date before merging" を使う案がある。依存関係のあるIssueは、先のIssueがmergeされてから着手するので、この問題が起きるのは並行して進めた独立のIssueの間だけである。
 
 ## まだ確かめていないこと

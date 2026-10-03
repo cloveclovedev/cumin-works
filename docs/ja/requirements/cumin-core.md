@@ -168,6 +168,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | roleとGitHub Appの対応 | roleごとのAppのClient ID。秘密鍵がHostにあるので、Hostの設定に書く。リポジトリの持ち主 (Organization) ごとに指定できる | なし | できない |
 | レビューのラウンドの上限 | これを超えて指摘が残ったら、Ownerに回す | 3 | できる |
 | checkの修正を依頼する回数の上限 | これを超えたら、Ownerに回す | 3 | できる |
+| checkの待ち時間 | 必須のcheckが全て結果を返すのを待つ時間。過ぎたら、Ownerに回す ([Issueのラベルと状態遷移](workflow/issue-states.md) のI15)。CIの長さはリポジトリごとに違うので、リポジトリで上書きできる | 60分 | できる |
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
 | 優先度のラベル | 着手の順番を決めるラベルの一覧。優先度の高い順に書く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「着手の順番」)。設定に書いたラベルはOrganizationのものなので、cuminは作らず、変えない。足りないラベルは、リポジトリの準備のスクリプトが、実行した人に尋ねてから作る。設定に書かなければ初期値のラベルを使い、足りないものをcuminが作る | `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` | リポジトリだけで決める |
@@ -219,3 +220,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 21 | 必須のcheckを待つ実装Issueが1つだけあり、動いているAgentもいない | 待ち状態の通知 (Q4) を出さない。checkが終わって進み、Ownerの対応だけが残ったときに、1回だけ通知する |
 | 22 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestに、Ownerが今の先頭のコミットで `REQUEST_CHANGES` を出す | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerの直前のセッションで直させる。直したあと、check、Reviewerのレビューを経て、もう一度Ownerの判断を待つ。botや、writeの権限のないアカウントの `REQUEST_CHANGES` では、何もしない |
 | 23 | Ownerでないアカウントが、Issueに `cumin/status/ready` を付ける | 着手しない。ラベルは替えない。Ownerに1回だけ通知する。Ownerが `cumin/status/ready` を付け直すと着手する |
+| 24 | `cumin/status/awaiting-checks` の実装IssueのPull Requestが、既定のブランチと衝突する | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerに衝突の解消を1回だけ依頼する。GitHubがまだ計算している (`UNKNOWN`) 間は依頼しない。checkの修正を依頼した回数は増えない |
+| 25 | `cumin/status/awaiting-checks` の実装Issueで、必須のcheckが、checkの待ち時間を過ぎても先頭のコミットで結果を返さない | `cumin/status/awaiting-owner-decision` に替え、先頭のコミット、結果を返していない必須のcheck、待った時間を添えて、Ownerに1回だけ通知する。待ち時間の内に結果が返れば、I3かI4で進む |
