@@ -623,11 +623,11 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2", n)
 	}
-	// Three polls, the read of the login of the Owner before the start,
-	// one read again at the end of the run (I2), the closing link, and one
-	// read after it.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 7 {
-		t.Errorf("%d GraphQL requests, want 7", n)
+	// Three polls of two queries each, the read of the login of the Owner
+	// before the start, one read again at the end of the run (I2), the
+	// closing link, and one read after it.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 10 {
+		t.Errorf("%d GraphQL requests, want 10", n)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none on the success path", n)
@@ -743,12 +743,12 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2 (the claim and I2)", n)
 	}
-	// The end of the run reads the snapshot again, so that a pull request
+	// The end of the run reads the issue again, so that a pull request
 	// that the agent opened just before it ended is seen.
 	// The read of the login of the Owner before the start is one more
 	// GraphQL request.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
-		t.Errorf("%d GraphQL requests, want 3 (the poll, the login of the Owner, and the read after the run)", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 4 {
+		t.Errorf("%d GraphQL requests, want 4 (the two queries of the poll, the login of the Owner, and the read after the run)", n)
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"pull_request":21`, `"issue":10`} {
@@ -1407,10 +1407,10 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- service.Run(ctx) }()
 
-	// The third GraphQL request is the read of the login of the Owner in
-	// the second poll, before the claim. The fourth one comes after the
-	// claim.
-	sc.fake.WaitForRequests(http.MethodPost, "/graphql", 4, hangGuard)
+	// The second poll sends two queries. The fourth GraphQL request is the
+	// read of the login of the Owner in the second poll, before the claim.
+	// The fifth one comes after the claim.
+	sc.fake.WaitForRequests(http.MethodPost, "/graphql", 5, hangGuard)
 	cancel()
 	select {
 	case err := <-done:

@@ -500,6 +500,38 @@ func (s *Service) noteRunEnded(repository string) {
 	}
 }
 
+// readSnapshot reads one repository for a poll, in two queries, and builds
+// one snapshot from the two reads. The poll query stops at the sub-issue. The
+// second query reads the pull requests of the sub-issues that a rule reads
+// them for; no such sub-issue means no second query (poll.md, the topic on
+// the two queries). The rate limit of the result is the one of both reads.
+func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (github.RepositorySnapshot, Snapshot, error) {
+	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	if err != nil {
+		return github.RepositorySnapshot{}, Snapshot{}, err
+	}
+	snapshot := toSnapshot(read)
+	selected := snapshot.SubIssuesWithPullRequestRules()
+	if len(selected) == 0 {
+		return read, snapshot, nil
+	}
+	ids := make([]string, 0, len(selected))
+	for _, sub := range selected {
+		ids = append(ids, sub.NodeID)
+	}
+	pullRequests, err := s.GitHub.ReadPullRequests(ctx, token, owner, repo, ids)
+	if err != nil {
+		return github.RepositorySnapshot{}, Snapshot{}, err
+	}
+	byIssue := map[int][]PullRequest{}
+	for number, list := range pullRequests.PullRequests {
+		byIssue[number] = toPullRequests(list)
+	}
+	read.RateLimit.Cost += pullRequests.RateLimit.Cost
+	read.RateLimit.Remaining = pullRequests.RateLimit.Remaining
+	return read, snapshot.WithPullRequests(byIssue), nil
+}
+
 func (s *Service) pollRepository(ctx context.Context, target Target, finishing bool) (pollResult, error) {
 	var result pollResult
 	err := s.pollRepositoryInto(ctx, target, finishing, &result)
@@ -512,11 +544,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	if err != nil {
 		return err
 	}
-	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	read, snapshot, err := s.readSnapshot(ctx, token, owner, repo)
 	if err != nil {
 		return err
 	}
-	snapshot := toSnapshot(read)
 	log := s.logger().With("repository", target.Repository.String())
 
 	// The settings of this repository. A wrong file skips this repository
@@ -545,6 +576,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	log.Info("poll",
 		"requirement_issues", len(snapshot.RequirementIssues),
 		"required_checks", len(required),
+		"issues_with_pull_requests_read", len(snapshot.SubIssuesWithPullRequestRules()),
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
@@ -1105,15 +1137,15 @@ func labelsNow(sub SubIssue, ok bool) []string {
 	return sub.Labels
 }
 
-// verifyDone applies I2 after a done result. It reads the snapshot of the
-// repository again, because a rule that the end of a run triggers judges on
-// the facts of that moment, not on those of the last poll (cumin-core.md,
-// the topic on the GitHub client). It then lists the open pull requests of
+// verifyDone applies I2 after a done result. It reads the issue of the run
+// again, and only that issue, because a rule that the end of a run triggers
+// judges on the facts of that moment, not on those of the last poll
+// (cumin-core.md, the topic on the GitHub client). It then lists the open pull requests of
 // the branch of the run, reads the head commit of the worktree, and runs
 // the pure check.
 //
 // On a pass, when the issue has no closing link to the pull request,
-// cumin-core adds it and reads the snapshot once more to see it; then the
+// cumin-core adds it and reads the issue once more to see it; then the
 // status label becomes cumin/status/awaiting-checks. A failed check, a
 // failed link, and a link that is still missing hand the issue back to the
 // Owner through the stop step, with one sentence. Nothing here is retried:
@@ -1125,16 +1157,13 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		log.Error("I2: no token", "error", err.Error())
 		return
 	}
-	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
-		log.Error("I2: the snapshot was not read again", "error", err.Error())
+		log.Error("I2: the issue was not read again", "error", err.Error())
 		return
 	}
-	sub, ok := toSnapshot(read).SubIssue(number)
-	if !ok {
-		log.Error("I2: the issue is not in the snapshot")
-		return
-	}
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
+	sub := toSubIssue(read.Issue)
 	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, branch)
 	if err != nil {
 		log.Error("I2: the open pull requests of the branch were not read", "branch", branch, "error", err.Error())
@@ -1184,16 +1213,13 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 			stopI2(LinkFailedReason(pr, githubAnswer(err)), pr)
 			return
 		}
-		again, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 		if err != nil {
-			log.Error("I2: the snapshot was not read after the closing link", "error", err.Error())
+			log.Error("I2: the issue was not read after the closing link", "error", err.Error())
 			return
 		}
-		sub, ok = toSnapshot(again).SubIssue(number)
-		if !ok {
-			log.Error("I2: the issue is not in the snapshot after the closing link")
-			return
-		}
+		log.Debug("read the issue again", "issue", number, "rate_limit_cost", again.RateLimit.Cost, "rate_limit_remaining", again.RateLimit.Remaining)
+		sub = toSubIssue(again.Issue)
 		if !linksPullRequest(sub, pr) {
 			log.Warn("I2: the closing link is missing after cumin-core added it", "pull_request", pr)
 			stopI2(LinkMissingReason(pr), pr)
@@ -1290,35 +1316,55 @@ func toConclusion(c github.CheckConclusion) CheckConclusion {
 func toSnapshot(read github.RepositorySnapshot) Snapshot {
 	snapshot := Snapshot{DefaultBranch: read.DefaultBranch}
 	for _, issue := range read.RequirementIssues {
-		requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
-		for _, blocker := range issue.BlockedBy {
-			requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
-		}
-		for _, sub := range issue.SubIssues {
-			subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
-			for _, blocker := range sub.BlockedBy {
-				subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
-			}
-			for _, pr := range sub.PullRequests {
-				subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{
-					Number:     pr.Number,
-					HeadCommit: pr.HeadCommit,
-					HeadBranch: pr.HeadBranch,
-					Author:     pr.Author,
-					Labels:     pr.Labels,
-					Checks:     toChecks(pr.Checks),
-					Reviews:    toReviews(pr.Reviews),
-					// The three values of GitHub pass as they are; the
-					// client refuses any other value.
-					Mergeable:       MergeableState(pr.Mergeable),
-					HeadCommittedAt: pr.HeadCommittedAt,
-				})
-			}
-			requirement.SubIssues = append(requirement.SubIssues, subIssue)
-		}
-		snapshot.RequirementIssues = append(snapshot.RequirementIssues, requirement)
+		snapshot.RequirementIssues = append(snapshot.RequirementIssues, toRequirementIssue(issue))
 	}
 	return snapshot
+}
+
+// toRequirementIssue converts one requirement issue of the GitHub client,
+// from the poll or from the read of one issue.
+func toRequirementIssue(issue github.Issue) RequirementIssue {
+	requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
+	for _, blocker := range issue.BlockedBy {
+		requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
+	}
+	for _, sub := range issue.SubIssues {
+		requirement.SubIssues = append(requirement.SubIssues, toSubIssue(sub))
+	}
+	return requirement
+}
+
+// toSubIssue converts one sub-issue of the GitHub client, from the poll or
+// from the read of one issue.
+func toSubIssue(sub github.Issue) SubIssue {
+	subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
+	for _, blocker := range sub.BlockedBy {
+		subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
+	}
+	subIssue.PullRequests = toPullRequests(sub.PullRequests)
+	return subIssue
+}
+
+// toPullRequests converts the pull requests of one sub-issue of the GitHub
+// client, from the second query of the poll or from the read of one issue.
+func toPullRequests(read []github.PullRequest) []PullRequest {
+	var pullRequests []PullRequest
+	for _, pr := range read {
+		pullRequests = append(pullRequests, PullRequest{
+			Number:     pr.Number,
+			HeadCommit: pr.HeadCommit,
+			HeadBranch: pr.HeadBranch,
+			Author:     pr.Author,
+			Labels:     pr.Labels,
+			Checks:     toChecks(pr.Checks),
+			Reviews:    toReviews(pr.Reviews),
+			// The three values of GitHub pass as they are; the
+			// client refuses any other value.
+			Mergeable:       MergeableState(pr.Mergeable),
+			HeadCommittedAt: pr.HeadCommittedAt,
+		})
+	}
+	return pullRequests
 }
 
 // settingsSource names where the settings of a poll came from, for the log.

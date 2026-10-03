@@ -65,6 +65,38 @@ func (s Snapshot) HasIssueAwaitingChecks() bool {
 	return false
 }
 
+// SubIssuesWithPullRequestRules returns the sub-issues whose pull requests
+// the poll reads in its second query: the open sub-issues with a
+// cumin/status/* label. Every rule of the poll that reads a pull request
+// applies to such a sub-issue only (docs/ja/designs/poll.md, the topic on
+// the two queries). The order is the order of the snapshot.
+func (s Snapshot) SubIssuesWithPullRequestRules() []SubIssue {
+	var selected []SubIssue
+	for _, requirement := range s.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if !sub.Closed && slices.ContainsFunc(sub.Labels, IsStatusLabel) {
+				selected = append(selected, sub)
+			}
+		}
+	}
+	return selected
+}
+
+// WithPullRequests returns the snapshot with the pull requests of the second
+// query of the poll, by the number of the sub-issue. A sub-issue that the
+// second query did not read has no pull request.
+func (s Snapshot) WithPullRequests(pullRequests map[int][]PullRequest) Snapshot {
+	requirements := slices.Clone(s.RequirementIssues)
+	for i, requirement := range requirements {
+		requirements[i].SubIssues = slices.Clone(requirement.SubIssues)
+		for j, sub := range requirements[i].SubIssues {
+			requirements[i].SubIssues[j].PullRequests = pullRequests[sub.Number]
+		}
+	}
+	s.RequirementIssues = requirements
+	return s
+}
+
 // HasIssueInWork reports whether an issue of the repository is in work:
 // an open requirement issue with cumin/status/ready or
 // cumin/status/planning, or an open sub-issue with cumin/status/ready,
