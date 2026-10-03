@@ -363,6 +363,7 @@ func (sc *scene) settings() *config.Settings {
 		WorkDir:             sc.workRoot,
 		MaxReviewRounds:     3,
 		MaxCheckFixRequests: 3,
+		ChecksWaitTime:      time.Hour,
 		MergeMethod:         config.MergeSquash,
 		Roles: map[config.Role]config.RoleSettings{
 			config.RolePlanner:     roleSettings,
@@ -2461,6 +2462,159 @@ func TestI4_AStopWhoseLabelFailsWritesNothingElse(t *testing.T) {
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications after the label changed, want 1", n)
+	}
+}
+
+// notReporting puts issue #10 in cumin/status/awaiting-checks since the time
+// of the scene, with the required checks ci, lint, and unit. Only unit
+// reported: ci has no result, and lint has not finished.
+func (sc *scene) notReporting(t *testing.T) {
+	t.Helper()
+	sc.awaitingChecks(t, []string{"ci", "lint", "unit"}, []githubtest.Check{
+		{Name: "lint", Status: "IN_PROGRESS"},
+		{Name: "unit", Conclusion: "SUCCESS"},
+	})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 10, Parent: 6, Title: subIssueTitle,
+		Labels:      []string{workflow.LabelAwaitingChecks, "risk/low"},
+		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingChecks, At: sceneNow}},
+	})
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, sceneNow.Add(-time.Minute))
+}
+
+// I15 (issue-states.md): required checks that do not report on the head
+// commit within the wait time stop the issue for the Owner exactly once:
+// one label change, one comment, and one notification, with the head
+// commit, the checks that have not reported, and the time waited. Before
+// the wait time is over, the poll changes nothing. No agent starts.
+func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
+	sc := newScene(t)
+	sc.notReporting(t)
+	service := sc.service()
+
+	sc.clock.Set(sceneNow.Add(59 * time.Minute))
+	sc.pollAndWait(t, service)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{workflow.LabelAwaitingChecks, "risk/low"}) {
+		t.Errorf("labels of #10 before the wait time is over = %v, want them unchanged", got)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 0 {
+		t.Errorf("%d label changes before the wait time is over, want none", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments before the wait time is over, want none", n)
+	}
+	if n := len(sc.messagesExceptQ4()); n != 0 {
+		t.Errorf("%d notifications before the wait time is over, want none", n)
+	}
+
+	sc.clock.Set(sceneNow.Add(61 * time.Minute))
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
+		t.Errorf("%d label changes, want 1", n)
+	}
+	facts := []string{"I15", "(ci, lint)", "head commit " + sc.remoteHead, "waited 1h1m0s"}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments, want 1", len(comments))
+	}
+	for _, want := range append([]string{"Row: I15", "Pull request: #21"}, facts...) {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	messages := sc.messagesExceptQ4()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, want := range facts {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("the notification has no %q:\n%s", want, messages[0])
+		}
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+}
+
+// I15: a new head commit while the issue waits starts the wait time again,
+// from the commit time of that commit.
+func TestI15_ANewHeadCommitStartsTheWaitTimeAgain(t *testing.T) {
+	sc := newScene(t)
+	sc.notReporting(t)
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, sceneNow.Add(30*time.Minute))
+	service := sc.service()
+
+	sc.clock.Set(sceneNow.Add(61 * time.Minute))
+	sc.pollAndWait(t, service)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingChecks) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks to stay after the new head commit", got)
+	}
+
+	sc.clock.Set(sceneNow.Add(91 * time.Minute))
+	sc.pollAndWait(t, service)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "waited 1h1m0s") {
+		t.Errorf("comments = %v, want one that says waited 1h1m0s", comments)
+	}
+}
+
+// I15: at the stop, the label changes first. When it cannot change, cumin
+// posts no comment and sends no notification, so that the polls that
+// follow do not repeat them.
+func TestI15_AStopWhoseLabelFailsWritesNothingElse(t *testing.T) {
+	sc := newScene(t)
+	sc.notReporting(t)
+	service := sc.service()
+	sc.clock.Set(sceneNow.Add(61 * time.Minute))
+	sc.fake.FailNext(http.MethodPut, putLabelsPath, http.StatusInternalServerError)
+
+	if err := service.Poll(context.Background()); err == nil {
+		t.Error("the poll hid the failed label change")
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments, want none", n)
+	}
+	if n := len(sc.messagesExceptQ4()); n != 0 {
+		t.Errorf("%d notifications, want none", n)
+	}
+
+	sc.pollAndWait(t, service)
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
+		t.Errorf("%d comments after the label changed, want 1", n)
+	}
+	if n := len(sc.messagesExceptQ4()); n != 1 {
+		t.Errorf("%d notifications after the label changed, want 1", n)
+	}
+}
+
+// I15: checks that report after the wait time still go on to the review
+// (I3): a result decides before the wait time does.
+func TestI15_ChecksThatReportedGoOnToTheReview(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
+	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 10, Parent: 6, Title: subIssueTitle,
+		Labels:      []string{workflow.LabelAwaitingChecks, "risk/low"},
+		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingChecks, At: sceneNow}},
+	})
+	service := sc.service()
+	sc.clock.Set(sceneNow.Add(2 * time.Hour))
+
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
+		t.Errorf("labels of #10 = %v, want no stop for the Owner", got)
+	}
+	if !strings.Contains(sc.logs.String(), "I3: the pull request is ready for review") {
+		t.Errorf("the log does not say that I3 applied: %s", sc.logs)
 	}
 }
 
