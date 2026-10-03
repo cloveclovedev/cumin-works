@@ -144,7 +144,8 @@ func (s *Service) ReadQuota(ctx context.Context, role config.Role) (QuotaUsage, 
 // token and the identity. The token lives only in the request of the run.
 // The request text of the run starts with the facts of the run (facts.go):
 // the issue of the run, the time limit of the settings that the run uses,
-// and the end time.
+// and the end time. A run of the Planner also receives the time limits of
+// the Implementer and of the Reviewer, from the settings of the roles.
 // An error from the run is an *AbnormalEnd.
 func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	settings, ok := s.Roles[req.Role]
@@ -189,7 +190,14 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	// caller can compare it with the author of a pull request (I2). The
 	// clock is read right before the run, so that the end time that the
 	// agent receives is not later than the time at which the run is cut.
-	facts := runFacts{Facts: req.Facts, TimeLimit: settings.TimeLimit, End: s.now().Add(settings.TimeLimit)}
+	facts := runFacts{
+		Facts:                req.Facts,
+		TimeLimit:            settings.TimeLimit,
+		End:                  s.now().Add(settings.TimeLimit),
+		Role:                 req.Role,
+		ImplementerTimeLimit: s.Roles[config.RoleImplementer].TimeLimit,
+		ReviewerTimeLimit:    s.Roles[config.RoleReviewer].TimeLimit,
+	}
 	run, err := cli.Run(ctx, Request{
 		Role:            req.Role,
 		RoleInstruction: roleInstruction,

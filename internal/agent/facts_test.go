@@ -3,6 +3,8 @@ package agent
 import (
 	"testing"
 	"time"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
 
 func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC(t *testing.T) {
@@ -72,6 +74,26 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				"- Protected paths (agents keep these paths unchanged): none\n" +
 				"- Time limit of the run: 1m\n" +
 				"- End time of the run: 2026-10-03T00:01:00Z\n",
+		},
+		{
+			name: "the Planner receives the time limits of the Implementer and the Reviewer",
+			facts: runFacts{Facts: Facts{IssueNumber: 7, IssueKind: IssueKindRequirement},
+				TimeLimit: 20 * time.Minute, End: time.Date(2026, 10, 3, 1, 20, 0, 0, time.UTC),
+				Role: config.RolePlanner, ImplementerTimeLimit: 50 * time.Minute, ReviewerTimeLimit: 30 * time.Minute},
+			want: "Facts of this run (data from cumin):\n" +
+				"- Issue of the run: #7 (requirement issue)\n" +
+				"- Time limit of the run: 20m\n" +
+				"- End time of the run: 2026-10-03T01:20:00Z\n" +
+				"- Time limit of the Implementer: 50m\n" +
+				"- Time limit of the Reviewer: 30m\n",
+		},
+		{
+			name: "the Implementer and the Reviewer do not receive the time limits of the other roles",
+			facts: runFacts{TimeLimit: 50 * time.Minute, End: time.Date(2026, 10, 3, 1, 50, 0, 0, time.UTC),
+				Role: config.RoleImplementer, ImplementerTimeLimit: 50 * time.Minute, ReviewerTimeLimit: 30 * time.Minute},
+			want: "Facts of this run (data from cumin):\n" +
+				"- Time limit of the run: 50m\n" +
+				"- End time of the run: 2026-10-03T01:50:00Z\n",
 		},
 		{
 			name:  "a time in another location is written in UTC",
