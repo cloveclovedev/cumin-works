@@ -37,10 +37,12 @@ fragment labeled on LabeledEvent { createdAt label { name } actor { __typename l
 // LabelActor is the account that added a label. Type is the type of the
 // account as GraphQL names it: "User" for a person, "Bot" for a GitHub App.
 // The zero value says that no event added the label, or that the account
-// of the event no longer exists.
+// of the event no longer exists. At is the time of the event; it is zero
+// when no event added the label.
 type LabelActor struct {
 	Login string
 	Type  string
+	At    time.Time
 }
 
 // ReadLabelActor reads the actor of the newest event that added the label
@@ -143,7 +145,7 @@ type labelActorNode struct {
 
 func (n labelActorNode) labelActor() LabelActor {
 	if n.Actor == nil {
-		return LabelActor{}
+		return LabelActor{At: n.CreatedAt}
 	}
-	return LabelActor{Login: n.Actor.Login, Type: n.Actor.Type}
+	return LabelActor{Login: n.Actor.Login, Type: n.Actor.Type, At: n.CreatedAt}
 }

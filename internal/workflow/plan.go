@@ -33,14 +33,10 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 		}
 		return nil
 	}
-	// A failed read of the login of the Owner changes nothing: the
-	// requirement issue keeps cumin/status/ready, and the next poll tries
-	// again.
+	// The poll read the Owner of the newest cumin/status/ready before the
+	// decision (readReadyOwners); R1 holds only with that Owner.
 	req := planRequest
-	var err error
-	if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, p.Number); err != nil {
-		return fmt.Errorf("R1: read the login of the Owner of issue #%d: %w", p.Number, err)
-	}
+	req.ownerLogin = requirement.ReadyOwner
 	labels := LabelsAfterPlan(requirement.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
 		return fmt.Errorf("R1: move issue #%d to planning: %w", p.Number, err)

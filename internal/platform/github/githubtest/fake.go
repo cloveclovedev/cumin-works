@@ -1392,6 +1392,9 @@ func (f *Fake) servePermission(w http.ResponseWriter, login string) {
 		if strings.HasSuffix(login, "[bot]") {
 			p = Permission{Permission: "none", UserType: "Bot"}
 		}
+		if login == SeedActor {
+			p = Permission{Permission: "admin", UserType: "User"}
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"permission": p.Permission, "role_name": p.Permission,
 		"user": map[string]any{"login": login, "type": p.UserType}})
@@ -1797,6 +1800,26 @@ func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, numbe
 	})
 }
 
+// SeedActor is the account of the label events that the fake answers for
+// the labels that a test gave an issue without an event. On GitHub every
+// label of an issue has an event, so the fake answers one for each such
+// label: at the zero time, before every other event, by this account. Its
+// permission is admin until a test sets another one, so it is an Owner.
+const SeedActor = "seed-owner"
+
+// withSeededLabelEvents returns the label events of the issue, with one
+// event of SeedActor first for each label that the issue carries and that
+// no event added.
+func withSeededLabelEvents(issue *Issue) []LabelEvent {
+	var list []LabelEvent
+	for _, label := range issue.Labels {
+		if !slices.ContainsFunc(issue.LabelEvents, func(e LabelEvent) bool { return e.Label == label }) {
+			list = append(list, LabelEvent{Label: label, Actor: SeedActor, ActorType: "User"})
+		}
+	}
+	return append(list, issue.LabelEvents...)
+}
+
 // serveLabelTimes answers the query of the label times and the query of
 // the actor of a label: the newest label events of the issue and of each of
 // its sub-issues, each with its actor. Official: the LabeledEvent of the
@@ -1811,7 +1834,7 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 		return
 	}
 	timeline := func(issue *Issue) map[string]any {
-		list := issue.LabelEvents
+		list := withSeededLabelEvents(issue)
 		if len(list) > events {
 			list = list[len(list)-events:]
 		}

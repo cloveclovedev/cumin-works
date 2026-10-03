@@ -177,6 +177,14 @@ type RequirementIssue struct {
 	// AcceptanceCheckAt is when the newest acceptance check comment of the
 	// Planner App was written; zero when there is none.
 	AcceptanceCheckAt time.Time
+	// ReadyRead says that ReadyOwner was read. The poll reads it only for
+	// a candidate of a start, and only when a slot is free
+	// (ReadyActorReads).
+	ReadyRead bool
+	// ReadyOwner is the login of the account that added the newest
+	// cumin/status/ready, when that account is the Owner (IsOwner). It is
+	// empty when another account added it, and when it was not read.
+	ReadyOwner string
 	// FollowUpsDone says that no closed sub-issue needs a follow-up note
 	// (I9) any more: each one has its note, was closed without a merge, or
 	// left nothing to copy. The poll sets it after I9, and R4 waits for it.
@@ -210,6 +218,14 @@ type SubIssue struct {
 	AwaitingOwnerReviewAt time.Time
 	// ClosedAt is when a closed sub-issue closed.
 	ClosedAt time.Time
+	// ReadyRead says that ReadyOwner was read. The poll reads it only for
+	// a candidate of a start, and only when a slot is free
+	// (ReadyActorReads).
+	ReadyRead bool
+	// ReadyOwner is the login of the account that added the newest
+	// cumin/status/ready, when that account is the Owner (IsOwner). It is
+	// empty when another account added it, and when it was not read.
+	ReadyOwner string
 }
 
 // PullRequest is an open pull request that closes a sub-issue.
@@ -506,31 +522,7 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 	actions = append(actions, failedSubIssues(snapshot, required)...)
 	actions = append(actions, unreportedSubIssues(snapshot, required, now, checksWait)...)
 	room := maxInProgress - inProgress(snapshot)
-	type start struct {
-		rank   int
-		number int
-		action Action
-	}
-	// A start on a requirement issue has the priority of that issue.
-	requirementRank := func(number int) int {
-		requirement, _ := snapshot.RequirementIssue(number)
-		return PriorityRank(requirement.Labels, nil, priority)
-	}
-	var starts []start
-	for _, plan := range readyRequirementIssues(snapshot) {
-		starts = append(starts, start{requirementRank(plan.Number), plan.Number, plan})
-	}
-	for _, check := range acceptanceChecks(snapshot) {
-		starts = append(starts, start{requirementRank(check.Number), check.Number, check})
-	}
-	for _, claim := range readySubIssues(snapshot) {
-		sub, _ := snapshot.SubIssue(claim.Number)
-		requirement, _ := snapshot.RequirementIssue(claim.RequirementIssue)
-		starts = append(starts, start{PriorityRank(sub.Labels, requirement.Labels, priority), claim.Number, claim})
-	}
-	slices.SortFunc(starts, func(a, b start) int {
-		return cmp.Or(a.rank-b.rank, a.number-b.number)
-	})
+	starts := orderedStarts(snapshot, priority, readyRequirementIssues(snapshot), readySubIssues(snapshot), true)
 	for _, s := range starts[:max(0, min(room, len(starts)))] {
 		actions = append(actions, s.action)
 	}
@@ -751,6 +743,68 @@ func IssuesToCleanUp(snapshot Snapshot) []int {
 	return numbers
 }
 
+// start is one start of an agent with its place in the order of the starts.
+type start struct {
+	rank   int
+	number int
+	action Action
+}
+
+// orderedStarts returns the starts of the plans (R1), of the acceptance
+// checks (R4) when withChecks is set, and of the claims (I1), in the order
+// of the starts: by priority label, then by issue number.
+func orderedStarts(snapshot Snapshot, priority []string, plans []Plan, claims []Claim, withChecks bool) []start {
+	// A start on a requirement issue has the priority of that issue.
+	requirementRank := func(number int) int {
+		requirement, _ := snapshot.RequirementIssue(number)
+		return PriorityRank(requirement.Labels, nil, priority)
+	}
+	var starts []start
+	for _, plan := range plans {
+		starts = append(starts, start{requirementRank(plan.Number), plan.Number, plan})
+	}
+	if withChecks {
+		for _, check := range acceptanceChecks(snapshot) {
+			starts = append(starts, start{requirementRank(check.Number), check.Number, check})
+		}
+	}
+	for _, claim := range claims {
+		sub, _ := snapshot.SubIssue(claim.Number)
+		requirement, _ := snapshot.RequirementIssue(claim.RequirementIssue)
+		starts = append(starts, start{PriorityRank(sub.Labels, requirement.Labels, priority), claim.Number, claim})
+	}
+	slices.SortFunc(starts, func(a, b start) int {
+		return cmp.Or(a.rank-b.rank, a.number-b.number)
+	})
+	return starts
+}
+
+// ReadyActorReads names the issues whose newest cumin/status/ready the poll
+// must read the actor of, and the free slots: the candidates of R1 and of
+// I1, in the order of the starts. With no free slot it names none, so that
+// a poll that can start nothing makes no read. The poll reads in this order
+// and stops when it has as many candidates of the Owner as free slots: a
+// later candidate cannot start at this poll.
+func ReadyActorReads(snapshot Snapshot, maxInProgress int, priority []string) (numbers []int, room int) {
+	room = maxInProgress - inProgress(snapshot)
+	if room <= 0 {
+		return nil, 0
+	}
+	for _, s := range orderedStarts(snapshot, priority, requirementCandidates(snapshot), subIssueCandidates(snapshot), false) {
+		numbers = append(numbers, s.number)
+	}
+	return numbers, room
+}
+
+// readyOfOwner reports whether the newest cumin/status/ready was read and
+// is the Owner's. R1 and I1 hold only then (issue-states.md, the ready of
+// the Owner).
+func readyOfOwner(read bool, owner string) bool { return read && owner != "" }
+
+// readyOfAnother reports whether the newest cumin/status/ready was read and
+// is not the Owner's. Such an issue waits for the Owner.
+func readyOfAnother(read bool, owner string) bool { return read && owner == "" }
+
 // NeedsLabelTimes reports whether a rule needs the label times of the
 // requirement issue: R3 needs them (startNeedsLabelTimes), an open
 // sub-issue waits in cumin/status/awaiting-checks, whose wait is counted
@@ -805,11 +859,26 @@ func statusLabel(labels []string) string {
 	return ""
 }
 
-// readyRequirementIssues returns the plans of R1 before the limit: open
-// requirement issues with cumin/status/ready whose blocked-by issues are
-// all closed. Whether the requirement issue has sub-issues does not
-// matter (issue-states.md, R1).
+// readyRequirementIssues returns the plans of R1 before the limit: the
+// candidates (requirementCandidates) whose newest cumin/status/ready the
+// Owner added. A candidate whose ready is of another account, or was not
+// read, is skipped.
 func readyRequirementIssues(snapshot Snapshot) []Plan {
+	var plans []Plan
+	for _, plan := range requirementCandidates(snapshot) {
+		requirement, _ := snapshot.RequirementIssue(plan.Number)
+		if readyOfOwner(requirement.ReadyRead, requirement.ReadyOwner) {
+			plans = append(plans, plan)
+		}
+	}
+	return plans
+}
+
+// requirementCandidates returns the candidates of R1 before the check of
+// the Owner: open requirement issues with cumin/status/ready whose
+// blocked-by issues are all closed. Whether the requirement issue has
+// sub-issues does not matter (issue-states.md, R1).
+func requirementCandidates(snapshot Snapshot) []Plan {
 	var plans []Plan
 	for _, requirement := range snapshot.RequirementIssues {
 		if slices.Contains(requirement.Labels, LabelReady) && !anyOpen(requirement.BlockedBy) {
@@ -1082,10 +1151,24 @@ func inProgress(snapshot Snapshot) int {
 	return n
 }
 
-// readySubIssues returns the claims of I1 before the limit: open sub-issues
-// with cumin/status/ready whose blocked-by issues are all closed, lowest
-// issue number first across all requirement issues.
+// readySubIssues returns the claims of I1 before the limit: the candidates
+// (subIssueCandidates) whose newest cumin/status/ready the Owner added. A
+// candidate whose ready is of another account, or was not read, is skipped.
 func readySubIssues(snapshot Snapshot) []Claim {
+	var claims []Claim
+	for _, claim := range subIssueCandidates(snapshot) {
+		sub, _ := snapshot.SubIssue(claim.Number)
+		if readyOfOwner(sub.ReadyRead, sub.ReadyOwner) {
+			claims = append(claims, claim)
+		}
+	}
+	return claims
+}
+
+// subIssueCandidates returns the candidates of I1 before the check of the
+// Owner: open sub-issues with cumin/status/ready whose blocked-by issues
+// are all closed, lowest issue number first across all requirement issues.
+func subIssueCandidates(snapshot Snapshot) []Claim {
 	var claims []Claim
 	for _, requirement := range snapshot.RequirementIssues {
 		// R3 could not be judged without the label times. A claim would
@@ -1112,10 +1195,25 @@ func readySubIssues(snapshot Snapshot) []Claim {
 // without the Owner, so that cumin is not waiting (issue-states.md, the
 // table under Q4): an open sub-issue that waits for the required checks,
 // or a ready issue that can start and waits only for room under the limit.
-// A ready issue with an open blocked-by issue, an issue that waits for the
-// Owner, and an issue whose agent no longer runs do not count.
+// A ready issue with an open blocked-by issue, a ready issue whose ready
+// another account than the Owner added, an issue that waits for the Owner,
+// and an issue whose agent no longer runs do not count. A ready that was
+// not read counts: the poll reads it when a slot is free.
 func (s Snapshot) MovesWithoutOwner() bool {
-	return s.HasIssueAwaitingChecks() || len(readyRequirementIssues(s)) > 0 || len(readySubIssues(s)) > 0
+	if s.HasIssueAwaitingChecks() {
+		return true
+	}
+	for _, plan := range requirementCandidates(s) {
+		if requirement, _ := s.RequirementIssue(plan.Number); !readyOfAnother(requirement.ReadyRead, requirement.ReadyOwner) {
+			return true
+		}
+	}
+	for _, claim := range subIssueCandidates(s) {
+		if sub, _ := s.SubIssue(claim.Number); !readyOfAnother(sub.ReadyRead, sub.ReadyOwner) {
+			return true
+		}
+	}
+	return false
 }
 
 // ReplaceStatusLabel returns the labels of an issue with every

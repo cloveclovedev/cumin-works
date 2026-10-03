@@ -134,7 +134,13 @@ type Service struct {
 	// pollFailures counts the consecutive failed polls of each repository,
 	// so that a failure that repeats reaches the Owner once
 	// (pollfailure.go).
-	failureMu    sync.Mutex
+	failureMu sync.Mutex
+	// readyTold holds, for each issue, the time of the cumin/status/ready
+	// event of another account than the Owner that cumin already logged
+	// and told the Owner about. cumin can lose it: after a restart it
+	// tells the Owner once more.
+	readyMu      sync.Mutex
+	readyTold    map[string]time.Time
 	pollFailures map[string]*repeatedFailure
 
 	// quota keeps which Q1 notifications the Owner already got
@@ -585,6 +591,9 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// counts as running, and R4 waits one poll instead of asking twice.
 	snapshot.Running = s.runningIssues(target.Repository.String())
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
+	if !finishing {
+		s.readReadyOwners(ctx, log, token, target, settings, &snapshot)
+	}
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
 	s.writeFollowUpNotes(ctx, log, token, target, &snapshot)
 	s.cleanUp(ctx, log, target, snapshot)
@@ -727,13 +736,6 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
 		return fmt.Errorf("I1: clear the state of issue #%d: %w", c.Number, err)
 	}
-	// The login of the Owner is read before the label changes: a failed
-	// read leaves cumin/status/ready, so the next poll claims the issue
-	// again.
-	ownerLogin, err := s.readOwnerLogin(ctx, token, target, c.Number)
-	if err != nil {
-		return fmt.Errorf("I1: read the login of the Owner of issue #%d: %w", c.Number, err)
-	}
 	labels := LabelsAfterClaim(sub.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, c.Number, labels); err != nil {
 		return fmt.Errorf("I1: claim issue #%d: %w", c.Number, err)
@@ -741,7 +743,9 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	log := s.logger().With("repository", target.Repository.String(), "issue", c.Number)
 	log.Info("I1: claimed the issue",
 		"requirement_issue", c.RequirementIssue, "labels", labels)
-	if err := s.startImplementer(ctx, target, settings, sub, ownerLogin); err != nil {
+	// The poll read the Owner of the newest cumin/status/ready before the
+	// decision (readReadyOwners); I1 holds only with that Owner.
+	if err := s.startImplementer(ctx, target, settings, sub, sub.ReadyOwner); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
@@ -976,29 +980,36 @@ const agentAttempts = 2
 // request): the account that added the newest cumin/status/ready to the
 // issue of the run, or to a sub-issue when a requirement issue has no such
 // event. The login is passed only when that account is the Owner (IsOwner).
-// The empty login says that there is no Owner login. A GitHub App is never
-// the Owner, so its permission is not read. A failed read is an error: the
-// caller reads before it changes the label, changes nothing, and sends no
-// request, so the next poll tries again.
+// The empty login says that there is no Owner login. A failed read is an
+// error: the caller reads before it changes the label, changes nothing, and
+// sends no request, so the next poll tries again.
 func (s *Service) readOwnerLogin(ctx context.Context, token string, target Target, number int) (string, error) {
+	actor, isOwner, err := s.readReadyActor(ctx, token, target, number)
+	if err != nil || !isOwner {
+		return "", err
+	}
+	return actor.Login, nil
+}
+
+// readReadyActor reads the account that added the newest cumin/status/ready
+// to the issue, and whether that account is the Owner (IsOwner). A GitHub
+// App is never the Owner, so its permission is not read.
+func (s *Service) readReadyActor(ctx context.Context, token string, target Target, number int) (github.LabelActor, bool, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	actor, rate, err := s.GitHub.ReadLabelActor(ctx, token, owner, repo, number, LabelReady)
 	if err != nil {
-		return "", err
+		return github.LabelActor{}, false, err
 	}
 	s.logger().Debug("read the actor of the newest "+LabelReady, "repository", target.Repository.String(), "issue", number,
 		"actor", actor.Login, "actor_type", actor.Type, "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	if actor.Login == "" || actor.Type != "User" {
-		return "", nil
+		return actor, false, nil
 	}
 	permission, userType, err := s.GitHub.RepositoryPermission(ctx, token, owner, repo, actor.Login)
 	if err != nil {
-		return "", err
+		return github.LabelActor{}, false, err
 	}
-	if !IsOwner(permission, userType) {
-		return "", nil
-	}
-	return actor.Login, nil
+	return actor, IsOwner(permission, userType), nil
 }
 
 // runImplementer prepares the worktree and runs one Implementer request to

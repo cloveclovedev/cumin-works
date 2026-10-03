@@ -1,9 +1,7 @@
 package workflow_test
 
 import (
-	"context"
 	"net/http"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -44,34 +42,20 @@ func TestOwnerLogin_TheImplementerReceivesTheActorOfTheNewestReady(t *testing.T)
 	}
 }
 
-// The prompt of the Planner names the Owner of the requirement issue. A
-// requirement issue with no cumin/status/ready event takes the newest such
-// event of its sub-issues.
-func TestOwnerLogin_ThePlannerReceivesTheOwnerOfTheRequirementIssueOrOfItsSubIssues(t *testing.T) {
-	tests := []struct {
-		name        string
-		requirement []githubtest.LabelEvent
-		subIssue    []githubtest.LabelEvent
-	}{
-		{name: "the event of the requirement issue", requirement: []githubtest.LabelEvent{readyBy(theOwner, 5)},
-			subIssue: []githubtest.LabelEvent{readyBy("another-owner", 1)}},
-		{name: "no event on the requirement issue", subIssue: []githubtest.LabelEvent{readyBy(theOwner, 5)}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sc := newPlanScene(t)
-			sc.repo.Issues[6].LabelEvents = tt.requirement
-			sc.repo.Issues[10].LabelEvents = tt.subIssue
-			sc.fake.SetPermission(theOwner, "admin", "User")
-			sc.fake.SetPermission("another-owner", "admin", "User")
+// The prompt of the Planner names the Owner of the requirement issue: the
+// event of the requirement issue wins over a newer event of a sub-issue.
+func TestOwnerLogin_ThePlannerReceivesTheOwnerOfTheRequirementIssue(t *testing.T) {
+	sc := newPlanScene(t)
+	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("another-owner", 1)}
+	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.fake.SetPermission("another-owner", "admin", "User")
 
-			sc.pollAndWait(t, sc.service())
+	sc.pollAndWait(t, sc.service())
 
-			text := promptOf(t, sc.record(t, "agent.args"))
-			if !strings.Contains(text, "- Issue of the run: #6 (requirement issue)"+ownerLoginLine) {
-				t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theOwner, text)
-			}
-		})
+	text := promptOf(t, sc.record(t, "agent.args"))
+	if !strings.Contains(text, "- Issue of the run: #6 (requirement issue)"+ownerLoginLine) {
+		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theOwner, text)
 	}
 }
 
@@ -93,7 +77,9 @@ func TestOwnerLogin_TheReviewerReceivesTheOwner(t *testing.T) {
 
 // Without an event, and with an actor that is not the Owner (cumin-core.md:
 // a person with write permission or higher), the prompt says that there is
-// no Owner login. The permission of a GitHub App is not read.
+// no Owner login. The permission of a GitHub App is not read. The start is
+// the one of the Reviewer: the Implementer does not start on such a ready
+// (issue-states.md, the ready of the Owner).
 func TestOwnerLogin_WithoutAnOwnerThePromptSaysThatThereIsNoOwnerLogin(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -109,13 +95,14 @@ func TestOwnerLogin_WithoutAnOwnerThePromptSaysThatThereIsNoOwnerLogin(t *testin
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := newScene(t)
-			sc.addUnlinkedPullRequest(21, sc.remoteHead)
+			sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
+			service := sc.service()
+			sc.reviewing(t, service, state.Issue{})
 			sc.repo.Issues[10].LabelEvents = tt.events
 			// GitHub reports triage as read.
 			sc.fake.SetPermission("a-triager", "read", "User")
 
-			sc.pollAndWait(t, sc.service())
+			sc.pollAndWait(t, service)
 
 			text := promptOf(t, sc.record(t, "agent.args"))
 			if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+noOwnerLoginLine) {
@@ -136,43 +123,5 @@ func TestOwnerLogin_WithoutAnOwnerThePromptSaysThatThereIsNoOwnerLogin(t *testin
 				t.Errorf("%d reads of a permission, want %d", n, tt.permissionReads)
 			}
 		})
-	}
-}
-
-// A failed read of the login of the Owner sends no request and changes no
-// label, so the next poll tries again. Then the label changes before the
-// request, and the request names the Owner.
-func TestOwnerLogin_AFailedReadSendsNoRequestAndTheNextPollTriesAgain(t *testing.T) {
-	sc := newScene(t)
-	sc.addUnlinkedPullRequest(21, sc.remoteHead)
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
-	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 0, everyTry, http.StatusBadGateway)
-	service := sc.service()
-
-	// The poll reports the failed read or only logs it; both send nothing.
-	_ = service.Poll(context.Background())
-	service.Wait()
-
-	if n := sc.agentRuns(t); n != 0 {
-		t.Errorf("%d agent runs, want none after a failed read", n)
-	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/ready") {
-		t.Errorf("labels of #10 = %v, want cumin/status/ready: a failed read changes nothing", got)
-	}
-	if !strings.Contains(sc.logs.String(), "read the login of the Owner of issue #10") {
-		t.Errorf("the log does not name the failed read:\n%s", sc.logs.String())
-	}
-
-	sc.pollAndWait(t, service)
-
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1 after the next poll", n)
-	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, "cumin/status/ready") {
-		t.Errorf("labels of #10 = %v, want no cumin/status/ready after the request", got)
-	}
-	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, ownerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s:\n%s", theOwner, text)
 	}
 }
