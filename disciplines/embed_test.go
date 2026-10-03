@@ -116,10 +116,10 @@ func TestRole_HoldsTheCriterionOnTheTimeOfOneRunForThePlanner(t *testing.T) {
 		t.Fatalf("Role(planner) = %v, %v; want a file", ok, err)
 	}
 	for _, want := range []string{
-		"11. It fits in one run.",
+		"10. It fits in one run.",
 		"Time limit of the Implementer",
 		"Time limit of the Reviewer",
-		"when the answer to one of 1 to 9, or to 11, is no",
+		"Split it or rewrite it when the answer to one of them is no",
 		"Name the work under \"Please check\" of the plan summary",
 		"raise `roles.<role>.time_limit`, change the criterion, or drop the work",
 	} {
