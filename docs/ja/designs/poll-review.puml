@@ -31,7 +31,7 @@ repeat
     then hand back to the Owner (row I3);
     stop
   else (done)
-    :Read the snapshot again;
+    :Read the issue of the run again;
   endif
   backward:Ask once more in the same session;
 repeat while (Latest review of the Reviewer is on the head
