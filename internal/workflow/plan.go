@@ -151,7 +151,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 		Repo:         target.Repository.Name,
 		Role:         config.RolePlanner,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement, OwnerLogin: req.ownerLogin},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement, OwnerLogin: req.ownerLogin, ProtectedPaths: settings.ProtectedPaths},
 		Text:         req.text(target.Repository.String(), number, workDir),
 		WorkDir:      workDir,
 		Settings:     &role,

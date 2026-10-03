@@ -138,6 +138,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 | Agentが先に進めない。指摘が残った。mergeできない、またはmergeのあとに実装Issueを閉じられない | I2、I4、I6、I8、I10、I12、R2、R4 |
 | 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、新しい着手を止めた | Q1 |
 | Ownerが動かなければ何も進まない (進められるIssueがなく、動いているAgentもなく、check待ちのIssueもない) | Q4 |
+| Ownerでないアカウントが `cumin/status/ready` を付けたので、着手しなかった | R1、I1 (Ownerのready) |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
 
 通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
@@ -216,3 +217,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 19 | cuminがmergeしたあと、GitHubが実装Issueを閉じない | cuminが1回だけ閉じる。Ownerがそれを開き直しても、あとの定期確認では閉じない |
 | 20 | 着手できるIssueが2つあり、番号の大きいほうに、より高い優先度のラベルが付いている | 優先度の高いほうから着手する。同じ優先度なら、番号の小さいほうから着手する。優先度のラベルがないIssueは、最後に着手する。設定でラベルの名前を変えると、その名前で順番が決まる |
 | 21 | 必須のcheckを待つ実装Issueが1つだけあり、動いているAgentもいない | 待ち状態の通知 (Q4) を出さない。checkが終わって進み、Ownerの対応だけが残ったときに、1回だけ通知する |
+| 22 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestに、Ownerが今の先頭のコミットで `REQUEST_CHANGES` を出す | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerの直前のセッションで直させる。直したあと、check、Reviewerのレビューを経て、もう一度Ownerの判断を待つ。botや、writeの権限のないアカウントの `REQUEST_CHANGES` では、何もしない |
+| 23 | Ownerでないアカウントが、Issueに `cumin/status/ready` を付ける | 着手しない。ラベルは替えない。Ownerに1回だけ通知する。Ownerが `cumin/status/ready` を付け直すと着手する |

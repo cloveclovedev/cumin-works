@@ -19,6 +19,7 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 | checkの修正 | I4: 必須のcheckが失敗した | 直前と同じセッション |
 | 指摘の修正 | I5: Reviewerが `REQUEST_CHANGES` を出した | 直前と同じセッション |
 | 衝突の解消 | I6: mergeしようとしたら衝突した | 直前と同じセッション |
+| Ownerのレビューへの対応 | I13: OwnerがPull Requestに `REQUEST_CHANGES` を出した | 直前と同じセッション。OwnerのレビューとそのコメントをGitHubから読み、Reviewerの指摘と同じく、返答のテンプレートで各コメントに答える |
 
 ## 入力
 

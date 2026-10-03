@@ -845,7 +845,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		Repo:         target.Repository.Name,
 		Role:         config.RoleImplementer,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin, ProtectedPaths: settings.ProtectedPaths},
 		Text:         req.text(workDir),
 		WorkDir:      workDir,
 		Settings:     &role,
