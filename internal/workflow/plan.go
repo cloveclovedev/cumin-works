@@ -55,12 +55,9 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 // the check is done (issue-states.md, the text below the table). The
 // running set keeps a second poll from asking again while the Planner
 // works.
-func (s *Service) checkAcceptance(ctx context.Context, target Target, settings *RepositorySettings, a CheckAcceptance) error {
-	token, err := target.Token(ctx)
-	if err != nil {
-		return fmt.Errorf("R4: the token for issue #%d: %w", a.Number, err)
-	}
+func (s *Service) checkAcceptance(ctx context.Context, token string, target Target, settings *RepositorySettings, a CheckAcceptance) error {
 	req := acceptanceRequest
+	var err error
 	if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, a.Number); err != nil {
 		return fmt.Errorf("R4: read the login of the Owner of issue #%d: %w", a.Number, err)
 	}

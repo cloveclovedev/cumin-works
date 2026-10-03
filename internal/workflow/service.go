@@ -493,7 +493,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 				errs = append(errs, err)
 			}
 		case CheckAcceptance:
-			if err := s.checkAcceptance(ctx, target, settings, a); err != nil {
+			if err := s.checkAcceptance(ctx, token, target, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Plan:

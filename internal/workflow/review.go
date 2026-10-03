@@ -210,7 +210,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		switch result {
 		case ReviewApprovedOnHead:
 			log.Info("I3: the Reviewer approved the head commit", "round", req.review.Round)
-			s.afterApproval(ctx, log, target, settings, number, pr)
+			s.afterApproval(ctx, log, target, settings, number, pr, req.ownerLogin)
 			return
 		case ReviewChangesRequestedOnHead:
 			s.afterChangesRequested(ctx, log, target, settings, number, req, sub, pr, run.SessionID)
