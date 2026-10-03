@@ -380,7 +380,8 @@ func (s *Service) readOwners(ctx context.Context, token string, target Target, r
 
 // fixOwnerReview applies I13 to a candidate: it reads the permission of each
 // person whose review decides, keeps the Owners (IsOwner), and checks that
-// the latest review of an Owner is CHANGES_REQUESTED on the head commit
+// the latest review of an Owner is CHANGES_REQUESTED on the head commit,
+// newer than the last cumin/status/awaiting-owner-review of the issue
 // (OwnerRequestedChanges). Then the label becomes cumin/status/implementing
 // first (principle 3), and the Implementer addresses that review in the
 // session of its last run, on the branch of the pull request. The end of
@@ -409,9 +410,9 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 	if err != nil {
 		return false, fmt.Errorf("I13: issue #%d: %w", a.Number, err)
 	}
-	review, ok := OwnerRequestedChanges(pr.Reviews, pr.HeadCommit, owners)
+	review, ok := OwnerRequestedChanges(pr.Reviews, pr.HeadCommit, owners, sub.AwaitingOwnerReviewAt)
 	if !ok {
-		log.Debug("I13: no request for changes of an Owner on the head commit", "pull_request", pr.Number)
+		log.Debug("I13: no new request for changes of an Owner on the head commit", "pull_request", pr.Number)
 		return false, nil
 	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
