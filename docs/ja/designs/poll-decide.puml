@@ -51,7 +51,9 @@ partition "Decision (pure function, no I/O)" {
   - open sub-issues with cumin/status/awaiting-owner-review
     and without cumin/status/ready
   - a CHANGES_REQUESTED review of a person
-    on the head commit of the pull request;
+    on the head commit of the pull request,
+    submitted after the last
+    cumin/status/awaiting-owner-review of the issue;
   :Collect I11 copies
   - each open pull request that closes an issue
   - its cumin/status/* and risk/* differ
@@ -82,7 +84,8 @@ partition "Apply (in the order of the list)" {
   the head commit, run the merge step;
   :I13: read the permission of each reviewer,
   and when the latest review of an Owner requests
-  changes on the head commit, change the label to
+  changes on the head commit, after the last
+  cumin/status/awaiting-owner-review, change the label to
   cumin/status/implementing, then ask the Implementer
   to address that review in the same session;
   :I11: make the labels of the pull request

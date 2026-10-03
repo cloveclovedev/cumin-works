@@ -77,8 +77,8 @@ type RequirementIssue struct {
 	// BlockedBy are the issues that block the requirement issue. The Owner
 	// links requirement issues to each other, and R1 waits for them.
 	BlockedBy []BlockedBy
-	// LabelTimesRead says that ReviewAt and the ReadyAt and
-	// AwaitingChecksAt of the sub-issues were read. The poll reads them
+	// LabelTimesRead says that ReviewAt and the ReadyAt, AwaitingChecksAt,
+	// and AwaitingOwnerReviewAt of the sub-issues were read. The poll reads them
 	// only when a rule needs them (NeedsLabelTimes).
 	LabelTimesRead bool
 	// ReviewAt is when cumin/status/awaiting-owner-review was last added.
@@ -116,6 +116,10 @@ type SubIssue struct {
 	// AwaitingChecksAt is when cumin/status/awaiting-checks was last added.
 	// It is read only when RequirementIssue.LabelTimesRead is true.
 	AwaitingChecksAt time.Time
+	// AwaitingOwnerReviewAt is when cumin/status/awaiting-owner-review was
+	// last added. It is read only when RequirementIssue.LabelTimesRead is
+	// true.
+	AwaitingOwnerReviewAt time.Time
 	// ClosedAt is when a closed sub-issue closed.
 	ClosedAt time.Time
 }
@@ -325,10 +329,11 @@ type MergeOwnerApproval struct {
 
 // FixOwnerReview is the candidate of I13: an implementation issue in
 // cumin/status/awaiting-owner-review whose pull request has a
-// CHANGES_REQUESTED review of a person on its head commit. Reviewers are the
-// people whose reviews decide, as for MergeOwnerApproval; the caller reads
-// their permission, and only then knows whether the latest review of an
-// Owner requests changes (OwnerRequestedChanges).
+// CHANGES_REQUESTED review of a person on its head commit, submitted after
+// that label was last added. Reviewers are the people whose reviews decide,
+// as for MergeOwnerApproval; the caller reads their permission, and only
+// then knows whether the latest review of an Owner requests changes
+// (OwnerRequestedChanges).
 type FixOwnerReview struct {
 	Number      int
 	PullRequest int
@@ -626,13 +631,16 @@ func IssuesToCleanUp(snapshot Snapshot) []int {
 }
 
 // NeedsLabelTimes reports whether a rule needs the label times of the
-// requirement issue: R3 needs them (startNeedsLabelTimes), or an open
+// requirement issue: R3 needs them (startNeedsLabelTimes), an open
 // sub-issue waits in cumin/status/awaiting-checks, whose wait is counted
-// from the time of that label. Only then does the poll read the times, so
-// that the poll query keeps its cost.
+// from the time of that label, or an open sub-issue in
+// cumin/status/awaiting-owner-review has a request for changes of a person
+// on its head commit, which I13 compares with the time of that label. Only
+// then does the poll read the times, so that the poll query keeps its cost.
 func NeedsLabelTimes(requirement RequirementIssue) bool {
 	return startNeedsLabelTimes(requirement) ||
-		slices.ContainsFunc(requirement.SubIssues, openAwaitingChecks)
+		slices.ContainsFunc(requirement.SubIssues, openAwaitingChecks) ||
+		slices.ContainsFunc(requirement.SubIssues, openWithChangeRequest)
 }
 
 // startNeedsLabelTimes reports whether R3 needs the label times of the
@@ -645,6 +653,20 @@ func startNeedsLabelTimes(requirement RequirementIssue) bool {
 
 func openAwaitingChecks(sub SubIssue) bool {
 	return !sub.Closed && slices.Contains(sub.Labels, LabelAwaitingChecks)
+}
+
+// openWithChangeRequest reports whether an open sub-issue in
+// cumin/status/awaiting-owner-review has a CHANGES_REQUESTED review of a
+// person on the head commit of its pull request.
+func openWithChangeRequest(sub SubIssue) bool {
+	if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingOwnerReview) {
+		return false
+	}
+	pr, ok := sub.LatestPullRequest()
+	return ok && slices.ContainsFunc(pr.Reviews, func(review Review) bool {
+		return review.Author != "" && !isBot(review.Author) &&
+			review.State == ReviewChangesRequested && review.Commit == pr.HeadCommit
+	})
 }
 
 func openReady(sub SubIssue) bool {
@@ -1499,16 +1521,36 @@ func ownerApprovals(snapshot Snapshot) []Action {
 // ownerChangeRequests returns the candidates of I13, lowest issue number
 // first: as ownerApprovals, with a CHANGES_REQUESTED review of a person on
 // the head commit. An issue that also has cumin/status/ready is not a
-// candidate: the Owner asked for a new start, and I1 takes it.
+// candidate: the Owner asked for a new start, and I1 takes it. The review
+// is newer than the last cumin/status/awaiting-owner-review of the issue
+// (newChangeRequest), so that one review sends the pull request back once.
 func ownerChangeRequests(snapshot Snapshot) []Action {
 	var actions []Action
 	for _, c := range ownerReviewCandidates(snapshot, ReviewChangesRequested) {
-		if sub, _ := snapshot.SubIssue(c.Number); slices.Contains(sub.Labels, LabelReady) {
+		sub, _ := snapshot.SubIssue(c.Number)
+		if slices.Contains(sub.Labels, LabelReady) || !newChangeRequest(snapshot, sub) {
 			continue
 		}
 		actions = append(actions, c)
 	}
 	return actions
+}
+
+// newChangeRequest reports whether the pull request of the sub-issue has a
+// CHANGES_REQUESTED review of a person on its head commit that was
+// submitted after cumin/status/awaiting-owner-review was last added to the
+// issue. While the label times are not read, the answer is no, and I13
+// waits for the next poll.
+func newChangeRequest(snapshot Snapshot, sub SubIssue) bool {
+	read := slices.ContainsFunc(snapshot.RequirementIssues, func(requirement RequirementIssue) bool {
+		return requirement.LabelTimesRead &&
+			slices.ContainsFunc(requirement.SubIssues, func(s SubIssue) bool { return s.Number == sub.Number })
+	})
+	pr, ok := sub.LatestPullRequest()
+	return read && ok && slices.ContainsFunc(pr.Reviews, func(review Review) bool {
+		return !isBot(review.Author) && review.State == ReviewChangesRequested &&
+			review.Commit == pr.HeadCommit && review.SubmittedAt.After(sub.AwaitingOwnerReviewAt)
+	})
 }
 
 // ownerReviewCandidates returns, lowest issue number first, the open
@@ -1561,13 +1603,18 @@ func OwnerApproved(reviews []Review, head string, owners map[string]bool) bool {
 
 // OwnerRequestedChanges applies the check of I13: of the reviews of the
 // Owners (owners holds their logins), the latest one that decides is
-// CHANGES_REQUESTED on the head commit. It returns that review, whose
-// address the request names. A request for changes on an older commit does
-// not count, and a later APPROVED of an Owner takes it back. A comment-only
-// review decides nothing, and a review of a bot never counts.
-func OwnerRequestedChanges(reviews []Review, head string, owners map[string]bool) (Review, bool) {
+// CHANGES_REQUESTED on the head commit, submitted after awaitingOwnerAt:
+// the time that cumin/status/awaiting-owner-review was last added to the
+// issue. It returns that review, whose address the request names. A request
+// for changes on an older commit does not count, and a later APPROVED of an
+// Owner takes it back. A comment-only review decides nothing, and a review
+// of a bot never counts. A review that is not newer than the label sent the
+// pull request back already, or came before the Owner was asked, so one
+// review sends the pull request back once.
+func OwnerRequestedChanges(reviews []Review, head string, owners map[string]bool, awaitingOwnerAt time.Time) (Review, bool) {
 	latest, found := latestOwnerReview(reviews, owners)
-	if !found || latest.State != ReviewChangesRequested || head == "" || latest.Commit != head {
+	if !found || latest.State != ReviewChangesRequested || head == "" || latest.Commit != head ||
+		!latest.SubmittedAt.After(awaitingOwnerAt) {
 		return Review{}, false
 	}
 	return latest, true

@@ -18,8 +18,8 @@ import (
 
 // readLabelTimes adds the label times to each requirement issue of the
 // snapshot that needs them (NeedsLabelTimes), with one small query for each.
-// A failed read is logged and leaves LabelTimesRead false, so R3 waits for
-// the next poll and the other rules go on.
+// A failed read is logged and leaves LabelTimesRead false, so R3 and I13
+// wait for the next poll and the other rules go on.
 func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token string, target Target, snapshot *Snapshot) {
 	for i := range snapshot.RequirementIssues {
 		requirement := &snapshot.RequirementIssues[i]
@@ -39,6 +39,7 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 			sub := &requirement.SubIssues[j]
 			sub.ReadyAt = times[sub.Number][LabelReady]
 			sub.AwaitingChecksAt = times[sub.Number][LabelAwaitingChecks]
+			sub.AwaitingOwnerReviewAt = times[sub.Number][LabelAwaitingOwnerReview]
 		}
 	}
 }

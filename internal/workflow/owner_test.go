@@ -435,11 +435,16 @@ func TestI13_WithoutTheLabelChangeNoRequestIsSent(t *testing.T) {
 // After the fix run ends with done, the issue passes the verification (I2),
 // the required checks, and the review, and waits for the Owner again (I7).
 // The request for changes is then on an older commit and sends nothing
-// more. An approval of the Owner on the new head is merged (I12).
+// more. An approval of the Owner on the new head is merged (I12). The
+// review after the fix is round 1: the rounds count again from the last
+// APPROVE of the Reviewer.
 func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) {
 	// Run 1 is the fix, which pushes a new head; run 2 is the review.
 	sc := awaitingOwner(t, cliOptions{movesHeadOnRun: 1, reviews: []string{"NONE", "APPROVE"}})
 	oldHead := sc.remoteHead
+	// The Reviewer asked for changes once before it approved.
+	sc.review(implementerSlug, true, "CHANGES_REQUESTED", olderCommit, 30)
+	sc.review(implementerSlug, true, "APPROVED", oldHead, 20)
 	sc.review(theOwner, false, "CHANGES_REQUESTED", oldHead, 5)
 	service := sc.serviceWithSession(t)
 
@@ -463,6 +468,15 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 			t.Errorf("the log has no %s", want)
 		}
 	}
+	requested := ""
+	for line := range strings.Lines(sc.logs.String()) {
+		if strings.Contains(line, `"msg":"I3: requested the review"`) {
+			requested = line
+		}
+	}
+	if !strings.Contains(requested, `"round":1,`) {
+		t.Errorf("the review after the fix is not round 1: %s", requested)
+	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Fatalf("%d merge requests before the approval of the Owner, want none", n)
 	}
@@ -476,6 +490,51 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 	}
 	if n := sc.agentRuns(t); n != 2 {
 		t.Errorf("%d agent runs, want no run after the approval", n)
+	}
+}
+
+// One request for changes sends the pull request back once. The Implementer
+// answers the review without a commit, so the head stays and the review
+// still stands on it when the issue waits for the Owner again (I7). The next
+// polls send no request for that review; a new request for changes of the
+// Owner sends one.
+func TestI13_AnAnswerWithoutACommitSendsNoSecondRequestForTheSameReview(t *testing.T) {
+	const sentBack = `"msg":"I13: the Owner requested changes; the issue goes back to the Implementer"`
+	// Run 1 is the answer, which pushes nothing; run 2 is the review.
+	sc := awaitingOwner(t, cliOptions{reviews: []string{"NONE", "APPROVE"}})
+	head := sc.remoteHead
+	sc.review(theOwner, false, "CHANGES_REQUESTED", head, 5)
+	service := sc.serviceWithSession(t)
+
+	for range 5 {
+		sc.pollAndWait(t, service)
+	}
+
+	if got := sc.repo.PullRequests[21].HeadCommit; got != head {
+		t.Fatalf("the head of the pull request moved to %s", got)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"I7: the merge waits for the Owner"`) {
+		t.Fatal("the issue did not come back to the Owner after the answer")
+	}
+	if n := strings.Count(sc.logs.String(), sentBack); n != 1 {
+		t.Errorf("%d send-backs for one request for changes, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want the answer and one review", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
+		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	}
+
+	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
+		Author: theOwner, State: "CHANGES_REQUESTED", Commit: head, SubmittedAt: sceneNow.Add(time.Hour)})
+	sc.pollAndWait(t, service)
+
+	if n := strings.Count(sc.logs.String(), sentBack); n != 2 {
+		t.Errorf("%d send-backs after a new request for changes, want 2", n)
+	}
+	if n := sc.agentRuns(t); n < 3 {
+		t.Errorf("%d agent runs, want a run for the new request for changes", n)
 	}
 }
 
@@ -509,12 +568,22 @@ func TestOwnerRequestedChanges_I13(t *testing.T) {
 	const head = "2222222222222222222222222222222222222222"
 	at := func(minutes int) time.Time { return time.Date(2026, 10, 1, 10, minutes, 0, 0, time.UTC) }
 	owners := map[string]bool{"owner": true, "owner-two": true, "app[bot]": true}
+	// The issue last got cumin/status/awaiting-owner-review at minute 0,
+	// before the reviews of the table.
 	for _, tc := range []struct {
 		name    string
 		reviews []workflow.Review
 		want    string
 	}{
 		{"a request for changes on the head", []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}, "review-1"},
+		{"a request for changes from before the issue last waited for the Owner", []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(-1), URL: "review-1"}}, ""},
+		{"a request for changes at the time of the label", []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(0), URL: "review-1"}}, ""},
+		{"a new request for changes after an answered one", []workflow.Review{
+			{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(-1), URL: "review-1"},
+			{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-2"}}, "review-2"},
+		{"an answered request for changes of an Owner and a new one of a person who is not an Owner", []workflow.Review{
+			{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(-1), URL: "review-1"},
+			{Author: "someone", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-2"}}, ""},
 		{"a request for changes on an older commit", []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: "old", SubmittedAt: at(1), URL: "review-1"}}, ""},
 		{"a later approval of another Owner", []workflow.Review{
 			{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"},
@@ -530,7 +599,7 @@ func TestOwnerRequestedChanges_I13(t *testing.T) {
 		{"a bot never counts", []workflow.Review{{Author: "app[bot]", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			review, ok := workflow.OwnerRequestedChanges(tc.reviews, head, owners)
+			review, ok := workflow.OwnerRequestedChanges(tc.reviews, head, owners, at(0))
 			if ok != (tc.want != "") || review.URL != tc.want {
 				t.Errorf("OwnerRequestedChanges = %q, %v; want %q", review.URL, ok, tc.want)
 			}
