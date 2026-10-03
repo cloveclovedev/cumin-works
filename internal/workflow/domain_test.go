@@ -698,6 +698,7 @@ func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
 		CheckAcceptance{Number: 5},
 		Claim{Number: 12, RequirementIssue: 1},
 		MergeOwnerApproval{Number: 13, PullRequest: 23},
+		FixOwnerReview{Number: 14, PullRequest: 24},
 		CopyLabels{Issue: 10, PullRequest: 20},
 	}
 	want := []Action{
@@ -759,6 +760,57 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.snapshot.MovesWithoutOwner(); got != tt.want {
 				t.Errorf("MovesWithoutOwner = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// The send-back after a request for changes of the Owner (I13) is decided
+// from the snapshot alone: an open sub-issue in
+// cumin/status/awaiting-owner-review, not running, with a CHANGES_REQUESTED
+// review of a person on the head commit. Who of the reviewers is an Owner is
+// decided later (OwnerRequestedChanges).
+func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t *testing.T) {
+	t.Parallel()
+	const head, old = "2222222222222222222222222222222222222222", "1111111111111111111111111111111111111111"
+	review := func(author string, state ReviewState, commit string) Review {
+		return Review{Author: author, State: state, Commit: commit}
+	}
+	for _, tc := range []struct {
+		name    string
+		labels  []string
+		closed  bool
+		running bool
+		reviews []Review
+		want    []Action
+	}{
+		{name: "a request for changes of a person on the head", labels: []string{LabelAwaitingOwnerReview},
+			reviews: []Review{review("owner", ReviewChangesRequested, head), review("other", ReviewApproved, old)},
+			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"other", "owner"}}}},
+		{name: "a request for changes on an older commit", labels: []string{LabelAwaitingOwnerReview},
+			reviews: []Review{review("owner", ReviewChangesRequested, old)}},
+		{name: "a request for changes of a bot", labels: []string{LabelAwaitingOwnerReview},
+			reviews: []Review{review("app[bot]", ReviewChangesRequested, head)}},
+		{name: "a comment-only review", labels: []string{LabelAwaitingOwnerReview},
+			reviews: []Review{review("owner", ReviewCommented, head)}},
+		{name: "a pull request in another state", labels: []string{LabelReviewing},
+			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
+		{name: "a closed issue", labels: []string{LabelAwaitingOwnerReview}, closed: true,
+			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
+		{name: "an issue that runs now", labels: []string{LabelAwaitingOwnerReview}, running: true,
+			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := Snapshot{
+				RequirementIssues: []RequirementIssue{{
+					Number: 6, Labels: []string{LabelRequirement, LabelImplementing},
+					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels,
+						PullRequests: []PullRequest{{Number: 21, HeadCommit: head, Labels: tc.labels, Reviews: tc.reviews}}}},
+				}},
+				Running: map[int]bool{10: tc.running},
+			}
+			if got := Decide(snapshot, 1, nil, nil); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("Decide = %#v, want %#v", got, tc.want)
 			}
 		})
 	}

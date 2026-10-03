@@ -473,9 +473,11 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		actions = kept
 	}
 	for _, action := range actions {
-		// An I12 candidate is only a check; it counts as progress for Q4
-		// when it merges or stops the issue.
-		if _, check := action.(MergeOwnerApproval); !check {
+		// A candidate of I12 or of I13 is only a check; it counts as
+		// progress for Q4 when it merges, stops, or sends back the issue.
+		switch action.(type) {
+		case MergeOwnerApproval, FixOwnerReview:
+		default:
 			result.note(action)
 		}
 		switch a := action.(type) {
@@ -522,6 +524,14 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			}
 		case MergeOwnerApproval:
 			acted, err := s.mergeOwnerApproval(ctx, token, target, snapshot, settings, required, a)
+			if err != nil {
+				errs = append(errs, err)
+			}
+			if acted {
+				result.note(action)
+			}
+		case FixOwnerReview:
+			acted, err := s.fixOwnerReview(ctx, token, target, snapshot, settings, a)
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -598,7 +608,7 @@ func (s *Service) copyLabels(ctx context.Context, token string, target Target, a
 // implementerRequest is one request to the Implementer: its row, its kind,
 // the branch of its worktree, the session that it resumes, and its text.
 type implementerRequest struct {
-	// row starts the log lines of the request: I1 or I4.
+	// row starts the log lines of the request: I1, I4, or I13.
 	row string
 	// kind is the request kind of implementer.md, for the log.
 	kind   string
