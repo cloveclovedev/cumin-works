@@ -1555,6 +1555,27 @@ func LastReviewedCommit(reviews []Review, reviewer string, readyAt time.Time) st
 	return rounds[len(rounds)-1].Commit
 }
 
+// LastApprovedCommit is the commit of the newest review of the Reviewer with
+// the state APPROVED, or "" when the Reviewer approved no commit. After an
+// approval the rounds start again at 1, and round 1 looks only at the diff
+// from this commit to the head commit (agents/reviewer.md, the scope of each
+// round). A DISMISSED review does not count: GitHub does not show the state
+// before the dismissal. A review of another author and a pending review do
+// not count either.
+func LastApprovedCommit(reviews []Review, reviewer string) string {
+	var latest Review
+	found := false
+	for _, review := range reviews {
+		if review.Author != reviewer || review.State != ReviewApproved {
+			continue
+		}
+		if !found || !review.SubmittedAt.Before(latest.SubmittedAt) {
+			latest, found = review, true
+		}
+	}
+	return latest.Commit
+}
+
 // LatestReview is the last submitted review of the Reviewer, in any state.
 // The check after a Reviewer run reads it: it must be on the head commit,
 // with APPROVE or REQUEST_CHANGES (the Reviewer requirement, completion).

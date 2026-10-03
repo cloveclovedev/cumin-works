@@ -20,6 +20,11 @@ else (2 or later)
   :Resume the Reviewer session;
   :Name the last reviewed commit;
 endif
+if (The Reviewer approved an earlier commit?) then (yes)
+  :Name the last approved commit
+  (round 1: review only the diff from it);
+else (no)
+endif
 repeat
   :Run the Reviewer ("review");
   if (Result?) then (blocked)
