@@ -463,7 +463,8 @@ func TestStart_ThePromptOfEveryRoleNamesTheTimeLimitAndTheEndTime(t *testing.T) 
 		want    string
 	}{
 		{config.RolePlanner, "planner-done.jsonl", 20 * time.Minute,
-			"- Time limit of the run: 20m\n- End time of the run: 2026-10-03T01:20:00Z\n"},
+			"- Time limit of the run: 20m\n- End time of the run: 2026-10-03T01:20:00Z\n" +
+				"- Time limit of the Implementer: 1m\n- Time limit of the Reviewer: 0s\n"},
 		{config.RoleImplementer, "done.jsonl", 50 * time.Minute,
 			"- Time limit of the run: 50m\n- End time of the run: 2026-10-03T01:50:00Z\n"},
 		{config.RoleReviewer, "done.jsonl", 30 * time.Minute,
@@ -490,6 +491,94 @@ func TestStart_ThePromptOfEveryRoleNamesTheTimeLimitAndTheEndTime(t *testing.T) 
 				t.Errorf("prompt = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+// plannerService returns a Service that holds the settings of the three
+// roles, each with its own time limit. The fake knows one App, so the
+// Planner runs with its credentials.
+func plannerService(t *testing.T, path string, client *github.AppClient) *Service {
+	t.Helper()
+	s := newService(t, path, client, nil)
+	s.Roles[config.RolePlanner] = config.RoleSettings{TimeLimit: 20 * time.Minute, CLI: config.CLIClaudeCode, CLIPath: path}
+	s.Roles[config.RoleImplementer] = config.RoleSettings{TimeLimit: 50 * time.Minute, CLI: config.CLIClaudeCode, CLIPath: path}
+	s.Roles[config.RoleReviewer] = config.RoleSettings{TimeLimit: 30 * time.Minute, CLI: config.CLIClaudeCode, CLIPath: path}
+	s.Apps["example-org"][config.RolePlanner] = s.Apps["example-org"][config.RoleImplementer]
+	s.Apps["example-org"][config.RoleReviewer] = s.Apps["example-org"][config.RoleImplementer]
+	return s
+}
+
+// otherLimitLines are the lines of the time limits of the Implementer and
+// the Reviewer, with the values of plannerService.
+const otherLimitLines = "- Time limit of the Implementer: 50m\n- Time limit of the Reviewer: 30m\n"
+
+// The start request of the Planner names the time limits of the
+// Implementer and of the Reviewer, after the end time, so that the Planner
+// sizes each implementation issue for one run of each. The start requests
+// of the Implementer and of the Reviewer do not hold these lines
+// (docs/ja/requirements/agents/common.md, the test of the time limits that
+// the Planner receives).
+func TestStart_ThePromptOfThePlannerAloneNamesTheTimeLimitsOfTheImplementerAndTheReviewer(t *testing.T) {
+	tests := []struct {
+		role    config.Role
+		fixture string
+		want    string
+	}{
+		{config.RolePlanner, "planner-done.jsonl",
+			"- Time limit of the run: 20m\n- End time of the run: 2026-10-03T01:20:00Z\n" + otherLimitLines},
+		{config.RoleImplementer, "done.jsonl",
+			"- Time limit of the run: 50m\n- End time of the run: 2026-10-03T01:50:00Z\n"},
+		{config.RoleReviewer, "done.jsonl",
+			"- Time limit of the run: 30m\n- End time of the run: 2026-10-03T01:30:00Z\n"},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			_, client := newFakeGitHub(t)
+			path, dir := serviceCLI(t, "quota-run.jsonl", tt.fixture)
+			s := plannerService(t, path, client)
+			s.Now = fixedClock(time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC))
+			request := startRequest(t)
+			request.Role = tt.role
+
+			if _, err := s.Start(context.Background(), request); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			want := "Facts of this run (data from cumin):\n" + tt.want + "\n" + request.Text
+			if got := promptOfRun(t, dir); got != want {
+				t.Errorf("prompt = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// A resumed session of the Planner receives the time limits of the
+// Implementer and of the Reviewer again.
+func TestStart_AResumedSessionOfThePlannerReceivesTheTimeLimitsOfTheOtherRolesAgain(t *testing.T) {
+	_, client := newFakeGitHub(t)
+	path, dir := serviceCLI(t, "quota-run.jsonl", "planner-done.jsonl")
+	s := plannerService(t, path, client)
+
+	s.Now = fixedClock(time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC))
+	request := startRequest(t)
+	request.Role = config.RolePlanner
+	first, err := s.Start(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	s.Now = fixedClock(time.Date(2026, 10, 3, 2, 30, 0, 0, time.UTC))
+	request.SessionID = first.SessionID
+	if _, err := s.Start(context.Background(), request); err != nil {
+		t.Fatalf("Start of the resumed session: %v", err)
+	}
+	args := recordedArgs(t, filepath.Join(dir, "agent.args"))
+	if i := indexOf(args, "--resume"); i < 0 || args[i+1] != first.SessionID {
+		t.Fatalf("the second run does not resume the session: %q", args)
+	}
+	want := "Facts of this run (data from cumin):\n" +
+		"- Time limit of the run: 20m\n- End time of the run: 2026-10-03T02:50:00Z\n" + otherLimitLines + "\n" + request.Text
+	if got := promptOfRun(t, dir); got != want {
+		t.Errorf("resumed prompt = %q, want %q", got, want)
 	}
 }
 

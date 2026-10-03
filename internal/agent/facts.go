@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
 
 // IssueKind is the kind of the issue that a run works on.
@@ -65,6 +67,15 @@ type runFacts struct {
 	// End is the time at which the run ends: the start of the run plus the
 	// time limit.
 	End time.Time
+	// Role is the role of the run. The Planner alone receives the time
+	// limits of the other roles.
+	Role config.Role
+	// ImplementerTimeLimit and ReviewerTimeLimit are the time limits of
+	// one run of the Implementer and of the Reviewer: the settings
+	// roles.implementer.time_limit and roles.reviewer.time_limit. The
+	// Planner sizes each implementation issue with them.
+	ImplementerTimeLimit time.Duration
+	ReviewerTimeLimit    time.Duration
 }
 
 // factsBlock returns the block of labelled lines of the facts. The first
@@ -72,6 +83,8 @@ type runFacts struct {
 // the login of the Owner come next, then the protected paths, one entry on
 // each line, with the rules of matching. The end time is in UTC as RFC
 // 3339, whatever the location of the time is.
+// A run of the Planner has two more lines at the end: the time limits of
+// the Implementer and of the Reviewer.
 func factsBlock(facts runFacts) string {
 	var b strings.Builder
 	b.WriteString("Facts of this run (data from cumin):\n")
@@ -88,6 +101,10 @@ func factsBlock(facts runFacts) string {
 	}
 	b.WriteString("- Time limit of the run: " + limitText(facts.TimeLimit) + "\n")
 	b.WriteString("- End time of the run: " + facts.End.UTC().Format(time.RFC3339) + "\n")
+	if facts.Role == config.RolePlanner {
+		b.WriteString("- Time limit of the Implementer: " + limitText(facts.ImplementerTimeLimit) + "\n")
+		b.WriteString("- Time limit of the Reviewer: " + limitText(facts.ReviewerTimeLimit) + "\n")
+	}
 	return b.String()
 }
 
