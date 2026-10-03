@@ -32,3 +32,9 @@ protected_paths = [
 # requirement issue. cumin never creates or changes these labels;
 # scripts/setup-repo.sh asks before it creates the missing ones.
 priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
+
+# How long cumin waits for every required check to report on the head commit
+# of a pull request. After this time it stops the issue for the Owner. The CI
+# of this repository ends in about a minute, so ten minutes leave room for a
+# queue at GitHub Actions.
+checks_wait_time = "10m"
