@@ -307,6 +307,9 @@ func (c *AppClient) text(ctx context.Context, token, path, label string) (string
 
 // sendText sends one try of text.
 func (c *AppClient) sendText(ctx context.Context, token, path, label string) (string, error) {
+	if err := c.fullRateLimit(token, http.MethodGet, label); err != nil {
+		return "", err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
 		return "", fmt.Errorf("GET %s: cannot build the request", label)
@@ -327,6 +330,11 @@ func (c *AppClient) sendText(ctx context.Context, token, path, label string) (st
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode >= 500 {
 			return "", &TemporaryError{Err: &StatusError{Method: http.MethodGet, Label: label, Status: resp.StatusCode}}
+		}
+		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+			if err := c.rateLimited(token, http.MethodGet, label, resp.Header); err != nil {
+				return "", err
+			}
 		}
 		return "", fmt.Errorf("GET %s: status %d", label, resp.StatusCode)
 	}

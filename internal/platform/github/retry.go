@@ -32,10 +32,11 @@ func (e *TemporaryError) Error() string { return e.Err.Error() }
 func (e *TemporaryError) Unwrap() error { return e.Err }
 
 // IsTemporary reports whether err is a failure of a call to GitHub that can
-// pass by itself. The same call may succeed later.
+// pass by itself. The same call may succeed later. A full rate limit
+// (RateLimitError) is temporary too: it passes at its reset time.
 func IsTemporary(err error) bool {
 	var temporary *TemporaryError
-	return errors.As(err, &temporary)
+	return errors.As(err, &temporary) || isRateLimit(err)
 }
 
 // SetLogger sets the logger of the retries. Without it, the client logs to
@@ -65,11 +66,12 @@ func sleep(ctx context.Context, d time.Duration) error {
 // retry sends one call, and sends a read again after a temporary failure,
 // up to maxRetries times. A write is sent once: a write whose answer was
 // lost may have happened, and a second one could write the same thing twice.
-// Each try is a new request with its own deadline.
+// Each try is a new request with its own deadline. A full rate limit is
+// not tried again: a call before the reset time fails again.
 func (c *AppClient) retry(ctx context.Context, method, label string, read bool, send func() error) error {
 	for try := 1; ; try++ {
 		err := send()
-		if err == nil || !read || !IsTemporary(err) || try > maxRetries {
+		if err == nil || !read || !IsTemporary(err) || isRateLimit(err) || try > maxRetries {
 			return err
 		}
 		logger := c.logger
