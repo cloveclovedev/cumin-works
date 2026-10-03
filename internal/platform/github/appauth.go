@@ -69,6 +69,10 @@ type AppClient struct {
 	baseURL string
 	http    *http.Client
 	now     func() time.Time
+	// wait is the wait between two tries of a read. Tests replace it.
+	wait func(ctx context.Context, d time.Duration) error
+	// logger gets one line for each retry. Nil means the default logger.
+	logger *slog.Logger
 }
 
 // NewAppClient returns a client for the API at baseURL. Tests pass the address
@@ -77,7 +81,7 @@ func NewAppClient(baseURL string, httpClient *http.Client) *AppClient {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: defaultTimeout}
 	}
-	return &AppClient{baseURL: strings.TrimRight(baseURL, "/"), http: httpClient, now: time.Now}
+	return &AppClient{baseURL: strings.TrimRight(baseURL, "/"), http: httpClient, now: time.Now, wait: sleep}
 }
 
 // ParsePrivateKey reads the PEM of a GitHub App private key. GitHub issues
@@ -176,14 +180,27 @@ func (e *StatusError) Error() string {
 // could hold a token: it holds only the label, the status code, and the
 // "message" field of the error body from GitHub. The label names the request
 // in errors. It is the path, or a text without the secret part of the path.
+// A read that fails with a network error or a 5xx answer is sent again, as
+// retry says. Such a failure of the last try, or of a write, is a
+// TemporaryError.
 func (c *AppClient) do(ctx context.Context, jwt, method, path, label string, body any, wantStatus int, out any) error {
-	var reader io.Reader
+	var encoded []byte
 	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
+		var err error
+		if encoded, err = json.Marshal(body); err != nil {
 			return err
 		}
-		reader = bytes.NewReader(encoded)
+	}
+	return c.retry(ctx, method, label, isRead(method, path, body), func() error {
+		return c.send(ctx, jwt, method, path, label, encoded, wantStatus, out)
+	})
+}
+
+// send sends one try of a request. A nil body sends no body.
+func (c *AppClient) send(ctx context.Context, jwt, method, path, label string, body []byte, wantStatus int, out any) error {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
@@ -207,7 +224,7 @@ func (c *AppClient) do(ctx context.Context, jwt, method, path, label string, bod
 		if errors.As(err, &urlErr) {
 			err = urlErr.Err
 		}
-		return fmt.Errorf("%s %s: %w", method, label, err)
+		return networkError(ctx, fmt.Errorf("%s %s: %w", method, label, err))
 	}
 	defer resp.Body.Close()
 
@@ -216,7 +233,19 @@ func (c *AppClient) do(ctx context.Context, jwt, method, path, label string, bod
 			Message string `json:"message"`
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, maxErrorBody)).Decode(&apiError)
-		return &StatusError{Method: method, Label: label, Status: resp.StatusCode, Message: apiError.Message}
+		statusErr := &StatusError{Method: method, Label: label, Status: resp.StatusCode, Message: apiError.Message}
+		if resp.StatusCode >= 500 {
+			return &TemporaryError{Err: statusErr}
+		}
+		return statusErr
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	answer := &bodyReader{r: resp.Body}
+	if err := json.NewDecoder(answer).Decode(out); err != nil {
+		if answer.err != nil {
+			// The connection broke in the middle of the body.
+			return networkError(ctx, fmt.Errorf("%s %s: %w", method, label, answer.err))
+		}
+		return err
+	}
+	return nil
 }

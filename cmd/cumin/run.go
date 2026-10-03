@@ -100,6 +100,7 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 	}
 	logger.Info("state loaded", "issues", states.Issues())
 	client := github.NewAppClient(github.DefaultBaseURL, nil)
+	client.SetLogger(logger)
 	agents := &agent.Service{
 		Roles:     settings.Roles,
 		Apps:      roleCredentials(credentials),

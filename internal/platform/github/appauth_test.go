@@ -362,3 +362,19 @@ func TestNewAppClient_NilHTTPClientHasTheTimeoutOfOneCall(t *testing.T) {
 		t.Errorf("timeout = %v, want 30s", got)
 	}
 }
+
+// The wait between two tries ends at once when the context is cancelled.
+func TestSleep_ACancelledContextEndsTheWaitAtOnce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	if err := sleep(ctx, time.Hour); err != context.Canceled {
+		t.Fatalf("sleep = %v, want context.Canceled", err)
+	}
+	if took := time.Since(start); took > time.Minute {
+		t.Errorf("sleep took %v, want no wait", took)
+	}
+	if err := sleep(context.Background(), time.Nanosecond); err != nil {
+		t.Errorf("sleep with a live context = %v, want nil", err)
+	}
+}

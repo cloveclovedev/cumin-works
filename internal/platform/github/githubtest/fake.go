@@ -390,6 +390,12 @@ type failure struct {
 	skip int
 	// hang leaves the request without an answer, as HangNext set it.
 	hang bool
+	// closed closes the connection without an answer, as CloseTimes set it.
+	closed bool
+	// times is how many matching requests fail.
+	times int
+	// then is the failure that follows when this one is used up.
+	then *failure
 }
 
 // New starts the fake. The server closes when the test ends.
@@ -639,7 +645,38 @@ func (f *Fake) FailNext(method, path string, status int) {
 func (f *Fake) FailAfter(method, path string, skip, status int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.failNext = &failure{method: method, path: path, status: status, skip: skip}
+	f.failNext = &failure{method: method, path: path, status: status, skip: skip, times: 1}
+}
+
+// FailTimes is FailAfter for the next times matching requests after the
+// skipped ones. A test uses it to fail every try of a read that the client
+// sends again. A failure of FailTimes or CloseTimes that still waits comes
+// first.
+func (f *Fake) FailTimes(method, path string, skip, times, status int) {
+	f.failThen(&failure{method: method, path: path, status: status, skip: skip, times: times})
+}
+
+// CloseTimes makes the fake close the connection of the next times
+// requests with the method and the path, without an answer, as a network
+// error. The requests are recorded and change nothing. A failure of
+// FailTimes or CloseTimes that still waits comes first.
+func (f *Fake) CloseTimes(method, path string, times int) {
+	f.failThen(&failure{method: method, path: path, closed: true, times: times})
+}
+
+// failThen adds a failure after the failures that still wait.
+func (f *Fake) failThen(next *failure) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failNext == nil {
+		f.failNext = next
+		return
+	}
+	last := f.failNext
+	for last.then != nil {
+		last = last.then
+	}
+	last.then = next
 }
 
 // HangNext makes the fake leave the next request with the method and the
@@ -649,7 +686,15 @@ func (f *Fake) FailAfter(method, path string, skip, status int) {
 func (f *Fake) HangNext(method, path string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.failNext = &failure{method: method, path: path, hang: true}
+	f.failNext = &failure{method: method, path: path, hang: true, times: 1}
+}
+
+// HangTimes is HangNext for the next times matching requests: every try
+// of a read that the client sends again stalls.
+func (f *Fake) HangTimes(method, path string, times int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failNext = &failure{method: method, path: path, hang: true, times: times}
 }
 
 // Requests returns the requests that the fake received, in order.
@@ -703,7 +748,9 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		fail.skip--
 		fail = nil
 	} else if fail != nil && fail.method == r.Method && fail.path == r.URL.Path {
-		f.failNext = nil
+		if fail.times--; fail.times <= 0 {
+			f.failNext = fail.then
+		}
 	} else {
 		fail = nil
 	}
@@ -713,6 +760,10 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		// this return, the Close of the server waits forever.
 		<-r.Context().Done()
 		return
+	}
+	if fail != nil && fail.closed {
+		// net/http closes the connection without an answer.
+		panic(http.ErrAbortHandler)
 	}
 	if fail != nil {
 		writeJSON(w, fail.status, map[string]any{"message": "Failure requested by the test"})

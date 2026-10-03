@@ -147,7 +147,7 @@ func TestOwnerLogin_AFailedReadSendsNoRequestAndTheNextPollTriesAgain(t *testing
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
 	sc.fake.SetPermission(theOwner, "admin", "User")
-	sc.fake.FailNext(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", http.StatusBadGateway)
+	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 0, everyTry, http.StatusBadGateway)
 	service := sc.service()
 
 	// The poll reports the failed read or only logs it; both send nothing.
