@@ -45,9 +45,13 @@ type Snapshot struct {
 	// DefaultBranch is the branch whose rules name the required checks.
 	DefaultBranch     string
 	RequirementIssues []RequirementIssue
-	// Running are the issues whose agent runs in this cumin now. A label
-	// shows most of them; an acceptance check (R4) keeps the label of the
-	// requirement issue, so only this shows that its Planner runs.
+	// Running are the issues whose agent runs in this cumin now, or whose
+	// step after the run is kept. A label shows most of them; an acceptance
+	// check (R4) keeps the label of the requirement issue, so only this
+	// shows that its Planner runs. A kept step whose label change reached
+	// GitHub without an answer leaves the issue in
+	// cumin/status/awaiting-checks, so the rules of that label skip a
+	// running issue.
 	Running map[int]bool
 }
 
@@ -928,9 +932,15 @@ func labelCopies(snapshot Snapshot) []Action {
 // for the checks: open sub-issues in cumin/status/awaiting-checks whose
 // open pull request GitHub reports as CONFLICTING, lowest issue number
 // first. UNKNOWN says that GitHub is still calculating, so it gives no
-// action: a later poll decides.
+// action: a later poll decides. A running issue gives no action.
 func conflictingSubIssues(snapshot Snapshot) []Action {
-	return conflictsUnder(snapshot, LabelAwaitingChecks)
+	var actions []Action
+	for _, action := range conflictsUnder(snapshot, LabelAwaitingChecks) {
+		if !snapshot.Running[action.(ResolveConflict).Number] {
+			actions = append(actions, action)
+		}
+	}
+	return actions
 }
 
 // conflictingOwnerReviews returns the actions of I14 for the issues that
@@ -978,12 +988,13 @@ func conflictsUnder(snapshot Snapshot, status string) []Action {
 // reviewableSubIssues returns the actions of I3: open sub-issues in
 // cumin/status/awaiting-checks whose open pull request has every required
 // check passed on its head commit. A pull request that conflicts belongs
-// to I14.
+// to I14. A running issue gives no action: its agent runs, or its step
+// after the run is kept, and one issue has one agent.
 func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || snapshot.Running[sub.Number] {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
@@ -1005,12 +1016,12 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 // failedSubIssues returns the actions of I4: open sub-issues in
 // cumin/status/awaiting-checks whose open pull request has a failed
 // required check on its head commit, lowest issue number first. A pull
-// request that conflicts belongs to I14.
+// request that conflicts belongs to I14. A running issue gives no action.
 func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || snapshot.Running[sub.Number] {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
@@ -1034,11 +1045,12 @@ func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 // whose head commit time was not read gives no action: a later poll decides.
 // A commit time that was not read can hide a new head commit. A sub-issue
 // with no open pull request stops too, after the wait time since the label.
+// A running issue gives no action.
 func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.Time, checksWait time.Duration) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || sub.AwaitingChecksAt.IsZero() {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || sub.AwaitingChecksAt.IsZero() || snapshot.Running[sub.Number] {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()

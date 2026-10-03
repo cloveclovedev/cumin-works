@@ -317,14 +317,18 @@ func (s *Service) markInProgress(ctx context.Context, repository string, issue i
 	}
 	s.inProgress[key] = true
 	s.started++
-	return func() {
-		s.progressMu.Lock()
-		defer s.progressMu.Unlock()
-		if ctx.Err() != nil || s.keptSteps[key] != nil {
-			return
-		}
-		s.endInProgress(key)
+	return func() { s.endRun(ctx, key) }
+}
+
+// endRun removes an issue from the set of issues in work when its run ends.
+// See markInProgress for the two cases that leave the entry.
+func (s *Service) endRun(ctx context.Context, key inProgressKey) {
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+	if ctx.Err() != nil || s.keptSteps[key] != nil {
+		return
 	}
+	s.endInProgress(key)
 }
 
 // endInProgress removes an issue from the set of issues in work, and wakes
@@ -1169,12 +1173,18 @@ func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, ta
 // result usually means that a requirement is missing, so the Owner answers
 // first (issue-states.md, the paragraph on a blocked result).
 func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, reason string) {
+	s.stopBlocked(ctx, log, target, settings, row, role, number, reason, labelsNow(s.subIssueNow(ctx, log, target, number)))
+}
+
+// stopBlocked is stopAfterBlocked with the labels of the issue that the
+// caller read.
+func (s *Service) stopBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, reason string, labels []string) {
 	question := firstLine(reason)
 	log.Warn(row+": the agent returned blocked", "reason", question)
 	s.stopForOwner(ctx, log, target, settings, stop{
 		row:     row,
 		issue:   number,
-		labels:  labelsNow(s.subIssueNow(ctx, log, target, number)),
+		labels:  labels,
 		reason:  "the " + role + " returned blocked: " + question,
 		comment: reason,
 	})

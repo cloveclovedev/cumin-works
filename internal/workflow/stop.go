@@ -170,18 +170,25 @@ func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled boo
 // caller then leaves the labels alone, because writing a list without the
 // risk label would remove it.
 func (s *Service) subIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (SubIssue, bool) {
+	sub, err := s.readSubIssueNow(ctx, log, target, number)
+	return sub, err == nil
+}
+
+// readSubIssueNow is subIssueNow with the error of the read, for a step
+// that is kept after a temporary failure (keptstep.go).
+func (s *Service) readSubIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (SubIssue, error) {
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("the issue was not read again: no token", "error", err.Error())
-		return SubIssue{}, false
+		return SubIssue{}, err
 	}
 	read, err := s.GitHub.ReadSubIssue(ctx, token, target.Repository.Owner, target.Repository.Name, number)
 	if err != nil {
 		log.Error("the issue was not read again", "error", err.Error())
-		return SubIssue{}, false
+		return SubIssue{}, err
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	return toSubIssue(read.Issue), true
+	return toSubIssue(read.Issue), nil
 }
 
 // StopNote is the comment that cumin writes when the reason is its own: a
