@@ -500,6 +500,38 @@ func (s *Service) noteRunEnded(repository string) {
 	}
 }
 
+// readSnapshot reads one repository for a poll, in two queries, and builds
+// one snapshot from the two reads. The poll query stops at the sub-issue. The
+// second query reads the pull requests of the sub-issues that a rule reads
+// them for; no such sub-issue means no second query (poll.md, the topic on
+// the two queries). The rate limit of the result is the one of both reads.
+func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (github.RepositorySnapshot, Snapshot, error) {
+	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	if err != nil {
+		return github.RepositorySnapshot{}, Snapshot{}, err
+	}
+	snapshot := toSnapshot(read)
+	selected := snapshot.SubIssuesWithPullRequestRules()
+	if len(selected) == 0 {
+		return read, snapshot, nil
+	}
+	ids := make([]string, 0, len(selected))
+	for _, sub := range selected {
+		ids = append(ids, sub.NodeID)
+	}
+	pullRequests, err := s.GitHub.ReadPullRequests(ctx, token, owner, repo, ids)
+	if err != nil {
+		return github.RepositorySnapshot{}, Snapshot{}, err
+	}
+	byIssue := map[int][]PullRequest{}
+	for number, list := range pullRequests.PullRequests {
+		byIssue[number] = toPullRequests(list)
+	}
+	read.RateLimit.Cost += pullRequests.RateLimit.Cost
+	read.RateLimit.Remaining = pullRequests.RateLimit.Remaining
+	return read, snapshot.WithPullRequests(byIssue), nil
+}
+
 func (s *Service) pollRepository(ctx context.Context, target Target, finishing bool) (pollResult, error) {
 	var result pollResult
 	err := s.pollRepositoryInto(ctx, target, finishing, &result)
@@ -512,11 +544,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	if err != nil {
 		return err
 	}
-	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	read, snapshot, err := s.readSnapshot(ctx, token, owner, repo)
 	if err != nil {
 		return err
 	}
-	snapshot := toSnapshot(read)
 	log := s.logger().With("repository", target.Repository.String())
 
 	// The settings of this repository. A wrong file skips this repository
@@ -545,6 +576,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	log.Info("poll",
 		"requirement_issues", len(snapshot.RequirementIssues),
 		"required_checks", len(required),
+		"issues_with_pull_requests_read", len(snapshot.SubIssuesWithPullRequestRules()),
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
@@ -1316,8 +1348,16 @@ func toSubIssue(sub github.Issue) SubIssue {
 	for _, blocker := range sub.BlockedBy {
 		subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 	}
-	for _, pr := range sub.PullRequests {
-		subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{
+	subIssue.PullRequests = toPullRequests(sub.PullRequests)
+	return subIssue
+}
+
+// toPullRequests converts the pull requests of one sub-issue of the GitHub
+// client, from the second query of the poll or from the read of one issue.
+func toPullRequests(read []github.PullRequest) []PullRequest {
+	var pullRequests []PullRequest
+	for _, pr := range read {
+		pullRequests = append(pullRequests, PullRequest{
 			Number:     pr.Number,
 			HeadCommit: pr.HeadCommit,
 			HeadBranch: pr.HeadBranch,
@@ -1331,7 +1371,7 @@ func toSubIssue(sub github.Issue) SubIssue {
 			HeadCommittedAt: pr.HeadCommittedAt,
 		})
 	}
-	return subIssue
+	return pullRequests
 }
 
 // settingsSource names where the settings of a poll came from, for the log.

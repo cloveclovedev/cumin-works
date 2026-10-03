@@ -282,13 +282,20 @@ func (l *live) recordSnapshotFact(t *testing.T, token string, issueNumber, pullN
 	if err != nil {
 		t.Fatalf("fact 12: read the required checks: %v", err)
 	}
+	// The second query of the poll reads the pull requests of the issue.
 	var pull github.PullRequest
 	for _, issue := range snapshot.RequirementIssues {
 		for _, sub := range issue.SubIssues {
 			if sub.Number != issueNumber {
 				continue
 			}
-			for _, pr := range sub.PullRequests {
+			read, err := client.ReadPullRequests(ctx, token, l.owner, l.repo, []string{sub.NodeID})
+			if err != nil {
+				t.Fatalf("fact 12: read the pull requests: %v", err)
+			}
+			snapshot.RateLimit.Cost += read.RateLimit.Cost
+			snapshot.RateLimit.Remaining = read.RateLimit.Remaining
+			for _, pr := range read.PullRequests[sub.Number] {
 				if pr.Number == pullNumber {
 					pull = pr
 				}
@@ -303,7 +310,7 @@ func (l *live) recordSnapshotFact(t *testing.T, token string, issueNumber, pullN
 	for _, check := range required {
 		requiredNames = append(requiredNames, fmt.Sprintf("%s (app %d)", check.Name, check.Integration))
 	}
-	l.record("12", "The poll query of cumin, with the head branch, the labels, and the checks of a pull request (I3, I4, I11)", "Every field is readable, and the cost stays small enough for one poll a minute",
+	l.record("12", "The two queries of a poll of cumin, with the head branch, the labels, and the checks of a pull request (I3, I4, I11)", "Every field is readable, and the cost stays small enough for one poll a minute",
 		fmt.Sprintf("`rateLimit.cost`: %d, `remaining`: %d, requirement issues: %d. Required checks: `%s`. Pull request #%d: branch `%s`, labels `%s`, checks `%s`",
 			snapshot.RateLimit.Cost, snapshot.RateLimit.Remaining, len(snapshot.RequirementIssues),
 			strings.Join(requiredNames, "`, `"), pull.Number, pull.HeadBranch, strings.Join(pull.Labels, "`, `"), strings.Join(checks, "`, `")))

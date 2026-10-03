@@ -723,3 +723,32 @@ func TestI14_ARequestForChangesOfTheOwnerOnAConflictingHeadGoesThroughI13(t *tes
 		t.Error("I14 sent a request beside I13")
 	}
 }
+
+// An approval of the Owner on a conflicting head whose required checks do
+// not pass leaves I12 waiting, so I14 sends the conflict resolution at the
+// same poll: the checks of a conflicting pull request do not run again.
+func TestI14_AnApprovalThatWaitsForTheChecksOnAConflictingHeadSendsTheResolution(t *testing.T) {
+	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc.repo.PullRequests[21].Checks = []githubtest.Check{{Name: "ci", Status: "IN_PROGRESS"}}
+	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	service := sc.serviceWithSession(t)
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one resolution", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: conflict resolution") {
+		t.Errorf("the request is not a conflict resolution:\n%s", text)
+	}
+}
