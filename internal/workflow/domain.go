@@ -269,6 +269,22 @@ type ResolveConflict struct {
 	PullRequest int
 }
 
+// StopForUnreportedChecks is the action of I15: a required check has not
+// reported on the head commit of the pull request, and the wait time of the
+// repository is over, so the issue stops for the Owner. It carries the facts
+// that cumin sees; it names no cause.
+type StopForUnreportedChecks struct {
+	Number      int
+	PullRequest int
+	// HeadCommit is the full SHA of the head of the pull request.
+	HeadCommit string
+	// Unreported are the required checks without a finished result on the
+	// head commit, in the order of the required checks.
+	Unreported []RequiredCheck
+	// Waited is the time from the start of the wait to the poll.
+	Waited time.Duration
+}
+
 // CopyLabels is the action of I11: the pull request gets Labels, so that its
 // cumin/status/* and risk/* labels are those of the issue that it closes.
 type CopyLabels struct {
@@ -340,18 +356,19 @@ type Action interface {
 	isAction()
 }
 
-func (Claim) isAction()              {}
-func (StartReview) isAction()        {}
-func (FixChecks) isAction()          {}
-func (ResolveConflict) isAction()    {}
-func (CopyLabels) isAction()         {}
-func (Plan) isAction()               {}
-func (StartRequirement) isAction()   {}
-func (ReviewRemaining) isAction()    {}
-func (CheckAcceptance) isAction()    {}
-func (Accept) isAction()             {}
-func (MergeOwnerApproval) isAction() {}
-func (FixOwnerReview) isAction()     {}
+func (Claim) isAction()                   {}
+func (StartReview) isAction()             {}
+func (FixChecks) isAction()               {}
+func (ResolveConflict) isAction()         {}
+func (StopForUnreportedChecks) isAction() {}
+func (CopyLabels) isAction()              {}
+func (Plan) isAction()                    {}
+func (StartRequirement) isAction()        {}
+func (ReviewRemaining) isAction()         {}
+func (CheckAcceptance) isAction()         {}
+func (Accept) isAction()                  {}
+func (MergeOwnerApproval) isAction()      {}
+func (FixOwnerReview) isAction()          {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -359,13 +376,15 @@ func (FixOwnerReview) isAction()     {}
 // awaiting-checks, or reviewing at the same time (cumin-core.md, the
 // settings table). required are the checks that the rules of the default
 // branch require; the caller reads them only when an issue of the
-// repository waits for the checks.
+// repository waits for the checks. now is the time of the poll, and
+// checksWait is the setting "checks_wait_time"; I15 reads both.
 //
-// I14, I3, and I4 come before the starts of R1 and I1: an issue that leaves
-// cumin/status/awaiting-checks keeps its place in the limit, so deciding it
-// first never takes room from a start. I14 (the pull request conflicts)
-// comes before I3 and I4 for its issue: only the first row that holds
-// moves the issue at one poll.
+// I14, I3, I4, and I15 come before the starts of R1 and I1: an issue that
+// leaves cumin/status/awaiting-checks keeps its place in the limit, so
+// deciding it first never takes room from a start. I14 (the pull request
+// conflicts) comes before I3 and I4 for its issue, and I15 (the required
+// checks did not report in time) comes after them: only the first row that
+// holds moves the issue at one poll.
 //
 // R1 and I1 both start an agent, so they share the room under the limit.
 // The starts are taken highest priority first and then lowest issue number
@@ -376,11 +395,12 @@ func (FixOwnerReview) isAction()     {}
 //
 // R3 and R6 move a requirement issue and start no agent, so they come
 // first and take no room.
-func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string) []Action {
+func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string, now time.Time, checksWait time.Duration) []Action {
 	actions := requirementMoves(snapshot)
 	actions = append(actions, conflictingSubIssues(snapshot)...)
 	actions = append(actions, reviewableSubIssues(snapshot, required)...)
 	actions = append(actions, failedSubIssues(snapshot, required)...)
+	actions = append(actions, unreportedSubIssues(snapshot, required, now, checksWait)...)
 	room := maxInProgress - inProgress(snapshot)
 	type start struct {
 		rank   int
@@ -787,6 +807,50 @@ func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	return actions
 }
 
+// unreportedSubIssues returns the actions of I15: open sub-issues in
+// cumin/status/awaiting-checks whose open pull request has a required check
+// that has not reported on its head commit after the wait time, lowest
+// issue number first. A pull request that conflicts belongs to I14, and a
+// failed required check belongs to I4. A sub-issue whose label time was not
+// read gives no action: a later poll decides.
+func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.Time, checksWait time.Duration) []Action {
+	var actions []Action
+	for _, requirement := range snapshot.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || sub.AwaitingChecksAt.IsZero() {
+				continue
+			}
+			pr, ok := sub.LatestPullRequest()
+			if !ok || pr.Mergeable == Conflicting || ChecksOf(required, pr.Checks) != ChecksWaiting {
+				continue
+			}
+			waited := now.Sub(ChecksWaitStart(sub.AwaitingChecksAt, pr.HeadCommittedAt))
+			if waited < checksWait {
+				continue
+			}
+			actions = append(actions, StopForUnreportedChecks{
+				Number: sub.Number, PullRequest: pr.Number, HeadCommit: pr.HeadCommit,
+				Unreported: UnreportedChecks(required, pr.Checks), Waited: waited,
+			})
+		}
+	}
+	slices.SortFunc(actions, func(a, b Action) int {
+		return a.(StopForUnreportedChecks).Number - b.(StopForUnreportedChecks).Number
+	})
+	return actions
+}
+
+// ChecksWaitStart returns the start of the wait time of I15: the later one
+// of the time that the issue entered cumin/status/awaiting-checks and the
+// commit time of the head commit. A push while the issue waits gives a
+// newer head commit, so the wait starts again.
+func ChecksWaitStart(awaitingChecksAt, headCommittedAt time.Time) time.Time {
+	if headCommittedAt.After(awaitingChecksAt) {
+		return headCommittedAt
+	}
+	return awaitingChecksAt
+}
+
 // CheckFixAllowed reports whether I4 may send one more check fix request:
 // count requests were sent since the Owner last added cumin/status/ready,
 // and limit is max_check_fix_requests of the repository. At the limit, I4
@@ -990,6 +1054,19 @@ func FailedChecks(required []RequiredCheck, results []CheckResult) []RequiredChe
 		}
 	}
 	return failed
+}
+
+// UnreportedChecks returns the required checks that have not reported on
+// the commit: no result, or a result that has not finished. The order is
+// that of the required checks. I15 names them for the Owner.
+func UnreportedChecks(required []RequiredCheck, results []CheckResult) []RequiredCheck {
+	var unreported []RequiredCheck
+	for _, check := range required {
+		if checkState(check, results) == ChecksWaiting {
+			unreported = append(unreported, check)
+		}
+	}
+	return unreported
 }
 
 // checkState says what one required check says.
