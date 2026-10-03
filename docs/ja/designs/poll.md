@@ -471,14 +471,14 @@ checkの結果の読み方:
   - また一時的な失敗で終わったら、さらに5分待つ。レート制限のリセットの時刻より前は、クライアントが呼び出しを送らずに失敗を返すので、手順は同じようにさらに5分待つ。成功するか、一時的でない結果になるまで続ける。
   - 持っておく間、Issueは作業中のIssueの集合 (`markInProgress`) に残る。ラベルは `cumin/status/implementing` のままで、進行中の数に数えられ、このIssueのAgentは起動しない。`cumin stop --after-current-runs` は、持っておいた手順が終わるまで待つ。
   - 持っておくときに、warnのログを1行出す。理由と、次に試す時刻を入れる。
-  - R2、Reviewerの実行のあとの手順、mergeは、まだ持っておかない (#423 のほかのsub-issue)。
+  - R2の手順も同じように持っておく (下の「Plannerの実行のあとの手順」)。Reviewerの実行のあとの手順とmergeは、まだ持っておかない (#423 のほかのsub-issue)。
 - 採らなかった案: 全ての行で、ブランチの名前でPull Requestを見つける。スナップショット、I9、mergeのあとのIssueの閉じ方まで変わる。I2でリンクを付ければ、変わるのはI2だけで、GitHubがリンクを作るようになっても、そのまま動く。
 - 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号と、リンクを付けるかどうかである。通れば、リンクを付けてから、ラベルを `cumin/status/awaiting-checks` に替える。落ちたときは、次の話題の手順でOwnerに戻す。
 - 判定に渡す3つの値は、Agentの実行の側から来る。ブランチは依頼に渡したものである。ImplementerのAppのbotのlogin (`<slug>[bot]`) は実行の結果に付いて返り、worktreeの先頭のコミットは `git rev-parse HEAD` で読む ([Agentの実行の設計](agent-run.md) の「作業場所」と「1回の依頼の手順」)。
 - 実行終了のあとの読み直しは、1つのIssueを番号で指定する問い合わせである (`ReadSubIssue`、`ReadRequirementIssue`)。リポジトリの全ページは読まない。R2、I2、I5〜I8、I10の判定が使うのは、1つのIssueの事実だけだからである。
   - 実装Issueでは、ラベル、blocked by、そのIssueを閉じる開いているPull Request (check、レビュー、先頭のコミット、`mergeable`)、親の要求Issueの状態とラベル、既定のブランチの名前を読む。要求Issueでは、ラベル、blocked by、sub-issueを読む。sub-issueの項目は、定期確認と同じである。
   - Issueの項目は、定期確認の問い合わせと同じ2つのfragment (`requirementIssueFields`、`subIssueFields`) と、2つ目の問い合わせと同じfragment (`closingPullRequestFields`) から作る。上限も同じ値を渡す。そのため、どちらで読んでも、判定は同じ事実を受け取る。
-  - 上限を超えたIssueは、定期確認と同じく、Issueの番号を入れたエラーにする。読めなければ、ラベルを替えずにログに出す。I2の読み直しが一時的な失敗で終わったときは、上のとおり手順を持っておく。
+  - 上限を超えたIssueは、定期確認と同じく、Issueの番号を入れたエラーにする。読めなければ、ラベルを替えずにログに出す。I2とR2の読み直しが一時的な失敗で終わったときは、手順を持っておく (I2は上、R2は下の「Plannerの実行のあとの手順」)。
   - 読むのは1回の問い合わせなので、判定が見る事実の時点は1つのままである。
   - ポイントは、実装Issueで1、要求Issueで2である (cumin-worksで実測、2026-10-03、`rateLimit.cost`)。全ページを読み直すと、cumin-worksでは34ポイントだった ([実測した制約](../evidence/measured-constraints.md) の133)。
   - 読み直しがIssueを返すのは、定期確認がそのIssueを読むときだけである (原則6: 閉じた要求Issueと、そのsub-issueは読まない)。要求Issueは、開いていて、`cumin/type/requirement` のラベルを持つこと。実装Issueは、親がそのような要求Issueであること。そのために、実装Issueの問い合わせは、親の状態とラベルも読む (`parent`)。
@@ -487,6 +487,18 @@ checkの結果の読み方:
 - Plannerの実行が `done` で終わったら、同じようにその要求Issueだけを、sub-issueと一緒に読み直し、R2の2つの確認を行う。sub-issueが1つ以上あること。全てのsub-issueに `risk/*` のラベルがちょうど1つ付いていること。閉じたsub-issueも数える。sub-issueは番号の小さい順に確かめ、最初に落ちたものの番号を結果に入れる。分割の中身は判定しない。見るのはOwnerである。
 - R2が通れば、開いているsub-issueがあるときは、要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「分割結果の確認が必要」と通知する。sub-issueが全て閉じているとき (受け入れの確認が `blocked` で止まったあとに、Ownerが `cumin/status/ready` で再開し、Plannerが何も作らなかったとき) は、`cumin/status/implementing` に替え、通知しない。次の定期確認でR4が成り立つ。行き先を決めるのは純粋関数 (`SplitStatus`) である。通知のリンクは要求Issueのアドレスである。通知は止まったことの知らせではないので、戻す道の手順を通らず、同じ通知の部分を直接呼ぶ。
 - Plannerの `blocked` と異常終了は、I2と同じ扱いで、行の番号をR2にしてOwnerに戻す。Plannerのセッションは手元に残さない。
+- Plannerの実行のあとの手順: 分割の実行のあとの手順も、GitHubの呼び出しが一時的な失敗 (`github.IsTemporary`) で終わったときは、I2と同じ仕組み (`keptstep.go`) で持っておく (要件: [cumin本体の要件](../requirements/cumin-core.md) の「GitHubの呼び出しの失敗」)。次の図の戻る矢印がこれである。
+
+
+  ![R2の判定](poll-split.svg)
+
+  図の元ファイル: [poll-split.puml](poll-split.puml)
+
+  - `done` のあとの対象は、tokenの発行、要求Issueの読み直し、ラベルの付け替えである。`blocked` のあとの対象は、Ownerに戻す前の、tokenの発行と要求Issueの読み直しである。Ownerに戻す手順の中の失敗は、今までどおり、ログに出して次に進む。
+  - 持っておくもの、次に試す時刻 (5分後)、ログ、作業中のIssueの集合に残ることは、I2と同じである。要求Issueのラベルは `cumin/status/planning` のままで、進行中の数に数えられ、このIssueのPlannerは起動しない。
+  - 手順は、要求Issueの読み直しからやり直す。検証が落ちれば、今までどおりOwnerに戻す。
+  - やり直しで読み直した要求Issueに `cumin/status/planning` がもうなければ、ラベルの付け替えは済んでいるので、ラベルを替えない。`done` のあとで、ラベルが `cumin/status/awaiting-owner-review` なら、通知だけを出す。通知はラベルの付け替えのあとに出すので、付け替えの答えが届かなかったときは、まだ出ていないためである。それ以外のラベルなら、何もしない。`blocked` のあとでは、何もしない。Ownerに戻す手順が済んでいるためである。
+  - 持っておかないもの: 異常終了のあとの読み直しと、受け入れの確認 (R4) の実行のあとの手順。R4は、ラベルが `cumin/status/implementing` のままなので、次の定期確認がもう一度決める。
 
 ### うまくいかなかったときに、Ownerに戻す道
 

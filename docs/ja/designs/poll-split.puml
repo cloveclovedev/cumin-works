@@ -1,0 +1,77 @@
+@startuml poll-split
+' cumin works - the end of a Planner run that split a requirement issue (R2): the check of the split, the kept step after a temporary failure, and the way back to the Owner.
+' Document: poll.md, section on the end of a run.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:The Planner run of a split ends;
+if (Result?) then (done)
+  repeat
+    :Read the requirement issue again
+    (one issue with its sub-issues);
+    backward :Keep the step (in memory).
+    The issue stays in work, with its label.
+    A poll 5 minutes later runs it again;
+  repeat while (A call to GitHub of this step failed
+  with a temporary failure? (the read, or
+  the label change below)) is (yes) not (no)
+  if (A kept step, and the issue left
+  cumin/status/planning?) then (yes)
+    if (cumin/status/awaiting-owner-review?) then (yes)
+      :Notify the Owner
+      (the split needs a review);
+    endif
+    stop
+  endif
+  partition "Decision (pure function, no I/O)" {
+    if (One or more sub-issues?) then (no)
+      :failed: no sub-issue;
+    elseif (Exactly one risk label
+    on every sub-issue?) then (no)
+      :failed: the risk label of a sub-issue;
+    else (yes)
+      :passed;
+    endif
+  }
+  if (Passed?) then (yes)
+    if (An open sub-issue?) then (yes)
+      :Change the label to
+      cumin/status/awaiting-owner-review;
+      :Notify the Owner
+      (the split needs a review);
+    else (no)
+      :Change the label to
+      cumin/status/implementing;
+    endif
+    stop
+  else (no)
+    :Build the comment
+    (stop-note.md, one sentence for the failed check);
+  endif
+elseif (blocked) then
+  repeat
+    :Read the requirement issue again;
+    backward :Keep the step (in memory),
+    as above;
+  repeat while (The read failed with
+  a temporary failure?) is (yes) not (no)
+  if (A kept step, and the issue left
+  cumin/status/planning?) then (yes)
+    stop
+  endif
+  :The comment is blocked_reason
+  (decision-request.md, written by the agent);
+else (abnormal end)
+  :Retry, then build the comment
+  (stop-note.md);
+endif
+
+partition "Hand back to the Owner (the row number is R2)" {
+  :Comment on the requirement issue;
+  :Change the label to cumin/status/awaiting-owner-decision;
+  :Notify the Owner;
+}
+stop
+@enduml
