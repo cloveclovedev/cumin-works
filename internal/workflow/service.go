@@ -64,6 +64,10 @@ type Service struct {
 	SettingsDir string
 	// PollInterval is the setting poll_interval.
 	PollInterval time.Duration
+	// IdlePollInterval is the setting idle_poll_interval: how often a
+	// poll reads a repository with no issue in work. Zero means that every
+	// poll reads every repository.
+	IdlePollInterval time.Duration
 	// StopGrace is how long Run waits for the requests that are running,
 	// after SIGINT or SIGTERM ended the context. Zero means
 	// DefaultStopGrace. Tests shorten it.
@@ -109,6 +113,13 @@ type Service struct {
 	// runEnded wakes Run when a run ends, so that a stop after the runs does not wait for
 	// the next tick. Run makes it; without Run, nothing is sent.
 	runEnded chan struct{}
+
+	// lastPolls keeps, for each repository, what its last poll left, so
+	// that a repository with no issue in work waits for the idle poll
+	// interval. It lives in memory: after a restart every repository is
+	// polled at once.
+	lastPollMu sync.Mutex
+	lastPolls  map[string]*lastPoll
 
 	// repositorySettings keeps what each repository's .cumin/ decided,
 	// until a blob of those files changes. Poll reads and writes it, and a
@@ -160,7 +171,9 @@ type inProgressKey struct {
 }
 
 // Run creates the missing labels in each target repository, then polls at
-// once and after every PollInterval, until ctx ends. A failed poll is logged,
+// once and after every PollInterval, until ctx ends. A poll passes over a
+// repository with no issue in work until IdlePollInterval passed since its
+// last poll. A failed poll is logged,
 // and the loop continues.
 //
 // When ctx ends (SIGINT or SIGTERM), Run starts no new work, and the runs
@@ -300,6 +313,7 @@ func (s *Service) markInProgress(ctx context.Context, repository string, issue i
 			return
 		}
 		delete(s.inProgress, key)
+		s.noteRunEnded(repository)
 		select {
 		case s.runEnded <- struct{}{}:
 		default:
@@ -378,7 +392,14 @@ func (s *Service) Poll(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return errors.Join(errs...)
 		}
+		// A repository with no issue in work waits for the idle poll
+		// interval. A stop after the runs polls every repository, as before.
+		at := s.now()
+		if !s.pollIsDue(target.Repository, at) && !finishing {
+			continue
+		}
 		result, err := s.pollRepository(ctx, target, finishing)
+		s.notePoll(target.Repository, at, result, err)
 		all.add(result)
 		if err == nil {
 			s.pollSucceeded(target.Repository)
@@ -395,6 +416,86 @@ func (s *Service) Poll(ctx context.Context) error {
 		s.waitingCheck(ctx, all, len(errs) == 0)
 	}
 	return errors.Join(errs...)
+}
+
+// lastPoll is what the poll loop keeps of the last poll of a repository.
+type lastPoll struct {
+	LastPoll
+	// at is when the poll started.
+	at time.Time
+	// runEnded says that an agent run of the repository ended since the
+	// poll started. The next poll reads what the run left.
+	runEnded bool
+	// idle says that the log already told that the repository is not in work.
+	idle bool
+}
+
+// pollIsDue says whether this poll reads the repository: always when the
+// repository is in work, and otherwise once in each idle poll interval.
+func (s *Service) pollIsDue(repository config.Repository, now time.Time) bool {
+	if s.IdlePollInterval <= 0 {
+		return true
+	}
+	key := repository.String()
+	running := len(s.runningIssues(key)) > 0
+	s.lastPollMu.Lock()
+	defer s.lastPollMu.Unlock()
+	last := s.lastPolls[key]
+	if last == nil {
+		return true
+	}
+	inWork := RepositoryInWork(last.LastPoll, running || last.runEnded)
+	if !PollIsDue(inWork, now.Sub(last.at), s.PollInterval, s.IdlePollInterval) {
+		return false
+	}
+	// This poll reads what a run that ended left.
+	last.runEnded = false
+	return true
+}
+
+// notePoll keeps the result of a poll of a repository for pollIsDue, and
+// logs once when the repository leaves or enters the work.
+func (s *Service) notePoll(repository config.Repository, at time.Time, result pollResult, err error) {
+	if s.IdlePollInterval <= 0 {
+		return
+	}
+	key := repository.String()
+	running := len(s.runningIssues(key)) > 0
+	s.lastPollMu.Lock()
+	defer s.lastPollMu.Unlock()
+	if s.lastPolls == nil {
+		s.lastPolls = map[string]*lastPoll{}
+	}
+	last := s.lastPolls[key]
+	if last == nil {
+		last = &lastPoll{}
+		s.lastPolls[key] = last
+	}
+	// A run that ended while this poll ran stays noted: the poll may have
+	// read GitHub before the end.
+	last.LastPoll = LastPoll{Ran: true, Failed: err != nil, Acted: result.decided, IssueInWork: result.issueInWork}
+	last.at = at
+	idle := !RepositoryInWork(last.LastPoll, running || last.runEnded)
+	if idle != last.idle {
+		log := s.logger().With("repository", key)
+		if idle {
+			log.Info("no issue is in work: the next poll comes after the idle poll interval",
+				"idle_poll_interval", s.IdlePollInterval.String())
+		} else {
+			log.Info("the repository is in work again: the next poll comes after the poll interval")
+		}
+	}
+	last.idle = idle
+}
+
+// noteRunEnded records the end of an agent run of a repository, so that
+// the next poll reads the repository, also when it had no issue in work.
+func (s *Service) noteRunEnded(repository string) {
+	s.lastPollMu.Lock()
+	defer s.lastPollMu.Unlock()
+	if last := s.lastPolls[repository]; last != nil {
+		last.runEnded = true
+	}
 }
 
 func (s *Service) pollRepository(ctx context.Context, target Target, finishing bool) (pollResult, error) {
@@ -462,6 +563,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// An issue that cumin moves on without the Owner keeps Q4 silent, even
 	// when this poll decides nothing for it.
 	result.movesOn = snapshot.MovesWithoutOwner()
+	result.issueInWork = snapshot.HasIssueInWork()
 	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames(),
 		s.now(), settings.Settings.ChecksWaitTime)
 	if finishing {

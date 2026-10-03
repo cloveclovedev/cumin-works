@@ -20,6 +20,31 @@
 
 ## 設計
 
+### 定期確認の間隔
+
+![定期確認の間隔](poll-interval.svg)
+
+図の元ファイル: [poll-interval.puml](poll-interval.puml)
+
+- cuminは `poll_interval` ごとに、対象のリポジトリを順に見る。作業中のリポジトリは毎回確かめる。作業中でないリポジトリは、前回の定期確認から `idle_poll_interval` が過ぎるまで飛ばす。飛ばすときは、GitHubを1回も呼ばない (cumin本体の要件の「GitHubの定期確認」、テスト26)。
+- 作業中とは、次のどれかである。
+  - そのリポジトリの定期確認を、まだ1回もしていない。
+  - 前回の定期確認が失敗した。動作の1つが失敗したときも含む。
+  - 前回の定期確認で、何か動作をした。Ownerの承認とOwnerのレビューの候補 (I12、I13) は、mergeか差し戻しまで進んだときだけ動作に数える。候補は、Ownerが動くまで毎回の判定に出るためである。
+  - そのリポジトリでAgentの実行が進んでいる。または、前回の定期確認のあとに実行が終わった。
+  - 前回のスナップショットに、`cumin/status/ready` か `cumin/status/planning` の開いている要求Issueがある。
+  - 前回のスナップショットに、`cumin/status/ready`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いているsub-issueがある。
+- 判定は `internal/workflow` の純粋関数である。`Snapshot.HasIssueInWork` がスナップショットからIssueを見て、`RepositoryInWork` が前回の定期確認の結果と実行の有無から作業中かを返し、`PollIsDue` が前回からの時間と2つの間隔から、今回確かめるかを返す。時計を読むのは `Service.Poll` である。
+- 前回の定期確認の時刻と結果は、リポジトリごとにメモリに持つ。GitHub上の事実ではないが、失っても作業を失わない。cuminが起動し直すと、全てのリポジトリを1回確かめるだけである。
+- 作業中でないリポジトリが気付く速さ。Ownerが `cumin/status/ready` を付ける、Pull Requestを承認する、レビューで差し戻す、のどれにも、最長で `idle_poll_interval` (初期値は5分) のうちに気付く。気付いた定期確認は動作をするか、作業中のIssueを読むので、次の定期確認は `poll_interval` のあとに来る。
+- 実行が終わると、ラベルが作業中のものでなくても、次の `poll_interval` で確かめる。受け入れの確認 (R4) とmergeの手順は、要求Issueや実装Issueのラベルを作業中のものにしないまま進むので、実行の終わりを別に覚える。
+- 時間の比べ方。`poll_interval` の刻みは、わずかに早く来ることがある。前回からの時間が `idle_poll_interval` に `poll_interval` の半分だけ足りなくても、確かめる。足りないからと次の刻みまで待つと、5分のはずが6分になるためである。`idle_poll_interval` が `poll_interval` の倍数でないときは、いちばん近い刻みで確かめる。
+- リポジトリは、それぞれ別に判定する。作業中でないリポジトリを飛ばしても、他のリポジトリの定期確認は `poll_interval` のままである。
+- 実行を待ってから止める間 ([cumin本体の設計メモ](cumin-core.md) の「実行を待ってから止める」) は、どのリポジトリも飛ばさない。最後の定期確認が全てのリポジトリを読む、という止め方を変えないためである。
+- 待ち状態の通知 (Q4) は変わらない。飛ばしたリポジトリは、動作もなく、cuminがOwnerなしで進めるIssueもないリポジトリだからである。
+- ログ。作業中でなくなったときと、作業中に戻ったときに、リポジトリごとに1行ずつ出す。飛ばすたびには出さない。
+- `idle_poll_interval` が0のとき (テストが `Service` を直に作るとき) は、飛ばさない。設定ファイルからは、`poll_interval` より短い値を指定できない。
+
 ### 定期確認で読む内容
 
 対象のリポジトリごとに、開いていて `cumin/type/requirement` の付いたIssueを起点にして、次を読む。項目の名前は、GraphQLのスキーマで確かめた (実測 55 と、2026-09-20 の introspection)。
