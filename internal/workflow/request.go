@@ -241,6 +241,26 @@ The Reviewer requested changes on the pull request #%[5]d. Read that review and 
 `, repository, number, branch, workDir, pullRequest, review)
 }
 
+// OwnerReviewFixRequestText returns the request text of the kind "owner
+// review fix" (implementer.md, the request kinds): the Owner requested
+// changes on the head commit of a pull request that waits for the merge
+// decision (I13). The request resumes the Implementer session and names the
+// review. The comments of the Owner carry no mark of blocking, so the text
+// asks for every comment; the comments stand on GitHub, where the
+// Implementer replies to them.
+func OwnerReviewFixRequestText(repository string, number, pullRequest int, branch, workDir, review string) string {
+	return fmt.Sprintf(`Request: owner review fix
+Repository: %[1]s
+Implementation issue: #%[2]d
+Pull request: #%[5]d
+Branch: %[3]s
+Work directory: %[4]s
+Review: %[6]s
+
+The Owner requested changes on the pull request #%[5]d. Read that review and its comments on GitHub. Address every comment of that review in the work directory, which is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request. Reply to every comment of that review with the skill cumin-review-reply. When the fix changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
+`, repository, number, branch, workDir, pullRequest, review)
+}
+
 // ExplainCauseRequestText returns the request text of the kind "explain
 // the cause" (reviewer.md, the request kinds): blocking comments remain at
 // the limit of rounds (I8). The request resumes the Reviewer session, which

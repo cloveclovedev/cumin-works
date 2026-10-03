@@ -151,6 +151,48 @@ func TestCheckFixRequestText_I4(t *testing.T) {
 	}
 }
 
+// I13 (implementer.md, the request kind "owner review fix"): the text names
+// the pull request, its branch, and the address of the review of the Owner,
+// asks for every comment of that review, and keeps the work in the same pull
+// request. It copies no comment: the Implementer reads them on GitHub.
+func TestOwnerReviewFixRequestText_I13(t *testing.T) {
+	const review = "https://github.com/example-org/example-repo/pull/21#pullrequestreview-7"
+	text := OwnerReviewFixRequestText("example-org/example-repo", 10, 21, "cumin/10-add-the-login-screen",
+		"/work/example-org/example-repo/10-implementer", review)
+	if !strings.HasPrefix(text, "Request: owner review fix\n") {
+		t.Errorf("the request text does not start with the kind \"owner review fix\":\n%s", text)
+	}
+	for _, want := range []string{
+		"Repository: example-org/example-repo\n",
+		"Implementation issue: #10\n",
+		"Pull request: #21\n",
+		"Branch: cumin/10-add-the-login-screen\n",
+		"Work directory: /work/example-org/example-repo/10-implementer\n",
+		"Review: " + review + "\n",
+		"The Owner requested changes on the pull request #21",
+		"Read that review and its comments on GitHub",
+		"Address every comment of that review",
+		"Do not open a new pull request",
+		"Reply to every comment of that review with the skill cumin-review-reply",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text does not hold %q:\n%s", want, text)
+		}
+	}
+	// The Owner's comments carry no mark of blocking, so the text must not
+	// limit the work to blocking comments.
+	if strings.Contains(text, "blocking") {
+		t.Errorf("the request text limits the work to blocking comments:\n%s", text)
+	}
+	// The address of the review is the only thing of the review in the text.
+	if n := strings.Count(text, review); n != 1 {
+		t.Errorf("the request text names the review %d times, want 1", n)
+	}
+	if strings.Contains(text, "**") {
+		t.Error("the request text uses bold text")
+	}
+}
+
 func TestAcceptanceRequestText_R4(t *testing.T) {
 	text := AcceptanceRequestText("example-org/example-repo", 6, "/work/example-org/example-repo/6-planner")
 	for _, want := range []string{
