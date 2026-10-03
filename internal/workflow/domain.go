@@ -77,9 +77,9 @@ type RequirementIssue struct {
 	// BlockedBy are the issues that block the requirement issue. The Owner
 	// links requirement issues to each other, and R1 waits for them.
 	BlockedBy []BlockedBy
-	// LabelTimesRead says that ReviewAt and the ReadyAt of the sub-issues
-	// were read. The poll reads them only when R3 needs them
-	// (NeedsLabelTimes).
+	// LabelTimesRead says that ReviewAt and the ReadyAt and
+	// AwaitingChecksAt of the sub-issues were read. The poll reads them
+	// only when a rule needs them (NeedsLabelTimes).
 	LabelTimesRead bool
 	// ReviewAt is when cumin/status/awaiting-owner-review was last added.
 	ReviewAt time.Time
@@ -113,6 +113,9 @@ type SubIssue struct {
 	// ReadyAt is when cumin/status/ready was last added. It is read only
 	// when RequirementIssue.LabelTimesRead is true.
 	ReadyAt time.Time
+	// AwaitingChecksAt is when cumin/status/awaiting-checks was last added.
+	// It is read only when RequirementIssue.LabelTimesRead is true.
+	AwaitingChecksAt time.Time
 	// ClosedAt is when a closed sub-issue closed.
 	ClosedAt time.Time
 }
@@ -136,7 +139,25 @@ type PullRequest struct {
 	// Reviews are the reviews of the pull request. The round of the review
 	// and the check after a Reviewer run read them (I3, I5, I8).
 	Reviews []Review
+	// Mergeable is what GitHub says about a merge into the base branch.
+	Mergeable MergeableState
+	// HeadCommittedAt is the commit time of the head commit, or zero when
+	// the poll could not read it.
+	HeadCommittedAt time.Time
 }
+
+// MergeableState is the mergeability of a pull request on GitHub (the
+// GraphQL schema, MergeableState).
+type MergeableState string
+
+const (
+	// Mergeable: the pull request can be merged.
+	Mergeable MergeableState = "MERGEABLE"
+	// Conflicting: the pull request has merge conflicts.
+	Conflicting MergeableState = "CONFLICTING"
+	// MergeableUnknown: GitHub is still calculating the mergeability.
+	MergeableUnknown MergeableState = "UNKNOWN"
+)
 
 // ReviewState is the state of a review on GitHub (the GraphQL schema,
 // PullRequestReviewState).
@@ -589,13 +610,26 @@ func IssuesToCleanUp(snapshot Snapshot) []int {
 	return numbers
 }
 
-// NeedsLabelTimes reports whether R3 needs the label times of the
-// requirement issue: it waits in cumin/status/awaiting-owner-review, and an
-// open sub-issue carries cumin/status/ready. Only then does the poll read
-// the times, so that the poll query keeps its cost.
+// NeedsLabelTimes reports whether a rule needs the label times of the
+// requirement issue: R3 needs them (startNeedsLabelTimes), or an open
+// sub-issue waits in cumin/status/awaiting-checks, whose wait is counted
+// from the time of that label. Only then does the poll read the times, so
+// that the poll query keeps its cost.
 func NeedsLabelTimes(requirement RequirementIssue) bool {
+	return startNeedsLabelTimes(requirement) ||
+		slices.ContainsFunc(requirement.SubIssues, openAwaitingChecks)
+}
+
+// startNeedsLabelTimes reports whether R3 needs the label times of the
+// requirement issue: it waits in cumin/status/awaiting-owner-review, and an
+// open sub-issue carries cumin/status/ready.
+func startNeedsLabelTimes(requirement RequirementIssue) bool {
 	return statusLabel(requirement.Labels) == LabelAwaitingOwnerReview &&
 		slices.ContainsFunc(requirement.SubIssues, openReady)
+}
+
+func openAwaitingChecks(sub SubIssue) bool {
+	return !sub.Closed && slices.Contains(sub.Labels, LabelAwaitingChecks)
 }
 
 func openReady(sub SubIssue) bool {
@@ -791,7 +825,7 @@ func readySubIssues(snapshot Snapshot) []Claim {
 		// R3 could not be judged without the label times. A claim would
 		// take away the cumin/status/ready that R3 must still see, so the
 		// sub-issues wait for the next poll.
-		if NeedsLabelTimes(requirement) && !requirement.LabelTimesRead {
+		if startNeedsLabelTimes(requirement) && !requirement.LabelTimesRead {
 			continue
 		}
 		for _, sub := range requirement.SubIssues {

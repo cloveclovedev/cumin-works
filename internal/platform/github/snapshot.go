@@ -30,7 +30,9 @@ import (
 // With these sizes one page costs 11 points, against 5,000 points per hour
 // for one installation (measured on the sandbox on 2026-09-26). The reviews
 // of a pull request are one more connection under it, and raise the cost of
-// one page to 14 points (measured on the sandbox on 2026-09-30).
+// one page to 14 points (measured on the sandbox on 2026-09-30). The head
+// commit with its time is one more connection again (commits), and raises
+// the cost of one page to 17 points (measured on cumin-works on 2026-10-03).
 // MaxOpenClosingPullRequests is the most open closing pull requests that
 // the snapshot reads for one issue. I2 adds no closing link that would go
 // over it, because every later poll would then fail on that issue.
@@ -142,7 +144,26 @@ type PullRequest struct {
 	// of the review and the checks after a Reviewer run read them (I3, I5,
 	// I8).
 	Reviews []Review
+	// Mergeable is what GitHub says about a merge into the base branch.
+	Mergeable MergeableState
+	// HeadCommittedAt is the commit time of the head commit (committedDate).
+	// Zero when the last commit that GitHub lists is not HeadCommit: a push
+	// came between the two reads of GitHub.
+	HeadCommittedAt time.Time
 }
+
+// MergeableState is the mergeability of a pull request (the GraphQL schema,
+// MergeableState).
+type MergeableState string
+
+const (
+	// Mergeable: the pull request can be merged.
+	Mergeable MergeableState = "MERGEABLE"
+	// Conflicting: the pull request has merge conflicts.
+	Conflicting MergeableState = "CONFLICTING"
+	// MergeableUnknown: GitHub is still calculating the mergeability.
+	MergeableUnknown MergeableState = "UNKNOWN"
+)
 
 // Review is one review of a pull request, as the rules need it.
 type Review struct {
@@ -222,6 +243,10 @@ type RateLimit struct {
 // measured-constraints.md row 55, and were checked against the schema by
 // introspection on 2026-09-21 and on the sandbox on 2026-09-22
 // (closedByPullRequestsReferences, Repository.object, and Blob).
+// PullRequest.mergeable and Commit.committedDate were checked by
+// introspection on 2026-10-03. Commit.pushedDate is no longer supported, and
+// PullRequest.headRef was null for open pull requests on cumin-works, so the
+// head commit is read as the last node of PullRequest.commits.
 //
 // "HEAD:" is the default branch of the repository, so the files never come
 // from a pull request branch. The files are not a connection, so they do not
@@ -255,6 +280,8 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
                 number
                 headRefOid
                 headRefName
+                mergeable
+                commits(last: 1) { nodes { commit { oid committedDate } } }
                 author { __typename login }
                 labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
                 statusCheckRollup {
@@ -377,7 +404,16 @@ type pullRequestNode struct {
 	Number      int    `json:"number"`
 	HeadRefOid  string `json:"headRefOid"`
 	HeadRefName string `json:"headRefName"`
-	Author      *struct {
+	Mergeable   string `json:"mergeable"`
+	Commits     struct {
+		Nodes []struct {
+			Commit struct {
+				OID           string    `json:"oid"`
+				CommittedDate time.Time `json:"committedDate"`
+			} `json:"commit"`
+		} `json:"nodes"`
+	} `json:"commits"`
+	Author *struct {
 		TypeName string `json:"__typename"`
 		Login    string `json:"login"`
 	} `json:"author"`
@@ -504,9 +540,22 @@ func restLogin(typeName, login string) string {
 
 // pullRequest converts one node. Without includeClosedPrs, the connection
 // holds open pull requests only (the schema: closedByPullRequestsReferences).
-// A connection over its page size is an error, as it is for an issue.
+// A connection over its page size is an error, as it is for an issue. An
+// unknown mergeable value is an error too: cumin must not decide on a value
+// whose meaning it does not know.
 func (n pullRequestNode) pullRequest() (PullRequest, error) {
 	pr := PullRequest{Number: n.Number, HeadCommit: n.HeadRefOid, HeadBranch: n.HeadRefName}
+	switch state := MergeableState(n.Mergeable); state {
+	case Mergeable, Conflicting, MergeableUnknown:
+		pr.Mergeable = state
+	default:
+		return PullRequest{}, fmt.Errorf("pull request #%d has the unknown mergeable value %q", n.Number, n.Mergeable)
+	}
+	for _, node := range n.Commits.Nodes {
+		if node.Commit.OID == n.HeadRefOid {
+			pr.HeadCommittedAt = node.Commit.CommittedDate
+		}
+	}
 	if n.Author != nil {
 		pr.Author = restLogin(n.Author.TypeName, n.Author.Login)
 	}

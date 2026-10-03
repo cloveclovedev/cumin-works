@@ -208,7 +208,7 @@ func TestReadSnapshot_AnUnknownKindOfCheckIsAnError(t *testing.T) {
 	       {"number":10,"title":"x","state":"OPEN","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
 	        "blockedBy":{"pageInfo":{"hasNextPage":false},"nodes":[]},
 	        "closedByPullRequestsReferences":{"pageInfo":{"hasNextPage":false},"nodes":[
-	          {"number":21,"headRefOid":"222","headRefName":"cumin/10-x","author":null,
+	          {"number":21,"headRefOid":"222","headRefName":"cumin/10-x","mergeable":"MERGEABLE","author":null,
 	           "labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
 	           "statusCheckRollup":{"contexts":{"pageInfo":{"hasNextPage":false},"nodes":[
 	             {"__typename":"DeploymentGate","name":"a-new-kind"}]}}}]}}]}}]}},

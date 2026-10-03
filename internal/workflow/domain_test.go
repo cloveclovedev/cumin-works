@@ -427,7 +427,7 @@ func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
 	}
 }
 
-func TestNeedsLabelTimes_R3(t *testing.T) {
+func TestNeedsLabelTimes(t *testing.T) {
 	ready := SubIssue{Number: 10, Labels: []string{LabelReady}}
 	tests := []struct {
 		name string
@@ -437,6 +437,8 @@ func TestNeedsLabelTimes_R3(t *testing.T) {
 		{"review with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{ready}}, true},
 		{"review without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{{Number: 10}}}, false},
 		{"implementing with a ready sub-issue", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{ready}}, false},
+		{"a sub-issue waits for its checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}}}}, true},
+		{"a closed sub-issue in awaiting-checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}}}}, false},
 	}
 	for _, tt := range tests {
 		if got := NeedsLabelTimes(tt.r); got != tt.want {

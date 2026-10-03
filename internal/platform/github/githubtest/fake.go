@@ -104,6 +104,11 @@ type PullRequest struct {
 	// Conflict makes a merge answer 405, and mergeable read false, as
 	// GitHub answers for a pull request that conflicts with its base.
 	Conflict bool
+	// Mergeable is the value of the GraphQL field mergeable. Empty answers
+	// CONFLICTING for a pull request with Conflict, and MERGEABLE otherwise.
+	Mergeable string
+	// HeadCommittedAt is the commit time of the head commit.
+	HeadCommittedAt time.Time
 	// MergeMethod is the method of the merge that merged it.
 	MergeMethod string
 }
@@ -529,6 +534,26 @@ func (f *Fake) SetPullRequestConflict(r *Repository, number int) {
 	defer f.mu.Unlock()
 	if pr, ok := r.PullRequests[number]; ok {
 		pr.Conflict = true
+	}
+}
+
+// SetPullRequestMergeable sets the value that the GraphQL field mergeable
+// answers for the pull request, for example "UNKNOWN".
+func (f *Fake) SetPullRequestMergeable(r *Repository, number int, mergeable string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if pr, ok := r.PullRequests[number]; ok {
+		pr.Mergeable = mergeable
+	}
+}
+
+// SetPullRequestHeadCommitTime sets the commit time of the head commit of
+// the pull request.
+func (f *Fake) SetPullRequestHeadCommitTime(r *Repository, number int, at time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if pr, ok := r.PullRequests[number]; ok {
+		pr.HeadCommittedAt = at
 	}
 }
 
@@ -1724,15 +1749,27 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 
 // pullRequestNode is one pull request as GraphQL returns it: the author
 // of an App is a Bot whose login has no "[bot]", and the rollup is null
-// when the head commit has no check.
+// when the head commit has no check. The last commit is the head commit.
 func pullRequestNode(pr *PullRequest, labels, checks, reviews int) map[string]any {
+	mergeable := pr.Mergeable
+	switch {
+	case mergeable != "":
+	case pr.Conflict:
+		mergeable = "CONFLICTING"
+	default:
+		mergeable = "MERGEABLE"
+	}
 	node := map[string]any{
 		"number":      pr.Number,
 		"headRefOid":  pr.HeadCommit,
 		"headRefName": pr.HeadBranch,
-		"author":      nil,
-		"labels":      connection(pr.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
-		"reviews":     connection(pr.Reviews, reviews, reviewNode),
+		"mergeable":   mergeable,
+		"commits": map[string]any{"nodes": []any{map[string]any{"commit": map[string]any{
+			"oid": pr.HeadCommit, "committedDate": pr.HeadCommittedAt.UTC().Format(time.RFC3339Nano),
+		}}}},
+		"author":  nil,
+		"labels":  connection(pr.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
+		"reviews": connection(pr.Reviews, reviews, reviewNode),
 	}
 	if pr.Author != "" {
 		typeName := "User"
