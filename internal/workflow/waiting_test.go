@@ -121,7 +121,7 @@ func TestQ4_AFailedPollSendsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := sc.service()
-	sc.fake.FailNext(http.MethodPost, "/graphql", http.StatusBadGateway)
+	sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
 	_ = service.Poll(t.Context())
 	if got := sc.q4Messages(); len(got) != 0 {
 		t.Errorf("Q4 after a failed poll = %q, want none", got)

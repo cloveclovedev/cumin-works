@@ -296,6 +296,17 @@ func jobID(detailsURL string) string {
 // redirect; Go follows it and drops the Authorization header on the way to
 // another host.
 func (c *AppClient) text(ctx context.Context, token, path, label string) (string, error) {
+	var text string
+	err := c.retry(ctx, http.MethodGet, label, true, func() error {
+		var err error
+		text, err = c.sendText(ctx, token, path, label)
+		return err
+	})
+	return text, err
+}
+
+// sendText sends one try of text.
+func (c *AppClient) sendText(ctx context.Context, token, path, label string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
 		return "", fmt.Errorf("GET %s: cannot build the request", label)
@@ -310,10 +321,13 @@ func (c *AppClient) text(ctx context.Context, token, path, label string) (string
 		if errors.As(err, &urlErr) {
 			err = urlErr.Err
 		}
-		return "", fmt.Errorf("GET %s: %w", label, err)
+		return "", networkError(ctx, fmt.Errorf("GET %s: %w", label, err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= 500 {
+			return "", &TemporaryError{Err: &StatusError{Method: http.MethodGet, Label: label, Status: resp.StatusCode}}
+		}
 		return "", fmt.Errorf("GET %s: status %d", label, resp.StatusCode)
 	}
 	// The end of the log is what says why the job failed, so the read
@@ -336,7 +350,7 @@ func (c *AppClient) text(ctx context.Context, token, path, label string) (string
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return "", fmt.Errorf("GET %s: %w", label, err)
+			return "", networkError(ctx, fmt.Errorf("GET %s: %w", label, err))
 		}
 		if total >= logReadLimit {
 			reachedLimit = true

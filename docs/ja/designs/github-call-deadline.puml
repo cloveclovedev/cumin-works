@@ -1,5 +1,6 @@
 @startuml github-call-deadline
-' cumin works - every call of the GitHub client ends after a deadline.
+' cumin works - every call of the GitHub client ends after a deadline,
+' and a read that fails for a reason that passes is sent again.
 ' Document: cumin-core.md, topic on the GitHub client.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -14,12 +15,17 @@ cloud "GitHub API" as api
 run --> client
 status --> client
 setup --> client
-client -[#red,bold]-> api : <color:red>every call ends\n<color:red>after 30 seconds</color>
+client -[#red,bold]-> api : <color:red>every try ends\n<color:red>after 30 seconds</color>
 
 note right of client
-  A call that gets no answer
-  returns an error at the deadline.
-  The poll logs it and runs again
-  at the next interval.
+  A try that gets no answer
+  ends with an error at the deadline.
+  A read (GET, GraphQL query) that fails
+  with a network error or a 5xx answer
+  is sent again: up to 3 retries,
+  2 seconds apart, one warn log line each.
+  A write is sent once.
+  After the last try, the error
+  is a temporary error (IsTemporary).
 end note
 @enduml

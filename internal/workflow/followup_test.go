@@ -490,7 +490,7 @@ func TestR4_AFailedReadOfTheCommentsWaits(t *testing.T) {
 	service := sc.service()
 	// The poll queries GraphQL three times: the snapshot, the comments for
 	// R4 and R7, then the comments for I9. The third query fails.
-	sc.fake.FailAfter("POST", "/graphql", 2, 502)
+	sc.fake.FailTimes("POST", "/graphql", 2, everyTry, 502)
 	sc.pollAndWait(t, service)
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want none", n)

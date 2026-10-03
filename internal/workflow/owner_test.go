@@ -290,7 +290,7 @@ func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *t
 	service := sc.serviceWithSession(t)
 	// The first read of the permission is the one of the reviewer for I12;
 	// the second one is the read of the login of the Owner.
-	sc.fake.FailAfter(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 1, http.StatusBadGateway)
+	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 1, everyTry, http.StatusBadGateway)
 
 	sc.pollAndWait(t, service)
 
