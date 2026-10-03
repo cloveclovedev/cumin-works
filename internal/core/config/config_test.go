@@ -38,6 +38,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if s.PollInterval != 60*time.Second {
 		t.Errorf("PollInterval = %v, want 60s", s.PollInterval)
 	}
+	if s.IdlePollInterval != 5*time.Minute {
+		t.Errorf("IdlePollInterval = %v, want 5m", s.IdlePollInterval)
+	}
 	if s.MaxIssuesInProgress != 1 {
 		t.Errorf("MaxIssuesInProgress = %d, want 1", s.MaxIssuesInProgress)
 	}
@@ -89,6 +92,7 @@ func TestLoadReadsEveryKey(t *testing.T) {
 repositories = ["example-org/first", "example-org/second"]
 work_dir = "/tmp/cumin-work"
 poll_interval = "30s"
+idle_poll_interval = "10m"
 max_issues_in_progress = 2
 max_review_rounds = 5
 max_check_fix_requests = 4
@@ -113,7 +117,7 @@ reviewer = "client-id-reviewer"
 	if len(s.Repositories) != 2 || s.Repositories[1] != (Repository{"example-org", "second"}) {
 		t.Errorf("Repositories = %v", s.Repositories)
 	}
-	if s.PollInterval != 30*time.Second || s.MaxIssuesInProgress != 2 ||
+	if s.PollInterval != 30*time.Second || s.IdlePollInterval != 10*time.Minute || s.MaxIssuesInProgress != 2 ||
 		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.ChecksWaitTime != 90*time.Minute ||
 		s.MergeMethod != MergeRebase {
 		t.Errorf("top-level settings = %+v", s)
@@ -164,6 +168,8 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"poll_interval zero", required + `poll_interval = "0s"`, "poll_interval:"},
 		{"poll_interval negative", required + `poll_interval = "-1s"`, "poll_interval:"},
 		{"poll_interval without unit", required + `poll_interval = 60`, `"poll_interval"`},
+		{"idle_poll_interval less than poll_interval", required + `idle_poll_interval = "59s"`, "idle_poll_interval:"},
+		{"poll_interval more than the default idle_poll_interval", required + `poll_interval = "6m"`, "idle_poll_interval:"},
 		{"max_issues_in_progress zero", required + `max_issues_in_progress = 0`, "max_issues_in_progress:"},
 		{"max_review_rounds zero", required + `max_review_rounds = 0`, "max_review_rounds:"},
 		{"max_check_fix_requests zero", required + `max_check_fix_requests = 0`, "max_check_fix_requests:"},

@@ -24,6 +24,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `repositories` | 対象のリポジトリの一覧。`"<owner>/<repo>"` の形の文字列の配列 | なし (必須) | 1つ以上。同じリポジトリを2回書けない |
 | `work_dir` | `git worktree` を置くディレクトリ。先頭の `~/` は、ホームディレクトリに置き換わる | なし (必須) | 空にできない |
 | `poll_interval` | 定期確認の間隔 | `"60s"` | 0より大きい |
+| `idle_poll_interval` | 作業中のIssueがないリポジトリを確かめる間隔。作業中の意味は、[定期確認の設計](../designs/poll.md) の「定期確認の間隔」にある | `"5m"` | `poll_interval` 以上。`poll_interval` を5分より長くするときは、このキーも書く |
 | `max_issues_in_progress` | リポジトリごとに同時に進めるIssueの数 | `1` | 1以上 |
 | `max_review_rounds` | レビューのラウンドの上限 | `3` | 1以上 |
 | `max_check_fix_requests` | checkの修正を依頼する回数の上限 | `3` | 1以上 |
@@ -71,6 +72,7 @@ repositories = ["example-org/example-repo"]
 work_dir = "~/cumin-work"
 
 poll_interval = "60s"
+idle_poll_interval = "5m"
 max_issues_in_progress = 1
 max_review_rounds = 3
 max_check_fix_requests = 3
@@ -146,7 +148,7 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 - 書かないキーには、Hostの設定ファイルの値が残る。優先順位は、初期値、Hostの設定ファイル、リポジトリの設定ファイルの順に強くなる。
 - 値の制限と、制限を外れたときの文章は、Hostの設定ファイルと同じである。
 - 次のものは、そのリポジトリのエラーになる。cuminはキーの名前をログに出して、そのリポジトリの定期確認を飛ばす。他のリポジトリの定期確認は続く。Ownerが直したものをmergeすると、次の定期確認から元に戻る。
-  - Hostに属するキー (`repositories`、`work_dir`、`poll_interval`、`max_issues_in_progress`、`quota` の表、`github_apps` の表、`roles.<role>.cli_path`、`roles.<role>.time_limit`)
+  - Hostに属するキー (`repositories`、`work_dir`、`poll_interval`、`idle_poll_interval`、`max_issues_in_progress`、`quota` の表、`github_apps` の表、`roles.<role>.cli_path`、`roles.<role>.time_limit`)
   - 知らないキーと、知らないroleの名前
   - 制限を外れた値
 - `roles.<role>.cli_path` と `roles.<role>.time_limit` がHostのものなのは、前者がHostのパスであり、後者がGitHub Appのtokenの寿命から決まるためである。

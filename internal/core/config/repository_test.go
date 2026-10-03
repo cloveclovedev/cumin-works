@@ -226,6 +226,7 @@ func TestWithRepository_AKeyOfTheHostIsAnError(t *testing.T) {
 		{"repositories = [\"example-org/other\"]\n", "repositories: " + reasonHostOnly},
 		{"work_dir = \"/tmp/other\"\n", "work_dir: " + reasonHostOnly},
 		{"poll_interval = \"5s\"\n", "poll_interval: " + reasonHostOnly},
+		{"idle_poll_interval = \"10m\"\n", "idle_poll_interval: " + reasonHostOnly},
 		{"max_issues_in_progress = 4\n", "max_issues_in_progress: " + reasonHostOnly},
 		{"[quota.five_hour]\nthreshold = 100\n", "quota: " + reasonHostOnly},
 		{"[github_apps.example-org]\ncumin-core = \"client-id\"\n", "github_apps: " + reasonHostOnly},
