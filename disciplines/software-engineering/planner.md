@@ -47,7 +47,7 @@ When a change sits between two levels, take the higher one. The Owner decides th
 
 The start request names the limit of the run in two lines: "Time limit of the run" and "End time of the run".
 
-- Plan a long check, such as rendering the diagrams, so that it ends well before "End time of the run".
+- Plan a long check so that it ends well before "End time of the run".
 - Before you start a long check, estimate how long it takes, and compare the estimate with the time that is left.
 - Keep time to write the comment, and to return the result.
 - When a planned long check does not end before "End time of the run", stop at the part that fits. Write in the comment how many runs of how many you did, and their result. Write the missing part there too.

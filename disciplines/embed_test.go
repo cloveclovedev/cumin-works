@@ -122,7 +122,6 @@ func TestRole_HoldsTheCriterionOnTheTimeOfOneRunForThePlanner(t *testing.T) {
 		"when the answer to one of 1 to 9, or to 11, is no",
 		"Name the work under \"Please check\" of the plan summary",
 		"raise `roles.<role>.time_limit`, change the criterion, or drop the work",
-		"such as rendering the diagrams",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the discipline of the planner does not hold %q", want)
