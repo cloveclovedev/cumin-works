@@ -6,7 +6,7 @@ This file holds the standards of software engineering for the Planner. The role 
 
 ### Questions that split
 
-Ask these questions of every implementation issue. Split it or rewrite it when the answer to one of them is no, unless the split is one that the next section stops.
+Ask these questions of every implementation issue. Split it or rewrite it when the answer to one of them is no, but never with a split that the next section stops.
 
 1. One purpose. You can describe the change in one sentence without "and". Do not mix a refactoring, a new behavior, and a fix. A refactoring becomes its own issue, before the others.
 2. The work can be checked. A command shows that the issue is done: a test, a build, a linter. The issue says what the tests and the documents must hold.
@@ -21,9 +21,11 @@ Ask these questions of every implementation issue. Split it or rewrite it when t
 
 Some work does not fit after every split, such as a long test that must run as a whole. Do not write an implementation issue for that work. Name the work under "Please check" of the plan summary. The Owner decides: raise `roles.<role>.time_limit`, change the criterion, or drop the work.
 
-### The question that stops a split
+### Questions that stop a split
 
-Do not split further when the split would leave a piece that no command can check, separate a rule from its test, add an API that nothing calls, leave an issue that reads as nothing without another pull request, or only add an order between issues.
+Ask these questions of every split you plan. Do not make a split when the answer to one of them is no.
+
+1. Every piece still stands alone. The split does not leave a piece that no command can check, separate a rule from its test, add an API that nothing calls, leave an issue that reads as nothing without another pull request, or only add an order between issues.
 
 ## How many implementation issues
 
