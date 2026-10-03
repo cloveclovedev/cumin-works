@@ -219,6 +219,8 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 
 Agentの実行が異常終了したとき (プロセスの失敗、タイムアウトなど) は、同じ依頼を1回だけやり直す。それでも駄目なら `cumin/status/awaiting-owner-decision` に替えてOwnerに通知する。利用枠の上限に当たった場合はやり直しに数えず、枠のリセットを待つ。
 
+Agentの実行のあとの手順 (R2、I2、I5〜I8、I10、Reviewerの承認のあとのmerge) で、GitHubの呼び出しが一時的な理由で失敗したときは、Agentの異常終了ではない。手順を持っておき、あとの定期確認でやり直す ([cumin本体の要件](../cumin-core.md) の「GitHubの呼び出しの失敗」)。
+
 ## v0.1では実装しないこと
 
 - 辻褄の合わないIssueの回収。cuminが再起動すると、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing` のまま、実行中のAgentがいないIssueが残りうる。`cumin/status/awaiting-checks` のIssueは、Agentが動いていない状態なので、再起動のあともI3、I4、I14、I15で続きから進む。将来は、ラベルとcuminの動作状態を突き合わせて、適切な状態まで戻す機能を作る。v0.1では、OwnerがそのIssueに `cumin/status/ready` を付け直せば、I1により続きから再開する。
