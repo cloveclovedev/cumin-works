@@ -105,6 +105,33 @@ func TestRole_HoldsTheRuleOnLongChecksForEveryRole(t *testing.T) {
 	}
 }
 
+// A review after an approval covers only the diff since the approved
+// commit, at the depth of round 1. The rule names the line of the start
+// request by its label (package agent writes it), so that the Reviewer
+// finds the approved commit there. A request without that line gets the
+// full review of round 1.
+func TestRole_HoldsTheRuleOnTheApprovedCommitForTheReviewer(t *testing.T) {
+	text, ok, err := Role(Default, "reviewer")
+	if err != nil || !ok {
+		t.Fatalf("Role(reviewer) = %v, %v; want a file", ok, err)
+	}
+	for _, want := range []string{
+		"Approved commit",
+		"`git diff <approved commit>..HEAD`",
+		"Do not review the approved part again",
+		"`high <approved commit>..HEAD`",
+		"`security-review`",
+		"against that diff only",
+		"`git diff --name-only origin/HEAD...HEAD`",
+		"When it is not, do the full round 1 review above, and say so in the summary",
+		"A request with no `Approved commit` line gets the full round 1 review",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the discipline of the reviewer does not hold %q", want)
+		}
+	}
+}
+
 // The Planner sizes an implementation issue against the time of one run of
 // the Implementer and of the Reviewer. The criterion names the two lines of
 // the start request by their labels (package agent writes them). Work that
