@@ -82,7 +82,9 @@ func TestInstruction_ImplementerHoldsTheWritingRulesAndNamesItsSkills(t *testing
 		"`Closes #<issue number>`",
 		"Never open a second pull request",
 		"Do not wait for checks or for reviews",
+		"When the request is `review fix`: reply to every blocking comment",
 		"When the request is `owner review fix`",
+		"answer the body in one comment on the pull request",
 		"Address every comment of that review, and reply to each one with the skill `cumin-review-reply`",
 	} {
 		if !strings.Contains(text, want) {

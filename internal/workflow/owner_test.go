@@ -12,14 +12,17 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
 
-const theOwner = "the-owner"
+const (
+	theOwner    = "the-owner"
+	olderCommit = "0000000000000000000000000000000000000000"
+)
 
 // awaitingOwner puts issue #10 in cumin/status/awaiting-owner-review after
 // I7, with risk/medium, the pull request #21 with one passed required
 // check, and the Owner as an admin of the repository.
-func awaitingOwner(t *testing.T) *scene {
+func awaitingOwner(t *testing.T, opts ...cliOptions) *scene {
 	t.Helper()
-	sc := newScene(t)
+	sc := newScene(t, opts...)
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
@@ -85,7 +88,7 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 		setup func(sc *scene)
 	}{
 		{"an approval on an older commit", func(sc *scene) {
-			sc.review(theOwner, false, "APPROVED", "0000000000000000000000000000000000000000", 5)
+			sc.review(theOwner, false, "APPROVED", olderCommit, 5)
 		}},
 		{"an approval of a bot", func(sc *scene) {
 			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 5)
@@ -96,10 +99,6 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 		{"an approval of a bot account that has write permission", func(sc *scene) {
 			sc.fake.SetPermission("writer-bot", "write", "Bot")
 			sc.review("writer-bot", false, "APPROVED", sc.remoteHead, 5)
-		}},
-		{"an approval that the Owner took back with REQUEST_CHANGES", func(sc *scene) {
-			sc.review(theOwner, false, "APPROVED", sc.remoteHead, 10)
-			sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -134,11 +133,11 @@ func TestI12_ACommentOfTheOwnerKeepsTheApproval(t *testing.T) {
 	}
 }
 
-// Without an approval of a person on the head commit, cumin reads no
-// permission and no required checks.
+// Without a review of a person that decides on the head commit, cumin reads
+// no permission and no required checks.
 func TestI12_ThePermissionIsReadOnlyForACandidate(t *testing.T) {
 	sc := awaitingOwner(t)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.review(theOwner, false, "CHANGES_REQUESTED", olderCommit, 5)
 	service := sc.service()
 
 	if err := service.Poll(context.Background()); err != nil {
@@ -307,5 +306,234 @@ func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *t
 	}
 	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, ownerLoginLine) {
 		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
+	}
+}
+
+// I13 (issue-states.md): the Owner requests changes on the head commit of a
+// pull request that waits for the merge decision. cumin changes the label
+// to cumin/status/implementing and sends one request of the kind "owner
+// review fix" in the session of the Implementer, across polls. The request
+// for changes also takes an earlier approval back, so nothing is merged.
+func TestI13_ARequestForChangesOfTheOwnerOnTheHeadSendsOneRequest(t *testing.T) {
+	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
+	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 10)
+	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.repo.PullRequests[21].Reviews[2].URL = "https://github.com/example-org/example-repo/pull/21#pullrequestreview-7"
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 60)}
+	service := sc.serviceWithSession(t)
+	ctx := context.Background()
+
+	if err := service.Poll(ctx); err != nil {
+		t.Fatalf("poll 1: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	for i := range 2 {
+		if err := service.Poll(ctx); err != nil {
+			t.Fatalf("poll %d: %v", i+2, err)
+		}
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelImplementing}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/implementing", got)
+	}
+	sc.release(t)
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one fix", n)
+	}
+	args := sc.record(t, "agent.args")
+	if got := argumentOf(t, args, "--resume"); got != "implementer-session" {
+		t.Errorf("--resume = %q, want the session of the Implementer", got)
+	}
+	text := promptOf(t, args)
+	requireIssueOfTheRun(t, text, 10, "implementation issue")
+	for _, want := range []string{"Request: owner review fix", "Pull request: #21",
+		"Review: https://github.com/example-org/example-repo/pull/21#pullrequestreview-7",
+		"Branch: cumin/10-add-the-login-screen", ownerLoginLine} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none", n)
+	}
+	for _, want := range []string{`"msg":"I13: the Owner requested changes; the issue goes back to the Implementer"`,
+		`"msg":"I13: requested the work"`, `"kind":"owner review fix"`} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
+}
+
+// Requests for changes that do not count send no request and change no
+// label.
+func TestI13_RequestsForChangesThatDoNotCountSendNoRequest(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(sc *scene)
+	}{
+		{"a request for changes on an older commit", func(sc *scene) {
+			sc.review(theOwner, false, "CHANGES_REQUESTED", olderCommit, 5)
+		}},
+		{"a request for changes of a bot", func(sc *scene) {
+			sc.review(implementerSlug, true, "CHANGES_REQUESTED", sc.remoteHead, 5)
+		}},
+		{"a request for changes of an account without write permission", func(sc *scene) {
+			sc.review("someone", false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+		}},
+		{"a request for changes of a bot account that has write permission", func(sc *scene) {
+			sc.fake.SetPermission("writer-bot", "write", "Bot")
+			sc.review("writer-bot", false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+		}},
+		{"a comment-only review of the Owner", func(sc *scene) {
+			sc.review(theOwner, false, "COMMENTED", sc.remoteHead, 5)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := awaitingOwner(t)
+			tc.setup(sc)
+			service := sc.service()
+
+			for range 2 {
+				sc.pollAndWait(t, service)
+			}
+
+			if n := sc.agentRuns(t); n != 0 {
+				t.Errorf("%d agent runs, want none", n)
+			}
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
+				t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+			}
+		})
+	}
+}
+
+// A label that does not change sends no request; the next poll sends it.
+func TestI13_WithoutTheLabelChangeNoRequestIsSent(t *testing.T) {
+	sc := awaitingOwner(t)
+	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	service := sc.service()
+	sc.fake.FailNext(http.MethodPut, issue10Path+"/labels", http.StatusBadGateway)
+
+	if err := service.Poll(context.Background()); err == nil {
+		t.Error("the poll reported no error after a label change that failed")
+	}
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs, want none without the label change", n)
+	}
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want one fix after the next poll", n)
+	}
+}
+
+// After the fix run ends with done, the issue passes the verification (I2),
+// the required checks, and the review, and waits for the Owner again (I7).
+// The request for changes is then on an older commit and sends nothing
+// more. An approval of the Owner on the new head is merged (I12).
+func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) {
+	// Run 1 is the fix, which pushes a new head; run 2 is the review.
+	sc := awaitingOwner(t, cliOptions{movesHeadOnRun: 1, reviews: []string{"NONE", "APPROVE"}})
+	oldHead := sc.remoteHead
+	sc.review(theOwner, false, "CHANGES_REQUESTED", oldHead, 5)
+	service := sc.serviceWithSession(t)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want the fix and one review", n)
+	}
+	newHead := sc.repo.PullRequests[21].HeadCommit
+	if newHead == oldHead {
+		t.Fatal("the fix did not move the head of the pull request")
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
+		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	}
+	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"msg":"I3: the Reviewer approved the head commit"`,
+		`"msg":"I7: the merge waits for the Owner"`} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Fatalf("%d merge requests before the approval of the Owner, want none", n)
+	}
+
+	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
+		Author: theOwner, State: "APPROVED", Commit: newHead, SubmittedAt: sceneNow.Add(time.Hour)})
+	sc.pollAndWait(t, service)
+
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
+		t.Errorf("%d merge requests, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want no run after the approval", n)
+	}
+}
+
+// A comment and cumin/status/ready on the issue still start the Implementer
+// in a new session (I1), also when the Owner requested changes on the head.
+func TestI13_AReadyOfTheOwnerStillStartsTheImplementer(t *testing.T) {
+	sc := awaitingOwner(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 10, Parent: 6, Title: subIssueTitle,
+		Labels:      []string{"risk/medium", workflow.LabelAwaitingOwnerReview, workflow.LabelReady},
+		LabelEvents: []githubtest.LabelEvent{readyBy(theOwner, 1)},
+	})
+	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	service := sc.serviceWithSession(t)
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one", n)
+	}
+	args := sc.record(t, "agent.args")
+	if strings.Contains(args, "--resume") {
+		t.Errorf("the run after cumin/status/ready resumed a session:\n%q", args)
+	}
+	if text := promptOf(t, args); !strings.Contains(text, "Request: continue") {
+		t.Errorf("the run was not a continuation of I1:\n%s", text)
+	}
+}
+
+func TestOwnerRequestedChanges_I13(t *testing.T) {
+	const head = "2222222222222222222222222222222222222222"
+	at := func(minutes int) time.Time { return time.Date(2026, 10, 1, 10, minutes, 0, 0, time.UTC) }
+	owners := map[string]bool{"owner": true, "owner-two": true, "app[bot]": true}
+	for _, tc := range []struct {
+		name    string
+		reviews []workflow.Review
+		want    string
+	}{
+		{"a request for changes on the head", []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}, "review-1"},
+		{"a request for changes on an older commit", []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: "old", SubmittedAt: at(1), URL: "review-1"}}, ""},
+		{"a later approval of another Owner", []workflow.Review{
+			{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"},
+			{Author: "owner-two", State: workflow.ReviewApproved, Commit: head, SubmittedAt: at(2), URL: "review-2"}}, ""},
+		{"a later request for changes after an approval", []workflow.Review{
+			{Author: "owner", State: workflow.ReviewApproved, Commit: head, SubmittedAt: at(1), URL: "review-1"},
+			{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(2), URL: "review-2"}}, "review-2"},
+		{"a later comment does not count", []workflow.Review{
+			{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"},
+			{Author: "owner", State: workflow.ReviewCommented, Commit: head, SubmittedAt: at(2), URL: "review-2"}}, "review-1"},
+		{"a comment-only review", []workflow.Review{{Author: "owner", State: workflow.ReviewCommented, Commit: head, SubmittedAt: at(1), URL: "review-1"}}, ""},
+		{"a person who is not an Owner", []workflow.Review{{Author: "someone", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}, ""},
+		{"a bot never counts", []workflow.Review{{Author: "app[bot]", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			review, ok := workflow.OwnerRequestedChanges(tc.reviews, head, owners)
+			if ok != (tc.want != "") || review.URL != tc.want {
+				t.Errorf("OwnerRequestedChanges = %q, %v; want %q", review.URL, ok, tc.want)
+			}
+		})
 	}
 }

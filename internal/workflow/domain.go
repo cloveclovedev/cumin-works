@@ -292,6 +292,18 @@ type MergeOwnerApproval struct {
 	Reviewers   []string
 }
 
+// FixOwnerReview is the candidate of I13: an implementation issue in
+// cumin/status/awaiting-owner-review whose pull request has a
+// CHANGES_REQUESTED review of a person on its head commit. Reviewers are the
+// people whose reviews decide, as for MergeOwnerApproval; the caller reads
+// their permission, and only then knows whether the latest review of an
+// Owner requests changes (OwnerRequestedChanges).
+type FixOwnerReview struct {
+	Number      int
+	PullRequest int
+	Reviewers   []string
+}
+
 // Action is one thing that cumin does after a poll. Later rules add types.
 type Action interface {
 	isAction()
@@ -307,6 +319,7 @@ func (ReviewRemaining) isAction()    {}
 func (CheckAcceptance) isAction()    {}
 func (Accept) isAction()             {}
 func (MergeOwnerApproval) isAction() {}
+func (FixOwnerReview) isAction()     {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -363,6 +376,7 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 		actions = append(actions, s.action)
 	}
 	actions = append(actions, ownerApprovals(snapshot)...)
+	actions = append(actions, ownerChangeRequests(snapshot)...)
 	return append(actions, labelCopies(snapshot)...)
 }
 
@@ -370,15 +384,15 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 // stops after its runs: the ones that ask no agent for new work. A requirement issue
 // still changes its label, a pull request still gets the labels of its
 // issue, and an approval of an Owner still merges. The split, the
-// acceptance check, the claim, the review, and the check fix wait for the
-// next start of cumin; each of them starts from a label that no agent
+// acceptance check, the claim, the review, the check fix, and the fix of the
+// Owner's review wait for the next start of cumin; each of them starts from a label that no agent
 // works under, so nothing is lost (designs/cumin-core.md, the topic on the
 // stop).
 func WithoutNewWork(actions []Action) []Action {
 	kept := make([]Action, 0, len(actions))
 	for _, action := range actions {
 		switch action.(type) {
-		case Plan, CheckAcceptance, Claim, StartReview, FixChecks:
+		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, FixOwnerReview:
 		default:
 			kept = append(kept, action)
 		}
@@ -1401,6 +1415,33 @@ func decides(state ReviewState) bool {
 // the latest review of any Owner among them counts.
 func ownerApprovals(snapshot Snapshot) []Action {
 	var actions []Action
+	for _, c := range ownerReviewCandidates(snapshot, ReviewApproved) {
+		actions = append(actions, MergeOwnerApproval(c))
+	}
+	return actions
+}
+
+// ownerChangeRequests returns the candidates of I13, lowest issue number
+// first: as ownerApprovals, with a CHANGES_REQUESTED review of a person on
+// the head commit. An issue that also has cumin/status/ready is not a
+// candidate: the Owner asked for a new start, and I1 takes it.
+func ownerChangeRequests(snapshot Snapshot) []Action {
+	var actions []Action
+	for _, c := range ownerReviewCandidates(snapshot, ReviewChangesRequested) {
+		if sub, _ := snapshot.SubIssue(c.Number); slices.Contains(sub.Labels, LabelReady) {
+			continue
+		}
+		actions = append(actions, c)
+	}
+	return actions
+}
+
+// ownerReviewCandidates returns, lowest issue number first, the open
+// sub-issues in cumin/status/awaiting-owner-review, not running now, whose
+// open pull request has a review of a person with the state on its head
+// commit. Each one names every person whose review decides.
+func ownerReviewCandidates(snapshot Snapshot, state ReviewState) []FixOwnerReview {
+	var candidates []FixOwnerReview
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
 			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingOwnerReview) || snapshot.Running[sub.Number] {
@@ -1419,20 +1460,18 @@ func ownerApprovals(snapshot Snapshot) []Action {
 				if !slices.Contains(reviewers, review.Author) {
 					reviewers = append(reviewers, review.Author)
 				}
-				if review.State == ReviewApproved && review.Commit == pr.HeadCommit {
+				if review.State == state && review.Commit == pr.HeadCommit {
 					candidate = true
 				}
 			}
 			if candidate {
 				slices.Sort(reviewers)
-				actions = append(actions, MergeOwnerApproval{Number: sub.Number, PullRequest: pr.Number, Reviewers: reviewers})
+				candidates = append(candidates, FixOwnerReview{Number: sub.Number, PullRequest: pr.Number, Reviewers: reviewers})
 			}
 		}
 	}
-	slices.SortFunc(actions, func(a, b Action) int {
-		return a.(MergeOwnerApproval).Number - b.(MergeOwnerApproval).Number
-	})
-	return actions
+	slices.SortFunc(candidates, func(a, b FixOwnerReview) int { return a.Number - b.Number })
+	return candidates
 }
 
 // OwnerApproved applies the check of I12: of the reviews of the Owners
@@ -1441,6 +1480,27 @@ func ownerApprovals(snapshot Snapshot) []Action {
 // later CHANGES_REQUESTED of an Owner takes the approval back. A review of
 // a bot never counts, whatever owners says.
 func OwnerApproved(reviews []Review, head string, owners map[string]bool) bool {
+	latest, found := latestOwnerReview(reviews, owners)
+	return found && latest.State == ReviewApproved && head != "" && latest.Commit == head
+}
+
+// OwnerRequestedChanges applies the check of I13: of the reviews of the
+// Owners (owners holds their logins), the latest one that decides is
+// CHANGES_REQUESTED on the head commit. It returns that review, whose
+// address the request names. A request for changes on an older commit does
+// not count, and a later APPROVED of an Owner takes it back. A comment-only
+// review decides nothing, and a review of a bot never counts.
+func OwnerRequestedChanges(reviews []Review, head string, owners map[string]bool) (Review, bool) {
+	latest, found := latestOwnerReview(reviews, owners)
+	if !found || latest.State != ReviewChangesRequested || head == "" || latest.Commit != head {
+		return Review{}, false
+	}
+	return latest, true
+}
+
+// latestOwnerReview returns the latest review that decides among the
+// reviews of the Owners. A bot is never an Owner, whatever owners says.
+func latestOwnerReview(reviews []Review, owners map[string]bool) (Review, bool) {
 	var latest Review
 	found := false
 	for _, review := range reviews {
@@ -1451,7 +1511,7 @@ func OwnerApproved(reviews []Review, head string, owners map[string]bool) bool {
 			latest, found = review, true
 		}
 	}
-	return found && latest.State == ReviewApproved && head != "" && latest.Commit == head
+	return latest, found
 }
 
 // IsOwner applies the definition of the Owner (cumin-core.md): a person,

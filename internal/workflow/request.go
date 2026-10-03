@@ -247,7 +247,9 @@ The Reviewer requested changes on the pull request #%[5]d. Read that review and 
 // decision (I13). The request resumes the Implementer session and names the
 // review. The comments of the Owner carry no mark of blocking, so the text
 // asks for every comment; the comments stand on GitHub, where the
-// Implementer replies to them.
+// Implementer replies to them. The body of the review has no comment
+// thread, so the text asks for one comment on the pull request as its
+// answer.
 func OwnerReviewFixRequestText(repository string, number, pullRequest int, branch, workDir, review string) string {
 	return fmt.Sprintf(`Request: owner review fix
 Repository: %[1]s
@@ -257,7 +259,7 @@ Branch: %[3]s
 Work directory: %[4]s
 Review: %[6]s
 
-The Owner requested changes on the pull request #%[5]d. Read that review and its comments on GitHub. Address every comment of that review in the work directory, which is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request. Reply to every comment of that review with the skill cumin-review-reply. When the fix changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
+The Owner requested changes on the pull request #%[5]d. Read that review and its comments on GitHub. Address every comment of that review in the work directory, which is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request. Reply to every comment of that review with the skill cumin-review-reply. Address the body of that review too. A review body has no comment thread, so answer the body in one comment on the pull request #%[5]d, with the same skill. When the fix changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
 `, repository, number, branch, workDir, pullRequest, review)
 }
 
