@@ -14,6 +14,7 @@ Use this template in two cases:
 - Say what is not decided. A review that does not end usually means that something in the requirement is not decided.
 - Give 2 or 3 options, with the good and bad points of each. Recommend one option.
 - Keep the three `###` headings of the template as headings: "Situation", "Options", "Next step".
+- The stopped issue is the issue of the run: the line "Issue of the run" in the facts of the start request. Name that issue under "Work stopped", for every role and every kind of issue.
 - Keep it within 20 lines. Give only the facts that the Owner needs to decide. Put background that the Owner may skip in a `<details>` block.
 - Write a row number with its meaning ("I5 (review comments, fix request)"). Show a flow or a state as a small diagram when it explains the question better than words.
 
@@ -23,7 +24,7 @@ Use this template in two cases:
 ## Decision needed: <the question in one sentence>
 
 Type: Blocked | Unresolved after 3 review rounds
-Work stopped: #<issue or pull request> <title>
+Work stopped: #<number of the stopped issue> <title>
 
 ### Situation
 <1 or 2 sentences: what happened.>
@@ -39,8 +40,8 @@ Background: <only the facts that are needed to decide. Add links.>
 Recommendation: <A or B>, because <one sentence>.
 
 ### Next step
-To continue: write your decision as a comment, or edit the issue. Then add the label `cumin/status/ready` to the implementation issue.
-Until then: this issue stays stopped. Other issues continue.
+To continue: write your decision as a comment, or edit the stopped issue. Then add the label `cumin/status/ready` to the stopped issue.
+Until then: the stopped issue waits. Other issues continue.
 ```
 
 For "Unresolved after 3 review rounds", list each open blocking comment under "Background":
@@ -78,8 +79,8 @@ Not decided: the Firebase project for staging. It belongs in `docs/architecture/
 Recommendation: A, because test data stays out of production.
 
 ### Next step
-To continue: write your decision as a comment, or edit the issue. Then add the label `cumin/status/ready` to the implementation issue.
-Until then: this issue stays stopped. Other issues continue.
+To continue: write your decision as a comment, or edit the stopped issue. Then add the label `cumin/status/ready` to the stopped issue.
+Until then: the stopped issue waits. Other issues continue.
 
 <details><summary>Background</summary>
 

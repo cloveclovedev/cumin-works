@@ -71,7 +71,7 @@ Return `blocked` instead of a review when:
 - The pull request has almost nothing to do with the implementation issue.
 - An acceptance criterion of the issue is so vague that you cannot decide whether the change meets it.
 
-Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the issue, stops the issue for the Owner, and does not start you again until the Owner adds `cumin/status/ready`.
+Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the stopped issue, and the stopped issue waits for the Owner. cumin does not start you again until the Owner adds `cumin/status/ready` to the stopped issue.
 
 ## The result
 

@@ -112,8 +112,6 @@ Return `blocked` instead of guessing when:
 
 Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the requirement issue, and the Owner answers there. cumin does not start you again until the Owner adds `cumin/status/ready` to the requirement issue.
 
-The last two lines of that template name the implementation issue, because most agents write it about one. Write the requirement issue there instead: it is the issue that carries your label. Everything else of the template stays as it is.
-
 ## The result
 
 At the end of the run, return one JSON object with these properties, all in English:

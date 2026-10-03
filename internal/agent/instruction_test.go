@@ -297,9 +297,6 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		// The Planner must be able to tell who the Owner is.
 		"The Owner is the account that adds `cumin/status/ready`",
 		"read the timelines of the sub-issues",
-		// The last lines of the decision request name the implementation
-		// issue; the Planner writes about the requirement issue.
-		"Write the requirement issue there instead",
 		// The Planner must know which files the Implementer cannot change.
 		"`protected_paths` of `.cumin/config.toml`",
 		"`.github/workflows/`",
@@ -454,5 +451,35 @@ func TestInstruction_ReviewerHoldsTheCraftOfItsDiscipline(t *testing.T) {
 	}
 	if strings.Contains(discipline, "commit_id") || strings.Contains(discipline, "`cumin-") {
 		t.Error("the Reviewer discipline file holds the contract with cumin")
+	}
+}
+
+// The decision request names the stopped issue for every role, so no role
+// instruction corrects the template, and the roles that stop an
+// implementation issue use the same term.
+func TestRoleFiles_DoNotCorrectTheDecisionRequest(t *testing.T) {
+	for _, role := range config.AllRoles() {
+		text, err := instruction(role, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, phrase := range []string{
+			"lines of that template",
+			"of the template stays as it is",
+			"there instead",
+		} {
+			if strings.Contains(text, phrase) {
+				t.Errorf("the %s instruction corrects the decision request: %s", role, phrase)
+			}
+		}
+	}
+	for _, role := range []config.Role{config.RoleImplementer, config.RoleReviewer} {
+		text, err := instruction(role, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "adds `cumin/status/ready` to the stopped issue"; !strings.Contains(text, want) {
+			t.Errorf("the %s instruction does not say: %s", role, want)
+		}
 	}
 }
