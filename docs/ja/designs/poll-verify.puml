@@ -9,15 +9,16 @@ start
 :The Implementer run ends;
 if (Result?) then (done)
   repeat
-    :Verify done: read the issue of the run again
-    (one issue, the facts right after the run),
-    list the open pull requests of the branch (REST),
-    add the link, change the label;
+    :Read the issue of the run again
+    (one issue, the facts right after the run);
+    :List the open pull requests of the branch
+    that cumin chose (REST);
     backward :Keep the step (in memory).
     The issue stays in work, with its label.
     A poll 5 minutes later runs it again;
-  repeat while (A call to GitHub failed
-  with a temporary failure?) is (yes) not (no)
+  repeat while (A call to GitHub of this step failed
+  with a temporary failure? (a read, or
+  the label change below)) is (yes) not (no)
   :Read the head commit of the worktree;
   partition "Decision (pure function, no I/O)" {
     if (An open pull request
