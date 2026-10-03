@@ -16,14 +16,14 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 			name:  "minutes",
 			facts: runFacts{TimeLimit: 50 * time.Minute, End: time.Date(2026, 10, 3, 2, 50, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
-				"- Time limit of the run: 50m0s\n" +
+				"- Time limit of the run: 50m\n" +
 				"- End time of the run: 2026-10-03T02:50:00Z\n",
 		},
 		{
 			name:  "more than one hour",
 			facts: runFacts{TimeLimit: 90 * time.Minute, End: time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
-				"- Time limit of the run: 1h30m0s\n" +
+				"- Time limit of the run: 1h30m\n" +
 				"- End time of the run: 2026-12-31T23:59:59Z\n",
 		},
 		{
@@ -32,7 +32,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				TimeLimit: 20 * time.Minute, End: time.Date(2026, 10, 3, 1, 20, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Issue of the run: #7 (requirement issue)\n" +
-				"- Time limit of the run: 20m0s\n" +
+				"- Time limit of the run: 20m\n" +
 				"- End time of the run: 2026-10-03T01:20:00Z\n",
 		},
 		{
@@ -41,7 +41,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				TimeLimit: 50 * time.Minute, End: time.Date(2026, 10, 3, 1, 50, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Issue of the run: #12 (implementation issue)\n" +
-				"- Time limit of the run: 50m0s\n" +
+				"- Time limit of the run: 50m\n" +
 				"- End time of the run: 2026-10-03T01:50:00Z\n",
 		},
 		{
@@ -61,7 +61,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				"  - An entry with a trailing \"/\" is a directory. It matches everything below that directory.\n" +
 				"  - Wildcards do not work.\n" +
 				"  - Upper case and lower case are the same. \"claude.md\" matches \"CLAUDE.md\".\n" +
-				"- Time limit of the run: 50m0s\n" +
+				"- Time limit of the run: 50m\n" +
 				"- End time of the run: 2026-10-03T01:50:00Z\n",
 		},
 		{
@@ -70,14 +70,14 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				TimeLimit: time.Minute, End: time.Date(2026, 10, 3, 0, 1, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Protected paths (agents keep these paths unchanged): none\n" +
-				"- Time limit of the run: 1m0s\n" +
+				"- Time limit of the run: 1m\n" +
 				"- End time of the run: 2026-10-03T00:01:00Z\n",
 		},
 		{
 			name:  "a time in another location is written in UTC",
 			facts: runFacts{TimeLimit: time.Minute, End: time.Date(2026, 10, 3, 9, 1, 0, 0, tokyo)},
 			want: "Facts of this run (data from cumin):\n" +
-				"- Time limit of the run: 1m0s\n" +
+				"- Time limit of the run: 1m\n" +
 				"- End time of the run: 2026-10-03T00:01:00Z\n",
 		},
 	}
@@ -87,6 +87,28 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				t.Errorf("factsBlock = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLimitText_LeavesOutThePartsThatAreZeroAtTheEnd(t *testing.T) {
+	tests := []struct {
+		limit time.Duration
+		want  string
+	}{
+		{50 * time.Minute, "50m"},
+		{10 * time.Minute, "10m"},
+		{90 * time.Minute, "1h30m"},
+		{time.Hour, "1h"},
+		{10 * time.Hour, "10h"},
+		{90 * time.Second, "1m30s"},
+		{time.Hour + 30*time.Second, "1h0m30s"},
+		{30 * time.Second, "30s"},
+		{0, "0s"},
+	}
+	for _, tt := range tests {
+		if got := limitText(tt.limit); got != tt.want {
+			t.Errorf("limitText(%v) = %q, want %q", tt.limit, got, tt.want)
+		}
 	}
 }
 

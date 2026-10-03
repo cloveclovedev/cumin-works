@@ -76,7 +76,7 @@ func factsBlock(facts runFacts) string {
 	if facts.ProtectedPaths != nil {
 		b.WriteString(protectedPathsLines(facts.ProtectedPaths))
 	}
-	b.WriteString("- Time limit of the run: " + facts.TimeLimit.String() + "\n")
+	b.WriteString("- Time limit of the run: " + limitText(facts.TimeLimit) + "\n")
 	b.WriteString("- End time of the run: " + facts.End.UTC().Format(time.RFC3339) + "\n")
 	return b.String()
 }
@@ -95,6 +95,19 @@ func protectedPathsLines(entries []string) string {
 	}
 	b.WriteString(protectedPathRules)
 	return b.String()
+}
+
+// limitText writes a time limit without the parts that are zero at its
+// end: 50m, not 50m0s, and 1h, not 1h0m0s.
+func limitText(limit time.Duration) string {
+	text := limit.String()
+	if strings.HasSuffix(text, "m0s") {
+		text = strings.TrimSuffix(text, "0s")
+	}
+	if strings.HasSuffix(text, "h0m") {
+		text = strings.TrimSuffix(text, "0m")
+	}
+	return text
 }
 
 // requestWithFacts puts the block of facts before the request text, with

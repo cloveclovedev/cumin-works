@@ -1,8 +1,8 @@
 # 調査・実測で確定した制約
 
-Claude Code と GitHub について、公式文書と実機で確かめた事実だけを集める。設計上の決定は含まない。要件の文書ではなく、事実の記録である。行は主題ごとの9つの表に分かれ、表の中では番号の順に並ぶ。番号は確かめた順に付けたもので、文書の全体で一意である。1つの事実は1つの行に書く。別の行にまとめてなくした番号は、最後の「引退した番号」の表にある。
+Claude Code と GitHub について、公式文書と実機で確かめた事実だけを集める。設計上の決定は含まない。要件の文書ではなく、事実の記録である。行は主題ごとの9つの表に分かれ、表の中では番号の順に並ぶ。番号は確かめた順に付けたもので、文書の全体で一意である。1つの事実は1つの行に書く。まだ確かめていないことと、ある日に観測しただけで今も成り立つか分からないことは、主題の表に置かず、「未確認 (Not confirmed)」の節に集める。この節の行を、事実として読んではいけない。別の行にまとめてなくした番号は、最後の「引退した番号」の表にある。
 
-確度の凡例: 実測 = このホストで実際に動かして観測した、公式文書 = 公式ドキュメントで確認した、未確認 = 公式文書に記載が見つからず、まだ試していない。「日付と版」の列は、その行を確かめた日付と、そのときの道具の版である。根拠の「答えた行」は、その行が確かめた、先に未確認だった行である。
+確度の凡例: 実測 = このホストで実際に動かして観測した、公式文書 = 公式ドキュメントで確認した、未確認 = 公式文書に記載が見つからず、まだ試していない。または、ある日に観測したが、測り直していない。未確認の行は「未確認 (Not confirmed)」の節にだけある。「日付と版」の列は、その行を確かめた日付と、そのときの道具の版である。1つの番号の確かめた部分と確かめていない部分は、同じ番号で主題の表とこの節に分かれ、互いを指す。
 
 ## Claude Code
 
@@ -13,8 +13,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 3 | `claude -p "/usage"` はheadlessで動き、使用率とリセット時刻を人間向けテキストで返す。`--output-format json` でもテキストが `result` に入るだけ | 出力例: `Current session: <N>% used · resets <日時> (<タイムゾーン>)` | 実測 + 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 4 | statuslineスクリプトへのJSONには `rate_limits.five_hour.used_percentage` と `resets_at` (Unix秒) などがある。Pro/Max加入者のみ、セッション内の最初のAPI応答後にだけ現れる | https://code.claude.com/docs/en/statusline.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 5 | Anthropic APIのRate Limits API、Usage & Cost APIはAPI組織向けで、サブスクリプションの5h枠・weekly枠は返さない | https://platform.claude.com/docs/en/manage-claude/rate-limits-api.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
-| 6 | 枠の上限に当たったときのheadless実行の振る舞い (エラーの形、`status` の値) | 試していない | 未確認 | 2026-09-19、Claude Code 2.1.267 |
-| 6a | `claude -p` の `--bare` は、hooks、skills、plugins、MCPサーバ、自動メモリ、CLAUDE.md の自動読み込みを全て省く。ただしサブスクリプションのログインを使えず、`ANTHROPIC_API_KEY` などが要る。利用枠でAgentを動かすcuminでは使えない | https://code.claude.com/docs/en/headless.md: "bare mode doesn't use your subscription login"、"In bare mode, Claude Code never reads OAuth credentials or the system keychain." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 6a | `claude -p` の `--bare` は、hooks、skills、plugins、MCPサーバ、自動メモリ、CLAUDE.md の自動読み込みを全て省く。ただしサブスクリプションのログインを使えず、`ANTHROPIC_API_KEY` などが要る | https://code.claude.com/docs/en/headless.md: "bare mode doesn't use your subscription login"、"In bare mode, Claude Code never reads OAuth credentials or the system keychain." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6b | `--bare` は将来 `-p` の既定になる予定と書かれている。そうなったとき、サブスクリプションのログインでheadless実行を続ける方法を確かめる必要がある | 同上: "`--bare` is the recommended mode for scripted and SDK calls, and will become the default for `-p` in a future release." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6c | `--bare` なしの `claude -p` は、対話セッションと同じ文脈を読み込む。作業ディレクトリの設定と、ユーザアカウントの `~/.claude` の設定の両方が対象になる | 同上: "Without it, `claude -p` loads the same context an interactive session would, including anything configured in the working directory or `~/.claude`." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6d | Agentの最後の応答をJSON Schemaに従わせる機能は、Claude CodeにもCodexにもある。Claude Codeは `claude -p --output-format json --json-schema <schema>` で、結果は `structured_output` に入る。Codexは `codex exec --output-schema <file>` で、`-o` で最後の応答をファイルに書ける | https://code.claude.com/docs/en/headless.md、https://learn.chatgpt.com/docs/non-interactive-mode | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
@@ -25,8 +24,8 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 30 | システムプロンプトを `--system-prompt` で短いものに置き換え、1語だけ答えさせる最小の実行でも、`rate_limit_event` は出る。実行は1〜2秒で終わる。入力のほとんどは、CLIが毎回送る定型の部分である | 同左 | 実測 | 2026-09-20、Claude Code 2.1.267 |
 | 31 | `-p` でも `--resume <session_id>` でセッションを再開できる。2.1.223以降は、別のディレクトリからでも再開できる | https://code.claude.com/docs/en/sessions.md | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
 | 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限は、起動する側で持つ必要がある。`-p` の実行は、SIGTERMを受けると終了コード143で終わる。Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない | https://code.claude.com/docs/en/headless.md、手元の `--help`。プロセスグループへのSIGTERMは #42 の実機の確認で、打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 公式文書 + 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
-| 74 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した。cuminは標準入力をnullデバイスにして起動する | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
-| 85 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` は、Bashツール、hook、MCPサーバの環境から認証情報を取り除く。cuminは使わない。AgentがBashツールでroleのtokenを使うためである | 公式: Environment variables | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 74 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 85 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` は、Bashツール、hook、MCPサーバの環境から認証情報を取り除く | 公式: Environment variables | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 86 | `--setting-sources project` を付けても、自動メモリは止まらない。`init` のイベントの `memory_paths.auto` が、ユーザアカウントの下にある、作業ディレクトリごとのメモリを指す。環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`init` のイベントに `memory_paths` の項目そのものがない。設定の `autoMemoryEnabled: false` でも止められる。`init` には、指示のファイルの一覧を返す項目がない。ある項目は `plugins`、`mcp_servers`、`skills`、`agents`、`slash_commands`、`tools` など | https://code.claude.com/docs/en/memory.md。環境変数の有無で `init` のイベントを比べた。#76 で実測。項目の全体は #67 に記録 | 実測 + 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 87 | `rate_limit_event` には、`rate_limit_info` のほかに、`session_id` と `uuid` がある。`rate_limit_info` の項目は `status`、`resetsAt`、`rateLimitType`、`unifiedWindows` (1を参照)、`isUsingOverage`、`overageStatus`、`overageDisabledReason` である。通常の実行では `status` は `allowed` になる。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。#76 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 91 | `--setting-sources project` を付けた `-p` の実行でも、claude.aiのアカウントのコネクタが `init` の `mcp_servers` に現れる。worktreeに `.mcp.json` がなくても同じである。`ENABLE_CLAUDEAI_MCP_SERVERS=false` を付けると消える | #93 で実測 (2026-09-22) | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
@@ -95,19 +94,17 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 12 | Pull Requestの作成者は自分のPull Requestをapproveできない。作成者とレビュー者の身元が同じだとapproveが成立しない | docs.github.com: approving-a-pull-request-with-required-reviews | 公式文書 | 2026-09-19 |
 | 13 | rulesetとbranch protectionは、Freeプラン (個人・Organizationとも) では公開リポジトリでしか使えない。非公開リポジトリで使うには個人はPro、OrganizationはTeamが要る | docs.github.com: about-rulesets、about-protected-branches | 公式文書 | 2026-09-19 |
 | 15 | ラベルを条件にしたruleは、ruleの一覧に存在しない (「risk/mediumならOwnerの承認が必須」をGitHubだけでは書けない) | docs.github.com: available-rules-for-rulesets に記載なし | 公式文書 (不在の確認) | 2026-09-19 |
-| 17 | GitHub Appのapproveが「必須承認数」に数えられるか | 公式文書に記載なし。コミュニティでは「数えられる」との報告がある | 未確認 | 2026-09-19 |
 | 21 | ファイルのパスを制限するrule (push ruleset) は、Teamプランの非公開または内部リポジトリでしか使えない。Freeプランの公開リポジトリでは使えない | docs.github.com: about-rulesets | 公式文書 | 2026-09-19 |
 | 24 | secret scanning、push protection、code scanning、dependency reviewは、公開リポジトリでは無料で使える。Dependabotは全てのプランで使える | docs.github.com: code-security/getting-started/github-security-features | 公式文書 | 2026-09-19 |
-| 35 | check runの一覧を読むには Checks: Read-only、commit statusを読むには Commit statuses: Read-only が要る、と書かれている。公開リポジトリなら権限なしで読めるかは、確かめていない | 同上 | 公式文書 (公開リポジトリでの要否は未確認)。54で実測した | 2026-09-20、Claude Code 2.1.267 |
-| 51 | `if` の条件で飛ばされたjobのcheck runは、`status: completed`、`conclusion: skipped` になる。必須のcheckであっても、mergeを止めない。cuminは、必須のcheckの `skipped` を、通ったものとして数える必要がある。workflow全体が飛ばされたとき (パスやブランチの絞り込みなど) は、checkが保留のまま残り、mergeを止める | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。workflow全体が飛ばされた場合は、docs.github.com: troubleshooting-required-status-checks | 実測 (workflow全体が飛ばされた場合は公式文書) | 2026-09-20、2026-09-21 |
+| 51 | `if` の条件で飛ばされたjobのcheck runは、`status: completed`、`conclusion: skipped` になる。必須のcheckであっても、mergeを止めない。workflow全体が飛ばされたとき (パスやブランチの絞り込みなど) は、checkが保留のまま残り、mergeを止める | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。workflow全体が飛ばされた場合は、docs.github.com: troubleshooting-required-status-checks | 実測 (workflow全体が飛ばされた場合は公式文書) | 2026-09-20、2026-09-21 |
 | 53 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べて、必須のcheckの一覧が返る。要る権限は Metadata: Read-only である | docs.github.com: permissions-required-for-github-apps。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
-| 54 | 公開リポジトリでは、installation tokenは、Checks、Commit statuses、Actions の権限がなくても、check run、commit status、check runのannotation、jobのログを読める。jobのログは、認証なしでは読めない (403)。jobのIDは、check runの `details_url` の最後の部分である。失敗したGitHub Actionsのcheck runは、`output.title` が空で、内容はannotationに入る | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。答えた行: 35 | 実測 | 2026-09-20、2026-09-21 |
-| 62 | rulesetのbypass listにGitHub Appを入れられる。必須status checkは「このAppが出したものだけ有効」と発行元を固定できる。"Restrict updates" のruleがあるブランチへのPull Requestは、mergeの状態が常に `blocked` になる (`mergeable_state`、GraphQLでは `BLOCKED`)。bypass listにいる相手から見ても、必須のcheckが全て通っていても、同じである。それでも、bypass listにいる相手のmergeの呼び出しは成功する (200)。bypass listにいないAppは、405 (`Repository rule violations found`) を受け取る。`gh pr merge` には `--admin` が要る。cuminは、`clean` になるのを待ってはいけない | docs.github.com: creating-rulesets-for-a-repository、available-rules-for-rulesets。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 54 | 公開リポジトリでは、installation tokenは、Checks、Commit statuses、Actions の権限がなくても、check run、commit status、check runのannotation、jobのログを読める。jobのログは、認証なしでは読めない (403)。jobのIDは、check runの `details_url` の最後の部分である。公式文書は、check runの一覧を読むには Checks: Read-only、commit statusを読むには Commit statuses: Read-only が要る、と書いている。失敗したGitHub Actionsのcheck runは、`output.title` が空で、内容はannotationに入る | docs.github.com: permissions-required-for-github-apps。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 (権限が要るという記述は公式文書) | 2026-09-20、2026-09-21 |
+| 62 | rulesetのbypass listにGitHub Appを入れられる。必須status checkは「このAppが出したものだけ有効」と発行元を固定できる。"Restrict updates" のruleがあるブランチへのPull Requestは、mergeの状態が常に `blocked` になる (`mergeable_state`、GraphQLでは `BLOCKED`)。bypass listにいる相手から見ても、必須のcheckが全て通っていても、同じである。それでも、bypass listにいる相手のmergeの呼び出しは成功する (200)。bypass listにいないAppは、405 (`Repository rule violations found`) を受け取る。`gh pr merge` には `--admin` が要る | docs.github.com: creating-rulesets-for-a-repository、available-rules-for-rulesets。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
 | 68 | rulesetのbypassの相手の種類 `RepositoryRole` で、`actor_id: 5` は `admin` のroleである。同じ内容でrulesetを `PUT` しても、履歴の版は増えない。OAuthのtoken (`gh`) でworkflowのファイルをpushするには、`workflow` のscopeが要る。既定のブランチのworkflowを変えたあと、開いているPull Requestを閉じて開き直しても、古いworkflowが動く。"Update branch" か新しいコミットで、新しいworkflowが動く | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 79 | 公開リポジトリでは、標準のGitHub-hosted runner (macOSを含む) の利用は無料である。Freeプランの同時実行は、全体で20 job、macOSは5 jobまで。`macos-latest` はarm64である | 公式: About billing for GitHub Actions、Usage limits for GitHub Actions、GitHub-hosted runners reference | 公式文書 | 2026-09-21 |
 | 80 | `POST /repos/{owner}/{repo}/rulesets` に、そのリポジトリにある ruleset と同じ名前を渡すと、422 "Name must be unique" が返る。同じリポジトリに、同じ名前の ruleset は2つ作れない | sandboxで実測 | 実測 | 2026-09-21 |
 | 81 | `GET /repos/{owner}/{repo}/rulesets` は、`includes_parents` (初期値 `true`) により、Organizationの ruleset のうちそのリポジトリに当たるものも返す | 公式: Get all repository rulesets | 公式文書 | 2026-09-21 |
-| 82 | Organizationの階層の ruleset は、GitHub Enterprise プランでだけ作れる。Free と Team の Organization では作れないので、Organizationの ruleset とリポジトリの ruleset の名前が重なることは、これらのプランでは起きない | 公式: About rulesets ("For organizations on the GitHub Enterprise plan, you can set up rulesets at the organization level")。Organizationの ruleset の名前の一意性は、公式文書に記載がない | 公式文書 (名前の一意性は未確認) | 2026-09-21 |
+| 82 | Organizationの階層の ruleset は、GitHub Enterprise プランでだけ作れる。Free と Team の Organization では作れないので、Organizationの ruleset とリポジトリの ruleset の名前が重なることは、これらのプランでは起きない。Organizationの ruleset の名前が一意かどうかは、「Not confirmed」の節の82を参照 | 公式: About rulesets ("For organizations on the GitHub Enterprise plan, you can set up rulesets at the organization level") | 公式文書 | 2026-09-21 |
 | 109 | 必須のcheckは `GET /repos/{owner}/{repo}/rules/branches/{branch}` で読み、この応答はページに分かれる。`statusCheckRollup` は、`CheckRun` なら `name`、`status`、`conclusion`、`checkSuite.app.databaseId` を、`StatusContext` なら `context`、`state` を返す | #187 で実測 (2026-09-25) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.284 |
 | 117 | rulesetで作成を止めたブランチを、止められていないAppがGit Database API (`POST /repos/{owner}/{repo}/git/refs`) で作ろうとすると、422 ("Reference update failed") が返る | sandboxのlive check (`TestLiveDiagramsBranch`、#212) で実測 (2026-09-30) | 実測 | 2026-09-29、2026-09-30 |
 
@@ -115,11 +112,9 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
-| 60 | Appが作った、本文に `Closes #N` のあるPull Requestを、別のAppがmergeすると、Pull Requestに閉じるリンクが付いていれば、sub-issueである #N が数秒で閉じる。2026-09-30の途中からは、作った直後に閉じるリンクが付かないことがある (121を参照) | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 60 | Appが作った、本文に `Closes #N` のあるPull Requestを、別のAppがmergeすると、Pull Requestに閉じるリンクが付いていれば、sub-issueである #N が数秒で閉じる。2026-09-30の途中からは、作った直後に閉じるリンクが付かないことがある。手で張ったリンクでは閉じなかった日もある。どちらも今も成り立つかは分からない (「Not confirmed」の節の120と121を参照) | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
 | 118 | cumin-coreのinstallation tokenで、GraphQLの `addCloseIssueReferences` を呼べる。張ったリンクは、すぐに実装Issueの `closedByPullRequestsReferences` に現れ、Issueにcumin-coreの `connected` のイベントが付く。公式のGraphQLのリファレンスは、このmutationに要る権限を書いていない | sandboxの `TestLiveCloseReferences` で実測 (#278、C1とC2、2026-09-30) | 実測 | 2026-09-30、2026-10-01 |
 | 119 | cumin-coreのtokenで、Issueを `state: closed`、`state_reason: completed` で閉じられる。閉じたIssueをもう一度閉じても200が返り、`closed` のイベントは1つのままである | 同上 (C3とC4) | 実測 | 2026-09-30、2026-10-01 |
-| 120 | 2026-09-30には、手で張ったリンク (画面の Development の欄、または `addCloseIssueReferences`) のPull Requestを既定のブランチにmergeしても、Issueは閉じなかった。cumin-coreのmergeで、1分待っても開いたままだった | 同上 (C5)。cumin-works #271 と #229 でも同じ | 実測 | 2026-09-30、2026-10-01 |
-| 121 | 2026-09-30の途中から、本文に `Closes #N` と書いたPull Requestに、作った直後は閉じるリンクが付かないことがある。数時間あとに付くこともある (cumin-works #268〜#270、sandbox #185 は作ってから3分はリンクがなく、2026-10-01には付いていた)。キーワードのリンクと手で張ったリンクは、`closingIssuesReferences(userLinkedOnly: true)` で見分けられる。GitHub Status に障害の表示はなく、community の discussions 209162 と 209148 に報告がある | cumin-works、sandbox、ほかの公開リポジトリで観測 (2026-09-30、2026-10-01) | 実測 | 2026-09-30、2026-10-01 |
 | 123 | Pull Requestのmergeで、`sha` に先頭でないコミットを渡すと、409 ("Head branch was modified") が返り、何もmergeされない | 公式: Merge a pull request。#293 の M2 | 公式文書 + 実測 | 2026-10-01 |
 | 124 | 衝突するPull Requestのmergeは、405 ("Pull Request has merge conflicts") になる。rulesetに止められたmergeも405である (62)。mergeの直前に読んだ `mergeable` は、mainが動いた直後だと古い `true` のことがある | #293 の M4 | 実測 | 2026-10-01 |
 | 125 | mergeが405で失敗した直後に読み直すと、衝突のときだけ `mergeable` が `false`、`mergeable_state` が `dirty` になる。衝突とrulesetの拒否は、これで見分けられる | 公式: Get a pull request。#293 の M5 | 公式文書 + 実測 | 2026-10-01 |
@@ -132,8 +127,8 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 71 | `git clone --no-checkout` は、remote-tracking branch と `remote.origin.fetch` を作る。`--bare` はどちらも作らない | git-clone: `--no-checkout` は "Do not checkout HEAD after the clone is complete"。`--bare` は "neither remote-tracking branches nor the related configuration variables are created" | 公式文書 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
 | 72 | `git fetch` は `refs/remotes/origin/HEAD` を動かさない。`git remote set-head origin --auto` がリモートに問い合わせて、`refs/remotes/origin/HEAD` をリモートの既定のブランチに向ける | git-remote: "With -a or --auto, the remote is queried to determine its HEAD, then the symbolic-ref refs/remotes/<name>/HEAD is set to the same branch"。git-fetch には HEAD の更新の記述がない | 公式文書 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
 | 73 | `git worktree list --porcelain` は、worktreeの実体のパスを出す。macOSでは、`/var` の下の一時ディレクトリが `/private/var` で出る | テストで `filepath.EvalSymlinks` と比べた | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
-| 83 | `GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` を付けても、`GIT_AUTHOR_*` と `GIT_COMMITTER_*` がなければ、gitはユーザ名とホスト名から推測した作者でコミットに成功する。cuminは、作者を環境変数で渡す | #74 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
-| 96 | contextを取り消した `git clone` は、"signal: killed" で失敗する。cuminの停止による取り消しは、Agentの異常終了ではなく、作業場所の用意の失敗として記録される | `TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval` で観測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
+| 83 | `GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` を付けても、`GIT_AUTHOR_*` と `GIT_COMMITTER_*` がなければ、gitはユーザ名とホスト名から推測した作者でコミットに成功する | #74 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 96 | contextを取り消した `git clone` は、"signal: killed" で失敗する | `TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval` で観測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
 | 115 | 親のない (orphan) ブランチ `cumin/diagrams` に置いたSVGを、`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>` の画像としてIssueとPull Requestに貼ると、Webでも Android のGitHubアプリでも表示される。本文のURLは書き換えられず (Camoを通らない)、`image/svg+xml` で200を返す。Mermaidの図は、Android のアプリでは "Loading" のまま表示されない | sandboxで実測 (2026-09-29、#198 の decision request) | 実測 | 2026-09-29、2026-09-30 |
 | 116 | PlantUMLは、SVGに埋め込むソースのコメント (`<!--SRC=[...]-->`) の中で、`--` を `- -` と書く。XMLのコメントは `--` を含めないためである。ソースを読み戻すときは、空白を除いてから読む | #231 で観測 (2026-09-30) | 実測 | 2026-09-29、2026-09-30 |
 
@@ -148,13 +143,25 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 100 | `man launchd.plist`: `KeepAlive` の `SuccessfulExit` は、終了コードが0かどうかの逆の条件で起動し直す意味で、`KeepAlive` は `RunAtLoad` を含意する。`ProcessType` の `Standard` は書かないのと同じで、`Background` はCPUとI/Oを絞る。`ExitTimeOut` はSIGTERMからSIGKILLまでの時間で、初期値はシステムが決める。launchdはjobのプロセスグループに残ったプロセスを止めるが、CLIは自分のプロセスグループで動くので届かない | `man launchd.plist` | 公式文書 | 2026-09-22 |
 | 101 | ログイン中のユーザの LaunchAgent は `gui/<uid>` の domain にある。Appleが求めるのは一意な `Label` だけで、逆ドメインの形は例の慣習である。launchdから起動したcuminは、Keychainの項目を確認の画面なしで読み、`kill -9` のあと11秒で起動し直され、`launchctl kill SIGTERM` で終了コード0で止まった | `man launchctl`。Hostでの実測 (#112 の記録) | 公式文書 + 実測 | 2026-09-22 |
 | 103 | `security add-generic-password ... -w` は、次の引数を値として取る。`-w` のあとにkeychainのパスを書くと、パスが秘密の値として保存され、コマンドは成功を報告する。`-w` を付けない、または `-w` を最後に置いてkeychainのパスを書かないと、値を標準入力から2回読む | Hostで、一時的なkeychainと作り物の値で実測 (2026-09-22) | 実測 | 2026-09-22、2026-09-23 |
-| 104 | keychainのパスを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧にある全てのkeychainを探す。`security default-keychain` は、既定のkeychainのパスを出力する。cuminは既定のkeychainをパスで指定して読むので、手順書の `security` のコマンドもkeychainを指定する | `man security` と、Hostでの実測 | 公式文書 + 実測 | 2026-09-22、2026-09-23 |
+| 104 | keychainのパスを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧にある全てのkeychainを探す。`security default-keychain` は、既定のkeychainのパスを出力する | `man security` と、Hostでの実測 | 公式文書 + 実測 | 2026-09-22、2026-09-23 |
 
 ## Discord
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
 | 102 | Discordのwebhookは `POST /webhooks/{webhook.id}/{webhook.token}` で実行する。本文には `content`、`embeds`、`components`、`file`、`poll` のどれかが要り、`content` は2000文字まで。既定の応答は `204 No Content` で、メッセージの保存に失敗してもエラーにならない。`wait=true` を付けると、作られたメッセージが返る。Allowed Mentions Object の `parse` を空の配列にすると、全てのメンションが抑えられる | 公式: Execute Webhook (2026-09-22) | 公式文書 | 2026-09-22、2026-09-23 |
+
+## 未確認 (Not confirmed)
+
+次の行は、確かめた事実ではない。まだ試していないことと、ある日に観測しただけで、今も成り立つか分からないことである。番号は主題の表と同じ並びから付けたもので、82は確かめた部分が「rulesetとcheck」の表にある。
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 6 | 枠の上限に当たったときのheadless実行の振る舞い (エラーの形、`status` の値) | 試していない | 未確認 | 2026-09-19、Claude Code 2.1.267 |
+| 17 | GitHub Appのapproveが「必須承認数」に数えられるか | 公式文書に記載なし。コミュニティでは「数えられる」との報告がある | 未確認 | 2026-09-19 |
+| 82 | Organizationの ruleset の名前が一意かどうか。Organizationの ruleset が、リポジトリの ruleset と同じ名前を持てるかどうか | 公式文書に記載がない。試していない。Organizationの ruleset を作れるプランは、「rulesetとcheck」の表の82を参照 | 未確認 | 2026-09-21 |
+| 120 | 2026-09-30には、手で張ったリンク (画面の Development の欄、または `addCloseIssueReferences`) のPull Requestを既定のブランチにmergeしても、Issueは閉じなかった。cumin-coreのmergeで、1分待っても開いたままだった | sandboxの `TestLiveCloseReferences` で観測 (#278、C5、2026-09-30)。cumin-works #271 と #229 でも同じ | 未確認 (2026-09-30から2026-10-01に観測した。それからは測り直していない) | 2026-09-30、2026-10-01 |
+| 121 | 2026-09-30の途中から、本文に `Closes #N` と書いたPull Requestに、作った直後は閉じるリンクが付かないことがある。数時間あとに付くこともある (cumin-works #268〜#270、sandbox #185 は作ってから3分はリンクがなく、2026-10-01には付いていた)。キーワードのリンクと手で張ったリンクは、`closingIssuesReferences(userLinkedOnly: true)` で見分けられる。GitHub Status に障害の表示はなく、community の discussions 209162 と 209148 に報告がある | cumin-works、sandbox、ほかの公開リポジトリで観測 (2026-09-30、2026-10-01) | 未確認 (2026-09-30から2026-10-01に観測した。それからは測り直していない) | 2026-09-30、2026-10-01 |
 
 ## 引退した番号 (Retired numbers)
 
@@ -172,6 +179,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 25 | 52 |
 | 28 | 86 |
 | 34 | 53 |
+| 35 | 54 |
 | 36 | 55 |
 | 38 | 44 |
 | 40 | 55 |

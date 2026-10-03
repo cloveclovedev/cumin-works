@@ -64,6 +64,8 @@ The start request names the limit of the run in two lines: "Time limit of the ru
 - Plan a long check, such as a repeated test run, so that it ends well before "End time of the run".
 - Before you start a long check, estimate how long it takes, and compare the estimate with the time that is left.
 - Keep time to submit the review, and to return the result.
+- When a planned long check does not end before "End time of the run", stop at the part that fits. Write in the summary of the review how many runs of how many you did, and their result. Write the missing part there too.
+- When an acceptance criterion itself needs a check that is longer than the run, do not start the review. Return `blocked` and write the reason. The Owner decides: change the criterion, split the issue, or raise `time_limit`.
 
 ## What good work looks like
 
