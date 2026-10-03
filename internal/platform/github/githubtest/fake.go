@@ -396,6 +396,10 @@ type failure struct {
 	// LimitTimes set it.
 	limited bool
 	reset   time.Time
+	// secondary answers a secondary rate limit, as SecondaryLimitTimes set
+	// it. A retryAfter of 0 sends no retry-after header.
+	secondary  bool
+	retryAfter time.Duration
 	// times is how many matching requests fail.
 	times int
 	// then is the failure that follows when this one is used up.
@@ -679,6 +683,18 @@ func (f *Fake) LimitTimes(method, path string, times, status int, reset time.Tim
 	f.failThen(&failure{method: method, path: path, status: status, limited: true, reset: reset, times: times})
 }
 
+// SecondaryLimitTimes makes the fake answer the next times requests with
+// the method and the path as GitHub answers a secondary rate limit: the
+// status (403 or 429) and an error message that names the secondary rate
+// limit. A GraphQL request with the status 200 gets the message as a
+// GraphQL error. A retryAfter above 0 adds the header retry-after in
+// seconds. The answer has no header x-ratelimit-remaining with 0. The
+// requests are recorded and change nothing. A failure of FailTimes or
+// CloseTimes that still waits comes first.
+func (f *Fake) SecondaryLimitTimes(method, path string, times, status int, retryAfter time.Duration) {
+	f.failThen(&failure{method: method, path: path, status: status, secondary: true, retryAfter: retryAfter, times: times})
+}
+
 // failThen adds a failure after the failures that still wait.
 func (f *Fake) failThen(next *failure) {
 	f.mu.Lock()
@@ -793,6 +809,20 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("x-ratelimit-resource", "core")
+		writeJSON(w, fail.status, map[string]any{"message": message})
+		return
+	}
+	if fail != nil && fail.secondary {
+		const message = "You have exceeded a secondary rate limit. Please wait a few minutes before you try again."
+		w.Header().Set("x-ratelimit-limit", "5000")
+		w.Header().Set("x-ratelimit-remaining", "4990")
+		if fail.retryAfter > 0 {
+			w.Header().Set("retry-after", strconv.Itoa(int(fail.retryAfter/time.Second)))
+		}
+		if r.URL.Path == "/graphql" && fail.status == http.StatusOK {
+			writeJSON(w, http.StatusOK, map[string]any{"errors": []any{map[string]any{"message": message}}})
+			return
+		}
 		writeJSON(w, fail.status, map[string]any{"message": message})
 		return
 	}
