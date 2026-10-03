@@ -23,7 +23,7 @@ cuminが判定に使うOwnerは、対象のリポジトリに write 以上 (writ
 
 | 受け持つこと | 内容 |
 |---|---|
-| GitHubの定期確認 | 対象のリポジトリのIssue、Pull Request、check、レビューを、決まった間隔で確かめる |
+| GitHubの定期確認 | 対象のリポジトリのIssue、Pull Request、check、レビューを、決まった間隔で確かめる。作業中のIssueがないリポジトリは、長い間隔 (アイドルの間隔) で確かめる。作業中とは、そのリポジトリでAgentが動いているか、`cumin/status/ready` か `cumin/status/planning` の要求Issue、または `cumin/status/ready`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` のsub-issueがあるか、前回の定期確認で何か動作をしたか失敗したことである。Ownerの判断を待つIssueしかないリポジトリは作業中でないので、Ownerの `cumin/status/ready` や承認には、アイドルの間隔のうちに気付く |
 | 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う。実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestにもコピーする |
 | Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
 | 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
@@ -159,6 +159,7 @@ Ownerに知らせるのは、Ownerの対応が要るときと、cuminが止ま�
 |---|---|---|---|
 | 対象のリポジトリ | cuminが確かめるリポジトリの一覧 | なし | できない |
 | 定期確認の間隔 | GitHubを確かめる間隔 | 60秒 | できない |
+| アイドルの間隔 | 作業中のIssueがないリポジトリを確かめる間隔。対象のリポジトリが増えても、GitHub GraphQLのポイントの枠に収めるためである。定期確認の間隔より短くできない | 5分 | できない |
 | リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、同時に進めるIssueの数の上限。数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。Ownerの対応を待っているIssueも数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
 | 5h枠のしきい値 | 5h枠の使用率がこれ以上なら、新しい着手を止める。時間帯ごとに指定できる。どの時間帯にも入らない時刻には、初期のしきい値を使う | 85% | できない |
 | weekly枠の目標 | ペースの上限の式の目標。weekly枠に時間帯はない | 85% | できない |
@@ -221,4 +222,5 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 22 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestに、Ownerが今の先頭のコミットで `REQUEST_CHANGES` を出す | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerの直前のセッションで直させる。直したあと、check、Reviewerのレビューを経て、もう一度Ownerの判断を待つ。Implementerがコミットせずに答えたときも、もう一度Ownerの判断を待ち、同じレビューで2回目の差し戻しはしない。botや、writeの権限のないアカウントの `REQUEST_CHANGES` では、何もしない |
 | 23 | Ownerでないアカウントが、Issueに `cumin/status/ready` を付ける | 着手しない。ラベルは替えない。Ownerに1回だけ通知する。Ownerが `cumin/status/ready` を付け直すと着手する |
 | 24 | `cumin/status/awaiting-checks` の実装IssueのPull Requestが、既定のブランチと衝突する | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerに衝突の解消を1回だけ依頼する。GitHubがまだ計算している (`UNKNOWN`) 間は依頼しない。checkの修正を依頼した回数は増えない |
-| 25 | `cumin/status/awaiting-checks` の実装Issueで、必須のcheckが、checkの待ち時間を過ぎても先頭のコミットで結果を返さない | `cumin/status/awaiting-owner-decision` に替え、先頭のコミット、結果を返していない必須のcheck、待った時間を添えて、Ownerに1回だけ通知する。待ち時間の内に結果が返れば、I3かI4で進む |
+| 25 | `cumin/status/awaiting-checks` の実装Issueで、必須のcheckが、checkの待ち時間を過ぎても先頭のコミットで結果を返さない | `cumin/status/awaiting-owner-decision` に替え、先頭のコミット、結果を返していない必須のcheck、待った時間を添えて、Ownerに1回だけ通知する。待ち時間の内に結果が返れば、I3かI4で進む。開いているPull Requestがなくなったときも、待ち時間を過ぎたら、そのことを添えて1回だけ通知する |
+| 26 | 作業中のIssueがないリポジトリと、作業中のIssueがあるリポジトリを、同時に対象にする | 作業中のリポジトリは定期確認の間隔で、作業中でないリポジトリはアイドルの間隔で確かめる。作業中でないリポジトリでOwnerが `cumin/status/ready` を付けると、アイドルの間隔のうちに着手する |
