@@ -88,7 +88,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 ### Agentの環境
 
 - CLIプロセスの環境変数は、cuminの環境を引き継がず、決まった一覧から組み立てる。Hostから引き継ぐのは `PATH`、`HOME`、`TMPDIR`、`LANG`、`LC_ALL`、`LC_CTYPE`、`SHELL`、`USER`、`LOGNAME` だけである。Hostのユーザが持つ `SSH_AUTH_SOCK`、`GH_TOKEN`、`GITHUB_TOKEN`、`ANTHROPIC_API_KEY` は一覧にないので、Agentには届かない。`HOME` を残すのは、Claude Codeがサブスクリプションのログインとセッションの記録を `~/.claude` の下に探しに行くからである。
-- 自動メモリは、環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` で切る。`--setting-sources project` だけでは止まらない (実測 28、公式: Environment variables)。
+- 自動メモリは、環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` で切る。`--setting-sources project` だけでは止まらない (実測 86、公式: Environment variables)。
 - claude.aiアカウントのコネクタ (アカウントに結び付いたMCPサーバ) は、環境変数 `ENABLE_CLAUDEAI_MCP_SERVERS=false` で切る。ログインしているユーザには既定で読み込まれ、`--setting-sources project` では止まらない (公式: Environment variables)。2026-09-22 のsandboxでの実機実行で、このコネクタが `init` の `mcp_servers` に現れ、起動の記録の確認が実行を止めた。
 - gitには、Hostのユーザとシステムの設定ファイルを読ませない。`GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` を付けると、credential helperとOwnerの作者設定が見えなくなる (公式: git の環境変数)。`GIT_TERMINAL_PROMPT=0` でパスワードの入力待ちを防ぎ、`GIT_SSH_COMMAND=false` でSSH接続を必ず失敗させる。worktreeのremoteはHTTPSなので、Hostの鍵を使う経路はない。
 - roleのtokenは、`GIT_CONFIG_COUNT=1`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>` の3つで渡す (公式: git-config の環境変数)。ファイルにも引数にも書かない。
@@ -101,7 +101,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 ### 起動の記録の確認
 
-- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことと、cuminが渡したskillが届いていることを確かめる。見るのは、`plugins` (項目がない、または組み込みでないpluginがあれば異常。下を参照)、`mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (項目があり、作業場所の外のパスを指すか、パスとして読み取れない形なら異常)、`skills` (項目がない、または、cuminがそのroleのために書き出したskillが1つでも載っていなければ異常) である。項目がない場合まで異常にするのは、Claude Codeが項目の名前を変えたときに、確かめないまま通してしまわないためである。`--setting-sources project` を付けると `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 28。2026-09-21 の最小の実機実行でも同じだった)。
+- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことと、cuminが渡したskillが届いていることを確かめる。見るのは、`plugins` (項目がない、または組み込みでないpluginがあれば異常。下を参照)、`mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (項目があり、作業場所の外のパスを指すか、パスとして読み取れない形なら異常)、`skills` (項目がない、または、cuminがそのroleのために書き出したskillが1つでも載っていなければ異常) である。項目がない場合まで異常にするのは、Claude Codeが項目の名前を変えたときに、確かめないまま通してしまわないためである。`--setting-sources project` を付けると `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 86。2026-09-21 の最小の実機実行でも同じだった)。
 - 異常に当たったら、実行時間の上限と同じ手順 (プロセスグループにSIGTERM、猶予のあとSIGKILL) でその場で止める。追えない指示のもとでAgentに作業を始めさせないためである。異常終了の種類は「user-level context」とし、理由には項目の名前だけを書いて、パスは書かない。
 - `result` のイベントが来るまでに `init` のイベントがなければ、同じ種類の異常終了にする。起動の記録がないと、Agentが何を読んだのか分からない。
 - Claude Code は、`--setting-sources project` を付けても、バイナリに入ったpluginを `plugins` に載せる (2.1.284 では `agents-md@builtin` と `telemetry@builtin`。2026-09-29 に実測)。`source` が `<名前>@builtin` のpluginは、全て許す。`builtin` は、Claude Codeが組み込みのpluginのために予約したmarketplaceの名前で、marketplace、claude.ai、skillのディレクトリから来たpluginには付かない (公式: Marketplace reference の Reserved names)。組み込みのpluginは、組み込みのツールと同じくClaude Code自身の一部なので、ユーザの文脈ではない。Claude Codeの更新で組み込みのpluginが増えても実行が止まらないよう、名前の一覧は持たない (#156 で Owner が決めた)。名前だけでは照らさない。同じ名前でも `@synced` や marketplace のpluginは止める。`source` のない項目と、読み取れない形も止める。止めたときの理由には、そのpluginの `source` を書く。
@@ -143,7 +143,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - 入口は、結果と一緒に、roleのAppのbotのlogin (`<slug>[bot]`) を返す。呼び出し処理が、Pull Requestの作成者と比べるためである (I2)。2で読んだ身元をそのまま返すので、読み取りは増えない。
 - 起動の入口は、使用率を読まない。着手でない依頼 (I4、I5、Reviewerへの依頼) は、上限に達していても進めるためである。使用率を読む最小の実行は、別の入口 (使用率の読み取り) にあり、呼び出し処理が新しい着手 (R1、I1) の前にだけ呼ぶ ([利用枠の設計](quota.md) の「着手の前の確認」)。この入口はtokenを発行しない。
 - roleごとの設定 (CLI、実行ファイル、モデル、時間の上限) と、リポジトリの持ち主とroleの組ごとのAppの認証情報 (設定 `github_apps.<organization>.<role>`) は、起動時に入口へ渡す。設定を読むのは `cmd/cumin` の役目である。身元も、持ち主とroleの組ごとに持つ。
-- CLIが無視できないグローバルな指示ファイルへの備え: 入口は、roleのCLIごとに「そのCLIが読んでしまうユーザアカウントの指示ファイル」の一覧を持ち、実際にあるものを警告として返す。`cumin run` が起動時にこれをログに出す。Claude Codeでは一覧は空である (`--setting-sources project` と自動メモリの環境変数で、全て無視できる。実測 6e、28)。別のCLIを足すときに、そのCLIの一覧を書く。
+- CLIが無視できないグローバルな指示ファイルへの備え: 入口は、roleのCLIごとに「そのCLIが読んでしまうユーザアカウントの指示ファイル」の一覧を持ち、実際にあるものを警告として返す。`cumin run` が起動時にこれをログに出す。Claude Codeでは一覧は空である (`--setting-sources project` と自動メモリの環境変数で、全て無視できる。実測 6e、86)。別のCLIを足すときに、そのCLIの一覧を書く。
 - 採らなかった案: tokenの発行を、定期確認で使うtokenの使い回しに乗せる。使い回したtokenは、実行の途中で失効しかねない。
 - 採らなかった案: 身元を設定ファイルに書く。slugとidはGitHubが決める値なので、書き写すと食い違いが生じる。
 

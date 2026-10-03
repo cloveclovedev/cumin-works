@@ -40,7 +40,7 @@ const rulePage = 100
 //
 // Official: REST "Get rules for a branch"
 // (GET /repos/{owner}/{repo}/rules/branches/{branch}, 200). An installation
-// token may call it with Metadata: read-only (row 34, measured in row 53).
+// token may call it with Metadata: read-only (row 53).
 func (c *AppClient) RequiredChecks(ctx context.Context, token, owner, repo, branch string) ([]RequiredCheck, error) {
 	base := fmt.Sprintf("/repos/%s/%s/rules/branches/%s",
 		url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(branch))

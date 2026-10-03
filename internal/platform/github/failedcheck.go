@@ -127,7 +127,7 @@ func pickRun(runs []checkRun, check RequiredCheck) (checkRun, bool) {
 }
 
 // failedConclusion reports whether a conclusion of REST is a failure.
-// Success, skipped, and neutral are the three that pass (rows 20 and 51);
+// Success, skipped, and neutral are the three that pass (row 51);
 // a run without a conclusion has not finished.
 func failedConclusion(conclusion string) bool {
 	switch conclusion {
