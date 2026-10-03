@@ -9,16 +9,23 @@ object "repository" as repo
 object "requirement issue (open, cumin/type/requirement)\nnumber, state, labels (up to 100)" as req
 object "sub-issue (implementation issue)\nnumber, title, state, labels (up to 100)" as sub
 object "blocked-by issue\nnumber, state" as blocker
-object "open pull request that closes the issue\nnumber, author, head commit, branch\nlabels (up to 100), check results (up to 100)" as pr
+object "open pull request that closes the issue\nnumber, author, head commit, branch, mergeable\nlabels (up to 100), check results (up to 100)\nreviews (up to 100)" as pr
+object "head commit\noid, committedDate" as commit
 
 repo "1" --> "10 per page" req : issues
 req "1" --> "up to 15" sub : subIssues
 sub "1" --> "up to 100" blocker : blockedBy
 sub "1" --> "up to 2" pr : closedByPullRequestsReferences
+pr "1" --> "last 1" commit : commits
 
 note bottom of pr
   Closed and merged pull requests are not read here.
   I9 (follow-up note) reads merged pull requests separately.
+end note
+note left of sub
+  The time that cumin/status/awaiting-checks
+  was last added comes from the label times
+  query, not from this query.
 end note
 note right of sub
   When an issue exceeds a limit,

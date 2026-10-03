@@ -86,6 +86,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 105 | 定期確認の問い合わせの1ページのポイントは「要求Issue × sub-issue × k ÷ 100」で決まる。k は接続の数で、sub-issueの下のラベルと blocked by で2、Pull Requestで1、Pull Requestの下の接続 (ラベル、check) ごとにPull Requestの件数を足す。接続の中のページサイズ (checkやラベルの件数) はポイントを変えない。公式文書の、経路に沿った `first` の積を100で割る式どおりには増えない | 公式: Rate limits and node limits for the GraphQL API。sandboxで実測 (2026-09-25) | 公式文書 + 実測 | 2026-09-25 |
 | 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである | #221 で実測 (2026-09-29) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
 | 127 | 定期確認の問い合わせの1ページ (sub-issueを15件、Pull Requestを2件まで。Pull Requestの下の接続は、ラベル、check、レビュー) は、14ポイントである。レビューの接続を足す前は11ポイントで、105の式のとおり3ポイント増えた。60秒の間隔で、1リポジトリが毎時840ポイントを使う | sandboxで実測 (2026-09-30) | 実測 | 2026-09-30 |
+| 128 | 定期確認の問い合わせに、Pull Requestの `mergeable` と `commits(last: 1) { nodes { commit { oid committedDate } } }` を足すと、1ページは14ポイントから17ポイントになる (105の式のとおり、Pull Requestの下の接続が1つ増える)。`mergeable` はスカラーで、ポイントを変えない。`MergeableState` の値は `MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つである。`Commit.committedDate` は null にならず、`Commit.pushedDate` は「no longer supported」である。`PullRequest.headRef` は、開いているPull Requestでも `null` を返すことがあった。60秒の間隔で、1リポジトリが毎時1,020ポイントを使う | GraphQLのスキーマのintrospectionと、cumin-worksでの実測 (2026-10-03) | 実測 | 2026-10-03 |
 
 ## rulesetとcheck
 
