@@ -35,12 +35,13 @@ func TestReadSnapshot_ReadsRequirementIssuesWithSubIssuesAndBlockedBy(t *testing
 	fake.AddIssue(repo, &githubtest.Issue{Number: 5, Labels: []string{"question"}})
 	client := github.NewAppClient(server.URL, server.Client())
 
-	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	snapshot, err := readTwoQueries(client)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}
-	if n := fake.CountRequests(http.MethodPost, "/graphql"); n != 1 {
-		t.Errorf("%d GraphQL requests, want 1", n)
+	// One page of the poll query, and one call of the second query.
+	if n := fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
+		t.Errorf("%d GraphQL requests, want 2", n)
 	}
 	if len(snapshot.RequirementIssues) != 1 {
 		t.Fatalf("requirement issues = %+v, want only #6", snapshot.RequirementIssues)
@@ -153,7 +154,7 @@ func TestReadSnapshot_PullRequestWithoutAuthorHasAnEmptyAuthor(t *testing.T) {
 	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 3, HeadCommit: "4444444444444444444444444444444444444444", Closes: []int{2}})
 	client := github.NewAppClient(server.URL, server.Client())
 
-	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	snapshot, err := readTwoQueries(client)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}
@@ -177,14 +178,14 @@ func TestReadSnapshot_TooManyPullRequestsIsAnError(t *testing.T) {
 	}
 	client := github.NewAppClient(server.URL, server.Client())
 
-	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	_, err := readTwoQueries(client)
 	if err == nil || !strings.Contains(err.Error(), "issue #2 has more than 2 open closing pull requests") {
 		t.Errorf("err = %v, want an error that names issue #2", err)
 	}
 	if err := fake.ClosePullRequest(repo, 12); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo"); err != nil {
+	if _, err := readTwoQueries(client); err != nil {
 		t.Errorf("with two open pull requests: %v", err)
 	}
 }
@@ -315,7 +316,7 @@ func TestReadSnapshot_ReadsTheReviewsOfAPullRequest(t *testing.T) {
 	}})
 	client := github.NewAppClient(server.URL, server.Client())
 
-	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	snapshot, err := readTwoQueries(client)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}
@@ -344,7 +345,7 @@ func TestReadSnapshot_TooManyReviewsIsAnError(t *testing.T) {
 	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 3, Closes: []int{2}, Reviews: reviews})
 	client := github.NewAppClient(server.URL, server.Client())
 
-	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	_, err := readTwoQueries(client)
 	if err == nil || !strings.Contains(err.Error(), "pull request #3 has more than 100 reviews") {
 		t.Errorf("err = %v, want an error that names pull request #3", err)
 	}
@@ -378,7 +379,7 @@ func TestReadSnapshot_ReadsTheMergeableValueAndTheHeadCommitTime(t *testing.T) {
 			tt.set(fake, repo)
 			client := github.NewAppClient(server.URL, server.Client())
 
-			snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+			snapshot, err := readTwoQueries(client)
 			if err != nil {
 				t.Fatalf("ReadSnapshot: %v", err)
 			}
@@ -404,7 +405,7 @@ func TestReadSnapshot_AnUnknownMergeableValueIsAnError(t *testing.T) {
 	fake.SetPullRequestMergeable(repo, 3, "BLOCKED")
 	client := github.NewAppClient(server.URL, server.Client())
 
-	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	_, err := readTwoQueries(client)
 	if err == nil || !strings.Contains(err.Error(), `pull request #3 has the unknown mergeable value "BLOCKED"`) {
 		t.Errorf("ReadSnapshot = %v, want an error that names pull request #3 and the value", err)
 	}
@@ -426,19 +427,14 @@ func TestReadSnapshot_TheHeadCommitTimeIsZeroWhenTheLastCommitIsNotTheHead(t *te
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			answer := `{"data":{"repository":{"defaultBranchRef":{"name":"main","target":{"oid":"abc"}},
-			  "cuminConfig":null,"cuminRiskCriteria":null,
-			  "issues":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
-			    {"number":6,"state":"OPEN","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
-			     "subIssues":{"pageInfo":{"hasNextPage":false},"nodes":[
-			       {"number":10,"title":"x","state":"OPEN","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
-			        "blockedBy":{"pageInfo":{"hasNextPage":false},"nodes":[]},
-			        "closedByPullRequestsReferences":{"pageInfo":{"hasNextPage":false},"nodes":[
+			answer := `{"data":{"nodes":[
+	       {"__typename":"Issue","number":10,
+	        "closedByPullRequestsReferences":{"pageInfo":{"hasNextPage":false},"nodes":[
 			          {"number":21,"headRefOid":"222","headRefName":"cumin/10-x","mergeable":"MERGEABLE","author":null,
 			           "commits":{"nodes":` + tt.commits + `},
 			           "labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
 			           "statusCheckRollup":null,
-			           "reviews":{"pageInfo":{"hasNextPage":false},"nodes":[]}}]}}]}}]}},
+			           "reviews":{"pageInfo":{"hasNextPage":false},"nodes":[]}}]}}],
 			  "rateLimit":{"cost":17,"remaining":4983}}}`
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
@@ -447,11 +443,11 @@ func TestReadSnapshot_TheHeadCommitTimeIsZeroWhenTheLastCommitIsNotTheHead(t *te
 			defer server.Close()
 			client := github.NewAppClient(server.URL, server.Client())
 
-			snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+			read, err := client.ReadPullRequests(context.Background(), githubtest.Token, "example-org", "example-repo", []string{"I_10"})
 			if err != nil {
-				t.Fatalf("ReadSnapshot: %v", err)
+				t.Fatalf("ReadPullRequests: %v", err)
 			}
-			pr := snapshot.RequirementIssues[0].SubIssues[0].PullRequests[0]
+			pr := read.PullRequests[10][0]
 			if !pr.HeadCommittedAt.Equal(tt.want) {
 				t.Errorf("head commit time = %v, want %v", pr.HeadCommittedAt, tt.want)
 			}
@@ -480,7 +476,7 @@ func TestReadSubIssue_ReturnsTheFactsOfThePollForOneIssue(t *testing.T) {
 	client := github.NewAppClient(server.URL, server.Client())
 	ctx := context.Background()
 
-	snapshot, err := client.ReadSnapshot(ctx, githubtest.Token, "example-org", "example-repo")
+	snapshot, err := readTwoQueries(client)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}
@@ -520,7 +516,7 @@ func TestReadRequirementIssue_ReturnsTheFactsOfThePollForOneIssue(t *testing.T) 
 	client := github.NewAppClient(server.URL, server.Client())
 	ctx := context.Background()
 
-	snapshot, err := client.ReadSnapshot(ctx, githubtest.Token, "example-org", "example-repo")
+	snapshot, err := readTwoQueries(client)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}

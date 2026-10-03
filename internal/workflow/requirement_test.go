@@ -44,9 +44,9 @@ func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing
 	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/awaiting-owner-review") {
 		t.Fatalf("labels of #6 = %v, want awaiting-owner-review kept", got)
 	}
-	// The poll query, and the query of the label times.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
-		t.Errorf("%d GraphQL requests, want 2", n)
+	// The two queries of the poll, and the query of the label times.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
+		t.Errorf("%d GraphQL requests, want 3", n)
 	}
 
 	// The Owner reviews the new sub-issue and lets it start.
@@ -78,8 +78,9 @@ func TestR3_ARequirementIssueWithoutAStatusLabelFollowsAReadySubIssue(t *testing
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 1 {
-		t.Errorf("%d GraphQL requests, want 1", n)
+	// The two queries of the poll: #10 is open and has a status label.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
+		t.Errorf("%d GraphQL requests, want 2", n)
 	}
 }
 
@@ -167,5 +168,23 @@ func TestR3_AFailedMoveKeepsTheSubIssueReady(t *testing.T) {
 	}
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A poll of a repository with no open sub-issue with a status label sends
+// the poll query only: no second query reads pull requests.
+func TestPoll_NoSubIssueWithAStatusLabelSendsNoSecondQuery(t *testing.T) {
+	sc := newScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Done", Closed: true, Labels: []string{"cumin/status/awaiting-checks", "risk/low"}})
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{Number: 20, Closes: []int{10}})
+	sc.pollAndWait(t, sc.service())
+
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 1 {
+		t.Errorf("%d GraphQL requests, want 1 (the poll query)", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
 	}
 }

@@ -1472,6 +1472,9 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			// IssueID and PullRequestIDs belong to the closing link.
 			IssueID        string   `json:"issueId"`
 			PullRequestIDs []string `json:"pullRequestIds"`
+			// IDs belongs to the second query of the poll: the node ids
+			// of the sub-issues whose pull requests the client asks for.
+			IDs []string `json:"ids"`
 		} `json:"variables"`
 	}
 	if err := json.Unmarshal(body, &request); err == nil && strings.HasPrefix(strings.TrimSpace(request.Query), "mutation") && strings.Contains(request.Query, "addCloseIssueReferences") {
@@ -1486,6 +1489,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if v.IDs != nil {
+		f.servePullRequests(w, v.IDs, v.Labels, v.PullRequests, v.Checks, v.Reviews)
+		return
+	}
 	repo, ok := f.repositories[key(v.Owner, v.Name)]
 	if !ok {
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -1550,6 +1557,45 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": repository, "rateLimit": rateLimit(len(page))},
 	})
+}
+
+// servePullRequests answers the second query of the poll: the open closing
+// pull requests of each issue that the client names by its node id, in the
+// order of the ids. An id that is not an issue is null, with an error, and
+// more than 100 ids are an error with no data (measured on cumin-works on
+// 2026-10-03). Official: Query.nodes.
+func (f *Fake) servePullRequests(w http.ResponseWriter, ids []string, labels, pullRequests, checks, reviews int) {
+	if len(ids) > 100 {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"errors": []map[string]any{{"message": fmt.Sprintf("You may not provide more than 100 node ids; you provided %d.", len(ids))}},
+		})
+		return
+	}
+	nodes := []any{}
+	var errs []map[string]any
+	for _, id := range ids {
+		var node any
+		for _, repo := range f.repositories {
+			for _, issue := range repo.Issues {
+				if IssueNodeID(repo, issue.Number) == id {
+					node = map[string]any{
+						"__typename":                     "Issue",
+						"number":                         issue.Number,
+						"closedByPullRequestsReferences": closingPullRequests(repo, issue, labels, pullRequests, checks, reviews),
+					}
+				}
+			}
+		}
+		if node == nil {
+			errs = append(errs, map[string]any{"message": "Could not resolve to a node with the global id of '" + id + "'."})
+		}
+		nodes = append(nodes, node)
+	}
+	answer := map[string]any{"data": map[string]any{"nodes": nodes, "rateLimit": rateLimit(1)}}
+	if errs != nil {
+		answer["errors"] = errs
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // serveOneIssue answers the query of one issue with the fields of the poll
@@ -1776,17 +1822,26 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}
 		return map[string]any{"number": number, "state": state(closed)}
 	})
-	// Without includeClosedPrs, GitHub lists the open pull requests only.
+	// The poll query asks for no pull request; the queries of one issue do.
+	if pullRequests != 0 {
+		node["closedByPullRequestsReferences"] = closingPullRequests(repo, issue, labels, pullRequests, checks, reviews)
+	}
+	return node
+}
+
+// closingPullRequests is the connection of the open pull requests that
+// close the issue. Without includeClosedPrs, GitHub lists the open pull
+// requests only.
+func closingPullRequests(repo *Repository, issue *Issue, labels, pullRequests, checks, reviews int) map[string]any {
 	var closing []*PullRequest
 	for _, pr := range sortedPullRequests(repo) {
 		if !pr.Closed && slices.Contains(pr.Closes, issue.Number) {
 			closing = append(closing, pr)
 		}
 	}
-	node["closedByPullRequestsReferences"] = connection(closing, pullRequests, func(pr *PullRequest) any {
+	return connection(closing, pullRequests, func(pr *PullRequest) any {
 		return pullRequestNode(pr, labels, checks, reviews)
 	})
-	return node
 }
 
 // pullRequestNode is one pull request as GraphQL returns it: the author

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 )
@@ -33,6 +34,12 @@ import (
 // one page to 14 points (measured on the sandbox on 2026-09-30). The head
 // commit with its time is one more connection again (commits), and raises
 // the cost of one page to 17 points (measured on cumin-works on 2026-10-03).
+//
+// The pull requests cost 14 of those 17 points, so the poll query stops at
+// the sub-issue, and one page costs 3 points. A second query of the same
+// poll reads the pull requests of the few sub-issues that a rule reads them
+// for (pullRequestsQuery; measured on cumin-works on 2026-10-03).
+//
 // MaxOpenClosingPullRequests is the most open closing pull requests that
 // the snapshot reads for one issue. I2 adds no closing link that would go
 // over it, because every later poll would then fail on that issue.
@@ -55,6 +62,10 @@ const (
 	// Reviews of one pull request. The Reviewer gives one review for each
 	// round, and max_review_rounds is a few; people may add their own.
 	snapshotReviews = 100
+	// Sub-issues whose pull requests one call of the second query reads. A
+	// poll with more of them makes one call for each page of this size.
+	// GraphQL returns at most 100 nodes for nodes(ids:).
+	snapshotPullRequestIssues = 100
 )
 
 // requirementLabel marks a requirement issue (issue-states.md). The poll
@@ -72,6 +83,7 @@ const (
 
 // RepositorySnapshot is what one poll reads of one repository: the open
 // requirement issues with their sub-issues, and the rate limit of the call.
+// The sub-issues carry no pull request: ReadPullRequests reads those.
 // docs/ja/designs/poll.md, topic "What one poll reads".
 type RepositorySnapshot struct {
 	// DefaultBranch is the name of the default branch, and DefaultBranchOID
@@ -120,6 +132,8 @@ type Issue struct {
 	// read: no rule of the poll needs them, and old pull requests of a
 	// waiting or closed issue must not reach the page limit. The follow-up
 	// note (I9) reads the merged pull request of a closed issue separately.
+	// The poll query does not read them: the caller takes them from
+	// ReadPullRequests. The read of one issue fills them.
 	PullRequests []PullRequest
 }
 
@@ -242,9 +256,9 @@ type RateLimit struct {
 }
 
 // snapshotQuery reads the open issues with the requirement label, their
-// sub-issues with the title, the state of the blocked-by issues, the open
-// pull requests that close each sub-issue, and the files of .cumin/ on the
-// default branch. The field names come from the design note and
+// sub-issues with the title, the state of the blocked-by issues, and the
+// files of .cumin/ on the default branch. It stops at the sub-issue: the
+// open pull requests that close a sub-issue come from pullRequestsQuery. The field names come from the design note and
 // measured-constraints.md row 55, and were checked against the schema by
 // introspection on 2026-09-21 and on the sandbox on 2026-09-22
 // (closedByPullRequestsReferences, Repository.object, and Blob).
@@ -257,7 +271,7 @@ type RateLimit struct {
 // from a pull request branch. The files are not a connection, so they do not
 // change the cost of the query; $repositoryFiles asks for them on the first
 // page only, because one poll reads them once.
-const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!, $repositoryFiles: Boolean!) {
+const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $after: String, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $repositoryFiles: Boolean!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef @include(if: $repositoryFiles) { name target { oid } }
     cuminConfig: object(expression: "HEAD:` + CuminConfigPath + `") @include(if: $repositoryFiles) { ...cuminFile }
@@ -275,9 +289,23 @@ fragment cuminFile on GitObject {
 }
 ` + requirementIssueFields + subIssueFields
 
-// requirementIssueFields and subIssueFields are the fields of an issue that
-// cumin reads. The poll query and the queries of one issue are built from
-// these two fragments, so that a rule gets the same facts from either read.
+// pullRequestsQuery is the second query of a poll: the open pull requests
+// that close each of the named sub-issues. The caller names the sub-issues
+// by the id that the poll query read. Official: Query.nodes, and
+// Issue.closedByPullRequestsReferences.
+const pullRequestsQuery = `query($ids: [ID!]!, $labels: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
+  nodes(ids: $ids) {
+    __typename
+    ... on Issue { number ...closingPullRequestFields }
+  }
+  rateLimit { cost remaining }
+}
+` + closingPullRequestFields
+
+// requirementIssueFields, subIssueFields, and closingPullRequestFields are
+// the fields of an issue that cumin reads. The two queries of the poll and
+// the queries of one issue are built from these fragments, so that a rule
+// gets the same facts from either read.
 const requirementIssueFields = `
 fragment requirementIssueFields on Issue {
   number
@@ -291,6 +319,21 @@ fragment requirementIssueFields on Issue {
 }
 `
 
+// requirementIssueWithPullRequestsFields is requirementIssueFields with the
+// pull requests of each sub-issue, for the read of one requirement issue.
+const requirementIssueWithPullRequestsFields = `
+fragment requirementIssueFields on Issue {
+  number
+  state
+  labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+  blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
+  subIssues(first: $subIssues) {
+    pageInfo { hasNextPage }
+    nodes { ...subIssueFields ...closingPullRequestFields }
+  }
+}
+`
+
 const subIssueFields = `
 fragment subIssueFields on Issue {
   number
@@ -300,6 +343,11 @@ fragment subIssueFields on Issue {
   closedAt
   labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
   blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
+}
+`
+
+const closingPullRequestFields = `
+fragment closingPullRequestFields on Issue {
   closedByPullRequestsReferences(first: $pullRequests) {
     pageInfo { hasNextPage }
     nodes {
@@ -330,7 +378,7 @@ fragment subIssueFields on Issue {
 `
 
 // requirementIssueQuery and subIssueQuery read one issue by its number, with
-// the fields and the limits of the poll query. A rule that the end of an
+// the fields and the limits of the two queries of the poll. A rule that the end of an
 // agent run triggers reads the facts of one issue only, so it does not read
 // every page of the repository again. The default branch is a scalar path:
 // the merge reads the required checks of that branch.
@@ -351,19 +399,20 @@ const requirementIssueQuery = `query($owner: String!, $name: String!, $number: I
   }
   rateLimit { cost remaining }
 }
-` + requirementIssueFields + subIssueFields
+` + requirementIssueWithPullRequestsFields + subIssueFields + closingPullRequestFields
 
 const subIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef { name }
     issue(number: $number) {
       ...subIssueFields
+      ...closingPullRequestFields
       parent { number state labels(first: $labels) { pageInfo { hasNextPage } nodes { name } } }
     }
   }
   rateLimit { cost remaining }
 }
-` + subIssueFields
+` + subIssueFields + closingPullRequestFields
 
 // IssueRead is what the read of one issue returns: the issue, the name of
 // the default branch, and the rate limit of the call.
@@ -688,7 +737,8 @@ func (n pullRequestNode) pullRequest() (PullRequest, error) {
 
 // ReadSnapshot reads the snapshot of one repository with the installation
 // token: one GraphQL query for each page of requirement issues. Closed
-// requirement issues are not read (issue-states.md, principle 6).
+// requirement issues are not read (issue-states.md, principle 6). The
+// sub-issues come without their pull requests (ReadPullRequests).
 func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string) (RepositorySnapshot, error) {
 	var snapshot RepositorySnapshot
 	var after *string
@@ -697,9 +747,6 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 		variables := map[string]any{
 			"owner": owner, "name": repo, "first": snapshotIssuePage, "after": after,
 			"subIssues": snapshotSubIssues, "labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
-			"pullRequests":    snapshotPullRequests,
-			"checks":          snapshotChecks,
-			"reviews":         snapshotReviews,
 			"repositoryFiles": firstPage,
 		}
 		var resp snapshotResponse
@@ -742,6 +789,80 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 	}
 }
 
+// PullRequestsRead is what the second query of a poll returns: the open
+// closing pull requests of each sub-issue that the caller named, by the
+// number of the sub-issue, and the rate limit of the calls.
+type PullRequestsRead struct {
+	PullRequests map[int][]PullRequest
+	RateLimit    RateLimit
+}
+
+type pullRequestsResponse struct {
+	Data struct {
+		Nodes []*struct {
+			TypeName string `json:"__typename"`
+			issueNode
+		} `json:"nodes"`
+		RateLimit struct {
+			Cost      int `json:"cost"`
+			Remaining int `json:"remaining"`
+		} `json:"rateLimit"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+// ReadPullRequests reads the open pull requests that close each of the
+// sub-issues, with the installation token. issueIDs are the node ids that
+// ReadSnapshot read. No id means no query. An id that is no longer an issue
+// (deleted or moved between the two reads) is an error, so that a rule never
+// decides on a sub-issue whose pull requests were not read.
+func (c *AppClient) ReadPullRequests(ctx context.Context, token, owner, repo string, issueIDs []string) (PullRequestsRead, error) {
+	read := PullRequestsRead{PullRequests: map[int][]PullRequest{}}
+	for page := range slices.Chunk(issueIDs, snapshotPullRequestIssues) {
+		variables := map[string]any{
+			"ids": page, "labels": snapshotLabels,
+			"pullRequests": snapshotPullRequests,
+			"checks":       snapshotChecks,
+			"reviews":      snapshotReviews,
+		}
+		var resp pullRequestsResponse
+		request := map[string]any{"query": pullRequestsQuery, "variables": variables}
+		if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
+			return PullRequestsRead{}, fmt.Errorf("github: read the pull requests of %s/%s: %w", owner, repo, err)
+		}
+		if len(resp.Errors) > 0 {
+			var messages []string
+			for _, e := range resp.Errors {
+				messages = append(messages, e.Message)
+			}
+			return PullRequestsRead{}, fmt.Errorf("github: read the pull requests of %s/%s: %s", owner, repo, strings.Join(messages, "; "))
+		}
+		if len(resp.Data.Nodes) != len(page) {
+			return PullRequestsRead{}, fmt.Errorf("github: read the pull requests of %s/%s: the response has %d issues, want %d", owner, repo, len(resp.Data.Nodes), len(page))
+		}
+		read.RateLimit.Cost += resp.Data.RateLimit.Cost
+		read.RateLimit.Remaining = resp.Data.RateLimit.Remaining
+		var errs []error
+		for i, node := range resp.Data.Nodes {
+			if node == nil || node.TypeName != "Issue" {
+				return PullRequestsRead{}, fmt.Errorf("github: read the pull requests of %s/%s: the id %s is not an issue", owner, repo, page[i])
+			}
+			pullRequests, err := node.pullRequests()
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			read.PullRequests[node.Number] = pullRequests
+		}
+		if err := errors.Join(errs...); err != nil {
+			return PullRequestsRead{}, fmt.Errorf("github: read the pull requests of %s/%s: %w", owner, repo, err)
+		}
+	}
+	return read, nil
+}
+
 // readRepositoryFiles takes the default branch and the files of .cumin/
 // from the answer of the first page.
 func (s *RepositorySnapshot) readRepositoryFiles(resp snapshotResponse) error {
@@ -773,9 +894,6 @@ func (n issueNode) issue() (Issue, error) {
 	if n.BlockedBy.PageInfo.HasNextPage {
 		return Issue{}, fmt.Errorf("issue #%d has more than %d blocked-by issues", n.Number, snapshotBlockedBy)
 	}
-	if n.PullRequests.PageInfo.HasNextPage {
-		return Issue{}, fmt.Errorf("issue #%d has more than %d open closing pull requests", n.Number, snapshotPullRequests)
-	}
 	issue := Issue{Number: n.Number, Title: n.Title, NodeID: n.ID, Closed: n.State == "CLOSED"}
 	if n.ClosedAt != nil {
 		issue.ClosedAt = *n.ClosedAt
@@ -798,15 +916,32 @@ func (n issueNode) issue() (Issue, error) {
 	for _, blocker := range n.BlockedBy.Nodes {
 		issue.BlockedBy = append(issue.BlockedBy, IssueRef{Number: blocker.Number, Closed: blocker.State == "CLOSED"})
 	}
+	pullRequests, err := n.pullRequests()
+	if err != nil {
+		errs = append(errs, err)
+	}
+	issue.PullRequests = pullRequests
+	return issue, errors.Join(errs...)
+}
+
+// pullRequests converts the open closing pull requests of the node. More
+// pull requests than the page size is an error, as it is for the other
+// connections of an issue.
+func (n issueNode) pullRequests() ([]PullRequest, error) {
+	if n.PullRequests.PageInfo.HasNextPage {
+		return nil, fmt.Errorf("issue #%d has more than %d open closing pull requests", n.Number, snapshotPullRequests)
+	}
+	var pullRequests []PullRequest
+	var errs []error
 	for _, node := range n.PullRequests.Nodes {
 		pr, err := node.pullRequest()
 		if err != nil {
 			errs = append(errs, fmt.Errorf("issue #%d: %w", n.Number, err))
 			continue
 		}
-		issue.PullRequests = append(issue.PullRequests, pr)
+		pullRequests = append(pullRequests, pr)
 	}
-	return issue, errors.Join(errs...)
+	return pullRequests, errors.Join(errs...)
 }
 
 // ReadRequirementIssue reads one requirement issue with its sub-issues, as
