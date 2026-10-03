@@ -2479,6 +2479,7 @@ func (sc *scene) notReporting(t *testing.T) {
 		Labels:      []string{workflow.LabelAwaitingChecks, "risk/low"},
 		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingChecks, At: sceneNow}},
 	})
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, sceneNow.Add(-time.Minute))
 }
 
 // I15 (issue-states.md): required checks that do not report on the head

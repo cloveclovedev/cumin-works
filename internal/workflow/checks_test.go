@@ -392,7 +392,7 @@ func TestDecide_I15(t *testing.T) {
 	}
 	waiting := func(number int, mergeable MergeableState, checks []CheckResult) SubIssue {
 		return SubIssue{Number: number, Labels: []string{LabelAwaitingChecks, "risk/low"}, AwaitingChecksAt: labeled,
-			PullRequests: []PullRequest{{Number: number + 10, HeadCommit: "abc", Mergeable: mergeable, Checks: checks}}}
+			PullRequests: []PullRequest{{Number: number + 10, HeadCommit: "abc", HeadCommittedAt: labeled.Add(-time.Minute), Mergeable: mergeable, Checks: checks}}}
 	}
 	pushed := func(sub SubIssue, at time.Time) SubIssue {
 		sub.PullRequests[0].HeadCommittedAt = at
@@ -473,15 +473,20 @@ func TestDecide_I15(t *testing.T) {
 			now: labeled.Add(2 * wait),
 		},
 		{
+			name: "a head commit time that was not read gives nothing",
+			subs: []SubIssue{pushed(waiting(10, Mergeable, results(CheckPending, CheckPassed)), time.Time{})},
+			now:  labeled.Add(2 * wait),
+		},
+		{
 			name: "another status label is not I15",
 			subs: []SubIssue{{Number: 10, Labels: []string{LabelReviewing}, AwaitingChecksAt: labeled,
-				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc"}}}},
+				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
 			now: labeled.Add(2 * wait),
 		},
 		{
 			name: "a closed issue is not I15",
 			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}, AwaitingChecksAt: labeled,
-				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc"}}}},
+				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
 			now: labeled.Add(2 * wait),
 		},
 		{

@@ -811,8 +811,9 @@ func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 // cumin/status/awaiting-checks whose open pull request has a required check
 // that has not reported on its head commit after the wait time, lowest
 // issue number first. A pull request that conflicts belongs to I14, and a
-// failed required check belongs to I4. A sub-issue whose label time was not
-// read gives no action: a later poll decides.
+// failed required check belongs to I4. A sub-issue whose label time or
+// whose head commit time was not read gives no action: a later poll decides.
+// A commit time that was not read can hide a new head commit.
 func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.Time, checksWait time.Duration) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
@@ -822,6 +823,9 @@ func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.T
 			}
 			pr, ok := sub.LatestPullRequest()
 			if !ok || pr.Mergeable == Conflicting || ChecksOf(required, pr.Checks) != ChecksWaiting {
+				continue
+			}
+			if pr.HeadCommittedAt.IsZero() {
 				continue
 			}
 			waited := now.Sub(ChecksWaitStart(sub.AwaitingChecksAt, pr.HeadCommittedAt))
