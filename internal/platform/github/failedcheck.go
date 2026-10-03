@@ -9,6 +9,7 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -332,7 +333,11 @@ func (c *AppClient) sendText(ctx context.Context, token, path, label string) (st
 			return "", &TemporaryError{Err: &StatusError{Method: http.MethodGet, Label: label, Status: resp.StatusCode}}
 		}
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-			if err := c.rateLimited(token, http.MethodGet, label, resp.Header); err != nil {
+			var apiError struct {
+				Message string `json:"message"`
+			}
+			_ = json.NewDecoder(io.LimitReader(resp.Body, maxErrorBody)).Decode(&apiError)
+			if err := c.rateLimited(token, http.MethodGet, label, resp.Header, apiError.Message); err != nil {
 				return "", err
 			}
 		}

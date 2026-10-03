@@ -249,3 +249,136 @@ func TestRateLimit_TheLastGraphQLCallOfTheLimitSucceeds(t *testing.T) {
 		t.Errorf("%d requests, want 2", got)
 	}
 }
+
+// secondaryLines returns the warn lines of a secondary rate limit in the log.
+func (sc *limitScene) secondaryLines() []string {
+	var lines []string
+	for _, line := range strings.Split(sc.logs.String(), "\n") {
+		if strings.Contains(line, "GitHub answered a secondary rate limit") {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+// wantSecondaryLimit fails the test unless err is the typed error of a
+// secondary rate limit with the end of the wait, and counts as temporary.
+func wantSecondaryLimit(t *testing.T, err error, until time.Time) {
+	t.Helper()
+	var limit *github.RateLimitError
+	if !errors.As(err, &limit) {
+		t.Fatalf("err = %v, want a RateLimitError", err)
+	}
+	if !limit.Reset.Equal(until) || limit.Resource != "secondary" {
+		t.Errorf("the limit = %s until %s, want secondary until %s", limit.Resource, limit.Reset, until)
+	}
+	if !github.IsTemporary(err) {
+		t.Errorf("err = %v, want a temporary error", err)
+	}
+	if strings.Contains(err.Error(), githubtest.Token) {
+		t.Errorf("err = %v, holds the token", err)
+	}
+}
+
+// An answer of a secondary rate limit returns the typed error at once, for
+// REST and for GraphQL: the fake receives one call, and the client does not
+// wait. With retry-after: 30 the fake receives no call of the installation
+// for 30 seconds; without the header, for 1 minute. The next call after
+// that is sent.
+func TestRateLimit_NoCallIsSentDuringASecondaryRateLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path string
+		status             int
+		retryAfter, pause  time.Duration
+	}{
+		{"REST 403 with retry-after", http.MethodGet, labelsPath, http.StatusForbidden, 30 * time.Second, 30 * time.Second},
+		{"REST 429 with retry-after", http.MethodGet, labelsPath, http.StatusTooManyRequests, 30 * time.Second, 30 * time.Second},
+		{"REST 403 without retry-after", http.MethodGet, labelsPath, http.StatusForbidden, 0, time.Minute},
+		{"GraphQL 200 with retry-after", http.MethodPost, "/graphql", http.StatusOK, 30 * time.Second, 30 * time.Second},
+		{"GraphQL 200 without retry-after", http.MethodPost, "/graphql", http.StatusOK, 0, time.Minute},
+		{"GraphQL 403 without retry-after", http.MethodPost, "/graphql", http.StatusForbidden, 0, time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := newLimitScene(t)
+			sc.fake.SecondaryLimitTimes(tc.method, tc.path, 1, tc.status, tc.retryAfter)
+			call := sc.readLabels
+			if tc.path == "/graphql" {
+				call = sc.readSnapshot
+			}
+			until := limitFound.Add(tc.pause)
+
+			wantSecondaryLimit(t, call(), until)
+
+			if got := sc.fake.CountRequests(tc.method, tc.path); got != 1 {
+				t.Errorf("%d requests, want 1: a secondary rate limit is not tried again inside the call", got)
+			}
+			if len(sc.waits) != 0 || len(sc.retryLines()) != 0 {
+				t.Errorf("waits = %v, retry lines = %v, want none", sc.waits, sc.retryLines())
+			}
+			lines := sc.secondaryLines()
+			if len(lines) != 1 || !strings.Contains(lines[0], "level=WARN") ||
+				!strings.Contains(lines[0], "resource=secondary") || !strings.Contains(lines[0], "reset="+until.Format(time.RFC3339)) {
+				t.Errorf("secondary lines = %v, want one warn line with the kind and the time", lines)
+			}
+			if strings.Contains(sc.logs.String(), githubtest.Token) {
+				t.Errorf("the log holds the token:\n%s", sc.logs.String())
+			}
+
+			sc.now = until.Add(-time.Second)
+			received := len(sc.fake.Requests())
+			wantSecondaryLimit(t, sc.readLabels(), until)
+			wantSecondaryLimit(t, sc.writeComment(), until)
+			wantSecondaryLimit(t, sc.readSnapshot(), until)
+			if got := len(sc.fake.Requests()); got != received {
+				t.Errorf("%d requests during the pause, want none", got-received)
+			}
+			if got := len(sc.secondaryLines()); got != 1 {
+				t.Errorf("%d secondary lines, want 1: a call that is not sent logs nothing", got)
+			}
+
+			sc.now = until
+			if err := call(); err != nil {
+				t.Fatalf("the call after the pause: %v", err)
+			}
+			if got := len(sc.fake.Requests()); got == received {
+				t.Errorf("no request after the pause, want the call to be sent")
+			}
+		})
+	}
+}
+
+// The job log is read as text. That read finds a secondary rate limit too.
+func TestRateLimit_TheJobLogReadFindsASecondaryRateLimit(t *testing.T) {
+	sc := newLimitScene(t)
+	sc.fake.AddCheckRun(sc.repo, headSHA, githubtest.CheckRun{ID: 7, Name: "ci", Conclusion: "failure", JobID: 42, JobLog: "the reason of the failure\n"})
+	const logPath = "/repos/example-org/example-repo/actions/jobs/42/logs"
+	sc.fake.SecondaryLimitTimes(http.MethodGet, logPath, 1, http.StatusForbidden, 0)
+
+	sc.client.FailedCheckContent(context.Background(), githubtest.Token,
+		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, logger(sc.logs))
+
+	if got := sc.fake.CountRequests(http.MethodGet, logPath); got != 1 {
+		t.Errorf("%d requests of the job log, want 1", got)
+	}
+	received := len(sc.fake.Requests())
+	wantSecondaryLimit(t, sc.readLabels(), limitFound.Add(time.Minute))
+	if got := len(sc.fake.Requests()); got != received {
+		t.Errorf("%d requests during the pause, want none", got-received)
+	}
+}
+
+// A write that gets a secondary rate limit returns the typed error, and
+// the pause holds a later read too.
+func TestRateLimit_AWriteFindsASecondaryRateLimit(t *testing.T) {
+	sc := newLimitScene(t)
+	sc.fake.SecondaryLimitTimes(http.MethodPost, commentsPath, 1, http.StatusForbidden, 30*time.Second)
+	until := limitFound.Add(30 * time.Second)
+
+	wantSecondaryLimit(t, sc.writeComment(), until)
+
+	received := len(sc.fake.Requests())
+	wantSecondaryLimit(t, sc.readLabels(), until)
+	if got := len(sc.fake.Requests()); got != received {
+		t.Errorf("%d requests during the pause, want none", got-received)
+	}
+}

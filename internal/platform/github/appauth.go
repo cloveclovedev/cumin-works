@@ -73,8 +73,8 @@ type AppClient struct {
 	wait func(ctx context.Context, d time.Duration) error
 	// logger gets one line for each retry. Nil means the default logger.
 	logger *slog.Logger
-	// limits holds the full rate limits. Until the reset time of one, no
-	// call of its installation is sent.
+	// limits holds the full rate limits and the secondary rate limits. Until
+	// the reset time of one, no call of its installation is sent.
 	limits rateLimits
 }
 
@@ -186,8 +186,9 @@ func (e *StatusError) Error() string {
 // in errors. It is the path, or a text without the secret part of the path.
 // A read that fails with a network error or a 5xx answer is sent again, as
 // retry says. Such a failure of the last try, or of a write, is a
-// TemporaryError. A full rate limit is a RateLimitError: until its reset
-// time, a call of the same installation returns that error and sends nothing.
+// TemporaryError. A full rate limit and a secondary rate limit are a
+// RateLimitError: until its reset time, a call of the same installation
+// returns that error and sends nothing.
 func (c *AppClient) do(ctx context.Context, jwt, method, path, label string, body any, wantStatus int, out any) error {
 	var encoded []byte
 	if body != nil {
@@ -237,15 +238,15 @@ func (c *AppClient) send(ctx context.Context, jwt, method, path, label string, b
 	defer resp.Body.Close()
 
 	if resp.StatusCode != wantStatus {
-		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-			if err := c.rateLimited(jwt, method, label, resp.Header); err != nil {
-				return err
-			}
-		}
 		var apiError struct {
 			Message string `json:"message"`
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, maxErrorBody)).Decode(&apiError)
+		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+			if err := c.rateLimited(jwt, method, label, resp.Header, apiError.Message); err != nil {
+				return err
+			}
+		}
 		statusErr := &StatusError{Method: method, Label: label, Status: resp.StatusCode, Message: apiError.Message}
 		if resp.StatusCode >= 500 {
 			return &TemporaryError{Err: statusErr}
@@ -254,17 +255,19 @@ func (c *AppClient) send(ctx context.Context, jwt, method, path, label string, b
 	}
 	answer := &bodyReader{r: resp.Body}
 	var decoded io.Reader = answer
-	if path == "/graphql" && resp.Header.Get("x-ratelimit-remaining") == "0" {
-		// GraphQL answers a full rate limit with the status 200 and an
-		// error. The last call that the limit allows has the same header
-		// and no error, so the body decides.
+	if path == "/graphql" {
+		// GraphQL answers a rate limit with the status 200 and an error.
+		// The last call that the primary limit allows has the header with
+		// 0 and no error, so the body decides.
 		data, err := io.ReadAll(answer)
 		if err != nil {
 			return networkError(ctx, fmt.Errorf("%s %s: %w", method, label, err))
 		}
-		if hasGraphQLErrors(data) {
-			if err := c.rateLimited(jwt, method, label, resp.Header); err != nil {
-				return err
+		if resp.Header.Get("x-ratelimit-remaining") == "0" || bytes.Contains(data, []byte(secondarySignal)) {
+			if message, ok := graphQLErrorMessages(data); ok {
+				if err := c.rateLimited(jwt, method, label, resp.Header, message); err != nil {
+					return err
+				}
 			}
 		}
 		decoded = bytes.NewReader(data)
