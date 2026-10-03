@@ -997,15 +997,15 @@ func labelsNow(sub SubIssue, ok bool) []string {
 	return sub.Labels
 }
 
-// verifyDone applies I2 after a done result. It reads the snapshot of the
-// repository again, because a rule that the end of a run triggers judges on
-// the facts of that moment, not on those of the last poll (cumin-core.md,
-// the topic on the GitHub client). It then lists the open pull requests of
+// verifyDone applies I2 after a done result. It reads the issue of the run
+// again, and only that issue, because a rule that the end of a run triggers
+// judges on the facts of that moment, not on those of the last poll
+// (cumin-core.md, the topic on the GitHub client). It then lists the open pull requests of
 // the branch of the run, reads the head commit of the worktree, and runs
 // the pure check.
 //
 // On a pass, when the issue has no closing link to the pull request,
-// cumin-core adds it and reads the snapshot once more to see it; then the
+// cumin-core adds it and reads the issue once more to see it; then the
 // status label becomes cumin/status/awaiting-checks. A failed check, a
 // failed link, and a link that is still missing hand the issue back to the
 // Owner through the stop step, with one sentence. Nothing here is retried:
@@ -1017,16 +1017,12 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		log.Error("I2: no token", "error", err.Error())
 		return
 	}
-	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
-		log.Error("I2: the snapshot was not read again", "error", err.Error())
+		log.Error("I2: the issue was not read again", "error", err.Error())
 		return
 	}
-	sub, ok := toSnapshot(read).SubIssue(number)
-	if !ok {
-		log.Error("I2: the issue is not in the snapshot")
-		return
-	}
+	sub := toSubIssue(read.Issue)
 	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, branch)
 	if err != nil {
 		log.Error("I2: the open pull requests of the branch were not read", "branch", branch, "error", err.Error())
@@ -1076,16 +1072,12 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 			stopI2(LinkFailedReason(pr, githubAnswer(err)), pr)
 			return
 		}
-		again, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 		if err != nil {
-			log.Error("I2: the snapshot was not read after the closing link", "error", err.Error())
+			log.Error("I2: the issue was not read after the closing link", "error", err.Error())
 			return
 		}
-		sub, ok = toSnapshot(again).SubIssue(number)
-		if !ok {
-			log.Error("I2: the issue is not in the snapshot after the closing link")
-			return
-		}
+		sub = toSubIssue(again.Issue)
 		if !linksPullRequest(sub, pr) {
 			log.Warn("I2: the closing link is missing after cumin-core added it", "pull_request", pr)
 			stopI2(LinkMissingReason(pr), pr)
@@ -1182,35 +1174,47 @@ func toConclusion(c github.CheckConclusion) CheckConclusion {
 func toSnapshot(read github.RepositorySnapshot) Snapshot {
 	snapshot := Snapshot{DefaultBranch: read.DefaultBranch}
 	for _, issue := range read.RequirementIssues {
-		requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
-		for _, blocker := range issue.BlockedBy {
-			requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
-		}
-		for _, sub := range issue.SubIssues {
-			subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
-			for _, blocker := range sub.BlockedBy {
-				subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
-			}
-			for _, pr := range sub.PullRequests {
-				subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{
-					Number:     pr.Number,
-					HeadCommit: pr.HeadCommit,
-					HeadBranch: pr.HeadBranch,
-					Author:     pr.Author,
-					Labels:     pr.Labels,
-					Checks:     toChecks(pr.Checks),
-					Reviews:    toReviews(pr.Reviews),
-					// The three values of GitHub pass as they are; the
-					// client refuses any other value.
-					Mergeable:       MergeableState(pr.Mergeable),
-					HeadCommittedAt: pr.HeadCommittedAt,
-				})
-			}
-			requirement.SubIssues = append(requirement.SubIssues, subIssue)
-		}
-		snapshot.RequirementIssues = append(snapshot.RequirementIssues, requirement)
+		snapshot.RequirementIssues = append(snapshot.RequirementIssues, toRequirementIssue(issue))
 	}
 	return snapshot
+}
+
+// toRequirementIssue converts one requirement issue of the GitHub client,
+// from the poll or from the read of one issue.
+func toRequirementIssue(issue github.Issue) RequirementIssue {
+	requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
+	for _, blocker := range issue.BlockedBy {
+		requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
+	}
+	for _, sub := range issue.SubIssues {
+		requirement.SubIssues = append(requirement.SubIssues, toSubIssue(sub))
+	}
+	return requirement
+}
+
+// toSubIssue converts one sub-issue of the GitHub client, from the poll or
+// from the read of one issue.
+func toSubIssue(sub github.Issue) SubIssue {
+	subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
+	for _, blocker := range sub.BlockedBy {
+		subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
+	}
+	for _, pr := range sub.PullRequests {
+		subIssue.PullRequests = append(subIssue.PullRequests, PullRequest{
+			Number:     pr.Number,
+			HeadCommit: pr.HeadCommit,
+			HeadBranch: pr.HeadBranch,
+			Author:     pr.Author,
+			Labels:     pr.Labels,
+			Checks:     toChecks(pr.Checks),
+			Reviews:    toReviews(pr.Reviews),
+			// The three values of GitHub pass as they are; the
+			// client refuses any other value.
+			Mergeable:       MergeableState(pr.Mergeable),
+			HeadCommittedAt: pr.HeadCommittedAt,
+		})
+	}
+	return subIssue
 }
 
 // settingsSource names where the settings of a poll came from, for the log.

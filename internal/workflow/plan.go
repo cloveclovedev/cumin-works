@@ -273,8 +273,8 @@ func (s *Service) runningIssues(repository string) map[int]bool {
 	return running
 }
 
-// verifySplit applies R2 after a done result, on a new snapshot of the
-// repository. On a pass with an open sub-issue, the requirement issue moves
+// verifySplit applies R2 after a done result, on a new read of the
+// requirement issue. On a pass with an open sub-issue, the requirement issue moves
 // to cumin/status/awaiting-owner-review and the Owner is told that the
 // split needs a review. On a pass with every sub-issue closed, it moves to
 // cumin/status/implementing without a notification, so that R4 asks for the
@@ -326,25 +326,25 @@ func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Targ
 	})
 }
 
-// requirementIssueNow reads one requirement issue from a new snapshot of
-// the repository, as subIssueNow does for a sub-issue.
+// requirementIssueNow reads one requirement issue again with its
+// sub-issues, as subIssueNow does for a sub-issue. A closed requirement
+// issue is not read, as in a poll (issue-states.md, principle 6).
 func (s *Service) requirementIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (RequirementIssue, bool) {
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("the issue was not read again: no token", "error", err.Error())
 		return RequirementIssue{}, false
 	}
-	read, err := s.GitHub.ReadSnapshot(ctx, token, target.Repository.Owner, target.Repository.Name)
+	read, err := s.GitHub.ReadRequirementIssue(ctx, token, target.Repository.Owner, target.Repository.Name, number)
 	if err != nil {
 		log.Error("the issue was not read again", "error", err.Error())
 		return RequirementIssue{}, false
 	}
-	requirement, ok := toSnapshot(read).RequirementIssue(number)
-	if !ok {
-		log.Error("the issue was not read again: it is not in the snapshot")
+	if read.Issue.Closed {
+		log.Error("the issue was not read again: it is closed")
 		return RequirementIssue{}, false
 	}
-	return requirement, true
+	return toRequirementIssue(read.Issue), true
 }
 
 // labelsOf is the labels of the requirement issue that requirementIssueNow

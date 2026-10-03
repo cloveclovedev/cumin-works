@@ -38,7 +38,7 @@ func (s *Service) closeWait() time.Duration {
 }
 
 // afterApproval applies I6 or I7 when the Reviewer approved the head commit
-// of the pull request. It reads the snapshot again for the labels of the
+// of the pull request. It reads the issue again for the labels of the
 // issue now and for the default branch, whose rules name the required
 // checks. A read that fails is logged, and the issue keeps its label.
 // ownerLogin is the login of the Owner that the Reviewer run holds; a
@@ -51,18 +51,13 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 		log.Error("I6: no token; the issue keeps its label", "error", err.Error())
 		return
 	}
-	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
+	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
-		log.Error("I6: the snapshot was not read again; the issue keeps its label", "error", err.Error())
+		log.Error("I6: the issue was not read again; the issue keeps its label", "error", err.Error())
 		return
 	}
-	snapshot := toSnapshot(read)
-	sub, ok := snapshot.SubIssue(number)
-	if !ok {
-		log.Error("I6: the issue is not in the snapshot")
-		return
-	}
-	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
+	sub := toSubIssue(read.Issue)
+	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
 	if err != nil {
 		log.Error("I6: the required checks were not read; the issue keeps its label", "error", err.Error())
 		return
@@ -84,7 +79,7 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 	log.Info("I6: decided on the approved pull request", "decision", decision.String(), "pull_request", pr.Number)
 	switch decision {
 	case MergeNow:
-		s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, snapshot.DefaultBranch,
+		s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, read.DefaultBranch,
 			func(string) (string, error) { return ownerLogin, nil })
 	case MergeAskOwner:
 		s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr)

@@ -259,50 +259,7 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
     cuminRiskCriteria: object(expression: "HEAD:` + CuminRiskCriteriaPath + `") @include(if: $repositoryFiles) { ...cuminFile }
     issues(states: [OPEN], labels: ["cumin/type/requirement"], first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
-      nodes {
-        number
-        state
-        labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
-        blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
-        subIssues(first: $subIssues) {
-          pageInfo { hasNextPage }
-          nodes {
-            number
-            id
-            title
-            state
-            closedAt
-            labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
-            blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
-            closedByPullRequestsReferences(first: $pullRequests) {
-              pageInfo { hasNextPage }
-              nodes {
-                number
-                headRefOid
-                headRefName
-                mergeable
-                commits(last: 1) { nodes { commit { oid committedDate } } }
-                author { __typename login }
-                labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
-                statusCheckRollup {
-                  contexts(first: $checks) {
-                    pageInfo { hasNextPage }
-                    nodes {
-                      __typename
-                      ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }
-                      ... on StatusContext { context state }
-                    }
-                  }
-                }
-                reviews(first: $reviews) {
-                  pageInfo { hasNextPage }
-                  nodes { author { __typename login } state submittedAt url commit { oid } }
-                }
-              }
-            }
-          }
-        }
-      }
+      nodes { ...requirementIssueFields }
     }
   }
   rateLimit { cost remaining }
@@ -310,7 +267,114 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
 
 fragment cuminFile on GitObject {
   ... on Blob { oid text byteSize isBinary isTruncated }
-}`
+}
+` + requirementIssueFields + subIssueFields
+
+// requirementIssueFields and subIssueFields are the fields of an issue that
+// cumin reads. The poll query and the queries of one issue are built from
+// these two fragments, so that a rule gets the same facts from either read.
+const requirementIssueFields = `
+fragment requirementIssueFields on Issue {
+  number
+  state
+  labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+  blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
+  subIssues(first: $subIssues) {
+    pageInfo { hasNextPage }
+    nodes { ...subIssueFields }
+  }
+}
+`
+
+const subIssueFields = `
+fragment subIssueFields on Issue {
+  number
+  id
+  title
+  state
+  closedAt
+  labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+  blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
+  closedByPullRequestsReferences(first: $pullRequests) {
+    pageInfo { hasNextPage }
+    nodes {
+      number
+      headRefOid
+      headRefName
+      mergeable
+      commits(last: 1) { nodes { commit { oid committedDate } } }
+      author { __typename login }
+      labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
+      statusCheckRollup {
+        contexts(first: $checks) {
+          pageInfo { hasNextPage }
+          nodes {
+            __typename
+            ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }
+            ... on StatusContext { context state }
+          }
+        }
+      }
+      reviews(first: $reviews) {
+        pageInfo { hasNextPage }
+        nodes { author { __typename login } state submittedAt url commit { oid } }
+      }
+    }
+  }
+}
+`
+
+// requirementIssueQuery and subIssueQuery read one issue by its number, with
+// the fields and the limits of the poll query. A rule that the end of an
+// agent run triggers reads the facts of one issue only, so it does not read
+// every page of the repository again. The default branch is a scalar path:
+// the merge reads the required checks of that branch.
+//
+// Measured on cumin-works on 2026-10-03 with rateLimit { cost }: 2 points for
+// a requirement issue with its sub-issues, and 1 point for a sub-issue.
+const requirementIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef { name }
+    issue(number: $number) { ...requirementIssueFields }
+  }
+  rateLimit { cost remaining }
+}
+` + requirementIssueFields + subIssueFields
+
+const subIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef { name }
+    issue(number: $number) { ...subIssueFields }
+  }
+  rateLimit { cost remaining }
+}
+` + subIssueFields
+
+// IssueRead is what the read of one issue returns: the issue, the name of
+// the default branch, and the rate limit of the call.
+type IssueRead struct {
+	DefaultBranch string
+	Issue         Issue
+	RateLimit     RateLimit
+}
+
+type issueResponse struct {
+	Data struct {
+		Repository *struct {
+			DefaultBranchRef *struct {
+				Name string `json:"name"`
+			} `json:"defaultBranchRef"`
+			Issue *issueNode `json:"issue"`
+		} `json:"repository"`
+		RateLimit struct {
+			Cost      int `json:"cost"`
+			Remaining int `json:"remaining"`
+		} `json:"rateLimit"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
 
 // The GraphQL response. It stops in this package.
 type snapshotResponse struct {
@@ -708,4 +772,54 @@ func (n issueNode) issue() (Issue, error) {
 		issue.PullRequests = append(issue.PullRequests, pr)
 	}
 	return issue, errors.Join(errs...)
+}
+
+// ReadRequirementIssue reads one requirement issue with its sub-issues, as
+// one poll reads it, in one GraphQL query. An issue over a limit of the
+// query is an error that names the issue.
+func (c *AppClient) ReadRequirementIssue(ctx context.Context, token, owner, repo string, number int) (IssueRead, error) {
+	return c.readIssue(ctx, token, owner, repo, number, requirementIssueQuery, map[string]any{"subIssues": snapshotSubIssues})
+}
+
+// ReadSubIssue reads one sub-issue with its open closing pull requests, as
+// one poll reads it, in one GraphQL query. An issue over a limit of the
+// query is an error that names the issue.
+func (c *AppClient) ReadSubIssue(ctx context.Context, token, owner, repo string, number int) (IssueRead, error) {
+	return c.readIssue(ctx, token, owner, repo, number, subIssueQuery, map[string]any{})
+}
+
+func (c *AppClient) readIssue(ctx context.Context, token, owner, repo string, number int, query string, variables map[string]any) (IssueRead, error) {
+	for name, value := range map[string]any{
+		"owner": owner, "name": repo, "number": number,
+		"labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
+		"pullRequests": snapshotPullRequests,
+		"checks":       snapshotChecks,
+		"reviews":      snapshotReviews,
+	} {
+		variables[name] = value
+	}
+	var resp issueResponse
+	request := map[string]any{"query": query, "variables": variables}
+	if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
+	}
+	if len(resp.Errors) > 0 {
+		var messages []string
+		for _, e := range resp.Errors {
+			messages = append(messages, e.Message)
+		}
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %s", number, owner, repo, strings.Join(messages, "; "))
+	}
+	if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: the response has no issue", number, owner, repo)
+	}
+	issue, err := resp.Data.Repository.Issue.issue()
+	if err != nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
+	}
+	read := IssueRead{Issue: issue, RateLimit: RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}}
+	if ref := resp.Data.Repository.DefaultBranchRef; ref != nil {
+		read.DefaultBranch = ref.Name
+	}
+	return read, nil
 }

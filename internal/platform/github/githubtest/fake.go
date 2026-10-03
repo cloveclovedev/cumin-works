@@ -1435,7 +1435,7 @@ func labelJSON(label Label) map[string]any {
 	return map[string]any{"name": label.Name, "color": label.Color, "description": label.Description}
 }
 
-// serveGraphQL answers the snapshot query of the client. It does not parse
+// serveGraphQL answers the GraphQL queries of the client. It does not parse
 // the query text: it answers from the variables, in the shape that the
 // client expects. The cursor is the number of the last issue of the page.
 func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
@@ -1507,6 +1507,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 		f.serveIssueComments(w, repo, v.Number, v.Last, v.Before)
 		return
 	}
+	if v.Number != 0 && v.PullRequests != 0 {
+		f.serveOneIssue(w, repo, v.Number, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks, v.Reviews)
+		return
+	}
 	if v.Number != 0 {
 		f.serveLabelTimes(w, repo, v.Number, v.SubIssues, v.Events)
 		return
@@ -1545,6 +1549,35 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": repository, "rateLimit": rateLimit(len(page))},
+	})
+}
+
+// serveOneIssue answers the query of one issue with the fields of the poll
+// query. The query of a requirement issue carries the page size of the
+// sub-issues, and asks for no pull request of the issue itself; the query of
+// a sub-issue carries no such size, and asks for no sub-issue. Official:
+// Repository.issue.
+func (f *Fake) serveOneIssue(w http.ResponseWriter, repo *Repository, number, labels, subIssues, blockedBy, pullRequests, checks, reviews int) {
+	issue, ok := repo.Issues[number]
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
+			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an Issue with the number of %d.", number)}},
+		})
+		return
+	}
+	node := f.issueNode(repo, issue, labels, subIssues, blockedBy, pullRequests, checks, reviews)
+	if subIssues == 0 {
+		delete(node, "subIssues")
+	} else {
+		delete(node, "closedByPullRequestsReferences")
+	}
+	var defaultBranch any
+	if ref, ok := defaultBranchRefJSON(repo).(map[string]any); ok {
+		defaultBranch = map[string]any{"name": ref["name"]}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"repository": map[string]any{"defaultBranchRef": defaultBranch, "issue": node}, "rateLimit": rateLimit(1)},
 	})
 }
 
