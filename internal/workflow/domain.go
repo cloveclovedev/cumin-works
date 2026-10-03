@@ -259,6 +259,16 @@ type FixChecks struct {
 	Failed      []RequiredCheck
 }
 
+// ResolveConflict is the action of I14: the pull request of an issue that
+// waits for the checks conflicts with the default branch, so the issue
+// goes back to the Implementer for a conflict resolution, in the same
+// session. GitHub runs no pull_request workflow on a pull request that
+// conflicts, so its required checks would never report.
+type ResolveConflict struct {
+	Number      int
+	PullRequest int
+}
+
 // CopyLabels is the action of I11: the pull request gets Labels, so that its
 // cumin/status/* and risk/* labels are those of the issue that it closes.
 type CopyLabels struct {
@@ -333,6 +343,7 @@ type Action interface {
 func (Claim) isAction()              {}
 func (StartReview) isAction()        {}
 func (FixChecks) isAction()          {}
+func (ResolveConflict) isAction()    {}
 func (CopyLabels) isAction()         {}
 func (Plan) isAction()               {}
 func (StartRequirement) isAction()   {}
@@ -350,9 +361,11 @@ func (FixOwnerReview) isAction()     {}
 // branch require; the caller reads them only when an issue of the
 // repository waits for the checks.
 //
-// I3 and I4 come before the starts of R1 and I1: an issue that leaves
+// I14, I3, and I4 come before the starts of R1 and I1: an issue that leaves
 // cumin/status/awaiting-checks keeps its place in the limit, so deciding it
-// first never takes room from a start.
+// first never takes room from a start. I14 (the pull request conflicts)
+// comes before I3 and I4 for its issue: only the first row that holds
+// moves the issue at one poll.
 //
 // R1 and I1 both start an agent, so they share the room under the limit.
 // The starts are taken highest priority first and then lowest issue number
@@ -365,6 +378,7 @@ func (FixOwnerReview) isAction()     {}
 // first and take no room.
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string) []Action {
 	actions := requirementMoves(snapshot)
+	actions = append(actions, conflictingSubIssues(snapshot)...)
 	actions = append(actions, reviewableSubIssues(snapshot, required)...)
 	actions = append(actions, failedSubIssues(snapshot, required)...)
 	room := maxInProgress - inProgress(snapshot)
@@ -405,7 +419,8 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 // stops after its runs: the ones that ask no agent for new work. A requirement issue
 // still changes its label, a pull request still gets the labels of its
 // issue, and an approval of an Owner still merges. The split, the
-// acceptance check, the claim, the review, the check fix, and the fix of the
+// acceptance check, the claim, the review, the check fix, the conflict
+// resolution, and the fix of the
 // Owner's review wait for the next start of cumin; each of them starts from a label that no agent
 // works under, so nothing is lost (designs/cumin-core.md, the topic on the
 // stop).
@@ -413,7 +428,7 @@ func WithoutNewWork(actions []Action) []Action {
 	kept := make([]Action, 0, len(actions))
 	for _, action := range actions {
 		switch action.(type) {
-		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, FixOwnerReview:
+		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, ResolveConflict, FixOwnerReview:
 		default:
 			kept = append(kept, action)
 		}
@@ -697,9 +712,34 @@ func labelCopies(snapshot Snapshot) []Action {
 	return actions
 }
 
+// conflictingSubIssues returns the actions of I14: open sub-issues in
+// cumin/status/awaiting-checks whose open pull request GitHub reports as
+// CONFLICTING, lowest issue number first. UNKNOWN says that GitHub is still
+// calculating, so it gives no action: a later poll decides.
+func conflictingSubIssues(snapshot Snapshot) []Action {
+	var actions []Action
+	for _, requirement := range snapshot.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) {
+				continue
+			}
+			pr, ok := sub.LatestPullRequest()
+			if !ok || pr.Mergeable != Conflicting {
+				continue
+			}
+			actions = append(actions, ResolveConflict{Number: sub.Number, PullRequest: pr.Number})
+		}
+	}
+	slices.SortFunc(actions, func(a, b Action) int {
+		return a.(ResolveConflict).Number - b.(ResolveConflict).Number
+	})
+	return actions
+}
+
 // reviewableSubIssues returns the actions of I3: open sub-issues in
 // cumin/status/awaiting-checks whose open pull request has every required
-// check passed on its head commit.
+// check passed on its head commit. A pull request that conflicts belongs
+// to I14.
 func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
@@ -708,7 +748,7 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
-			if !ok {
+			if !ok || pr.Mergeable == Conflicting {
 				continue
 			}
 			if ChecksOf(required, pr.Checks) != ChecksPassed {
@@ -725,7 +765,8 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 
 // failedSubIssues returns the actions of I4: open sub-issues in
 // cumin/status/awaiting-checks whose open pull request has a failed
-// required check on its head commit, lowest issue number first.
+// required check on its head commit, lowest issue number first. A pull
+// request that conflicts belongs to I14.
 func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
@@ -734,7 +775,7 @@ func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
-			if !ok || ChecksOf(required, pr.Checks) != ChecksFailed {
+			if !ok || pr.Mergeable == Conflicting || ChecksOf(required, pr.Checks) != ChecksFailed {
 				continue
 			}
 			actions = append(actions, FixChecks{Number: sub.Number, PullRequest: pr.Number, Failed: FailedChecks(required, pr.Checks)})

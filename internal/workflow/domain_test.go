@@ -696,6 +696,7 @@ func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
 		Accept{Number: 3},
 		StartReview{Number: 10, PullRequest: 20},
 		FixChecks{Number: 11, PullRequest: 21},
+		ResolveConflict{Number: 15, PullRequest: 25},
 		Plan{Number: 4},
 		CheckAcceptance{Number: 5},
 		Claim{Number: 12, RequirementIssue: 1},

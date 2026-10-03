@@ -265,13 +265,155 @@ func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
 }
 
 // conflicting is approved with risk/low, and the pull request #21
-// conflicts with the default branch.
+// conflicts with the default branch. The poll still reads MERGEABLE, as
+// GitHub answers right after a merge into the default branch, so the
+// conflict shows only at the merge (I6), not while the issue waits for
+// the checks (I14).
 func conflicting(t *testing.T, opts cliOptions) *scene {
 	t.Helper()
 	sc := newScene(t, opts)
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "MERGEABLE")
 	return sc
+}
+
+// conflictingBeforeChecks puts issue #10 in cumin/status/awaiting-checks
+// with a pull request whose required check has not reported, and whose
+// mergeable value on GitHub is the given one.
+func conflictingBeforeChecks(t *testing.T, opts cliOptions, mergeable string) *scene {
+	t.Helper()
+	sc := newScene(t, opts)
+	sc.awaitingChecks(t, []string{"ci"}, nil)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, mergeable)
+	return sc
+}
+
+// I14 (issue-states.md): a pull request that conflicts while its issue
+// waits for the checks goes back to the Implementer. The label becomes
+// cumin/status/implementing before the request, exactly one conflict
+// resolution request resumes the Implementer session, and it does not
+// count as a check fix request. The run pushes a new head, so after done
+// I2 runs and the issue returns to cumin/status/awaiting-checks.
+func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChecks(t *testing.T) {
+	sc := conflictingBeforeChecks(t, cliOptions{movesHeadOnRun: 1}, "CONFLICTING")
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
+	sc.fake.SetPermission(theOwner, "admin", "User")
+	service := sc.serviceWithSession(t)
+
+	sc.pollAndWait(t, service)
+	// The new head has no conflict; its required check has not reported.
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "MERGEABLE")
+	for range 2 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one resolution", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none", n)
+	}
+	args := sc.record(t, "agent.args")
+	if got := argumentOf(t, args, "--resume"); got != "implementer-session" {
+		t.Errorf("--resume = %q, want the Implementer session", got)
+	}
+	text := promptOf(t, args)
+	for _, want := range []string{"Request: conflict resolution", "Pull request: #21", "Branch: cumin/10-add-the-login-screen",
+		"Default branch: main", "The pull request #21 has merge conflicts with the default branch main", "git merge origin/main",
+		"do not force-push", ownerLoginLine} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "could not merge") {
+		t.Errorf("the request text says that a merge failed:\n%s", text)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none", n)
+	}
+	if got := service.State.Issue("example-org/example-repo", 10).CheckFixRequests; got != 0 {
+		t.Errorf("check fix requests = %d, want 0: a conflict does not count", got)
+	}
+	// The label changes before the request, then I2 verifies the new head.
+	logs := sc.logs.String()
+	at := -1
+	for _, want := range []string{
+		`"msg":"I14: the pull request conflicts with the default branch; the issue goes back to the Implementer"`,
+		`"msg":"I14: requested the work"`, `"msg":"I2: verified the pull request"`} {
+		i := strings.Index(logs, want)
+		if i < 0 {
+			t.Fatalf("the log has no %s", want)
+		}
+		if i < at {
+			t.Errorf("the log line %s comes too early", want)
+		}
+		at = i
+	}
+	if !strings.Contains(logs, `"kind":"conflict resolution"`) {
+		t.Error("the log does not name the kind of the request")
+	}
+}
+
+// I14: UNKNOWN says that GitHub is still calculating, so that poll sends
+// nothing and changes no label. A later poll that reads CONFLICTING sends
+// the request.
+func TestI14_UnknownWaitsForALaterPoll(t *testing.T) {
+	sc := conflictingBeforeChecks(t, cliOptions{}, "UNKNOWN")
+	service := sc.serviceWithSession(t)
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs while GitHub calculates, want none", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, issue10Path+"/labels"); n != 0 {
+		t.Errorf("%d label changes while GitHub calculates, want none", n)
+	}
+
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after CONFLICTING, want one resolution", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: conflict resolution") {
+		t.Errorf("the request is not a conflict resolution:\n%s", text)
+	}
+}
+
+// I14: a resolution that ends with done and leaves the head at the commit
+// that conflicted stops the issue once for the Owner, with the row I14.
+// The polls that follow send nothing more.
+func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
+	sc := conflictingBeforeChecks(t, cliOptions{}, "CONFLICTING")
+	service := sc.serviceWithSession(t)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one resolution", n)
+	}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"## Stopped for the Owner", "Row: I14", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+		t.Errorf("%d notifications, want 1: %v", len(messages), messages)
+	}
 }
 
 // serviceWithSession is the service with a state file that holds the

@@ -49,6 +49,10 @@ const (
 	// RowI12 is the merge after the approval of the Owner: a risk label
 	// that is not exactly one, a merge that failed, or a close that failed.
 	RowI12 = "I12"
+	// RowI14 is a pull request that conflicts with the default branch
+	// while its issue waits for the checks: a conflict resolution that
+	// left the head where it was.
+	RowI14 = "I14"
 )
 
 // The rows that start the Planner (R1, R4) and that move a requirement

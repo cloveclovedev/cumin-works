@@ -11,12 +11,18 @@ partition "Poll (each repository)" {
   (one GraphQL query);
 }
 partition "Decision (pure function, no I/O)" {
+  :Collect I14 candidates
+  - open sub-issues with cumin/status/awaiting-checks
+  - the pull request is CONFLICTING
+    (UNKNOWN and MERGEABLE are no candidates);
   :Collect I3 candidates
   - open sub-issues with cumin/status/awaiting-checks
+  - the pull request is not CONFLICTING
   - every required check passed on the head commit
     of the pull request;
   :Collect I4 candidates
   - open sub-issues with cumin/status/awaiting-checks
+  - the pull request is not CONFLICTING
   - a required check failed on the head commit
     of the pull request;
   :Count the issues in progress
@@ -51,9 +57,12 @@ partition "Decision (pure function, no I/O)" {
   - its cumin/status/* and risk/* differ
     from the issue in this snapshot;
   :Return the list of actions
-  (I3, I4, R1 and I1, I12, I13, I11, in this order);
+  (I14, I3, I4, R1 and I1, I12, I13, I11, in this order);
 }
 partition "Apply (in the order of the list)" {
+  :I14: change the label to cumin/status/implementing,
+  then ask the Implementer to resolve the conflict
+  in the same session;
   :I3: change the label to cumin/status/reviewing;
   if (I4: fix requests below the limit?) then (yes)
     :count one more, change the label to

@@ -251,6 +251,63 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 	})
 }
 
+// resolveConflictBeforeChecks applies I14: the pull request of an issue in
+// cumin/status/awaiting-checks conflicts with the default branch. The
+// label becomes cumin/status/implementing first (principle 3), then the
+// Implementer resolves the conflict in the session of its last run, on the
+// branch of the pull request: the same request as after a merge that
+// conflicts (resolveConflict). The end of that run is the end of any
+// Implementer run: I2 verifies it, and a head that did not change stops
+// the issue for the Owner with the row I14.
+//
+// The request does not count toward the limit of check fix requests: a
+// conflict comes from the merge of another pull request, not from a
+// mistake of the Implementer (issue-states.md, the rows while an issue
+// waits for the checks). A login of the Owner that cannot be read and a
+// label that does not change are errors of the poll: nothing is requested,
+// the issue keeps cumin/status/awaiting-checks, and the next poll tries
+// again.
+func (s *Service) resolveConflictBeforeChecks(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ResolveConflict) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	repository := target.Repository.String()
+	log := s.logger().With("repository", repository, "issue", a.Number, "pull_request", a.PullRequest)
+	sub, ok := snapshot.SubIssue(a.Number)
+	if !ok {
+		return fmt.Errorf("I14: issue #%d is not in the snapshot", a.Number)
+	}
+	pr, ok := sub.LatestPullRequest()
+	if !ok || pr.Number != a.PullRequest {
+		return fmt.Errorf("I14: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
+	}
+	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	if err != nil {
+		return fmt.Errorf("I14: read the login of the Owner of issue #%d: %w", a.Number, err)
+	}
+	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+		return fmt.Errorf("I14: move issue #%d back to the Implementer: %w", a.Number, err)
+	}
+	log.Info("I14: the pull request conflicts with the default branch; the issue goes back to the Implementer", "labels", labels)
+	branch := pr.HeadBranch
+	if branch == "" {
+		branch = BranchName(sub.Number, sub.Title)
+	}
+	defaultBranch := snapshot.DefaultBranch
+	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
+		row: RowI14, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
+		sessionID:    s.State.Issue(repository, a.Number).SessionID,
+		ownerLogin:   ownerLogin,
+		conflictHead: pr.HeadCommit,
+		text: func(workDir string) string {
+			return ConflictResolutionRequestText(repository, a.Number, pr.Number, branch, workDir, defaultBranch)
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("I14: request the conflict resolution for issue #%d: %w", a.Number, err)
+	}
+	return nil
+}
+
 // mergeOwnerApproval applies I12 to a candidate: it reads the permission of
 // each person whose review decides, keeps the Owners (IsOwner), and checks
 // that the latest review of an Owner is APPROVED on the head commit
