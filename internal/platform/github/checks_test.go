@@ -122,7 +122,7 @@ func TestReadSnapshot_ReadsTheBranchTheLabelsAndTheChecksOfAPullRequest(t *testi
 	})
 	client := github.NewAppClient(server.URL, server.Client())
 
-	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	snapshot, err := readTwoQueries(client)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestReadSnapshot_APullRequestWithoutAnyCheckHasNoChecks(t *testing.T) {
 	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 21, HeadBranch: "cumin/10-x", Closes: []int{10}})
 	client := github.NewAppClient(server.URL, server.Client())
 
-	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	snapshot, err := readTwoQueries(client)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestReadSnapshot_TooManyChecksOrLabelsOnAPullRequestIsAnError(t *testing.T)
 			fake.AddPullRequest(repo, &pull)
 			client := github.NewAppClient(server.URL, server.Client())
 
-			_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+			_, err := readTwoQueries(client)
 			if err == nil || !strings.Contains(err.Error(), tc.message) {
 				t.Fatalf("err = %v, want %q", err, tc.message)
 			}
@@ -200,18 +200,13 @@ func TestReadSnapshot_TooManyChecksOrLabelsOnAPullRequestIsAnError(t *testing.T)
 // check in the rollup today. A third one must stop the poll instead of
 // letting I3 pass an issue whose check cumin cannot read.
 func TestReadSnapshot_AnUnknownKindOfCheckIsAnError(t *testing.T) {
-	const answer = `{"data":{"repository":{"defaultBranchRef":{"name":"main","target":{"oid":"abc"}},
-	  "cuminConfig":null,"cuminRiskCriteria":null,
-	  "issues":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
-	    {"number":6,"state":"OPEN","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
-	     "subIssues":{"pageInfo":{"hasNextPage":false},"nodes":[
-	       {"number":10,"title":"x","state":"OPEN","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
-	        "blockedBy":{"pageInfo":{"hasNextPage":false},"nodes":[]},
+	const answer = `{"data":{"nodes":[
+	       {"__typename":"Issue","number":10,
 	        "closedByPullRequestsReferences":{"pageInfo":{"hasNextPage":false},"nodes":[
 	          {"number":21,"headRefOid":"222","headRefName":"cumin/10-x","mergeable":"MERGEABLE","author":null,
 	           "labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
 	           "statusCheckRollup":{"contexts":{"pageInfo":{"hasNextPage":false},"nodes":[
-	             {"__typename":"DeploymentGate","name":"a-new-kind"}]}}}]}}]}}]}},
+	             {"__typename":"DeploymentGate","name":"a-new-kind"}]}}}]}}],
 	  "rateLimit":{"cost":9,"remaining":4991}}}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -220,7 +215,7 @@ func TestReadSnapshot_AnUnknownKindOfCheckIsAnError(t *testing.T) {
 	defer server.Close()
 	client := github.NewAppClient(server.URL, server.Client())
 
-	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	_, err := client.ReadPullRequests(context.Background(), githubtest.Token, "example-org", "example-repo", []string{"I_10"})
 	if err == nil || !strings.Contains(err.Error(), "unknown type \"DeploymentGate\"") {
 		t.Fatalf("err = %v, want the unknown type", err)
 	}

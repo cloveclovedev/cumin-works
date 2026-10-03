@@ -48,7 +48,7 @@
 
 ### 定期確認で読む内容
 
-対象のリポジトリごとに、開いていて `cumin/type/requirement` の付いたIssueを起点にして、次を読む。項目の名前は、GraphQLのスキーマで確かめた (実測 55 と、2026-09-20 の introspection)。
+対象のリポジトリごとに、開いていて `cumin/type/requirement` の付いたIssueを起点にして、次を読む。Pull Requestとその下の項目は、2つ目の問い合わせで読む (下の「2つの問い合わせ」)。項目の名前は、GraphQLのスキーマで確かめた (実測 55 と、2026-09-20 の introspection)。
 
 | 読むもの | 項目 | 使う行 |
 |---|---|---|
@@ -70,6 +70,41 @@
 ![定期確認の問い合わせ](poll-snapshot.svg)
 
 図の元ファイル: [poll-snapshot.puml](poll-snapshot.puml)
+
+2つの問い合わせ:
+
+- 1回の定期確認は、GitHubを2つの問い合わせで読む。1つ目 (`snapshotQuery`) はsub-issueまでで止まり、番号、id、題、開閉、閉じた時刻、ラベル、blocked by を読む。2つ目 (`pullRequestsQuery`) は、選んだsub-issueだけについて、Issueを閉じる開いているPull Request (`closedByPullRequestsReferences` と、その下の全ての項目) を読む。上の表のPull Requestの行は、どれも2つ目の問い合わせで読む。
+- 分ける理由はポイントである。Pull Requestは、1ページ17ポイントのうち14ポイントを占めていた (実測 131)。Pull Requestを読む行が当てはまるsub-issueは、少ない。
+- 選ぶのは、開いていて `cumin/status/*` のラベルが付いたsub-issueである。`internal/workflow` の純粋関数 `Snapshot.SubIssuesWithPullRequestRules` が、1つ目の読み取りから選ぶ。選んだsub-issueがなければ、2つ目の問い合わせを送らない。
+- `Service.Poll` が、2つの読み取りから1つのスナップショットを作る (`Snapshot.WithPullRequests`)。`Decide` と各行の判定は、そのスナップショットだけを読む純粋関数のままである。選ばなかったsub-issueは、Pull Requestなしでスナップショットに入る。
+- `cumin status` はラベルだけを読むので、1つ目の問い合わせだけを送る。
+
+選んだsub-issueが、Pull Requestを読む行の対象を全て含む理由:
+
+| 行 | 対象のsub-issue | 含む理由 |
+|---|---|---|
+| I1 (readyの実装Issueに着手) | 開いていて `cumin/status/ready` | `cumin/status/ready` は状態ラベルである |
+| I3 (checkが通り、reviewへ)、I4 (checkが失敗し、修正へ)、I14 (衝突の解消の依頼)、I15 (checkが結果を返さない) | 開いていて `cumin/status/awaiting-checks` | `cumin/status/awaiting-checks` は状態ラベルである |
+| I12 (Ownerの承認のあとのmerge)、I13 (Ownerの指摘への対応の依頼) | 開いていて `cumin/status/awaiting-owner-review` | `cumin/status/awaiting-owner-review` は状態ラベルである |
+| I11 (Pull Requestにラベルを写す) | 開いていて状態ラベルのあるsub-issue | cuminが作るPull Requestは、状態ラベルのある実装Issueのものである。状態ラベルが変わるたびに、選んだsub-issueとして写す |
+
+- I11は、状態ラベルのない開いたsub-issueと、閉じたsub-issueのPull Requestには、ラベルを写さなくなる。閉じたsub-issueのPull Requestはmerge済みで、開いていない。Ownerが状態ラベルを全て外したsub-issueでは、Pull Requestに前のラベルが残り、Ownerが次に状態ラベルを付けたときに写し直す。写したラベルは判定に使わない (原則5) ので、判定は変わらない。
+- 実行終了の判定 (I2、I5〜I8、I10) は、定期確認ではなく、1つのIssueの読み取りでPull Requestを読む (「実行終了のあとの読み取り」)。この読み取りは変わらない。
+
+読む時点が2つになっても判定が正しい理由:
+
+- 判定の入口は、1つ目の時点のsub-issueのラベルである。Pull Requestの事実は、それよりあとの2つ目の時点のものになる。1つの行が読むPull Requestの事実 (先頭のコミット、check、レビュー、`mergeable`) は、どれも2つ目の問い合わせの1回の応答から来るので、互いに食い違わない。
+- 動作は、どの行でも読み取りよりあとに起きる。問い合わせが1つのときも、スナップショットは動作の時点より古かった。各動作は、ラベルを先に替えることと、動作の前の確かめ (mergeの手順の読み直しなど) で、これに耐えるように作ってある。2つ目の時点は動作に近いので、Pull Requestの事実はむしろ新しくなる。
+- 2つの時点のあいだにsub-issueへ状態ラベルが付いたとき。そのsub-issueは選ばれず、Pull Requestなしで入る。そのsub-issueに当てはまる行は、1つ目の時点のラベルで判定するので、今回は出ない。次の定期確認で読む。ラベルが1つ目の読み取りの直後に付いたときと同じである。
+- 2つの時点のあいだにPull Requestがmergeされるか閉じられたとき。sub-issueは開いたまま、Pull Requestなしで入る。I3、I4、I12〜I15は、Pull Requestがなければ何もしない。I1は、Pull Requestがなければ新しいブランチで依頼する。これは、問い合わせが1つのときに、Ownerが手でPull Requestを閉じたあとのスナップショットと同じ形である。
+- 2つの時点のあいだにPull Requestが開いたか、pushが入ったとき。新しいほうの事実で判定する。1つ目の時点より古い事実で判定することはない。
+- 2つの時点のあいだにsub-issueが消えたか、別のリポジトリへ移ったとき。2つ目の問い合わせがエラーを返し、そのリポジトリの今回の定期確認を止める。欠けたスナップショットでは判定しない。
+
+2つ目の問い合わせの上限とポイント:
+
+- sub-issueは、1つ目の問い合わせで読んだidで指定する (`nodes(ids:)`)。1回に100件までで、101件ではGitHubがエラーを返す (2026-10-03 にcumin-worksで実測)。選んだsub-issueが100件を超えるときは、100件ごとに分けて送る。
+- Pull Requestは1つのsub-issueに2件まで、その下のラベル、check、レビューは100件までである。超えたときは、Issueの番号を示すエラーにして、そのリポジトリの定期確認を止める。上限は、1つのIssueの読み取りと同じ値である。
+- ポイント (2026-10-03 にcumin-worksで `rateLimit { cost }` を実測)。1つ目の問い合わせは1ページ3ポイントである。2つ目の問い合わせは、sub-issueが1件でも9件でも1ポイント、100件で9ポイントである。
 
 Pull Requestの読み方:
 
@@ -408,7 +443,7 @@ checkの結果の読み方:
 - 判定に渡す3つの値は、Agentの実行の側から来る。ブランチは依頼に渡したものである。ImplementerのAppのbotのlogin (`<slug>[bot]`) は実行の結果に付いて返り、worktreeの先頭のコミットは `git rev-parse HEAD` で読む ([Agentの実行の設計](agent-run.md) の「作業場所」と「1回の依頼の手順」)。
 - 実行終了のあとの読み直しは、1つのIssueを番号で指定する問い合わせである (`ReadSubIssue`、`ReadRequirementIssue`)。リポジトリの全ページは読まない。R2、I2、I5〜I8、I10の判定が使うのは、1つのIssueの事実だけだからである。
   - 実装Issueでは、ラベル、blocked by、そのIssueを閉じる開いているPull Request (check、レビュー、先頭のコミット、`mergeable`)、親の要求Issueの状態とラベル、既定のブランチの名前を読む。要求Issueでは、ラベル、blocked by、sub-issueを読む。sub-issueの項目は、定期確認と同じである。
-  - Issueの項目は、定期確認の問い合わせと同じ2つのfragment (`requirementIssueFields`、`subIssueFields`) から作る。上限も同じ値を渡す。そのため、どちらで読んでも、判定は同じ事実を受け取る。
+  - Issueの項目は、定期確認の問い合わせと同じ2つのfragment (`requirementIssueFields`、`subIssueFields`) と、2つ目の問い合わせと同じfragment (`closingPullRequestFields`) から作る。上限も同じ値を渡す。そのため、どちらで読んでも、判定は同じ事実を受け取る。
   - 上限を超えたIssueは、定期確認と同じく、Issueの番号を入れたエラーにする。読めなければ、ラベルを替えずにログに出す。
   - 読むのは1回の問い合わせなので、判定が見る事実の時点は1つのままである。
   - ポイントは、実装Issueで1、要求Issueで2である (cumin-worksで実測、2026-10-03、`rateLimit.cost`)。全ページを読み直すと、cumin-worksでは34ポイントだった ([実測した制約](../evidence/measured-constraints.md) の133)。

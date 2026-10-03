@@ -116,7 +116,9 @@ func coreClientID(settings *config.Settings, owner string) (string, error) {
 	return id, nil
 }
 
-// readRepository reads the snapshot of one target repository.
+// readRepository reads the snapshot of one target repository. cumin status
+// reads the labels only, so it sends the poll query and not the second query
+// of a poll, which reads the pull requests.
 type readRepository func(ctx context.Context, repo config.Repository) (github.RepositorySnapshot, error)
 
 // agentLabels are the status labels of an issue whose agent works: the

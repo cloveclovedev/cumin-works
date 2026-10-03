@@ -7,8 +7,16 @@ skinparam defaultFontName sans-serif
 
 start
 partition "Poll (each repository)" {
-  :Read the snapshot
-  (one GraphQL query);
+  :Query 1: read the requirement issues
+  and their sub-issues (no pull request);
+  :Select the open sub-issues
+  with a cumin/status/* label (pure function);
+  if (a sub-issue is selected?) then (yes)
+    :Query 2: read the open pull requests
+    that close the selected sub-issues;
+  else (no)
+  endif
+  :Build one snapshot from the two reads;
 }
 partition "Decision (pure function, no I/O)" {
   :Collect I14 candidates

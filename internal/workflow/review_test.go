@@ -116,15 +116,15 @@ func TestReviewRounds_TheCountComesFromGitHubAndSurvivesARestart(t *testing.T) {
 
 	for _, run := range []string{"before the restart", "after the restart"} {
 		client := github.NewAppClient(server.URL, server.Client())
-		read, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+		_, snapshot, err := (&Service{GitHub: client}).readSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
 		if err != nil {
-			t.Fatalf("%s: ReadSnapshot: %v", run, err)
+			t.Fatalf("%s: readSnapshot: %v", run, err)
 		}
 		times, _, err := client.ReadLabelTimes(context.Background(), githubtest.Token, "example-org", "example-repo", 10)
 		if err != nil {
 			t.Fatalf("%s: ReadLabelTimes: %v", run, err)
 		}
-		sub, ok := toSnapshot(read).SubIssue(10)
+		sub, ok := snapshot.SubIssue(10)
 		if !ok {
 			t.Fatalf("%s: issue #10 is not in the snapshot", run)
 		}
