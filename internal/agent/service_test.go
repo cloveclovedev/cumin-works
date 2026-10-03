@@ -463,11 +463,11 @@ func TestStart_ThePromptOfEveryRoleNamesTheTimeLimitAndTheEndTime(t *testing.T) 
 		want    string
 	}{
 		{config.RolePlanner, "planner-done.jsonl", 20 * time.Minute,
-			"- Time limit of the run: 20m0s\n- End time of the run: 2026-10-03T01:20:00Z\n"},
+			"- Time limit of the run: 20m\n- End time of the run: 2026-10-03T01:20:00Z\n"},
 		{config.RoleImplementer, "done.jsonl", 50 * time.Minute,
-			"- Time limit of the run: 50m0s\n- End time of the run: 2026-10-03T01:50:00Z\n"},
+			"- Time limit of the run: 50m\n- End time of the run: 2026-10-03T01:50:00Z\n"},
 		{config.RoleReviewer, "done.jsonl", 30 * time.Minute,
-			"- Time limit of the run: 30m0s\n- End time of the run: 2026-10-03T01:30:00Z\n"},
+			"- Time limit of the run: 30m\n- End time of the run: 2026-10-03T01:30:00Z\n"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.role), func(t *testing.T) {
@@ -509,7 +509,7 @@ func TestStart_TheTimeLimitOfThePromptIsTheOneOfTheSettingsOfTheRequest(t *testi
 	if _, err := s.Start(context.Background(), request); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	want := "- Time limit of the run: 45m0s\n- End time of the run: 2026-10-03T01:45:00Z\n"
+	want := "- Time limit of the run: 45m\n- End time of the run: 2026-10-03T01:45:00Z\n"
 	if got := promptOfRun(t, dir); !strings.Contains(got, want) {
 		t.Errorf("prompt = %q, want the lines %q", got, want)
 	}
@@ -544,7 +544,7 @@ func TestStart_AResumedSessionReceivesANewEndTime(t *testing.T) {
 		t.Fatalf("the second run does not resume the session: %q", args)
 	}
 	want := "Facts of this run (data from cumin):\n- Issue of the run: #12 (implementation issue)\n" +
-		"- Time limit of the run: 1m0s\n- End time of the run: 2026-10-03T02:31:00Z\n\n" + request.Text
+		"- Time limit of the run: 1m\n- End time of the run: 2026-10-03T02:31:00Z\n\n" + request.Text
 	if got := promptOfRun(t, dir); got != want {
 		t.Errorf("resumed prompt = %q, want %q", got, want)
 	}

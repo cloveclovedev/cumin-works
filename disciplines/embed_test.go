@@ -78,6 +78,9 @@ func TestRole_AnswersForEveryRoleOfTheDefaultDiscipline(t *testing.T) {
 // Every role plans a long check against the limit of its run. The rule
 // names the two lines of the start request by their labels (package agent
 // writes them), so that the agent finds the limit and the end time there.
+// The rule also says what the role does when a long check does not fit:
+// stop at the part that fits and report the runs, and return blocked when
+// a criterion itself needs more time than the run has.
 func TestRole_HoldsTheRuleOnLongChecksForEveryRole(t *testing.T) {
 	for _, role := range []string{"planner", "implementer", "reviewer"} {
 		text, ok, err := Role(Default, role)
@@ -90,6 +93,10 @@ func TestRole_HoldsTheRuleOnLongChecksForEveryRole(t *testing.T) {
 			"Time limit of the run",
 			"End time of the run",
 			"ends well before",
+			"does not end before \"End time of the run\", stop at the part that fits",
+			"how many runs of how many",
+			"needs a check that is longer than the run",
+			"Return `blocked` and write the reason",
 		} {
 			if !strings.Contains(text, want) {
 				t.Errorf("the discipline of the %s does not hold %q", role, want)
