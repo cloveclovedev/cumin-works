@@ -439,6 +439,12 @@ func TestNeedsLabelTimes(t *testing.T) {
 		{"implementing with a ready sub-issue", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{ready}}, false},
 		{"a sub-issue waits for its checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}}}}, true},
 		{"a closed sub-issue in awaiting-checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}}}}, false},
+		{"a sub-issue that waits for the Owner has a request for changes of a person on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewChangesRequested, Commit: "c2"}}}}}}}, true},
+		{"a sub-issue that waits for the Owner has a request for changes on an older commit", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewChangesRequested, Commit: "c1"}}}}}}}, false},
+		{"a sub-issue that waits for the Owner has an approval on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewApproved, Commit: "c2"}}}}}}}, false},
 	}
 	for _, tt := range tests {
 		if got := NeedsLabelTimes(tt.r); got != tt.want {
@@ -773,25 +779,39 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 // The send-back after a request for changes of the Owner (I13) is decided
 // from the snapshot alone: an open sub-issue in
 // cumin/status/awaiting-owner-review, not running, with a CHANGES_REQUESTED
-// review of a person on the head commit. Who of the reviewers is an Owner is
-// decided later (OwnerRequestedChanges).
+// review of a person on the head commit, submitted after
+// cumin/status/awaiting-owner-review was last added to the issue. Who of the
+// reviewers is an Owner is decided later (OwnerRequestedChanges).
 func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t *testing.T) {
 	t.Parallel()
 	const head, old = "2222222222222222222222222222222222222222", "1111111111111111111111111111111111111111"
+	awaitingOwnerAt := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
 	review := func(author string, state ReviewState, commit string) Review {
-		return Review{Author: author, State: state, Commit: commit}
+		return Review{Author: author, State: state, Commit: commit, SubmittedAt: awaitingOwnerAt.Add(time.Minute)}
 	}
+	answered := review("owner", ReviewChangesRequested, head)
+	answered.SubmittedAt = awaitingOwnerAt.Add(-time.Minute)
 	for _, tc := range []struct {
 		name    string
 		labels  []string
 		closed  bool
 		running bool
-		reviews []Review
-		want    []Action
+		// timesNotRead leaves the label times of the requirement issue
+		// unread.
+		timesNotRead bool
+		reviews      []Review
+		want         []Action
 	}{
 		{name: "a request for changes of a person on the head", labels: []string{LabelAwaitingOwnerReview},
 			reviews: []Review{review("owner", ReviewChangesRequested, head), review("other", ReviewApproved, old)},
 			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"other", "owner"}}}},
+		{name: "a request for changes from before the issue last waited for the Owner", labels: []string{LabelAwaitingOwnerReview},
+			reviews: []Review{answered}},
+		{name: "a new request for changes after an answered one", labels: []string{LabelAwaitingOwnerReview},
+			reviews: []Review{answered, review("owner", ReviewChangesRequested, head)},
+			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"owner"}}}},
+		{name: "the label times are not read", labels: []string{LabelAwaitingOwnerReview}, timesNotRead: true,
+			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
 		{name: "a request for changes on an older commit", labels: []string{LabelAwaitingOwnerReview},
 			reviews: []Review{review("owner", ReviewChangesRequested, old)}},
 		{name: "a request for changes of a bot", labels: []string{LabelAwaitingOwnerReview},
@@ -808,8 +828,8 @@ func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t 
 		t.Run(tc.name, func(t *testing.T) {
 			snapshot := Snapshot{
 				RequirementIssues: []RequirementIssue{{
-					Number: 6, Labels: []string{LabelRequirement, LabelImplementing},
-					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels,
+					Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, LabelTimesRead: !tc.timesNotRead,
+					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels, AwaitingOwnerReviewAt: awaitingOwnerAt,
 						PullRequests: []PullRequest{{Number: 21, HeadCommit: head, Labels: tc.labels, Reviews: tc.reviews}}}},
 				}},
 				Running: map[int]bool{10: tc.running},
@@ -818,5 +838,84 @@ func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t 
 				t.Errorf("Decide = %#v, want %#v", got, tc.want)
 			}
 		})
+	}
+}
+
+// An issue is in work when cumin or an agent moves it on without the Owner.
+func TestHasIssueInWork(t *testing.T) {
+	requirement := func(labels []string, subs ...SubIssue) Snapshot {
+		return Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: labels, SubIssues: subs}}}
+	}
+	tests := []struct {
+		name     string
+		snapshot Snapshot
+		want     bool
+	}{
+		{"no requirement issue", Snapshot{}, false},
+		{"requirement issue with no status label", requirement(nil), false},
+		{"ready requirement issue", requirement([]string{LabelReady}), true},
+		{"planning requirement issue", requirement([]string{LabelPlanning}), true},
+		{"implementing requirement issue with no sub-issue in work", requirement([]string{LabelImplementing},
+			SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerReview}}), false},
+		{"requirement issue that waits for the Owner", requirement([]string{LabelAwaitingOwnerReview}), false},
+		{"ready sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReady}}), true},
+		{"implementing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelImplementing}}), true},
+		{"sub-issue that waits for the checks", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingChecks}}), true},
+		{"reviewing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReviewing}}), true},
+		{"sub-issue that waits for the Owner", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerDecision}}), false},
+		{"closed sub-issue", requirement(nil, SubIssue{Number: 10, Closed: true, Labels: []string{LabelImplementing}}), false},
+	}
+	for _, tt := range tests {
+		if got := tt.snapshot.HasIssueInWork(); got != tt.want {
+			t.Errorf("%s: HasIssueInWork = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// A repository is in work until a poll that succeeded found nothing to do.
+func TestRepositoryInWork(t *testing.T) {
+	tests := []struct {
+		name     string
+		last     LastPoll
+		agentRun bool
+		want     bool
+	}{
+		{"no poll ran yet", LastPoll{}, false, true},
+		{"the last poll failed", LastPoll{Ran: true, Failed: true}, false, true},
+		{"the last poll took an action", LastPoll{Ran: true, Acted: true}, false, true},
+		{"an issue is in work", LastPoll{Ran: true, IssueInWork: true}, false, true},
+		{"an agent run", LastPoll{Ran: true}, true, true},
+		{"nothing to do", LastPoll{Ran: true}, false, false},
+	}
+	for _, tt := range tests {
+		if got := RepositoryInWork(tt.last, tt.agentRun); got != tt.want {
+			t.Errorf("%s: RepositoryInWork = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// A repository that is not in work is polled at the tick nearest to the
+// idle poll interval after its last poll.
+func TestPollIsDue(t *testing.T) {
+	const poll, idle = time.Minute, 5 * time.Minute
+	tests := []struct {
+		name   string
+		inWork bool
+		since  time.Duration
+		want   bool
+	}{
+		{"in work, one tick later", true, time.Minute, true},
+		{"idle, one tick later", false, time.Minute, false},
+		{"idle, one tick before the idle poll interval", false, 4*time.Minute + time.Second, false},
+		{"idle, a tick that comes a moment early", false, 5*time.Minute - time.Millisecond, true},
+		{"idle, the idle poll interval is over", false, 5 * time.Minute, true},
+	}
+	for _, tt := range tests {
+		if got := PollIsDue(tt.inWork, tt.since, poll, idle); got != tt.want {
+			t.Errorf("%s: PollIsDue = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+	if !PollIsDue(false, time.Minute, time.Minute, time.Minute) {
+		t.Error("equal intervals: PollIsDue = false, want a poll at every tick")
 	}
 }

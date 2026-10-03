@@ -1,0 +1,40 @@
+@startuml poll-interval
+' cumin works - the poll interval of a repository: every poll interval when in work, the idle poll interval otherwise.
+' Document: poll.md, section on the poll interval.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+repeat
+  :tick of poll_interval;
+  :read the stop request;
+  while (next target repository?) is (yes)
+    if (in work, or idle_poll_interval over\nsince the last poll, or stop after the runs?) then (yes)
+      :poll the repository:
+      read the snapshot, decide, apply;
+      :keep the time of the poll,
+      its result, and whether
+      an issue is in work;
+    else (no)
+      :skip the repository:
+      no GitHub call;
+    endif
+  endwhile (no)
+repeat while (stop?) is (no)
+->yes;
+stop
+
+note right
+  In work, one of:
+  * no poll of the repository ran yet
+  * the last poll failed
+  * the last poll took an action
+  * an agent run of the repository is in progress,
+    or one ended since the last poll
+  * an open requirement issue has
+    cumin/status/ready or planning
+  * an open sub-issue has cumin/status/ready,
+    implementing, awaiting-checks, or reviewing
+end note
+@enduml

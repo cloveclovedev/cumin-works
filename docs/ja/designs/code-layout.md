@@ -77,7 +77,7 @@
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。必須のcheckが待ち時間を過ぎても結果を返さないIssueをOwnerに戻す (I15)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
 | | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、分割の確かめ (R2)、受け入れの確認の依頼とその結果 (R4、R7) |
-| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueのための、ラベルの時刻の読み取り |
+| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り |
 | | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
 | | `merge.go` | 承認されたPull Requestの扱い (I6、I7)、Ownerの承認のあとのmerge (I12)、2つが使うmergeの手順、Ownerのレビューへの対応の依頼 (I13)、checkを待つ間の衝突の解消の依頼 (I14) |

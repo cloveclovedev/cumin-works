@@ -116,7 +116,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 | 問い合わせ | ポイント | 動かす規則と条件 | 回数 |
 |---|---|---|---|
-| ラベルの時刻 (`labelTimesQuery`) | 1 | R3 (分割の確認のあとの着手): 要求Issueが `cumin/status/awaiting-owner-review` で、`cumin/status/ready` の付いた開いているsub-issueがある。I15 (checkが結果を返さない): `cumin/status/awaiting-checks` の付いた開いているsub-issueがある (`NeedsLabelTimes`) | 条件に合う要求Issue 1件につき、定期確認のたびに1回。両方の条件に合っても1回 |
+| ラベルの時刻 (`labelTimesQuery`) | 1 | R3 (分割の確認のあとの着手): 要求Issueが `cumin/status/awaiting-owner-review` で、`cumin/status/ready` の付いた開いているsub-issueがある。I15 (checkが結果を返さない): `cumin/status/awaiting-checks` の付いた開いているsub-issueがある。I13 (Ownerのレビューへの対応): `cumin/status/awaiting-owner-review` の開いているsub-issueのPull Requestで、今の先頭のコミットに人の `CHANGES_REQUESTED` のレビューがある (`NeedsLabelTimes`) | 条件に合う要求Issue 1件につき、定期確認のたびに1回。2つ以上の条件に合っても1回 |
 | ラベルの時刻 (同じ問い合わせを、実装Issueの番号で) | 1 | I3 (checkが通り、reviewへ): レビューのラウンドの起点の `cumin/status/ready` の時刻 | Reviewerへの依頼1回につき1回 |
 | Ownerのログイン名 (`labelActorQuery`) | 1 | Agentを起動する行: R1 (分割)、R4 (受け入れの確認)、I1 (着手)、I3 (review)、I4 (checkの修正)、I13 (Ownerのレビューへの対応)、I14 (checkを待つ間の衝突)、I12 (Ownerの承認のあとのmerge) で衝突したとき | 起動1回につき1回。人のアカウントなら、RESTの権限の読み取りも1回 |
 | コメント (`issueCommentsQuery`) | 1ページ (50件) につき1 | R4、R7 (受け入れの確認): 要求Issueが `cumin/status/implementing` で、sub-issueが1つ以上あり、全て閉じている (`NeedsComments`) | 条件に合う要求Issue 1件につき、定期確認のたびに1回 |
@@ -157,7 +157,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | I10 | Reviewerのblockedを投稿 | sub-issueのラベル | 読み直し (sub-issueの `labels`) |
 | I11 | Pull Requestにラベルを写す | sub-issueのラベル。開いているPull Requestのラベル | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、Pull Requestの `labels`) |
 | I12 | Ownerの承認のあとのmerge | sub-issueのラベル (状態と `risk/*`)。Pull Requestの先頭のコミット。人のレビューの作成者、結果、対象のコミット。その作成者の権限。checkの結果。必須のcheck。衝突したときは、最新の `cumin/status/ready` を付けたアカウント | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、`reviews`、`statusCheckRollup.contexts`)。REST (権限、必須のcheck、merge、Issueの開閉)。読み直しはしない。衝突したときは、Ownerのログイン名 |
-| I13 | Ownerの指摘への対応を依頼 | sub-issueのラベル。Pull Requestの先頭のコミットとブランチ。人のレビューの作成者、結果、対象のコミット。その作成者の権限。最新の `cumin/status/ready` を付けたアカウント。要件にある「最新の `cumin/status/awaiting-owner-review` が付いた時刻」は、今のコードは読まない | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、`reviews`)。REST (権限)。Ownerのログイン名 |
+| I13 | Ownerの指摘への対応を依頼 | sub-issueのラベル。Pull Requestの先頭のコミットとブランチ。人のレビューの作成者、結果、対象のコミット。その作成者の権限。最新の `cumin/status/ready` を付けたアカウント。レビューが出された時刻と、sub-issueに最新の `cumin/status/awaiting-owner-review` が付いた時刻 | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、`reviews`)。ラベルの時刻。REST (権限)。Ownerのログイン名 |
 | I14 | checkを待つ間の衝突を解消 | sub-issueのラベル。Pull Requestの `mergeable` とブランチ。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences` の `mergeable`)。Ownerのログイン名。REST (権限) |
 | I15 | checkが結果を返さない | sub-issueのラベル。sub-issueに `cumin/status/awaiting-checks` が付いた時刻。先頭のコミットの時刻。checkの結果。必須のcheck。今のコードは、2つの時刻を読むだけで、まだ判定しない | 定期確認 (sub-issueの `labels`、Pull Requestの `commits`、`statusCheckRollup.contexts`)。ラベルの時刻。REST (必須のcheck) |
 
