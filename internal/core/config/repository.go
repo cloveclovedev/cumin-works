@@ -42,12 +42,9 @@ const (
 // pointer is empty when the file does not hold the key, so that the Host
 // value stays.
 //
-// priority_labels is a key of the repository only: the Host file does not
-// take it.
-//
-// protected_paths is a valid key that cumin ignores: the check of GitHub
-// Actions and the Implementer instruction use it, and the starter file of
-// scripts/setup-repo.sh holds only this key.
+// priority_labels and protected_paths are keys of the repository only: the
+// Host file does not take them. The starter file of scripts/setup-repo.sh
+// holds protected_paths.
 type repositoryFile struct {
 	MaxReviewRounds     *int                      `toml:"max_review_rounds"`
 	MaxCheckFixRequests *int                      `toml:"max_check_fix_requests"`
@@ -55,7 +52,7 @@ type repositoryFile struct {
 	PriorityLabels      *[]string                 `toml:"priority_labels"`
 	Roles               map[string]repositoryRole `toml:"roles"`
 	Notify              *repositoryNotify         `toml:"notify"`
-	ProtectedPaths      []string                  `toml:"protected_paths"`
+	ProtectedPaths      *[]string                 `toml:"protected_paths"`
 }
 
 type repositoryNotify struct {
@@ -127,6 +124,11 @@ func (s *Settings) WithRepository(data []byte) (*Settings, error) {
 		} else {
 			effective.PriorityLabels = *f.PriorityLabels
 		}
+	}
+	// The entries are taken as they are: the check of GitHub Actions is the
+	// only judge of them. An empty list is a value: it protects nothing.
+	if f.ProtectedPaths != nil {
+		effective.ProtectedPaths = *f.ProtectedPaths
 	}
 	if f.Notify != nil && f.Notify.Discord != nil && f.Notify.Discord.Enabled != nil {
 		effective.Notify.DiscordEnabled = *f.Notify.Discord.Enabled

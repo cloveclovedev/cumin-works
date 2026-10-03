@@ -23,6 +23,10 @@ type RepositorySettings struct {
 	RiskCriteria string
 	// RiskCriteriaSource says which of the three levels the text came from.
 	RiskCriteriaSource config.RiskCriteriaSource
+	// ProtectedPaths is the list of protected paths that applies: the
+	// list of the repository file, or the default list. Every agent
+	// receives it as a fact of the run. cumin does not check the entries.
+	ProtectedPaths []string
 	// FromRepository is true when the repository has a .cumin/config.toml.
 	FromRepository bool
 
@@ -73,6 +77,7 @@ func (s *Service) settingsFor(repository config.Repository, read github.Reposito
 		Settings:           settings,
 		RiskCriteria:       criteria,
 		RiskCriteriaSource: source,
+		ProtectedPaths:     settings.ProtectedPathEntries(),
 		FromRepository:     read.CuminConfig != nil,
 		configOID:          configOID,
 		criteriaOID:        criteriaOID,

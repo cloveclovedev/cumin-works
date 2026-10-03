@@ -136,7 +136,7 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 | `roles.<role>.cli` | Hostの設定と同じ |
 | `roles.<role>.model` | Hostの設定と同じ |
 | `notify.discord.enabled` | Hostの設定と同じ。そのリポジトリのIssueについて通知を出すかどうかを、リポジトリが選ぶ。webhookのアドレスはHostのもの1つで、リポジトリからは変えられない |
-| `protected_paths` | Agentに変更させないパスの一覧。cuminは読まない。使うのはGitHub Actionsのcheckと、Implementerへの指示である |
+| `protected_paths` | Agentに変更させないパスの一覧。リポジトリの設定ファイルにだけ書ける。書かなければ、またはファイルがなければ、初期値 (`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`) になる。書いた一覧は、初期値に足されるのではなく、初期値を置き換える。cuminはこの一覧を読み、照合の決まりとともに、起動の依頼のデータとしてどのroleのAgentにも渡す。cuminは一覧の中身を確かめない。確かめて強制するのは、GitHub Actionsのcheck (`cumin-protected-paths`) だけである |
 
 読み込みの決まり:
 
