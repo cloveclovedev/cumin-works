@@ -243,8 +243,9 @@ func (s *Service) reviewRuns(ctx context.Context, log *slog.Logger, target Targe
 type reviewTry struct {
 	// again says that the step ran before: this try is one of the kept step.
 	again bool
-	// lost is the status label of a write that ended with a temporary
-	// failure. Its answer did not come, so the issue can have the label.
+	// lost is the status label of a write of the last try that ended with
+	// a temporary failure. Its answer did not come, so the issue can have
+	// the label. Each try takes it and clears it.
 	lost string
 }
 
@@ -283,9 +284,12 @@ func (s *Service) afterReview(ctx context.Context, log *slog.Logger, target Targ
 		return nil, temporary(err)
 	}
 	// The issue left cumin/status/reviewing while the step was kept. Only a
-	// label that an earlier try wrote lets the step go on: its answer was
-	// lost, and what follows the label is still to do.
-	if try.again && !slices.Contains(sub.Labels, LabelReviewing) && (try.lost == "" || !slices.Contains(sub.Labels, try.lost)) {
+	// label that the last try wrote lets the step go on: its answer was
+	// lost, and what follows the label is still to do. Nothing follows
+	// cumin/status/awaiting-checks, so that write ends the step.
+	lost := try.lost
+	try.lost = ""
+	if try.again && !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelAwaitingChecks || !slices.Contains(sub.Labels, lost)) {
 		log.Info("I3: the issue left cumin/status/reviewing while the check of the review was kept; nothing changes", "labels", sub.Labels)
 		return nil, nil
 	}

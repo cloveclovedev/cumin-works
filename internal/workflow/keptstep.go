@@ -106,20 +106,20 @@ func (s *Service) runKeptSteps(ctx context.Context) {
 			s.keepStep(key, step, err)
 			continue
 		}
+		rest := step.rest
 		s.progressMu.Lock()
 		delete(s.keptSteps, key)
-		if step.rest == nil {
+		if rest == nil {
 			s.endInProgress(key)
-		}
-		s.progressMu.Unlock()
-		if step.rest == nil {
+			s.progressMu.Unlock()
 			continue
 		}
+		s.progressMu.Unlock()
 		s.running.Add(1)
 		go func() {
 			defer s.running.Done()
 			defer s.endRun(ctx, key)
-			step.rest(ctx)
+			rest(ctx)
 		}()
 	}
 }

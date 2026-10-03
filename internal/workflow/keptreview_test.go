@@ -321,3 +321,51 @@ func TestKeptStep_AnIssueThatLeftTheReviewIsLeftAsItIs(t *testing.T) {
 		t.Errorf("issues in work = %v, want none", got)
 	}
 }
+
+// The label change after a head that moved reached GitHub, and its answer
+// was lost: the issue has cumin/status/awaiting-checks with passed checks
+// while the step is kept. A poll before the delay starts no agent for the
+// issue in work. The poll after the delay ends the step: it writes nothing,
+// and no second agent run starts.
+func TestKeptStep_AnIssueInWorkThatWaitsForTheChecksStartsNoSecondAgent(t *testing.T) {
+	sc, service := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 1}, "risk/low")
+	keptReview(t, sc, service, func() { sc.fake.CloseTimes(http.MethodPut, putLabelsPath, 1) })
+	assertReviewStepIsKept(t, sc, service, "risk/low", "the check of the review")
+	labels := []string{"risk/low", workflow.LabelAwaitingChecks}
+	if err := sc.fake.SetLabels(sc.repo, 10, labels); err != nil {
+		t.Fatal(err)
+	}
+	writes := sc.fake.CountRequests(http.MethodPut, putLabelsPath)
+
+	if err := pollAtMinute(sc, service, 1); err != nil {
+		t.Fatalf("Poll at minute 1: %v", err)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs at minute 1, want 1: no agent starts for an issue in work", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, labels) {
+		t.Errorf("labels of #10 at minute 1 = %v, want %v", got, labels)
+	}
+	if got := workflow.InProgressIssues(service); !slices.Equal(got, []string{"example-org/example-repo#10"}) {
+		t.Errorf("issues in work at minute 1 = %v, want #10", got)
+	}
+
+	// The required check has not reported on the new head, so that the poll
+	// that ends the step starts no review of its own.
+	sc.repo.PullRequests[21].Checks = nil
+	if err := pollAtMinute(sc, service, 5); err != nil {
+		t.Fatalf("Poll at minute 5: %v", err)
+	}
+	if !strings.Contains(sc.logs.String(), "while the check of the review was kept; nothing changes") {
+		t.Errorf("the log does not say that the kept step changed nothing:\n%s", sc.logs.String())
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != writes {
+		t.Errorf("%d label changes of #10 after the lost one, want none", n-writes)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: no second run", n)
+	}
+	if got := workflow.InProgressIssues(service); len(got) != 0 {
+		t.Errorf("issues in work = %v, want none after the kept step ended", got)
+	}
+}
