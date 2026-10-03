@@ -168,7 +168,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
   - 期限で終わった呼び出しは、ネットワークの誤りの1つとして扱う。下のやり直しの対象である。
   - 設定にはしない。対象ごとに変える理由がないためである。
 - 一時的な失敗をした読み取りは、クライアントの中でやり直す (`retry.go`。要件: [cumin本体の要件](../requirements/cumin-core.md) の一時的な失敗のやり直し)。
-  - 一時的な失敗は、ネットワークの誤り (期限、接続の切断など。応答の本文の途中で切れた場合を含む) と、5xxの応答である。レート制限は、ここでは扱わない。
+  - 一時的な失敗は、ネットワークの誤り (期限、接続の切断など。応答の本文の途中で切れた場合を含む) と、5xxの応答である。一次のレート制限の使い切りは、やり直さない (下の項目)。
   - 読み取りは、RESTの `GET` と、GraphQLのquery (本文の `query` が `query` で始まる要求) である。それ以外 (`POST`、`PUT`、`PATCH`、GraphQLのmutation) は書き込みで、1回だけ送る。
   - やり直しは3回まで (定数 `maxRetries`)、2秒あけて行う (定数 `retryWait`)。最初の1回と合わせて、1つの読み取りは最大4回送る。毎回、新しい要求を作るので、どの回も30秒の期限を持つ。応答が返らないGitHubに対する1つの読み取りは、最長で約2分かかる。
   - 待つ間に呼び出し元のcontextが終わると、待ちをすぐにやめて、失敗を返す。この失敗は一時的な失敗としない。
@@ -176,6 +176,17 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
   - やり直しのたびに、warnのログを1行出す。要求のラベル (`request`)、何回目か (`try`)、理由 (`reason`: `status 502`、`time-out` など) を持つ。tokenとアドレスは持たない。`cumin run` は自分のloggerを渡す (`SetLogger`)。
   - テストは、待ちを差し替えて眠らない (`SetRetryWait`)。
   - 設定にはしない。回数と間隔は要件が決めていて、対象ごとに変える理由がないためである。
+- 一次のレート制限を使い切ったら、リセットの時刻まで、そのinstallationの呼び出しを送らない (`ratelimit.go`。要件: 同じ節のレート制限の規則)。
+  - 見分け方は、公式の文書のとおりである (公式: Rate limits for the REST API、Rate limits and query limits for the GraphQL API の「Exceeding the rate limit」)。RESTは、403か429の応答で、ヘッダー `x-ratelimit-remaining` が `0` である。GraphQLは、statusが200のまま、本文に `errors` があり、同じヘッダーが `0` である。リセットの時刻は、ヘッダー `x-ratelimit-reset` (UTCのエポック秒) で読む。
+  - GraphQLでは、上限の最後の1回の成功も、同じヘッダーが `0` になる。そこで、ヘッダーが `0` のときだけ本文を全て読み、`errors` があるときに限って使い切りとする。
+  - ヘッダーが `0` でない403と、リセットの時刻を読めない応答は、今までどおり `StatusError` である。
+  - 使い切りの応答は、`RateLimitError` を返す。枠の名前 (`Resource`: ヘッダー `x-ratelimit-resource` の値。RESTは `core`、GraphQLは `graphql`) と、リセットの時刻 (`Reset`) を持つ。tokenは持たない。`github.IsTemporary(err)` は真を返す。やり直しの対象にはしない。すぐに送り直しても、同じ答えが返るためである。
+  - クライアントは、installationごとにリセットの時刻を覚える (mutexの後ろの表)。その時刻より前は、同じinstallationの呼び出しを、RESTもGraphQLも、読み取りも書き込みも、送らずに同じ `RateLimitError` で返す。その時刻になると、次の呼び出しを送る。時計は、クライアントに差し込んだ `now` である。
+    - 理由: 要件が、待つ間はそのinstallationでGitHubを呼ばない、と決めている。制限されている間に呼び続けると、GitHubがintegrationを止めることがある (同じ公式の文書)。
+  - installationは、tokenから決める。クライアントは、installation token を発行したときに、tokenとinstallationの番号の組を覚える (期限が過ぎた組は、次の発行のときに捨てる)。同じinstallationの別のリポジトリのtokenも、同じ制限を分け合うためである。クライアントが発行していないtokenは、そのtokenだけを1つの単位とする。AppのJWTは呼び出しごとに新しいので、JWTの呼び出し (tokenの発行など) は止めない。
+  - 呼び出しの中では待たない。`cumin status` と `cumin setup` は、すぐにこの失敗を返す。リセットのあとにやり直すのは、定期確認と、持っておいた手順である。
+  - 使い切りを見つけたときに、warnのログを1行出す。要求のラベル (`request`)、枠の名前 (`resource`)、リセットの時刻 (`reset`) を持つ。tokenは持たない。送らなかった呼び出しでは、ログを出さない。
+  - 二次のレート制限は、まだ扱わない。
 
 ![GitHubへの呼び出しの期限](github-call-deadline.svg)
 
