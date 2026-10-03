@@ -187,6 +187,44 @@ func TestIdlePoll_ThePollAfterAnActionReadsWhatTheRunLeft(t *testing.T) {
 	}
 }
 
+// The end of an agent run makes an idle repository in work again. The
+// acceptance check of the Planner keeps cumin/status/implementing on the
+// requirement issue, which is no label in work: only the run itself, and
+// then its end, make the next poll read the repository.
+func TestIdlePoll_TheEndOfAnAgentRunIsReadAtTheNextPoll(t *testing.T) {
+	// Every sub-issue of #6 is closed, so the poll asks the Planner for the
+	// acceptance check. The run holds, and then returns blocked.
+	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true,
+		ClosedAt: sceneNow.Add(-time.Hour), Labels: []string{"risk/low"}})
+	service := idlePollService(sc)
+	if n := pollAt(t, sc, service, 0, "example-repo"); n == 0 {
+		t.Fatal("minute 0: the poll sent no GraphQL query")
+	}
+	waitForAgentRun(t, sc)
+
+	// The run goes on: the poll takes no action and reads no label in work.
+	if n := pollAt(t, sc, service, 1, "example-repo"); n == 0 {
+		t.Error("minute 1: the poll sent no GraphQL query, want a poll while the agent run goes on")
+	}
+	if n := pollAt(t, sc, service, 2, "example-repo"); n == 0 {
+		t.Error("minute 2: the poll sent no GraphQL query, want a poll while the agent run goes on")
+	}
+	sc.release(t)
+	service.Wait()
+	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerDecision}
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
+		t.Fatalf("labels of #6 = %v, want %v after the blocked run", got, want)
+	}
+
+	if n := pollAt(t, sc, service, 3, "example-repo"); n == 0 {
+		t.Error("minute 3: the poll sent no GraphQL query, want a poll after the end of the run")
+	}
+	if n := pollAt(t, sc, service, 4, "example-repo"); n != 0 {
+		t.Errorf("minute 4: the poll sent %d GraphQL queries, want none: the repository has no issue in work", n)
+	}
+}
+
 // A stop after the runs behaves as before with an idle repository: every
 // poll reads the repository, and cumin exits after a poll with no run.
 func TestIdlePoll_AStopAfterTheRunsStillReadsAnIdleRepository(t *testing.T) {
