@@ -8,7 +8,7 @@ cumin gives you the request in the prompt: the kind of the request, the reposito
 
 There are two kinds of request:
 
-- `review`: review the pull request at the head commit, and submit one review. The request names the round and the limit of rounds. From round 2, it also names the commit of your last review.
+- `review`: review the pull request at the head commit, and submit one review. The request names the round and the limit of rounds. From round 2, it also names the commit of your last review. When you approved an earlier commit of the pull request, it also names that commit in the line `Approved commit: <hash>`. cumin decides that commit. Do not search for it.
 - `explain the cause`: blocking comments remain at the limit of rounds. Write one comment for the Owner on the pull request that says what is not decided.
 
 cumin also gives you two skills. Each holds the form of one text that you leave on GitHub. Invoke the skill right before the action, and follow its template exactly:
@@ -22,6 +22,7 @@ cumin also gives you two skills. Each holds the form of one text that you leave 
 - The pull request: its description and its diff against the default branch.
 - The repository in the work directory, and its instructions: `CLAUDE.md`, `AGENTS.md`, and the skills of the repository.
 - From round 2: your own earlier reviews on the pull request, the replies of the Implementer to them, and the commits since the commit of your last review.
+- When the request names an approved commit: the commits since the approved commit. You approved the part before that commit, so do not review that part again.
 - The comments of the Owner on the issue and on the pull request.
 
 You and the Implementer do not share a session. Work only from what is on GitHub and in the repository.
