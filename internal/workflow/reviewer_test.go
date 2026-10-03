@@ -58,6 +58,7 @@ func TestI3_Round1StartsANewSessionAtTheHeadCommit(t *testing.T) {
 		t.Errorf("round 1 resumed a session:\n%q", args)
 	}
 	text := promptOf(t, args)
+	requireIssueOfTheRun(t, text, 10, "implementation issue")
 	for _, want := range []string{"Request: review", "Implementation issue: #10", "Pull request: #21",
 		"Head commit: " + sc.remoteHead, "Round: 1 of 3", "find as much as you can"} {
 		if !strings.Contains(text, want) {
@@ -311,6 +312,7 @@ func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
 		t.Fatalf("reviews = %+v, want the one of the Reviewer", reviews)
 	}
 	text := promptOf(t, args)
+	requireIssueOfTheRun(t, text, 10, "implementation issue")
 	for _, want := range []string{"Request: review fix", "Pull request: #21", "Review: " + reviews[0].URL,
 		"Branch: cumin/10-add-the-login-screen", "cumin-review-reply", "Do not open a new pull request"} {
 		if !strings.Contains(text, want) {
@@ -370,6 +372,7 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 	if text := promptOf(t, args); !strings.Contains(text, "Request: explain the cause") || !strings.Contains(text, "after 3 review rounds") {
 		t.Errorf("the request text is not the explanation of I8:\n%s", text)
 	}
+	requireIssueOfTheRun(t, promptOf(t, args), 10, "implementation issue")
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
 	}

@@ -644,6 +644,7 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	// The request text names the kind, the repository, the issue, and the
 	// branch. It is the last argument of -p.
 	text := promptOf(t, sc.record(t, "agent.args"))
+	requireIssueOfTheRun(t, text, 10, "implementation issue")
 	for _, want := range []string{"Request: implement", "example-org/example-repo", "#10", wantBranch} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
@@ -1484,6 +1485,17 @@ func branchOf(t *testing.T, dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// requireIssueOfTheRun fails the test unless the prompt starts with the
+// facts of the run and names the issue with its kind
+// (docs/ja/requirements/agents/common.md, the facts of the start request).
+func requireIssueOfTheRun(t *testing.T, prompt string, number int, kind string) {
+	t.Helper()
+	want := fmt.Sprintf("Facts of this run (data from cumin):\n- Issue of the run: #%d (%s)\n", number, kind)
+	if !strings.HasPrefix(prompt, want) {
+		t.Errorf("the prompt does not start with %q:\n%s", want, prompt)
+	}
+}
+
 // promptOf returns the value of -p from the recorded arguments, which are
 // separated by NUL.
 func promptOf(t *testing.T, args string) string {
@@ -2180,6 +2192,7 @@ func TestI1_AClaimWithAnOpenPullRequestContinuesOnItsBranch(t *testing.T) {
 	}
 	args := sc.record(t, "agent.args")
 	text := promptOf(t, args)
+	requireIssueOfTheRun(t, text, 10, "implementation issue")
 	for _, want := range []string{"Request: continue", "Pull request: #21", "Branch: " + branch, "Do not open a new pull request"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
@@ -2298,6 +2311,7 @@ func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
 		t.Errorf("--resume = %q, want the session of the last run", got)
 	}
 	text := promptOf(t, args)
+	requireIssueOfTheRun(t, text, 10, "implementation issue")
 	for _, want := range []string{"Request: check fix", "Pull request: #21", "Branch: " + wantBranch,
 		`Check "ci" failed.`, "login.go: login_test.go:12: want 2, got 1", "FAIL\texample/login", "Do not open a new pull request"} {
 		if !strings.Contains(text, want) {

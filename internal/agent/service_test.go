@@ -515,8 +515,9 @@ func TestStart_TheTimeLimitOfThePromptIsTheOneOfTheSettingsOfTheRequest(t *testi
 	}
 }
 
-// A resumed session receives the two lines again, with the end time of the
-// new run and not the one of the run that it continues.
+// A resumed session receives the block again, with the issue of the run,
+// and with the end time of the new run and not the one of the run that it
+// continues.
 func TestStart_AResumedSessionReceivesANewEndTime(t *testing.T) {
 	_, client := newFakeGitHub(t)
 	path, dir := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
@@ -533,6 +534,7 @@ func TestStart_AResumedSessionReceivesANewEndTime(t *testing.T) {
 
 	s.Now = fixedClock(time.Date(2026, 10, 3, 2, 30, 0, 0, time.UTC))
 	request := startRequest(t)
+	request.Facts = Facts{IssueNumber: 12, IssueKind: IssueKindImplementation}
 	request.SessionID = first.SessionID
 	if _, err := s.Start(context.Background(), request); err != nil {
 		t.Fatalf("Start of the resumed session: %v", err)
@@ -541,7 +543,8 @@ func TestStart_AResumedSessionReceivesANewEndTime(t *testing.T) {
 	if i := indexOf(args, "--resume"); i < 0 || args[i+1] != first.SessionID {
 		t.Fatalf("the second run does not resume the session: %q", args)
 	}
-	want := "Facts of this run (data from cumin):\n- Time limit of the run: 1m0s\n- End time of the run: 2026-10-03T02:31:00Z\n\n" + request.Text
+	want := "Facts of this run (data from cumin):\n- Issue of the run: #12 (implementation issue)\n" +
+		"- Time limit of the run: 1m0s\n- End time of the run: 2026-10-03T02:31:00Z\n\n" + request.Text
 	if got := promptOfRun(t, dir); got != want {
 		t.Errorf("resumed prompt = %q, want %q", got, want)
 	}

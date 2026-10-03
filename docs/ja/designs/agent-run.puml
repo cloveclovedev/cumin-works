@@ -20,7 +20,7 @@ github --> cumin : installation token
 cumin -> github : bot identity (once for each role)\nGET /app, GET /users/<slug>[bot]
 github --> cumin : slug, user id
 
-cumin -> claude : start (in the worktree, token and author in the environment)\nrole instruction (--append-system-prompt), schema,\nrequest (the facts of the run first: time limit, end time),\nskill directory of the role (--add-dir),\nnew session or --resume
+cumin -> claude : start (in the worktree, token and author in the environment)\nrole instruction (--append-system-prompt), schema,\nrequest (the facts of the run first: issue and its kind,\ntime limit, end time),\nskill directory of the role (--add-dir),\nnew session or --resume
 activate claude
 claude --> cumin : system / init\n(session ID, plugins, mcp_servers, memory_paths, skills)
 cumin -> cumin : check the start record\n(stop at once on context from outside the work directory,\nor on a missing cumin skill)
