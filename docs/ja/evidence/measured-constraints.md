@@ -91,7 +91,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 130 | 定期確認の問い合わせ (`snapshotQuery`) の1回の定期確認のポイントは、cumin-worksで34ポイント (2ページ、17 + 17。開いている要求Issueは20件)、cumin-sandboxで17ポイント (1ページ。開いている要求Issueは3件) である。1ページのポイントは、そのページの要求Issueの件数 (3件と10件) でも、`.cumin/` のファイルを読むかどうか (1ページ目だけ読む) でも変わらない。60秒の間隔では、計算上、cumin-worksが毎時2,040ポイント、cumin-sandboxが毎時1,020ポイントである | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03 08:22 UTC、`rateLimit.cost`) | 実測 | 2026-10-03 |
 | 131 | 定期確認の問い合わせから接続を1つ外したときの1ページのポイントは、下の表「接続を1つ外した1ページのポイント」のとおりである。cumin-worksとcumin-sandboxで、どの数字も同じだった。どの数字も、129の式で数えた値と一致する。今の問い合わせの要求の数は 1 + 30 + 450 + 1,200 = 1,681 で、17ポイントになる | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03、`rateLimit.cost`)。要求の数は129の式での計算 | 実測 | 2026-10-03 |
 | 132 | 5つの小さな問い合わせ (ラベルの時刻、Ownerのログイン名、コメント、結び付いたPull Request、フォローアップノートのPull Request) は、cumin-worksでもcumin-sandboxでも、どれも1回に1ポイントである。ラベルの時刻とOwnerのログイン名は、要求Issueの番号 (sub-issueが6件) でも、実装Issueの番号でも1ポイントである。コメントは、Issueの番号でも、Pull Requestの番号でも1ポイントである。動かす規則と条件は、下の表「小さな問い合わせのポイントと、動かす規則」にある | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03 08:23 UTC、`rateLimit.cost`) | 実測 | 2026-10-03 |
-| 133 | 実行終了の判定 (R2、I2、I5〜I8、I10) と、Reviewerの承認のあとのmergeの判定 (I6、I7) は、定期確認と同じ問い合わせで、リポジトリの全ページを読み直す。1回の読み直しは、130の1回の定期確認と同じポイントである (cumin-worksで34ポイント)。I2は、リンクを付けたときに、もう1回読み直す | コード (`internal/workflow` の `requirementIssueNow`、`subIssueNow`、`verifyDone`、`afterApproval` が `ReadSnapshot` を呼ぶ)。ポイントは130の実測 | 実測 | 2026-10-03 |
+| 133 | 実行終了の判定 (R2、I2、I5〜I8、I10) と、Reviewerの承認のあとのmergeの判定 (I6、I7) は、定期確認と同じ問い合わせで、リポジトリの全ページを読み直す。1回の読み直しは、130の1回の定期確認と同じポイントである (cumin-worksで34ポイント)。I2は、リンクを付けたときに、もう1回読み直す | コード (`internal/workflow` の `requirementIssueNow`、`subIssueNow`、`verifyDone`、`afterApproval` が `ReadSnapshot` を呼ぶ)。読み直すことはコードを読んで確かめたもので、実行では観測していない。ポイントは130の実測 | 実測 (ポイントだけ) | 2026-10-03 |
 
 接続を1つ外した1ページのポイント (131)。「要求の数」は、129の式で数えた、その接続を読むのに要る要求の数である。括弧の中は、親の件数の積である。
 
@@ -161,7 +161,7 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | I14 | checkを待つ間の衝突を解消 | sub-issueのラベル。Pull Requestの `mergeable` とブランチ。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences` の `mergeable`)。Ownerのログイン名。REST (権限) |
 | I15 | checkが結果を返さない | sub-issueのラベル。sub-issueに `cumin/status/awaiting-checks` が付いた時刻。先頭のコミットの時刻。checkの結果。必須のcheck。今のコードは、2つの時刻を読むだけで、まだ判定しない | 定期確認 (sub-issueの `labels`、Pull Requestの `commits`、`statusCheckRollup.contexts`)。ラベルの時刻。REST (必須のcheck) |
 
-「AIリソースに空きがある」と「このIssueのAgentが動いていない」は、Hostの手元の事実で、GitHubからは読まない。RESTの必須のcheck (ruleset) は、定期確認のたびに、リポジトリごとに1回読む。
+「AIリソースに空きがある」と「このIssueのAgentが動いていない」は、Hostの手元の事実で、GitHubからは読まない。RESTの必須のcheck (ruleset) は、定期確認では、リポジトリごとに1回、条件に合うときだけ読む。条件は、`cumin/status/awaiting-checks` の付いた開いているsub-issueがある (I3、I4、I15) か、人の承認を確かめるsub-issueがある (I12) ことである (`HasIssueAwaitingChecks`、`HasOwnerApprovalCandidate`)。Reviewerの承認のあとのmergeの判定 (I6、I7) は、読み直しのあとに、もう1回読む (`afterApproval`)。
 
 ## rulesetとcheck
 
