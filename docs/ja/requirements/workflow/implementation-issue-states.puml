@@ -27,7 +27,7 @@ Reviewing --> OwnerReview : I7 APPROVE,\nrisk/medium or risk/high
 Reviewing --> Decision : I8 comments left\nafter 3 rounds
 Reviewing --> Decision : I10 Reviewer\nreturned blocked
 OwnerReview --> [*] : I12 Owner approves the head commit\n(cumin merges)
-OwnerReview --> Implementing : I13 Owner requests changes\n(new session)
+OwnerReview --> Implementing : I13 Owner requests changes\n(same session)
 OwnerReview --> Ready : Owner sends it back\n(comment, cumin/status/ready again)
 Decision --> Ready : Owner answers,\nadds cumin/status/ready again
 
