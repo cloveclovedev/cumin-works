@@ -29,7 +29,26 @@ type Facts struct {
 	// the line out: a run without an issue behind it (a test).
 	IssueNumber int
 	IssueKind   IssueKind
+	// ProtectedPaths is the list of protected paths that applies in the
+	// target repository, resolved by the caller: the list of its
+	// .cumin/config.toml, or the default list. cumin does not check the
+	// entries. Nil leaves the lines out: a run without the settings of a
+	// repository behind it (a test). An empty list is a value: the
+	// repository protects nothing.
+	ProtectedPaths []string
 }
+
+// protectedPathRules are the rules of matching of the protected paths, as
+// the check cumin-protected-paths applies them (cumin-core.md, the topic on
+// settings): any depth, a fixed position, a directory, no wildcard, no
+// case.
+const protectedPathRules = `- Rules of matching of the protected paths:
+  - An entry with no "/" other than a trailing "/" matches at any depth. "CLAUDE.md" also matches "sub/CLAUDE.md".
+  - An entry with a leading "/" or an inner "/" matches only at that position from the top of the repository.
+  - An entry with a trailing "/" is a directory. It matches everything below that directory.
+  - Wildcards do not work.
+  - Upper case and lower case are the same. "claude.md" matches "CLAUDE.md".
+`
 
 // runFacts are the facts of one run that the agent receives.
 type runFacts struct {
@@ -45,16 +64,36 @@ type runFacts struct {
 
 // factsBlock returns the block of labelled lines of the facts. The first
 // line says that the lines are data from cumin. The issue of the run comes
-// next. The end time is in UTC as RFC 3339, whatever the location of the
-// time is.
+// next, then the protected paths, one entry on each line, with the rules of
+// matching. The end time is in UTC as RFC 3339, whatever the location of
+// the time is.
 func factsBlock(facts runFacts) string {
 	var b strings.Builder
 	b.WriteString("Facts of this run (data from cumin):\n")
 	if facts.IssueNumber != 0 {
 		b.WriteString("- Issue of the run: #" + strconv.Itoa(facts.IssueNumber) + " (" + string(facts.IssueKind) + ")\n")
 	}
+	if facts.ProtectedPaths != nil {
+		b.WriteString(protectedPathsLines(facts.ProtectedPaths))
+	}
 	b.WriteString("- Time limit of the run: " + limitText(facts.TimeLimit) + "\n")
 	b.WriteString("- End time of the run: " + facts.End.UTC().Format(time.RFC3339) + "\n")
+	return b.String()
+}
+
+// protectedPathsLines returns the lines of the protected paths: each entry
+// as the settings hold it, then the rules of matching. An empty list has no
+// entry to match, so the rules are left out.
+func protectedPathsLines(entries []string) string {
+	if len(entries) == 0 {
+		return "- Protected paths (agents keep these paths unchanged): none\n"
+	}
+	var b strings.Builder
+	b.WriteString("- Protected paths (agents keep these paths unchanged):\n")
+	for _, entry := range entries {
+		b.WriteString("  - `" + entry + "`\n")
+	}
+	b.WriteString(protectedPathRules)
 	return b.String()
 }
 

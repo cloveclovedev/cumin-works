@@ -132,7 +132,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 		Repo:         target.Repository.Name,
 		Role:         config.RolePlanner,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement, ProtectedPaths: settings.ProtectedPaths},
 		Text:         req.text(target.Repository.String(), number, workDir),
 		WorkDir:      workDir,
 		Settings:     &role,

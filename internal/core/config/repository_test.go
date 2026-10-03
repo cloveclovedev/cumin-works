@@ -115,13 +115,43 @@ func TestWithRepository_SetsTheCLIAndTheModelOfOneRole(t *testing.T) {
 	}
 }
 
-// The starter file that scripts/setup-repo.sh writes holds only
-// protected_paths, which cumin does not read.
-func TestWithRepository_ProtectedPathsChangesNothing(t *testing.T) {
+// The protected paths that apply are the list of protected_paths, or the
+// default list when the file or the key does not exist. A list of the file
+// replaces the default list. It does not add to it.
+func TestWithRepository_ProtectedPathsAreTheListOfTheFileOrTheDefaultList(t *testing.T) {
+	defaults := []string{".cumin/", "CLAUDE.md", "AGENTS.md", ".claude/"}
 	host := hostSettings(t, "max_review_rounds = 5\n")
-	s := withRepository(t, host, "protected_paths = [\n  \".cumin/\",\n  \"CLAUDE.md\",\n]\n")
+	if got := host.ProtectedPathEntries(); !slices.Equal(got, defaults) {
+		t.Errorf("with no file, protected paths = %q, want %q", got, defaults)
+	}
+
+	tests := []struct {
+		name string
+		file string
+		want []string
+	}{
+		{"no key", "max_review_rounds = 2\n", defaults},
+		{"a list replaces the default list", "protected_paths = [\n  \".cumin/\",\n  \"/docs/requirements/\",\n]\n", []string{".cumin/", "/docs/requirements/"}},
+		{"an empty list protects nothing", "protected_paths = []\n", []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := withRepository(t, host, tt.file)
+			if got := s.ProtectedPathEntries(); !slices.Equal(got, tt.want) {
+				t.Errorf("protected paths = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	// The starter file of scripts/setup-repo.sh holds only this key: the
+	// other settings stay the ones of the Host, and the Host settings do
+	// not change.
+	s := withRepository(t, host, "protected_paths = [\".cumin/\"]\n")
 	if s.MaxReviewRounds != 5 || s.MergeMethod != MergeSquash {
 		t.Errorf("settings = %+v, want the Host values", s)
+	}
+	if host.ProtectedPaths != nil {
+		t.Errorf("the Host settings hold the protected paths %q of a repository", host.ProtectedPaths)
 	}
 }
 

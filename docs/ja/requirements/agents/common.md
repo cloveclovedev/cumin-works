@@ -98,7 +98,7 @@ cuminは、起動の依頼の先頭に、その実行の事実をラベル付き
 | Ownerのログイン名 | このIssueに最新の `cumin/status/ready` を付けたアカウントが、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) であるときの、その名前。要求Issueにそのイベントがなければ、sub-issueの最新のものを使う。どれもないとき、またはそのアカウントがOwnerでないときは、「Ownerのログイン名はない」と書く。Agentは、このアカウントのコメントを、Ownerの指示として読む | GitHubのラベルのイベントと権限 |
 | 保護されたパス | 対象のリポジトリで効いている一覧と、その照合の決まり。cuminが既定のブランチの `.cumin/config.toml` から読む。一覧がなければ初期値 ([cumin本体の要件](../cumin-core.md) の「設定」) | リポジトリの設定 |
 
-時間の上限と終わる時刻も、同じ並びに書く (下の「プロセスとセッション」)。
+時間の上限と終わる時刻も、同じ並びに書く (下の「プロセスとセッション」)。Plannerの起動の依頼には、ImplementerとReviewerの時間の上限 (`roles.<role>.time_limit`) も書く。Plannerが、1つの実装Issueがそれぞれの1回の実行に収まるように分けるためである ([実装Issueの分割基準](../policies/issue-sizing.md) の11)。
 
 ## プロセスとセッション
 
@@ -123,3 +123,4 @@ cuminは、起動の依頼の先頭に、その実行の事実をラベル付き
 |---|---|---|
 | 1 | どのroleでも、cuminがAgentを起動する | 起動の依頼に、その実行の時間の上限 (`roles.<role>.time_limit`) と、実行が終わる時刻がある。disciplineのファイルに、長い確認を終わる時刻より前に終える決まりがある |
 | 2 | どのroleでも、cuminがAgentを起動する | 起動の依頼に、扱うIssueの番号と種類、Ownerのログイン名 (Ownerでないときは「ない」)、保護されたパスとその照合の決まりがある |
+| 3 | cuminがPlannerを起動する | 起動の依頼に、ImplementerとReviewerの時間の上限がある |
