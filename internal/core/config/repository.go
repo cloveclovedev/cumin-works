@@ -13,6 +13,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -48,6 +49,7 @@ const (
 type repositoryFile struct {
 	MaxReviewRounds     *int                      `toml:"max_review_rounds"`
 	MaxCheckFixRequests *int                      `toml:"max_check_fix_requests"`
+	ChecksWaitTime      *duration                 `toml:"checks_wait_time"`
 	MergeMethod         *string                   `toml:"merge_method"`
 	PriorityLabels      *[]string                 `toml:"priority_labels"`
 	Roles               map[string]repositoryRole `toml:"roles"`
@@ -108,6 +110,13 @@ func (s *Settings) WithRepository(data []byte) (*Settings, error) {
 			fail("max_check_fix_requests", limitAtLeastOne)
 		} else {
 			effective.MaxCheckFixRequests = *f.MaxCheckFixRequests
+		}
+	}
+	if f.ChecksWaitTime != nil {
+		if *f.ChecksWaitTime <= 0 {
+			fail("checks_wait_time", limitMoreThanZero)
+		} else {
+			effective.ChecksWaitTime = time.Duration(*f.ChecksWaitTime)
 		}
 	}
 	if f.MergeMethod != nil {

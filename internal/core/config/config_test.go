@@ -47,6 +47,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if s.MaxCheckFixRequests != 3 {
 		t.Errorf("MaxCheckFixRequests = %d, want 3", s.MaxCheckFixRequests)
 	}
+	if s.ChecksWaitTime != 60*time.Minute {
+		t.Errorf("ChecksWaitTime = %v, want 60m", s.ChecksWaitTime)
+	}
 	if s.MergeMethod != MergeSquash {
 		t.Errorf("MergeMethod = %q, want squash", s.MergeMethod)
 	}
@@ -89,6 +92,7 @@ poll_interval = "30s"
 max_issues_in_progress = 2
 max_review_rounds = 5
 max_check_fix_requests = 4
+checks_wait_time = "90m"
 merge_method = "rebase"
 
 [roles.implementer]
@@ -110,7 +114,8 @@ reviewer = "client-id-reviewer"
 		t.Errorf("Repositories = %v", s.Repositories)
 	}
 	if s.PollInterval != 30*time.Second || s.MaxIssuesInProgress != 2 ||
-		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.MergeMethod != MergeRebase {
+		s.MaxReviewRounds != 5 || s.MaxCheckFixRequests != 4 || s.ChecksWaitTime != 90*time.Minute ||
+		s.MergeMethod != MergeRebase {
 		t.Errorf("top-level settings = %+v", s)
 	}
 	want := RoleSettings{TimeLimit: 55 * time.Minute, CLI: CLIClaudeCode, CLIPath: "/opt/example/bin/claude", Model: "example-model"}
@@ -162,6 +167,10 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 		{"max_issues_in_progress zero", required + `max_issues_in_progress = 0`, "max_issues_in_progress:"},
 		{"max_review_rounds zero", required + `max_review_rounds = 0`, "max_review_rounds:"},
 		{"max_check_fix_requests zero", required + `max_check_fix_requests = 0`, "max_check_fix_requests:"},
+		{"checks_wait_time zero", required + `checks_wait_time = "0s"`, "checks_wait_time:"},
+		{"checks_wait_time negative", required + `checks_wait_time = "-1m"`, "checks_wait_time:"},
+		{"checks_wait_time without unit", required + `checks_wait_time = 60`, `"checks_wait_time"`},
+		{"checks_wait_time wrong format", required + `checks_wait_time = "one hour"`, `"checks_wait_time"`},
 		{"merge_method unknown", required + `merge_method = "fast-forward"`, "merge_method:"},
 		{"time_limit over 55 minutes", required + "[roles.implementer]\n" + `time_limit = "56m"`, "roles.implementer.time_limit:"},
 		{"time_limit zero", required + "[roles.reviewer]\n" + `time_limit = "0s"`, "roles.reviewer.time_limit:"},

@@ -50,6 +50,37 @@ func TestWithRepository_ThreeLevelsOfOneKey(t *testing.T) {
 	}
 }
 
+// The wait time for the required checks follows the length of the CI of a
+// repository, so a repository may override it.
+func TestWithRepository_SetsTheWaitTimeForTheChecks(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		file string
+		want time.Duration
+	}{
+		{"the default", "", "", defaultChecksWaitTime},
+		{"the Host file", "checks_wait_time = \"30m\"\n", "", 30 * time.Minute},
+		{"the repository file over the Host file", "checks_wait_time = \"30m\"\n", "checks_wait_time = \"2h\"\n", 2 * time.Hour},
+		{"the repository file over the default", "", "checks_wait_time = \"2h\"\n", 2 * time.Hour},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host := hostSettings(t, tt.host)
+			s := withRepository(t, host, tt.file)
+			if s.ChecksWaitTime != tt.want {
+				t.Errorf("checks_wait_time = %v, want %v", s.ChecksWaitTime, tt.want)
+			}
+		})
+	}
+
+	// A value without a unit is a type error, which names the key.
+	_, err := hostSettings(t, "").WithRepository([]byte("checks_wait_time = 60\n"))
+	if err == nil || !strings.Contains(err.Error(), "checks_wait_time") {
+		t.Errorf("a value without a unit gave %v, want an error that names checks_wait_time", err)
+	}
+}
+
 func TestWithRepository_SetsTheOtherOverridableKeys(t *testing.T) {
 	host := hostSettings(t, "max_check_fix_requests = 2\nmerge_method = \"squash\"\n")
 	s := withRepository(t, host, "max_check_fix_requests = 1\nmerge_method = \"rebase\"\n")
@@ -245,6 +276,7 @@ func TestWithRepository_AValueOutsideItsLimitGivesTheErrorOfTheHostFile(t *testi
 	}{
 		{"max_review_rounds", "max_review_rounds = 0\n"},
 		{"max_check_fix_requests", "max_check_fix_requests = 0\n"},
+		{"checks_wait_time", "checks_wait_time = \"0s\"\n"},
 		{"merge_method", "merge_method = \"fast-forward\"\n"},
 		{"roles.implementer.cli", "[roles.implementer]\ncli = \"codex\"\n"},
 	}
