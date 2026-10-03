@@ -777,9 +777,9 @@ type implementerRequest struct {
 
 // stopForUnreportedChecks applies I15: a required check has not reported on
 // the head commit of the pull request within the wait time of the
-// repository. The issue goes to the Owner through the stop step with the
-// row I15. No agent starts: cumin writes what it sees, and the Owner finds
-// the cause.
+// repository, or no open pull request closes the issue. The issue goes to
+// the Owner through the stop step with the row I15. No agent starts: cumin
+// writes what it sees, and the Owner finds the cause.
 //
 // The label changes first: until it changes, the next poll decides the same
 // stop, and must not post the comment and notify again (principle 3).
@@ -790,12 +790,16 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 	if !ok {
 		return fmt.Errorf("I15: issue #%d is not in the snapshot", a.Number)
 	}
-	names := make([]string, 0, len(a.Unreported))
-	for _, check := range a.Unreported {
-		names = append(names, check.Name)
+	if a.PullRequest == 0 {
+		log.Warn("I15: no open pull request closes the issue after the wait time", "waited", a.Waited.String())
+	} else {
+		names := make([]string, 0, len(a.Unreported))
+		for _, check := range a.Unreported {
+			names = append(names, check.Name)
+		}
+		log.Warn("I15: the required checks did not report within the wait time",
+			"head_commit", a.HeadCommit, "unreported", names, "waited", a.Waited.String())
 	}
-	log.Warn("I15: the required checks did not report within the wait time",
-		"head_commit", a.HeadCommit, "unreported", names, "waited", a.Waited.String())
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerDecision)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 		return fmt.Errorf("I15: stop issue #%d for the Owner: %w", a.Number, err)

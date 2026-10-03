@@ -2541,6 +2541,65 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	}
 }
 
+// I15: an issue in cumin/status/awaiting-checks whose pull request someone
+// closed stops for the Owner exactly once, after the wait time since the
+// label. The comment and the notification say that no open pull request
+// closes the issue, and the time waited. Before the wait time is over, the
+// poll changes nothing.
+func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
+	sc := newScene(t)
+	sc.notReporting(t)
+	if err := sc.fake.ClosePullRequest(sc.repo, 21); err != nil {
+		t.Fatal(err)
+	}
+	service := sc.service()
+
+	sc.clock.Set(sceneNow.Add(59 * time.Minute))
+	sc.pollAndWait(t, service)
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 0 {
+		t.Errorf("%d label changes before the wait time is over, want none", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments before the wait time is over, want none", n)
+	}
+	if n := len(sc.messagesExceptQ4()); n != 0 {
+		t.Errorf("%d notifications before the wait time is over, want none", n)
+	}
+
+	sc.clock.Set(sceneNow.Add(61 * time.Minute))
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
+		t.Errorf("%d label changes, want 1", n)
+	}
+	facts := []string{"I15", "No open pull request closes this issue", "waited 1h1m0s"}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments, want 1", len(comments))
+	}
+	for _, want := range append([]string{"Row: I15", "Pull request: None"}, facts...) {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	messages := sc.messagesExceptQ4()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, want := range facts {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("the notification has no %q:\n%s", want, messages[0])
+		}
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+}
+
 // I15: a new head commit while the issue waits starts the wait time again,
 // from the commit time of that commit.
 func TestI15_ANewHeadCommitStartsTheWaitTimeAgain(t *testing.T) {
