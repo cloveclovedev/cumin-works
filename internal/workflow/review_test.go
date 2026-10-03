@@ -77,6 +77,80 @@ func TestReviewRounds_CountsTheReviewsOfTheReviewerSinceTheStart(t *testing.T) {
 	}
 }
 
+// The approved commit of the request (agents/reviewer.md, round 1 after an
+// approval): the commit of the newest APPROVED review of the Reviewer.
+func TestLastApprovedCommit_IsTheCommitOfTheNewestApprovalOfTheReviewer(t *testing.T) {
+	const reviewer = "example-reviewer[bot]"
+	at := func(minute int) time.Time { return time.Date(2026, 9, 30, 10, minute, 0, 0, time.UTC) }
+	review := func(author string, state ReviewState, minute int, commit string) Review {
+		return Review{Author: author, State: state, SubmittedAt: at(minute), Commit: commit}
+	}
+	tests := []struct {
+		name    string
+		reviews []Review
+		want    string
+	}{
+		{"no review names no commit", nil, ""},
+		{"a request for changes is not an approval", []Review{review(reviewer, ReviewChangesRequested, 1, "c1")}, ""},
+		{"one approval names its commit", []Review{review(reviewer, ReviewApproved, 1, "c1")}, "c1"},
+		{"two approvals name the newer one, in any order", []Review{
+			review(reviewer, ReviewApproved, 5, "c2"),
+			review(reviewer, ReviewApproved, 1, "c1"),
+		}, "c2"},
+		{"a later request for changes keeps the approval", []Review{
+			review(reviewer, ReviewApproved, 1, "c1"),
+			review(reviewer, ReviewChangesRequested, 5, "c2"),
+		}, "c1"},
+		{"a dismissed review does not count", []Review{
+			review(reviewer, ReviewApproved, 1, "c1"),
+			review(reviewer, ReviewDismissed, 5, "c2"),
+		}, "c1"},
+		{"an approval of another author does not count", []Review{
+			review(reviewer, ReviewApproved, 1, "c1"),
+			review("octocat", ReviewApproved, 5, "c2"),
+		}, "c1"},
+		{"a pending review does not count", []Review{
+			review(reviewer, ReviewApproved, 1, "c1"),
+			{Author: reviewer, State: ReviewPending, Commit: "c2"},
+		}, "c1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := LastApprovedCommit(tt.reviews, reviewer); got != tt.want {
+				t.Errorf("LastApprovedCommit = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// The request text with no approved commit is the text of round 1 and of
+// round 2 as before; the approved commit adds one line after the round, and
+// in round 1 the sentence on the diff.
+func TestReviewRequestText_NamesTheApprovedCommitAfterTheRound(t *testing.T) {
+	base := ReviewRequest{Repository: "example-org/example-repo", Issue: 10, PullRequest: 21, HeadCommit: "c3", Round: 1, Limit: 3, WorkDir: "/work"}
+	const tail = " The work directory is a checkout of the head commit c3 with no branch; change nothing in it. Invoke the skill cumin-review, then submit one review on that commit with APPROVE or REQUEST_CHANGES. Then return the result.\n"
+	const head = "Request: review\nRepository: example-org/example-repo\nImplementation issue: #10\nPull request: #21\nHead commit: c3\n"
+
+	want := head + "Round: 1 of 3\nWork directory: /work\n\nReview the pull request #21 against the implementation issue #10. This is round 1: find as much as you can." + tail
+	if got := ReviewRequestText(base); got != want {
+		t.Errorf("with no approved commit:\n%s\nwant:\n%s", got, want)
+	}
+
+	approved := base
+	approved.Approved = "c1"
+	want = head + "Round: 1 of 3\nApproved commit: c1\nWork directory: /work\n\nReview the pull request #21 against the implementation issue #10. This is round 1 after your approval of c1: review only the diff from that commit to the head commit, with the depth of round 1." + tail
+	if got := ReviewRequestText(approved); got != want {
+		t.Errorf("round 1 after an approval:\n%s\nwant:\n%s", got, want)
+	}
+
+	// Round 2 and later keep their text; only the line is new.
+	approved.Round, approved.LastReviewed = 2, "c2"
+	want = head + "Round: 2 of 3\nApproved commit: c1\nLast reviewed commit: c2\nWork directory: /work\n\nReview the pull request #21 again. This is round 2: check that your earlier blocking comments are fixed, in the diff from c2 to the head commit." + tail
+	if got := ReviewRequestText(approved); got != want {
+		t.Errorf("round 2 after an approval:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // The latest review of the Reviewer is the one that the check after a run
 // reads, in any state, but never a pending one.
 func TestLatestReview_IsTheLastSubmittedReviewOfTheReviewer(t *testing.T) {
