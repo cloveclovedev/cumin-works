@@ -697,6 +697,7 @@ func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
 		StartReview{Number: 10, PullRequest: 20},
 		FixChecks{Number: 11, PullRequest: 21},
 		ResolveConflict{Number: 15, PullRequest: 25},
+		StopForUnreportedChecks{Number: 16, PullRequest: 26},
 		Plan{Number: 4},
 		CheckAcceptance{Number: 5},
 		Claim{Number: 12, RequirementIssue: 1},
@@ -708,6 +709,7 @@ func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
 		StartRequirement{Number: 1},
 		ReviewRemaining{Number: 2},
 		Accept{Number: 3},
+		StopForUnreportedChecks{Number: 16, PullRequest: 26},
 		MergeOwnerApproval{Number: 13, PullRequest: 23},
 		CopyLabels{Issue: 10, PullRequest: 20},
 	}

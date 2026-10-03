@@ -438,7 +438,8 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 // WithoutNewWork returns the actions that cumin still applies while it
 // stops after its runs: the ones that ask no agent for new work. A requirement issue
 // still changes its label, a pull request still gets the labels of its
-// issue, and an approval of an Owner still merges. The split, the
+// issue, an approval of an Owner still merges, and required checks that do
+// not report in time still stop the issue for the Owner. The split, the
 // acceptance check, the claim, the review, the check fix, the conflict
 // resolution, and the fix of the
 // Owner's review wait for the next start of cumin; each of them starts from a label that no agent
