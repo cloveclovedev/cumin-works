@@ -221,6 +221,6 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 21 | 必須のcheckを待つ実装Issueが1つだけあり、動いているAgentもいない | 待ち状態の通知 (Q4) を出さない。checkが終わって進み、Ownerの対応だけが残ったときに、1回だけ通知する |
 | 22 | `cumin/status/awaiting-owner-review` の実装IssueのPull Requestに、Ownerが今の先頭のコミットで `REQUEST_CHANGES` を出す | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerの直前のセッションで直させる。直したあと、check、Reviewerのレビューを経て、もう一度Ownerの判断を待つ。Implementerがコミットせずに答えたときも、もう一度Ownerの判断を待ち、同じレビューで2回目の差し戻しはしない。botや、writeの権限のないアカウントの `REQUEST_CHANGES` では、何もしない |
 | 23 | Ownerでないアカウントが、Issueに `cumin/status/ready` を付ける | 着手しない。ラベルは替えない。Ownerに1回だけ通知する。Ownerが `cumin/status/ready` を付け直すと着手する |
-| 24 | `cumin/status/awaiting-checks` の実装IssueのPull Requestが、既定のブランチと衝突する | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerに衝突の解消を1回だけ依頼する。GitHubがまだ計算している (`UNKNOWN`) 間は依頼しない。checkの修正を依頼した回数は増えない |
+| 24 | `cumin/status/awaiting-checks` または `cumin/status/awaiting-owner-review` の実装IssueのPull Requestが、既定のブランチと衝突する | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerに衝突の解消を1回だけ依頼する。GitHubがまだ計算している (`UNKNOWN`) 間は依頼しない。checkの修正を依頼した回数は増えない |
 | 25 | `cumin/status/awaiting-checks` の実装Issueで、必須のcheckが、checkの待ち時間を過ぎても先頭のコミットで結果を返さない | `cumin/status/awaiting-owner-decision` に替え、先頭のコミット、結果を返していない必須のcheck、待った時間を添えて、Ownerに1回だけ通知する。待ち時間の内に結果が返れば、I3かI4で進む。開いているPull Requestがなくなったときも、待ち時間を過ぎたら、そのことを添えて1回だけ通知する |
 | 26 | 作業中のIssueがないリポジトリと、作業中のIssueがあるリポジトリを、同時に対象にする | 作業中のリポジトリは定期確認の間隔で、作業中でないリポジトリはアイドルの間隔で確かめる。作業中でないリポジトリでOwnerが `cumin/status/ready` を付けると、アイドルの間隔のうちに着手する |
