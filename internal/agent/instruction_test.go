@@ -225,6 +225,47 @@ func TestRoleFiles_SayThatTheRoleWinsOverItsDiscipline(t *testing.T) {
 	}
 }
 
+// The instruction of every role takes the Owner and the protected paths
+// from the facts of the start request, and holds no rule that derives them:
+// cumin knows these facts, so an agent must not work them out.
+func TestInstruction_EveryRoleUsesTheFactsOfTheStartRequest(t *testing.T) {
+	for _, role := range config.AllRoles() {
+		text, err := instruction(role, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{
+			// The three facts.
+			"the issue of the run, the login of the Owner, and the protected paths with their rules of matching",
+			"Do not derive them",
+			"The Owner is the account that the fact \"Login of the Owner\" names",
+			"there is no Owner login, no comment is an answer of the Owner",
+			"The fact \"Protected paths\"",
+			"the rules of matching that follow the list",
+		} {
+			if !strings.Contains(strings.ToLower(text), strings.ToLower(want)) {
+				t.Errorf("the instruction of %s does not say: %s", role, want)
+			}
+		}
+		for _, old := range []string{
+			// The rule that derived the Owner from the timelines.
+			"newest event",
+			"timelines of the sub-issues",
+			// The place and the default of the list of protected paths.
+			"`protected_paths`",
+			"`.cumin/config.toml`",
+			"`.cumin/`, `CLAUDE.md`, `AGENTS.md`, and `.claude/`",
+			// The rules of matching.
+			"at any depth",
+			"wildcard",
+		} {
+			if strings.Contains(strings.ToLower(text), strings.ToLower(old)) {
+				t.Errorf("the instruction of %s still holds a rule that derives a fact: %s", role, old)
+			}
+		}
+	}
+}
+
 // The templates that cumin writes itself (the follow-up note and the stop
 // note) must reach no agent: they are the form of a comment of cumin, not
 // of an agent, and an agent that read them could imitate them on GitHub.
@@ -295,16 +336,13 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		// Only these three write a source; anyone may comment otherwise.
 		"is not a source",
 		// The Planner must be able to tell who the Owner is.
-		"The Owner is the account that adds `cumin/status/ready`",
-		"read the timelines of the sub-issues",
+		"The Owner is the account that the fact \"Login of the Owner\" names",
 		// The last lines of the decision request name the implementation
 		// issue; the Planner writes about the requirement issue.
 		"Write the requirement issue there instead",
 		// The Planner must know which files the Implementer cannot change.
-		"`protected_paths` of `.cumin/config.toml`",
+		"the fact \"Protected paths\" holds the list",
 		"`.github/workflows/`",
-		// The list alone does not say which files it covers.
-		"matches that name at any depth, as a file or as a directory",
 		// A short answer of the Owner replies to the question in the
 		// decision request, which cumin posted.
 		"the decision request that cumin posted for you",
