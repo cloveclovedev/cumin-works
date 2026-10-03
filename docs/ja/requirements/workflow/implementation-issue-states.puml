@@ -1,6 +1,6 @@
 @startuml implementation-issue-states
 ' cumin works - states of an implementation issue.
-' A state is a label on GitHub. Each arrow names one row of issue-states.md (I1 to I13); I9 and I11 are notes.
+' A state is a label on GitHub. Each arrow names one row of issue-states.md (I1 to I15); I9 and I11 are notes.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 
 hide empty description
@@ -21,6 +21,8 @@ Implementing --> Decision : I2 blocked, or\ntwo abnormal ends
 Checks --> Reviewing : I3 required checks passed
 Checks --> Implementing : I4 a required check failed,\nfix request
 Checks --> Decision : I4 fix requests\nat the limit
+Checks --> Implementing : I14 the pull request\nconflicts (same session)
+Checks --> Decision : I15 required checks\ndo not report in time
 Reviewing --> Implementing : I5 REQUEST_CHANGES\n(fix request)
 Reviewing --> [*] : I6 APPROVE, risk/low\n(cumin merges)
 Reviewing --> OwnerReview : I7 APPROVE,\nrisk/medium or risk/high
