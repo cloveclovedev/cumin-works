@@ -27,6 +27,8 @@ func awaitingOwner(t *testing.T, opts ...cliOptions) *scene {
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
 		Labels: []string{"risk/medium", workflow.LabelAwaitingOwnerReview},
+		// The reviews of the Owner in the tests are newer than this label.
+		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingOwnerReview, At: sceneNow.Add(-10 * time.Minute)}},
 	})
 	sc.fake.SetPermission(theOwner, "admin", "User")
 	return sc
@@ -320,7 +322,7 @@ func TestI13_ARequestForChangesOfTheOwnerOnTheHeadSendsOneRequest(t *testing.T) 
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 10)
 	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 	sc.repo.PullRequests[21].Reviews[2].URL = "https://github.com/example-org/example-repo/pull/21#pullrequestreview-7"
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 60)}
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
 	service := sc.serviceWithSession(t)
 	ctx := context.Background()
 
@@ -605,4 +607,10 @@ func TestOwnerRequestedChanges_I13(t *testing.T) {
 			}
 		})
 	}
+	t.Run("the time of the label is not known", func(t *testing.T) {
+		reviews := []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}
+		if review, ok := workflow.OwnerRequestedChanges(reviews, head, owners, time.Time{}); ok {
+			t.Errorf("OwnerRequestedChanges = %q, true; want no review without the time of the label", review.URL)
+		}
+	})
 }

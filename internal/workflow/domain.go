@@ -1539,15 +1539,15 @@ func ownerChangeRequests(snapshot Snapshot) []Action {
 // newChangeRequest reports whether the pull request of the sub-issue has a
 // CHANGES_REQUESTED review of a person on its head commit that was
 // submitted after cumin/status/awaiting-owner-review was last added to the
-// issue. While the label times are not read, the answer is no, and I13
-// waits for the next poll.
+// issue. While the label times are not read, or hold no time of that label,
+// the answer is no: I13 sends nothing back without the time.
 func newChangeRequest(snapshot Snapshot, sub SubIssue) bool {
 	read := slices.ContainsFunc(snapshot.RequirementIssues, func(requirement RequirementIssue) bool {
 		return requirement.LabelTimesRead &&
 			slices.ContainsFunc(requirement.SubIssues, func(s SubIssue) bool { return s.Number == sub.Number })
 	})
 	pr, ok := sub.LatestPullRequest()
-	return read && ok && slices.ContainsFunc(pr.Reviews, func(review Review) bool {
+	return read && ok && !sub.AwaitingOwnerReviewAt.IsZero() && slices.ContainsFunc(pr.Reviews, func(review Review) bool {
 		return !isBot(review.Author) && review.State == ReviewChangesRequested &&
 			review.Commit == pr.HeadCommit && review.SubmittedAt.After(sub.AwaitingOwnerReviewAt)
 	})
@@ -1610,11 +1610,12 @@ func OwnerApproved(reviews []Review, head string, owners map[string]bool) bool {
 // Owner takes it back. A comment-only review decides nothing, and a review
 // of a bot never counts. A review that is not newer than the label sent the
 // pull request back already, or came before the Owner was asked, so one
-// review sends the pull request back once.
+// review sends the pull request back once. A zero awaitingOwnerAt means
+// that the time of the label is not known, and no review counts.
 func OwnerRequestedChanges(reviews []Review, head string, owners map[string]bool, awaitingOwnerAt time.Time) (Review, bool) {
 	latest, found := latestOwnerReview(reviews, owners)
 	if !found || latest.State != ReviewChangesRequested || head == "" || latest.Commit != head ||
-		!latest.SubmittedAt.After(awaitingOwnerAt) {
+		awaitingOwnerAt.IsZero() || !latest.SubmittedAt.After(awaitingOwnerAt) {
 		return Review{}, false
 	}
 	return latest, true

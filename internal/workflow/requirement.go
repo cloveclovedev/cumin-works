@@ -2,8 +2,9 @@ package workflow
 
 // This file applies the rows that move a requirement issue with its
 // sub-issues: R3 (a sub-issue may start) and R6 (only sub-issues without a
-// status label are left), and reads the label times that R3 and a sub-issue
-// that waits for its checks need.
+// status label are left), and reads the label times that R3, a sub-issue
+// that waits for its checks, and the send-back after a request for changes
+// of the Owner (I13) need.
 // docs/ja/designs/poll.md, the topics on the label times and on the
 // decision of the poll.
 
