@@ -83,7 +83,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 			fixtureStatus = s.State
 		}
 	}
-	l.record("1", "The cumin-core App (no Checks and no Commit statuses permission) reads the check runs and the commit statuses of a commit in a public repository (row 35)", "Not known",
+	l.record("1", "The cumin-core App (no Checks and no Commit statuses permission) reads the check runs and the commit statuses of a commit in a public repository (row 54)", "Not known",
 		fmt.Sprintf("`GET .../check-runs`: status %d. `GET .../status`: status %d, with the commit statuses `%s`", checkRuns.status, combined.status, strings.Join(found, "`, `")))
 	if checkRuns.status != http.StatusOK || combined.status != http.StatusOK || fixtureStatus != "success" {
 		t.Errorf("fact 1: check runs %d, status %d, the status %s of the fixture is %q (want success). If a call is refused, a permission is missing: stop and ask the Owner", checkRuns.status, combined.status, liveStatusContext, fixtureStatus)
