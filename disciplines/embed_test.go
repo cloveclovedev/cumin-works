@@ -3,6 +3,7 @@ package disciplines
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -71,5 +72,28 @@ func TestRole_AnswersForEveryRoleOfTheDefaultDiscipline(t *testing.T) {
 			t.Errorf("Role(%s) found an empty file", role)
 		}
 		t.Logf("%s: has a file in %s = %v", role, Default, ok)
+	}
+}
+
+// Every role plans a long check against the limit of its run. The rule
+// names the two lines of the start request by their labels (package agent
+// writes them), so that the agent finds the limit and the end time there.
+func TestRole_HoldsTheRuleOnLongChecksForEveryRole(t *testing.T) {
+	for _, role := range []string{"planner", "implementer", "reviewer"} {
+		text, ok, err := Role(Default, role)
+		if err != nil || !ok {
+			t.Errorf("Role(%s) = %v, %v; want a file", role, ok, err)
+			continue
+		}
+		for _, want := range []string{
+			"## Long checks",
+			"Time limit of the run",
+			"End time of the run",
+			"ends well before",
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("the discipline of the %s does not hold %q", role, want)
+			}
+		}
 	}
 }

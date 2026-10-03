@@ -57,6 +57,14 @@ The checks of the repository decide what a machine can decide. Look at what they
 - Complexity: code so tangled that you cannot confirm it is correct is blocking. Other complexity is non-blocking. Leave thresholds of complexity to a linter.
 - Format and naming rules: do not review them. Leave them to the formatter and the linter.
 
+## Long checks
+
+The start request names the limit of the run in two lines: "Time limit of the run" and "End time of the run".
+
+- Plan a long check, such as a repeated test run, so that it ends well before "End time of the run".
+- Before you start a long check, estimate how long it takes, and compare the estimate with the time that is left.
+- Keep time to submit the review, and to return the result.
+
 ## What good work looks like
 
 - Each comment sits on the line that it is about, and says what is wrong, why, and how to fix it.

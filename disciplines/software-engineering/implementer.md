@@ -11,6 +11,14 @@ This file holds the standards of software engineering for the Implementer. The r
 
 - The tests, the build, and the lint of the repository pass in the work directory. Run the commands under "How to verify" in the issue.
 
+## Long checks
+
+The start request names the limit of the run in two lines: "Time limit of the run" and "End time of the run".
+
+- Plan a long check, such as a repeated test run, so that it ends well before "End time of the run".
+- Before you start a long check, estimate how long it takes, and compare the estimate with the time that is left.
+- Keep time to open the pull request, and to return the result.
+
 ## What good work looks like
 
 - The change is the smallest one that meets every acceptance criterion. Do not refactor what the issue did not ask about.
