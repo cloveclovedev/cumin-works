@@ -39,7 +39,10 @@ func (s *Service) closeWait() time.Duration {
 // of the pull request. It reads the snapshot again for the labels of the
 // issue now and for the default branch, whose rules name the required
 // checks. A read that fails is logged, and the issue keeps its label.
-func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest) {
+// ownerLogin is the login of the Owner that the Reviewer run holds; a
+// conflict resolution carries it, because no later poll acts on an issue
+// in cumin/status/reviewing after a read that failed here.
+func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest, ownerLogin string) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -79,7 +82,8 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 	log.Info("I6: decided on the approved pull request", "decision", decision.String(), "pull_request", pr.Number)
 	switch decision {
 	case MergeNow:
-		s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, snapshot.DefaultBranch)
+		s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, snapshot.DefaultBranch,
+			func(string) (string, error) { return ownerLogin, nil })
 	case MergeAskOwner:
 		s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr)
 	case MergeChecksNotPassed:
@@ -131,8 +135,9 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 // pushed after the approval is never merged. A conflict goes back to the
 // Implementer (resolveConflict). Every other failure stops the issue for
 // the Owner with one sentence: a head that moved, any other answer of
-// GitHub, and a close that failed.
-func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string) {
+// GitHub, and a close that failed. ownerLogin gives the login of the Owner
+// for the conflict resolution request; it is called only on a conflict.
+func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error)) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	stopIssue := func(reason string) {
 		s.stopForOwner(ctx, log, target, settings, stop{
@@ -150,7 +155,7 @@ func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target
 		log.Warn(row+": the pull request was not merged", "pull_request", pr.Number, "error", err.Error())
 		switch {
 		case errors.Is(err, github.ErrConflict):
-			s.resolveConflict(ctx, log, target, settings, row, sub, pr, defaultBranch)
+			s.resolveConflict(ctx, log, target, settings, row, sub, pr, defaultBranch, ownerLogin)
 		case errors.Is(err, github.ErrHeadMoved):
 			stopIssue(MergeHeadMovedReason(pr.Number))
 		default:
@@ -206,11 +211,23 @@ func statusAnswer(err error) string {
 // checks and the review follow. The review counts its rounds again from
 // the last APPROVE (issue-states.md, the rounds), and the new head needs a
 // new approval.
-func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string) {
+//
+// The login of the Owner comes from ownerLogin, before the label changes.
+// After the approval of the Reviewer (I6) it is the login that the
+// Reviewer run holds, so nothing can fail. After the approval of the Owner
+// (I12) it is a read; when the read fails, the issue keeps
+// cumin/status/awaiting-owner-review, and I12 applies again at the next
+// poll.
+func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error)) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error(row+": no token; the issue keeps its label", "error", err.Error())
+		return
+	}
+	login, err := ownerLogin(token)
+	if err != nil {
+		log.Error(row+": the login of the Owner was not read; the issue keeps its label", "error", err.Error())
 		return
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
@@ -224,6 +241,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 	s.runImplementer(ctx, target, settings, sub.Number, implementerRequest{
 		row: row, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:    s.State.Issue(repository, sub.Number).SessionID,
+		ownerLogin:   login,
 		conflictHead: pr.HeadCommit,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)
@@ -286,7 +304,8 @@ func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target T
 	go func() {
 		defer s.running.Done()
 		defer done()
-		s.mergeStep(ctx, log, target, settings, RowI12, sub, pr, snapshot.DefaultBranch)
+		s.mergeStep(ctx, log, target, settings, RowI12, sub, pr, snapshot.DefaultBranch,
+			func(token string) (string, error) { return s.readOwnerLogin(ctx, token, target, a.Number) })
 	}()
 	return true, nil
 }

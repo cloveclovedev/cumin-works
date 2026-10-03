@@ -57,11 +57,12 @@
 | | `comments.go` | Issueへのコメントの投稿 |
 | | `issuecomments.go` | IssueかPull Requestの最新のコメントの読み取り (受け入れの確認のコメント、原因の説明のコメントを探す) |
 | | `labeltimes.go` | 要求Issueとsub-issueに、ラベルが付いた時刻の読み取り (R3: sub-issueに `cumin/status/ready` が付いたか) |
+| | `labelactor.go` | Issueに最新のラベルを付けたアカウントの読み取り。Issueにイベントがなければsub-issueから読む (起動の依頼の事実: Ownerのログイン名) |
 | | `closer.go` | Issueに結び付いたPull Requestの一覧と、1つのPull Requestの説明とレビューのスレッドの読み取り (I9) |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
 | | `closinglink.go` | ブランチの開いているPull Requestの一覧と、閉じるリンクの追加 (I2) |
-| | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (I12のOwnerの判定) |
+| | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (I12のOwnerの判定、起動の依頼のOwnerのログイン名) |
 | | `merge.go` | Pull Requestのmerge (衝突と先頭のコミットの移動の見分け)、Issueの開閉の読み取りと、完了として閉じること (I6、I12) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。`internal/workflow` と `internal/agent` の受け入れテストが使う |
@@ -90,7 +91,7 @@
 | `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (Q3) |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
-| | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、保護されたパスと照合の決まり、実行時間の上限、実行が終わる時刻) |
+| | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、Ownerのログイン名、保護されたパスと照合の決まり、実行時間の上限、実行が終わる時刻) |
 | | `skills.go` | テンプレートを、roleごとのディレクトリにskillとして書き出す |
 | | `service.go` | 1回の依頼の入口 `Start` (指示の合成、token、身元、実行)、使用率の読み取りの入口 `ReadQuota`、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |

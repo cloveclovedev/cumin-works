@@ -203,12 +203,20 @@ func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
 // (failure column of I6).
 func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 2})
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
+	sc.fake.SetPermission(theOwner, "admin", "User")
 	service := sc.serviceWithSession(t)
 
 	sc.pollAndWait(t, service)
 
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one resolution", n)
+	}
+	// The resolution request carries the login of the Owner that the
+	// Reviewer run holds: one read of the actor and one of the permission,
+	// both before the review.
+	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission"); n != 1 {
+		t.Errorf("%d reads of the permission of the Owner, want 1", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -218,6 +226,9 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 		t.Errorf("--resume = %q, want the Implementer session", got)
 	}
 	text := promptOf(t, args)
+	if !strings.Contains(text, ownerLoginLine) {
+		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
+	}
 	for _, want := range []string{"Request: conflict resolution", "Pull request: #21", "Branch: cumin/10-add-the-login-screen",
 		"Default branch: main", "git merge origin/main", "do not force-push"} {
 		if !strings.Contains(text, want) {
