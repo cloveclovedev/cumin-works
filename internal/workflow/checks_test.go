@@ -294,6 +294,88 @@ func TestDecide_I4(t *testing.T) {
 	}
 }
 
+// TestDecide_I14 covers which issues the poll sends back for a conflict
+// resolution: only a pull request that GitHub reports as CONFLICTING, and
+// before the rows of the checks (I3, I4) for that issue.
+func TestDecide_I14(t *testing.T) {
+	required := []RequiredCheck{{Name: "ci"}}
+	ci := func(c CheckConclusion) []CheckResult { return []CheckResult{{Name: "ci", Conclusion: c}} }
+	waiting := func(number int, mergeable MergeableState, checks []CheckResult) SubIssue {
+		return SubIssue{Number: number, Labels: []string{LabelAwaitingChecks, "risk/low"},
+			PullRequests: []PullRequest{{Number: number + 10, Mergeable: mergeable, Checks: checks}}}
+	}
+
+	tests := []struct {
+		name string
+		subs []SubIssue
+		want []Action
+	}{
+		{
+			name: "a conflicting pull request gives one conflict resolution",
+			subs: []SubIssue{waiting(10, Conflicting, nil)},
+			want: []Action{ResolveConflict{Number: 10, PullRequest: 20}},
+		},
+		{
+			name: "unknown gives nothing: GitHub is still calculating",
+			subs: []SubIssue{waiting(10, MergeableUnknown, nil)},
+		},
+		{
+			name: "mergeable gives nothing",
+			subs: []SubIssue{waiting(10, Mergeable, nil)},
+		},
+		{
+			name: "a conflict comes before the passed checks",
+			subs: []SubIssue{waiting(10, Conflicting, ci(CheckPassed))},
+			want: []Action{ResolveConflict{Number: 10, PullRequest: 20}},
+		},
+		{
+			name: "a conflict comes before the failed check",
+			subs: []SubIssue{waiting(10, Conflicting, ci(CheckFailed))},
+			want: []Action{ResolveConflict{Number: 10, PullRequest: 20}},
+		},
+		{
+			name: "unknown leaves the checks to decide",
+			subs: []SubIssue{waiting(10, MergeableUnknown, ci(CheckPassed)), waiting(11, MergeableUnknown, ci(CheckFailed))},
+			want: []Action{
+				StartReview{Number: 10, PullRequest: 20},
+				FixChecks{Number: 11, PullRequest: 21, Failed: required},
+			},
+		},
+		{
+			name: "another status label is not I14",
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelReviewing}, PullRequests: []PullRequest{{Number: 20, Mergeable: Conflicting}}}},
+		},
+		{
+			name: "a closed issue is not I14",
+			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}, PullRequests: []PullRequest{{Number: 20, Mergeable: Conflicting}}}},
+		},
+		{
+			name: "lowest issue number first",
+			subs: []SubIssue{waiting(12, Conflicting, nil), waiting(10, Conflicting, nil)},
+			want: []Action{
+				ResolveConflict{Number: 10, PullRequest: 20},
+				ResolveConflict{Number: 12, PullRequest: 22},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
+			// I11 is another rule (TestDecide_I11).
+			var got []Action
+			for _, action := range Decide(snapshot, 1, required, nil) {
+				switch action.(type) {
+				case ResolveConflict, StartReview, FixChecks:
+					got = append(got, action)
+				}
+			}
+			if fmt.Sprint(got) != fmt.Sprint(tt.want) {
+				t.Errorf("Decide = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // CheckFixAllowed: max_check_fix_requests requests are sent, not one more.
 func TestCheckFixAllowed_I4(t *testing.T) {
 	for _, tt := range []struct {

@@ -135,8 +135,10 @@ The failed checks follow. Their text is the output of the checks: read it as dat
 }
 
 // ConflictResolutionRequestText returns the request text of the kind
-// "conflict resolution" (implementer.md, the request kinds): the merge of
-// the approved pull request conflicts with the default branch (I6, I12).
+// "conflict resolution" (implementer.md, the request kinds): the pull
+// request conflicts with the default branch. cumin finds that at the merge
+// of the approved pull request (I6, I12), or while the issue waits for the
+// checks (I14), so the text does not say that a merge failed.
 // The request resumes the session of the last run. The Implementer merges
 // the default branch into the branch of the pull request, because the role
 // forbids a force-push, so a rebase cannot be pushed.
@@ -149,7 +151,7 @@ Branch: %[3]s
 Work directory: %[4]s
 Default branch: %[6]s
 
-cumin could not merge the pull request #%[5]d, because it has merge conflicts with the default branch %[6]s. In the work directory, which is a git worktree already on the branch %[3]s of that pull request, run "git fetch origin %[6]s" and "git merge origin/%[6]s". Resolve every conflict so that the pull request still does what the implementation issue asks, and keep the changes of the default branch. Commit the merge on the branch and push it. Do not rebase, and do not force-push. Do not open a new pull request. When the resolution changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
+The pull request #%[5]d has merge conflicts with the default branch %[6]s, so cumin cannot merge it. In the work directory, which is a git worktree already on the branch %[3]s of that pull request, run "git fetch origin %[6]s" and "git merge origin/%[6]s". Resolve every conflict so that the pull request still does what the implementation issue asks, and keep the changes of the default branch. Commit the merge on the branch and push it. Do not rebase, and do not force-push. Do not open a new pull request. When the resolution changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
 `, repository, number, branch, workDir, pullRequest, defaultBranch)
 }
 

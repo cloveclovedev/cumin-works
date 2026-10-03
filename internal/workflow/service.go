@@ -518,6 +518,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err := s.fixChecks(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
+		case ResolveConflict:
+			if err := s.resolveConflictBeforeChecks(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
 		case CopyLabels:
 			if err := s.copyLabels(ctx, token, target, a); err != nil {
 				errs = append(errs, err)
@@ -608,7 +612,7 @@ func (s *Service) copyLabels(ctx context.Context, token string, target Target, a
 // implementerRequest is one request to the Implementer: its row, its kind,
 // the branch of its worktree, the session that it resumes, and its text.
 type implementerRequest struct {
-	// row starts the log lines of the request: I1, I4, or I13.
+	// row starts the log lines of the request: I1, I4, I13, or I14.
 	row string
 	// kind is the request kind of implementer.md, for the log.
 	kind   string
@@ -624,7 +628,7 @@ type implementerRequest struct {
 	// text builds the request text once the work directory is known.
 	text func(workDir string) string
 	// conflictHead is the head commit that conflicted with the default
-	// branch, for a conflict resolution (I6); empty otherwise. After done,
+	// branch, for a conflict resolution (I6, I12, I14); empty otherwise. After done,
 	// a head that is still this commit stops the issue instead of I2, so
 	// that the same conflict does not go round the review again.
 	conflictHead string
@@ -1014,7 +1018,7 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 	}
 	if conflictHead != "" && head == conflictHead {
 		// The pull request passed, so its head is the head of the worktree.
-		// row is the row of the merge that conflicted: I6 or I12.
+		// row is the row that found the conflict: I6, I12, or I14.
 		log.Warn(row+": the head did not change after the conflict resolution", "pull_request", verification.PullRequest)
 		s.stopForOwner(ctx, log, target, settings, stop{
 			row: row, issue: number, labels: sub.Labels, reason: ConflictNotResolvedReason(verification.PullRequest),
