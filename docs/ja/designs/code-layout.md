@@ -86,11 +86,11 @@
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
 | | `waiting.go` | Ownerが動かなければ何も進まないときの1回だけの通知 (Q4)。動作も実行中のAgentもなく、cuminがOwnerなしで次に進めるIssueもないとき |
 | | `quota.go` | 着手 (R1、I1) の前の使用率の確認と、実行の終わりの確認 (Q1)。枠ごとに1回だけ知らせる。使用率を状態ファイルに残し、止めている間は次に試す時刻まで読まない (Q3) |
-| | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準を決める。blobのoidが変わるまで結果を持つ |
+| | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準と、保護されたパスの一覧を決める。blobのoidが変わるまで結果を持つ |
 | `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (Q3) |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
-| | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、実行時間の上限、実行が終わる時刻) |
+| | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、保護されたパスと照合の決まり、実行時間の上限、実行が終わる時刻) |
 | | `skills.go` | テンプレートを、roleごとのディレクトリにskillとして書き出す |
 | | `service.go` | 1回の依頼の入口 `Start` (指示の合成、token、身元、実行)、使用率の読み取りの入口 `ReadQuota`、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |

@@ -104,6 +104,13 @@ type Settings struct {
 	// A list of the file names labels of the organization, which cumin
 	// never creates or changes.
 	PriorityLabels []string
+	// ProtectedPaths are the paths that agents keep unchanged. Only the
+	// .cumin/config.toml of a repository sets them (WithRepository): the
+	// check of GitHub Actions, which enforces them, reads that file. Nil
+	// means that the repository names none: the list is then
+	// DefaultProtectedPaths. A list of the file replaces the default list,
+	// so an empty list protects nothing.
+	ProtectedPaths []string
 	Roles          map[Role]RoleSettings
 	Quota          QuotaSettings
 	Notify         NotifySettings
@@ -127,6 +134,23 @@ func (s *Settings) PriorityLabelNames() []string {
 		return DefaultPriorityLabels()
 	}
 	return s.PriorityLabels
+}
+
+// DefaultProtectedPaths are the protected paths of a repository whose
+// settings name none. The check of GitHub Actions holds the same list
+// (scripts/setup-repo/protected-paths.yml).
+func DefaultProtectedPaths() []string {
+	return []string{".cumin/", "CLAUDE.md", "AGENTS.md", ".claude/"}
+}
+
+// ProtectedPathEntries returns the protected paths that apply: the list of
+// the settings, or the default list. cumin does not check the entries: the
+// check of GitHub Actions is the only judge.
+func (s *Settings) ProtectedPathEntries() []string {
+	if s.ProtectedPaths == nil {
+		return DefaultProtectedPaths()
+	}
+	return s.ProtectedPaths
 }
 
 // checkPriorityLabels returns what is wrong with a list of priority labels
