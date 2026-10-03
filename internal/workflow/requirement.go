@@ -51,7 +51,9 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 // newest cumin/status/ready, and stores in the snapshot whether that
 // account is the Owner (issue-states.md, the ready of the Owner). It reads
 // only when a slot is free, in the order of the starts, and stops when it
-// has as many candidates of the Owner as free slots (ReadyActorReads). A
+// has as many candidates of the Owner as free slots (ReadyActorReads). Only
+// an event of the issue itself answers: a candidate carries the label, so
+// no ready event among the events that are read means "not the Owner". A
 // failed read is logged and leaves ReadyRead false, so the issue waits for
 // the next poll and the other rules go on.
 func (s *Service) readReadyOwners(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
@@ -60,7 +62,7 @@ func (s *Service) readReadyOwners(ctx context.Context, log *slog.Logger, token s
 		if room == 0 {
 			return
 		}
-		actor, isOwner, err := s.readReadyActor(ctx, token, target, number)
+		actor, isOwner, err := s.readReadyActor(ctx, token, target, number, false)
 		if err != nil {
 			log.Error("the actor of the newest "+LabelReady+" was not read", "issue", number, "error", err.Error())
 			continue
@@ -109,9 +111,12 @@ func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, targ
 	log = log.With("row", row, "issue", number)
 	log.Warn("the newest "+LabelReady+" is not of the Owner: nothing starts until the Owner adds the label again",
 		"actor", actor.Login, "actor_type", actor.Type)
-	by := "an account that no longer exists"
-	if actor.Login != "" {
+	by := "an account that cumin could not find among the newest label events"
+	switch {
+	case actor.Login != "":
 		by = actor.Login
+	case !actor.At.IsZero():
+		by = "an account that no longer exists"
 	}
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        row,

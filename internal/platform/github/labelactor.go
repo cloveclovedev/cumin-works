@@ -50,6 +50,19 @@ type LabelActor struct {
 // among its sub-issues answers; an implementation issue has no sub-issues.
 // With no such event at all, the actor is the zero value.
 func (c *AppClient) ReadLabelActor(ctx context.Context, token, owner, repo string, number int, label string) (LabelActor, RateLimit, error) {
+	return c.readLabelActor(ctx, token, owner, repo, number, label, true)
+}
+
+// ReadOwnLabelActor reads the actor of the newest event that added the
+// label to the issue itself, and never an event of a sub-issue. With no
+// such event among the newest events that are read, the actor is the zero
+// value. The check of who may start work uses it: an event of another
+// issue must not answer for this one.
+func (c *AppClient) ReadOwnLabelActor(ctx context.Context, token, owner, repo string, number int, label string) (LabelActor, RateLimit, error) {
+	return c.readLabelActor(ctx, token, owner, repo, number, label, false)
+}
+
+func (c *AppClient) readLabelActor(ctx context.Context, token, owner, repo string, number int, label string, subIssues bool) (LabelActor, RateLimit, error) {
 	variables := map[string]any{
 		"owner": owner, "name": repo, "number": number,
 		"subIssues": snapshotSubIssues, "events": labelTimesEvents,
@@ -73,6 +86,9 @@ func (c *AppClient) ReadLabelActor(ctx context.Context, token, owner, repo strin
 	issue := resp.Data.Repository.Issue
 	if event, ok := newestLabelEvent(label, issue.TimelineItems.Nodes); ok {
 		return event.labelActor(), rate, nil
+	}
+	if !subIssues {
+		return LabelActor{}, rate, nil
 	}
 	if issue.SubIssues.PageInfo.HasNextPage {
 		return LabelActor{}, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, snapshotSubIssues)

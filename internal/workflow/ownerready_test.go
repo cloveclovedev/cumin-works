@@ -351,3 +351,38 @@ func TestReadyActorReads_NamesTheStartCandidatesOnlyWithAFreeSlot(t *testing.T) 
 		t.Errorf("Decide = %v, want only the claim of #11, whose ready is of the Owner", actions)
 	}
 }
+
+// Only an event of the issue itself answers the check. A ready of a triage
+// account that left the newest label events that cumin reads starts
+// nothing, although a sub-issue has a ready of the Owner.
+func TestOwnerReady_AReadyOutsideTheEventsReadDoesNotTakeTheOwnerOfASubIssue(t *testing.T) {
+	sc := newPlanScene(t)
+	events := []githubtest.LabelEvent{readyBy("a-triager", 500)}
+	for i := range 101 {
+		events = append(events, githubtest.LabelEvent{Label: "risk/low", At: sceneNow.Add(-time.Duration(400-i) * time.Minute), Actor: "a-triager", ActorType: "User"})
+	}
+	sc.repo.Issues[6].LabelEvents = events
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
+	setNotOwnerPermissions(sc)
+	service := sc.service()
+
+	for i := range 3 {
+		if err := service.Poll(context.Background()); err != nil {
+			t.Fatalf("poll %d: %v", i+1, err)
+		}
+	}
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if n := sc.labelChanges(); n != 0 {
+		t.Errorf("%d label changes, want none", n)
+	}
+	if n := strings.Count(sc.logs.String(), "is not of the Owner"); n != 1 {
+		t.Errorf("%d log lines across three polls, want 1:\n%s", n, sc.logs.String())
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "could not find") {
+		t.Errorf("messages = %q, want one that says that cumin found no ready event", messages)
+	}
+}

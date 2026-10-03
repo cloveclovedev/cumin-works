@@ -984,7 +984,7 @@ const agentAttempts = 2
 // error: the caller reads before it changes the label, changes nothing, and
 // sends no request, so the next poll tries again.
 func (s *Service) readOwnerLogin(ctx context.Context, token string, target Target, number int) (string, error) {
-	actor, isOwner, err := s.readReadyActor(ctx, token, target, number)
+	actor, isOwner, err := s.readReadyActor(ctx, token, target, number, true)
 	if err != nil || !isOwner {
 		return "", err
 	}
@@ -993,10 +993,17 @@ func (s *Service) readOwnerLogin(ctx context.Context, token string, target Targe
 
 // readReadyActor reads the account that added the newest cumin/status/ready
 // to the issue, and whether that account is the Owner (IsOwner). A GitHub
-// App is never the Owner, so its permission is not read.
-func (s *Service) readReadyActor(ctx context.Context, token string, target Target, number int) (github.LabelActor, bool, error) {
+// App is never the Owner, so its permission is not read. subIssues lets an
+// event of a sub-issue answer for a requirement issue with no such event;
+// the check of R1 and of I1 passes false, so that only an event of the
+// issue itself can start work.
+func (s *Service) readReadyActor(ctx context.Context, token string, target Target, number int, subIssues bool) (github.LabelActor, bool, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	actor, rate, err := s.GitHub.ReadLabelActor(ctx, token, owner, repo, number, LabelReady)
+	read := s.GitHub.ReadOwnLabelActor
+	if subIssues {
+		read = s.GitHub.ReadLabelActor
+	}
+	actor, rate, err := read(ctx, token, owner, repo, number, LabelReady)
 	if err != nil {
 		return github.LabelActor{}, false, err
 	}
