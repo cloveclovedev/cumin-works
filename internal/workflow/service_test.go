@@ -622,10 +622,11 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2", n)
 	}
-	// Three polls, one read again at the end of the run (I2), the closing
-	// link, and one read after it.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
-		t.Errorf("%d GraphQL requests, want 6", n)
+	// Three polls, the read of the login of the Owner before the start,
+	// one read again at the end of the run (I2), the closing link, and one
+	// read after it.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 7 {
+		t.Errorf("%d GraphQL requests, want 7", n)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none on the success path", n)
@@ -743,8 +744,10 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 	}
 	// The end of the run reads the snapshot again, so that a pull request
 	// that the agent opened just before it ended is seen.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
-		t.Errorf("%d snapshot reads, want 2 (the poll and the read after the run)", n)
+	// The read of the login of the Owner before the start is one more
+	// GraphQL request.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
+		t.Errorf("%d GraphQL requests, want 3 (the poll, the login of the Owner, and the read after the run)", n)
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"pull_request":21`, `"issue":10`} {
@@ -1403,7 +1406,10 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- service.Run(ctx) }()
 
-	sc.fake.WaitForRequests(http.MethodPost, "/graphql", 3, hangGuard)
+	// The third GraphQL request is the read of the login of the Owner in
+	// the second poll, before the claim. The fourth one comes after the
+	// claim.
+	sc.fake.WaitForRequests(http.MethodPost, "/graphql", 4, hangGuard)
 	cancel()
 	select {
 	case err := <-done:

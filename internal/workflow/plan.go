@@ -33,13 +33,21 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 		}
 		return nil
 	}
+	// A failed read of the login of the Owner changes nothing: the
+	// requirement issue keeps cumin/status/ready, and the next poll tries
+	// again.
+	req := planRequest
+	var err error
+	if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, p.Number); err != nil {
+		return fmt.Errorf("R1: read the login of the Owner of issue #%d: %w", p.Number, err)
+	}
 	labels := LabelsAfterPlan(requirement.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
 		return fmt.Errorf("R1: move issue #%d to planning: %w", p.Number, err)
 	}
 	s.logger().Info("R1: moved the requirement issue to planning",
 		"repository", target.Repository.String(), "issue", p.Number, "labels", labels)
-	return s.goPlanner(ctx, target, settings, p.Number, planRequest)
+	return s.goPlanner(ctx, target, settings, p.Number, req)
 }
 
 // checkAcceptance applies R4: request the acceptance check. The label stays
@@ -48,7 +56,15 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 // running set keeps a second poll from asking again while the Planner
 // works.
 func (s *Service) checkAcceptance(ctx context.Context, target Target, settings *RepositorySettings, a CheckAcceptance) error {
-	return s.goPlanner(ctx, target, settings, a.Number, acceptanceRequest)
+	token, err := target.Token(ctx)
+	if err != nil {
+		return fmt.Errorf("R4: the token for issue #%d: %w", a.Number, err)
+	}
+	req := acceptanceRequest
+	if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, a.Number); err != nil {
+		return fmt.Errorf("R4: read the login of the Owner of issue #%d: %w", a.Number, err)
+	}
+	return s.goPlanner(ctx, target, settings, a.Number, req)
 }
 
 // plannerRequest is one kind of request to the Planner.
@@ -59,6 +75,9 @@ type plannerRequest struct {
 	// kind is the request kind of planner.md, for the log.
 	kind string
 	text func(repository string, number int, workDir string) string
+	// ownerLogin is the login of the Owner for the facts of the request,
+	// read before the request. Empty says that there is none.
+	ownerLogin string
 }
 
 var (
@@ -132,7 +151,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 		Repo:         target.Repository.Name,
 		Role:         config.RolePlanner,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement, OwnerLogin: req.ownerLogin},
 		Text:         req.text(target.Repository.String(), number, workDir),
 		WorkDir:      workDir,
 		Settings:     &role,

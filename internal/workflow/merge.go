@@ -213,6 +213,11 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 		log.Error(row+": no token; the issue keeps its label", "error", err.Error())
 		return
 	}
+	ownerLogin, err := s.readOwnerLogin(ctx, token, target, sub.Number)
+	if err != nil {
+		log.Error(row+": the login of the Owner was not read; the issue keeps its label", "error", err.Error())
+		return
+	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
 		log.Error(row+": the label was not changed; nothing is requested", "error", err.Error())
@@ -224,6 +229,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 	s.runImplementer(ctx, target, settings, sub.Number, implementerRequest{
 		row: row, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:    s.State.Issue(repository, sub.Number).SessionID,
+		ownerLogin:   ownerLogin,
 		conflictHead: pr.HeadCommit,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)

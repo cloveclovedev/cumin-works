@@ -29,6 +29,11 @@ type Facts struct {
 	// the line out: a run without an issue behind it (a test).
 	IssueNumber int
 	IssueKind   IssueKind
+	// OwnerLogin is the login of the Owner of the issue: the account that
+	// added the newest cumin/status/ready, when that account is the Owner.
+	// Empty says that there is no Owner login. The line stands with the
+	// line of the issue.
+	OwnerLogin string
 }
 
 // runFacts are the facts of one run that the agent receives.
@@ -44,14 +49,19 @@ type runFacts struct {
 }
 
 // factsBlock returns the block of labelled lines of the facts. The first
-// line says that the lines are data from cumin. The issue of the run comes
-// next. The end time is in UTC as RFC 3339, whatever the location of the
+// line says that the lines are data from cumin. The issue of the run and
+// the login of the Owner come next. The end time is in UTC as RFC 3339, whatever the location of the
 // time is.
 func factsBlock(facts runFacts) string {
 	var b strings.Builder
 	b.WriteString("Facts of this run (data from cumin):\n")
 	if facts.IssueNumber != 0 {
 		b.WriteString("- Issue of the run: #" + strconv.Itoa(facts.IssueNumber) + " (" + string(facts.IssueKind) + ")\n")
+		if facts.OwnerLogin != "" {
+			b.WriteString("- Login of the Owner: " + facts.OwnerLogin + "\n")
+		} else {
+			b.WriteString("- Login of the Owner: there is no Owner login\n")
+		}
 	}
 	b.WriteString("- Time limit of the run: " + facts.TimeLimit.String() + "\n")
 	b.WriteString("- End time of the run: " + facts.End.UTC().Format(time.RFC3339) + "\n")

@@ -30,6 +30,11 @@ type reviewerRequest struct {
 	readyAt time.Time
 	// sessionID resumes that session. Empty starts a new session.
 	sessionID string
+	// ownerLogin is the login of the Owner for the facts of the request,
+	// read before the label changed. Empty says that there is none. The
+	// requests that follow in the same run (the review fix of I5, the
+	// explanation of the cause of I8) carry the same login.
+	ownerLogin string
 }
 
 // startReview applies I3: every required check passed on the head commit of
@@ -70,6 +75,10 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	s.logger().Debug("I3: read the label times", "repository", repository, "issue", a.Number,
 		"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	readyAt := times[a.Number][LabelReady]
+	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	if err != nil {
+		return fmt.Errorf("I3: read the login of the Owner of issue #%d: %w", a.Number, err)
+	}
 	round := ReviewRounds(pr.Reviews, reviewer, readyAt) + 1
 	req := reviewerRequest{
 		review: ReviewRequest{
@@ -81,8 +90,9 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 			Limit:        settings.Settings.MaxReviewRounds,
 			LastReviewed: LastReviewedCommit(pr.Reviews, reviewer, readyAt),
 		},
-		reviewer: reviewer,
-		readyAt:  readyAt,
+		reviewer:   reviewer,
+		readyAt:    readyAt,
+		ownerLogin: ownerLogin,
 	}
 	if round > 1 {
 		req.sessionID = s.State.Issue(repository, a.Number).ReviewerSessionID
@@ -147,7 +157,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		Repo:         target.Repository.Name,
 		Role:         config.RoleReviewer,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin},
 		Text:         ReviewRequestText(req.review),
 		WorkDir:      workDir,
 		Settings:     &role,
@@ -305,7 +315,8 @@ func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, t
 	branch := pr.HeadBranch
 	s.runImplementer(ctx, target, settings, number, implementerRequest{
 		row: "I5", kind: "review fix", branch: branch, pullRequest: pr.Number,
-		sessionID: s.State.Issue(repository, number).SessionID,
+		sessionID:  s.State.Issue(repository, number).SessionID,
+		ownerLogin: req.ownerLogin,
 		text: func(workDir string) string {
 			return ReviewFixRequestText(repository, number, pr.Number, branch, workDir, latest.URL)
 		},
@@ -335,7 +346,7 @@ func (s *Service) explainCause(ctx context.Context, log *slog.Logger, target Tar
 		Repo:         target.Repository.Name,
 		Role:         config.RoleReviewer,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin},
 		Text:         ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, limit, req.review.WorkDir),
 		WorkDir:      req.review.WorkDir,
 		Settings:     &role,
