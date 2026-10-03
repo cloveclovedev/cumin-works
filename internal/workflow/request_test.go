@@ -174,6 +174,8 @@ func TestOwnerReviewFixRequestText_I13(t *testing.T) {
 		"Address every comment of that review",
 		"Do not open a new pull request",
 		"Reply to every comment of that review with the skill cumin-review-reply",
+		"Address the body of that review too",
+		"answer the body in one comment on the pull request #21",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text does not hold %q:\n%s", want, text)
