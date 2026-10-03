@@ -104,3 +104,31 @@ func TestRole_HoldsTheRuleOnLongChecksForEveryRole(t *testing.T) {
 		}
 	}
 }
+
+// The Planner sizes an implementation issue against the time of one run of
+// the Implementer and of the Reviewer. The criterion names the two lines of
+// the start request by their labels (package agent writes them). Work that
+// no split makes fit goes back to the Owner under "Please check", with the
+// three choices of the Owner.
+func TestRole_HoldsTheCriterionOnTheTimeOfOneRunForThePlanner(t *testing.T) {
+	text, ok, err := Role(Default, "planner")
+	if err != nil || !ok {
+		t.Fatalf("Role(planner) = %v, %v; want a file", ok, err)
+	}
+	for _, want := range []string{
+		"11. It fits in one run.",
+		"Time limit of the Implementer",
+		"Time limit of the Reviewer",
+		"when the answer to one of 1 to 9, or to 11, is no",
+		"Name the work under \"Please check\" of the plan summary",
+		"raise `roles.<role>.time_limit`, change the criterion, or drop the work",
+		"such as rendering the diagrams",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the discipline of the planner does not hold %q", want)
+		}
+	}
+	if strings.Contains(text, "a repeated test run") {
+		t.Error("the discipline of the planner still holds \"a repeated test run\" as its long check")
+	}
+}
