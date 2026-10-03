@@ -52,7 +52,7 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 
 | # | cuminの動作 | きっかけ | 動く前に確かめること | うまくいかないとき |
 |---|---|---|---|---|
-| R1 | 要求Issueに `cumin/status/planning` を付け、Plannerに分割を依頼する | 定期確認: 開いていて、`cumin/type/requirement` と `cumin/status/ready` が付いた要求Issueがある。sub-issueがあるかどうかは問わない | 要求Issueの blocked by のIssueが全て閉じている。AIリソースに空きがある | — |
+| R1 | 要求Issueに `cumin/status/planning` を付け、Plannerに分割を依頼する | 定期確認: 開いていて、`cumin/type/requirement` と `cumin/status/ready` が付いた要求Issueがある。sub-issueがあるかどうかは問わない | 最新の `cumin/status/ready` を付けたのがOwnerである (下の「Ownerのready」)。要求Issueの blocked by のIssueが全て閉じている。AIリソースに空きがある | — |
 | R2 | 要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「分割結果の確認が必要」と通知する。sub-issueが全て閉じているときは、`cumin/status/implementing` に替え、通知しない | 実行終了: Plannerの実行が終わった | sub-issueが1つ以上ある。全てのsub-issueにriskのラベルがちょうど1つ付いている | `cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら、その前に1回だけやり直す |
 | R3 | 要求Issueのラベルを `cumin/status/implementing` に替える | 定期確認: 要求Issueに `cumin/status/awaiting-owner-review` が付いたあとで、sub-issueのどれかに `cumin/status/ready` が付いた。要求Issueに状態ラベルがないときは、sub-issueのどれかに `cumin/status/ready` が付いていればよい | — | — |
 | R4 | Plannerに、受け入れの確認を依頼する。ラベルは `cumin/status/implementing` のままにする | 定期確認: sub-issueが全て閉じていて、最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントが、まだない | 要求Issueに `cumin/status/implementing` が付いている。sub-issueが1つ以上ある。閉じたsub-issueのフォローアップノート (I9) を書き終えている。この要求IssueのAgentが動いていない。AIリソースに空きがある | 結果が `blocked` なら、`cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら1回だけやり直し、それでも駄目なら同じ扱いにする |
@@ -91,7 +91,7 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 
 | # | cuminの動作 | きっかけ | 動く前に確かめること | うまくいかないとき |
 |---|---|---|---|---|
-| I1 | ラベルを `cumin/status/implementing` に替え、新しいセッションでImplementerに実装を依頼する。Pull Requestが既にあれば、続きから進めるよう依頼する | 定期確認: 開いていて `cumin/status/ready` が付いた実装Issueがある | `cumin/type/owner-task` が付いていない。blocked by のIssueが全て閉じている。AIリソースに空きがある (下の「上限の決め方」で、どちらの枠も上限未満) | — |
+| I1 | ラベルを `cumin/status/implementing` に替え、新しいセッションでImplementerに実装を依頼する。Pull Requestが既にあれば、続きから進めるよう依頼する | 定期確認: 開いていて `cumin/status/ready` が付いた実装Issueがある | `cumin/type/owner-task` が付いていない。最新の `cumin/status/ready` を付けたのがOwnerである (下の「Ownerのready」)。blocked by のIssueが全て閉じている。AIリソースに空きがある (下の「上限の決め方」で、どちらの枠も上限未満) | — |
 | I2 | IssueにそのPull Requestを閉じるリンクがなければ、`cumin-core` がリンクを付け、付いたことを読み直して確かめる。そのあとラベルを `cumin/status/awaiting-checks` に替え、必須のcheckの完了を待ち始める | 実行終了: Implementerの実行が終わり、結果が `done` | cuminがこのIssueのために決めたブランチに、Pull Requestが開いている。そのPull Requestの作成者が、ImplementerのGitHub Appである。ブランチの先頭のコミットがpushされている | 結果が `blocked`、Pull Requestがない、作成者が違う、先頭のコミットがpushされていない、またはリンクを付けられなかったなら `cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら1回だけやり直し、それでも駄目なら同じ扱いにする |
 | I3 | ラベルを `cumin/status/reviewing` に替え、Reviewerにレビューを依頼する | 定期確認: `cumin/status/awaiting-checks` の実装Issueで、必須のcheckが、Pull Requestの先頭のコミットで全て通った。必須のcheckが1つもなければ、すぐに通ったとみなす | — | — |
 | I4 | ラベルを `cumin/status/implementing` に戻し、失敗したcheckの内容を添えてImplementerに修正を依頼する | 定期確認: `cumin/status/awaiting-checks` の実装Issueで、必須のcheckのどれかが失敗した | checkの修正依頼が上限 (3回) に達していない | 上限に達したら `cumin/status/awaiting-owner-decision` に替えて通知する |
@@ -103,6 +103,12 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | I10 | `blocked_reason` を実装Issueにコメントとして投稿し、ラベルを `cumin/status/awaiting-owner-decision` に替えて通知する。やり直さない | 実行終了: Reviewerの実行が終わり、結果が `blocked` | — | — |
 | I11 | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする | 定期確認: 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | — | — |
 | I12 | Pull Requestをmergeする。mergeの手順と、うまくいかないときの扱いは、I6と同じ | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) が出したレビューのうち最新のものが、Pull Requestの今の先頭のコミットに対する `APPROVE` である | 必須のcheckが、その先頭のコミットで全て通っている。riskのラベルがちょうど1つである | I6と同じ |
+
+Ownerのready:
+
+- `cumin/status/ready` はOwnerの「進めてよい」の合図である。R1とI1は、そのIssueに最新の `cumin/status/ready` を付けたのが、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) であるときだけ成り立つ。GitHubでは、triageの権限でもラベルを付けられるためである。承認のあとのmerge (I12) と同じく、作業を始めさせられるのもOwnerだけにする
+- Ownerでないアカウントが付けた `cumin/status/ready` には、着手しない。ラベルは替えない。ログに1回だけ残し、Ownerに1回だけ通知する。同じreadyについて、定期確認のたびに繰り返さない
+- そのIssueは、Ownerがreadyを付け直すまで進まないので、待ち状態の通知 (Q4) では「Ownerなしで進めるIssue」に数えない
 
 I5〜I8は、Reviewerの結果が `done` のときの動作である。結果が `blocked` のときは、I10に従う。
 
