@@ -98,6 +98,7 @@ func TestFake_HangNextHoldsTheRequestUntilTheClientGivesUp(t *testing.T) {
 	fake, server := githubtest.New(t)
 	fake.AddRepository("example-org", "example-repo")
 	client := github.NewAppClient(server.URL, &http.Client{Timeout: 200 * time.Millisecond})
+	client.SetRetryWait(func(context.Context, time.Duration) error { return nil })
 	ctx := context.Background()
 	labels := []github.Label{{Name: "risk/low", Color: "C2E0C6"}}
 
@@ -116,7 +117,8 @@ func TestFake_HangNextHoldsTheRequestUntilTheClientGivesUp(t *testing.T) {
 	}
 	for _, c := range calls {
 		t.Run(c.name, func(t *testing.T) {
-			fake.HangNext(c.method, c.path)
+			// Both calls are reads, so the client sends them 4 times.
+			fake.HangTimes(c.method, c.path, 4)
 			// The real time of the call: the timeout of the client is a
 			// timer of the real clock.
 			start := time.Now()

@@ -560,6 +560,22 @@ func TestDecide_I15(t *testing.T) {
 			now:  labeled.Add(wait - time.Minute),
 		},
 		{
+			name: "no open pull request, before the wait time is over, nothing",
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}, AwaitingChecksAt: labeled}},
+			now:  labeled.Add(wait - time.Second),
+		},
+		{
+			name: "no open pull request, at the wait time, stops the issue",
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}, AwaitingChecksAt: labeled}},
+			now:  labeled.Add(wait),
+			want: []Action{StopForUnreportedChecks{Number: 10, Waited: wait}},
+		},
+		{
+			name: "no open pull request and a label time that was not read gives nothing",
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}}},
+			now:  labeled.Add(2 * wait),
+		},
+		{
 			name: "a label time that was not read gives nothing",
 			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks},
 				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
@@ -626,6 +642,20 @@ func TestUnreportedChecksReason_I15(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("the reason has no %q: %s", want, got)
 		}
+	}
+}
+
+// With no open pull request, the sentence of I15 says that, and the time
+// that cumin waited.
+func TestUnreportedChecksReason_I15_NoOpenPullRequest(t *testing.T) {
+	got := UnreportedChecksReason(StopForUnreportedChecks{Number: 10, Waited: 61*time.Minute + 400*time.Millisecond})
+	for _, want := range []string{"No open pull request closes this issue", "waited 1h1m0s", "checks_wait_time"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the reason has no %q: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "#0") {
+		t.Errorf("the reason names a pull request: %s", got)
 	}
 }
 

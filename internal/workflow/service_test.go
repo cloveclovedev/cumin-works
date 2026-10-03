@@ -47,7 +47,13 @@ const (
 	// hangGuard is how long a test waits on a signal of a fake. It is only a
 	// guard against a hang: no test passes or fails by how long a step took.
 	hangGuard = time.Minute
+	// everyTry is how many times the client sends a read that fails with a
+	// temporary failure: the first try and 3 retries.
+	everyTry = 4
 )
+
+// noWait is the wait between two tries of the client, without a sleep.
+func noWait(context.Context, time.Duration) error { return nil }
 
 // testKey is the private key of the Implementer App of the fake. The fake
 // does not verify the signature, but the client signs the JWT with it.
@@ -247,8 +253,10 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	// the clock of the scene.
 	clock := &testClock{now: sceneNow}
 	fake.SetClock(clock.Now)
+	client := github.NewAppClient(server.URL, server.Client())
+	client.SetRetryWait(noWait)
 	return &scene{
-		fake: fake, client: github.NewAppClient(server.URL, server.Client()), serverURL: server.URL, repo: repo,
+		fake: fake, client: client, serverURL: server.URL, repo: repo,
 		logs: &bytes.Buffer{}, remote: remote, remoteHead: head, cliDir: cliDir,
 		workRoot: t.TempDir(), cliPath: cliPath, settingsDir: t.TempDir(),
 		webhook: webhook, notifier: webhook.notifier(), notifications: true,
@@ -1363,9 +1371,11 @@ func TestPoll_OneFailedRepositoryDoesNotStopTheOthers(t *testing.T) {
 // the next poll reads the repository.
 func TestPoll_StalledGitHubCallEndsAtTheTimeoutAndTheNextPollRuns(t *testing.T) {
 	sc := newScene(t)
-	sc.client = github.NewAppClient(sc.serverURL, &http.Client{Timeout: time.Second})
+	sc.client = github.NewAppClient(sc.serverURL, &http.Client{Timeout: 300 * time.Millisecond})
+	sc.client.SetRetryWait(noWait)
 	service := sc.service()
-	sc.fake.HangNext(http.MethodPost, "/graphql")
+	// Every try of the read stalls.
+	sc.fake.HangTimes(http.MethodPost, "/graphql", everyTry)
 
 	done := make(chan error, 1)
 	go func() { done <- service.Poll(context.Background()) }()
@@ -1395,22 +1405,41 @@ func TestPoll_StalledGitHubCallEndsAtTheTimeoutAndTheNextPollRuns(t *testing.T) 
 	}
 }
 
+// A temporary failure of GitHub: the fake answers the snapshot read once
+// with 502. The client sends the read again, and the poll goes on as if the
+// read had not failed.
+func TestPoll_AReadThatFailsOnceIsSentAgainAndThePollGoesOn(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	sc.fake.FailNext(http.MethodPost, "/graphql", http.StatusBadGateway)
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: the poll goes on after the retry", n)
+	}
+}
+
 func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	service.PollInterval = 10 * time.Millisecond
 	service.Labels = workflow.RepositoryLabels()
-	// The fake answers the first snapshot read with 500: a failed poll does
-	// not stop the loop.
-	sc.fake.FailNext(http.MethodPost, "/graphql", http.StatusInternalServerError)
+	// The fake answers every try of the first snapshot read with 500: a
+	// failed poll does not stop the loop.
+	sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusInternalServerError)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- service.Run(ctx) }()
 
-	// The second poll sends two queries. The fourth GraphQL request is the
-	// read of the login of the Owner in the second poll, before the claim.
-	// The fifth one comes after the claim.
-	sc.fake.WaitForRequests(http.MethodPost, "/graphql", 5, hangGuard)
+	// The first poll sends the failed read on every try. The second poll
+	// sends two queries. The GraphQL request after them is the read of the
+	// login of the Owner in the second poll, before the claim. The one
+	// after it comes after the claim.
+	sc.fake.WaitForRequests(http.MethodPost, "/graphql", everyTry+4, hangGuard)
 	cancel()
 	select {
 	case err := <-done:
@@ -2523,6 +2552,65 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 		t.Fatalf("%d comments, want 1", len(comments))
 	}
 	for _, want := range append([]string{"Row: I15", "Pull request: #21"}, facts...) {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	messages := sc.messagesExceptQ4()
+	if len(messages) != 1 {
+		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
+	}
+	for _, want := range facts {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("the notification has no %q:\n%s", want, messages[0])
+		}
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+}
+
+// I15: an issue in cumin/status/awaiting-checks whose pull request someone
+// closed stops for the Owner exactly once, after the wait time since the
+// label. The comment and the notification say that no open pull request
+// closes the issue, and the time waited. Before the wait time is over, the
+// poll changes nothing.
+func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
+	sc := newScene(t)
+	sc.notReporting(t)
+	if err := sc.fake.ClosePullRequest(sc.repo, 21); err != nil {
+		t.Fatal(err)
+	}
+	service := sc.service()
+
+	sc.clock.Set(sceneNow.Add(59 * time.Minute))
+	sc.pollAndWait(t, service)
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 0 {
+		t.Errorf("%d label changes before the wait time is over, want none", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments before the wait time is over, want none", n)
+	}
+	if n := len(sc.messagesExceptQ4()); n != 0 {
+		t.Errorf("%d notifications before the wait time is over, want none", n)
+	}
+
+	sc.clock.Set(sceneNow.Add(61 * time.Minute))
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
+		t.Errorf("%d label changes, want 1", n)
+	}
+	facts := []string{"I15", "No open pull request closes this issue", "waited 1h1m0s"}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments, want 1", len(comments))
+	}
+	for _, want := range append([]string{"Row: I15", "Pull request: None"}, facts...) {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}

@@ -153,7 +153,7 @@ func TestCleanup_WhatIsNotKnownClosedStays(t *testing.T) {
 	})
 	t.Run("a failed snapshot", func(t *testing.T) {
 		sc, service := newCleanupScene(t, true)
-		sc.fake.FailNext("POST", "/graphql", 502)
+		sc.fake.FailTimes("POST", "/graphql", 0, everyTry, 502)
 		if err := service.Poll(context.Background()); err == nil {
 			t.Fatal("the poll did not fail")
 		}

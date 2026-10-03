@@ -48,6 +48,7 @@
 | | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
+| | `retry.go` | 一時的な失敗 (ネットワークの誤り、5xxの応答) をした読み取りのやり直し。`TemporaryError` と `IsTemporary` |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
 | | `roles.go` | AppごとのGitHubの権限の表 |
 | | `installations.go` | Appの情報とインストールの確認 (`GET /app` など) |
@@ -65,7 +66,7 @@
 | | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (I12のOwnerの判定、起動の依頼のOwnerのログイン名) |
 | | `merge.go` | Pull Requestのmerge (衝突と先頭のコミットの移動の見分け)、Issueの開閉の読み取りと、完了として閉じること (I6、I12) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
-| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。`internal/workflow` と `internal/agent` の受け入れテストが使う |
+| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
