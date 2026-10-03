@@ -105,7 +105,7 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | I12 | Pull Requestをmergeする。mergeの手順と、うまくいかないときの扱いは、I6と同じ | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) が出したレビューのうち最新のものが、Pull Requestの今の先頭のコミットに対する `APPROVE` である | 必須のcheckが、その先頭のコミットで全て通っている。riskのラベルがちょうど1つである | I6と同じ |
 | I13 | ラベルを `cumin/status/implementing` に替え、Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) が出したレビューのうち最新のもの (コメントだけのレビューは除く) が、Pull Requestの今の先頭のコミットに対する `REQUEST_CHANGES` である。そのレビューは、実装Issueに最新の `cumin/status/awaiting-owner-review` が付いたあとに出されている | — | 異常終了なら1回だけやり直し、それでも駄目なら `cumin/status/awaiting-owner-decision` に替えて通知する |
 | I14 | ラベルを `cumin/status/implementing` に替え、Implementerの直前のセッションで、衝突の解消を依頼する。依頼はI6の衝突の解消と同じである | 定期確認: `cumin/status/awaiting-checks` の開いた実装Issueで、GitHubがPull Requestを既定のブランチと衝突していると返した (GraphQLの `mergeable` が `CONFLICTING`) | — | 解消のあとも先頭のコミットが変わらなければ、`cumin/status/awaiting-owner-decision` に替えて通知する。異常終了なら1回だけやり直し、それでも駄目なら同じ扱いにする |
-| I15 | ラベルを `cumin/status/awaiting-owner-decision` に替え、Ownerに「必須のcheckが結果を返さない」と通知する。通知には、Pull Requestの先頭のコミット、まだ結果を返していない必須のcheck、待った時間を書く | 定期確認: `cumin/status/awaiting-checks` の開いた実装Issueで、checkの待ち時間 ([cumin本体の要件](../cumin-core.md) の「設定」) を過ぎても、必須のcheckのどれかが、先頭のコミットで結果を返していない | I14、I3、I4のどれも成り立たない | — |
+| I15 | ラベルを `cumin/status/awaiting-owner-decision` に替え、Ownerに「必須のcheckが結果を返さない」と通知する。通知には、Pull Requestの先頭のコミット、まだ結果を返していない必須のcheck、待った時間を書く。開いているPull Requestがないときは、そのことと待った時間を書く | 定期確認: `cumin/status/awaiting-checks` の開いた実装Issueで、checkの待ち時間 ([cumin本体の要件](../cumin-core.md) の「設定」) を過ぎても、必須のcheckのどれかが、先頭のコミットで結果を返していない。実装Issueを閉じる開いているPull Requestがない (誰かが閉じたなど) ときも、待ち時間を過ぎたら成り立つ | I14、I3、I4のどれも成り立たない | — |
 
 Ownerのready:
 
@@ -138,6 +138,7 @@ checkを待つ間の行 (I3、I4、I14、I15):
 - I14は、`mergeable` が `CONFLICTING` のときだけ成り立つ。GitHubは、Pull Requestに衝突があると `pull_request` のワークフローを動かさないので、衝突したままではcheckがいつまでも結果を返さない。`UNKNOWN` は、GitHubがまだ計算している印である。既定のブランチに何かがmergeされるたびに、開いているPull Requestはしばらく `UNKNOWN` になる。そのため、`UNKNOWN` ではその定期確認でI14を判定せず、Ownerにも回さない。`UNKNOWN` のまま待ち時間を過ぎたら、I15が成り立つ
 - I14は、checkの修正を依頼した回数に数えない。衝突はImplementerの誤りではなく、並行して進むほかのPull Requestのmergeで起きるためである
 - I15の待ち時間は、実装Issueに最新の `cumin/status/awaiting-checks` が付いた時刻と、先頭のコミットの時刻 (`committedDate`) の、遅いほうから数える。ふつうはI2が先頭のコミットのpushを確かめてからラベルを替えるので、ラベルの時刻になる。先頭のコミットの時刻が効くのは、待っている間に誰かがブランチにpushしたときである。GitHubはpushの時刻を返さない (GraphQLの `Commit.pushedDate` は使えない) ので、コミットの時刻で代える。コミットの時刻はpushより前なので、そのぶん早く止まりうるが、差はコミットからpushまでの間だけである
+- 開いているPull Requestがないときは、先頭のコミットがないので、待ち時間はラベルの時刻から数える。checkが来ないのと同じく、どの行もそのIssueを進めないためである
 - I15は、checkが結果を返さない理由を調べない。ワークフローの誤り、どのワークフローも報告しない必須のcheckの名前、無効にしたワークフロー、GitHub Actionsの障害などがある。cuminは見える事実だけを書き、理由はOwnerが調べる
 
 `cumin/status/awaiting-checks` を置くのは、「Implementerの実行が終わり、checkを待っている」ことをGitHubに残すためである。`cumin/status/implementing` のままだと、Implementerが修正の途中なのか、checkを待っているのかを、GitHub上の事実から区別できない。必須のcheckが1つもないリポジトリでも、この状態を必ず通る。次の定期確認で、すぐにI3が成り立つ。
