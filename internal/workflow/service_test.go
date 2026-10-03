@@ -1371,7 +1371,9 @@ func TestPoll_OneFailedRepositoryDoesNotStopTheOthers(t *testing.T) {
 // the next poll reads the repository.
 func TestPoll_StalledGitHubCallEndsAtTheTimeoutAndTheNextPollRuns(t *testing.T) {
 	sc := newScene(t)
-	sc.client = github.NewAppClient(sc.serverURL, &http.Client{Timeout: 300 * time.Millisecond})
+	// The stalled poll runs with a short timeout, so that the test stays fast.
+	httpClient := &http.Client{Timeout: 300 * time.Millisecond}
+	sc.client = github.NewAppClient(sc.serverURL, httpClient)
 	sc.client.SetRetryWait(noWait)
 	service := sc.service()
 	// Every try of the read stalls.
@@ -1396,6 +1398,9 @@ func TestPoll_StalledGitHubCallEndsAtTheTimeoutAndTheNextPollRuns(t *testing.T) 
 		t.Errorf("the log has no failed poll with the timeout:\n%s", logs)
 	}
 
+	// The next poll must succeed on a loaded machine too, so its timeout is
+	// only a guard against a hang. No request runs at this moment.
+	httpClient.Timeout = hangGuard
 	if err := service.Poll(context.Background()); err != nil {
 		t.Fatalf("the next Poll: %v", err)
 	}

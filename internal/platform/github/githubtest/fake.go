@@ -683,6 +683,7 @@ func (f *Fake) failThen(next *failure) {
 // path without an answer, once, as a stalled connection. The request is
 // recorded and changes nothing. The fake holds the request until the client
 // gives up, so the client needs a timeout or a context with a deadline.
+// HangNext replaces a failure that FailNext or FailAfter set.
 func (f *Fake) HangNext(method, path string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
