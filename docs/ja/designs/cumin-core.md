@@ -173,7 +173,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 図の元ファイル: [github-call-deadline.puml](github-call-deadline.puml)
 
 - 読み取りは、定期確認の1回分を、リポジトリごとに1つのGraphQLの問い合わせで読む。Issue、sub-issue、ラベル、blocked by、Pull Request、レビュー、checkは入れ子の関係にあり、RESTだとIssueの数に比例して要求が増えるためである。1回で読めば、判定に使うスナップショットの時点も揃う。
-- 同じ問い合わせを、Agentの実行が終わった直後にも行う。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。
+- Agentの実行が終わった直後には、その実行のIssueだけを、番号で指定する1つのGraphQLの問い合わせで読み直す。項目と上限は、定期確認の問い合わせと同じである。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。リポジトリの全ページは読み直さない。これらの判定が使うのは、1つのIssueの事実だけだからである ([定期確認の設計](poll.md) の「実行終了の判定」)。
 - 書き込みは、全てRESTで行う。ラベル、コメント、merge、sub-issue、tokenの発行がこれに当たる。GitHub App に要る権限が、RESTのendpointごとに公式ドキュメントに書かれているためである (実測 10、33)。
 - 例外として、必須のcheckの一覧はRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。
 - 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and node limits for the GraphQL API)。定期確認の問い合わせは、要求Issueを10件ずつページで読み、sub-issueは15件、Issueを閉じるPull Requestは2件までを1回で読む。コストを変えない接続 (ラベル、blocked by のIssue、checkの結果、レビュー) は、GraphQLの上限の100件にする。上限を超えるとそのリポジトリの定期確認が止まるのに、広げてもコストが増えないためである。sub-issue、ラベル、blocked by、Pull Request、check、レビューが上限を超えたIssueがあれば、そのリポジトリの定期確認は、Issueの番号を示すエラーで止まる。要求の上限 (sub-issueは12個まで) の中では起きない。

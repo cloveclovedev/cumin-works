@@ -59,7 +59,7 @@
 | | `labeltimes.go` | 要求Issueとsub-issueに、ラベルが付いた時刻の読み取り (R3: sub-issueに `cumin/status/ready` が付いたか) |
 | | `labelactor.go` | Issueに最新のラベルを付けたアカウントの読み取り。Issueにイベントがなければsub-issueから読む (起動の依頼の事実: Ownerのログイン名) |
 | | `closer.go` | Issueに結び付いたPull Requestの一覧と、1つのPull Requestの説明とレビューのスレッドの読み取り (I9) |
-| | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む |
+| | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む。実行終了のあとに1つのIssueだけを読む問い合わせも、同じ項目で持つ |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
 | | `closinglink.go` | ブランチの開いているPull Requestの一覧と、閉じるリンクの追加 (I2) |
 | | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (I12のOwnerの判定、起動の依頼のOwnerのログイン名) |
