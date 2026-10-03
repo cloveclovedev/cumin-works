@@ -88,17 +88,19 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 127 | 定期確認の問い合わせの1ページ (sub-issueを15件、Pull Requestを2件まで。Pull Requestの下の接続は、ラベル、check、レビュー) は、14ポイントである。レビューの接続を足す前は11ポイントで、105の式のとおり3ポイント増えた。60秒の間隔で、1リポジトリが毎時840ポイントを使う | sandboxで実測 (2026-09-30) | 実測 | 2026-09-30 |
 | 128 | 定期確認の問い合わせに、Pull Requestの `mergeable` と `commits(last: 1) { nodes { commit { oid committedDate } } }` を足すと、1ページは14ポイントから17ポイントになる (105の式のとおり、Pull Requestの下の接続が1つ増える)。`mergeable` はスカラーで、ポイントを変えない。`MergeableState` の値は `MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つである。`Commit.committedDate` は null にならず、`Commit.pushedDate` は「no longer supported」である。`PullRequest.headRef` は、開いているPull Requestでも `null` を返すことがあった。60秒の間隔で、1リポジトリが毎時1,020ポイントを使う | GraphQLのスキーマのintrospectionと、cumin-worksでの実測 (2026-10-03) | 実測 | 2026-10-03 |
 | 129 | 公式の式を読み直した。1つの問い合わせのポイントは、接続ごとに「その接続を読むのに要る要求の数」を足し、100で割って四捨五入した値である。要求の数は、親の `first` か `last` が上限まで返ると仮定して数える。最小は1ポイントである。インストールの枠は1時間あたり5,000ポイントで、リポジトリが20を超えると1つにつき50ポイント、Organizationの利用者が20人を超えると1人につき50ポイント増え、12,500ポイントが上限である (GitHub Enterprise Cloud でないとき)。二次の制限では、GraphQLのendpointは1分あたり2,000ポイントまでで、mutationのない問い合わせは1ポイント、mutationのある問い合わせは5ポイントと数える。この数え方は、一次の枠のポイントとは別である | 公式: Rate limits and query limits for the GraphQL API ("Primary rate limit"、"Predicting the point value of a query"、"Secondary rate limits") | 公式文書 | 2026-10-03 |
-| 130 | 定期確認の問い合わせ (`snapshotQuery`) の1回の定期確認のポイントは、cumin-worksで34ポイント (2ページ、17 + 17。開いている要求Issueは20件)、cumin-sandboxで17ポイント (1ページ。開いている要求Issueは3件) である。1ページのポイントは、そのページの要求Issueの件数 (3件と10件) でも、`.cumin/` のファイルを読むかどうか (1ページ目だけ読む) でも変わらない。60秒の間隔では、計算上、cumin-worksが毎時2,040ポイント、cumin-sandboxが毎時1,020ポイントである | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03 08:22 UTC、`rateLimit.cost`) | 実測 | 2026-10-03 |
-| 131 | 定期確認の問い合わせから接続を1つ外したときの1ページのポイントは、下の表「接続を1つ外した1ページのポイント」のとおりである。cumin-worksとcumin-sandboxで、どの数字も同じだった。どの数字も、129の式で数えた値と一致する。今の問い合わせの要求の数は 1 + 30 + 450 + 1,200 = 1,681 で、17ポイントになる | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03、`rateLimit.cost`)。要求の数は129の式での計算 | 実測 | 2026-10-03 |
+| 130 | 定期確認の問い合わせ (`snapshotQuery`) の1回の定期確認のポイントは、cumin-worksで34ポイント (2ページ、17 + 17。開いている要求Issueは20件)、cumin-sandboxで17ポイント (1ページ。開いている要求Issueは3件) である。1ページのポイントは、そのページの要求Issueの件数 (3件と10件) でも、`.cumin/` のファイルを読むかどうか (1ページ目だけ読む) でも変わらない。60秒の間隔では、計算上、cumin-worksが毎時2,040ポイント、cumin-sandboxが毎時1,020ポイントである。#434、#449 より前の問い合わせの値である。今の値は135にある | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03 08:22 UTC、`rateLimit.cost`) | 実測 | 2026-10-03 |
+| 131 | 定期確認の問い合わせから接続を1つ外したときの1ページのポイントは、下の表「接続を1つ外した1ページのポイント」のとおりである。cumin-worksとcumin-sandboxで、どの数字も同じだった。どの数字も、129の式で数えた値と一致する。測ったときの問い合わせ (#449 より前。Pull Requestも1つの問い合わせで読む) の要求の数は 1 + 30 + 450 + 1,200 = 1,681 で、17ポイントになる | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03、`rateLimit.cost`)。要求の数は129の式での計算 | 実測 | 2026-10-03 |
 | 132 | 5つの小さな問い合わせ (ラベルの時刻、Ownerのログイン名、コメント、結び付いたPull Request、フォローアップノートのPull Request) は、cumin-worksでもcumin-sandboxでも、どれも1回に1ポイントである。ラベルの時刻とOwnerのログイン名は、要求Issueの番号 (sub-issueが6件) でも、実装Issueの番号でも1ポイントである。コメントは、Issueの番号でも、Pull Requestの番号でも1ポイントである。動かす規則と条件は、下の表「小さな問い合わせのポイントと、動かす規則」にある | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03 08:23 UTC、`rateLimit.cost`) | 実測 | 2026-10-03 |
-| 133 | 実行終了の判定 (R2、I2、I5〜I8、I10) と、Reviewerの承認のあとのmergeの判定 (I6、I7) は、定期確認と同じ問い合わせで、リポジトリの全ページを読み直す。1回の読み直しは、130の1回の定期確認と同じポイントである (cumin-worksで34ポイント)。I2は、リンクを付けたときに、もう1回読み直す | コード (`internal/workflow` の `requirementIssueNow`、`subIssueNow`、`verifyDone`、`afterApproval` が `ReadSnapshot` を呼ぶ)。読み直すことはコードを読んで確かめたもので、実行では観測していない。ポイントは130の実測 | 実測 (ポイントだけ) | 2026-10-03 |
+| 133 | #434 (2026-10-03) より前のコードは、実行終了の判定 (R2、I2、I5〜I8、I10) と、Reviewerの承認のあとのmergeの判定 (I6、I7) で、定期確認と同じ問い合わせを使い、リポジトリの全ページを読み直していた。その1回の読み直しは、130の1回の定期確認と同じポイントだった (cumin-worksで34ポイント)。今のコードは、その実行のIssueだけを読む。今の値は136にある | ポイントは130の実測 (`rateLimit.cost`)。全ページを読み直していたことは、当時のコード (`internal/workflow` の `requirementIssueNow`、`subIssueNow`、`verifyDone`、`afterApproval` が `ReadSnapshot` を呼んでいた) を読んで確かめた | 実測 | 2026-10-03 |
 | 134 | 定期確認の問い合わせからPull Requestを外すと、1ページは3ポイントである (cumin-worksの3ページのうち、読んだ2ページとも3ポイント)。Pull Requestを読む2つ目の問い合わせ (`nodes(ids:)` でsub-issueを指定し、`closedByPullRequestsReferences` とその下の全てを読む) は、sub-issueが1件でも9件でも1ポイント、100件で9ポイントである。101件では「You may not provide more than 100 node ids」のエラーで、データを返さない。存在しないidは、その位置が null になり、`errors` に「Could not resolve to a node with the global id」が入る | cumin-worksで実測 (#426、2026-10-03、`rateLimit.cost`) | 実測 | 2026-10-03 |
+| 135 | #434、#449、#435 のあとの1回の定期確認のポイントは、cumin-worksで10ポイント、cumin-sandboxで3ポイントである。cumin-worksは、1つ目の問い合わせ (`snapshotQuery`) が3ページで 3 + 3 + 3 = 9ポイント (開いている要求Issueは21件)、2つ目の問い合わせ (`pullRequestsQuery`) が1ポイント (選んだsub-issueは15件、そのPull Requestは2件) である。cumin-sandboxは、1つ目の問い合わせが1ページで3ポイント (開いている要求Issueは3件) で、選んだsub-issueがないので、2つ目の問い合わせを送らない。比べるために、cumin-sandboxのsub-issueの5件全てで2つ目の問い合わせを送ると、1ポイントだった。130の数字 (34と17) は、要求Issueが20件で2ページのときのものである。前の問い合わせなら、21件の3ページは 17 × 3 = 51ポイントになる。作業中のリポジトリ (`poll_interval` の初期値の60秒ごと) は、計算上、cumin-worksが毎時600ポイント、cumin-sandboxが毎時180ポイント (2つ目の問い合わせを送るなら毎時240ポイント) である。作業中でないリポジトリ (`idle_poll_interval` の初期値の5分ごと) は、計算上、cumin-worksが毎時120ポイント、cumin-sandboxが毎時36ポイントである | cumin-worksとcumin-sandboxで実測 (#428、2026-10-03 17:12 UTC、`rateLimit.cost`)。問い合わせは `main` の 9988fe8 のもの。1時間のポイントは、実測の値と間隔の初期値からの計算 | 実測 | 2026-10-03 |
+| 136 | Agentの実行のあとの、1つのIssueの読み取りのポイントは、実装Issue (`subIssueQuery`) で1ポイント、要求Issue (`requirementIssueQuery`) で2ポイントである。cumin-worksでもcumin-sandboxでも同じである。実装Issueは、開いているPull Requestがないとき (cumin-worksの #428、cumin-sandboxの #217) も、1件あるとき (cumin-worksの #430。checkが3件、レビューが6件) も1ポイントである。要求Issueは、sub-issueが1件 (cumin-sandboxの #216)、6件 (cumin-worksの #414)、8件 (cumin-worksの #313) のどれでも2ポイントである。実行終了の判定 (R2、I2、I5〜I8、I10) と、Reviewerの承認のあとのmergeの判定 (I6、I7) は、この読み取りを使う。I2は、リンクを付けたときに、もう1回読む。133の全ページの読み直しは、cumin-worksで34ポイントだった | cumin-worksとcumin-sandboxで実測 (#428、2026-10-03 17:12〜17:13 UTC、`rateLimit.cost`)。問い合わせを `gh api graphql` で送って測った。問い合わせは `main` の 9988fe8 のもの。どの判定がこの読み取りを使うかは、コード (`requirementIssueNow` が `ReadRequirementIssue` を、`subIssueNow`、`verifyDone`、`afterApproval` が `ReadSubIssue` を呼ぶ) を読んで確かめた | 実測 | 2026-10-03 |
 
 接続を1つ外した1ページのポイント (131)。「要求の数」は、129の式で数えた、その接続を読むのに要る要求の数である。括弧の中は、親の件数の積である。
 
 | 外した接続 | 要求の数 | 外した1ページのポイント | 差 |
 |---|---|---|---|
-| なし (今の問い合わせ) | 1,681 | 17 | — |
+| なし (測ったときの問い合わせ) | 1,681 | 17 | — |
 | 要求Issueの `labels` | 10 (要求Issue 10) | 17 | 0 |
 | 要求Issueの `blockedBy` | 10 (要求Issue 10) | 17 | 0 |
 | `subIssues` (その下の全てを含む) | 1,660 | 1 | 16 |
@@ -130,39 +132,40 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 ## 規則が読む事実と、その問い合わせ
 
-[Issueの状態と遷移](../requirements/workflow/issue-states.md) の行ごとに、今のコード (`internal/workflow`) が読む事実と、その事実を返す問い合わせを並べる。2026-10-03 に、コードと [定期確認の設計](../designs/poll.md) を読んで確かめた。行の番号は付けない。問い合わせの名前は次のとおりである。
+[Issueの状態と遷移](../requirements/workflow/issue-states.md) の行ごとに、今のコード (`internal/workflow`) が読む事実と、その事実を返す問い合わせを並べる。2026-10-03 に、コードと [定期確認の設計](../designs/poll.md) を読んで確かめた。問い合わせの名前は、#434 と #449 のあとのコード (`main` の 9988fe8) のものである。行の番号は付けない。問い合わせの名前は次のとおりである。
 
-- 定期確認: 定期確認の問い合わせ (`snapshotQuery`)。括弧の中は、その事実を持つ接続か項目である。
-- 読み直し: 同じ問い合わせで、全ページを読み直すこと (133)。
+- 定期確認: 定期確認の1つ目の問い合わせ (`snapshotQuery`)。要求Issueとsub-issueまでを読む。括弧の中は、その事実を持つ接続か項目である。
+- Pull Request: 定期確認の2つ目の問い合わせ (`pullRequestsQuery`)。開いていて `cumin/status/*` のラベルが付いたsub-issueだけについて、`closedByPullRequestsReferences` とその下の項目を読む (134、135)。
+- Issueの読み取り: Agentの実行のあとに、その実行のIssueだけを番号で読む問い合わせ (136)。要求Issueは `requirementIssueQuery`、実装Issueは `subIssueQuery` である。リポジトリの全ページは読まない。
 - ラベルの時刻、Ownerのログイン名、コメント、結び付いたPull Request、ノートのPull Request: 5つの小さな問い合わせ (132)。
 - REST: GraphQLのポイントを使わない読み取り。
 
 | 行 | 行の内容 | 読む事実 | 事実を返す問い合わせ |
 |---|---|---|---|
 | R1 | readyの要求Issueを分割へ | 要求Issueのラベル。要求Issueの blocked by の開閉。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (要求Issueの `labels`、`blockedBy`)。Ownerのログイン名。REST (権限) |
-| R2 | Plannerの終了のあとの確認 | sub-issueの件数。各sub-issueの `risk/*` のラベル。要求Issueのラベル | 読み直し (`subIssues`、sub-issueの `labels`、要求Issueの `labels`) |
+| R2 | Plannerの終了のあとの確認 | sub-issueの件数。各sub-issueの `risk/*` のラベル。要求Issueのラベル | Issueの読み取り (`requirementIssueQuery`: `subIssues`、sub-issueの `labels`、要求Issueの `labels`) |
 | R3 | sub-issueがreadyで、実装中へ | 要求Issueのラベル。sub-issueの開閉とラベル。要求Issueに `cumin/status/awaiting-owner-review` が付いた時刻と、sub-issueに `cumin/status/ready` が付いた時刻 (要求Issueに状態ラベルがないときは、時刻を読まない) | 定期確認 (要求Issueの `labels`、`subIssues`、sub-issueの `labels`)。ラベルの時刻 |
 | R4 | 受け入れの確認を依頼 | 要求Issueのラベル。sub-issueの件数、開閉、閉じた時刻。最後のsub-issueが閉じたあとの受け入れの確認のコメント。フォローアップノートを書き終えたこと (I9の読み取り)。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (要求Issueの `labels`、`subIssues`)。コメント。Ownerのログイン名。REST (権限) |
 | R5 | Ownerが閉じて完了 | なし。閉じた要求Issueは、定期確認の問い合わせに出ない | なし |
 | R6 | 残りのsub-issueの確認へ | 要求Issueのラベル。sub-issueの開閉とラベル | 定期確認 (要求Issueの `labels`、`subIssues`、sub-issueの `labels`) |
 | R7 | 受け入れ可能を通知 | 要求Issueのラベル。sub-issueの件数、開閉、閉じた時刻。受け入れの確認のコメント | 定期確認 (要求Issueの `labels`、`subIssues`)。コメント |
-| I1 | readyの実装Issueに着手 | sub-issueの開閉、ラベル、題。sub-issueの blocked by の開閉。親の要求Issueのラベル (優先度)。開いているPull Requestの番号とブランチ (続きからの依頼)。R3がラベルの時刻を待つかどうか。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (`subIssues`、sub-issueの `labels`、`blockedBy`、要求Issueの `labels`、`closedByPullRequestsReferences`)。Ownerのログイン名。REST (権限) |
-| I2 | Implementerの終了のあとの確認 | sub-issueのid。そのIssueを閉じる開いているPull Requestの番号、作成者、先頭のコミット、ブランチ。ブランチに開いているPull Request | 読み直し (`subIssues`、`closedByPullRequestsReferences`)。REST (ブランチのPull Request)。リンクを付けたときは、mutationが1回と、読み直しがもう1回 |
-| I3 | checkが通り、reviewへ | sub-issueのラベル。Pull Requestの先頭のコミット、checkの結果、`mergeable`、レビュー。必須のcheck。sub-issueに `cumin/status/ready` が付いた時刻。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、`statusCheckRollup.contexts`、`reviews`)。REST (必須のcheck、権限)。ラベルの時刻。Ownerのログイン名 |
-| I4 | checkが失敗し、修正へ | sub-issueのラベル。Pull Requestの先頭のコミット、checkの結果、`mergeable`。必須のcheck。失敗したcheckの内容。修正依頼の回数 (Hostの記録)。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、`statusCheckRollup.contexts`)。REST (必須のcheck、checkの内容、権限)。Ownerのログイン名 |
-| I5 | 指摘の修正を依頼 | sub-issueのラベル。Pull Requestの先頭のコミット。Reviewerの最新のレビューの結果と対象のコミット。ラウンドの数 (レビューと、I3で読んだ `cumin/status/ready` の時刻) | 読み直し (sub-issueの `labels`、`closedByPullRequestsReferences`、`reviews`) |
-| I6 | 承認とrisk/lowでmerge | I5の事実。checkの結果。必須のcheck。sub-issueの `risk/*` のラベル。mergeのあとの、Issueの開閉 | 読み直し (I5と同じ)。mergeの前に、読み直しがもう1回 (`statusCheckRollup.contexts`、sub-issueの `labels`)。REST (必須のcheck、merge、Issueの開閉) |
+| I1 | readyの実装Issueに着手 | sub-issueの開閉、ラベル、題。sub-issueの blocked by の開閉。親の要求Issueのラベル (優先度)。開いているPull Requestの番号とブランチ (続きからの依頼)。R3がラベルの時刻を待つかどうか。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (`subIssues`、sub-issueの `labels`、`blockedBy`、要求Issueの `labels`)。Pull Request (`closedByPullRequestsReferences`)。Ownerのログイン名。REST (権限) |
+| I2 | Implementerの終了のあとの確認 | sub-issueのid。そのIssueを閉じる開いているPull Requestの番号、作成者、先頭のコミット、ブランチ。ブランチに開いているPull Request | Issueの読み取り (`subIssueQuery`: id、`closedByPullRequestsReferences`)。REST (ブランチのPull Request)。リンクを付けたときは、mutationが1回と、Issueの読み取りがもう1回 |
+| I3 | checkが通り、reviewへ | sub-issueのラベル。Pull Requestの先頭のコミット、checkの結果、`mergeable`、レビュー。必須のcheck。sub-issueに `cumin/status/ready` が付いた時刻。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`)。Pull Request (`closedByPullRequestsReferences`、`statusCheckRollup.contexts`、`reviews`、`mergeable`)。REST (必須のcheck、権限)。ラベルの時刻。Ownerのログイン名 |
+| I4 | checkが失敗し、修正へ | sub-issueのラベル。Pull Requestの先頭のコミット、checkの結果、`mergeable`。必須のcheck。失敗したcheckの内容。修正依頼の回数 (Hostの記録)。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`)。Pull Request (`closedByPullRequestsReferences`、`statusCheckRollup.contexts`、`mergeable`)。REST (必須のcheck、checkの内容、権限)。Ownerのログイン名 |
+| I5 | 指摘の修正を依頼 | sub-issueのラベル。Pull Requestの先頭のコミット。Reviewerの最新のレビューの結果と対象のコミット。ラウンドの数 (レビューと、I3で読んだ `cumin/status/ready` の時刻) | Issueの読み取り (`subIssueQuery`: sub-issueの `labels`、`closedByPullRequestsReferences`、`reviews`) |
+| I6 | 承認とrisk/lowでmerge | I5の事実。checkの結果。必須のcheck。sub-issueの `risk/*` のラベル。mergeのあとの、Issueの開閉 | Issueの読み取り (I5と同じ)。mergeの前に、Issueの読み取りがもう1回 (`statusCheckRollup.contexts`、sub-issueの `labels`)。REST (必須のcheck、merge、Issueの開閉) |
 | I7 | 承認とrisk/medium以上でOwnerへ | I6と同じ | I6と同じ。mergeはしない |
-| I8 | ラウンドの上限で原因の整理 | I5の事実。原因の整理のあとの、Pull Requestのコメント | 読み直し (I5と同じ)。コメント (Pull Requestの番号で) |
+| I8 | ラウンドの上限で原因の整理 | I5の事実。原因の整理のあとの、Pull Requestのコメント | Issueの読み取り (I5と同じ)。コメント (Pull Requestの番号で) |
 | I9 | フォローアップノートを転記 | 閉じたsub-issueと、閉じた時刻。要求Issueのコメント (ノートの目印)。sub-issueに結び付いたPull Request (閉じたものとmerge済みのものを含む)。merge済みのPull Requestの説明とレビューのスレッド | 定期確認 (`subIssues`)。コメント。結び付いたPull Request。ノートのPull Request |
-| I10 | Reviewerのblockedを投稿 | sub-issueのラベル | 読み直し (sub-issueの `labels`) |
-| I11 | Pull Requestにラベルを写す | sub-issueのラベル。開いているPull Requestのラベル | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、Pull Requestの `labels`) |
-| I12 | Ownerの承認のあとのmerge | sub-issueのラベル (状態と `risk/*`)。Pull Requestの先頭のコミット。人のレビューの作成者、結果、対象のコミット。その作成者の権限。checkの結果。必須のcheck。衝突したときは、最新の `cumin/status/ready` を付けたアカウント | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、`reviews`、`statusCheckRollup.contexts`)。REST (権限、必須のcheck、merge、Issueの開閉)。読み直しはしない。衝突したときは、Ownerのログイン名 |
-| I13 | Ownerの指摘への対応を依頼 | sub-issueのラベル。Pull Requestの先頭のコミットとブランチ。人のレビューの作成者、結果、対象のコミット。その作成者の権限。最新の `cumin/status/ready` を付けたアカウント。レビューが出された時刻と、sub-issueに最新の `cumin/status/awaiting-owner-review` が付いた時刻 | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences`、`reviews`)。ラベルの時刻。REST (権限)。Ownerのログイン名 |
-| I14 | checkを待つ間の衝突を解消 | sub-issueのラベル。Pull Requestの `mergeable` とブランチ。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`、`closedByPullRequestsReferences` の `mergeable`)。Ownerのログイン名。REST (権限) |
-| I15 | checkが結果を返さない | sub-issueのラベル。sub-issueに `cumin/status/awaiting-checks` が付いた時刻。先頭のコミットの時刻。checkの結果。必須のcheck。今のコードは、2つの時刻を読むだけで、まだ判定しない | 定期確認 (sub-issueの `labels`、Pull Requestの `commits`、`statusCheckRollup.contexts`)。ラベルの時刻。REST (必須のcheck) |
+| I10 | Reviewerのblockedを投稿 | sub-issueのラベル | Issueの読み取り (`subIssueQuery`: sub-issueの `labels`) |
+| I11 | Pull Requestにラベルを写す | sub-issueのラベル。開いているPull Requestのラベル | 定期確認 (sub-issueの `labels`)。Pull Request (`closedByPullRequestsReferences`、Pull Requestの `labels`) |
+| I12 | Ownerの承認のあとのmerge | sub-issueのラベル (状態と `risk/*`)。Pull Requestの先頭のコミット。人のレビューの作成者、結果、対象のコミット。その作成者の権限。checkの結果。必須のcheck。衝突したときは、最新の `cumin/status/ready` を付けたアカウント | 定期確認 (sub-issueの `labels`)。Pull Request (`closedByPullRequestsReferences`、`reviews`、`statusCheckRollup.contexts`)。REST (権限、必須のcheck、merge、Issueの開閉)。Issueの読み取りはしない。衝突したときは、Ownerのログイン名 |
+| I13 | Ownerの指摘への対応を依頼 | sub-issueのラベル。Pull Requestの先頭のコミットとブランチ。人のレビューの作成者、結果、対象のコミット。その作成者の権限。最新の `cumin/status/ready` を付けたアカウント。レビューが出された時刻と、sub-issueに最新の `cumin/status/awaiting-owner-review` が付いた時刻 | 定期確認 (sub-issueの `labels`)。Pull Request (`closedByPullRequestsReferences`、`reviews`)。ラベルの時刻。REST (権限)。Ownerのログイン名 |
+| I14 | checkを待つ間の衝突を解消 | sub-issueのラベル。Pull Requestの `mergeable` とブランチ。最新の `cumin/status/ready` を付けたアカウントと、その権限 | 定期確認 (sub-issueの `labels`)。Pull Request (`closedByPullRequestsReferences` の `mergeable`)。Ownerのログイン名。REST (権限) |
+| I15 | checkが結果を返さない | sub-issueのラベル。sub-issueに `cumin/status/awaiting-checks` が付いた時刻。先頭のコミットの時刻。checkの結果。必須のcheck。今のコードは、2つの時刻を読むだけで、まだ判定しない | 定期確認 (sub-issueの `labels`)。Pull Request (`commits`、`statusCheckRollup.contexts`)。ラベルの時刻。REST (必須のcheck) |
 
-「AIリソースに空きがある」と「このIssueのAgentが動いていない」は、Hostの手元の事実で、GitHubからは読まない。RESTの必須のcheck (ruleset) は、定期確認では、リポジトリごとに1回、条件に合うときだけ読む。条件は、`cumin/status/awaiting-checks` の付いた開いているsub-issueがある (I3、I4、I15) か、人の承認を確かめるsub-issueがある (I12) ことである (`HasIssueAwaitingChecks`、`HasOwnerApprovalCandidate`)。Reviewerの承認のあとのmergeの判定 (I6、I7) は、読み直しのあとに、もう1回読む (`afterApproval`)。
+「AIリソースに空きがある」と「このIssueのAgentが動いていない」は、Hostの手元の事実で、GitHubからは読まない。RESTの必須のcheck (ruleset) は、定期確認では、リポジトリごとに1回、条件に合うときだけ読む。条件は、`cumin/status/awaiting-checks` の付いた開いているsub-issueがある (I3、I4、I15) か、人の承認を確かめるsub-issueがある (I12) ことである (`HasIssueAwaitingChecks`、`HasOwnerApprovalCandidate`)。Reviewerの承認のあとのmergeの判定 (I6、I7) は、Issueの読み取りのあとに、もう1回読む (`afterApproval`)。
 
 ## rulesetとcheck
 
