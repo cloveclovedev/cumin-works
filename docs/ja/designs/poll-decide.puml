@@ -72,12 +72,18 @@ partition "Decision (pure function, no I/O)" {
     on the head commit of the pull request,
     submitted after the last
     cumin/status/awaiting-owner-review of the issue;
+  :Collect I14 candidates of the Owner's review
+  - open sub-issues with cumin/status/awaiting-owner-review
+    and without cumin/status/ready
+  - the pull request is CONFLICTING
+    (UNKNOWN and MERGEABLE are no candidates);
   :Collect I11 copies
   - each open pull request that closes an issue
   - its cumin/status/* and risk/* differ
     from the issue in this snapshot;
   :Return the list of actions
-  (I14, I3, I4, I15, R1 and I1, I12, I13, I11, in this order);
+  (I14, I3, I4, I15, R1 and I1, I12, I13,
+  I14 of the Owner's review, I11, in this order);
 }
 partition "Apply (in the order of the list)" {
   :I14: change the label to cumin/status/implementing,
@@ -113,6 +119,11 @@ partition "Apply (in the order of the list)" {
   cumin/status/awaiting-owner-review, change the label to
   cumin/status/implementing, then ask the Implementer
   to address that review in the same session;
+  :I14 of the Owner's review: when I12 and I13
+  did not take the issue at this poll,
+  change the label to cumin/status/implementing,
+  then ask the Implementer to resolve the conflict
+  in the same session;
   :I11: make the labels of the pull request
   the same as the issue;
 }

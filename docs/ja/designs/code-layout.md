@@ -72,7 +72,7 @@
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
 | `internal/notify` | `domain.go` | 純粋。通知の内容と、その文章 |
 | | `notify.go` | 通知を送る入口 `Notifier` と、手段を表す `Sender` |
-| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、着手の順番 (優先度のラベル、Issueの番号)、実行を待って止める間に落とす動作、必須のcheckの判定、実行終了の判定 (I2)、承認のあとの判定 (I6、I7)、Ownerの承認の判定 (I12)、Ownerの差し戻しの判定 (I13)、checkを待つ間の衝突の判定 (I14)、必須のcheckが結果を返さないときの判定 (I15)、cuminがOwnerなしで次に進めるIssueがあるかの判定 (Q4) |
+| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、着手の順番 (優先度のラベル、Issueの番号)、実行を待って止める間に落とす動作、必須のcheckの判定、実行終了の判定 (I2)、承認のあとの判定 (I6、I7)、Ownerの承認の判定 (I12)、Ownerの差し戻しの判定 (I13)、checkまたはOwnerの判断を待つ間の衝突の判定 (I14)、必須のcheckが結果を返さないときの判定 (I15)、cuminがOwnerなしで次に進めるIssueがあるかの判定 (Q4) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧。初期値の優先度のラベルは、設定が名前を決めていないリポジトリにだけ作る |
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。必須のcheckが待ち時間を過ぎても結果を返さないIssueをOwnerに戻す (I15)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
@@ -81,7 +81,7 @@
 | | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り |
 | | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
-| | `merge.go` | 承認されたPull Requestの扱い (I6、I7)、Ownerの承認のあとのmerge (I12)、2つが使うmergeの手順、Ownerのレビューへの対応の依頼 (I13)、checkを待つ間の衝突の解消の依頼 (I14) |
+| | `merge.go` | 承認されたPull Requestの扱い (I6、I7)、Ownerの承認のあとのmerge (I12)、2つが使うmergeの手順、Ownerのレビューへの対応の依頼 (I13)、checkまたはOwnerの判断を待つ間の衝突の解消の依頼 (I14) |
 | | `cleanup.go` | 閉じたsub-issueの片付け (worktree、ローカルのブランチ、状態ファイルの項目) |
 | | `followup.go` | 純粋。フォローアップノートを読むsub-issue、拾うもの、ノートの文章と目印 (I9) |
 | | `followupnote.go` | フォローアップノートの読み取りと書き込み (I9) |

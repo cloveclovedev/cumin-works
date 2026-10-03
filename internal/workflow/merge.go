@@ -247,8 +247,9 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 	})
 }
 
-// resolveConflictBeforeChecks applies I14: the pull request of an issue in
-// cumin/status/awaiting-checks conflicts with the default branch. The
+// resolveConflictAtPoll applies I14: the pull request of an issue in
+// cumin/status/awaiting-checks or in cumin/status/awaiting-owner-review
+// conflicts with the default branch. The
 // label becomes cumin/status/implementing first (principle 3), then the
 // Implementer resolves the conflict in the session of its last run, on the
 // branch of the pull request: the same request as after a merge that
@@ -261,9 +262,8 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 // mistake of the Implementer (issue-states.md, the rows while an issue
 // waits for the checks). A login of the Owner that cannot be read and a
 // label that does not change are errors of the poll: nothing is requested,
-// the issue keeps cumin/status/awaiting-checks, and the next poll tries
-// again.
-func (s *Service) resolveConflictBeforeChecks(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ResolveConflict) error {
+// the issue keeps its label, and the next poll tries again.
+func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ResolveConflict) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	log := s.logger().With("repository", repository, "issue", a.Number, "pull_request", a.PullRequest)

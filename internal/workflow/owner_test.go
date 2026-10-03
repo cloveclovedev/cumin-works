@@ -614,3 +614,141 @@ func TestOwnerRequestedChanges_I13(t *testing.T) {
 		}
 	})
 }
+
+// I14 (issue-states.md): a pull request that conflicts while its issue
+// waits for the Owner's review goes back to the Implementer. The label
+// becomes cumin/status/implementing before the request, and exactly one
+// conflict resolution request resumes the Implementer session across
+// polls. cumin calls no merge.
+func TestI14_AConflictWhileTheOwnerDecidesSendsOneResolutionRequest(t *testing.T) {
+	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	service := sc.serviceWithSession(t)
+	ctx := context.Background()
+
+	if err := service.Poll(ctx); err != nil {
+		t.Fatalf("poll 1: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	for i := range 2 {
+		if err := service.Poll(ctx); err != nil {
+			t.Fatalf("poll %d: %v", i+2, err)
+		}
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelImplementing}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/implementing", got)
+	}
+	sc.release(t)
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one resolution", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none", n)
+	}
+	args := sc.record(t, "agent.args")
+	if got := argumentOf(t, args, "--resume"); got != "implementer-session" {
+		t.Errorf("--resume = %q, want the session of the Implementer", got)
+	}
+	text := promptOf(t, args)
+	for _, want := range []string{"Request: conflict resolution", "Pull request: #21",
+		"The pull request #21 has merge conflicts with the default branch main", ownerLoginLine} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	logs := sc.logs.String()
+	label := strings.Index(logs, `"msg":"I14: the pull request conflicts with the default branch; the issue goes back to the Implementer"`)
+	request := strings.Index(logs, `"msg":"I14: requested the work"`)
+	if label < 0 || request < 0 || request < label {
+		t.Errorf("the log does not show the label change of I14 before the request (label at %d, request at %d)", label, request)
+	}
+}
+
+// I14: UNKNOWN says that GitHub is still calculating, and MERGEABLE says
+// that nothing conflicts. Both send nothing and change no label: the issue
+// keeps waiting for the Owner.
+func TestI14_UnknownAndMergeableLeaveTheIssueWaitingForTheOwner(t *testing.T) {
+	for _, mergeable := range []string{"UNKNOWN", "MERGEABLE"} {
+		t.Run(mergeable, func(t *testing.T) {
+			sc := awaitingOwner(t)
+			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
+			sc.fake.SetPullRequestMergeable(sc.repo, 21, mergeable)
+			service := sc.serviceWithSession(t)
+
+			for range 2 {
+				sc.pollAndWait(t, service)
+			}
+
+			if n := sc.agentRuns(t); n != 0 {
+				t.Errorf("%d agent runs, want none", n)
+			}
+			if n := sc.fake.CountRequests(http.MethodPut, issue10Path+"/labels"); n != 0 {
+				t.Errorf("%d label changes, want none", n)
+			}
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerReview) {
+				t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-review", got)
+			}
+		})
+	}
+}
+
+// A request for changes of the Owner on a conflicting head goes through
+// I13: the poll sends the fix of the Owner's review, and no conflict
+// resolution of I14 beside it.
+func TestI14_ARequestForChangesOfTheOwnerOnAConflictingHeadGoesThroughI13(t *testing.T) {
+	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	service := sc.serviceWithSession(t)
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one fix of the Owner's review", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); strings.Contains(text, "Request: conflict resolution") {
+		t.Errorf("the request is a conflict resolution, want the fix of the Owner's review:\n%s", text)
+	}
+	if logs := sc.logs.String(); strings.Contains(logs, `"msg":"I14: requested the work"`) {
+		t.Error("I14 sent a request beside I13")
+	}
+}
+
+// An approval of the Owner on a conflicting head whose required checks do
+// not pass leaves I12 waiting, so I14 sends the conflict resolution at the
+// same poll: the checks of a conflicting pull request do not run again.
+func TestI14_AnApprovalThatWaitsForTheChecksOnAConflictingHeadSendsTheResolution(t *testing.T) {
+	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc.repo.PullRequests[21].Checks = []githubtest.Check{{Name: "ci", Status: "IN_PROGRESS"}}
+	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	service := sc.serviceWithSession(t)
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one resolution", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: conflict resolution") {
+		t.Errorf("the request is not a conflict resolution:\n%s", text)
+	}
+}
