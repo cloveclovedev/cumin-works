@@ -103,13 +103,15 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | I10 | `blocked_reason` を実装Issueにコメントとして投稿し、ラベルを `cumin/status/awaiting-owner-decision` に替えて通知する。やり直さない | 実行終了: Reviewerの実行が終わり、結果が `blocked` | — | — |
 | I11 | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする | 定期確認: 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | — | — |
 | I12 | Pull Requestをmergeする。mergeの手順と、うまくいかないときの扱いは、I6と同じ | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) が出したレビューのうち最新のものが、Pull Requestの今の先頭のコミットに対する `APPROVE` である | 必須のcheckが、その先頭のコミットで全て通っている。riskのラベルがちょうど1つである | I6と同じ |
+| I13 | ラベルを `cumin/status/implementing` に替え、Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する | 定期確認: `cumin/status/awaiting-owner-review` の開いた実装Issueで、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) が出したレビューのうち最新のもの (コメントだけのレビューは除く) が、Pull Requestの今の先頭のコミットに対する `REQUEST_CHANGES` である | — | 異常終了なら1回だけやり直し、それでも駄目なら `cumin/status/awaiting-owner-decision` に替えて通知する |
 
 I5〜I8は、Reviewerの結果が `done` のときの動作である。結果が `blocked` のときは、I10に従う。
 
 I7のあと、OwnerはPull RequestをGitHubのレビューで判断する。
 
 - 承認するときは、今の先頭のコミットに `APPROVE` のレビューを出す。I12が成り立ち、cuminがmergeする。古いコミットへの承認は数えない。承認のあとにOwnerが `REQUEST_CHANGES` を出すと、最新のレビューが承認でなくなるので、mergeしない。衝突の解消などで新しいコミットがpushされたら、Ownerはもう一度承認する
-- 差し戻すときは、今までどおり、コメントを書いて実装Issueに `cumin/status/ready` を付ける。I1が成り立つ
+- 差し戻すときは、今の先頭のコミットに `REQUEST_CHANGES` のレビューを出す。I13が成り立ち、cuminがImplementerに直させる。Implementerが `done` を返すと、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。Reviewerのレビューのラウンドは、Reviewerの最後の `APPROVE` のあとから数え直すので、差し戻しのあとは1ラウンド目から始まる
+- コメントを書いて実装Issueに `cumin/status/ready` を付けて差し戻すこともできる。I1が成り立ち、続きの依頼になる
 - Ownerのうちadminのアカウントは、自分でmergeしてもよい。mainのrulesetを迂回できるのは、adminと `cumin-core` だけだからである ([セットアップの手順](../../development/setup-guide.md))。そのあとの扱いは、cuminがmergeしたときと同じである (I9)。ただし、GitHubが実装Issueを閉じなければ、Ownerが閉じる。cuminが閉じるのは、自分のmergeの直後だけである
 
 mergeのあとにcuminが実装Issueを閉じるのは、GitHubの動作に合わせるためである。2026-09-30から、GitHubは、手で付けたリンクや `addCloseIssueReferences` で付けたリンクのPull Requestをmergeしても、Issueを閉じないことがある。cuminは、mergeの手順の中で少し待ってから実装Issueを読み、開いていれば1回だけ閉じる。あとの定期確認では閉じないので、Ownerが開き直したIssueは開いたままになる。mergeと閉じる操作の間でcuminが止まったときも、あとで閉じ直さない。そのIssueは、下の「v0.1では実装しないこと」の辻褄の合わないIssueと同じく、Ownerが閉じる。
@@ -150,6 +152,7 @@ Agentを起動する着手 (R1、R4、I1) は、同時に進めるIssueの数の
 
 - Ownerが介入したあと (`cumin/status/ready` の付け直し) は、Agentのセッションを新しくする。新しいセッションのAgentは、Issue、Pull Request、レビュー、Ownerのコメントを GitHub から読み直して、続きから進める。
 - Ownerの介入を挟まない一続きの作業 (I4のcheckの修正、I5の指摘の修正、Reviewerの2ラウンド目以降) は、同じセッションで続ける。
+- Ownerのレビューへの対応 (I13) も、Implementerの直前のセッションで続ける。ほぼ出来上がったPull Requestへのコメントを直すことが多く、Issueが書き直されたわけではないので、前の文脈がそのまま役に立つためである
 - こうする理由は3つある。書き直される前のIssueを前提にした古い文脈を引きずらない。作業の状態はGitHubにあるので、セッションを捨てても失うものがない。Ownerの対応には時間が空くので、古いセッションを再開すると長い文脈を読み直す分だけ利用枠を余計に使う。
 
 ## Issueの状態によらないトリガー
