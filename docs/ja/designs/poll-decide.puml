@@ -32,7 +32,9 @@ partition "Decision (pure function, no I/O)" {
     has not reported on the head commit
   - checks_wait_time is over, counted from the later
     one of the label time and the head commit time
-    (the time of the poll is an input value);
+    (the time of the poll is an input value)
+  - or no open pull request closes the issue, and
+    checks_wait_time is over since the label time;
   :Count the issues in progress
   - requirement issues with cumin/status/planning
   - open sub-issues with implementing,
@@ -85,7 +87,9 @@ partition "Apply (in the order of the list)" {
   cumin/status/awaiting-owner-decision, then
   hand it back to the Owner (row I15) with
   the head commit, the required checks that
-  have not reported, and the time waited;
+  have not reported, and the time waited
+  (with no open pull request: that fact,
+  and the time waited);
   :R1: change the label to cumin/status/planning,
   then ask the Planner to split
   I1: change the label to cumin/status/implementing,
