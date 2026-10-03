@@ -2,7 +2,8 @@ package workflow
 
 // This file applies the rows that move a requirement issue with its
 // sub-issues: R3 (a sub-issue may start) and R6 (only sub-issues without a
-// status label are left), and reads the label times that R3 needs.
+// status label are left), and reads the label times that R3 and a sub-issue
+// that waits for its checks need.
 // docs/ja/designs/poll.md, the topics on the label times and on the
 // decision of the poll.
 
@@ -16,9 +17,9 @@ import (
 )
 
 // readLabelTimes adds the label times to each requirement issue of the
-// snapshot that R3 needs them for, with one small query for each. A failed
-// read is logged and leaves LabelTimesRead false, so R3 waits for the next
-// poll and the other rules go on.
+// snapshot that needs them (NeedsLabelTimes), with one small query for each.
+// A failed read is logged and leaves LabelTimesRead false, so R3 waits for
+// the next poll and the other rules go on.
 func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token string, target Target, snapshot *Snapshot) {
 	for i := range snapshot.RequirementIssues {
 		requirement := &snapshot.RequirementIssues[i]
@@ -27,16 +28,17 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 		}
 		times, rate, err := s.GitHub.ReadLabelTimes(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number)
 		if err != nil {
-			log.Error("R3: the label times were not read", "issue", requirement.Number, "error", err.Error())
+			log.Error("the label times were not read", "issue", requirement.Number, "error", err.Error())
 			continue
 		}
-		log.Info("R3: read the label times", "issue", requirement.Number,
+		log.Info("read the label times", "issue", requirement.Number,
 			"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 		requirement.LabelTimesRead = true
 		requirement.ReviewAt = times[requirement.Number][LabelAwaitingOwnerReview]
 		for j := range requirement.SubIssues {
 			sub := &requirement.SubIssues[j]
 			sub.ReadyAt = times[sub.Number][LabelReady]
+			sub.AwaitingChecksAt = times[sub.Number][LabelAwaitingChecks]
 		}
 	}
 }

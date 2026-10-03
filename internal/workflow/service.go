@@ -1143,6 +1143,10 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 					Labels:     pr.Labels,
 					Checks:     toChecks(pr.Checks),
 					Reviews:    toReviews(pr.Reviews),
+					// The three values of GitHub pass as they are; the
+					// client refuses any other value.
+					Mergeable:       MergeableState(pr.Mergeable),
+					HeadCommittedAt: pr.HeadCommittedAt,
 				})
 			}
 			requirement.SubIssues = append(requirement.SubIssues, subIssue)

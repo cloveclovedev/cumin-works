@@ -55,8 +55,8 @@ func TestReadSnapshot_ReadsRequirementIssuesWithSubIssuesAndBlockedBy(t *testing
 		t.Errorf("sub-issue #10 = %+v", sub10)
 	}
 	wantPulls := []github.PullRequest{
-		{Number: 21, HeadCommit: "2222222222222222222222222222222222222222", Author: "example-implementer[bot]"},
-		{Number: 23, HeadCommit: "4444444444444444444444444444444444444444", Author: "octocat"},
+		{Number: 21, HeadCommit: "2222222222222222222222222222222222222222", Author: "example-implementer[bot]", Mergeable: github.Mergeable},
+		{Number: 23, HeadCommit: "4444444444444444444444444444444444444444", Author: "octocat", Mergeable: github.Mergeable},
 	}
 	if fmt.Sprint(sub10.PullRequests) != fmt.Sprint(wantPulls) {
 		t.Errorf("pull requests of #10 = %+v, want %+v", sub10.PullRequests, wantPulls)
@@ -345,5 +345,65 @@ func TestReadSnapshot_TooManyReviewsIsAnError(t *testing.T) {
 	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
 	if err == nil || !strings.Contains(err.Error(), "pull request #3 has more than 100 reviews") {
 		t.Errorf("err = %v, want an error that names pull request #3", err)
+	}
+}
+
+// The snapshot carries the mergeable value of a pull request as GitHub
+// answers it, and the commit time of the head commit.
+func TestReadSnapshot_ReadsTheMergeableValueAndTheHeadCommitTime(t *testing.T) {
+	at := time.Date(2026, 10, 3, 1, 2, 3, 0, time.UTC)
+	tests := []struct {
+		name string
+		set  func(fake *githubtest.Fake, repo *githubtest.Repository)
+		want github.MergeableState
+	}{
+		{"a pull request without a conflict is mergeable", func(*githubtest.Fake, *githubtest.Repository) {}, github.Mergeable},
+		{"a conflict is conflicting", func(fake *githubtest.Fake, repo *githubtest.Repository) {
+			fake.SetPullRequestConflict(repo, 3)
+		}, github.Conflicting},
+		{"a value that GitHub still calculates is unknown", func(fake *githubtest.Fake, repo *githubtest.Repository) {
+			fake.SetPullRequestMergeable(repo, 3, "UNKNOWN")
+		}, github.MergeableUnknown},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake, server := githubtest.New(t)
+			repo := fake.AddRepository("example-org", "example-repo")
+			fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+			fake.AddIssue(repo, &githubtest.Issue{Number: 2, Parent: 1})
+			fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 3, HeadCommit: "5555555555555555555555555555555555555555", Closes: []int{2}})
+			fake.SetPullRequestHeadCommitTime(repo, 3, at)
+			tt.set(fake, repo)
+			client := github.NewAppClient(server.URL, server.Client())
+
+			snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+			if err != nil {
+				t.Fatalf("ReadSnapshot: %v", err)
+			}
+			pr := snapshot.RequirementIssues[0].SubIssues[0].PullRequests[0]
+			if pr.Mergeable != tt.want {
+				t.Errorf("mergeable = %q, want %q", pr.Mergeable, tt.want)
+			}
+			if !pr.HeadCommittedAt.Equal(at) {
+				t.Errorf("head commit time = %v, want %v", pr.HeadCommittedAt, at)
+			}
+		})
+	}
+}
+
+// A mergeable value that cumin does not know is an error of the poll: no
+// rule decides on a value whose meaning is not known.
+func TestReadSnapshot_AnUnknownMergeableValueIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 2, Parent: 1})
+	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 3, HeadCommit: "5555555555555555555555555555555555555555", Closes: []int{2}})
+	fake.SetPullRequestMergeable(repo, 3, "BLOCKED")
+	client := github.NewAppClient(server.URL, server.Client())
+
+	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err == nil || !strings.Contains(err.Error(), `pull request #3 has the unknown mergeable value "BLOCKED"`) {
+		t.Errorf("ReadSnapshot = %v, want an error that names pull request #3 and the value", err)
 	}
 }
