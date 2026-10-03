@@ -296,6 +296,99 @@ func TestDecide_I4(t *testing.T) {
 	}
 }
 
+// TestDecide_I14_WhileTheOwnerDecides covers I14 for an issue in
+// cumin/status/awaiting-owner-review: only a CONFLICTING pull request sends
+// the issue back, and the candidates of I12 and of I13 come before it.
+func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
+	const head = "1111"
+	awaitingOwner := func(number int, mergeable MergeableState, reviews ...Review) SubIssue {
+		return SubIssue{Number: number, Labels: []string{LabelAwaitingOwnerReview, "risk/medium"},
+			AwaitingOwnerReviewAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+			PullRequests:          []PullRequest{{Number: number + 10, HeadCommit: head, Mergeable: mergeable, Reviews: reviews}}}
+	}
+	owner := func(state ReviewState) Review {
+		return Review{Author: "the-owner", State: state, Commit: head, SubmittedAt: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)}
+	}
+	withReady := awaitingOwner(10, Conflicting)
+	withReady.Labels = append(withReady.Labels, LabelReady)
+	closed := awaitingOwner(10, Conflicting)
+	closed.Closed = true
+
+	tests := []struct {
+		name    string
+		subs    []SubIssue
+		running map[int]bool
+		want    []Action
+	}{
+		{
+			name: "a conflicting pull request gives one conflict resolution",
+			subs: []SubIssue{awaitingOwner(10, Conflicting)},
+			want: []Action{ResolveConflict{Number: 10, PullRequest: 20}},
+		},
+		{
+			name: "unknown gives nothing: GitHub is still calculating",
+			subs: []SubIssue{awaitingOwner(10, MergeableUnknown)},
+		},
+		{
+			name: "mergeable leaves the issue waiting for the Owner",
+			subs: []SubIssue{awaitingOwner(10, Mergeable)},
+		},
+		{
+			name: "an approval on the conflicting head is a candidate of I12 first",
+			subs: []SubIssue{awaitingOwner(10, Conflicting, owner(ReviewApproved))},
+			want: []Action{
+				MergeOwnerApproval{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
+				ResolveConflict{Number: 10, PullRequest: 20},
+			},
+		},
+		{
+			name: "a request for changes on the conflicting head is a candidate of I13 first",
+			subs: []SubIssue{awaitingOwner(10, Conflicting, owner(ReviewChangesRequested))},
+			want: []Action{
+				FixOwnerReview{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
+				ResolveConflict{Number: 10, PullRequest: 20},
+			},
+		},
+		{
+			name:    "an issue whose merge step runs gives nothing",
+			subs:    []SubIssue{awaitingOwner(10, Conflicting)},
+			running: map[int]bool{10: true},
+		},
+		{
+			name: "an issue that also has cumin/status/ready is left to the start",
+			subs: []SubIssue{withReady},
+		},
+		{
+			name: "a closed issue gives nothing",
+			subs: []SubIssue{closed},
+		},
+		{
+			name: "lowest issue number first",
+			subs: []SubIssue{awaitingOwner(12, Conflicting), awaitingOwner(10, Conflicting)},
+			want: []Action{
+				ResolveConflict{Number: 10, PullRequest: 20},
+				ResolveConflict{Number: 12, PullRequest: 22},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := Snapshot{Running: tt.running,
+				RequirementIssues: []RequirementIssue{{Number: 6, LabelTimesRead: true, SubIssues: tt.subs}}}
+			var got []Action
+			for _, action := range Decide(snapshot, 1, nil, nil, time.Time{}, 0) {
+				switch action.(type) {
+				case ResolveConflict, MergeOwnerApproval, FixOwnerReview:
+					got = append(got, action)
+				}
+			}
+			if fmt.Sprint(got) != fmt.Sprint(tt.want) {
+				t.Errorf("Decide = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestDecide_I14 covers which issues the poll sends back for a conflict
 // resolution: only a pull request that GitHub reports as CONFLICTING, and
 // before the rows of the checks (I3, I4) for that issue.

@@ -577,7 +577,16 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		}
 		actions = kept
 	}
+	// An issue that I12 or I13 took at this poll gets no conflict resolution
+	// of I14: the review of the Owner on the conflicting head decides
+	// first. A check of I12 or of I13 that failed keeps the issue too, so
+	// that the next poll decides it again.
+	ownerDecided := map[int]bool{}
 	for _, action := range actions {
+		if a, ok := action.(ResolveConflict); ok && ownerDecided[a.Number] {
+			log.Info("I14: waits for the review of the Owner on the conflicting head", "issue", a.Number)
+			continue
+		}
 		// A candidate of I12 or of I13 is only a check; it counts as
 		// progress for Q4 when it merges, stops, or sends back the issue.
 		switch action.(type) {
@@ -624,7 +633,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 				errs = append(errs, err)
 			}
 		case ResolveConflict:
-			if err := s.resolveConflictBeforeChecks(ctx, token, target, snapshot, settings, a); err != nil {
+			if err := s.resolveConflictAtPoll(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case StopForUnreportedChecks:
@@ -640,6 +649,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err != nil {
 				errs = append(errs, err)
 			}
+			ownerDecided[a.Number] = acted || err != nil
 			if acted {
 				result.note(action)
 			}
@@ -648,6 +658,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err != nil {
 				errs = append(errs, err)
 			}
+			ownerDecided[a.Number] = ownerDecided[a.Number] || acted || err != nil
 			if acted {
 				result.note(action)
 			}

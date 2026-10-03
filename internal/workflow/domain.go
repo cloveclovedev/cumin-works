@@ -320,7 +320,8 @@ type FixChecks struct {
 }
 
 // ResolveConflict is the action of I14: the pull request of an issue that
-// waits for the checks conflicts with the default branch, so the issue
+// waits for the checks, or for the Owner's review, conflicts with the
+// default branch, so the issue
 // goes back to the Implementer for a conflict resolution, in the same
 // session. GitHub runs no pull_request workflow on a pull request that
 // conflicts, so its required checks would never report.
@@ -456,6 +457,11 @@ func (FixOwnerReview) isAction()          {}
 //
 // R3 and R6 move a requirement issue and start no agent, so they come
 // first and take no room.
+//
+// I14 also holds for an issue in cumin/status/awaiting-owner-review. Those
+// actions come after the candidates of I12 and of I13: a review of an Owner
+// on the conflicting head decides first, and the caller drops the conflict
+// resolution of an issue that I12 or I13 moved at this poll.
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string, now time.Time, checksWait time.Duration) []Action {
 	actions := requirementMoves(snapshot)
 	actions = append(actions, conflictingSubIssues(snapshot)...)
@@ -493,6 +499,7 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 	}
 	actions = append(actions, ownerApprovals(snapshot)...)
 	actions = append(actions, ownerChangeRequests(snapshot)...)
+	actions = append(actions, conflictingOwnerReviews(snapshot)...)
 	return append(actions, labelCopies(snapshot)...)
 }
 
@@ -811,15 +818,42 @@ func labelCopies(snapshot Snapshot) []Action {
 	return actions
 }
 
-// conflictingSubIssues returns the actions of I14: open sub-issues in
-// cumin/status/awaiting-checks whose open pull request GitHub reports as
-// CONFLICTING, lowest issue number first. UNKNOWN says that GitHub is still
-// calculating, so it gives no action: a later poll decides.
+// conflictingSubIssues returns the actions of I14 for the issues that wait
+// for the checks: open sub-issues in cumin/status/awaiting-checks whose
+// open pull request GitHub reports as CONFLICTING, lowest issue number
+// first. UNKNOWN says that GitHub is still calculating, so it gives no
+// action: a later poll decides.
 func conflictingSubIssues(snapshot Snapshot) []Action {
+	return conflictsUnder(snapshot, LabelAwaitingChecks)
+}
+
+// conflictingOwnerReviews returns the actions of I14 for the issues that
+// wait for the Owner: open sub-issues in cumin/status/awaiting-owner-review,
+// not running now, whose open pull request GitHub reports as CONFLICTING,
+// lowest issue number first. The Owner then approves only a head that can
+// merge. An issue that also has cumin/status/ready is left to I1, as for
+// I13. A merge step of I12 that runs keeps the label, so a running issue
+// gives no action.
+func conflictingOwnerReviews(snapshot Snapshot) []Action {
+	var actions []Action
+	for _, action := range conflictsUnder(snapshot, LabelAwaitingOwnerReview) {
+		sub, _ := snapshot.SubIssue(action.(ResolveConflict).Number)
+		if snapshot.Running[sub.Number] || slices.Contains(sub.Labels, LabelReady) {
+			continue
+		}
+		actions = append(actions, action)
+	}
+	return actions
+}
+
+// conflictsUnder returns a conflict resolution for each open sub-issue with
+// the status label whose open pull request is CONFLICTING, lowest issue
+// number first.
+func conflictsUnder(snapshot Snapshot, status string) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) {
+			if sub.Closed || !slices.Contains(sub.Labels, status) {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
