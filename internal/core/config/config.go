@@ -25,6 +25,7 @@ const (
 	defaultMaxIssuesInProgress = 1
 	defaultMaxReviewRounds     = 3
 	defaultMaxCheckFixRequests = 3
+	defaultChecksWaitTime      = 60 * time.Minute
 	defaultAgentTimeLimit      = 50 * time.Minute
 	// A GitHub App installation token expires one hour after it is issued.
 	maxAgentTimeLimit = 55 * time.Minute
@@ -62,9 +63,10 @@ func AllApps() []string {
 // Messages of the limits that both the Host settings file and the file of a
 // target repository check, so that the same value gives the same error.
 const (
-	limitAtLeastOne  = "must be 1 or more"
-	limitMergeMethod = "%q must be one of squash, merge, rebase"
-	limitCLI         = "%q is not supported: use %q"
+	limitAtLeastOne   = "must be 1 or more"
+	limitMoreThanZero = "must be more than 0"
+	limitMergeMethod  = "%q must be one of squash, merge, rebase"
+	limitCLI          = "%q is not supported: use %q"
 )
 
 // AppCuminCore is the name of the GitHub App of cumin itself in the
@@ -94,7 +96,10 @@ type Settings struct {
 	WorkDir             string
 	MaxReviewRounds     int
 	MaxCheckFixRequests int
-	MergeMethod         MergeMethod
+	// ChecksWaitTime is how long cumin waits for every required check to
+	// report on the head commit, before it stops the issue for the Owner.
+	ChecksWaitTime time.Duration
+	MergeMethod    MergeMethod
 	// PriorityLabels are the labels that order the starts, highest
 	// priority first. Only the .cumin/config.toml of a repository sets
 	// them (WithRepository): the labels live in the repository, and
@@ -243,6 +248,7 @@ type file struct {
 	WorkDir             string   `toml:"work_dir"`
 	MaxReviewRounds     int      `toml:"max_review_rounds"`
 	MaxCheckFixRequests int      `toml:"max_check_fix_requests"`
+	ChecksWaitTime      duration `toml:"checks_wait_time"`
 	MergeMethod         string   `toml:"merge_method"`
 	Roles               struct {
 		Planner     fileRole `toml:"planner"`
@@ -276,6 +282,7 @@ func defaults() file {
 		MaxIssuesInProgress: defaultMaxIssuesInProgress,
 		MaxReviewRounds:     defaultMaxReviewRounds,
 		MaxCheckFixRequests: defaultMaxCheckFixRequests,
+		ChecksWaitTime:      duration(defaultChecksWaitTime),
 		MergeMethod:         string(MergeSquash),
 		Quota:               defaultQuota(),
 		Notify:              fileNotify{Discord: fileNotifyDiscord{Enabled: defaultNotifyDiscordEnabled}},
@@ -329,6 +336,7 @@ func (f file) settings() (*Settings, error) {
 		MaxIssuesInProgress: f.MaxIssuesInProgress,
 		MaxReviewRounds:     f.MaxReviewRounds,
 		MaxCheckFixRequests: f.MaxCheckFixRequests,
+		ChecksWaitTime:      time.Duration(f.ChecksWaitTime),
 		MergeMethod:         MergeMethod(f.MergeMethod),
 		Roles:               map[Role]RoleSettings{},
 		Notify:              NotifySettings{DiscordEnabled: f.Notify.Discord.Enabled},
@@ -357,7 +365,7 @@ func (f file) settings() (*Settings, error) {
 	}
 
 	if s.PollInterval <= 0 {
-		fail("poll_interval", "must be more than 0")
+		fail("poll_interval", limitMoreThanZero)
 	}
 	if s.MaxIssuesInProgress < 1 {
 		fail("max_issues_in_progress", limitAtLeastOne)
@@ -367,6 +375,9 @@ func (f file) settings() (*Settings, error) {
 	}
 	if s.MaxCheckFixRequests < 1 {
 		fail("max_check_fix_requests", limitAtLeastOne)
+	}
+	if s.ChecksWaitTime <= 0 {
+		fail("checks_wait_time", limitMoreThanZero)
 	}
 	switch s.MergeMethod {
 	case MergeSquash, MergeMerge, MergeRebase:

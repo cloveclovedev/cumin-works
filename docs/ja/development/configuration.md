@@ -27,6 +27,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `max_issues_in_progress` | リポジトリごとに同時に進めるIssueの数 | `1` | 1以上 |
 | `max_review_rounds` | レビューのラウンドの上限 | `3` | 1以上 |
 | `max_check_fix_requests` | checkの修正を依頼する回数の上限 | `3` | 1以上 |
+| `checks_wait_time` | 必須のcheckが全て結果を返すのを待つ時間。過ぎたら、Ownerに回す | `"60m"` | 0より大きい |
 | `merge_method` | cuminがPull Requestをmergeするときの方法 | `"squash"` | `"squash"`、`"merge"`、`"rebase"` のどれか |
 | `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
 | `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
@@ -73,6 +74,7 @@ poll_interval = "60s"
 max_issues_in_progress = 1
 max_review_rounds = 3
 max_check_fix_requests = 3
+checks_wait_time = "60m"
 merge_method = "squash"
 
 [roles.implementer]
@@ -131,6 +133,7 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 |---|---|
 | `max_review_rounds` | Hostの設定と同じ |
 | `max_check_fix_requests` | Hostの設定と同じ |
+| `checks_wait_time` | Hostの設定と同じ。CIの長さはリポジトリごとに違うので、リポジトリが選べる |
 | `merge_method` | Hostの設定と同じ |
 | `priority_labels` | 着手の順番を決める優先度のラベルの一覧。優先度の高い順に書く。リポジトリの設定ファイルにだけ書ける。下の「優先度のラベル」を参照 |
 | `roles.<role>.cli` | Hostの設定と同じ |
