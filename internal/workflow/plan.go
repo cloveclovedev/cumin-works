@@ -327,8 +327,9 @@ func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Targ
 }
 
 // requirementIssueNow reads one requirement issue again with its
-// sub-issues, as subIssueNow does for a sub-issue. A closed requirement
-// issue is not read, as in a poll (issue-states.md, principle 6).
+// sub-issues, as subIssueNow does for a sub-issue. The read fails for an
+// issue that a poll does not read: a closed one, or one without the
+// requirement label (issue-states.md, principle 6).
 func (s *Service) requirementIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (RequirementIssue, bool) {
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -341,10 +342,6 @@ func (s *Service) requirementIssueNow(ctx context.Context, log *slog.Logger, tar
 		return RequirementIssue{}, false
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	if read.Issue.Closed {
-		log.Error("the issue was not read again: it is closed")
-		return RequirementIssue{}, false
-	}
 	return toRequirementIssue(read.Issue), true
 }
 

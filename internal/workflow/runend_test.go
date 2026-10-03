@@ -3,8 +3,11 @@ package workflow_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
 
 // pollQueries counts the poll queries that the fake GitHub received. Only
@@ -88,5 +91,104 @@ func TestR2_TheEndOfAPlannerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 	}
 	if n := sc.issueReads(6); n != 1 {
 		t.Errorf("%d reads of issue #6, want 1", n)
+	}
+}
+
+// closeRequirementIssue closes the requirement issue #6, as the Owner does
+// on GitHub.
+func (sc *scene) closeRequirementIssue(t *testing.T) {
+	t.Helper()
+	requirement := sc.fake.Issue(sc.repo, 6)
+	requirement.Closed = true
+	sc.fake.AddIssue(sc.repo, requirement)
+}
+
+// Principle 6 (issue-states.md): closed requirement issues and their
+// sub-issues are not read. A requirement issue that closes during an
+// Implementer run gets no action at the end of the run: a poll would not
+// read its sub-issue, so the read of one issue does not either, and the
+// label stays.
+func TestI2_ARequirementIssueClosedDuringTheRunGetsNoAction(t *testing.T) {
+	sc := newScene(t, cliOptions{holds: true})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+	if err := service.Poll(t.Context()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+
+	sc.closeRequirementIssue(t)
+	sc.release(t)
+	service.Wait()
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/implementing"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/implementing (no action)", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none", n)
+	}
+	if !strings.Contains(sc.logs.String(), "the parent of issue #10 is not a requirement issue of the poll: issue #6 is not open") {
+		t.Error("the log does not say that the requirement issue #6 is not open")
+	}
+	if n := sc.pollQueries(); n != 1 {
+		t.Errorf("%d poll queries, want 1", n)
+	}
+}
+
+// The same for the approval of the Reviewer: a risk/low pull request is not
+// merged when the requirement issue closed during the Reviewer run.
+func TestI6_ARequirementIssueClosedDuringTheReviewerRunIsNotMerged(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}, holds: true})
+	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 10, Parent: 6, Title: subIssueTitle,
+		Labels: []string{"cumin/status/awaiting-checks", "risk/low"},
+	})
+	service := sc.service()
+	if err := service.Poll(t.Context()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+
+	sc.closeRequirementIssue(t)
+	sc.release(t)
+	service.Wait()
+
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/reviewing"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/reviewing (no action)", got)
+	}
+	if !strings.Contains(sc.logs.String(), "the parent of issue #10 is not a requirement issue of the poll: issue #6 is not open") {
+		t.Error("the log does not say that the requirement issue #6 is not open")
+	}
+}
+
+// The same for the Planner: a requirement issue that closes during the
+// split keeps its label, and the Owner gets no notification.
+func TestR2_ARequirementIssueClosedDuringTheSplitGetsNoAction(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
+	service := sc.service()
+	if err := service.Poll(t.Context()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+
+	sc.closeRequirementIssue(t)
+	sc.release(t)
+	service.Wait()
+
+	want := []string{githubtest.RequirementLabel, "cumin/status/planning"}
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v (no action)", got, want)
+	}
+	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
+		t.Errorf("%d notifications, want none: %v", len(messages), messages)
+	}
+	if !strings.Contains(sc.logs.String(), "issue #6 is not open") {
+		t.Error("the log does not say that the requirement issue #6 is not open")
 	}
 }

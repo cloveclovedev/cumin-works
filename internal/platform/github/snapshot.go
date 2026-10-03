@@ -57,6 +57,11 @@ const (
 	snapshotReviews = 100
 )
 
+// requirementLabel marks a requirement issue (issue-states.md). The poll
+// reads the open issues with this label, and the read of one issue refuses
+// an issue that the poll does not read.
+const requirementLabel = "cumin/type/requirement"
+
 // Paths of the files that a target repository keeps on its default branch.
 // cumin reads them with the poll query, never from a pull request branch
 // (cumin-core.md, the topic on settings).
@@ -257,7 +262,7 @@ const snapshotQuery = `query($owner: String!, $name: String!, $first: Int!, $aft
     defaultBranchRef @include(if: $repositoryFiles) { name target { oid } }
     cuminConfig: object(expression: "HEAD:` + CuminConfigPath + `") @include(if: $repositoryFiles) { ...cuminFile }
     cuminRiskCriteria: object(expression: "HEAD:` + CuminRiskCriteriaPath + `") @include(if: $repositoryFiles) { ...cuminFile }
-    issues(states: [OPEN], labels: ["cumin/type/requirement"], first: $first, after: $after) {
+    issues(states: [OPEN], labels: ["` + requirementLabel + `"], first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes { ...requirementIssueFields }
     }
@@ -330,6 +335,13 @@ fragment subIssueFields on Issue {
 // every page of the repository again. The default branch is a scalar path:
 // the merge reads the required checks of that branch.
 //
+// The read returns an issue only when a poll reads it too: a requirement
+// issue is open and has the requirement label, and a sub-issue has such a
+// parent (issue-states.md, principle 6: closed requirement issues and their
+// sub-issues are not read). subIssueQuery reads the state and the labels of
+// the parent for that. Any other issue is an error, so that a rule of the
+// run end acts only when the poll would act.
+//
 // Measured on cumin-works on 2026-10-03 with rateLimit { cost }: 2 points for
 // a requirement issue with its sub-issues, and 1 point for a sub-issue.
 const requirementIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
@@ -344,7 +356,10 @@ const requirementIssueQuery = `query($owner: String!, $name: String!, $number: I
 const subIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef { name }
-    issue(number: $number) { ...subIssueFields }
+    issue(number: $number) {
+      ...subIssueFields
+      parent { number state labels(first: $labels) { pageInfo { hasNextPage } nodes { name } } }
+    }
   }
   rateLimit { cost remaining }
 }
@@ -462,6 +477,26 @@ type issueNode struct {
 		PageInfo pageInfo          `json:"pageInfo"`
 		Nodes    []pullRequestNode `json:"nodes"`
 	} `json:"closedByPullRequestsReferences"`
+	// Parent is read by the query of one sub-issue only.
+	Parent *issueNode `json:"parent"`
+}
+
+// polledAsRequirement says why a poll does not read the node as a
+// requirement issue, or nil when it does: the poll reads the open issues
+// with the requirement label.
+func (n issueNode) polledAsRequirement() error {
+	if n.State != "OPEN" {
+		return fmt.Errorf("issue #%d is not open", n.Number)
+	}
+	if n.Labels.PageInfo.HasNextPage {
+		return fmt.Errorf("issue #%d has more than %d labels", n.Number, snapshotLabels)
+	}
+	for _, label := range n.Labels.Nodes {
+		if label.Name == requirementLabel {
+			return nil
+		}
+	}
+	return fmt.Errorf("issue #%d has no label %s", n.Number, requirementLabel)
 }
 
 type pullRequestNode struct {
@@ -776,19 +811,33 @@ func (n issueNode) issue() (Issue, error) {
 
 // ReadRequirementIssue reads one requirement issue with its sub-issues, as
 // one poll reads it, in one GraphQL query. An issue over a limit of the
-// query is an error that names the issue.
+// query is an error that names the issue. An issue that a poll does not read
+// (closed, or without the requirement label) is an error too.
 func (c *AppClient) ReadRequirementIssue(ctx context.Context, token, owner, repo string, number int) (IssueRead, error) {
-	return c.readIssue(ctx, token, owner, repo, number, requirementIssueQuery, map[string]any{"subIssues": snapshotSubIssues})
+	return c.readIssue(ctx, token, owner, repo, number, requirementIssueQuery, map[string]any{"subIssues": snapshotSubIssues},
+		func(n issueNode) error { return n.polledAsRequirement() })
 }
 
 // ReadSubIssue reads one sub-issue with its open closing pull requests, as
 // one poll reads it, in one GraphQL query. An issue over a limit of the
-// query is an error that names the issue.
+// query is an error that names the issue. An issue that a poll does not read
+// (no parent, or a parent that is closed or has no requirement label) is an
+// error too.
 func (c *AppClient) ReadSubIssue(ctx context.Context, token, owner, repo string, number int) (IssueRead, error) {
-	return c.readIssue(ctx, token, owner, repo, number, subIssueQuery, map[string]any{})
+	return c.readIssue(ctx, token, owner, repo, number, subIssueQuery, map[string]any{}, func(n issueNode) error {
+		if n.Parent == nil {
+			return fmt.Errorf("issue #%d has no parent issue", n.Number)
+		}
+		if err := n.Parent.polledAsRequirement(); err != nil {
+			return fmt.Errorf("the parent of issue #%d is not a requirement issue of the poll: %w", n.Number, err)
+		}
+		return nil
+	})
 }
 
-func (c *AppClient) readIssue(ctx context.Context, token, owner, repo string, number int, query string, variables map[string]any) (IssueRead, error) {
+// readIssue runs one of the two queries. polled says why a poll does not
+// read the issue, or nil when it does.
+func (c *AppClient) readIssue(ctx context.Context, token, owner, repo string, number int, query string, variables map[string]any, polled func(issueNode) error) (IssueRead, error) {
 	for name, value := range map[string]any{
 		"owner": owner, "name": repo, "number": number,
 		"labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
@@ -812,6 +861,9 @@ func (c *AppClient) readIssue(ctx context.Context, token, owner, repo string, nu
 	}
 	if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
 		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: the response has no issue", number, owner, repo)
+	}
+	if err := polled(*resp.Data.Repository.Issue); err != nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
 	}
 	issue, err := resp.Data.Repository.Issue.issue()
 	if err != nil {

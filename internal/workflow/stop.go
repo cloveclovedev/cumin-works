@@ -165,9 +165,10 @@ func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled boo
 // subIssueNow reads one sub-issue again, and only that issue. A rule that
 // the end of a run triggers judges on the facts of that moment
 // (cumin-core.md, the topic on the GitHub client). The second value is
-// false when the issue could not be read; the caller then
-// leaves the labels alone, because writing a list without the risk label
-// would remove it.
+// false when the issue could not be read, or when a poll does not read it
+// (its requirement issue is closed, issue-states.md, principle 6); the
+// caller then leaves the labels alone, because writing a list without the
+// risk label would remove it.
 func (s *Service) subIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (SubIssue, bool) {
 	token, err := target.Token(ctx)
 	if err != nil {

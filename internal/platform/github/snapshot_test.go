@@ -579,3 +579,42 @@ func TestReadSubIssue_AnIssueThatDoesNotExistIsAnError(t *testing.T) {
 		t.Errorf("err = %v, want an error that names issue #7", err)
 	}
 }
+
+// The read of one issue returns an issue only when a poll reads it too
+// (issue-states.md, principle 6): a sub-issue needs an open parent with the
+// requirement label, and a requirement issue is open and has that label.
+func TestReadOneIssue_AnIssueThatThePollDoesNotReadIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	// #3 is a closed requirement issue, #5 has no requirement label, and
+	// #9 has no parent.
+	fake.AddIssue(repo, &githubtest.Issue{Number: 3, Closed: true, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 4, Parent: 3, Labels: []string{"risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 5, Labels: []string{"question"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 7, Parent: 5, Labels: []string{"risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 9, Labels: []string{"risk/low"}})
+	client := github.NewAppClient(server.URL, server.Client())
+	ctx := context.Background()
+
+	for number, want := range map[int]string{
+		4: "read issue #4 of example-org/example-repo: the parent of issue #4 is not a requirement issue of the poll: issue #3 is not open",
+		7: "read issue #7 of example-org/example-repo: the parent of issue #7 is not a requirement issue of the poll: issue #5 has no label cumin/type/requirement",
+		9: "read issue #9 of example-org/example-repo: issue #9 has no parent issue",
+	} {
+		if _, err := client.ReadSubIssue(ctx, githubtest.Token, "example-org", "example-repo", number); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("ReadSubIssue(%d): err = %v, want %q", number, err, want)
+		}
+	}
+	for number, want := range map[int]string{
+		3: "read issue #3 of example-org/example-repo: issue #3 is not open",
+		5: "read issue #5 of example-org/example-repo: issue #5 has no label cumin/type/requirement",
+	} {
+		if _, err := client.ReadRequirementIssue(ctx, githubtest.Token, "example-org", "example-repo", number); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("ReadRequirementIssue(%d): err = %v, want %q", number, err, want)
+		}
+	}
+	snapshot, err := client.ReadSnapshot(ctx, githubtest.Token, "example-org", "example-repo")
+	if err != nil || len(snapshot.RequirementIssues) != 0 {
+		t.Errorf("ReadSnapshot = %+v, %v; want no requirement issue, as the reads of one issue say", snapshot.RequirementIssues, err)
+	}
+}

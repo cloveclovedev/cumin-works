@@ -1555,8 +1555,9 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 // serveOneIssue answers the query of one issue with the fields of the poll
 // query. The query of a requirement issue carries the page size of the
 // sub-issues, and asks for no pull request of the issue itself; the query of
-// a sub-issue carries no such size, and asks for no sub-issue. Official:
-// Repository.issue.
+// a sub-issue carries no such size, asks for no sub-issue, and asks for the
+// state and the labels of the parent. Official: Repository.issue and
+// Issue.parent.
 func (f *Fake) serveOneIssue(w http.ResponseWriter, repo *Repository, number, labels, subIssues, blockedBy, pullRequests, checks, reviews int) {
 	issue, ok := repo.Issues[number]
 	if !ok {
@@ -1569,6 +1570,14 @@ func (f *Fake) serveOneIssue(w http.ResponseWriter, repo *Repository, number, la
 	node := f.issueNode(repo, issue, labels, subIssues, blockedBy, pullRequests, checks, reviews)
 	if subIssues == 0 {
 		delete(node, "subIssues")
+		node["parent"] = nil
+		if parent, ok := repo.Issues[issue.Parent]; ok {
+			node["parent"] = map[string]any{
+				"number": parent.Number,
+				"state":  state(parent.Closed),
+				"labels": connection(parent.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
+			}
+		}
 	} else {
 		delete(node, "closedByPullRequestsReferences")
 	}
