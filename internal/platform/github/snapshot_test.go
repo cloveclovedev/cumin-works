@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -405,5 +406,54 @@ func TestReadSnapshot_AnUnknownMergeableValueIsAnError(t *testing.T) {
 	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
 	if err == nil || !strings.Contains(err.Error(), `pull request #3 has the unknown mergeable value "BLOCKED"`) {
 		t.Errorf("ReadSnapshot = %v, want an error that names pull request #3 and the value", err)
+	}
+}
+
+// The time of the head commit is zero when the last commit that GitHub
+// lists is not the head commit (a push came between the two reads), and
+// when GitHub lists no commit: a later rule must not count a wait from the
+// time of another commit.
+func TestReadSnapshot_TheHeadCommitTimeIsZeroWhenTheLastCommitIsNotTheHead(t *testing.T) {
+	tests := []struct {
+		name    string
+		commits string
+		want    time.Time
+	}{
+		{"the last commit is the head commit", `[{"commit":{"oid":"222","committedDate":"2026-10-03T01:02:03Z"}}]`, time.Date(2026, 10, 3, 1, 2, 3, 0, time.UTC)},
+		{"the last commit is another commit", `[{"commit":{"oid":"111","committedDate":"2026-10-03T01:02:03Z"}}]`, time.Time{}},
+		{"no commit", `[]`, time.Time{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			answer := `{"data":{"repository":{"defaultBranchRef":{"name":"main","target":{"oid":"abc"}},
+			  "cuminConfig":null,"cuminRiskCriteria":null,
+			  "issues":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
+			    {"number":6,"state":"OPEN","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
+			     "subIssues":{"pageInfo":{"hasNextPage":false},"nodes":[
+			       {"number":10,"title":"x","state":"OPEN","labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
+			        "blockedBy":{"pageInfo":{"hasNextPage":false},"nodes":[]},
+			        "closedByPullRequestsReferences":{"pageInfo":{"hasNextPage":false},"nodes":[
+			          {"number":21,"headRefOid":"222","headRefName":"cumin/10-x","mergeable":"MERGEABLE","author":null,
+			           "commits":{"nodes":` + tt.commits + `},
+			           "labels":{"pageInfo":{"hasNextPage":false},"nodes":[]},
+			           "statusCheckRollup":null,
+			           "reviews":{"pageInfo":{"hasNextPage":false},"nodes":[]}}]}}]}}]}},
+			  "rateLimit":{"cost":17,"remaining":4983}}}`
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, answer)
+			}))
+			defer server.Close()
+			client := github.NewAppClient(server.URL, server.Client())
+
+			snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+			if err != nil {
+				t.Fatalf("ReadSnapshot: %v", err)
+			}
+			pr := snapshot.RequirementIssues[0].SubIssues[0].PullRequests[0]
+			if !pr.HeadCommittedAt.Equal(tt.want) {
+				t.Errorf("head commit time = %v, want %v", pr.HeadCommittedAt, tt.want)
+			}
+		})
 	}
 }
