@@ -24,6 +24,10 @@ type keptStep struct {
 	// already happened is not made twice. It returns an error only for a
 	// temporary failure.
 	run func(ctx context.Context) error
+	// rest is what follows a try that ended without a failure: work that
+	// can take long, such as an agent run or the merge. run sets it at every
+	// try, or leaves it nil. It runs once, and it is never tried again.
+	rest func(ctx context.Context)
 	// next is the time of the next try. A poll before it leaves the step.
 	next time.Time
 }
@@ -42,6 +46,21 @@ func (s *Service) keepStep(key inProgressKey, step *keptStep, reason error) {
 	s.progressMu.Unlock()
 	step.log.Warn("kept "+step.name+" after a temporary failure: a later poll runs it again",
 		"reason", reason.Error(), "next_try", step.next.UTC().Format(time.RFC3339))
+}
+
+// tryStep runs the first try of a step, at the end of an agent run: a
+// temporary failure keeps the step, and a try that ended goes on with the
+// rest of the step. A try of the kept step runs in a poll (runKeptSteps).
+func (s *Service) tryStep(ctx context.Context, key inProgressKey, step *keptStep) {
+	if err := step.run(ctx); err != nil {
+		if ctx.Err() == nil {
+			s.keepStep(key, step, err)
+		}
+		return
+	}
+	if step.rest != nil {
+		step.rest(ctx)
+	}
 }
 
 // dueKeptSteps takes the kept steps whose time has come, in a fixed order.
@@ -67,7 +86,9 @@ func (s *Service) dueKeptSteps(now time.Time) []inProgressKey {
 // set of issues in work, as the end of an agent run does. A step that fails
 // again with a temporary failure waits for the delay once more. Before the
 // reset of a full rate limit the client sends nothing, so the step fails
-// again and waits.
+// again and waits. The rest of a step that ended runs in its own goroutine,
+// so that the poll does not wait for an agent run; the issue stays in the
+// set of issues in work until the rest ends.
 func (s *Service) runKeptSteps(ctx context.Context) {
 	for _, key := range s.dueKeptSteps(s.now()) {
 		if ctx.Err() != nil {
@@ -87,7 +108,18 @@ func (s *Service) runKeptSteps(ctx context.Context) {
 		}
 		s.progressMu.Lock()
 		delete(s.keptSteps, key)
-		s.endInProgress(key)
+		if step.rest == nil {
+			s.endInProgress(key)
+		}
 		s.progressMu.Unlock()
+		if step.rest == nil {
+			continue
+		}
+		s.running.Add(1)
+		go func() {
+			defer s.running.Done()
+			defer s.endRun(ctx, key)
+			step.rest(ctx)
+		}()
 	}
 }
