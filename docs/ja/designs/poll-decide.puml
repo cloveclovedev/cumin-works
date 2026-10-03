@@ -25,6 +25,14 @@ partition "Decision (pure function, no I/O)" {
   - the pull request is not CONFLICTING
   - a required check failed on the head commit
     of the pull request;
+  :Collect I15 candidates
+  - open sub-issues with cumin/status/awaiting-checks
+  - the pull request is not CONFLICTING
+  - no required check failed, and a required check
+    has not reported on the head commit
+  - checks_wait_time is over, counted from the later
+    one of the label time and the head commit time
+    (the time of the poll is an input value);
   :Count the issues in progress
   - requirement issues with cumin/status/planning
   - open sub-issues with implementing,
@@ -59,7 +67,7 @@ partition "Decision (pure function, no I/O)" {
   - its cumin/status/* and risk/* differ
     from the issue in this snapshot;
   :Return the list of actions
-  (I14, I3, I4, R1 and I1, I12, I13, I11, in this order);
+  (I14, I3, I4, I15, R1 and I1, I12, I13, I11, in this order);
 }
 partition "Apply (in the order of the list)" {
   :I14: change the label to cumin/status/implementing,
@@ -73,6 +81,11 @@ partition "Apply (in the order of the list)" {
   else (no)
     :hand it back to the Owner (row I4);
   endif
+  :I15: change the label to
+  cumin/status/awaiting-owner-decision, then
+  hand it back to the Owner (row I15) with
+  the head commit, the required checks that
+  have not reported, and the time waited;
   :R1: change the label to cumin/status/planning,
   then ask the Planner to split
   I1: change the label to cumin/status/implementing,

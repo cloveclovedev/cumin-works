@@ -4,7 +4,7 @@ package workflow
 // row of issue-states.md that hands work back uses it with its own row
 // number: post one comment on the issue, replace the status label with
 // cumin/status/awaiting-owner-decision, then notify the Owner. I2, I4, and
-// R2, I3, I5, I8, and I10 use it today.
+// R2, I3, I5, I8, I10, and I15 use it today.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
 
@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
@@ -53,6 +54,9 @@ const (
 	// while its issue waits for the checks: a conflict resolution that
 	// left the head where it was.
 	RowI14 = "I14"
+	// RowI15 is a required check that did not report on the head commit
+	// within the wait time of the repository.
+	RowI15 = "I15"
 )
 
 // The rows that start the Planner (R1, R4) and that move a requirement
@@ -83,7 +87,7 @@ type stop struct {
 	// comment is the text to post on the issue.
 	comment string
 	// labelDone says that the caller already replaced the status label.
-	// A stop that a poll decides (I4) changes the label first: a label that
+	// A stop that a poll decides (I4, I15) changes the label first: a label that
 	// cumin cannot change would otherwise repeat the comment and the
 	// notification at every poll (principle 3).
 	labelDone bool
@@ -253,6 +257,18 @@ func RiskLabelReason(decision MergeDecision) string {
 // that conflicted.
 func ConflictNotResolvedReason(pullRequest int) string {
 	return fmt.Sprintf("The Implementer reported done after the conflict resolution, but the head of the pull request #%d is still the commit that conflicted with the default branch.", pullRequest)
+}
+
+// UnreportedChecksReason is the sentence of I15: the facts that cumin sees,
+// without a cause. It names the head commit, each required check that has
+// not reported, and the time that cumin waited.
+func UnreportedChecksReason(a StopForUnreportedChecks) string {
+	names := make([]string, 0, len(a.Unreported))
+	for _, check := range a.Unreported {
+		names = append(names, check.Name)
+	}
+	return fmt.Sprintf("The required checks did not report (%s) on the head commit %s of the pull request #%d. cumin waited %s, longer than the wait time of this repository (checks_wait_time).",
+		strings.Join(names, ", "), a.HeadCommit, a.PullRequest, a.Waited.Round(time.Second))
 }
 
 // MergeHeadMovedReason is the sentence of a merge whose head is no longer
