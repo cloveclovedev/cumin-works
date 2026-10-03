@@ -216,9 +216,7 @@ func (s *Service) runAndKeep(ctx context.Context, log *slog.Logger, target Targe
 		kept = true
 		return run(ctx, again)
 	}
-	if err := step.run(ctx); err != nil && ctx.Err() == nil {
-		s.keepStep(inProgressKey{repository: target.Repository.String(), issue: number}, step, err)
-	}
+	s.tryStep(ctx, inProgressKey{repository: target.Repository.String(), issue: number}, step)
 }
 
 // stopAfterPlannerBlocked stops the requirement issue for the Owner after a

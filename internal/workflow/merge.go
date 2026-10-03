@@ -44,24 +44,28 @@ func (s *Service) closeWait() time.Duration {
 // ownerLogin is the login of the Owner that the Reviewer run holds; a
 // conflict resolution carries it, because no later poll acts on an issue
 // in cumin/status/reviewing after a read that failed here.
-func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest, ownerLogin string) {
+//
+// The merge is the rest of the step: the function returns it, and the
+// caller runs it. A temporary failure of the token, of a read, or of a
+// label change is returned, for the kept step (keptstep.go).
+func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest, ownerLogin string, try *reviewTry) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("I6: no token; the issue keeps its label", "error", err.Error())
-		return
+		return nil, temporary(err)
 	}
 	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
 		log.Error("I6: the issue was not read again; the issue keeps its label", "error", err.Error())
-		return
+		return nil, temporary(err)
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
 	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
 	if err != nil {
 		log.Error("I6: the required checks were not read; the issue keeps its label", "error", err.Error())
-		return
+		return nil, temporary(err)
 	}
 	// The checks come from this read, not from the read that found the
 	// review: a check can run again in between. A pull request that is gone
@@ -80,15 +84,17 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 	log.Info("I6: decided on the approved pull request", "decision", decision.String(), "pull_request", pr.Number)
 	switch decision {
 	case MergeNow:
-		s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, read.DefaultBranch,
-			func(string) (string, error) { return ownerLogin, nil })
+		return func(ctx context.Context) {
+			s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, read.DefaultBranch,
+				func(string) (string, error) { return ownerLogin, nil })
+		}, nil
 	case MergeAskOwner:
-		s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr)
+		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, try)
 	case MergeChecksNotPassed:
-		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingChecks)
-		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
+		labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingChecks, try)
+		if err != nil {
 			log.Error("I6: the label was not changed", "error", err.Error())
-			return
+			return nil, temporary(err)
 		}
 		log.Info("I6: a required check does not pass on the approved commit; the issue waits for the checks again", "labels", labels)
 	default:
@@ -98,18 +104,23 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 			comment: StopNote(RowI6, reason, pr.Number, false),
 		})
 	}
+	return nil, nil
 }
 
 // askOwnerToMerge applies I7: the label cumin/status/awaiting-owner-review,
-// then one notification that links the pull request. A label that fails
-// does not hold back the notification, because the end of the Reviewer run
-// happens once, and the Owner must still learn that the pull request
-// waits.
-func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest) {
+// then one notification that links the pull request. A label change that
+// ends with a temporary failure is returned, without the notification: the
+// kept step runs again, and notifies then. Any other failure of the label
+// does not hold back the notification, because that step does not run
+// again, and the Owner must still learn that the pull request waits.
+func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest, try *reviewTry) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerReview)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
+	labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingOwnerReview, try)
+	if err != nil {
 		log.Error("I7: the label was not changed", "error", err.Error())
+		if temporary(err) != nil {
+			return err
+		}
 	} else {
 		log.Info("I7: the merge waits for the Owner", "labels", labels, "pull_request", pr.Number)
 	}
@@ -120,6 +131,7 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 		Subject:    fmt.Sprintf("issue #%d", sub.Number),
 		Link:       github.PullRequestURL(owner, repo, pr.Number),
 	})
+	return nil
 }
 
 // mergeStep merges the pull request at its head commit with merge_method of

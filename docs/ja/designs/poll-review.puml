@@ -1,5 +1,5 @@
 @startuml poll-review
-' cumin works - the Reviewer request (I3), the check of its review after the run, I5, I8, and I10.
+' cumin works - the Reviewer request (I3), the check of its review after the run, the kept step after a temporary failure, I5, I8, and I10.
 ' Document: poll.md, section on the Reviewer request.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -28,7 +28,14 @@ endif
 repeat
   :Run the Reviewer ("review");
   if (Result?) then (blocked)
-    :I10: hand back to the Owner
+    repeat
+      :I10: read the issue of the run again;
+      backward :Keep the step (in memory).
+      The issue stays in work, with its label.
+      A poll 5 minutes later runs it again;
+    repeat while (The read failed with
+    a temporary failure?) is (yes) not (no)
+    :Hand back to the Owner
     (blocked_reason, no retry);
     stop
   elseif (abnormal end) then
@@ -36,7 +43,14 @@ repeat
     then hand back to the Owner (row I3);
     stop
   else (done)
-    :Read the issue of the run again;
+    repeat
+      :Read the issue of the run again;
+      backward :Keep the step (in memory).
+      The issue stays in work, with its label.
+      A poll 5 minutes later runs it again;
+    repeat while (A call to GitHub of this step failed
+    with a temporary failure? (this read, or below:
+    the required checks, a label change)) is (yes) not (no)
   endif
   backward:Ask once more in the same session;
 repeat while (Latest review of the Reviewer is on the head
