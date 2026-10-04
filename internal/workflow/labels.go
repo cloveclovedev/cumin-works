@@ -6,7 +6,8 @@ import "github.com/cloveclovedev/cumin-works/internal/platform/github"
 // repository when it starts, when they are missing: the table "Labels" of
 // docs/ja/requirements/workflow/issue-states.md. The colors are the ones of
 // the cumin-works repository. A test compares the names with the document.
-// Two type labels, seven status labels, and three risk labels.
+// Two type labels, fourteen status labels (seven of today and the seven new
+// names of the move of the labels), and three risk labels.
 func RepositoryLabels() []github.Label {
 	return []github.Label{
 		{Name: LabelRequirement, Color: "5319E7", Description: "This is a requirement issue"},
@@ -18,6 +19,13 @@ func RepositoryLabels() []github.Label {
 		{Name: LabelReviewing, Color: "1D76DB", Description: "The Reviewer works on the pull request"},
 		{Name: LabelAwaitingOwnerReview, Color: "FBCA04", Description: "Waiting for the Owner to review and approve"},
 		{Name: LabelAwaitingOwnerDecision, Color: "D93F0B", Description: "The agent cannot continue; waiting for a decision of the Owner"},
+		{Name: LabelChecking, Color: "BFD4F2", Description: "GitHub runs the required checks"},
+		{Name: LabelAccepting, Color: "1D76DB", Description: "The Planner checks the merged work against the requirement"},
+		{Name: LabelMerging, Color: "1D76DB", Description: "cumin merges the pull request and closes the issue"},
+		{Name: LabelAwaitingPlanReview, Color: "FBCA04", Description: "Waiting for the Owner to review the plan and the sub-issues"},
+		{Name: LabelAwaitingMergeDecision, Color: "FBCA04", Description: "Waiting for the Owner to review the pull request and decide the merge"},
+		{Name: LabelAwaitingAcceptance, Color: "FBCA04", Description: "Waiting for the Owner to accept the requirement or send work back"},
+		{Name: LabelAwaitingDecision, Color: "D93F0B", Description: "cumin cannot go on; waiting for an answer of the Owner"},
 		{Name: "risk/low", Color: "C2E0C6", Description: "A few lines with an obvious effect; cumin merges"},
 		{Name: "risk/medium", Color: "FEF2C0", Description: "Everything else; the Owner merges"},
 		{Name: "risk/high", Color: "F9D0C4", Description: "Cannot be undone by a revert; the Owner merges"},
