@@ -51,7 +51,9 @@ type Service struct {
 	Notify *notify.Notifier
 	// State is what cumin keeps on the Host for each implementation issue:
 	// the session of the last run, and the number of check fix requests
-	// (I4). A nil store keeps nothing, which is the same as losing the
+	// (I4); and for each requirement issue in cumin/status/accepting: the
+	// session of the Planner, and whether the acceptance check was requested
+	// again. A nil store keeps nothing, which is the same as losing the
 	// file: the next request starts a new session and counts from zero.
 	State *state.Store
 	// Settings are the Host settings. Each poll applies the
@@ -667,7 +669,11 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 				errs = append(errs, err)
 			}
 		case CheckAcceptance:
-			if err := s.checkAcceptance(ctx, token, target, settings, a); err != nil {
+			if err := s.checkAcceptance(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
+		case StopAcceptance:
+			if err := s.stopAcceptance(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Plan:

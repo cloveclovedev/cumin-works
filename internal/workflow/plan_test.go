@@ -344,10 +344,11 @@ func TestR2_EverySubIssueClosedSendsTheIssueBackToTheAcceptanceCheck(t *testing.
 		t.Errorf("%d notifications, want none", n)
 	}
 
-	// The next poll asks for the acceptance check (R4).
+	// The next poll asks for the acceptance check (R4). The fake Planner
+	// leaves no comment, so the acceptance check runs a second time.
 	sc.pollAndWait(t, service)
-	if n := sc.agentRuns(t); n != 2 {
-		t.Errorf("%d agent runs, want 2 (the split and the acceptance check)", n)
+	if n := sc.agentRuns(t); n != 3 {
+		t.Errorf("%d agent runs, want 3 (the split and the acceptance check, twice)", n)
 	}
 	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: acceptance check") {
 		t.Errorf("the second request is not an acceptance check:\n%s", text)
@@ -576,20 +577,19 @@ func TestR2_ALostLabelChangeToImplementingIsNotMadeTwiceAndNotifiesNobody(t *tes
 	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
 
 	// The poll runs the kept step first. Then it asks for the acceptance
-	// check (R4), which changes no label; that run holds until the release.
+	// check (R4), which moves the issue to cumin/status/accepting; that run
+	// holds until the release.
 	sc.clock.Set(sceneNow.Add(5 * time.Minute))
 	if err := service.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll at minute 5: %v", err)
 	}
 	waitForAgentRun(t, sc)
-	sc.release(t)
-	service.Wait()
 
 	if !strings.Contains(sc.logs.String(), "while the check of the split was kept; nothing changes") {
 		t.Errorf("the log does not say that the kept step changed nothing:\n%s", sc.logs.String())
 	}
-	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes {
-		t.Errorf("%d label changes of #6 by the kept step, want none", n-writes)
+	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
+		t.Errorf("%d label changes of #6, want only the move to accepting", n-writes)
 	}
 	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
 		t.Errorf("notifications = %v, want none", messages)
@@ -597,6 +597,11 @@ func TestR2_ALostLabelChangeToImplementingIsNotMadeTwiceAndNotifiesNobody(t *tes
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
 	}
+
+	// The Planner writes its comment, and the acceptance check ends.
+	acceptanceComment(sc, sceneNow, plannerLogin)
+	sc.release(t)
+	service.Wait()
 	if got := workflow.InProgressIssues(service); len(got) != 0 {
 		t.Errorf("issues in work = %v, want none after the kept step ended", got)
 	}

@@ -366,9 +366,10 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    |---|---|
    | `R4: read the comments` | sub-issue が全て閉じた要求Issueのコメントを読んだ。確認が終わるまで、定期確認のたびに出る |
    | `worktree removed`、`worktree created` | 前の依頼の worktree を消し、merge された main で開き直した。初めての要求Issueでは `worktree removed` は出ない |
-   | `R4: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した。ラベルは替えない |
+   | `R4: moved the requirement issue to accepting` | ラベルを `cumin/status/accepting` に替えた |
+   | `R4: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した |
    | `agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ。使用率を読む `quota usage read` は出ない |
-   | `R7: the requirement issue waits for the acceptance of the Owner` | 次の定期確認で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
+   | `R7: the requirement issue waits for the acceptance of the Owner` | 実行の終わり (または次の定期確認) で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
    | `the Owner was notified` (`row` が `R7`) | 通知した |
 
    Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`R7: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
@@ -379,7 +380,7 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 要求Issueのラベルが、Planner の実行中も `cumin/status/implementing` のままで、確認のコメントのあとに `cumin/status/awaiting-acceptance` に移った | Issue のイベント |
+| 1 | 要求Issueのラベルが、依頼の前に `cumin/status/accepting` に移り、確認のコメントのあとに `cumin/status/awaiting-acceptance` に移った | Issue のイベント |
 | 2 | 要求Issueに、`## Acceptance check` で始まる Planner の App のコメントがちょうど1つある。Requirements の1項目ごとに1行あり、どの行にも根拠がある | 要求Issueのコメント |
 | 3 | 実行で Issue が作られず、sub-issue も変わらなかった | sandbox の Issue の一覧と、sub-issue の更新の時刻 |
 | 4 | Planner は、コメントの前に `cumin-acceptance-check` を呼んだ。skill の一覧は Plan-1 の7と同じ | Claude Code のセッションの記録 |
@@ -792,7 +793,7 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run Te
 
 | # | 確かめること | 見る事実 |
 |---|---|---|
-| 1 | 要求Issueの状態が `ready`、`planning`、`awaiting-plan-review`、`implementing`、`awaiting-acceptance` の順に移った。`ready` を付けたのは Owner で、ほかは cumin-core の App である | Issue のイベント |
+| 1 | 要求Issueの状態が `ready`、`planning`、`awaiting-plan-review`、`implementing`、`accepting`、`awaiting-acceptance` の順に移った。`ready` を付けたのは Owner で、ほかは cumin-core の App である | Issue のイベント |
 | 2 | sub-issue が2つで、作成者が Planner の App である。risk が1つずつ付いている。`## Plan for approval` のコメントが1つある | sub-issue の一覧、コメント |
 | 3 | 実装Issueの状態が `ready`、`implementing`、`checking`、`reviewing` の順に始まる。`risk/medium` は最後に `awaiting-merge-decision` に移る | Issue のイベント |
 | 4 | 実装Issueごとに Pull Request がちょうど1つある。作成者は Implementer の App、ブランチは `cumin/<Issue番号>-...`、本文に `Closes #<Issue番号>` がある | 閉じるリンク、Pull Request |

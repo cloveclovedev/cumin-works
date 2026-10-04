@@ -1,6 +1,8 @@
 // Package state keeps the small amount of state that cumin holds on the
 // Host: for each implementation issue, the session of the last agent run and
-// the number of check fix requests (I4); and the latest quota usage (Q3). The requirement allows only what
+// the number of check fix requests (I4); for each requirement issue in
+// cumin/status/accepting, the session of the last Planner run and the number
+// of repeated acceptance check requests; and the latest quota usage (Q3). The requirement allows only what
 // cumin can lose without losing work (cumin-core.md, the section on what
 // cumin keeps): a lost file starts a new session and a count of zero.
 //
@@ -39,6 +41,11 @@ type Issue struct {
 	// CheckFixRequests is how many check fixes cumin has asked for since
 	// the Owner last added cumin/status/ready (I4).
 	CheckFixRequests int `json:"check_fix_requests,omitempty"`
+	// AcceptanceRequests is how many times cumin has requested the
+	// acceptance check again during this stay of a requirement issue in
+	// cumin/status/accepting. The entry of a requirement issue holds it,
+	// with the session of the last Planner run in SessionID.
+	AcceptanceRequests int `json:"acceptance_requests,omitempty"`
 }
 
 // empty reports whether the entry holds nothing, so that Set removes it.

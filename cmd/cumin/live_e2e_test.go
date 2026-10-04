@@ -685,12 +685,12 @@ func TestLiveE2E(t *testing.T) {
 	e.record("Follow-up notes (I9)", "one note of cumin-core for each pull request, with the one line of \"Follow-up\" and no signature, before the acceptance check: "+strings.Join(notes, ", "))
 
 	checkHeadings(t, "the acceptance check", checks[0].Body, "### Constraints", "### Left after this requirement", "### To accept")
-	path = e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-plan-review", "implementing", "awaiting-acceptance"}, "awaiting-acceptance")
+	path = e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-plan-review", "implementing", "accepting", "awaiting-acceptance"}, "awaiting-acceptance")
 	events := e.statusEvents(t, requirement)
 	if last := events[len(events)-1]; last.CreatedAt < checks[0].CreatedAt {
 		t.Errorf("the requirement issue went to awaiting-acceptance at %s, before the acceptance check at %s", last.CreatedAt, checks[0].CreatedAt)
 	}
-	e.record("Requirement to implementing, acceptance check, wait for the acceptance (R3, R4, R7)",
+	e.record("Requirement to implementing, to accepting for the acceptance check, wait for the acceptance (R3, R4, R7)",
 		fmt.Sprintf("states of #%d: %s; acceptance check of the Planner App %s", requirement, path, checks[0].HTMLURL))
 
 	// The log of cumin: the steps in order, the notifications, and nothing
@@ -711,7 +711,7 @@ func TestLiveE2E(t *testing.T) {
 	e.record("Log of the requirement issue", checkLogOrder(t, lines, e.repo, requirement,
 		"R1: moved the requirement issue to planning", "R1: requested the Planner", "R2: the split waits for the Owner",
 		"R3: the sub-issues of the requirement issue are in progress", "I9: wrote the follow-up note", "I9: wrote the follow-up note",
-		"R4: requested the Planner", "R7: the requirement issue waits for the acceptance of the Owner"))
+		"R4: moved the requirement issue to accepting", "R4: requested the Planner", "R7: the requirement issue waits for the acceptance of the Owner"))
 	e.record("Log of the risk/low sub-issue", checkLogOrder(t, lines, e.repo, low,
 		"I1: claimed the issue", "I2: verified the pull request", "I3: the pull request is ready for review",
 		"I3: the Reviewer approved the head commit", "I6: merged the pull request"))

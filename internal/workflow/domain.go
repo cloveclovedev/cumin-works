@@ -32,8 +32,7 @@ const (
 	LabelAwaitingOwnerDecision = "cumin/status/awaiting-owner-decision"
 	// The seven labels below are the new names of the states
 	// (issue-states.md, the move of the labels). cumin reads and writes
-	// them, except cumin/status/accepting and cumin/status/merging, which
-	// it only creates. The three old names above stay in RepositoryLabels
+	// them, except cumin/status/merging, which it only creates. The three old names above stay in RepositoryLabels
 	// until the last step of the move.
 	LabelChecking              = "cumin/status/checking"
 	LabelAccepting             = "cumin/status/accepting"
@@ -114,13 +113,14 @@ func (s Snapshot) WithPullRequests(pullRequests map[int][]PullRequest) Snapshot 
 }
 
 // HasIssueInWork reports whether an issue of the repository is in work:
-// an open requirement issue with cumin/status/ready or
-// cumin/status/planning, or an open sub-issue with cumin/status/ready,
+// an open requirement issue with cumin/status/ready,
+// cumin/status/planning, or cumin/status/accepting, or an open sub-issue with cumin/status/ready,
 // cumin/status/implementing, cumin/status/checking, or
 // cumin/status/reviewing. An issue that waits for the Owner is not in work.
 func (s Snapshot) HasIssueInWork() bool {
 	for _, requirement := range s.RequirementIssues {
-		if slices.Contains(requirement.Labels, LabelReady) || slices.Contains(requirement.Labels, LabelPlanning) {
+		if slices.Contains(requirement.Labels, LabelReady) || slices.Contains(requirement.Labels, LabelPlanning) ||
+			slices.Contains(requirement.Labels, LabelAccepting) {
 			return true
 		}
 		for _, sub := range requirement.SubIssues {
@@ -187,7 +187,8 @@ type RequirementIssue struct {
 	LabelTimesRead bool
 	// ReviewAt is when the status label of the issue was last added. R3
 	// reads it in cumin/status/awaiting-plan-review and in
-	// cumin/status/awaiting-acceptance.
+	// cumin/status/awaiting-acceptance, and the end of the acceptance check
+	// reads it in cumin/status/accepting.
 	ReviewAt time.Time
 	// CommentsRead says that AcceptanceCheckAt was read. The poll reads
 	// the comments only when R4 or R7 needs them (NeedsComments).
@@ -195,6 +196,15 @@ type RequirementIssue struct {
 	// AcceptanceCheckAt is when the newest acceptance check comment of the
 	// Planner App was written; zero when there is none.
 	AcceptanceCheckAt time.Time
+	// QuestionAt is when the newest decision request of the Planner App was
+	// written on the issue; zero when there is none. It is read with
+	// AcceptanceCheckAt.
+	QuestionAt time.Time
+	// AcceptanceRequestedAgain says that cumin already requested the
+	// acceptance check again during this stay in cumin/status/accepting.
+	// The count lives in the state file of the Host; a lost file reads as
+	// not requested again.
+	AcceptanceRequestedAgain bool
 	// ReadyRead says that ReadyOwner was read. The poll reads it only for
 	// a candidate of a start, and only when a slot is free
 	// (ReadyActorReads).
@@ -446,10 +456,23 @@ type ReviewRemaining struct {
 	Number int
 }
 
-// CheckAcceptance is the action of R4: request the acceptance check from
-// the Planner. The label stays cumin/status/implementing.
+// CheckAcceptance is the action "request the acceptance check" (R4): move
+// the requirement issue to cumin/status/accepting, and then request the
+// acceptance check from the Planner. With Again, it is the action "request
+// the acceptance check again": the issue is already in
+// cumin/status/accepting, and the Planner left no result there.
 type CheckAcceptance struct {
 	Number int
+	Again  bool
+}
+
+// StopAcceptance is the action "stop the acceptance check for the Owner":
+// the requirement issue moves from cumin/status/accepting to
+// cumin/status/awaiting-decision. With Question, the Planner wrote a
+// decision request, and cumin writes no reason of its own.
+type StopAcceptance struct {
+	Number   int
+	Question bool
 }
 
 // Accept is the action of R7: the acceptance check comment exists, so the
@@ -500,6 +523,7 @@ func (StartRequirement) isAction()        {}
 func (ReviewRemaining) isAction()         {}
 func (CheckAcceptance) isAction()         {}
 func (Accept) isAction()                  {}
+func (StopAcceptance) isAction()          {}
 func (MergeOwnerApproval) isAction()      {}
 func (FixOwnerReview) isAction()          {}
 
@@ -591,8 +615,9 @@ func PriorityRank(labels, parent, priority []string) int {
 	return len(priority)
 }
 
-// requirementMoves returns the actions of R3 and R6, lowest requirement
-// issue number first.
+// requirementMoves returns the actions of R3 and R6, and the way out of
+// cumin/status/accepting (AcceptanceEnd), lowest requirement issue number
+// first.
 func requirementMoves(snapshot Snapshot) []Action {
 	requirements := slices.Clone(snapshot.RequirementIssues)
 	slices.SortFunc(requirements, func(a, b RequirementIssue) int { return a.Number - b.Number })
@@ -605,6 +630,10 @@ func requirementMoves(snapshot Snapshot) []Action {
 			actions = append(actions, ReviewRemaining{Number: requirement.Number})
 		case accepted(requirement):
 			actions = append(actions, Accept{Number: requirement.Number})
+		default:
+			if action := AcceptanceEnd(requirement, snapshot.Running[requirement.Number]); action != nil {
+				actions = append(actions, action)
+			}
 		}
 	}
 	return actions
@@ -654,9 +683,18 @@ func remainingNeedReview(requirement RequirementIssue) bool {
 }
 
 // NeedsComments reports whether R4 or R7 needs the comments of the
-// requirement issue: it is in cumin/status/implementing, and it has one or
-// more sub-issues, all closed.
+// requirement issue: it is in cumin/status/accepting, or it is in
+// cumin/status/implementing and has one or more sub-issues, all closed.
 func NeedsComments(requirement RequirementIssue) bool {
+	if statusLabel(requirement.Labels) == LabelAccepting {
+		return true
+	}
+	return everySubIssueClosed(requirement)
+}
+
+// everySubIssueClosed reports whether the requirement issue is in
+// cumin/status/implementing with one or more sub-issues, all closed.
+func everySubIssueClosed(requirement RequirementIssue) bool {
 	if statusLabel(requirement.Labels) != LabelImplementing || len(requirement.SubIssues) == 0 {
 		return false
 	}
@@ -692,9 +730,43 @@ func checked(requirement RequirementIssue) bool {
 		!requirement.AcceptanceCheckAt.Before(lastClose(requirement))
 }
 
-// accepted is R7.
+// accepted is R7 for a requirement issue in cumin/status/implementing: the
+// comment exists before cumin moved the issue to cumin/status/accepting, so
+// no request is needed. AcceptanceEnd is R7 in cumin/status/accepting.
 func accepted(requirement RequirementIssue) bool {
-	return NeedsComments(requirement) && checked(requirement)
+	return everySubIssueClosed(requirement) && checked(requirement)
+}
+
+// AcceptanceEnd decides the way out of cumin/status/accepting from the
+// facts on GitHub, for a requirement issue whose Planner does not run. The
+// poll and the end of a Planner run both decide with it, so a restart of
+// cumin during the check loses nothing.
+//
+//   - An acceptance check comment after the last close: ask the Owner to
+//     accept (Accept).
+//   - A decision request of the Planner, written after the issue got
+//     cumin/status/accepting: stop the acceptance check for the Owner.
+//   - Neither comment: request the acceptance check again, once for each
+//     stay in cumin/status/accepting. The second time, stop the acceptance
+//     check for the Owner.
+//
+// It returns nil while the Planner runs, in every other state, and while
+// the comments or the label times were not read: the next poll decides.
+func AcceptanceEnd(requirement RequirementIssue, running bool) Action {
+	if statusLabel(requirement.Labels) != LabelAccepting || running || !requirement.CommentsRead {
+		return nil
+	}
+	switch {
+	case checked(requirement):
+		return Accept{Number: requirement.Number}
+	case !requirement.LabelTimesRead:
+		return nil
+	case !requirement.QuestionAt.IsZero() && !requirement.QuestionAt.Before(requirement.ReviewAt):
+		return StopAcceptance{Number: requirement.Number, Question: true}
+	case requirement.AcceptanceRequestedAgain:
+		return StopAcceptance{Number: requirement.Number}
+	}
+	return CheckAcceptance{Number: requirement.Number, Again: true}
 }
 
 // acceptanceChecks returns the starts of R4 before the limit: every
@@ -704,7 +776,7 @@ func accepted(requirement RequirementIssue) bool {
 func acceptanceChecks(snapshot Snapshot) []CheckAcceptance {
 	var checks []CheckAcceptance
 	for _, requirement := range snapshot.RequirementIssues {
-		if NeedsComments(requirement) && requirement.CommentsRead && !checked(requirement) &&
+		if everySubIssueClosed(requirement) && requirement.CommentsRead && !checked(requirement) &&
 			requirement.FollowUpsDone && !snapshot.Running[requirement.Number] {
 			checks = append(checks, CheckAcceptance{Number: requirement.Number})
 		}
@@ -725,6 +797,22 @@ func AcceptanceCheckAt(comments []Comment, planner string) time.Time {
 		}
 		first, _, _ := strings.Cut(strings.TrimLeft(comment.Body, " \t\r\n"), "\n")
 		if strings.TrimSpace(first) != acceptanceCheckHeading {
+			continue
+		}
+		if comment.CreatedAt.After(newest) {
+			newest = comment.CreatedAt
+		}
+	}
+	return newest
+}
+
+// QuestionAt returns when the newest decision request of the Planner App
+// was written: a comment whose first line starts with
+// DecisionRequestHeading. A comment of anyone else never counts.
+func QuestionAt(comments []Comment, planner string) time.Time {
+	var newest time.Time
+	for _, comment := range comments {
+		if planner == "" || comment.Author != planner || !strings.HasPrefix(firstBodyLine(comment.Body), DecisionRequestHeading) {
 			continue
 		}
 		if comment.CreatedAt.After(newest) {
@@ -825,7 +913,9 @@ func readyOfOwner(read bool, owner string) bool { return read && owner != "" }
 func readyOfAnother(read bool, owner string) bool { return read && owner == "" }
 
 // NeedsLabelTimes reports whether a rule needs the label times of the
-// requirement issue: R3 needs them (startNeedsLabelTimes), an open
+// requirement issue: R3 needs them (startNeedsLabelTimes), the requirement
+// issue is in cumin/status/accepting, whose end compares a decision request
+// of the Planner with the time of that label, an open
 // sub-issue waits in cumin/status/checking, whose wait is counted
 // from the time of that label, or an open sub-issue in
 // cumin/status/awaiting-merge-decision has a request for changes of a person
@@ -833,6 +923,7 @@ func readyOfAnother(read bool, owner string) bool { return read && owner == "" }
 // then does the poll read the times, so that the poll query keeps its cost.
 func NeedsLabelTimes(requirement RequirementIssue) bool {
 	return startNeedsLabelTimes(requirement) ||
+		statusLabel(requirement.Labels) == LabelAccepting ||
 		slices.ContainsFunc(requirement.SubIssues, openChecking) ||
 		slices.ContainsFunc(requirement.SubIssues, openWithChangeRequest)
 }
@@ -1155,14 +1246,15 @@ func sameLabels(a, b []string) bool {
 
 // inProgress counts the issues that fill the limit: open sub-issues in
 // implementing, checking, or reviewing, and requirement issues in
-// planning. A requirement issue in implementing (R3) has no agent of its
-// own, so it does not count.
+// planning or accepting. A requirement issue in implementing (R3) has no
+// agent of its own, so it does not count.
 func inProgress(snapshot Snapshot) int {
 	n := 0
 	for _, requirement := range snapshot.RequirementIssues {
-		// An acceptance check (R4) keeps cumin/status/implementing, so its
-		// running Planner counts by the running set.
-		if slices.Contains(requirement.Labels, LabelPlanning) || snapshot.Running[requirement.Number] {
+		// A requirement issue whose Planner runs under another label counts
+		// by the running set.
+		if slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting) ||
+			snapshot.Running[requirement.Number] {
 			n++
 		}
 		for _, sub := range requirement.SubIssues {
@@ -1231,6 +1323,13 @@ func subIssueCandidates(snapshot Snapshot) []Claim {
 func (s Snapshot) MovesWithoutOwner() bool {
 	if s.HasIssueChecking() {
 		return true
+	}
+	// The next poll decides the way out of cumin/status/accepting from the
+	// facts, also when no Planner runs.
+	for _, requirement := range s.RequirementIssues {
+		if slices.Contains(requirement.Labels, LabelAccepting) {
+			return true
+		}
 	}
 	for _, plan := range requirementCandidates(s) {
 		if requirement, _ := s.RequirementIssue(plan.Number); !readyOfAnother(requirement.ReadyRead, requirement.ReadyOwner) {
