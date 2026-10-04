@@ -467,8 +467,8 @@ func TestNeedsLabelTimes(t *testing.T) {
 }
 
 // R2 (issue-states.md): after a pass, an open sub-issue sends the split to
-// the Owner; every sub-issue closed sends the requirement issue back to
-// implementing, where R4 asks for the acceptance check again.
+// the Owner; every sub-issue closed sends the requirement issue to the
+// acceptance check.
 func TestSplitStatus_R2(t *testing.T) {
 	tests := []struct {
 		name string
@@ -476,12 +476,123 @@ func TestSplitStatus_R2(t *testing.T) {
 		want string
 	}{
 		{"one open sub-issue", []SubIssue{{Number: 10, Closed: true}, {Number: 11}}, LabelAwaitingPlanReview},
-		{"every sub-issue closed", []SubIssue{{Number: 10, Closed: true}, {Number: 11, Closed: true}}, LabelImplementing},
+		{"every sub-issue closed", []SubIssue{{Number: 10, Closed: true}, {Number: 11, Closed: true}}, LabelAccepting},
 	}
 	for _, tt := range tests {
 		if got := SplitStatus(RequirementIssue{Number: 6, SubIssues: tt.subs}); got != tt.want {
 			t.Errorf("%s: SplitStatus = %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+// The way out of cumin/status/planning (issue-states.md, the transitions
+// of a requirement issue): the same facts always give the same action, at a
+// poll and at the end of a Planner run.
+func TestSplitEnd(t *testing.T) {
+	labeledAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	planning := func(change func(*RequirementIssue)) RequirementIssue {
+		requirement := RequirementIssue{
+			Number: 6, Labels: []string{LabelRequirement, LabelPlanning},
+			SubIssues:    []SubIssue{{Number: 10, Labels: []string{"risk/low"}}},
+			CommentsRead: true, LabelTimesRead: true, ReviewAt: labeledAt,
+		}
+		if change != nil {
+			change(&requirement)
+		}
+		return requirement
+	}
+	noSubIssue := func(r *RequirementIssue) { r.SubIssues = nil }
+	tests := []struct {
+		name        string
+		requirement RequirementIssue
+		running     bool
+		want        Action
+	}{
+		{
+			name:        "a verified split with an open sub-issue asks the Owner to review the plan",
+			requirement: planning(nil),
+			want:        ReviewPlan{Number: 6},
+		},
+		{
+			name:        "a verified split with every sub-issue closed requests the acceptance check",
+			requirement: planning(func(r *RequirementIssue) { r.SubIssues[0].Closed = true }),
+			want:        CheckAcceptance{Number: 6},
+		},
+		{
+			name:        "no sub-issue requests the split again",
+			requirement: planning(noSubIssue),
+			want:        Plan{Number: 6, Again: true},
+		},
+		{
+			name: "no sub-issue after the second request stops for the Owner",
+			requirement: planning(func(r *RequirementIssue) {
+				noSubIssue(r)
+				r.SplitRequestedAgain = true
+			}),
+			want: StopSplit{Number: 6, Reason: SplitReason(SplitVerification{Failure: SplitNoSubIssue})},
+		},
+		{
+			name: "a sub-issue without a risk label after the second request stops for the Owner",
+			requirement: planning(func(r *RequirementIssue) {
+				r.SubIssues[0].Labels = nil
+				r.SplitRequestedAgain = true
+			}),
+			want: StopSplit{Number: 6, Reason: SplitReason(SplitVerification{Failure: SplitNoRiskLabel, SubIssue: 10})},
+		},
+		{
+			name: "a question after the label stops for the Owner at once",
+			requirement: planning(func(r *RequirementIssue) {
+				noSubIssue(r)
+				r.QuestionAt = labeledAt.Add(time.Minute)
+			}),
+			want: StopSplit{Number: 6, Question: true},
+		},
+		{
+			name:        "a question after the label decides before a verified split",
+			requirement: planning(func(r *RequirementIssue) { r.QuestionAt = labeledAt.Add(time.Minute) }),
+			want:        StopSplit{Number: 6, Question: true},
+		},
+		{
+			name: "a question from before the label belongs to an earlier stay",
+			requirement: planning(func(r *RequirementIssue) {
+				noSubIssue(r)
+				r.QuestionAt = labeledAt.Add(-time.Minute)
+			}),
+			want: Plan{Number: 6, Again: true},
+		},
+		{
+			name:        "a running Planner gives no action",
+			requirement: planning(nil),
+			running:     true,
+		},
+		{
+			name:        "comments that were not read give no action",
+			requirement: planning(func(r *RequirementIssue) { r.CommentsRead = false }),
+		},
+		{
+			name:        "label times that were not read give no action",
+			requirement: planning(func(r *RequirementIssue) { r.LabelTimesRead = false }),
+		},
+		{
+			name:        "another state gives no action",
+			requirement: planning(func(r *RequirementIssue) { r.Labels = []string{LabelRequirement, LabelAwaitingPlanReview} }),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SplitEnd(tt.requirement, tt.running); got != tt.want {
+				t.Errorf("SplitEnd = %#v, want %#v", got, tt.want)
+			}
+			// Decide gives the same action at a poll.
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{6: tt.running}}
+			var want []Action
+			if tt.want != nil {
+				want = []Action{tt.want}
+			}
+			if got := Decide(snapshot, 1, nil, nil, labeledAt, time.Hour); !slices.Equal(got, want) {
+				t.Errorf("Decide = %#v, want %#v", got, want)
+			}
+		})
 	}
 }
 
@@ -772,7 +883,7 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 		{"a ready sub-issue with an open blocked-by issue does not count", requirement(LabelImplementing, blocked(open)), false},
 		{"a ready requirement issue with an open blocked-by issue does not count", Snapshot{RequirementIssues: []RequirementIssue{
 			{Number: 6, Labels: []string{LabelRequirement, LabelReady}, BlockedBy: open}}}, false},
-		{"planning without an agent does not count", requirement(LabelPlanning), false},
+		{"planning without an agent counts: the next poll decides its way out", requirement(LabelPlanning), true},
 		{"implementing without an agent does not count", requirement(LabelImplementing, sub(10, LabelImplementing)), false},
 		{"reviewing without an agent does not count", requirement(LabelImplementing, sub(10, LabelReviewing)), false},
 		{"awaiting-plan-review does not count", requirement(LabelAwaitingPlanReview, sub(10, LabelAwaitingMergeDecision)), false},

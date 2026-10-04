@@ -26,7 +26,7 @@ import (
 func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token string, target Target, snapshot *Snapshot) {
 	for i := range snapshot.RequirementIssues {
 		requirement := &snapshot.RequirementIssues[i]
-		if !NeedsLabelTimes(*requirement) {
+		if !NeedsLabelTimes(*requirement) && !SplitNeedsFacts(*requirement, snapshot.Running[requirement.Number]) {
 			continue
 		}
 		times, rate, err := s.GitHub.ReadLabelTimes(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number)
