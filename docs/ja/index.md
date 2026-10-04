@@ -7,7 +7,7 @@
 
 ## 調査と実測
 
-- [調査・実測で確定した制約](evidence/measured-constraints.md): 公式文書と実機で確かめた、Claude Code と GitHub の振る舞い。要件ではなく、事実の記録
+- [調査・実測で確定した制約](evidence/measured-constraints.md): 公式文書と実機で確かめた、外部の道具 (Claude Code、GitHub、git、macOS、Discord) の振る舞い。要件ではなく、事実の記録
 
 ## 設計
 

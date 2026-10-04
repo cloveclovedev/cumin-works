@@ -1,8 +1,8 @@
 # 調査・実測で確定した制約
 
-Claude Code と GitHub について、公式文書と実機で確かめた事実だけを集める。設計上の決定は含まない。要件の文書ではなく、事実の記録である。行は主題ごとの9つの表に分かれ、表の中では番号の順に並ぶ(「GraphQLとそのポイント」の節の下の表と、「規則が読む事実と、その問い合わせ」の節の表は、番号の行を補う表である)。番号は確かめた順に付けたもので、文書の全体で一意である。1つの事実は1つの行に書く。まだ確かめていないことと、ある日に観測しただけで今も成り立つか分からないことは、主題の表に置かず、「未確認 (Not confirmed)」の節に集める。この節の行を、事実として読んではいけない。別の行にまとめてなくした番号は、最後の「引退した番号」の表にある。
+Claude Code、GitHub、git、macOS、Discord について、公式文書と実機で確かめた事実だけを集める。この文書が持つのは、外部の道具の振る舞いだけである。cumin自身の問い合わせや振る舞いを測った値 (1回の定期確認のポイントなど) は、ここに書かない。cuminのコードが変わるたびに古くなるからである。その値は、測ったPull Requestの説明に書き、設計メモが今の値を述べて、そのPull Requestにリンクする。設計上の決定は含まない。要件の文書ではなく、事実の記録である。行は主題ごとの9つの表に分かれ、表の中では番号の順に並ぶ (「規則が読む事実と、その問い合わせ」の節の表は、番号のない表である)。番号は確かめた順に付けたもので、文書の全体で一意である。1つの事実は1つの行に書く。まだ確かめていないことと、ある日に観測しただけで今も成り立つか分からないことは、主題の表に置かず、「未確認 (Not confirmed)」の節に集める。この節の行を、事実として読んではいけない。別の行にまとめてなくした番号と、cumin自身の実測なのでなくした番号は、最後の「引退した番号」の表にある。
 
-確度の凡例: 実測 = このホストで実際に動かして観測した、公式文書 = 公式ドキュメントで確認した、未確認 = 公式文書に記載が見つからず、まだ試していない。または、ある日に観測したが、測り直していない。未確認の行は「未確認 (Not confirmed)」の節にだけある。「日付と版」の列は、その行を確かめた日付と、そのときの道具の版である。1つの番号の確かめた部分と確かめていない部分は、同じ番号で主題の表とこの節に分かれ、互いを指す。
+確度の凡例: 実測 = このホストで実際に動かして観測した、公式文書 = 公式ドキュメントで確認した、未確認 = 公式文書に記載が見つからず、まだ試していない。または、ある日に観測したが、測り直していない。未確認の行は「未確認 (Not confirmed)」の節にだけある。「日付と版」の列は、その行を確かめた日付である。そのときの道具の版が分かる行には、版も書く。日付が2つ以上ある行は、行の中の事実を別の日に確かめている。1つの番号の確かめた部分と確かめていない部分は、同じ番号で主題の表とこの節に分かれ、互いを指す。
 
 ## Claude Code
 
@@ -14,16 +14,16 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 4 | statuslineスクリプトへのJSONには `rate_limits.five_hour.used_percentage` と `resets_at` (Unix秒) などがある。Pro/Max加入者のみ、セッション内の最初のAPI応答後にだけ現れる | https://code.claude.com/docs/en/statusline.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 5 | Anthropic APIのRate Limits API、Usage & Cost APIはAPI組織向けで、サブスクリプションの5h枠・weekly枠は返さない | https://platform.claude.com/docs/en/manage-claude/rate-limits-api.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6a | `claude -p` の `--bare` は、hooks、skills、plugins、MCPサーバ、自動メモリ、CLAUDE.md の自動読み込みを全て省く。ただしサブスクリプションのログインを使えず、`ANTHROPIC_API_KEY` などが要る | https://code.claude.com/docs/en/headless.md: "bare mode doesn't use your subscription login"、"In bare mode, Claude Code never reads OAuth credentials or the system keychain." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
-| 6b | `--bare` は将来 `-p` の既定になる予定と書かれている。そうなったとき、サブスクリプションのログインでheadless実行を続ける方法を確かめる必要がある | 同上: "`--bare` is the recommended mode for scripted and SDK calls, and will become the default for `-p` in a future release." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 6b | `--bare` は将来 `-p` の既定になる予定と書かれている。そうなったあとに、サブスクリプションのログインで `-p` を使う方法は、書かれていない | 同上: "`--bare` is the recommended mode for scripted and SDK calls, and will become the default for `-p` in a future release." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6c | `--bare` なしの `claude -p` は、対話セッションと同じ文脈を読み込む。作業ディレクトリの設定と、ユーザアカウントの `~/.claude` の設定の両方が対象になる | 同上: "Without it, `claude -p` loads the same context an interactive session would, including anything configured in the working directory or `~/.claude`." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6d | Agentの最後の応答をJSON Schemaに従わせる機能は、Claude CodeにもCodexにもある。Claude Codeは `claude -p --output-format json --json-schema <schema>` で、結果は `structured_output` に入る。Codexは `codex exec --output-schema <file>` で、`-o` で最後の応答をファイルに書ける | https://code.claude.com/docs/en/headless.md、https://learn.chatgpt.com/docs/non-interactive-mode | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
 | 6e | `claude -p` に `--setting-sources project` を付けると、ユーザアカウントの `~/.claude/CLAUDE.md` が読み込まれなくなる。サブスクリプションのログインはそのまま使える | 同じ質問を2回実行した。オプションなしでは `~/.claude/CLAUDE.md` の内容を答え、オプションありでは「その指示はない」と答えた。どちらもサブスクリプションで実行できた (Claude Code 2.1.267) | 実測 | 2026-09-19、Claude Code 2.1.267 |
 | 26 | `--json-schema` は `--output-format stream-json --verbose` と併用できる。1回の実行で、`rate_limit_event` と、`result` のイベントの `structured_output`、`session_id`、`subtype`、`is_error` が取れる | 公式文書は `--output-format json` との組み合わせしか説明していない。実際に併用して、両方が出力されることを確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 |
-| 27 | `--setting-sources project` を付けると、実行の最初に出る `system` / `init` のイベントで、`skills` は組み込みのものだけになる。`plugins` に載るのは、バイナリに入ったpluginだけである (107を参照)。`mcp_servers` は、claude.aiのアカウントのコネクタを除いて空になる (91を参照) | ユーザアカウントにplugin、MCPサーバ、skillを入れてあるHostで確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 |
+| 27 | `--setting-sources project` を付けると、実行の最初に出る `system` / `init` のイベントで、`skills` は組み込みのものだけになる。`plugins` に載るのは、バイナリに入ったpluginだけである (107を参照)。`mcp_servers` は、claude.aiのアカウントのコネクタを除いて空になる (91を参照) | ユーザアカウントにplugin、MCPサーバ、skillを入れてあるHostで確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 (`skills`)。`mcp_servers` は2026-09-22 (91)。`plugins` は2026-09-29、Claude Code 2.1.284 (107) |
 | 29 | `claude -p "/usage"` はモデルを呼ばず (`num_turns` が0、`total_cost_usd` が0)、利用枠を使わない。ただし `rate_limit_event` は出ず、人間向けの文章だけが返る。使用率を機械可読で返すサブコマンドは、`claude --help` にない。機械可読の使用率を読むには、モデルを呼ぶ実行が要る。CLIのサブコマンド、フラグ、hook、statuslineの項目、SDKの呼び出しのどれも、モデルを呼ばずにサブスクリプションの使用率を返さない。`/usage` は、文書にないendpointをログインのOAuthのtokenで呼んでいる | `rate_limit_event` は、モデルへの要求に対する応答に付いてくる情報である。公式文書 (2026-09-21) と公開の報告 | 実測 + 公式文書 (不在の確認) | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 30 | システムプロンプトを `--system-prompt` で短いものに置き換え、1語だけ答えさせる最小の実行でも、`rate_limit_event` は出る。実行は1〜2秒で終わる。入力のほとんどは、CLIが毎回送る定型の部分である | 同左 | 実測 | 2026-09-20、Claude Code 2.1.267 |
 | 31 | `-p` でも `--resume <session_id>` でセッションを再開できる。2.1.223以降は、別のディレクトリからでも再開できる | https://code.claude.com/docs/en/sessions.md | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限は、起動する側で持つ必要がある。`-p` の実行は、SIGTERMを受けると終了コード143で終わる。Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない | https://code.claude.com/docs/en/headless.md、手元の `--help`。プロセスグループへのSIGTERMは #42 の実機の確認で、打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 公式文書 + 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限を指定するフラグは、`--help` にない。`-p` の実行は、SIGTERMを受けると終了コード143で終わる。Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない | https://code.claude.com/docs/en/headless.md、手元の `--help`。プロセスグループへのSIGTERMは #42 の実機の確認で、打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 公式文書 + 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
 | 74 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
 | 85 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` は、Bashツール、hook、MCPサーバの環境から認証情報を取り除く | 公式: Environment variables | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
 | 86 | `--setting-sources project` を付けても、自動メモリは止まらない。`init` のイベントの `memory_paths.auto` が、ユーザアカウントの下にある、作業ディレクトリごとのメモリを指す。環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`init` のイベントに `memory_paths` の項目そのものがない。設定の `autoMemoryEnabled: false` でも止められる。`init` には、指示のファイルの一覧を返す項目がない。ある項目は `plugins`、`mcp_servers`、`skills`、`agents`、`slash_commands`、`tools` など | https://code.claude.com/docs/en/memory.md。環境変数の有無で `init` のイベントを比べた。#76 で実測。項目の全体は #67 に記録 | 実測 + 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
@@ -80,64 +80,22 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
 | 39 | GraphQLのAPIは、installation tokenに、1時間あたり5,000ポイントを割り当てる。同じインストールの対象のリポジトリ全てで、この枠を分け合う。1つの問い合わせは1ポイント以上かかる。`first` と `last` に指定できるのは1から100までである | docs.github.com: rate-limits-and-query-limits-for-the-graphql-api | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 55 | installation tokenで、設計メモが使うGraphQLの項目を全て読める。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup`。`closedByPullRequestsReferences` の既定は開いているPull Requestだけで、`includeClosedPrs` でmerge済みも含む。スキーマには、ラベルが付いた時刻と、レビューとcheckの状態を読む項目もある。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`、`statusCheckRollup`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt` | GraphQLのスキーマのintrospection (2026-09-20)。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 55 | installation tokenで実際に読んだ項目は、次の6つである。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup`。`closedByPullRequestsReferences` の既定は開いているPull Requestだけで、`includeClosedPrs` でmerge済みも含む。次の項目は、スキーマのintrospectionで、あることだけを確かめた。2026-09-21 の時点では、installation tokenで読んでいない。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt` | 6つの項目は、公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して読んだ。残りは、GraphQLのスキーマのintrospection (2026-09-20) | 実測 (6つの項目)。残りはスキーマだけ | 2026-09-20、2026-09-21 |
 | 94 | GitHub Appが作ったPull Requestの GraphQL の `author` は `Bot` 型で、`login` に `[bot]` が付かない。RESTの `user.login` には付く (49を参照) | sandboxで実測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
 | 98 | GraphQLの `Repository.object(expression: "HEAD:<path>")` は、ファイルがなければ `null` を返す。`HEAD:` はそのリポジトリの既定のブランチを指す。`Blob` には `oid`、`text`、`byteSize`、`isBinary`、`isTruncated` があり、1MiBを超えるファイルは `isTruncated` になる。接続 (connection) でない項目 (`object`、`defaultBranchRef`) は、問い合わせのポイントを変えない (足す前も足したあとも `cost` は6) | GraphQLのスキーマのintrospectionと、sandboxでの実測 | 実測 | 2026-09-22 |
-| 105 | 定期確認の問い合わせの1ページのポイントは「要求Issue × sub-issue × k ÷ 100」で決まる。k は接続の数で、sub-issueの下のラベルと blocked by で2、Pull Requestで1、Pull Requestの下の接続 (ラベル、check) ごとにPull Requestの件数を足す。接続の中のページサイズ (checkやラベルの件数) はポイントを変えない。公式文書の、経路に沿った `first` の積を100で割る式どおりには増えない | 公式: Rate limits and node limits for the GraphQL API。sandboxで実測 (2026-09-25) | 公式文書 + 実測 | 2026-09-25 |
-| 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである | #221 で実測 (2026-09-29) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
-| 127 | 定期確認の問い合わせの1ページ (sub-issueを15件、Pull Requestを2件まで。Pull Requestの下の接続は、ラベル、check、レビュー) は、14ポイントである。レビューの接続を足す前は11ポイントで、105の式のとおり3ポイント増えた。60秒の間隔で、1リポジトリが毎時840ポイントを使う | sandboxで実測 (2026-09-30) | 実測 | 2026-09-30 |
-| 128 | 定期確認の問い合わせに、Pull Requestの `mergeable` と `commits(last: 1) { nodes { commit { oid committedDate } } }` を足すと、1ページは14ポイントから17ポイントになる (105の式のとおり、Pull Requestの下の接続が1つ増える)。`mergeable` はスカラーで、ポイントを変えない。`MergeableState` の値は `MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つである。`Commit.committedDate` は null にならず、`Commit.pushedDate` は「no longer supported」である。`PullRequest.headRef` は、開いているPull Requestでも `null` を返すことがあった。60秒の間隔で、1リポジトリが毎時1,020ポイントを使う | GraphQLのスキーマのintrospectionと、cumin-worksでの実測 (2026-10-03) | 実測 | 2026-10-03 |
-| 129 | 公式の式を読み直した。1つの問い合わせのポイントは、接続ごとに「その接続を読むのに要る要求の数」を足し、100で割って四捨五入した値である。要求の数は、親の `first` か `last` が上限まで返ると仮定して数える。最小は1ポイントである。インストールの枠は1時間あたり5,000ポイントで、リポジトリが20を超えると1つにつき50ポイント、Organizationの利用者が20人を超えると1人につき50ポイント増え、12,500ポイントが上限である (GitHub Enterprise Cloud でないとき)。二次の制限では、GraphQLのendpointは1分あたり2,000ポイントまでで、mutationのない問い合わせは1ポイント、mutationのある問い合わせは5ポイントと数える。この数え方は、一次の枠のポイントとは別である | 公式: Rate limits and query limits for the GraphQL API ("Primary rate limit"、"Predicting the point value of a query"、"Secondary rate limits") | 公式文書 | 2026-10-03 |
-| 130 | 定期確認の問い合わせ (`snapshotQuery`) の1回の定期確認のポイントは、cumin-worksで34ポイント (2ページ、17 + 17。開いている要求Issueは20件)、cumin-sandboxで17ポイント (1ページ。開いている要求Issueは3件) である。1ページのポイントは、そのページの要求Issueの件数 (3件と10件) でも、`.cumin/` のファイルを読むかどうか (1ページ目だけ読む) でも変わらない。60秒の間隔では、計算上、cumin-worksが毎時2,040ポイント、cumin-sandboxが毎時1,020ポイントである。#434、#449 より前の問い合わせの値である。今の値は135にある | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03 08:22 UTC、`rateLimit.cost`) | 実測 | 2026-10-03 |
-| 131 | 定期確認の問い合わせから接続を1つ外したときの1ページのポイントは、下の表「接続を1つ外した1ページのポイント」のとおりである。cumin-worksとcumin-sandboxで、どの数字も同じだった。どの数字も、129の式で数えた値と一致する。測ったときの問い合わせ (#449 より前。Pull Requestも1つの問い合わせで読む) の要求の数は 1 + 30 + 450 + 1,200 = 1,681 で、17ポイントになる | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03、`rateLimit.cost`)。要求の数は129の式での計算 | 実測 | 2026-10-03 |
-| 132 | 5つの小さな問い合わせ (ラベルの時刻、Ownerのログイン名、コメント、結び付いたPull Request、フォローアップノートのPull Request) は、cumin-worksでもcumin-sandboxでも、どれも1回に1ポイントである。ラベルの時刻とOwnerのログイン名は、要求Issueの番号 (sub-issueが6件) でも、実装Issueの番号でも1ポイントである。コメントは、Issueの番号でも、Pull Requestの番号でも1ポイントである。動かす規則と条件は、下の表「小さな問い合わせのポイントと、動かす規則」にある | cumin-worksとcumin-sandboxで実測 (#418、2026-10-03 08:23 UTC、`rateLimit.cost`) | 実測 | 2026-10-03 |
-| 133 | #434 (2026-10-03) より前のコードは、実行終了の判定 (R2、I2、I5〜I8、I10) と、Reviewerの承認のあとのmergeの判定 (I6、I7) で、定期確認と同じ問い合わせを使い、リポジトリの全ページを読み直していた。その1回の読み直しは、130の1回の定期確認と同じポイントだった (cumin-worksで34ポイント)。今のコードは、その実行のIssueだけを読む。今の値は136にある | ポイントは130の実測 (`rateLimit.cost`)。全ページを読み直していたことは、当時のコード (`internal/workflow` の `requirementIssueNow`、`subIssueNow`、`verifyDone`、`afterApproval` が `ReadSnapshot` を呼んでいた) を読んで確かめた | 実測 | 2026-10-03 |
-| 134 | 定期確認の問い合わせからPull Requestを外すと、1ページは3ポイントである (cumin-worksの3ページのうち、読んだ2ページとも3ポイント)。Pull Requestを読む2つ目の問い合わせ (`nodes(ids:)` でsub-issueを指定し、`closedByPullRequestsReferences` とその下の全てを読む) は、sub-issueが1件でも9件でも1ポイント、100件で9ポイントである。101件では「You may not provide more than 100 node ids」のエラーで、データを返さない。存在しないidは、その位置が null になり、`errors` に「Could not resolve to a node with the global id」が入る | cumin-worksで実測 (#426、2026-10-03、`rateLimit.cost`) | 実測 | 2026-10-03 |
-| 135 | #434、#449、#435 のあとの1回の定期確認のポイントは、cumin-worksで10ポイント、cumin-sandboxで3ポイントである。cumin-worksは、1つ目の問い合わせ (`snapshotQuery`) が3ページで 3 + 3 + 3 = 9ポイント (開いている要求Issueは21件)、2つ目の問い合わせ (`pullRequestsQuery`) が1ポイント (選んだsub-issueは15件、そのPull Requestは2件) である。cumin-sandboxは、1つ目の問い合わせが1ページで3ポイント (開いている要求Issueは3件) で、選んだsub-issueがないので、2つ目の問い合わせを送らない。比べるために、cumin-sandboxのsub-issueの5件全てで2つ目の問い合わせを送ると、1ポイントだった。130の数字 (34と17) は、要求Issueが20件で2ページのときのものである。前の問い合わせなら、21件の3ページは 17 × 3 = 51ポイントになる。作業中のリポジトリ (`poll_interval` の初期値の60秒ごと) は、計算上、cumin-worksが毎時600ポイント、cumin-sandboxが毎時180ポイント (2つ目の問い合わせを送るなら毎時240ポイント) である。作業中でないリポジトリ (`idle_poll_interval` の初期値の5分ごと) は、計算上、cumin-worksが毎時120ポイント、cumin-sandboxが毎時36ポイントである | cumin-worksとcumin-sandboxで実測 (#428、2026-10-03 17:12 UTC、`rateLimit.cost`)。問い合わせは `main` の 9988fe8 のもの。1時間のポイントは、実測の値と間隔の初期値からの計算 | 実測 | 2026-10-03 |
-| 136 | Agentの実行のあとの、1つのIssueの読み取りのポイントは、実装Issue (`subIssueQuery`) で1ポイント、要求Issue (`requirementIssueQuery`) で2ポイントである。cumin-worksでもcumin-sandboxでも同じである。実装Issueは、開いているPull Requestがないとき (cumin-worksの #428、cumin-sandboxの #217) も、1件あるとき (cumin-worksの #430。checkが3件、レビューが6件) も1ポイントである。要求Issueは、sub-issueが1件 (cumin-sandboxの #216)、6件 (cumin-worksの #414)、8件 (cumin-worksの #313) のどれでも2ポイントである。実行終了の判定 (R2、I2、I5〜I8、I10) と、Reviewerの承認のあとのmergeの判定 (I6、I7) は、この読み取りを使う。I2は、リンクを付けたときに、もう1回読む。133の全ページの読み直しは、cumin-worksで34ポイントだった | cumin-worksとcumin-sandboxで実測 (#428、2026-10-03 17:12〜17:13 UTC、`rateLimit.cost`)。問い合わせを `gh api graphql` で送って測った。問い合わせは `main` の 9988fe8 のもの。どの判定がこの読み取りを使うかは、コード (`requirementIssueNow` が `ReadRequirementIssue` を、`subIssueNow`、`verifyDone`、`afterApproval` が `ReadSubIssue` を呼ぶ) を読んで確かめた | 実測 | 2026-10-03 |
-
-接続を1つ外した1ページのポイント (131)。「要求の数」は、129の式で数えた、その接続を読むのに要る要求の数である。括弧の中は、親の件数の積である。
-
-| 外した接続 | 要求の数 | 外した1ページのポイント | 差 |
-|---|---|---|---|
-| なし (測ったときの問い合わせ) | 1,681 | 17 | — |
-| 要求Issueの `labels` | 10 (要求Issue 10) | 17 | 0 |
-| 要求Issueの `blockedBy` | 10 (要求Issue 10) | 17 | 0 |
-| `subIssues` (その下の全てを含む) | 1,660 | 1 | 16 |
-| sub-issueの `labels` | 150 (10 × 15) | 15 | 2 |
-| sub-issueの `blockedBy` | 150 (10 × 15) | 15 | 2 |
-| `closedByPullRequestsReferences` (その下の全てを含む) | 1,350 | 3 | 14 |
-| Pull Requestの `commits` | 300 (10 × 15 × 2) | 14 | 3 |
-| Pull Requestの `labels` | 300 (10 × 15 × 2) | 14 | 3 |
-| Pull Requestの `statusCheckRollup.contexts` | 300 (10 × 15 × 2) | 14 | 3 |
-| Pull Requestの `reviews` | 300 (10 × 15 × 2) | 14 | 3 |
-| Pull Requestの `mergeable` (スカラー。接続ではない) | 0 | 17 | 0 |
-
-`issues` の接続は問い合わせの起点で、要求の数は1である。これを外すと、読むものが残らない。
-
-小さな問い合わせのポイントと、動かす規則 (132)。ポイントは、cumin-worksとcumin-sandboxで同じである。行の名前は [Issueの状態と遷移](../requirements/workflow/issue-states.md) の行である。
-
-| 問い合わせ | ポイント | 動かす規則と条件 | 回数 |
-|---|---|---|---|
-| ラベルの時刻 (`labelTimesQuery`) | 1 | R3 (分割の確認のあとの着手): 要求Issueが `cumin/status/awaiting-owner-review` で、`cumin/status/ready` の付いた開いているsub-issueがある。I15 (checkが結果を返さない): `cumin/status/awaiting-checks` の付いた開いているsub-issueがある。I13 (Ownerのレビューへの対応): `cumin/status/awaiting-owner-review` の開いているsub-issueのPull Requestで、今の先頭のコミットに人の `CHANGES_REQUESTED` のレビューがある (`NeedsLabelTimes`) | 条件に合う要求Issue 1件につき、定期確認のたびに1回。2つ以上の条件に合っても1回 |
-| ラベルの時刻 (同じ問い合わせを、実装Issueの番号で) | 1 | I3 (checkが通り、reviewへ): レビューのラウンドの起点の `cumin/status/ready` の時刻 | Reviewerへの依頼1回につき1回 |
-| Ownerのログイン名 (`labelActorQuery`) | 1 | Agentを起動する行: R1 (分割)、R4 (受け入れの確認)、I1 (着手)、I3 (review)、I4 (checkの修正)、I13 (Ownerのレビューへの対応)、I14 (checkを待つ間の衝突)、I12 (Ownerの承認のあとのmerge) で衝突したとき | 起動1回につき1回。人のアカウントなら、RESTの権限の読み取りも1回 |
-| コメント (`issueCommentsQuery`) | 1ページ (50件) につき1 | R4、R7 (受け入れの確認): 要求Issueが `cumin/status/implementing` で、sub-issueが1つ以上あり、全て閉じている (`NeedsComments`) | 条件に合う要求Issue 1件につき、定期確認のたびに1回 |
-| コメント (同じ問い合わせ) | 1ページ (50件) につき1 | I9 (フォローアップノート): 開いている要求Issueに、閉じたsub-issueが1つ以上ある | 条件に合う要求Issue 1件につき、定期確認のたびに1回。R4、R7の読み取りとは別に読む |
-| コメント (同じ問い合わせを、Pull Requestの番号で) | 1ページ (50件) につき1 | I8 (ラウンドの上限で原因の整理): Reviewerの原因の整理の実行が終わった | その実行の終わりに1回 |
-| 結び付いたPull Request (`linkedQuery`) | 1 | I9: 閉じたsub-issueに、`notes` の全てにノートがある目印が、まだない | そのsub-issue 1件につき、定期確認のたびに1回 |
-| フォローアップノートのPull Request (`pullRequestNoteQuery`) | 1 | I9: 上のsub-issueに結び付いたmerge済みのPull Requestに、目印がまだない | そのPull Request 1件につき、定期確認のたびに1回。拾うものがないPull Requestは、要求Issueが開いている間、読み続ける |
-
-2026-10-03 08:23 UTC の時点で、閉じたsub-issueのある開いている要求Issueは、cumin-worksに6件、cumin-sandboxに2件あった。そのうち `NeedsComments` に合うものは、cumin-worksに1件あった。
+| 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである。この値は、129の数え方 (最小は1ポイント) に従う | #221 で実測 (2026-09-29) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
+| 128 | `PullRequest.mergeable` はスカラーで、`MergeableState` の値は `MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つである。`Commit.committedDate` は null にならず、`Commit.pushedDate` は「no longer supported」である。`PullRequest.headRef` は、開いているPull Requestでも `null` を返すことがあった | GraphQLのスキーマのintrospectionと、cumin-worksでの実測 (2026-10-03) | 実測 | 2026-10-03 |
+| 129 | 1つの問い合わせのポイントは、接続ごとに「その接続を読むのに要る要求の数」を足し、100で割って四捨五入した値である。要求の数は、親の `first` か `last` が上限まで返ると仮定して数える。その接続自身の `first` と `last` (接続の中のページの大きさ) と、スカラーの項目は、ポイントを変えない。最小は1ポイントである。インストールの枠は1時間あたり5,000ポイントで、リポジトリが20を超えると1つにつき50ポイント、Organizationの利用者が20人を超えると1人につき50ポイント増え、12,500ポイントが上限である (GitHub Enterprise Cloud でないとき)。二次の制限では、GraphQLのendpointは1分あたり2,000ポイントまでで、mutationのない問い合わせは1ポイント、mutationのある問い合わせは5ポイントと数える。この数え方は、一次の枠のポイントとは別である | 公式: Rate limits and query limits for the GraphQL API ("Primary rate limit"、"Predicting the point value of a query"、"Secondary rate limits")。接続の中のページの大きさとスカラーがポイントを変えないことは、sandboxとcumin-worksで実測 (2026-09-25、2026-10-03、`rateLimit.cost`) | 公式文書 + 実測 | 2026-09-25、2026-10-03 |
+| 137 | `nodes(ids:)` は、1回に100件までのidを受け付ける。101件では「You may not provide more than 100 node ids」のエラーで、データを返さない。存在しないidは、その位置が null になり、`errors` に「Could not resolve to a node with the global id」が入る | cumin-worksで実測 (#426、2026-10-03) | 実測 | 2026-10-03 |
 
 ## 規則が読む事実と、その問い合わせ
 
 [Issueの状態と遷移](../requirements/workflow/issue-states.md) の行ごとに、今のコード (`internal/workflow`) が読む事実と、その事実を返す問い合わせを並べる。2026-10-03 に、コードと [定期確認の設計](../designs/poll.md) を読んで確かめた。問い合わせの名前は、#434 と #449 のあとのコード (`main` の 9988fe8) のものである。行の番号は付けない。問い合わせの名前は次のとおりである。
 
 - 定期確認: 定期確認の1つ目の問い合わせ (`snapshotQuery`)。要求Issueとsub-issueまでを読む。括弧の中は、その事実を持つ接続か項目である。
-- Pull Request: 定期確認の2つ目の問い合わせ (`pullRequestsQuery`)。開いていて `cumin/status/*` のラベルが付いたsub-issueだけについて、`closedByPullRequestsReferences` とその下の項目を読む (134、135)。
-- Issueの読み取り: Agentの実行のあとに、その実行のIssueだけを番号で読む問い合わせ (136)。要求Issueは `requirementIssueQuery`、実装Issueは `subIssueQuery` である。リポジトリの全ページは読まない。
-- ラベルの時刻、Ownerのログイン名、コメント、結び付いたPull Request、ノートのPull Request: 5つの小さな問い合わせ (132)。
+- Pull Request: 定期確認の2つ目の問い合わせ (`pullRequestsQuery`)。開いていて `cumin/status/*` のラベルが付いたsub-issueだけについて、`closedByPullRequestsReferences` とその下の項目を読む (#449、#454)。
+- Issueの読み取り: Agentの実行のあとに、その実行のIssueだけを番号で読む問い合わせ (#454)。要求Issueは `requirementIssueQuery`、実装Issueは `subIssueQuery` である。リポジトリの全ページは読まない。
+- ラベルの時刻、Ownerのログイン名、コメント、結び付いたPull Request、ノートのPull Request: 5つの小さな問い合わせ (#421)。
 - REST: GraphQLのポイントを使わない読み取り。
 
 | 行 | 行の内容 | 読む事実 | 事実を返す問い合わせ |
@@ -245,9 +203,9 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 
 ## 引退した番号 (Retired numbers)
 
-次の番号の行は、同じ事実の別の行にまとめた。番号は使い回さない。前の文面は、gitの履歴にある。
+次の番号の行は、同じ事実の別の行にまとめたか、cumin自身の問い合わせの実測なのでなくした。番号は使い回さない。前の文面は、gitの履歴にある。cumin自身の実測は、右の列のPull Requestの説明か、そのPull Requestの変更にある。
 
-| 引退した番号 | いま事実を持つ行 |
+| 引退した番号 | いま事実を持つ行、または実測を持つPull Request |
 |---|---|
 | 9 | 33、57。Appの名義は49 |
 | 11 | 56 |
@@ -270,8 +228,17 @@ Claude Code と GitHub について、公式文書と実機で確かめた事実
 | 66 | 104 |
 | 75 | 87 |
 | 76 | 32 |
-| 77 | 105 |
+| 77 | 129 |
 | 88 | 2 |
 | 89 | 29 |
-| 95 | 105 |
-| 106 | 127 |
+| 95 | 129 |
+| 105 | 129 |
+| 106 | cumin自身の実測。#195 |
+| 127 | cumin自身の実測。#233。17ポイントへの変化は #412 |
+| 130 | cumin自身の実測。#421 |
+| 131 | cumin自身の実測。#421 |
+| 132 | cumin自身の実測。#421 |
+| 133 | cumin自身の実測。#421。今の値は #454 |
+| 134 | cumin自身の実測。#449。`nodes(ids:)` の事実は137 |
+| 135 | cumin自身の実測。#454 |
+| 136 | cumin自身の実測。#454 |
