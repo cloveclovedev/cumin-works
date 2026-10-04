@@ -80,10 +80,10 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
 | 39 | GraphQLのAPIは、installation tokenに、1時間あたり5,000ポイントを割り当てる。同じインストールの対象のリポジトリ全てで、この枠を分け合う。1つの問い合わせは1ポイント以上かかる。`first` と `last` に指定できるのは1から100までである | docs.github.com: rate-limits-and-query-limits-for-the-graphql-api | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
-| 55 | installation tokenで実際に読んだ項目は、次の6つである。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup`。`closedByPullRequestsReferences` の既定は開いているPull Requestだけで、`includeClosedPrs` でmerge済みも含む。次の項目は、スキーマのintrospectionで、あることだけを確かめた。installation tokenでは読んでいない。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`、`statusCheckRollup`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt` | 6つの項目は、公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して読んだ。残りは、GraphQLのスキーマのintrospection (2026-09-20) | 実測 (6つの項目)。残りはスキーマだけ | 2026-09-20、2026-09-21 |
+| 55 | installation tokenで実際に読んだ項目は、次の6つである。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup`。`closedByPullRequestsReferences` の既定は開いているPull Requestだけで、`includeClosedPrs` でmerge済みも含む。次の項目は、スキーマのintrospectionで、あることだけを確かめた。2026-09-21 の時点では、installation tokenで読んでいない。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt` | 6つの項目は、公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して読んだ。残りは、GraphQLのスキーマのintrospection (2026-09-20) | 実測 (6つの項目)。残りはスキーマだけ | 2026-09-20、2026-09-21 |
 | 94 | GitHub Appが作ったPull Requestの GraphQL の `author` は `Bot` 型で、`login` に `[bot]` が付かない。RESTの `user.login` には付く (49を参照) | sandboxで実測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
 | 98 | GraphQLの `Repository.object(expression: "HEAD:<path>")` は、ファイルがなければ `null` を返す。`HEAD:` はそのリポジトリの既定のブランチを指す。`Blob` には `oid`、`text`、`byteSize`、`isBinary`、`isTruncated` があり、1MiBを超えるファイルは `isTruncated` になる。接続 (connection) でない項目 (`object`、`defaultBranchRef`) は、問い合わせのポイントを変えない (足す前も足したあとも `cost` は6) | GraphQLのスキーマのintrospectionと、sandboxでの実測 | 実測 | 2026-09-22 |
-| 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである | #221 で実測 (2026-09-29) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
+| 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである。この値は、129の数え方 (最小は1ポイント) に従う | #221 で実測 (2026-09-29) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
 | 128 | `PullRequest.mergeable` はスカラーで、`MergeableState` の値は `MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つである。`Commit.committedDate` は null にならず、`Commit.pushedDate` は「no longer supported」である。`PullRequest.headRef` は、開いているPull Requestでも `null` を返すことがあった | GraphQLのスキーマのintrospectionと、cumin-worksでの実測 (2026-10-03) | 実測 | 2026-10-03 |
 | 129 | 1つの問い合わせのポイントは、接続ごとに「その接続を読むのに要る要求の数」を足し、100で割って四捨五入した値である。要求の数は、親の `first` か `last` が上限まで返ると仮定して数える。その接続自身の `first` と `last` (接続の中のページの大きさ) と、スカラーの項目は、ポイントを変えない。最小は1ポイントである。インストールの枠は1時間あたり5,000ポイントで、リポジトリが20を超えると1つにつき50ポイント、Organizationの利用者が20人を超えると1人につき50ポイント増え、12,500ポイントが上限である (GitHub Enterprise Cloud でないとき)。二次の制限では、GraphQLのendpointは1分あたり2,000ポイントまでで、mutationのない問い合わせは1ポイント、mutationのある問い合わせは5ポイントと数える。この数え方は、一次の枠のポイントとは別である | 公式: Rate limits and query limits for the GraphQL API ("Primary rate limit"、"Predicting the point value of a query"、"Secondary rate limits")。接続の中のページの大きさとスカラーがポイントを変えないことは、sandboxとcumin-worksで実測 (2026-09-25、2026-10-03、`rateLimit.cost`) | 公式文書 + 実測 | 2026-09-25、2026-10-03 |
 | 137 | `nodes(ids:)` は、1回に100件までのidを受け付ける。101件では「You may not provide more than 100 node ids」のエラーで、データを返さない。存在しないidは、その位置が null になり、`errors` に「Could not resolve to a node with the global id」が入る | cumin-worksで実測 (#426、2026-10-03) | 実測 | 2026-10-03 |
@@ -233,8 +233,8 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 89 | 29 |
 | 95 | 129 |
 | 105 | 129 |
-| 106 | cumin自身の実測。#412 |
-| 127 | cumin自身の実測。#412 |
+| 106 | cumin自身の実測。#195 |
+| 127 | cumin自身の実測。#233。17ポイントへの変化は #412 |
 | 130 | cumin自身の実測。#421 |
 | 131 | cumin自身の実測。#421 |
 | 132 | cumin自身の実測。#421 |
