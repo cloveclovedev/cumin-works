@@ -143,6 +143,13 @@ checkを待つ間の行 (I3、I4、I14、I15):
 - 開いているPull Requestがないときは、先頭のコミットがないので、待ち時間はラベルの時刻から数える。checkが来ないのと同じく、どの行もそのIssueを進めないためである
 - I15は、checkが結果を返さない理由を調べない。ワークフローの誤り、どのワークフローも報告しない必須のcheckの名前、無効にしたワークフロー、GitHub Actionsの障害などがある。cuminは見える事実だけを書き、理由はOwnerが調べる
 
+Reviewerの実行のあとの行 (I5、I6、I7、I8):
+
+- Reviewerの実行が終わったら、cuminは実装Issueを読み直し、Pull Requestの今の先頭のコミットへの `cumin-reviewer` のレビューで、行を決める
+- レビューの間に先頭のコミットが変わっていたら、どの行も動かさない。ラベルを `cumin/status/awaiting-checks` に戻し、新しい先頭のコミットで、I3からやり直す。古いコミットへのレビューは、ラウンドに数えたまま残る
+- `APPROVE` が出ても、必須のcheckのどれかが今の先頭のコミットで通っていなければ、I6もI7も動かさない。ラベルを `cumin/status/awaiting-checks` に戻す。checkが落ちていればI4、結果を返さなければI15が、そのあとを決める
+- レビューが今の先頭のコミットに出ていなければ、Reviewerに1回だけ依頼し直す (I5の「うまくいかないとき」)。それでも出ていなければ、`cumin/status/awaiting-owner-decision` に替えて通知する
+
 `cumin/status/awaiting-checks` を置くのは、「Implementerの実行が終わり、checkを待っている」ことをGitHubに残すためである。`cumin/status/implementing` のままだと、Implementerが修正の途中なのか、checkを待っているのかを、GitHub上の事実から区別できない。必須のcheckが1つもないリポジトリでも、この状態を必ず通る。次の定期確認で、すぐにI3が成り立つ。
 
 I2だけは、Pull Requestをブランチと作成者で見つける。GitHubが本文の `Closes #N` からリンクを作らないことがあるためである (2026-09-30に確かめた)。I2がリンクを付けるので、ほかの行は、IssueとPull Requestのリンクで、そのIssueのPull Requestを見つける。GitHubが既にリンクを作っていれば、cuminは何も付けない。
