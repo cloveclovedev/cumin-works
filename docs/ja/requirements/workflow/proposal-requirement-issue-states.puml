@@ -1,6 +1,7 @@
 @startuml proposal-requirement-issue-states
 ' cumin works - PROPOSAL, not the rule of today: states of a requirement issue, as they could be.
 ' Differences from today are marked NEW. See the draft pull request for the reasons.
+' Every activity, guard, and effect names who acts: cumin, the Planner, or the Owner.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 
 hide empty description
@@ -9,16 +10,16 @@ state "Draft (no status label)" as Draft
 Draft : do / the Owner writes the requirement
 
 state "ready" as Ready
-Ready : do / wait for a free slot
+Ready : do / cumin waits for a free slot
 
 state "planning" as Planning
 Planning : do / the Planner splits the requirement
 
-state "awaiting-split-review  (NEW name)" as PlanReview
-PlanReview : do / the Owner checks the sub-issues
+state "awaiting-plan-review  (NEW name)" as PlanReview
+PlanReview : do / the Owner reviews the plan and the sub-issues
 
 state "implementing" as Implementing
-Implementing : do / the sub-issues are worked on
+Implementing : do / the agents work on the sub-issues
 
 state "accepting  (NEW state)" as Accepting
 Accepting : do / the Planner checks the merged work
@@ -31,25 +32,26 @@ Decision : do / the Owner answers
 
 [*] --> Draft
 Draft --> Ready : the Owner adds ready
-Draft --> Implementing : ready added to a sub-issue
-Ready --> Planning : [ready is the Owner's, blockers closed,\nslot free, an open sub-issue or none]\n/ request the split
-Ready --> Accepting : [the same, and every sub-issue closed]\n/ request the acceptance check  (NEW)
-Planning --> PlanReview : [no agent runs, split verified]\n/ notify the Owner
-Planning --> Planning : [no agent runs, no result on GitHub,\nfirst time]\n/ request the split again  (NEW)
-Planning --> Decision : [no agent runs, split not verified,\nor the Planner asked a question]\n/ notify the Owner
-PlanReview --> Implementing : ready added to a sub-issue
-Implementing --> Accepting : [every sub-issue closed,\nfollow-up notes written, slot free]\n/ request the acceptance check
-Implementing --> PlanReview : [only sub-issues without\na status label remain]\n/ notify the Owner
-Accepting --> Acceptance : [acceptance check written]\n/ notify the Owner
-Accepting --> Accepting : [no agent runs, no acceptance check,\nfirst time]\n/ request the acceptance check again  (NEW)
-Accepting --> Decision : [the Planner asked a question]\n/ notify the Owner
-Acceptance --> Implementing : ready added to a sub-issue
+Draft --> Implementing : the Owner adds ready to a sub-issue\n/ cumin changes the label
+Ready --> Planning : [the Owner added ready, the blockers are closed,\ncumin has a free slot, a sub-issue is open or none exists]\n/ cumin requests the split from the Planner
+Ready --> Accepting : [the same, and every sub-issue is closed]\n/ cumin requests the acceptance check\nfrom the Planner  (NEW)
+Planning --> PlanReview : [no Planner runs, cumin verified the split]\n/ cumin notifies the Owner
+Planning --> Planning : [no Planner runs, the Planner left no result\non GitHub, first time]\n/ cumin requests the split again  (NEW)
+Planning --> Decision : [no Planner runs, and: cumin could not verify\nthe split, or the Planner asked a question]\n/ cumin notifies the Owner
+PlanReview --> Implementing : the Owner adds ready to a sub-issue\n/ cumin changes the label
+Implementing --> Accepting : [every sub-issue is closed, cumin wrote the\nfollow-up notes, cumin has a free slot]\n/ cumin requests the acceptance check\nfrom the Planner
+Implementing --> PlanReview : [only sub-issues without a status label remain]\n/ cumin notifies the Owner
+Accepting --> Acceptance : [the Planner wrote the acceptance check]\n/ cumin notifies the Owner
+Accepting --> Accepting : [no Planner runs, the Planner wrote no\nacceptance check, first time]\n/ cumin requests the acceptance check again  (NEW)
+Accepting --> Decision : [the Planner asked a question]\n/ cumin notifies the Owner
+Acceptance --> Implementing : the Owner adds ready to a sub-issue\n/ cumin changes the label
 Acceptance --> [*] : the Owner closes the issue
 Decision --> Ready : the Owner adds ready
 
 legend right
   PROPOSAL. A box is a state: a label on GitHub (written without "cumin/status/").
-  Every guard reads only facts on GitHub and "no agent of cumin runs for this issue".
+  "do /" says who works in the state. An arrow is: trigger [guard] / effect, each with its actor.
+  Every guard reads only facts on GitHub and "no agent runs for this issue".
   No arrow needs the event "the run ended": a restart of cumin loses nothing.
 endlegend
 
