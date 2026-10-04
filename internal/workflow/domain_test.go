@@ -580,8 +580,19 @@ func TestSplitEnd(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// cumin-core or an Owner added the status label.
+			tt.requirement.StatusRead, tt.requirement.StatusCounts = true, true
 			if got := SplitEnd(tt.requirement, tt.running); got != tt.want {
 				t.Errorf("SplitEnd = %#v, want %#v", got, tt.want)
+			}
+			// A label of another account, and one whose account was not
+			// read, decide nothing.
+			for _, counts := range []struct{ read, counts bool }{{true, false}, {false, false}} {
+				other := tt.requirement
+				other.StatusRead, other.StatusCounts = counts.read, counts.counts
+				if got := SplitEnd(other, tt.running); got != nil {
+					t.Errorf("SplitEnd with StatusRead %v = %#v, want nil for a label that does not count", counts.read, got)
+				}
 			}
 			// Decide gives the same action at a poll.
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{6: tt.running}}
@@ -1116,8 +1127,19 @@ func TestAcceptanceEnd(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// cumin-core or an Owner added the status label.
+			tt.requirement.StatusRead, tt.requirement.StatusCounts = true, true
 			if got := AcceptanceEnd(tt.requirement, tt.running); got != tt.want {
 				t.Errorf("AcceptanceEnd = %#v, want %#v", got, tt.want)
+			}
+			// A label of another account, and one whose account was not
+			// read, decide nothing.
+			for _, counts := range []struct{ read, counts bool }{{true, false}, {false, false}} {
+				other := tt.requirement
+				other.StatusRead, other.StatusCounts = counts.read, counts.counts
+				if got := AcceptanceEnd(other, tt.running); got != nil {
+					t.Errorf("AcceptanceEnd with StatusRead %v = %#v, want nil for a label that does not count", counts.read, got)
+				}
 			}
 			// The poll decides the same from the snapshot and the running set.
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{6: tt.running}}

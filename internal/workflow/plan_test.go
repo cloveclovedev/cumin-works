@@ -238,10 +238,11 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 		}
 	}
 	// One poll, the read of the login of the Owner before the start, and
-	// after the run one read of the issue, of its label times, and of its
-	// comments: R2 judges on the facts of that moment.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 5 {
-		t.Errorf("%d GraphQL requests, want 5", n)
+	// after the run one read of the issue, of the account of its status
+	// label, of its label times, and of its comments: R2 judges on the
+	// facts of that moment.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
+		t.Errorf("%d GraphQL requests, want 6", n)
 	}
 	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split waits for the Owner"`) {
 		t.Error("the log does not say that the split waits for the Owner")
@@ -396,7 +397,7 @@ func planningScene(t *testing.T, options ...cliOptions) (*scene, time.Time) {
 	sc := newScene(t, options...)
 	labeledAt := sceneNow.Add(-time.Hour)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/planning"},
-		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/planning", At: labeledAt}}})
+		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/planning", At: labeledAt, Actor: cuminSlug, ActorType: "Bot"}}})
 	// The sub-issue of newScene belongs to no requirement issue here.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
 	return sc, labeledAt

@@ -140,10 +140,11 @@ type Service struct {
 	// so that a failure that repeats reaches the Owner once
 	// (pollfailure.go).
 	failureMu sync.Mutex
-	// readyTold holds, for each issue, the time of the cumin/status/ready
-	// event of another account than the Owner that cumin already logged
-	// and told the Owner about. cumin can lose it: after a restart it
-	// tells the Owner once more.
+	// readyTold holds, for each issue, the time of the status label event
+	// of an account that does not count (another account than the Owner
+	// for cumin/status/ready; than cumin-core or an Owner for the others)
+	// that cumin already logged and told the Owner about. cumin can lose
+	// it: after a restart it tells the Owner once more.
 	readyMu      sync.Mutex
 	readyTold    map[string]time.Time
 	pollFailures map[string]*repeatedFailure
@@ -613,6 +614,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
+	s.readStatusActors(ctx, log, token, target, settings, &snapshot)
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	if !finishing {
 		s.readReadyOwners(ctx, log, token, target, settings, &snapshot)
@@ -1027,31 +1029,45 @@ func (s *Service) readOwnerLogin(ctx context.Context, token string, target Targe
 }
 
 // readReadyActor reads the account that added the newest cumin/status/ready
-// to the issue, and whether that account is the Owner (IsOwner). A GitHub
-// App is never the Owner, so its permission is not read. subIssues lets an
-// event of a sub-issue answer for a requirement issue with no such event;
-// the check of R1 and of I1 passes false, so that only an event of the
-// issue itself can start work.
+// to the issue, and whether that account is the Owner (IsOwner). subIssues
+// lets an event of a sub-issue answer for a requirement issue with no such
+// event; the check of R1 and of I1 passes false, so that only an event of
+// the issue itself can start work.
 func (s *Service) readReadyActor(ctx context.Context, token string, target Target, number int, subIssues bool) (github.LabelActor, bool, error) {
+	return s.readStatusActor(ctx, token, target, number, LabelReady, subIssues)
+}
+
+// readStatusActor reads the account that added the newest status label to
+// the issue, and whether the label counts as a state (StatusLabelCounts):
+// the account is an Owner or, for every label but cumin/status/ready, the
+// cumin-core App. The permission is read only for a person: a GitHub App is
+// never the Owner. A failed read of the login of cumin-core is an error, so
+// that the caller decides nothing.
+func (s *Service) readStatusActor(ctx context.Context, token string, target Target, number int, label string, subIssues bool) (github.LabelActor, bool, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	read := s.GitHub.ReadOwnLabelActor
 	if subIssues {
 		read = s.GitHub.ReadLabelActor
 	}
-	actor, rate, err := read(ctx, token, owner, repo, number, LabelReady)
+	actor, rate, err := read(ctx, token, owner, repo, number, label)
 	if err != nil {
 		return github.LabelActor{}, false, err
 	}
-	s.logger().Debug("read the actor of the newest "+LabelReady, "repository", target.Repository.String(), "issue", number,
+	s.logger().Debug("read the actor of the newest "+label, "repository", target.Repository.String(), "issue", number,
 		"actor", actor.Login, "actor_type", actor.Type, "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	if actor.Login == "" || actor.Type != "User" {
-		return actor, false, nil
+	status := StatusActor{Login: actor.Login, Type: actor.Type}
+	core := ""
+	switch {
+	case actor.Login == "":
+	case actor.Type == "User":
+		status.Permission, status.UserType, err = s.GitHub.RepositoryPermission(ctx, token, owner, repo, actor.Login)
+	case label != LabelReady && target.Login != nil:
+		core, err = target.Login(ctx)
 	}
-	permission, userType, err := s.GitHub.RepositoryPermission(ctx, token, owner, repo, actor.Login)
 	if err != nil {
 		return github.LabelActor{}, false, err
 	}
-	return actor, IsOwner(permission, userType), nil
+	return actor, StatusLabelCounts(label, status, core), nil
 }
 
 // runImplementer prepares the worktree and runs one Implementer request to

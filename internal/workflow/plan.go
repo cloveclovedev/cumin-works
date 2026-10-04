@@ -309,7 +309,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 		if err != nil {
 			return
 		}
-		s.readRequirementFacts(ctx, log, token, target, &requirement)
+		s.readRequirementFacts(ctx, log, token, target, settings, &requirement)
 		requirement.SplitRequestedAgain = requirement.SplitRequestedAgain || again
 		snapshot := Snapshot{RequirementIssues: []RequirementIssue{requirement}}
 		switch a := SplitEnd(requirement, false).(type) {
@@ -408,7 +408,7 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 		if err != nil {
 			return
 		}
-		s.readRequirementFacts(ctx, log, token, target, &requirement)
+		s.readRequirementFacts(ctx, log, token, target, settings, &requirement)
 		requirement.AcceptanceRequestedAgain = requirement.AcceptanceRequestedAgain || again
 		snapshot := Snapshot{RequirementIssues: []RequirementIssue{requirement}}
 		switch a := AcceptanceEnd(requirement, false).(type) {
@@ -676,10 +676,16 @@ func (s *Service) readAcceptanceComment(ctx context.Context, log *slog.Logger, t
 
 // readRequirementFacts reads, for one requirement issue that was read again
 // at the end of a Planner run, what the poll reads for SplitEnd and for
-// AcceptanceEnd: the time of its status label, and the comments.
-func (s *Service) readRequirementFacts(ctx context.Context, log *slog.Logger, token string, target Target, requirement *RequirementIssue) {
+// AcceptanceEnd: the account that added its status label, the time of that
+// label, and the comments. A label that does not count ends the read: the
+// end of the run decides nothing from it.
+func (s *Service) readRequirementFacts(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, requirement *RequirementIssue) {
 	status := statusLabel(requirement.Labels)
 	if status != LabelPlanning && status != LabelAccepting {
+		return
+	}
+	s.readStatusOfRequirement(ctx, log, token, target, settings, requirement)
+	if !statusCounts(*requirement) {
 		return
 	}
 	times, _, err := s.GitHub.ReadLabelTimes(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number)

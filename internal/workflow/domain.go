@@ -217,6 +217,13 @@ type RequirementIssue struct {
 	// cumin/status/ready, when that account is the Owner (IsOwner). It is
 	// empty when another account added it, and when it was not read.
 	ReadyOwner string
+	// StatusRead says that StatusCounts was read. The poll reads it only
+	// when cumin is about to act from the status label (StatusActorReads).
+	StatusRead bool
+	// StatusCounts says that the account that added the newest status label
+	// of the issue is the cumin-core App or an Owner (StatusLabelCounts).
+	// It is false when another account added it, and when it was not read.
+	StatusCounts bool
 	// FollowUpsDone says that no closed sub-issue needs a follow-up note
 	// (I9) any more: each one has its note, was closed without a merge, or
 	// left nothing to copy. The poll sets it after I9, and R4 waits for it.
@@ -718,7 +725,7 @@ func remainingNeedReview(requirement RequirementIssue) bool {
 // cumin/status/implementing and has one or more sub-issues, all closed.
 func NeedsComments(requirement RequirementIssue) bool {
 	if statusLabel(requirement.Labels) == LabelAccepting {
-		return true
+		return !statusOfAnother(requirement)
 	}
 	return everySubIssueClosed(requirement)
 }
@@ -781,10 +788,11 @@ func accepted(requirement RequirementIssue) bool {
 //     stay in cumin/status/accepting. The second time, stop the acceptance
 //     check for the Owner.
 //
-// It returns nil while the Planner runs, in every other state, and while
-// the comments or the label times were not read: the next poll decides.
+// It returns nil while the Planner runs, in every other state, while the
+// comments or the label times were not read, and while the status label
+// does not count (statusCounts): the next poll decides.
 func AcceptanceEnd(requirement RequirementIssue, running bool) Action {
-	if statusLabel(requirement.Labels) != LabelAccepting || running || !requirement.CommentsRead {
+	if statusLabel(requirement.Labels) != LabelAccepting || running || !statusCounts(requirement) || !requirement.CommentsRead {
 		return nil
 	}
 	switch {
@@ -819,10 +827,11 @@ func AcceptanceEnd(requirement RequirementIssue, running bool) Action {
 //     stay in cumin/status/planning. The second time, stop the split for
 //     the Owner.
 //
-// It returns nil while the Planner runs, in every other state, and while
-// the comments or the label times were not read: the next poll decides.
+// It returns nil while the Planner runs, in every other state, while the
+// comments or the label times were not read, and while the status label
+// does not count (statusCounts): the next poll decides.
 func SplitEnd(requirement RequirementIssue, running bool) Action {
-	if !SplitNeedsFacts(requirement, running) || !requirement.CommentsRead || !requirement.LabelTimesRead {
+	if !SplitNeedsFacts(requirement, running) || !statusCounts(requirement) || !requirement.CommentsRead || !requirement.LabelTimesRead {
 		return nil
 	}
 	verification := VerifySplit(requirement)
@@ -842,9 +851,10 @@ func SplitEnd(requirement RequirementIssue, running bool) Action {
 // SplitNeedsFacts reports whether the way out of cumin/status/planning
 // needs the comments and the label times of the requirement issue: it is in
 // cumin/status/planning, and its Planner does not run. While the Planner
-// runs, nothing is decided, so the poll reads nothing more.
+// runs, nothing is decided, so the poll reads nothing more. The same holds
+// for a label that another account than cumin-core or an Owner added.
 func SplitNeedsFacts(requirement RequirementIssue, running bool) bool {
-	return statusLabel(requirement.Labels) == LabelPlanning && !running
+	return statusLabel(requirement.Labels) == LabelPlanning && !running && !statusOfAnother(requirement)
 }
 
 // acceptanceChecks returns the starts of R4 before the limit: every
@@ -984,6 +994,69 @@ func ReadyActorReads(snapshot Snapshot, maxInProgress int, priority []string) (n
 	return numbers, room
 }
 
+// StatusActor is the account of the newest event that added a status
+// label. Login and Type are the ones of the event as GraphQL names them
+// ("User" for a person, "Bot" for a GitHub App); both are empty when the
+// account no longer exists or no event was found. Permission and UserType
+// are the answer of GitHub on the permission of a person on the
+// repository; they are empty for an account that is not a person.
+type StatusActor struct {
+	Login      string
+	Type       string
+	Permission string
+	UserType   string
+}
+
+// StatusLabelCounts reports whether cumin treats a status label as a state
+// (issue-states.md, the account that added a status label): the account of
+// its newest label event is an Owner (IsOwner) or, for every label but
+// cumin/status/ready, the cumin-core App. core is the login of the bot of
+// cumin-core; GraphQL names a bot without "[bot]", so both forms match.
+// Every rule that acts from a state calls it before it acts.
+func StatusLabelCounts(label string, actor StatusActor, core string) bool {
+	if actor.Login == "" {
+		return false
+	}
+	if actor.Type == "User" {
+		return IsOwner(actor.Permission, actor.UserType)
+	}
+	core = strings.TrimSuffix(core, "[bot]")
+	return label != LabelReady && actor.Type == "Bot" && core != "" &&
+		strings.TrimSuffix(actor.Login, "[bot]") == core
+}
+
+// StatusActorReads names the requirement issues whose newest status label
+// the poll must read the actor of: the ones that cumin is about to act
+// from, in cumin/status/planning or in cumin/status/accepting with no
+// Planner running. While the Planner runs, and in every other state,
+// nothing is decided from the label, so a poll with no such issue makes no
+// read.
+func StatusActorReads(snapshot Snapshot) []int {
+	var numbers []int
+	for _, requirement := range snapshot.RequirementIssues {
+		status := statusLabel(requirement.Labels)
+		if (status == LabelPlanning || status == LabelAccepting) && !snapshot.Running[requirement.Number] {
+			numbers = append(numbers, requirement.Number)
+		}
+	}
+	slices.Sort(numbers)
+	return numbers
+}
+
+// statusCounts reports whether the actor of the status label was read and
+// is the cumin-core App or an Owner. A rule that acts from the state holds
+// only then.
+func statusCounts(requirement RequirementIssue) bool {
+	return requirement.StatusRead && requirement.StatusCounts
+}
+
+// statusOfAnother reports whether the actor of the status label was read
+// and is neither the cumin-core App nor an Owner. Such an issue waits for
+// the Owner.
+func statusOfAnother(requirement RequirementIssue) bool {
+	return requirement.StatusRead && !requirement.StatusCounts
+}
+
 // readyOfOwner reports whether the newest cumin/status/ready was read and
 // is the Owner's. R1 and I1 hold only then (issue-states.md, the ready of
 // the Owner).
@@ -1004,7 +1077,7 @@ func readyOfAnother(read bool, owner string) bool { return read && owner == "" }
 // then does the poll read the times, so that the poll query keeps its cost.
 func NeedsLabelTimes(requirement RequirementIssue) bool {
 	return startNeedsLabelTimes(requirement) ||
-		statusLabel(requirement.Labels) == LabelAccepting ||
+		statusLabel(requirement.Labels) == LabelAccepting && !statusOfAnother(requirement) ||
 		slices.ContainsFunc(requirement.SubIssues, openChecking) ||
 		slices.ContainsFunc(requirement.SubIssues, openWithChangeRequest)
 }
@@ -1398,7 +1471,8 @@ func subIssueCandidates(snapshot Snapshot) []Claim {
 // table under Q4): an open sub-issue that waits for the required checks,
 // or a ready issue that can start and waits only for room under the limit.
 // A ready issue with an open blocked-by issue, a ready issue whose ready
-// another account than the Owner added, an issue that waits for the Owner,
+// another account than the Owner added, a status label that another account
+// than cumin-core or an Owner added, an issue that waits for the Owner,
 // and an issue whose agent no longer runs do not count. A ready that was
 // not read counts: the poll reads it when a slot is free.
 func (s Snapshot) MovesWithoutOwner() bool {
@@ -1408,7 +1482,8 @@ func (s Snapshot) MovesWithoutOwner() bool {
 	// The next poll decides the way out of cumin/status/planning and of
 	// cumin/status/accepting from the facts, also when no Planner runs.
 	for _, requirement := range s.RequirementIssues {
-		if slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting) {
+		if (slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting)) &&
+			!statusOfAnother(requirement) {
 			return true
 		}
 	}
