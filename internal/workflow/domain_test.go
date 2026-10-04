@@ -110,6 +110,14 @@ func TestDecide_I1(t *testing.T) {
 			maxInProgress: 1,
 		},
 		{
+			name: "a requirement issue in accepting fills limit 1",
+			snapshot: Snapshot{RequirementIssues: []RequirementIssue{
+				requirement(6, implementing, ready(10)),
+				requirement(7, []string{LabelAccepting}),
+			}},
+			maxInProgress: 1,
+		},
+		{
 			name: "a requirement issue in implementing does not fill the limit",
 			snapshot: Snapshot{RequirementIssues: []RequirementIssue{
 				requirement(6, implementing, ready(10)),
@@ -922,5 +930,93 @@ func TestPollIsDue(t *testing.T) {
 	}
 	if !PollIsDue(false, time.Minute, time.Minute, time.Minute) {
 		t.Error("equal intervals: PollIsDue = false, want a poll at every tick")
+	}
+}
+
+// The way out of cumin/status/accepting is a pure function of the facts of
+// the requirement issue and of whether its Planner runs.
+func TestAcceptanceEnd(t *testing.T) {
+	closedAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	labeledAt := closedAt.Add(time.Minute)
+	accepting := func(change func(*RequirementIssue)) RequirementIssue {
+		requirement := RequirementIssue{
+			Number: 6, Labels: []string{LabelRequirement, LabelAccepting},
+			SubIssues:    []SubIssue{{Number: 10, Closed: true, ClosedAt: closedAt}},
+			CommentsRead: true, LabelTimesRead: true, ReviewAt: labeledAt,
+		}
+		if change != nil {
+			change(&requirement)
+		}
+		return requirement
+	}
+	tests := []struct {
+		name        string
+		requirement RequirementIssue
+		running     bool
+		want        Action
+	}{
+		{
+			name:        "no comment requests the acceptance check again",
+			requirement: accepting(nil),
+			want:        CheckAcceptance{Number: 6, Again: true},
+		},
+		{
+			name:        "no comment after the second request stops for the Owner",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceRequestedAgain = true }),
+			want:        StopAcceptance{Number: 6},
+		},
+		{
+			name:        "the comment after the last close asks the Owner to accept",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceCheckAt = closedAt.Add(time.Hour) }),
+			want:        Accept{Number: 6},
+		},
+		{
+			name:        "a comment from before the last close belongs to an earlier round",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceCheckAt = closedAt.Add(-time.Hour) }),
+			want:        CheckAcceptance{Number: 6, Again: true},
+		},
+		{
+			name:        "a question after the label stops for the Owner at once",
+			requirement: accepting(func(r *RequirementIssue) { r.QuestionAt = labeledAt.Add(time.Minute) }),
+			want:        StopAcceptance{Number: 6, Question: true},
+		},
+		{
+			name:        "a question from before the label belongs to an earlier stay",
+			requirement: accepting(func(r *RequirementIssue) { r.QuestionAt = labeledAt.Add(-time.Second) }),
+			want:        CheckAcceptance{Number: 6, Again: true},
+		},
+		{
+			name:        "a running Planner changes nothing",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceCheckAt = closedAt.Add(time.Hour) }),
+			running:     true,
+		},
+		{
+			name:        "comments that were not read change nothing",
+			requirement: accepting(func(r *RequirementIssue) { r.CommentsRead = false }),
+		},
+		{
+			name:        "label times that were not read request nothing",
+			requirement: accepting(func(r *RequirementIssue) { r.LabelTimesRead = false }),
+		},
+		{
+			name:        "another state is not decided here",
+			requirement: accepting(func(r *RequirementIssue) { r.Labels = []string{LabelRequirement, LabelImplementing} }),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AcceptanceEnd(tt.requirement, tt.running); got != tt.want {
+				t.Errorf("AcceptanceEnd = %#v, want %#v", got, tt.want)
+			}
+			// The poll decides the same from the snapshot and the running set.
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{6: tt.running}}
+			var want []Action
+			if tt.want != nil {
+				want = []Action{tt.want}
+			}
+			if got := Decide(snapshot, 1, nil, nil, closedAt, time.Hour); !reflect.DeepEqual(got, want) {
+				t.Errorf("Decide = %#v, want %#v", got, want)
+			}
+		})
 	}
 }

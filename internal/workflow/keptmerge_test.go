@@ -53,7 +53,13 @@ func assertMergedAndClosedOnce(t *testing.T, sc *scene, service *workflow.Servic
 	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
 		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 0 {
+	// The close of the last sub-issue starts the acceptance check of #6. The
+	// fake agent leaves no comment, so that check may stop for the Owner in
+	// the same poll. That notification is not one of the merge step.
+	messages := slices.DeleteFunc(sc.messagesExceptQ4(), func(message string) bool {
+		return strings.Contains(message, workflow.NoAcceptanceCheckReason)
+	})
+	if len(messages) != 0 {
 		t.Errorf("notifications = %v, want none", messages)
 	}
 	if got := workflow.InProgressIssues(service); len(got) != 0 {
