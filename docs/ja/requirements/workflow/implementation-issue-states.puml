@@ -1,6 +1,8 @@
 @startuml implementation-issue-states
 ' cumin works - states of an implementation issue.
-' A state is a label on GitHub. Each arrow names one row of issue-states.md (I1 to I15); I9 and I11 are notes.
+' A state is a label on GitHub. Each arrow is one transition. Its first line names the step of cumin
+' that makes it (with the row of issue-states.md), and the second line says what happened.
+' One step can have several arrows. I9 and I11 change no state; they are notes.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 
 hide empty description
@@ -13,27 +15,36 @@ state "cumin/status/reviewing" as Reviewing
 state "cumin/status/awaiting-owner-review" as OwnerReview
 state "cumin/status/awaiting-owner-decision" as Decision
 
-[*] --> Draft : Planner or Owner creates\na sub-issue
-Draft --> Ready : Owner checks it,\nadds cumin/status/ready
-Ready --> Implementing : I1 cumin asks for the implementation
-Implementing --> Checks : I2 run done,\npull request verified
-Implementing --> Decision : I2 blocked, or\ntwo abnormal ends
-Checks --> Reviewing : I3 required checks passed
-Checks --> Implementing : I4 a required check failed,\nfix request
-Checks --> Decision : I4 fix requests\nat the limit
-Checks --> Implementing : I14 the pull request\nconflicts (same session)
-Checks --> Decision : I15 required checks\ndo not report in time
-Reviewing --> Implementing : I5 REQUEST_CHANGES\n(fix request)
-Reviewing --> [*] : I6 APPROVE, risk/low\n(cumin merges)
-Reviewing --> OwnerReview : I7 APPROVE,\nrisk/medium or risk/high
-Reviewing --> Decision : I8 comments left\nafter 3 rounds
-Reviewing --> Decision : I10 Reviewer\nreturned blocked
-OwnerReview --> [*] : I12 Owner approves the head commit\n(cumin merges)
-OwnerReview --> Implementing : I13 Owner requests changes\n(same session)
-OwnerReview --> Ready : Owner sends it back\n(comment, cumin/status/ready again)
-Decision --> Ready : Owner answers,\nadds cumin/status/ready again
+[*] --> Draft : the Planner or the Owner\ncreates a sub-issue
+Draft --> Ready : the Owner checks it,\nadds cumin/status/ready
+Ready --> Implementing : I1 request the implementation:\nthe Implementer is asked
+Implementing --> Checks : I2 check the finished work:\nthe pull request is verified,\nthe checks run
+Implementing --> Decision : I2 check the finished work:\nblocked, the pull request failed the check,\nor two abnormal ends
+Checks --> Reviewing : I3 request the review:\nthe required checks passed
+Checks --> Implementing : I4 request a check fix:\na required check failed
+Checks --> Decision : I4 request a check fix:\nthe fix requests are at the limit
+Checks --> Implementing : I14 request a conflict resolution:\nthe pull request conflicts
+Checks --> Decision : I15 stop for missing checks:\nthe required checks do not report in time
+Reviewing --> Implementing : check the review (I5):\nchanges requested
+Reviewing --> [*] : check the review (I6):\napproved, risk/low, cumin merges
+Reviewing --> OwnerReview : check the review (I7):\napproved, risk/medium or risk/high,\nthe Owner decides the merge
+Reviewing --> Decision : check the review (I8):\ncomments left at the round limit,\nthe Reviewer explains the cause
+Reviewing --> Decision : check the review (I10):\nthe Reviewer returned blocked,\nor left no review twice
+Reviewing --> Checks : check the review (no row today):\nthe head commit moved, or a required\ncheck does not pass
+OwnerReview --> [*] : I12 merge on the Owner's approval:\nthe Owner approved the head commit,\ncumin merges
+OwnerReview --> Implementing : I13 request a response to the Owner's review:\nthe Owner requested changes
+OwnerReview --> Implementing : I14 request a conflict resolution:\nthe pull request conflicts
+OwnerReview --> Ready : the Owner sends it back\n(comment, cumin/status/ready again)
+Decision --> Ready : the Owner answers,\nadds cumin/status/ready again
 
-note "I11: in every state, cumin copies the\ncumin/status/* and risk/* labels of the\nissue to its open pull request." as I11
-note "I9: after every merge (I6, I12, or by the Owner),\ncumin copies the work left to a follow-up note." as I9
+note "I11 copy the labels to the pull request:\nin every state, no transition." as I11
+note "I9 write the follow-up note:\nafter every merge, no transition." as I9
+
+legend right
+  First line of an arrow: the step of cumin (a row of issue-states.md).
+  Second line: what happened (the transition).
+  An arrow without a row: the Owner, or the Planner, acts.
+  "check the review" is one step after a Reviewer run; today it is five rows.
+endlegend
 
 @enduml
