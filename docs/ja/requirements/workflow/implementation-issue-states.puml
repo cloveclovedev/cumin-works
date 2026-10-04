@@ -1,50 +1,62 @@
 @startuml implementation-issue-states
 ' cumin works - states of an implementation issue.
-' A state is a label on GitHub. Each arrow is one transition. Its first line names the step of cumin
-' that makes it (with the row of issue-states.md), and the second line says what happened.
-' One step can have several arrows. I9 and I11 change no state; they are notes.
+' A state is a label on GitHub. "do /" in a state says what goes on while the issue has the label.
+' A transition is written as in UML: trigger [guard] / effect. The row of issue-states.md stands in
+' parentheses at the end. I9 and I11 change no state; they are notes.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 
 hide empty description
 
-state "Draft\n(no status label)" as Draft
+state "Draft (no status label)" as Draft
+Draft : do / the Planner or the Owner writes the issue
+
 state "cumin/status/ready" as Ready
+Ready : do / wait for a free slot
+
 state "cumin/status/implementing" as Implementing
+Implementing : do / the Implementer works
+
 state "cumin/status/awaiting-checks" as Checks
+Checks : do / the required checks run
+
 state "cumin/status/reviewing" as Reviewing
+Reviewing : do / the Reviewer reviews
+
 state "cumin/status/awaiting-owner-review" as OwnerReview
+OwnerReview : do / the Owner reviews the pull request
+
 state "cumin/status/awaiting-owner-decision" as Decision
+Decision : do / the Owner answers
 
-[*] --> Draft : the Planner or the Owner\ncreates a sub-issue
-Draft --> Ready : the Owner checks it,\nadds cumin/status/ready
-Ready --> Implementing : I1 request the implementation:\nthe Implementer is asked
-Implementing --> Checks : I2 check the finished work:\nthe pull request is verified,\nthe checks run
-Implementing --> Decision : I2 check the finished work:\nblocked, the pull request failed the check,\nor two abnormal ends
-Checks --> Reviewing : I3 request the review:\nthe required checks passed
-Checks --> Implementing : I4 request a check fix:\na required check failed
-Checks --> Decision : I4 request a check fix:\nthe fix requests are at the limit
-Checks --> Implementing : I14 request a conflict resolution:\nthe pull request conflicts
-Checks --> Decision : I15 stop for missing checks:\nthe required checks do not report in time
-Reviewing --> Implementing : check the review (I5):\nchanges requested
-Reviewing --> [*] : check the review (I6):\napproved, risk/low, cumin merges
-Reviewing --> OwnerReview : check the review (I7):\napproved, risk/medium or risk/high,\nthe Owner decides the merge
-Reviewing --> Decision : check the review (I8):\ncomments left at the round limit,\nthe Reviewer explains the cause
-Reviewing --> Decision : check the review (I10):\nthe Reviewer returned blocked,\nor left no review twice
-Reviewing --> Checks : check the review (no row today):\nthe head commit moved, or a required\ncheck does not pass
-OwnerReview --> [*] : I12 merge on the Owner's approval:\nthe Owner approved the head commit,\ncumin merges
-OwnerReview --> Implementing : I13 request a response to the Owner's review:\nthe Owner requested changes
-OwnerReview --> Implementing : I14 request a conflict resolution:\nthe pull request conflicts
-OwnerReview --> Ready : the Owner sends it back\n(comment, cumin/status/ready again)
-Decision --> Ready : the Owner answers,\nadds cumin/status/ready again
+[*] --> Draft
+Draft --> Ready : the Owner adds cumin/status/ready
+Ready --> Implementing : poll [ready is the Owner's,\nblockers closed, slot free]\n/ request the implementation (I1)
+Implementing --> Checks : Implementer run ended\n[done, pull request verified]\n/ add the closing link (I2)
+Implementing --> Decision : Implementer run ended\n[blocked, not verified,\nor second abnormal end]\n/ write the reason, notify the Owner (I2)
+Checks --> Reviewing : required checks passed\n/ request the review (I3)
+Checks --> Implementing : a required check failed\n[fix requests under the limit]\n/ request a check fix (I4)
+Checks --> Decision : a required check failed\n[fix requests at the limit]\n/ notify the Owner (I4)
+Checks --> Implementing : pull request conflicts\n/ request a conflict resolution (I14)
+Checks --> Decision : wait time passed\n[a required check has no result]\n/ notify the Owner (I15)
+Reviewing --> Implementing : Reviewer run ended\n[changes requested,\nrounds under the limit]\n/ request a review fix (I5)
+Reviewing --> [*] : Reviewer run ended\n[approved, checks passed, risk/low]\n/ merge, close the issue (I6)
+Reviewing --> OwnerReview : Reviewer run ended\n[approved, checks passed,\nrisk/medium or risk/high]\n/ notify the Owner (I7)
+Reviewing --> Decision : Reviewer run ended\n[changes requested,\nrounds at the limit]\n/ request the cause, notify the Owner (I8)
+Reviewing --> Decision : Reviewer run ended\n[blocked, or no review twice]\n/ post the reason, notify the Owner (I10)
+Reviewing --> Checks : Reviewer run ended\n[head commit moved, or\na check does not pass] (no row)
+OwnerReview --> [*] : the Owner approved the head commit\n[checks passed]\n/ merge, close the issue (I12)
+OwnerReview --> Implementing : the Owner requested changes\n/ request a response (I13)
+OwnerReview --> Implementing : pull request conflicts\n/ request a conflict resolution (I14)
+OwnerReview --> Ready : the Owner adds cumin/status/ready
+Decision --> Ready : the Owner adds cumin/status/ready
 
-note "I11 copy the labels to the pull request:\nin every state, no transition." as I11
-note "I9 write the follow-up note:\nafter every merge, no transition." as I9
+note "In every state: the labels of the issue differ from\nthose of its pull request / copy the labels (I11)." as I11
+note "After the issue closed with a merged pull request:\n/ write the follow-up note (I9)." as I9
 
 legend right
-  First line of an arrow: the step of cumin (a row of issue-states.md).
-  Second line: what happened (the transition).
-  An arrow without a row: the Owner, or the Planner, acts.
-  "check the review" is one step after a Reviewer run; today it is five rows.
+  A box is a state: a label on GitHub. "do /" is what goes on in the state.
+  An arrow is a transition: trigger [guard] / effect.
+  In parentheses: the row of issue-states.md today.
 endlegend
 
 @enduml
