@@ -282,8 +282,11 @@ type Fake struct {
 	mu           sync.Mutex
 	repositories map[string]*Repository
 	app          *App
-	users        map[string]int64
-	requests     []Request
+	// labelWriter is the actor of the label events of a label change, as
+	// SetLabelWriter set it.
+	labelWriter string
+	users       map[string]int64
+	requests    []Request
 	// received is closed, and replaced, each time a request arrives, so
 	// that WaitForRequests wakes.
 	received chan struct{}
@@ -438,6 +441,15 @@ func (f *Fake) AddApp(app App) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.app = &app
+}
+
+// SetLabelWriter names the GitHub App that the label events of a label
+// change carry as their actor: the slug, without "[bot]", as GraphQL gives
+// it. Without it, such an event has no actor.
+func (f *Fake) SetLabelWriter(slug string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.labelWriter = slug
 }
 
 // AddUser registers a user for GET /users/{login}.
@@ -1308,7 +1320,11 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 		now := f.now()
 		for _, label := range *request.Labels {
 			if !slices.Contains(issue.Labels, label) {
-				issue.LabelEvents = append(issue.LabelEvents, LabelEvent{Label: label, At: now})
+				event := LabelEvent{Label: label, At: now}
+				if f.labelWriter != "" {
+					event.Actor, event.ActorType = f.labelWriter, "Bot"
+				}
+				issue.LabelEvents = append(issue.LabelEvents, event)
 			}
 		}
 	}

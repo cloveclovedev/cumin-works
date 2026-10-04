@@ -212,6 +212,25 @@ checkの結果の読み方:
 - 採らなかった案: 着手を適用するとき (ラベルを替える直前) に確かめる。判定が、Ownerでないreadyに空きを割り当ててしまい、同じ定期確認でほかのIssueに着手できない。判定の前に読めば、判定は純粋関数のままで、空きを正しく分けられる。
 - 採らなかった案: 読んだ結果を、次の定期確認まで持ち越す。readyを付け直したことは、イベントを読まないと分からないので、候補であるあいだは毎回読む。
 
+### 状態ラベルを付けたアカウントの確認
+
+![状態ラベルを付けたアカウントの確認](poll-status-actor.svg)
+
+図の元ファイル: [poll-status-actor.puml](poll-status-actor.puml)
+
+- cuminは、`cumin-core` のGitHub AppかOwnerが最後に付けた状態ラベルだけを、状態として扱う ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「状態ラベルを付けたアカウント」)。決まりは、純粋関数 `StatusLabelCounts` の1つだけにある。ラベルの名前と、最新のラベルのイベントのアカウントと、`cumin-core` のログイン名を受け取り、数えるかどうかを返す。人は `IsOwner` で決める。GitHub Appは、`cumin-core` であるときだけ数える。GraphQLはGitHub Appのログイン名を `[bot]` なしで返すので、どちらの形でも同じとして比べる。`cumin/status/ready` は、Ownerだけを数える (「Ownerのreadyの確認 (R1、I1)」と同じ決まり)。アカウントがもうないとき、イベントが見つからないときは、数えない。
+- 今、この確認をするのは、定期確認が状態から決める2つの状態である: 要求Issueの `cumin/status/planning` と `cumin/status/accepting`。`implementing`、`reviewing`、`merging`、`checking` の決まりは、作るときに同じ関数 (`StatusLabelCounts`、`readStatusActor`) を呼ぶ。人を待つ状態は、そこから出るときにOwnerを確かめるので、対象にしない。
+- 読むのは、cuminがその状態から動作を起こす直前だけである。読むIssueは、純粋関数 `StatusActorReads` が決める: `cumin/status/planning` か `cumin/status/accepting` の要求Issueで、Plannerが動いていないもの。Plannerが動いている間は、ラベルから何も決めないので、読まない。この2つの状態でPlannerが動いていないのは、ふつう、cuminの再起動のあとか、実行のあとの読み取りが失敗したあとの、1回の定期確認だけである。
+- 読む場所は2つある。定期確認では、ラベルの時刻とコメントを読む前に読み、結果をスナップショットに入れる (`readStatusActors`。`StatusRead` と `StatusCounts`)。Plannerの実行の終わりでは、Issueを読み直したあと、ラベルの時刻とコメントの前に読む (`readRequirementFacts`)。実行の間にラベルが付け替えられることがあるためである。
+- 判定 (`SplitEnd`、`AcceptanceEnd`) は、読めて、数えるラベルのときだけ動作を返す。数えないラベルと、読めなかったラベルでは、何も返さない。数えないラベルのIssueでは、ラベルの時刻もコメントも読まない (`SplitNeedsFacts`、`NeedsLabelTimes`、`NeedsComments`)。
+- 数えないラベルには、Agentを起動せず、ラベルも替えない。ログに1行 (warn) 残し、Ownerに1回通知する (`tellStatusOfAnother`)。同じラベルのイベントについては、定期確認のたびに繰り返さない。伝えたイベントの時刻は、readyと同じメモリ (`readyTold`) に持つ。1つのIssueの状態ラベルは1つなので、Issueごとに1つの時刻で足りる。cuminが再起動すると、もう一度だけ伝える。
+- 読み取りは、「Ownerのreadyの確認 (R1、I1)」と同じ問い合わせである (`ReadOwnLabelActor`)。そのIssue自身のイベントだけを使い、新しいほうから100件の中にそのラベルのイベントがなければ、数えない。
+- 読めなかったときは、ログにエラーを出し、そのIssueは「読んでいない」のままにする。その定期確認では何も決めず、次の定期確認で読み直す。ほかの行は進める。`cumin-core` のログイン名が読めなかったときも同じである。
+- 待ち状態の通知 (Q4) では、数えないラベルと読めたIssueを「Ownerなしで進めるIssue」に数えない (`MovesWithoutOwner`)。
+- コストは、読むIssue1つにつき、GraphQLが1ポイント (「Ownerのログイン名の読み取り」の実測) と、人のときのRESTの呼び出し1回である。状態から決めるIssueのない定期確認では、何も読まないので、ふだんの定期確認のコストは変わらない。増えるのは次のときである: Plannerの実行の終わりごとに1回、再起動のあとなどでPlannerが動いていない `planning` か `accepting` を決める定期確認で1回、数えないラベルが残る間は定期確認のたびに1回。数えないラベルでは、ラベルの時刻とコメントを読まないので、その分は減る。
+- 採らなかった案: 定期確認の問い合わせに、Issueごとのタイムラインを入れる。状態から決めるIssueがない定期確認でも、コストが増える。
+- 採らなかった案: `cumin-core` が付けたことを手元に覚えて、読み取りを省く。再起動のあとに決められることが要件なので、GitHubの事実から読む。
+
 ### 要求Issueのコメントの読み取り
 
 - R4とR7は、Plannerの受け入れの確認のコメントが、最後のsub-issueが閉じたあとに書かれたかを見る。問い合わせは `issueOrPullRequest` で、IssueにもPull Requestにも答える。I8も、Pull Requestのコメントを同じ問い合わせで読む。`issue(number:)` はPull Requestの番号を解決しない (2026-09-30にcumin-worksで確かめた。NOT_FOUNDになる)。sub-issueが閉じた時刻は、定期確認の問い合わせで `closedAt` として読む。スカラーの項目なので、コストは変わらない。
