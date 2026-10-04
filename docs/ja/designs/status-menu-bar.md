@@ -66,12 +66,14 @@
 | `agents[].issue` | 整数 | Issueの番号 |
 | `agents[].role` | 文字列 | `planner`、`implementer`、`reviewer` |
 | `agents[].request` | 文字列 | 依頼の種類。roleの指示ファイルが使う名前 (`plan`、`acceptance check`、`implement`、`continue`、`check fix`、`conflict resolution`、`review`、`review fix`、`owner review fix`、`explain the cause`) |
+| `agents[].title` | 文字列 | Issueの題名 |
 | `agents[].url` | 文字列 | IssueのURL |
 | `waiting` | 配列 | Ownerの対応を待つ、開いているIssue。リポジトリごとに、最後に読めたスナップショットから作る |
 | `waiting[].repository` | 文字列 | `<owner>/<repo>` |
 | `waiting[].issue` | 整数 | Issueの番号 |
-| `waiting[].kind` | 文字列 | `owner-review` (`cumin/status/awaiting-owner-review`、Ownerが承認する)、`owner-decision` (`cumin/status/awaiting-owner-decision`、Ownerが答える) |
-| `waiting[].url` | 文字列 | IssueのURL |
+| `waiting[].kind` | 文字列 | 待つものの種類。下の表の4つの値 |
+| `waiting[].title` | 文字列 | Issueの題名 |
+| `waiting[].url` | 文字列 | `merge-decision` では、開いているPull RequestのURL。ほかの3つでは、IssueのURL |
 
 例:
 
@@ -91,18 +93,30 @@
     "next_try_at": "2026-10-04T09:00:00Z"
   },
   "agents": [
-    {"repository": "example/tool", "issue": 12, "role": "implementer", "request": "implement", "url": "https://github.com/example/tool/issues/12"}
+    {"repository": "example/tool", "issue": 12, "role": "implementer", "request": "implement", "title": "feat(api): add the list endpoint", "url": "https://github.com/example/tool/issues/12"}
   ],
   "waiting": [
-    {"repository": "example/tool", "issue": 9, "kind": "owner-review", "url": "https://github.com/example/tool/issues/9"},
-    {"repository": "example/app", "issue": 31, "kind": "owner-decision", "url": "https://github.com/example/app/issues/31"}
+    {"repository": "example/tool", "issue": 9, "kind": "merge-decision", "title": "fix(api): return 404 for a missing item", "url": "https://github.com/example/tool/pull/14"},
+    {"repository": "example/app", "issue": 31, "kind": "owner-decision", "title": "Show the history of an item", "url": "https://github.com/example/app/issues/31"}
   ]
 }
 ```
 
-- `waiting[].kind` は、ラベルだけから決める。判断の依頼と、止まったIssueは、どちらも `owner-decision` で、分けない。分けるにはコメントを読むことになる。
+`waiting[].kind` の値:
+
+| 値 | いつ | 今のメニューバーの区画 |
+|---|---|---|
+| `merge-decision` | `cumin/status/awaiting-owner-review` の実装Issue | 承認を待つ |
+| `split-review` | `cumin/status/awaiting-owner-review` の要求Issueで、開いているsub-issueがある | 承認を待つ |
+| `acceptance` | `cumin/status/awaiting-owner-review` の要求Issueで、sub-issueが全て閉じている | 承認を待つ |
+| `owner-decision` | `cumin/status/awaiting-owner-decision` のIssue (要求Issueでも実装Issueでも) | 答えを待つ |
+
+- 種類は、定期確認が既に持つ事実 (ラベル、要求Issueか実装Issueか、sub-issueの開閉) から決め、問い合わせを足さない。区画より細かく分けるのは、あとで表示を変えても、ファイルを変えずに済むようにするためである。
+- 判断の依頼と、止まったIssueは、どちらも `owner-decision` で、分けない。分けるにはコメントを読むことになる。
+- `merge-decision` のURLは、定期確認の2つ目の問い合わせ ([定期確認の設計](poll.md) の「2つの問い合わせ」) が読んだ、開いているPull Requestの番号から作る。Ownerが判断する場所は、Pull Requestだからである。開いているPull Requestが読めていないときは、IssueのURLにする。
+- 題名は、メニューの行に出す。sub-issueの題名は、定期確認が既に読んでいる。要求Issueの題名は、1つ目の問い合わせに項目を1つ足して読む。問い合わせの数は増えない。`agents` の題名は、依頼を始めるときのスナップショットから取り、実行とともに持つ。
+- 採らなかった案 (前の決定): 題名を載せず、URLをどれもIssueにする。載せるものは減るが、行が番号だけになり、mergeの判断ではPull Requestへ移る手間が残る。
 - 利用枠は、状態の名前と、枠の名前と、次に試す時刻だけを載せる。使用率、上限、リセット時刻は載せない。受け入れた不利益: weekly枠の次に試す時刻は使用率から計算するので、設定を知る人は使用率を逆算できる。ファイルはHostのユーザだけが読める。
-- 採らなかった案: Issueの題名を載せる。表示は読みやすくなるが、実行中の一覧は題名を持たず、載せるものが増える。
 
 ### アプリの構成
 
@@ -123,20 +137,21 @@
 | 区画 | 数 | ファイルから | 記号 |
 |---|---|---|---|
 | 実行中 | 続いているAgentの実行 | `agents` の長さ | `play.fill` |
-| 承認を待つ | Ownerのレビューを待つIssue | `kind` が `owner-review` の `waiting` | `hand.raised.fill` |
+| 承認を待つ | Ownerの承認を待つIssue | `kind` が `merge-decision`、`split-review`、`acceptance` の `waiting` | `hand.raised.fill` |
 | 答えを待つ | Ownerの判断を待つIssue | `kind` が `owner-decision` の `waiting` | `questionmark.circle.fill` |
 
 - 数は、Hostの全てのリポジトリの合計である。数が0の区画は描かない。区画が1つも残らないときは、中立の記号 (`circle`) を1つ描き、項目が消えないようにする。
 - 実行中の区画は、roleで分けない。roleと依頼の種類は、メニューの行に出す。
 - 4つの記号は、どれもSF Symbolsの最初の版 (2019) からある (一覧)。記号から画像を作る `NSImage(systemSymbolName:accessibilityDescription:)` は macOS 11.0 からなので (公式: NSImage の同名のページ)、アプリが対応するどの版でも使える。
-- メニューを開くと、`agents` と `waiting` の1行ずつが並ぶ。行を選ぶと、`url` を既定のブラウザで開く。その下に、利用枠の状態、止める予約、定期確認のエラー、最後の定期確認の時刻、Quitを出す。
+- メニューを開くと、`agents` と `waiting` の1行ずつが並ぶ。行には、リポジトリ、番号、題名と、`agents` ではroleと依頼の種類、`waiting` では種類を出す。行を選ぶと、`url` を既定のブラウザで開く。その下に、利用枠の状態、止める予約、定期確認のエラー、最後の定期確認の時刻、Quitを出す。
 - 古いファイルの判定: 今の時刻から `last_poll.at` を引いた値が上限を超えたら、古いとする。上限の初期値は180秒で、設定で変えられる。`poll_interval` の初期値 (60秒) の3回分であり、1回りが遅れても古いとしない。`poll_interval` を長くしたHostでは、Ownerが上限も長くする。
 - 採らなかった案: 上限をファイルに載せる (cuminが `poll_interval` から計算する)。Ownerは決まった上限とした (#392)。約束のフィールドも1つ増える。
 - 古いファイル、ないファイル、読めないファイル、新しすぎる `version` のファイルでは、区画を出さず、中立の記号を薄くして1つ出す。メニューには理由を1行出す。古い数字を、今の状態のように見せないためである。
 
 ### Ownerへの知らせ方
 
-- `waiting` に新しい項目が現れたら、音を1回鳴らし、その項目の区画を点滅させる。対象は、待つ2つの区画 (承認を待つ、答えを待つ) で、それぞれ自分の新しい項目で鳴り、点滅する。実行中の区画は、鳴らず、点滅しない。項目は、`repository`、`issue`、`kind` の組で見分ける。
+- `waiting` に新しい項目が現れたら、音を1回鳴らす。対象は、待つ2つの区画 (承認を待つ、答えを待つ) で、それぞれ自分の新しい項目で鳴る。実行中の区画は、鳴らず、点滅しない。項目は、`repository`、`issue`、`kind` の組で見分ける。同じIssueでも、種類が変われば新しい項目である。
+- 点滅は、設定 `blink` の3つの値で決まる (「アプリの設定」)。初期値の `new` では、新しい項目が現れた区画が点滅し、Ownerがメニューを開くと止まる。
 - アプリの起動のあと、最初に読んだ項目では鳴らさない。アプリを起動し直すたびに、既に知っている項目で鳴らさないためである。
 - 見た項目は、アプリのメモリにだけ持つ。ファイルが古い間は、新しい項目を数えない。
 - 採らなかった案: Notification Centerの通知。#392 の計画が範囲の外とした。app bundleが要るかは未確認である。
@@ -152,20 +167,17 @@
 | `stale_after_sec` | 古いファイルとする上限 (秒) | `180` |
 | `sound_owner_review` | 承認を待つ新しい項目で鳴らす、システムの音の名前。`""` は鳴らさない | `"Glass"` |
 | `sound_owner_decision` | 答えを待つ新しい項目で鳴らす、システムの音の名前。`""` は鳴らさない | `"Tink"` |
-| `blink` | 待つ2つの区画を点滅させるか | `true` |
+| `blink` | 待つ2つの区画の点滅。`off` (点滅しない)、`new` (新しい項目が現れると点滅し、Ownerがメニューを開くと止まる)、`always` (区画が出ている間、点滅し続ける) | `"new"` |
 
 ## まだ決めていないこと
 
 | 決める、または確かめること | どこで |
 |---|---|
-| 点滅をいつ止めるか (メニューを開いたとき、または決まった時間のあと) | [#505](https://github.com/cloveclovedev/cumin-works/issues/505) |
 | ラベルに出ない実行 (受け入れの確認のあとの手順など) を `agents` にどう載せるか | [#502](https://github.com/cloveclovedev/cumin-works/issues/502) |
 | golden fileの置き場所と、Swiftのテストからの読み方 | [#503](https://github.com/cloveclovedev/cumin-works/issues/503)、[#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 | 対応するmacOSとSwiftの最も古い版 (macOS 11.0 以上) | [#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 
 ## 後回しにしたこと
 
-- `waiting[].url` を、mergeの判断を待つ実装IssueではPull RequestのURLにすること。きっかけ: OwnerがIssueからPull Requestへ移る手間を減らしたいと言ったとき。
-- Issueの題名をファイルに載せること。きっかけ: 番号だけの行では、Ownerが見分けられないと分かったとき。
 - Notification Centerの通知と、app bundle。きっかけ: 音と点滅では、Ownerが気付かないと分かったとき。
 - `cumin setup` にアプリのLaunchAgentを書き出すサブコマンドを足すこと。きっかけ: 手でplistを置く手順 (#507) が、誤りのもとになったとき。
