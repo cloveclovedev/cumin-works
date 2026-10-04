@@ -1,8 +1,8 @@
 @startuml implementation-issue-states
 ' cumin works - states of an implementation issue.
-' A state is a label on GitHub. "do /" in a state says what goes on while the issue has the label.
-' A transition is written as in UML: trigger [guard] / effect. The row of issue-states.md stands in
-' parentheses at the end. I9 and I11 change no state; they are notes.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A transition is written: [guard] / effect, with the number of issue-states.md in front.
+' Every guard and effect names who acts. I9 and I11 change no state; they are notes.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 
 hide empty description
@@ -10,53 +10,63 @@ hide empty description
 state "Draft (no status label)" as Draft
 Draft : do / the Planner or the Owner writes the issue
 
-state "cumin/status/ready" as Ready
-Ready : do / wait for a free slot
+state "ready" as Ready
+Ready : do / cumin waits for a free slot
 
-state "cumin/status/implementing" as Implementing
+state "implementing" as Implementing
 Implementing : do / the Implementer works
 
-state "cumin/status/awaiting-checks" as Checks
-Checks : do / the required checks run
+state "checking" as Checks
+Checks : do / GitHub runs the required checks
 
-state "cumin/status/reviewing" as Reviewing
-Reviewing : do / the Reviewer reviews
+state "reviewing" as Reviewing
+Reviewing : do / the Reviewer reviews the pull request
 
-state "cumin/status/awaiting-owner-review" as OwnerReview
+state "awaiting-merge-decision" as OwnerReview
 OwnerReview : do / the Owner reviews the pull request
 
-state "cumin/status/awaiting-owner-decision" as Decision
+state "merging" as Merging
+Merging : do / cumin merges the pull request,\nthen closes the issue
+
+state "awaiting-decision" as Decision
 Decision : do / the Owner answers
 
 [*] --> Draft
-Draft --> Ready : the Owner adds cumin/status/ready
-Ready --> Implementing : poll [ready is the Owner's,\nblockers closed, slot free]\n/ request the implementation (I1)
-Implementing --> Checks : Implementer run ended\n[done, pull request verified]\n/ add the closing link (I2)
-Implementing --> Decision : Implementer run ended\n[blocked, not verified,\nor second abnormal end]\n/ write the reason, notify the Owner (I2)
-Checks --> Reviewing : required checks passed\n/ request the review (I3)
-Checks --> Implementing : a required check failed\n[fix requests under the limit]\n/ request a check fix (I4)
-Checks --> Decision : a required check failed\n[fix requests at the limit]\n/ notify the Owner (I4)
-Checks --> Implementing : pull request conflicts\n/ request a conflict resolution (I14)
-Checks --> Decision : wait time passed\n[a required check has no result]\n/ notify the Owner (I15)
-Reviewing --> Implementing : Reviewer run ended\n[changes requested,\nrounds under the limit]\n/ request a review fix (I5)
-Reviewing --> [*] : Reviewer run ended\n[approved, checks passed, risk/low]\n/ merge, close the issue (I6)
-Reviewing --> OwnerReview : Reviewer run ended\n[approved, checks passed,\nrisk/medium or risk/high]\n/ notify the Owner (I7)
-Reviewing --> Decision : Reviewer run ended\n[changes requested,\nrounds at the limit]\n/ request the cause, notify the Owner (I8)
-Reviewing --> Decision : Reviewer run ended\n[blocked, or no review twice]\n/ post the reason, notify the Owner (I10)
-Reviewing --> Checks : Reviewer run ended\n[head commit moved, or\na check does not pass] (no row)
-OwnerReview --> [*] : the Owner approved the head commit\n[checks passed]\n/ merge, close the issue (I12)
-OwnerReview --> Implementing : the Owner requested changes\n/ request a response (I13)
-OwnerReview --> Implementing : pull request conflicts\n/ request a conflict resolution (I14)
-OwnerReview --> Ready : the Owner adds cumin/status/ready
-Decision --> Ready : the Owner adds cumin/status/ready
+Draft --> Ready : the Owner adds ready
+Ready --> Implementing : I1 [the Owner added ready, the blockers are closed,\ncumin has a free slot]\n/ cumin requests the implementation\nfrom the Implementer
+Implementing --> Checks : I2 [no Implementer runs, cumin verified\nthe pull request]\n/ cumin adds the closing link
+Implementing --> Implementing : I16 [no Implementer runs, cumin could not verify\nthe pull request, first time]\n/ cumin requests the Implementer again
+Implementing --> Decision : I2 [no Implementer runs, and: the Implementer asked\na question, cumin could not verify the pull request\nthe second time, or a conflict resolution left the head commit]\n/ cumin notifies the Owner
+Checks --> Reviewing : I3 [the required checks passed]\n/ cumin requests the review from the Reviewer
+Checks --> Implementing : I4 [a required check failed, cumin's fix\nrequests are under the limit]\n/ cumin requests a check fix from the Implementer
+Checks --> Decision : I4 [a required check failed, the fix requests\nare at the limit]\n/ cumin notifies the Owner
+Checks --> Implementing : I14 [the pull request conflicts]\n/ cumin requests a conflict resolution\nfrom the Implementer
+Checks --> Decision : I15 [a required check gave no result in time]\n/ cumin notifies the Owner
+Reviewing --> Implementing : I5 [no Reviewer runs, the Reviewer requested changes\non the head commit, the rounds are under the limit]\n/ cumin requests a review fix from the Implementer
+Reviewing --> Merging : I6 [no Reviewer runs, the Reviewer approved the\nhead commit, the checks passed, risk/low]\n/ cumin changes the label
+Reviewing --> OwnerReview : I7 [no Reviewer runs, the Reviewer approved the\nhead commit, the checks passed,\nrisk/medium or risk/high]\n/ cumin requests the Owner's review\nand notifies the Owner
+Reviewing --> Reviewing : I8 [no Reviewer runs, the Reviewer requested changes,\nthe rounds are at the limit, no explanation yet]\n/ cumin requests the cause from the Reviewer
+Reviewing --> Decision : I8 [the Reviewer wrote the explanation of the cause]\n/ cumin notifies the Owner
+Reviewing --> Decision : I10 [no Reviewer runs, and: the Reviewer asked a question,\nor the Reviewer left no review the second time]\n/ cumin notifies the Owner
+Reviewing --> Checks : I17 [no Reviewer runs, and: the head commit moved,\nor a required check does not pass]\n/ cumin changes the label
+Reviewing --> Reviewing : I18 [no Reviewer runs, the Reviewer left no review\non the head commit, first time]\n/ cumin requests the review again
+OwnerReview --> Merging : I12 [the Owner approved the head commit,\nthe checks passed]\n/ cumin changes the label
+OwnerReview --> Implementing : I13 [the Owner requested changes]\n/ cumin requests a response from the Implementer
+OwnerReview --> Implementing : I14 [the pull request conflicts]\n/ cumin requests a conflict resolution\nfrom the Implementer
+OwnerReview --> Ready : the Owner adds ready
+Merging --> [*] : I19 [GitHub shows the pull request as merged]\n/ cumin closes the issue
+Merging --> Checks : I20 [the pull request is not merged, the approval\nor the checks no longer hold]\n/ cumin changes the label
+Merging --> Implementing : I21 [GitHub refused the merge: conflict]\n/ cumin requests a conflict resolution\nfrom the Implementer
+Merging --> Decision : I22 [GitHub refused the merge for another\nlasting reason]\n/ cumin notifies the Owner
+Decision --> Ready : the Owner adds ready
 
-note "In every state: the labels of the issue differ from\nthose of its pull request / copy the labels (I11)." as I11
-note "After the issue closed with a merged pull request:\n/ write the follow-up note (I9)." as I9
+note "I11: in every state, the labels of the issue differ from\nthose of its pull request / cumin copies the labels." as I11
+note "I9: the issue is closed and its pull request is merged\n/ cumin writes the follow-up note." as I9
 
 legend right
-  A box is a state: a label on GitHub. "do /" is what goes on in the state.
-  An arrow is a transition: trigger [guard] / effect.
-  In parentheses: the row of issue-states.md today.
+  A box is a state: a label on GitHub, without "cumin/status/". "do /" says who works in the state.
+  An arrow is a transition: [guard] / effect, each with its actor. The number is the row of issue-states.md.
+  Every guard reads only facts on GitHub and "no agent runs for this issue".
 endlegend
 
 @enduml

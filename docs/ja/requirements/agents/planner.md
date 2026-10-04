@@ -101,7 +101,7 @@ cuminが `done` を受けて、GitHub上で確かめること:
 - 要求Issueにsub-issueが1つ以上ある
 - 全てのsub-issueに、`risk/*` のラベルがちょうど1つ付いている
 
-確かめた結果が合っていれば、cuminは要求Issueを `cumin/status/awaiting-owner-review` に替えて、Ownerに知らせる。
+確かめた結果が合っていれば、cuminは要求Issueを `cumin/status/awaiting-plan-review` に替えて、Ownerに知らせる。
 
 受け入れの確認では、cuminは、最後のsub-issueが閉じたあとに書かれた `## Acceptance check` のコメントが、要求Issueにあることを確かめる。表の結果は読まない。
 

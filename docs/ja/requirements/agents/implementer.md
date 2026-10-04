@@ -99,7 +99,7 @@ checkが失敗したときは、他の必須のcheckと同じくI4に乗り、cu
 
 ## blocked を返すとき
 
-次のどれかに当たったら、推測で進めずに `blocked` を返す。cuminはやり直さずに、1回目から `cumin/status/awaiting-owner-decision` に替えてOwnerに知らせる。
+次のどれかに当たったら、推測で進めずに `blocked` を返す。cuminはやり直さずに、1回目から `cumin/status/awaiting-decision` に替えてOwnerに知らせる。
 
 - 実装に必要な要件が足りない、または要件どうしが食い違っている
 - 保護されたパスや `.github/workflows` の変更が必要である
