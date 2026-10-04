@@ -74,7 +74,7 @@
 2つの問い合わせ:
 
 - 1回の定期確認は、GitHubを2つの問い合わせで読む。1つ目 (`snapshotQuery`) はsub-issueまでで止まり、番号、id、題、開閉、閉じた時刻、ラベル、blocked by を読む。2つ目 (`pullRequestsQuery`) は、選んだsub-issueだけについて、Issueを閉じる開いているPull Request (`closedByPullRequestsReferences` と、その下の全ての項目) を読む。上の表のPull Requestの行は、どれも2つ目の問い合わせで読む。
-- 分ける理由はポイントである。Pull Requestは、1ページ17ポイントのうち14ポイントを占めていた (実測 131)。Pull Requestを読む行が当てはまるsub-issueは、少ない。
+- 分ける理由はポイントである。Pull Requestは、1ページ17ポイントのうち14ポイントを占めていた (2026-10-03に実測、[#421](https://github.com/cloveclovedev/cumin-works/pull/421))。今の値は、下の「ポイント」の項目にある。Pull Requestを読む行が当てはまるsub-issueは、少ない。
 - 選ぶのは、開いていて `cumin/status/*` のラベルが付いたsub-issueである。`internal/workflow` の純粋関数 `Snapshot.SubIssuesWithPullRequestRules` が、1つ目の読み取りから選ぶ。選んだsub-issueがなければ、2つ目の問い合わせを送らない。
 - `Service.Poll` が、2つの読み取りから1つのスナップショットを作る (`Snapshot.WithPullRequests`)。`Decide` と各行の判定は、そのスナップショットだけを読む純粋関数のままである。選ばなかったsub-issueは、Pull Requestなしでスナップショットに入る。
 - `cumin status` はラベルだけを読むので、1つ目の問い合わせだけを送る。
@@ -143,7 +143,7 @@ checkの結果の読み方:
 - 知らない種類の context が来たら、そのリポジトリの定期確認をエラーにする。読めない check の上でI3を通すより、止まって知らせるほうがよい。
 - 必須のcheckがGitHub Appに紐づいているとき (rulesetの `integration_id`。sandboxの `cumin-protected-paths` がそれである) は、そのAppが出したcheckだけが条件を満たす。GitHubも同じに扱う。cuminは、必須のcheckのAppのidと、check runの `checkSuite.app.databaseId` を持ち、名前とAppの両方で照らす (I3、I4が使う)。commit statusにはAppのidがないので、Appを指定した必須のcheckは満たせない。この項目を足してもコストは変わらない (接続ではないため)。
 - 必須のcheckの一覧は、この問い合わせでは読めないのでRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。読むのは、`cumin/status/awaiting-checks` のIssueがそのリポジトリに1つ以上あるときだけである。RESTの上限はGraphQLと別なので、問い合わせのポイントは増えない。
-- ラベル、checkの結果、レビュー、先頭のコミット (`commits`) は、Pull Requestの下の接続なので、1件のPull Requestにつき1ずつコストの係数を上げる。これらの接続は2つ目の問い合わせにあり、選んだsub-issueだけについて読む。Pull Requestを2件までにして、2つ目の問い合わせを、sub-issueが9件までで1ポイント、100件で9ポイントに収めている (実測 134)。接続の中の件数 (ラベル、check、レビュー、blocked by) はコストを変えないので、100件まで読む。式と見積もりは [cumin本体の設計メモ](cumin-core.md) の「GitHubクライアント」にある。
+- ラベル、checkの結果、レビュー、先頭のコミット (`commits`) は、Pull Requestの下の接続なので、1件のPull Requestにつき1ずつコストの係数を上げる。これらの接続は2つ目の問い合わせにあり、選んだsub-issueだけについて読む。Pull Requestを2件までにして、2つ目の問い合わせを、sub-issueが9件までで1ポイント、100件で9ポイントに収めている (2026-10-03に実測、[#449](https://github.com/cloveclovedev/cumin-works/pull/449))。接続の中の件数 (ラベル、check、レビュー、blocked by) はコストを変えないので、100件まで読む。式と見積もりは [cumin本体の設計メモ](cumin-core.md) の「GitHubクライアント」にある。
 
 失敗したcheckの内容の読み方 (I4の依頼に入れる):
 
@@ -488,7 +488,7 @@ checkの結果の読み方:
   - Issueの項目は、定期確認の問い合わせと同じ2つのfragment (`requirementIssueFields`、`subIssueFields`) と、2つ目の問い合わせと同じfragment (`closingPullRequestFields`) から作る。上限も同じ値を渡す。そのため、どちらで読んでも、判定は同じ事実を受け取る。
   - 上限を超えたIssueは、定期確認と同じく、Issueの番号を入れたエラーにする。読めなければ、ラベルを替えずにログに出す。I2と、Reviewerの実行のあと (I5〜I8、I10) と、R2の読み直しが一時的な失敗で終わったときは、手順を持っておく (R2は下の「Plannerの実行のあとの手順」)。
   - 読むのは1回の問い合わせなので、判定が見る事実の時点は1つのままである。
-  - ポイントは、実装Issueで1、要求Issueで2である (cumin-worksで実測、2026-10-03、`rateLimit.cost`)。全ページを読み直すと、cumin-worksでは34ポイントだった ([実測した制約](../evidence/measured-constraints.md) の133)。
+  - ポイントは、実装Issueで1、要求Issueで2である (cumin-worksで実測、2026-10-03、`rateLimit.cost`、[#454](https://github.com/cloveclovedev/cumin-works/pull/454))。全ページを読み直すと、cumin-worksでは34ポイントだった ([#421](https://github.com/cloveclovedev/cumin-works/pull/421))。
   - 読み直しがIssueを返すのは、定期確認がそのIssueを読むときだけである (原則6: 閉じた要求Issueと、そのsub-issueは読まない)。要求Issueは、開いていて、`cumin/type/requirement` のラベルを持つこと。実装Issueは、親がそのような要求Issueであること。そのために、実装Issueの問い合わせは、親の状態とラベルも読む (`parent`)。
   - そうでないIssueは、理由を入れたエラーにして、読めなかったときと同じに扱う: ラベルを替えず、mergeもせず、ログに出す。実行中に要求Issueが閉じられたときも、定期確認が動かないIssueを、実行終了の判定が動かさない。どの行も、定期確認と同じ事実から同じ動作を決める。
 - `blocked` の結果と異常終了は、この判定に入らない。`blocked` は次の話題の手順でOwnerに戻す。異常終了は、同じ依頼を1回だけやり直してから、次の話題の手順でOwnerに戻す。

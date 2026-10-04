@@ -29,6 +29,7 @@ The start request names the limit of the run in two lines: "Time limit of the ru
 - Each commit has one purpose, and its message says what the commit does.
 - The pull request shows evidence: the command and its result, not the claim that the tests pass.
 - A document that your change makes wrong changes in the same pull request.
+- A measurement of the project itself, such as the cost of its own query, goes into the pull request description, as the first paragraph of `docs/ja/evidence/measured-constraints.md` says.
 
 ## When to return blocked
 
