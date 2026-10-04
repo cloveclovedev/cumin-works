@@ -36,15 +36,13 @@ func requestStop(t *testing.T, path string) {
 	}
 }
 
-// waitForPolls waits until the fake GitHub has received that many more
-// snapshot reads. Two more reads mean that one poll began after the call.
-func waitForPolls(t *testing.T, sc *scene, more int) {
-	t.Helper()
-	want := sc.fake.CountRequests(http.MethodPost, "/graphql") + more
-	if !sc.fake.WaitForRequests(http.MethodPost, "/graphql", want, hangGuard) {
-		t.Fatalf("the polls did not go on:\n%s", sc.logs.String())
-	}
-}
+// The log lines of a stop after the current runs. The tests wait for
+// them: a count of the reads of the fake GitHub does not say which poll
+// sent a read, since one poll sends more than one.
+const (
+	tookStopRequestLog = `"msg":"stop after the current runs: no new work starts; cumin exits when the agent runs have ended"`
+	heldBackLog        = `"msg":"stop after the current runs: new work is held back"`
+)
 
 // stopRequestExists reports whether a stop request is there.
 func stopRequestExists(t *testing.T, path string) bool {
@@ -70,10 +68,11 @@ func TestStopAfterRuns_LetsTheRunEndAppliesItsNextStateAndStartsNothingNew(t *te
 	waitForAgentRun(t, sc)
 
 	requestStop(t, path)
-	waitForPolls(t, sc, 2)
-	// A second issue becomes ready while cumin stops after its runs.
+	waitForLog(t, sc, tookStopRequestLog)
+	// A second issue becomes ready while cumin stops after its runs. The
+	// line of a poll that read two issues tells that a poll read it.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Add the logout screen", Labels: []string{"cumin/status/ready", "risk/low"}})
-	waitForPolls(t, sc, 2)
+	waitForLog(t, sc, `"msg":"poll","repository":"example-org/example-repo","requirement_issues":1,"required_checks":0,"issues_with_pull_requests_read":2`)
 
 	select {
 	case err := <-returned:
@@ -115,9 +114,9 @@ func TestStopAfterRuns_LetsTheRunEndAppliesItsNextStateAndStartsNothingNew(t *te
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{
-		`"msg":"stop after the current runs: no new work starts; cumin exits when the agent runs have ended"`,
+		tookStopRequestLog,
 		`"in_progress":["example-org/example-repo#10"]`,
-		`"msg":"stop after the current runs: new work is held back"`,
+		heldBackLog,
 		`"msg":"I2: verified the pull request"`,
 		`"msg":"stopped","reason":"the agent runs have ended after a stop request","in_progress":[]`,
 	} {
@@ -138,7 +137,11 @@ func TestStopAfterRuns_WithNoRunningAgentExitsAtOnce(t *testing.T) {
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	service := sc.service()
 	path, returned := stopAfterRunsScene(t, sc, service)
-	waitForPolls(t, sc, 1)
+	// The first read shows that cumin run has started: the request that
+	// follows is not one of before the start.
+	if !sc.fake.WaitForRequests(http.MethodPost, "/graphql", 1, hangGuard) {
+		t.Fatalf("no poll ran:\n%s", sc.logs.String())
+	}
 
 	requestStop(t, path)
 	select {
@@ -199,7 +202,9 @@ func TestStopAfterRuns_TheStopSignalStillStopsAtOnce(t *testing.T) {
 	go func() { returned <- service.Run(ctx) }()
 	waitForAgentRun(t, sc)
 	requestStop(t, service.StopRequestPath)
-	waitForPolls(t, sc, 2)
+	// The signal comes after cumin took the request. A request that cumin
+	// has not taken stays for the next start, which removes it.
+	waitForLog(t, sc, tookStopRequestLog)
 
 	cancel()
 	select {
@@ -241,9 +246,9 @@ func TestStopAfterRuns_ARequestThatCannotBeRemovedAtTheStartIsPassedOver(t *test
 	ctx, cancel := context.WithCancel(context.Background())
 	returned := make(chan error, 1)
 	go func() { returned <- service.Run(ctx) }()
-	// The claim and the agent run show that the polls went on as usual.
+	// The claim and the agent run show that the first poll passed over the
+	// request: a poll that takes a request starts no new work.
 	waitForAgentRun(t, sc)
-	waitForPolls(t, sc, 2)
 	select {
 	case err := <-returned:
 		t.Fatalf("Run returned %v on the request of before the start:\n%s", err, sc.logs.String())
@@ -261,7 +266,7 @@ func TestStopAfterRuns_ARequestThatCannotBeRemovedAtTheStartIsPassedOver(t *test
 	if !strings.Contains(logs, `"msg":"the stop request of an earlier start was not removed"`) {
 		t.Errorf("the log has no warning for the request that stays:\n%s", logs)
 	}
-	if strings.Contains(logs, `"msg":"stop after the current runs: no new work starts`) {
+	if strings.Contains(logs, tookStopRequestLog) {
 		t.Errorf("cumin took the request of before the start:\n%s", logs)
 	}
 }

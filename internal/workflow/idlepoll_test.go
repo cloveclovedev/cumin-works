@@ -236,10 +236,9 @@ func TestIdlePoll_AStopAfterTheRunsStillReadsAnIdleRepository(t *testing.T) {
 	service.StopRequestPath = filepath.Join(t.TempDir(), state.StopRequestFileName)
 	returned := make(chan error, 1)
 	go func() { returned <- service.Run(context.Background()) }()
-	// The first poll leaves the repository idle.
-	if !sc.fake.WaitForRequests(http.MethodPost, "/graphql", 1, hangGuard) {
-		t.Fatalf("no poll ran:\n%s", sc.logs.String())
-	}
+	// The first poll leaves the repository idle. The log line comes after
+	// every read of that poll, so the count below holds the whole poll.
+	waitForLog(t, sc, `"msg":"no issue is in work: the next poll comes after the idle poll interval"`)
 	before := queries(sc, "example-repo")
 	requestStop(t, service.StopRequestPath)
 
