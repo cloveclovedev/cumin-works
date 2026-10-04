@@ -75,7 +75,7 @@ type scene struct {
 	// its own client.
 	serverURL string
 	repo      *githubtest.Repository
-	logs      *bytes.Buffer
+	logs      *logBuffer
 	// remote is the bare repository that the clone of the work directory
 	// reads, in place of GitHub. remoteHead is the commit at its main.
 	remote     string
@@ -257,7 +257,7 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	client.SetRetryWait(noWait)
 	return &scene{
 		fake: fake, client: client, serverURL: server.URL, repo: repo,
-		logs: &bytes.Buffer{}, remote: remote, remoteHead: head, cliDir: cliDir,
+		logs: newLogBuffer(), remote: remote, remoteHead: head, cliDir: cliDir,
 		workRoot: t.TempDir(), cliPath: cliPath, settingsDir: t.TempDir(),
 		webhook: webhook, notifier: webhook.notifier(), notifications: true,
 		clock: clock,
@@ -1744,6 +1744,52 @@ func TestPoll_LogsWhereTheRiskCriteriaCameFrom(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// logBuffer holds the log of the scene. The service writes while the test
+// reads, so a lock guards the text, and a channel tells each write.
+type logBuffer struct {
+	mu      sync.Mutex
+	text    bytes.Buffer
+	written chan struct{}
+}
+
+func newLogBuffer() *logBuffer { return &logBuffer{written: make(chan struct{})} }
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	close(b.written)
+	b.written = make(chan struct{})
+	return b.text.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.text.String()
+}
+
+// waitForLog waits until the log of the scene holds the text: an event of
+// cumin that leaves no request on the fake GitHub. The guard is only there
+// against a hang.
+func waitForLog(t *testing.T, sc *scene, text string) {
+	t.Helper()
+	timeout := time.After(hangGuard)
+	for {
+		sc.logs.mu.Lock()
+		written := sc.logs.written
+		found := strings.Contains(sc.logs.text.String(), text)
+		sc.logs.mu.Unlock()
+		if found {
+			return
+		}
+		select {
+		case <-written:
+		case <-timeout:
+			t.Fatalf("the log has no %s:\n%s", text, sc.logs.String())
+		}
 	}
 }
 
