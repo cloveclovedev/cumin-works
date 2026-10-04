@@ -5,7 +5,7 @@ Read by: the Owner.
 
 Use this template in two cases:
 
-- Blocked: write the decision request as the value of `blocked_reason`. cumin posts it as a comment on the issue.
+- Blocked: write the decision request as the value of `blocked_reason`. cumin posts it as a comment on the stopped issue.
 - Unresolved after 3 review rounds: the Reviewer writes the decision request as a comment on the pull request.
 
 ## Rules
