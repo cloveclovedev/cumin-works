@@ -205,6 +205,10 @@ type RequirementIssue struct {
 	// The count lives in the state file of the Host; a lost file reads as
 	// not requested again.
 	AcceptanceRequestedAgain bool
+	// SplitRequestedAgain says that cumin already requested the split again
+	// during this stay in cumin/status/planning. The count lives in the
+	// state file of the Host; a lost file reads as not requested again.
+	SplitRequestedAgain bool
 	// ReadyRead says that ReadyOwner was read. The poll reads it only for
 	// a candidate of a start, and only when a slot is free
 	// (ReadyActorReads).
@@ -437,9 +441,31 @@ type CopyLabels struct {
 
 // Plan is the action of R1: replace the status label of the requirement
 // issue with cumin/status/planning, and only then request the split from
-// the Planner.
+// the Planner. With Again, it is the action "request the split again": the
+// issue is already in cumin/status/planning, and the Planner left no split
+// that passes the check there.
 type Plan struct {
 	Number int
+	Again  bool
+}
+
+// ReviewPlan is the action "ask the Owner to review the plan" (R2): the
+// split passes the check and a sub-issue is open, so the requirement issue
+// moves from cumin/status/planning to cumin/status/awaiting-plan-review and
+// the Owner is told that the split needs a review.
+type ReviewPlan struct {
+	Number int
+}
+
+// StopSplit is the action "stop the split for the Owner": the requirement
+// issue moves from cumin/status/planning to cumin/status/awaiting-decision.
+// With Question, the Planner wrote a decision request, and cumin writes no
+// reason of its own. Otherwise Reason is the sentence of the check that the
+// split failed the second time.
+type StopSplit struct {
+	Number   int
+	Question bool
+	Reason   string
 }
 
 // StartRequirement is the action of R3: the Owner let a sub-issue start, so
@@ -519,6 +545,8 @@ func (ResolveConflict) isAction()         {}
 func (StopForUnreportedChecks) isAction() {}
 func (CopyLabels) isAction()              {}
 func (Plan) isAction()                    {}
+func (ReviewPlan) isAction()              {}
+func (StopSplit) isAction()               {}
 func (StartRequirement) isAction()        {}
 func (ReviewRemaining) isAction()         {}
 func (CheckAcceptance) isAction()         {}
@@ -616,8 +644,8 @@ func PriorityRank(labels, parent, priority []string) int {
 }
 
 // requirementMoves returns the actions of R3 and R6, and the way out of
-// cumin/status/accepting (AcceptanceEnd), lowest requirement issue number
-// first.
+// cumin/status/accepting (AcceptanceEnd) and of cumin/status/planning
+// (SplitEnd), lowest requirement issue number first.
 func requirementMoves(snapshot Snapshot) []Action {
 	requirements := slices.Clone(snapshot.RequirementIssues)
 	slices.SortFunc(requirements, func(a, b RequirementIssue) int { return a.Number - b.Number })
@@ -631,7 +659,10 @@ func requirementMoves(snapshot Snapshot) []Action {
 		case accepted(requirement):
 			actions = append(actions, Accept{Number: requirement.Number})
 		default:
-			if action := AcceptanceEnd(requirement, snapshot.Running[requirement.Number]); action != nil {
+			running := snapshot.Running[requirement.Number]
+			if action := AcceptanceEnd(requirement, running); action != nil {
+				actions = append(actions, action)
+			} else if action := SplitEnd(requirement, running); action != nil {
 				actions = append(actions, action)
 			}
 		}
@@ -767,6 +798,51 @@ func AcceptanceEnd(requirement RequirementIssue, running bool) Action {
 		return StopAcceptance{Number: requirement.Number}
 	}
 	return CheckAcceptance{Number: requirement.Number, Again: true}
+}
+
+// SplitEnd decides the way out of cumin/status/planning from the facts on
+// GitHub, for a requirement issue whose Planner does not run. The poll and
+// the end of a Planner run both decide with it, so a restart of cumin
+// during the split, or a failed read after it, loses nothing.
+//
+//   - A decision request of the Planner, written after the issue got
+//     cumin/status/planning: stop the split for the Owner. The question
+//     decides before the check of the split: an issue that is planned again
+//     can hold sub-issues of an earlier split that pass the check.
+//   - The split passes the check (VerifySplit) and a sub-issue is open: ask
+//     the Owner to review the plan.
+//   - The split passes the check and every sub-issue is closed: request the
+//     acceptance check.
+//   - The split fails the check: request the split again, once for each
+//     stay in cumin/status/planning. The second time, stop the split for
+//     the Owner.
+//
+// It returns nil while the Planner runs, in every other state, and while
+// the comments or the label times were not read: the next poll decides.
+func SplitEnd(requirement RequirementIssue, running bool) Action {
+	if !SplitNeedsFacts(requirement, running) || !requirement.CommentsRead || !requirement.LabelTimesRead {
+		return nil
+	}
+	verification := VerifySplit(requirement)
+	switch {
+	case !requirement.QuestionAt.IsZero() && !requirement.QuestionAt.Before(requirement.ReviewAt):
+		return StopSplit{Number: requirement.Number, Question: true}
+	case verification.Passed && SplitStatus(requirement) == LabelAccepting:
+		return CheckAcceptance{Number: requirement.Number}
+	case verification.Passed:
+		return ReviewPlan{Number: requirement.Number}
+	case requirement.SplitRequestedAgain:
+		return StopSplit{Number: requirement.Number, Reason: SplitReason(verification)}
+	}
+	return Plan{Number: requirement.Number, Again: true}
+}
+
+// SplitNeedsFacts reports whether the way out of cumin/status/planning
+// needs the comments and the label times of the requirement issue: it is in
+// cumin/status/planning, and its Planner does not run. While the Planner
+// runs, nothing is decided, so the poll reads nothing more.
+func SplitNeedsFacts(requirement RequirementIssue, running bool) bool {
+	return statusLabel(requirement.Labels) == LabelPlanning && !running
 }
 
 // acceptanceChecks returns the starts of R4 before the limit: every
@@ -1324,10 +1400,10 @@ func (s Snapshot) MovesWithoutOwner() bool {
 	if s.HasIssueChecking() {
 		return true
 	}
-	// The next poll decides the way out of cumin/status/accepting from the
-	// facts, also when no Planner runs.
+	// The next poll decides the way out of cumin/status/planning and of
+	// cumin/status/accepting from the facts, also when no Planner runs.
 	for _, requirement := range s.RequirementIssues {
-		if slices.Contains(requirement.Labels, LabelAccepting) {
+		if slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting) {
 			return true
 		}
 	}
@@ -1652,15 +1728,15 @@ func VerifySplit(requirement RequirementIssue) SplitVerification {
 // passed. With one or more open sub-issues, the Owner reviews the split:
 // cumin/status/awaiting-plan-review. With every sub-issue closed, the
 // Planner created none, as when the Owner resumes a requirement issue after
-// a blocked acceptance check: cumin/status/implementing, so that R4 asks for
-// the acceptance check again (issue-states.md, R2).
+// a blocked acceptance check: cumin/status/accepting, and the Planner
+// checks the acceptance again (issue-states.md, R2).
 func SplitStatus(requirement RequirementIssue) string {
 	for _, sub := range requirement.SubIssues {
 		if !sub.Closed {
 			return LabelAwaitingPlanReview
 		}
 	}
-	return LabelImplementing
+	return LabelAccepting
 }
 
 // LatestPullRequest returns the open pull request with the highest number

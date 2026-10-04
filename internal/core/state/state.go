@@ -46,6 +46,9 @@ type Issue struct {
 	// cumin/status/accepting. The entry of a requirement issue holds it,
 	// with the session of the last Planner run in SessionID.
 	AcceptanceRequests int `json:"acceptance_requests,omitempty"`
+	// SplitRequests is how many times cumin has requested the split again
+	// during this stay of a requirement issue in cumin/status/planning.
+	SplitRequests int `json:"split_requests,omitempty"`
 }
 
 // empty reports whether the entry holds nothing, so that Set removes it.

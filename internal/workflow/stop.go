@@ -298,18 +298,20 @@ func CloseFailedReason(pullRequest int, answer string) string {
 	return fmt.Sprintf("cumin-core merged the pull request #%d, but could not close this issue; GitHub answered: %s. Close this issue by hand.", pullRequest, strings.TrimSuffix(answer, "."))
 }
 
-// SplitReason is the sentence of one failed check of R2, for the comment
-// and the notification alike.
+// SplitReason is the sentence of "stop the split for the Owner" when the
+// split fails a check of R2 after two requests, for the comment and the
+// notification alike.
 func SplitReason(v SplitVerification) string {
+	failed := "the verification of the split failed"
 	switch v.Failure {
 	case SplitNoSubIssue:
-		return "The Planner reported done, but this requirement issue has no sub-issue."
+		failed = "this requirement issue has no sub-issue"
 	case SplitNoRiskLabel:
-		return fmt.Sprintf("The Planner reported done, but the sub-issue #%d has no risk label.", v.SubIssue)
+		failed = fmt.Sprintf("the sub-issue #%d has no risk label", v.SubIssue)
 	case SplitTwoRiskLabels:
-		return fmt.Sprintf("The Planner reported done, but the sub-issue #%d has more than one risk label.", v.SubIssue)
+		failed = fmt.Sprintf("the sub-issue #%d has more than one risk label", v.SubIssue)
 	}
-	return "The verification of the split failed."
+	return "After the Planner run, " + failed + ". cumin requested the split again, and the check of the split failed again."
 }
 
 // abnormalReason is the sentence of a second abnormal end of the same

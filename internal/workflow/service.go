@@ -680,6 +680,14 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err := s.plan(ctx, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
+		case ReviewPlan:
+			if err := s.reviewPlan(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
+		case StopSplit:
+			if err := s.stopSplit(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
 		case Claim:
 			if notStarted[a.RequirementIssue] {
 				log.Info("I1: waits for R3 of the requirement issue", "issue", a.Number, "requirement_issue", a.RequirementIssue)

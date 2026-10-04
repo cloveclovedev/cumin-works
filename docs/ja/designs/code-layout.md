@@ -43,7 +43,7 @@
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
 | | `githubapps.go` | `github_apps` の表の読み書き (`cumin setup` が書く) |
 | | `quota.go` | 利用枠の設定 (5h枠のしきい値と時間帯、weekly枠の目標と前倒し) の読み込み |
-| `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、受け入れの確認を依頼し直した回数、最新の使用率 (Q3)。書くのは `cumin run` だけ |
+| `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、受け入れの確認を依頼し直した回数、分割を依頼し直した回数、最新の使用率 (Q3)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (Q2) |
 | | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
@@ -79,7 +79,7 @@
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。必須のcheckが待ち時間を過ぎても結果を返さないIssueをOwnerに戻す (I15)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
 | | `keptstep.go` | 一時的な失敗で終わった、Agentの実行のあとの手順を持っておく。時刻が来た手順を、定期確認の最初にやり直す (I2、I5〜I8、I10、R2、mergeの手順)。手順の残り (Agentの実行、merge) は、別のgoroutineで動かす |
-| | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、分割の確かめ (R2) と、一時的な失敗のあとにその手順を持っておくこと、受け入れの確認の依頼 (R4) と、`cumin/status/accepting` の出口 (R7、依頼し直し、Ownerに戻すこと) |
+| | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、`cumin/status/planning` の出口 (R2、依頼し直し、Ownerに戻すこと) と、`blocked` のあとの手順を一時的な失敗のあとに持っておくこと、受け入れの確認の依頼 (R4) と、`cumin/status/accepting` の出口 (R7、依頼し直し、Ownerに戻すこと) |
 | | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り。R1とI1のための、Ownerのreadyの確認と、Ownerでないreadyのログと通知 |
 | | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
