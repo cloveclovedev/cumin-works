@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -206,7 +207,7 @@ func TestQ1_InfoLogsHoldNoUsageNumber(t *testing.T) {
 		if strings.Contains(line, `"level":"DEBUG"`) {
 			continue
 		}
-		if strings.Contains(line, "utilization") || strings.Contains(line, "0.9") {
+		if logLineHoldsUsage(t, line) {
 			t.Errorf("an info line holds the usage:\n%s", line)
 		}
 	}
@@ -214,6 +215,46 @@ func TestQ1_InfoLogsHoldNoUsageNumber(t *testing.T) {
 		if strings.Contains(m, "0.9") || strings.Contains(m, "90") {
 			t.Errorf("a notification holds the usage:\n%s", m)
 		}
+	}
+}
+
+// logLineHoldsUsage reports whether a JSON log line holds the fake usage
+// 0.90 outside of its timestamp: a time such as 12:00:20.9 is not a usage.
+func logLineHoldsUsage(t *testing.T, line string) bool {
+	t.Helper()
+	if line == "" {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &fields); err != nil {
+		t.Fatalf("a log line is not JSON: %v\n%s", err, line)
+	}
+	delete(fields, "time")
+	rest, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("marshal the fields of a log line: %v", err)
+	}
+	return strings.Contains(string(rest), "utilization") || strings.Contains(string(rest), "0.9")
+}
+
+// The check of the info logs does not depend on the clock: a timestamp that
+// holds "0.9" is no usage, and a usage in any other field is found.
+func TestQ1_TheCheckOfTheInfoLogsIgnoresTheTimestamp(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		line string
+		want bool
+	}{
+		{"a timestamp that holds 0.9", `{"time":"2026-01-01T12:00:20.9Z","level":"INFO","msg":"Q1: the quota limit is reached"}`, false},
+		{"a usage in a field", `{"time":"2026-01-01T12:00:00Z","level":"INFO","msg":"Q1","five_hour":0.9}`, true},
+		{"a usage in the message", `{"time":"2026-01-01T12:00:00Z","level":"INFO","msg":"usage 0.90"}`, true},
+		{"a field named utilization", `{"time":"2026-01-01T12:00:00Z","level":"INFO","msg":"Q1","utilization":1}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := logLineHoldsUsage(t, tc.line); got != tc.want {
+				t.Errorf("logLineHoldsUsage = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
