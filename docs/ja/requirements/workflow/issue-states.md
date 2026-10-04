@@ -47,7 +47,7 @@ cuminは、実装Issueの `cumin/status/*` と `risk/*` を、そのIssueを閉�
 1. cuminは、GitHub上の事実と、「このcuminが今そのIssueのAgentを動かしているか」だけで、次の動作を決める。同じ事実からは、いつも同じ動作を決める。決める時点は2つある。定期確認と、cuminが起動したAgentの実行が終わった直後である。どちらも同じ決め方をする。実行が終わった直後に決めるのは、次の定期確認を待たないためで、その時点を逃しても (cuminの再起動、GitHubの読み取りの失敗)、次の定期確認が同じ事実から同じ動作を決める。「実行が終わった」という出来事そのものは、条件に使わない。
 2. Agentの申告では判定しない。Agentには実行の最後に結果 (`done` か `blocked` か、と理由) を決まった形式で返させるが、`done` は条件に使わない。Pull Requestがあるか、checkが通ったか、レビューが出たかは、cuminがGitHubで確かめる。`blocked` の理由は、cuminがすぐにIssueのコメントとして書く。書いたあとは、そのコメントがGitHub上の事実になる。
 3. Agentへの依頼は、依頼より先にラベルを付け替えることで表す。同じIssueを二重に依頼しない。
-4. 状態を表すラベルは1つのIssueに常に1つだけで、付け替えは全てcuminが行う。例外は `cumin/status/ready` で、これだけはOwnerが付ける。cuminは、`cumin-core` かOwnerが付けた状態ラベルだけを、状態として扱う (下の「状態ラベルを付けたアカウント」)。
+4. 状態を表すラベルは1つのIssueに常に1つだけで、付け替えは全てcuminが行う。例外は `cumin/status/ready` で、これだけはOwnerが付ける。cuminは、`cumin-core` かOwnerが付けた状態ラベルだけを、状態として扱う (「状態ラベルを付けたアカウント」)。
 5. 判定に使うのは、Issueのラベルだけである。cuminは、実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestにもコピーする (I11)。コピーしたラベルは、OwnerがPull Requestの一覧で状態とriskを見分けるためのもので、cuminは読まない。Pull Requestの側でラベルを変えても、cuminがIssueのラベルで上書きする。Ownerの合図 (`cumin/status/ready`) は、常にIssueに付ける。
 6. cuminは、閉じた要求Issueには何もしない。読まず、ラベルを替えず、コメントも書かない。
 
@@ -87,13 +87,19 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 
 - 状態ラベルのないIssue (下書き) は、cuminが扱わない。
 
-状態ラベルを付けたアカウント:
 
-- GitHubでは、triageの権限でもラベルを付けられる。cuminは、状態から動作を決めるので、状態ラベルを付けられる人は誰でも、cuminを動かせることになる。そこで、cuminが状態として扱うのは、今付いている状態ラベルを最後に付けたのが、`cumin-core` のGitHub Appか、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) であるときだけにする
-- `cumin/status/ready` は、Ownerが付けたものだけを数える (下の「Ownerのready」)。ほかの状態ラベルは、`cumin-core` が付けたものと、Ownerが付けたものを数える。Ownerが手でラベルを直すことと、リポジトリを移す手順 (「ラベルの移行」) があるためである
-- それ以外のアカウントが付けた状態ラベルでは、cuminは何もしない。Agentを起動せず、mergeせず、ラベルも替えない。ログに1回だけ残し、Ownerに1回だけ通知する。同じラベルについて、定期確認のたびに繰り返さない。Ownerが正しいラベルを付け直すまで、そのIssueは進まない
-- 付けたアカウントは、GitHubがIssueのタイムラインに残すラベルのイベントから読む。cuminが確かめるのは、その状態から動作を起こす前である。どの時点で読むかと、そのコストは、設計メモで決める
-- `awaiting-decision` は、止まった理由ごとに分けない。理由が要求でも環境でも、Ownerが答えて `ready` を付ける、という出口が同じだからである。
+## 状態ラベルを付けたアカウント
+
+cuminは、状態から動作を決める。GitHubでは、triageの権限でもラベルを付けられるので、状態ラベルを付けられる人は誰でも、cuminを動かせることになる。そこで、cuminは、今付いている状態ラベルを最後に付けたアカウントを確かめる。
+
+| 状態ラベル | 数えるのは、誰が付けたときか |
+|---|---|
+| `cumin/status/ready` | Owner ([cumin本体の要件](../cumin-core.md) の「Owner」)。Ownerの「進めてよい」の合図だからである |
+| ほかの全ての状態ラベル | `cumin-core` のGitHub Appか、Owner。付け替えはcuminが行うものだが、Ownerが手で直すことと、リポジトリを移す手順 (「ラベルの移行」) があるためである |
+
+- 数えないアカウントが付けた状態ラベルでは、cuminは何もしない。Agentを起動せず、mergeせず、ラベルも替えない。ログに1回だけ残し、Ownerに1回だけ通知する。同じラベルについて、定期確認のたびに繰り返さない。
+- そのIssueは、Ownerが正しいラベルを付け直すまで進まない。待ち状態の通知 (「tell the Owner that cumin waits」) では、「Ownerなしで進めるIssue」に数えない。
+- 付けたアカウントは、GitHubがIssueのタイムラインに残すラベルのイベントから読む。cuminが確かめるのは、その状態から動作を起こす前である。どの時点で読むかと、そのコストは、設計メモで決める。
 
 ## 要求Issueの状態遷移
 
@@ -103,7 +109,7 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 
 | 名前 | 旧番号 | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
 |---|---|---|---|---|
-| request the split | R1 | `ready` → `planning` | 最新の `ready` を付けたのがOwnerである (下の「Ownerのready」)。要求Issueの blocked by のIssueが全て閉じている。cuminに空きがある。sub-issueがあるかどうかは問わない | Plannerに分割を依頼する |
+| request the split | R1 | `ready` → `planning` | 最新の `ready` を付けたのがOwnerである (「状態ラベルを付けたアカウント」)。要求Issueの blocked by のIssueが全て閉じている。cuminに空きがある。sub-issueがあるかどうかは問わない | Plannerに分割を依頼する |
 | ask the Owner to review the plan | R2 | `planning` → `awaiting-plan-review` | Plannerが動いていない。分割が確認を通る (sub-issueが1つ以上あり、全てのsub-issueにriskのラベルがちょうど1つ付いている)。開いているsub-issueがある | Ownerに「分割結果の確認が必要」と通知する |
 | request the acceptance check | R2 | `planning` → `accepting` | Plannerが動いていない。分割が確認を通る。sub-issueが全て閉じている | Plannerに受け入れの確認を依頼する。通知しない |
 | stop the split for the Owner | R2 | `planning` → `awaiting-decision` | Plannerが動いていない。次のどちらかである。Plannerの質問のコメントが、`planning` になったあとに書かれている。または、分割が確認を通らず、「request the split again」を1回済ませている | 質問でなければ、理由をコメントに書く。Ownerに通知する |
@@ -171,14 +177,13 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | start the merge | I12 | `awaiting-merge-decision` → `merging` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `APPROVE` である。必須のcheckが全て通っている | ラベルを替える |
 | request a response to the Owner's review | I13 | `awaiting-merge-decision` → `implementing` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `REQUEST_CHANGES` である。そのレビューは、実装Issueが最後に `awaiting-merge-decision` になったあとに出されている | Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する |
 | close the merged issue | — | `merging` → 完了 | GitHubが、Pull Requestをmerge済みと返す | GitHubが実装Issueを閉じていなければ、閉じる。フォローアップノートは、I9が書く |
-| go back to the checks | — | `merging` → `checking` | Pull Requestがmergeされていない。mergeの条件 (下の「`merging` の中でcuminが行うこと」) が成り立たない | ラベルを替える。mergeしない |
+| go back to the checks | — | `merging` → `checking` | Pull Requestがmergeされていない。mergeの条件 (今の先頭のコミットへの承認、必須のcheck) が、成り立たなくなった | ラベルを替える。mergeしない |
 | request a conflict resolution | — | `merging` → `implementing` | GitHubが、衝突を理由にmergeを断った | Implementerの直前のセッションで、衝突の解消を依頼する |
 | stop the merge for the Owner | — | `merging` → `awaiting-decision` | GitHubが、衝突でも、既定のブランチが変わったことでもない、直らない理由でmergeを断った。または、mergeのあとで実装Issueを閉じられない | 理由をコメントに書く。Ownerに通知する |
 | — | — | `awaiting-merge-decision` → `ready`、`awaiting-decision` → `ready`、状態ラベルなし → `ready` | Ownerが `ready` を付けた | 何もしない。次にI1が成り立つ |
 
 `merging` の中でcuminが行うこと:
 
-- mergeの条件は、`merging` に入ってきた遷移の条件と同じである。必須のcheckが全て通っている。riskのラベルがちょうど1つである。riskが `risk/low` なら、Reviewerの最新のレビューが今の先頭のコミットに対する `APPROVE` である。riskが `risk/medium` または `risk/high` なら、それに加えて、Ownerが出した最新のレビューが今の先頭のコミットに対する `APPROVE` である。`merging` のラベルが付いていることは、条件の代わりにならない。cuminは、mergeを送るたびに、この条件を確かめ直す。
 - Pull Requestがmergeされておらず、mergeの条件が成り立つ間、cuminはmergeを送る。mergeの方法は、リポジトリの設定に従う。mergeに渡す先頭のコミットは、承認されたコミットである。承認のあとにpushされたコミットは、mergeしない。
 - mergeの答えが届かなかったときも、次の定期確認が、Pull Requestがmerge済みかを読む。merge済みなら「close the merged issue」、そうでなければ、もう一度mergeを送る。同じmergeを2回行うことはない。
 - GitHubが「既定のブランチが変わった」(405、Base branch was modified) という理由でmergeを断ったときは、Issueを止めない。`merging` のまま、次の定期確認でもう一度送る。ほかのPull Requestのmergeの直後に起きる、すぐに直る状態だからである。
@@ -190,12 +195,6 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 - 「依頼し直した回数」は、Hostの状態ファイルに持つ。失っても、依頼が1回増えるだけである。
 - Agentが `blocked` を返したら、cuminはその理由 (`blocked_reason`) を、すぐにIssueのコメントとして書く。これが「質問のコメント」である。書く前にcuminが止まったときは、コメントがないので、「request the implementation again」か「request the review again」が成り立ち、Agentがもう一度同じ質問を返す。
 - Implementerが質問したとき (I2) は、依頼し直さずに、1回目から `cumin/status/awaiting-decision` に替える。実装に必要な要件が足りない、という場合が多いためである。Ownerは実装Issueか、その上の要求Issueを書き直して進められる状態にしてから、実装Issueに `cumin/status/ready` を付け直す。Reviewerが質問したとき (I10) も、同じ扱いにする。
-
-Ownerのready:
-
-- `cumin/status/ready` はOwnerの「進めてよい」の合図である。R1とI1は、そのIssueに最新の `cumin/status/ready` を付けたのが、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) であるときだけ成り立つ。GitHubでは、triageの権限でもラベルを付けられるためである。Ownerの承認のあとのmerge (I12) と同じく、作業を始めさせられるのもOwnerだけにする
-- Ownerでないアカウントが付けた `cumin/status/ready` には、着手しない。ラベルは替えない。ログに1回だけ残し、Ownerに1回だけ通知する。同じreadyについて、定期確認のたびに繰り返さない
-- そのIssueは、Ownerがreadyを付け直すまで進まないので、待ち状態の通知 (Q4) では「Ownerなしで進めるIssue」に数えない
 
 I7のあと、OwnerはPull RequestをGitHubのレビューで判断する。
 
