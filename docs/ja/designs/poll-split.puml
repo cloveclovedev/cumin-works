@@ -19,9 +19,14 @@ if (Result?) then (done)
   the label change below)) is (yes) not (no)
   if (A kept step, and the issue left
   cumin/status/planning?) then (yes)
-    if (cumin/status/awaiting-owner-review?) then (yes)
+    if (The lost label change of the last try set
+    cumin/status/awaiting-owner-review?) then (yes)
       :Notify the Owner
       (the split needs a review);
+    else (no)
+      :Change nothing
+      (the label change is done,
+      or another hand changed the label);
     endif
     stop
   endif
@@ -57,10 +62,6 @@ elseif (blocked) then
     as above;
   repeat while (The read failed with
   a temporary failure?) is (yes) not (no)
-  if (A kept step, and the issue left
-  cumin/status/planning?) then (yes)
-    stop
-  endif
   :The comment is blocked_reason
   (decision-request.md, written by the agent);
 else (abnormal end)
