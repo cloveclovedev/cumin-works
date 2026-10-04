@@ -31,6 +31,9 @@ func stopAfterRunsScene(t *testing.T, sc *scene, service *workflow.Service) (str
 // --after-current-runs` does.
 func requestStop(t *testing.T, path string) {
 	t.Helper()
+	// The real clock: cumin compares the time of the request with the real
+	// start time of its process, to drop a request of before the start. A
+	// fixed time would be older than that start, and cumin would drop it.
 	if err := state.WriteStopRequest(path, state.StopRequest{RequestedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +281,9 @@ func TestStopAfterRuns_ARequestOfTheStartIsKept(t *testing.T) {
 	service := sc.service()
 	service.PollInterval = 10 * time.Millisecond
 	service.StopRequestPath = filepath.Join(t.TempDir(), state.StopRequestFileName)
-	// The time of a request that comes just after the start.
+	// The time of a request that comes just after the start. The real
+	// clock: cumin compares this time with the real start time of its
+	// process, and keeps only a request that is not older than that start.
 	if err := state.WriteStopRequest(service.StopRequestPath, state.StopRequest{RequestedAt: time.Now().Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
