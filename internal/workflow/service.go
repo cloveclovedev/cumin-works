@@ -565,6 +565,13 @@ func (s *Service) pollRepository(ctx context.Context, target Target, finishing b
 
 func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishing bool, result *pollResult) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
+	// The running set comes before every read of GitHub. A run that ends
+	// after the read of the snapshot has already decided its own end and
+	// changed the issue. It then still counts as running for this poll, so
+	// the poll does not decide the same end again from the old facts of
+	// its snapshot: the next poll decides. A poll starts every run itself,
+	// so no run is missing from a set that is read first.
+	running := s.runningIssues(target.Repository.String())
 	token, err := target.Token(ctx)
 	if err != nil {
 		return err
@@ -573,6 +580,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	if err != nil {
 		return err
 	}
+	snapshot.Running = running
 	log := s.logger().With("repository", target.Repository.String())
 
 	// The settings of this repository. A wrong file skips this repository
@@ -605,10 +613,6 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		"settings", settingsSource(settings.FromRepository), "risk_criteria", settings.RiskCriteriaSource,
 		"rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 
-	// The running set comes before the comments: a Planner that writes its
-	// acceptance check comment and ends between the two reads then still
-	// counts as running, and R4 waits one poll instead of asking twice.
-	snapshot.Running = s.runningIssues(target.Repository.String())
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	if !finishing {
 		s.readReadyOwners(ctx, log, token, target, settings, &snapshot)

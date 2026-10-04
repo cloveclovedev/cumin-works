@@ -735,6 +735,79 @@ func TestR2_TheStopAfterBlockedRunsAgainAtALaterPollAfterATemporaryFailure(t *te
 	}
 }
 
+// The Planner run ends between the two reads of a poll: after the poll read
+// the snapshot, which still shows cumin/status/planning. The run decides its
+// own end, changes the label, and notifies the Owner. The poll read the set
+// of running agents before the snapshot, so the run still counts as
+// running: the poll decides nothing from the old label. The label changes
+// once, the Owner gets one notification, and no second request starts.
+func TestPlanning_ARunThatEndsDuringThePollIsNotDecidedTwice(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
+	service := sc.service()
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
+
+	// The answer of the snapshot query is built, and then the run ends.
+	sc.fake.BeforeNextAnswer(http.MethodPost, "/graphql", func() {
+		sc.release(t)
+		service.Wait()
+	})
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll during the end of the run: %v", err)
+	}
+	service.Wait()
+
+	assertSplitWaitsForTheOwner(t, sc, service)
+	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
+		t.Errorf("%d label changes of #6 after the run ended, want 1", n-writes)
+	}
+
+	// The next poll sees the new label and has nothing to decide.
+	sc.pollAndWait(t, service)
+	assertSplitWaitsForTheOwner(t, sc, service)
+}
+
+// The start of the second request fails: the work directory cannot be
+// prepared. No Planner ran, so the state file does not count the request,
+// and the issue is not stopped. A later poll, whose start works, sends the
+// one second request; only after it does the issue stop for the Owner.
+func TestPlanning_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	path := filepath.Join(t.TempDir(), "state.json")
+	broken := sc.serviceWithState(path)
+	broken.Targets[0].RemoteURL = filepath.Join(t.TempDir(), "no-such-repository.git")
+
+	sc.pollAndWait(t, broken)
+	sc.pollAndWait(t, broken)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs, want none: the start failed", n)
+	}
+	if got := broken.State.Issue("example-org/example-repo", 6).SplitRequests; got != 0 {
+		t.Errorf("the count of the second request = %d, want 0 after a failed start", got)
+	}
+	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v after a failed start", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 after a failed start, want none", n)
+	}
+
+	sc.pollAndWait(t, sc.serviceWithState(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 (the second request)", n)
+	}
+	reason := "this requirement issue has no sub-issue"
+	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason, "Retried: once"}, []string{reason})
+}
+
 // A blocked result whose stop wrote the comment and then failed to change
 // the label: cumin-core wrote the decision request, and the issue stays in
 // cumin/status/planning. The next poll reads that comment as the question

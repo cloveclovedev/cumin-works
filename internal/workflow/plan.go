@@ -23,8 +23,9 @@ import (
 //
 // With Again, it applies "request the split again": the issue is already in
 // cumin/status/planning, and the Planner left no split that passes the
-// check. The count of the state file is raised before the request, so that
-// the request is sent once for each stay in cumin/status/planning.
+// check. The count of the state file is raised when the run is about to
+// start (runPlanner), so that the request is sent once for each stay in
+// cumin/status/planning, and a start that failed does not use it up.
 func (s *Service) plan(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, p Plan) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	requirement, ok := snapshot.RequirementIssue(p.Number)
@@ -48,10 +49,7 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 		if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, p.Number); err != nil {
 			return fmt.Errorf("R2: read the login of the Owner of issue #%d: %w", p.Number, err)
 		}
-		req.again = true
-		if err := s.countSplitRequest(repository, p.Number); err != nil {
-			return fmt.Errorf("R2: request the split of issue #%d again: %w", p.Number, err)
-		}
+		req.again, req.count = true, true
 		s.logger().Info("R2: the split does not pass the check; the split is requested again",
 			"repository", repository, "issue", p.Number)
 		return s.goPlanner(ctx, target, settings, p.Number, req)
@@ -69,12 +67,30 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	return s.goPlanner(ctx, target, settings, p.Number, req)
 }
 
-// countSplitRequest writes into the state file that the split of the
-// requirement issue was requested again.
-func (s *Service) countSplitRequest(repository string, number int) error {
+// countPlannerRequest changes, in the state file, how many times the
+// request of the requirement issue was sent again during this stay: the
+// split for end R2, the acceptance check for end R4. delta is 1 before the
+// second request starts, and -1 when that run did not start.
+func (s *Service) countPlannerRequest(repository string, number int, end string, delta int) error {
 	stored := s.State.Issue(repository, number)
-	stored.SplitRequests++
+	if end == RowR4 {
+		stored.AcceptanceRequests = max(0, stored.AcceptanceRequests+delta)
+	} else {
+		stored.SplitRequests = max(0, stored.SplitRequests+delta)
+	}
 	return s.State.Set(repository, number, stored)
+}
+
+// notStarted takes back the count of a second request whose run did not
+// start, so that the next poll sends that request. counted says that the
+// count was raised for this start.
+func (s *Service) notStarted(log *slog.Logger, repository string, number int, end string, counted bool) {
+	if !counted {
+		return
+	}
+	if err := s.countPlannerRequest(repository, number, end, -1); err != nil {
+		log.Error(end+": the count of the request that did not start was not taken back", "error", err.Error())
+	}
 }
 
 // checkAcceptance applies "request the acceptance check" (R4, and R2 with
@@ -85,9 +101,11 @@ func (s *Service) countSplitRequest(repository string, number int) error {
 //
 // With Again, it applies "request the acceptance check again": the issue is
 // already in cumin/status/accepting, and the Planner left no result. The
-// count of the state file is raised before the request, so that the request
-// is sent once for each stay in cumin/status/accepting. The request resumes
-// the session of the first run when the state file holds one.
+// count of the state file is raised when the run is about to start
+// (runPlanner), so that the request is sent once for each stay in
+// cumin/status/accepting, and a start that failed does not use it up. The
+// request resumes the session of the first run when the state file holds
+// one.
 func (s *Service) checkAcceptance(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a CheckAcceptance) error {
 	repository := target.Repository.String()
 	requirement, ok := snapshot.RequirementIssue(a.Number)
@@ -100,11 +118,8 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 		return fmt.Errorf("R4: read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
 	if a.Again {
-		req.again = true
+		req.again, req.count = true, true
 		req.sessionID = s.State.Issue(repository, a.Number).SessionID
-		if err := s.countAcceptanceRequest(repository, a.Number); err != nil {
-			return fmt.Errorf("R4: request the acceptance check of issue #%d again: %w", a.Number, err)
-		}
 		s.logger().Info("R4: the Planner left no acceptance check comment; the acceptance check is requested again",
 			"repository", repository, "issue", a.Number)
 		return s.goPlanner(ctx, target, settings, a.Number, req)
@@ -131,14 +146,6 @@ func (s *Service) moveToAccepting(ctx context.Context, token string, target Targ
 	return nil
 }
 
-// countAcceptanceRequest writes into the state file that the acceptance
-// check of the requirement issue was requested again.
-func (s *Service) countAcceptanceRequest(repository string, number int) error {
-	stored := s.State.Issue(repository, number)
-	stored.AcceptanceRequests++
-	return s.State.Set(repository, number, stored)
-}
-
 // plannerRequest is one kind of request to the Planner.
 type plannerRequest struct {
 	// start is the row that requested it, and end the row that judges the
@@ -156,6 +163,10 @@ type plannerRequest struct {
 	// again says that the request was already sent again during this stay
 	// in cumin/status/planning or in cumin/status/accepting.
 	again bool
+	// count says that the state file does not hold this second request
+	// yet. runPlanner counts it when the work directory is ready, and takes
+	// the count back when the agent did not start.
+	count bool
 }
 
 var (
@@ -219,6 +230,12 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 			log.Error("cleanup: the work directory of the Planner was not removed", "error", err.Error())
 		}
 	}()
+	if req.count {
+		if err := s.countPlannerRequest(target.Repository.String(), number, req.end, 1); err != nil {
+			log.Error(req.end+": the request was not counted; the next poll decides again", "error", err.Error())
+			return
+		}
+	}
 	log.Info(req.start+": requested the Planner", "kind", req.kind)
 	request := agent.StartRequest{
 		Owner:        target.Repository.Owner,
@@ -232,7 +249,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 	}
 	if req.end == RowR4 {
 		request.SessionID = req.sessionID
-		s.runAcceptanceCheck(ctx, log, target, settings, number, request, req.again)
+		s.runAcceptanceCheck(ctx, log, target, settings, number, request, req.again, req.count)
 		return
 	}
 
@@ -256,7 +273,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 // the next poll decides.
 func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, req plannerRequest) {
 	repository := target.Repository.String()
-	again := req.again
+	again, counted := req.again, req.count
 	for {
 		run, err := s.Agents.Start(ctx, request)
 		var abnormal *agent.AbnormalEnd
@@ -269,6 +286,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			}
 		case err != nil:
 			log.Error("the agent was not started", "error", err.Error())
+			s.notStarted(log, repository, number, RowR2, counted)
 			return
 		default:
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
@@ -324,11 +342,11 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 				log.Info("R2: cumin stops after its runs; the second request of the split waits for the next start of cumin")
 				return
 			}
-			if err := s.countSplitRequest(repository, number); err != nil {
+			if err := s.countPlannerRequest(repository, number, RowR2, 1); err != nil {
 				log.Error("R2: the request was not counted; the next poll decides again", "error", err.Error())
 				return
 			}
-			again = true
+			again, counted = true, true
 			log.Info("R2: the split does not pass the check; the same request runs again in the same work directory")
 		default:
 			log.Info("R2: the end of the split was not decided; the next poll decides", "labels", requirement.Labels)
@@ -345,12 +363,14 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 // blocked_reason and stops the issue for the Owner at once.
 //
 // again says that the acceptance check was already requested again during
-// this stay in cumin/status/accepting. When the facts ask for the second
+// this stay in cumin/status/accepting, and counted that the state file got
+// the count of that request for this start: a run that does not start
+// takes it back. When the facts ask for the second
 // request, it runs here in the session of the first run and in the same
 // work directory. While cumin is stopping, nothing is requested again and
 // no label changes. A failed read changes nothing: the issue keeps
 // cumin/status/accepting, and the next poll decides.
-func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, again bool) {
+func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, again, counted bool) {
 	repository := target.Repository.String()
 	for {
 		run, err := s.Agents.Start(ctx, request)
@@ -365,6 +385,7 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 			s.keepSession(log, target, config.RolePlanner, number, abnormal.SessionID)
 		case err != nil:
 			log.Error("the agent was not started", "error", err.Error())
+			s.notStarted(log, repository, number, RowR4, counted)
 			return
 		default:
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
@@ -402,11 +423,11 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 			}
 			return
 		case CheckAcceptance:
-			if err := s.countAcceptanceRequest(repository, number); err != nil {
+			if err := s.countPlannerRequest(repository, number, RowR4, 1); err != nil {
 				log.Error("R4: the request was not counted; the next poll decides again", "error", err.Error())
 				return
 			}
-			again = true
+			again, counted = true, true
 			request.SessionID = s.State.Issue(repository, number).SessionID
 			log.Info("R4: the Planner left no acceptance check comment; the acceptance check is requested again")
 		default:

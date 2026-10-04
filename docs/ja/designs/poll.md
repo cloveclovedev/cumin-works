@@ -280,12 +280,13 @@ checkの結果の読み方:
   - Plannerの質問のコメントが、`cumin/status/accepting` が付いた時刻以降に書かれていれば、「stop the acceptance check for the Owner」である。cuminはコメントを書かず、ラベルを `cumin/status/awaiting-decision` に替えて通知する。
   - どちらのコメントもなければ、「request the acceptance check again」である。この `cumin/status/accepting` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイルに持つ。依頼し直したあとにもコメントがなければ、ラベルを `cumin/status/awaiting-decision` に替えてから、理由をコメントに書き、通知する。ラベルを替えられなければ、コメントも通知も出さず、状態ファイルの回数も消さない。次の定期確認が、依頼せずに同じ判定をやり直す。
   - コメントかラベルの時刻を読めなかったときは、決めない。次の定期確認が決める。
+- 動いているAgentの集合 (`Snapshot.Running`) は、定期確認の最初に、GitHubのどの読み取りよりも前に読む。スナップショットを読んだあとに終わった実行は、自分の終わりを既に決めて、Issueを動かしている。その実行は、この定期確認ではまだ「動いている」ので、定期確認は古いスナップショットから同じ終わりをもう一度決めない (ラベルの付け替え、通知、依頼を二重にしない)。次の定期確認が決める。実行を始めるのは定期確認だけなので、先に読んだ集合から漏れる実行はない。`cumin/status/planning` と `cumin/status/accepting` のどちらの出口も、この順番に頼る。
 - `cumin/status/planning` の出口は、純粋関数 `SplitEnd` が、要求Issueの事実と「Plannerが動いているか」(`Snapshot.Running`) から決める。定期確認も、Plannerの実行の終わりも、同じ関数で決める。そのため、分割の途中でcuminが再起動しても、実行のあとの読み取りが失敗しても、次の定期確認が同じ結果を出す。
   - Plannerが動いている間は、何もしない。ラベルの時刻もコメントも読まない (`SplitNeedsFacts`)。
   - Plannerの質問のコメントが、`cumin/status/planning` が付いた時刻以降に書かれていれば、「stop the split for the Owner」である。cuminはコメントを書かず、ラベルを `cumin/status/awaiting-decision` に替えて通知する。質問は、分割の確認より先に見る。分割し直す要求Issueには、前の分割のsub-issueがあって確認を通ることがあり、そのときに質問を見落とさないためである。cumin-coreが書いた決定の依頼 (Plannerの `blocked` のあとのコメント) も、質問として数える。`blocked` のあとでラベルを替えられなかったときや、その前にcuminが再起動したときに、依頼もコメントも繰り返さないためである。
   - 分割が確認を通り (`VerifySplit`)、開いているsub-issueがあれば、R2 (「ask the Owner to review the plan」) である。ラベルを `cumin/status/awaiting-plan-review` に替えてから、1回だけ通知する。
   - 分割が確認を通り、sub-issueが全て閉じていれば、R2 (「request the acceptance check」) である。ラベルを `cumin/status/accepting` に替えてから、受け入れの確認を依頼する。通知しない。要求Issueは既に進行中の数に入っているので、空きを待たない。
-  - 分割が確認を通らなければ、「request the split again」である。この `cumin/status/planning` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイルに持つ (`split_requests`)。利用枠の判定 (Q1) は、回数を数える前に行う。依頼し直したあとにも確認を通らなければ、ラベルを `cumin/status/awaiting-decision` に替えてから、落ちた確認の文をコメントに書き、通知する。ラベルを替えられなければ、コメントも通知も出さず、状態ファイルの回数も消さない。次の定期確認が、依頼せずに同じ判定をやり直す。
+  - 分割が確認を通らなければ、「request the split again」である。この `cumin/status/planning` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイルに持つ (`split_requests`)。回数は、依頼し直す実行が始まる直前 (作業場所を用意できたあと) に数える。作業場所を用意できなかったときは数えず、Agentを起動できなかったときは数えた分を戻す。Plannerが動いていないのに、1回だけの依頼し直しを使い切らないためである。そのときは、次の定期確認がもう一度依頼し直す。`cumin/status/accepting` の依頼し直しも同じである。利用枠の判定 (Q1) は、回数を数える前に行う。依頼し直したあとにも確認を通らなければ、ラベルを `cumin/status/awaiting-decision` に替えてから、落ちた確認の文をコメントに書き、通知する。ラベルを替えられなければ、コメントも通知も出さず、状態ファイルの回数も消さない。次の定期確認が、依頼せずに同じ判定をやり直す。
   - コメントかラベルの時刻を読めなかったときは、決めない。次の定期確認が決める。
   - コメントは、`cumin/status/planning` が付いた時刻以降のものだけを読む。その時刻を読めなかったときは、コメントを読まない。
 - 状態ファイルを失うと、回数は0に戻る。そのときは、もう1回だけ余分に依頼する。Plannerは、同じ回の自分のコメントを書き直すので、コメントは増えない (Plannerの要件の「やり直しに備えること」)。
@@ -327,7 +328,7 @@ checkの結果の読み方:
 
 ### Plannerへの依頼 (R1、R2、R4)
 
-- 要求Issueのラベルを `cumin/status/planning` に替えてから、Plannerに依頼する。替えられなければ依頼せず、次の定期確認でやり直す。I1と同じ形である。R1で `cumin/status/planning` に入るときに、状態ファイルのその要求Issueの分を消す。「request the split again」は、ラベルを替えずに、回数を数えてから同じ依頼を出す。Ownerのログイン名は、依頼の前に読む。
+- 要求Issueのラベルを `cumin/status/planning` に替えてから、Plannerに依頼する。替えられなければ依頼せず、次の定期確認でやり直す。I1と同じ形である。R1で `cumin/status/planning` に入るときに、状態ファイルのその要求Issueの分を消す。「request the split again」は、ラベルを替えずに同じ依頼を出し、実行が始まる直前に回数を数える。Ownerのログイン名は、依頼の前に読む。
 - 作業場所は、要求Issueの番号とPlannerの組のworktreeで、既定のブランチの先頭をdetachedで開く ([Agentの実行の設計](agent-run.md) の「作業場所」)。ブランチは作らない。依頼のたびに、前の依頼のworktreeを消してから作り直す。受け入れの確認は、mergeされた全てのsub-issueを含むmainを読む必要があり、分割のときのworktreeは古いためである。Plannerは何も書かないので、消して失うものはない。異常終了のあとのやり直しは、同じworktreeで続ける。
 - R4と、R2の「request the acceptance check」では、要求Issueのラベルを `cumin/status/accepting` に替えてから依頼する。替えられなければ依頼せず、次の定期確認でやり直す。「受け入れの確認」の依頼文には、依頼の種類、リポジトリ、要求Issueの番号、作業場所と、mergeされた作業の上でRequirementsを1項目ずつ確かめてコメントする短い指示を入れる。
 - 依頼は、新しいセッションで始める。分割 (R1) も受け入れの確認 (R4) も、新しいセッションで始まるためである (Plannerの要件の「いつ起動されるか」)。例外は、受け入れの確認の依頼し直しである。受け入れの確認の実行のセッションを状態ファイルに持ち、依頼し直しは、そのセッションがあれば続きから始める。要求Issueが `cumin/status/accepting` を出るときと、次にR4で入るときに、状態ファイルのその要求Issueの分を消す。

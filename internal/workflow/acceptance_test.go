@@ -175,6 +175,46 @@ func TestAccepting_ARestartRequestsTheCheckOnceMoreAndThenStopsForTheOwner(t *te
 	assertAcceptanceStopped()
 }
 
+// The start of the second request fails: the work directory cannot be
+// prepared. No Planner ran, so the state file does not count the request,
+// and the issue is not stopped. A later poll, whose start works, sends the
+// one second request; only after it does the issue stop for the Owner.
+func TestAccepting_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	path := filepath.Join(t.TempDir(), "state.json")
+	broken := sc.serviceWithState(path)
+	broken.Targets[0].RemoteURL = filepath.Join(t.TempDir(), "no-such-repository.git")
+
+	sc.pollAndWait(t, broken)
+	sc.pollAndWait(t, broken)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs, want none: the start failed", n)
+	}
+	if got := broken.State.Issue("example-org/example-repo", 6).AcceptanceRequests; got != 0 {
+		t.Errorf("the count of the second request = %d, want 0 after a failed start", got)
+	}
+	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/accepting") {
+		t.Errorf("labels of #6 = %v, want accepting after a failed start", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 after a failed start, want none", n)
+	}
+
+	sc.pollAndWait(t, sc.serviceWithState(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 (the second request)", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 6); len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.NoAcceptanceCheckReason) {
+		t.Errorf("the comments of #6 = %+v, want one with the reason", comments)
+	}
+}
+
 // A restart after the second request: the state file says that the
 // acceptance check was requested again, and no comment exists. The issue
 // goes to cumin/status/awaiting-decision with no request.

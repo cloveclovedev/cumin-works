@@ -288,6 +288,8 @@ type Fake struct {
 	// that WaitForRequests wakes.
 	received chan struct{}
 	failNext *failure
+	// beforeAnswer is what BeforeNextAnswer set.
+	beforeAnswer *answerHook
 	// lastCommentID is the id of the comment that was created last.
 	lastCommentID int64
 	// commentAuthor is the author of the comments that the REST API
@@ -414,7 +416,7 @@ func New(t *testing.T) (*Fake, *httptest.Server) {
 	t.Helper()
 	f := &Fake{t: t, repositories: map[string]*Repository{}, users: map[string]int64{}, received: make(chan struct{}),
 		now: func() time.Time { return DefaultNow }}
-	server := httptest.NewServer(http.HandlerFunc(f.serve))
+	server := httptest.NewServer(http.HandlerFunc(f.serveWithHook))
 	t.Cleanup(server.Close)
 	return f, server
 }
@@ -739,6 +741,48 @@ func (f *Fake) HangTimes(method, path string, times int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.failNext = &failure{method: method, path: path, hang: true, times: times}
+}
+
+// answerHook is a function that runs between the answer of one request and
+// its way to the client.
+type answerHook struct {
+	method, path string
+	run          func()
+}
+
+// BeforeNextAnswer makes the fake call run once: after it built the answer
+// of the next request with the method and the path, and before it sends
+// that answer. The client then gets facts that are already old, as when
+// something changes on GitHub while an answer is on its way.
+func (f *Fake) BeforeNextAnswer(method, path string, run func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.beforeAnswer = &answerHook{method: method, path: path, run: run}
+}
+
+// serveWithHook answers a request, and runs the hook of BeforeNextAnswer
+// between the answer and its way to the client.
+func (f *Fake) serveWithHook(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	hook := f.beforeAnswer
+	if hook != nil && hook.method == r.Method && hook.path == r.URL.Path {
+		f.beforeAnswer = nil
+	} else {
+		hook = nil
+	}
+	f.mu.Unlock()
+	if hook == nil {
+		f.serve(w, r)
+		return
+	}
+	answer := httptest.NewRecorder()
+	f.serve(answer, r)
+	hook.run()
+	for name, values := range answer.Header() {
+		w.Header()[name] = values
+	}
+	w.WriteHeader(answer.Code)
+	_, _ = w.Write(answer.Body.Bytes())
 }
 
 // Requests returns the requests that the fake received, in order.
