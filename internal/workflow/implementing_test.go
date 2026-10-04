@@ -1,0 +1,258 @@
+package workflow_test
+
+import (
+	"context"
+	"net/http"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
+	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
+	"github.com/cloveclovedev/cumin-works/internal/workflow"
+)
+
+// runWithAFailedReadAfterDone runs the Implementer of #10 to a done result
+// while the fake GitHub fails every try of the read after the run, and
+// returns the service after the run. The run holds until the failure is
+// set, so that the failure meets the read after done and no call before it.
+func runWithAFailedReadAfterDone(t *testing.T, sc *scene) *workflow.Service {
+	t.Helper()
+	// A required check that does not report keeps the issue in
+	// cumin/status/checking, so that the later polls start no review.
+	sc.repo.DefaultBranch = "main"
+	sc.repo.RequiredChecks = append(sc.repo.RequiredChecks, githubtest.RequiredCheck{Name: "ci"})
+	service := sc.service()
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
+	sc.release(t)
+	service.Wait()
+	return service
+}
+
+// assertStillImplementing checks that nothing changed on #10 after the
+// run: the label stays, no comment is written, one agent ran, and no step
+// is kept for the issue.
+func assertStillImplementing(t *testing.T, sc *scene, service *workflow.Service) {
+	t.Helper()
+	want := []string{"risk/low", workflow.LabelImplementing}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+	if got := workflow.InProgressIssues(service); len(got) != 0 {
+		t.Errorf("issues in work = %v, want none: cumin keeps no step after the run", got)
+	}
+}
+
+// assertWaitsForTheChecks checks that #10 moved to cumin/status/checking
+// with no second request.
+func assertWaitsForTheChecks(t *testing.T, sc *scene) {
+	t.Helper()
+	want := []string{"risk/low", workflow.LabelChecking}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: a verified pull request needs no request", n)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
+	}
+}
+
+// A read that fails after the run changes nothing, and cumin keeps no step.
+// The next poll makes the decision from the same facts on GitHub: the pull
+// request is verified, so the issue waits for the checks.
+func TestImplementing_AReadThatFailsAfterTheRunChangesNothingAndTheNextPollDecides(t *testing.T) {
+	sc := newScene(t, cliOptions{holds: true})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := runWithAFailedReadAfterDone(t, sc)
+
+	assertStillImplementing(t, sc, service)
+
+	if err := pollAtMinute(sc, service, 1); err != nil {
+		t.Fatalf("Poll at minute 1: %v", err)
+	}
+	assertWaitsForTheChecks(t, sc)
+	if !strings.Contains(sc.logs.String(), `"msg":"I2: verified the pull request"`) {
+		t.Errorf("the log does not say that the pull request was verified:\n%s", sc.logs.String())
+	}
+}
+
+// A restart of cumin in cumin/status/implementing with a verified pull
+// request: the first poll of the new cumin moves the issue to
+// cumin/status/checking, and sends no request.
+func TestImplementing_ARestartWithAVerifiedPullRequestWaitsForTheChecksWithNoRequest(t *testing.T) {
+	sc := newScene(t, cliOptions{holds: true})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	stopped := runWithAFailedReadAfterDone(t, sc)
+	assertStillImplementing(t, sc, stopped)
+
+	// The new cumin holds no run and no memory of the first one.
+	restarted := sc.service()
+	if err := pollAtMinute(sc, restarted, 1); err != nil {
+		t.Fatalf("Poll after the restart: %v", err)
+	}
+
+	assertWaitsForTheChecks(t, sc)
+}
+
+// implementingWithoutAnAgent puts #10 in cumin/status/implementing with no
+// agent, as a restart of cumin leaves it. event is the newest event of the
+// label.
+func implementingWithoutAnAgent(t *testing.T, event githubtest.LabelEvent) *scene {
+	t.Helper()
+	sc := newScene(t)
+	sc.repo.Issues[10].Labels = []string{"risk/low", workflow.LabelImplementing}
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{event}
+	return sc
+}
+
+// implementingByCumin is the event of cumin/status/implementing that
+// cumin-core added.
+func implementingByCumin() githubtest.LabelEvent {
+	return githubtest.LabelEvent{Label: workflow.LabelImplementing, At: sceneNow.Add(-time.Hour), Actor: cuminSlug, ActorType: "Bot"}
+}
+
+// A restart of cumin in cumin/status/implementing with no pull request: the
+// poll sends one second request and counts it in the state file. That run
+// leaves no pull request either, so the issue goes to
+// cumin/status/awaiting-decision with the reason. The polls that follow
+// send nothing more.
+func TestImplementing_ARestartWithNoPullRequestSendsOneSecondRequestThenStops(t *testing.T) {
+	sc := implementingWithoutAnAgent(t, implementingByCumin())
+	service := sc.service()
+	service.State = state.Open(filepath.Join(t.TempDir(), "state.json"), nil)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one second request", n)
+	}
+	if !strings.Contains(sc.logs.String(), "the implementation is requested again") {
+		t.Errorf("the log does not say that the implementation is requested again:\n%s", sc.logs.String())
+	}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	reason := workflow.VerificationReason(workflow.FailureNoOpenPullRequest)
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"## Stopped for the Owner", "Reason: " + reason, "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
+	}
+}
+
+// A question of the Implementer after the label: the poll moves the issue
+// to cumin/status/awaiting-decision, sends no request, and writes no
+// comment of its own.
+func TestImplementing_AQuestionAfterTheLabelStopsWithNoRequest(t *testing.T) {
+	sc := implementingWithoutAnAgent(t, implementingByCumin())
+	sc.fake.AddComment(sc.repo, 10, githubtest.Comment{
+		Author: implementerSlug, AuthorIsBot: true, At: sceneNow.Add(-time.Minute),
+		Body: workflow.DecisionRequestHeading + ": which table holds the setting?\n",
+	})
+	service := sc.service()
+
+	for range 2 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
+		t.Errorf("%d comments on #10, want only the question", n)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question") {
+		t.Errorf("notifications = %v, want one about the question", messages)
+	}
+}
+
+// While the Implementer runs, a poll changes nothing on the issue and reads
+// nothing more for it.
+func TestImplementing_APollChangesNothingWhileTheImplementerRuns(t *testing.T) {
+	sc := newScene(t, cliOptions{holds: true})
+	service := sc.service()
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	changes, reads := sc.labelChanges(), sc.issueReads(10)
+
+	for i := range 2 {
+		if err := service.Poll(context.Background()); err != nil {
+			t.Fatalf("poll %d while the Implementer runs: %v", i+1, err)
+		}
+	}
+
+	if n := sc.labelChanges(); n != changes {
+		t.Errorf("%d label changes while the Implementer runs, want none", n-changes)
+	}
+	if n := sc.issueReads(10); n != reads {
+		t.Errorf("%d reads of #10 while the Implementer runs, want none", n-reads)
+	}
+	want := []string{"risk/low", workflow.LabelImplementing}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none", len(comments))
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+	sc.release(t)
+	service.Wait()
+}
+
+// A cumin/status/implementing that an account with only triage permission
+// added is not a state (issue-states.md, the account that added a status
+// label): no agent starts, no label changes, and the Owner is told once.
+func TestImplementing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T) {
+	sc := implementingWithoutAnAgent(t, statusBy(workflow.LabelImplementing, "a-triager"))
+	sc.fake.SetPermission("a-triager", "triage", "User")
+	service := sc.service()
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if n := sc.labelChanges(); n != 0 {
+		t.Errorf("%d label changes, want none", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none", n)
+	}
+	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of an Owner"); n != 1 {
+		t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
+	}
+}

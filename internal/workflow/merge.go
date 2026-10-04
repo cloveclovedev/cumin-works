@@ -390,9 +390,9 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 	branch := pr.HeadBranch
 	s.runImplementer(ctx, target, settings, sub.Number, implementerRequest{
 		row: row, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
-		sessionID:    s.State.Issue(repository, sub.Number).SessionID,
-		ownerLogin:   login,
-		conflictHead: pr.HeadCommit,
+		sessionID:  s.State.Issue(repository, sub.Number).SessionID,
+		ownerLogin: login,
+		conflict:   true,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)
 		},
@@ -443,9 +443,9 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	defaultBranch := snapshot.DefaultBranch
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		row: RowI14, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
-		sessionID:    s.State.Issue(repository, a.Number).SessionID,
-		ownerLogin:   ownerLogin,
-		conflictHead: pr.HeadCommit,
+		sessionID:  s.State.Issue(repository, a.Number).SessionID,
+		ownerLogin: ownerLogin,
+		conflict:   true,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, a.Number, pr.Number, branch, workDir, defaultBranch)
 		},

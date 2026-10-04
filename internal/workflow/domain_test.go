@@ -1153,3 +1153,118 @@ func TestAcceptanceEnd(t *testing.T) {
 		})
 	}
 }
+
+// ImplementationEnd decides the way out of cumin/status/implementing from
+// the facts on GitHub, and decides nothing while the Implementer runs,
+// without the facts, and from a label that does not count.
+func TestImplementationEnd(t *testing.T) {
+	labeledAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	const branch, implementer, head = "cumin/10-add-the-login-screen", "example-implementer[bot]", "abc"
+	verified := PullRequest{Number: 21, NodeID: "PR_21", HeadCommit: head, HeadBranch: branch, Author: implementer}
+	implementing := func(change func(*SubIssue)) SubIssue {
+		sub := SubIssue{
+			Number: 10, Labels: []string{"risk/low", LabelImplementing},
+			PullRequests: []PullRequest{{Number: 21, HeadCommit: head, HeadBranch: branch, Author: implementer, HeadCommittedAt: labeledAt.Add(time.Minute)}},
+			Implementing: &ImplementingFacts{
+				StatusCounts: true, ImplementingAt: labeledAt, Branch: branch, OnBranch: []PullRequest{verified},
+				Implementer: implementer, LocalHead: head, MaxLinks: 2,
+			},
+		}
+		if change != nil {
+			change(&sub)
+		}
+		return sub
+	}
+	noPullRequest := func(s *SubIssue) { s.PullRequests, s.Implementing.OnBranch = nil, nil }
+	tests := []struct {
+		name    string
+		sub     SubIssue
+		running bool
+		want    Action
+	}{
+		{
+			name: "a verified pull request waits for the checks",
+			sub:  implementing(nil),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{
+			name: "a verified pull request without a closing link gets the link",
+			sub:  implementing(func(s *SubIssue) { s.PullRequests = nil }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21", AddLink: true},
+		},
+		{
+			name: "no pull request requests the implementation again",
+			sub:  implementing(noPullRequest),
+			want: RequestImplementationAgain{Number: 10},
+		},
+		{
+			name: "no pull request after the second request stops the implementation with the reason",
+			sub: implementing(func(s *SubIssue) {
+				noPullRequest(s)
+				s.Implementing.RequestedAgain = true
+			}),
+			want: StopImplementation{Number: 10, Reason: VerificationReason(FailureNoOpenPullRequest), Retried: true},
+		},
+		{
+			name: "a question after the label stops the implementation before every other check",
+			sub:  implementing(func(s *SubIssue) { s.Implementing.QuestionAt = labeledAt.Add(time.Minute) }),
+			want: StopImplementation{Number: 10, Question: true},
+		},
+		{
+			name: "a question before the label does not count",
+			sub:  implementing(func(s *SubIssue) { s.Implementing.QuestionAt = labeledAt.Add(-time.Minute) }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{
+			name: "a head commit older than the label after a conflict request stops the implementation",
+			sub: implementing(func(s *SubIssue) {
+				s.Implementing.ConflictRequested = true
+				s.PullRequests[0].HeadCommittedAt = labeledAt.Add(-time.Minute)
+			}),
+			want: StopImplementation{Number: 10, Reason: ConflictNotResolvedReason(21), PullRequest: 21},
+		},
+		{
+			name: "a head commit newer than the label after a conflict request waits for the checks",
+			sub:  implementing(func(s *SubIssue) { s.Implementing.ConflictRequested = true }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{
+			name: "a head commit older than the label after another request waits for the checks",
+			sub:  implementing(func(s *SubIssue) { s.PullRequests[0].HeadCommittedAt = labeledAt.Add(-time.Minute) }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{name: "a running Implementer decides nothing", sub: implementing(nil), running: true},
+		{name: "facts that were not read decide nothing", sub: implementing(func(s *SubIssue) { s.Implementing = nil })},
+		{name: "a label of another account decides nothing", sub: implementing(func(s *SubIssue) { s.Implementing.StatusCounts = false })},
+		{name: "another state decides nothing", sub: implementing(func(s *SubIssue) { s.Labels = []string{"risk/low", LabelChecking} })},
+		{name: "a closed issue decides nothing", sub: implementing(func(s *SubIssue) { s.Closed = true })},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ImplementationEnd(tt.sub, tt.running); got != tt.want {
+				t.Errorf("ImplementationEnd = %#v, want %#v", got, tt.want)
+			}
+			// Decide returns the same action for the issue in a snapshot.
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{tt.sub}}},
+				Running: map[int]bool{10: tt.running}}
+			found := false
+			for _, action := range Decide(snapshot, 1, nil, nil, labeledAt, time.Hour) {
+				found = found || tt.want != nil && action == tt.want
+			}
+			if tt.want != nil && !found {
+				t.Errorf("Decide does not return %#v", tt.want)
+			}
+		})
+	}
+}
+
+// While cumin stops after its runs, the second request of the
+// implementation is held back, and the two ways out that start no agent
+// are kept.
+func TestWithoutNewWorkHoldsTheSecondRequestOfTheImplementation(t *testing.T) {
+	actions := []Action{WaitForChecks{Number: 10}, RequestImplementationAgain{Number: 11}, StopImplementation{Number: 12}}
+	want := []Action{WaitForChecks{Number: 10}, StopImplementation{Number: 12}}
+	if got := WithoutNewWork(actions); !slices.Equal(got, want) {
+		t.Errorf("WithoutNewWork = %#v, want %#v", got, want)
+	}
+}

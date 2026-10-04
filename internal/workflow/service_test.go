@@ -634,10 +634,11 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 		t.Errorf("%d label changes, want 2", n)
 	}
 	// Three polls of two queries each, the read of the login of the Owner
-	// before the start, one read again at the end of the run (I2), the
-	// closing link, and one read after it.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 10 {
-		t.Errorf("%d GraphQL requests, want 10", n)
+	// before the start, three reads at the end of the run (the issue, the
+	// actor of its label, and its comments), the closing link, and one
+	// read after it.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 12 {
+		t.Errorf("%d GraphQL requests, want 12", n)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none on the success path", n)
@@ -687,16 +688,17 @@ func TestCore08_RestartDoesNotRequestTwice(t *testing.T) {
 		t.Fatalf("first run: %v", err)
 	}
 	first.Wait()
+	runs := sc.agentRuns(t)
 	// A new Service holds nothing from the first one. The facts are on
-	// GitHub: the label of #10 is now cumin/status/implementing.
+	// GitHub: the first one decided the end of its run there.
 	second := sc.service()
 	if err := second.Poll(ctx); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
 	second.Wait()
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != runs {
+		t.Errorf("%d agent runs after the restart, want none", n-runs)
 	}
 }
 
@@ -757,8 +759,8 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 	// that the agent opened just before it ended is seen.
 	// The read of the login of the Owner before the start is one more
 	// GraphQL request.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 4 {
-		t.Errorf("%d GraphQL requests, want 4 (the two queries of the poll, the login of the Owner, and the read after the run)", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
+		t.Errorf("%d GraphQL requests, want 6 (the two queries of the poll, the login of the Owner, and the three reads after the run)", n)
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"pull_request":21`, `"issue":10`} {
@@ -1065,9 +1067,10 @@ func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 // assertVerificationFailed checks that the label of #10 stayed at
 // cumin/status/implementing and that the log names the failure.
 
-// Core-5 (cumin-core.md): a result that does not match the schema gives
-// exactly one retry. After the second abnormal end the issue goes to the
-// Owner, with one comment, the label, and exactly one notification.
+// Core-5 (cumin-core.md): a result that does not match the schema leaves
+// no pull request, so the implementation is requested again exactly once.
+// After the second run the issue goes to the Owner, with one comment that
+// names what is missing on GitHub, the label, and exactly one notification.
 func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "invalid-result.jsonl"})
 	service := sc.service()
@@ -1082,7 +1085,7 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "invalid result", "Retried: once", "Pull request: None"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: I2", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "Retried: once", "Pull request: None"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, body)
 		}
@@ -1094,13 +1097,13 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"I2", "invalid result", "example-org/example-repo", "issue #10"} {
+	for _, want := range []string{"I2", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "example-org/example-repo", "issue #10"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
 	}
 	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"I2: the same request runs again in the same work directory"`) {
+	if !strings.Contains(logs, `"msg":"I2: the pull request does not pass the check; the same request runs again in the same work directory"`) {
 		t.Errorf("the log does not say that the request ran again:\n%s", logs)
 	}
 }
@@ -1134,18 +1137,19 @@ func TestI2_TheRetryIsTheSameRequestInANewSession(t *testing.T) {
 	}
 }
 
-// A retry that ends normally goes on as usual: the verification runs, the
-// label moves to cumin/status/checking, and nothing is said to the
+// An abnormal end is decided from the facts on GitHub, as every other end:
+// the pull request of the run is verified, so the issue moves to
+// cumin/status/checking with no second request, and nothing is said to the
 // Owner.
-func TestI2_ARetryThatEndsWellIsVerified(t *testing.T) {
+func TestI2_AnAbnormalEndWithAVerifiedPullRequestWaitsForTheChecks(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "is-error.jsonl", secondFixture: "done.jsonl"})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
 
-	if n := sc.agentRuns(t); n != 2 {
-		t.Fatalf("%d agent runs, want 2", n)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1", n)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
@@ -1158,45 +1162,6 @@ func TestI2_ARetryThatEndsWellIsVerified(t *testing.T) {
 	}
 }
 
-// The two runs can end in different ways. The comment names both kinds,
-// so that the Owner knows where to look.
-func TestI2_TheStopNoteNamesTheKindOfEachAbnormalEnd(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "no-result.jsonl", secondFixture: "invalid-result.jsonl"})
-	service := sc.service()
-
-	sc.pollAndWait(t, service)
-
-	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 {
-		t.Fatalf("%d comments on #10, want 1", len(comments))
-	}
-	for _, want := range []string{"no result", "invalid result", "Retried: once"} {
-		if !strings.Contains(comments[0].Body, want) {
-			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
-		}
-	}
-}
-
-// The stop note names the pull request that the agent left behind, so that
-// the Owner knows whether the work reached GitHub.
-func TestI2_TheStopNoteOfAnAbnormalEndNamesThePullRequest(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "no-init.jsonl"})
-	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
-	service := sc.service()
-
-	sc.pollAndWait(t, service)
-
-	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 {
-		t.Fatalf("%d comments on #10, want 1", len(comments))
-	}
-	for _, want := range []string{"Pull request: #21", "user-level context", "Retried: once"} {
-		if !strings.Contains(comments[0].Body, want) {
-			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
-		}
-	}
-}
-
 // assertVerificationFailed checks the whole failed path of I2: the log
 // names the check that failed, the issue holds one comment in the form of
 // templates/stop-note.md with the sentence of that check, the label is
@@ -1205,15 +1170,21 @@ func TestI2_TheStopNoteOfAnAbnormalEndNamesThePullRequest(t *testing.T) {
 // must name, or 0 for "None".
 func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind workflow.VerificationFailure, pullRequest int) {
 	t.Helper()
-	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"I2: the verification failed"`) {
-		t.Errorf("the log does not say that the verification failed:\n%s", logs)
+	if got := kind.String(); got != failure {
+		t.Errorf("the failure is named %q, want %q", got, failure)
 	}
-	if !strings.Contains(logs, `"failure":"`+failure+`"`) {
-		t.Errorf("the log does not name the failure %q:\n%s", failure, logs)
+	logs := sc.logs.String()
+	for _, want := range []string{`"msg":"I2: the pull request does not pass the check; the same request runs again in the same work directory"`,
+		`"msg":"I2: the implementation stops for the Owner"`, `"retried":true`} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the log has no %s:\n%s", want, logs)
+		}
+	}
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 
-	assertStoppedAtI2(t, sc, workflow.VerificationReason(kind), pullRequest)
+	assertStopped(t, sc, workflow.VerificationReason(kind), pullRequest, "once")
 }
 
 // assertStoppedAtI2 checks the stop step of I2 for #10: one comment in the
@@ -1222,12 +1193,20 @@ func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind work
 // the same reason.
 func assertStoppedAtI2(t *testing.T, sc *scene, reason string, pullRequest int) {
 	t.Helper()
+	assertStopped(t, sc, reason, pullRequest, "no")
+}
+
+// assertStopped is assertStoppedAtI2 with what the comment says about the
+// second request: "no", or "once" after the implementation was requested
+// again.
+func assertStopped(t *testing.T, sc *scene, reason string, pullRequest int, retried string) {
+	t.Helper()
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	want := []string{"## Stopped for the Owner", "Row: I2", "Reason: " + reason, "Retried: no", "cumin/status/ready"}
+	want := []string{"## Stopped for the Owner", "Row: I2", "Reason: " + reason, "Retried: " + retried, "cumin/status/ready"}
 	if pullRequest > 0 {
 		want = append(want, fmt.Sprintf("Pull request: #%d", pullRequest))
 	} else {
@@ -1363,8 +1342,8 @@ func TestPoll_OneFailedRepositoryDoesNotStopTheOthers(t *testing.T) {
 		t.Fatalf("err = %v, want the failure of missing-repo", err)
 	}
 	service.Wait()
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1 for the good repository", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 for the good repository (the request and the second request)", n)
 	}
 }
 
@@ -1407,8 +1386,8 @@ func TestPoll_StalledGitHubCallEndsAtTheTimeoutAndTheNextPollRuns(t *testing.T) 
 		t.Fatalf("the next Poll: %v", err)
 	}
 	service.Wait()
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs after the next poll, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs after the next poll, want 2 (the request and the second request)", n)
 	}
 }
 
@@ -1425,8 +1404,8 @@ func TestPoll_AReadThatFailsOnceIsSentAgainAndThePollGoesOn(t *testing.T) {
 	}
 	service.Wait()
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1: the poll goes on after the retry", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request): the poll goes on after the retry", n)
 	}
 }
 
@@ -1651,8 +1630,8 @@ func TestPoll_AWrongRepositoryFileSkipsOnlyThatRepository(t *testing.T) {
 	service.Wait()
 
 	// The good repository claimed its issue; the wrong one claimed nothing.
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1 for the repository whose file is right", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 for the repository whose file is right (the request and the second request)", n)
 	}
 	if got := sc.fake.Issue(other, 2).Labels; !slices.Contains(got, "cumin/status/ready") {
 		t.Errorf("labels of the sub-issue of the wrong repository = %v, want the ready label untouched", got)
@@ -2223,8 +2202,8 @@ func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 	if got := sc.fake.PullRequestLabels(sc.repo, 21); !slices.Contains(got, "docs") {
 		t.Errorf("labels of the pull request = %v, want the label docs kept", got)
 	}
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1: the labels of a pull request decide nothing", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request): the labels of a pull request decide nothing", n)
 	}
 
 	// Equal labels cause no write.
@@ -2377,10 +2356,9 @@ func (sc *scene) failingCheck(t *testing.T, service *workflow.Service, count int
 // I4 (issue-states.md): a failed required check moves the issue back to
 // cumin/status/implementing and sends one request of the kind "check fix",
 // in the session of the last run, with what the failed check says. The
-// label changes first, so the polls that follow send nothing more. Here the
-// fix is not pushed, so I2 stops the issue after the run.
+// label changes first, so the polls that follow send nothing more.
 func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
-	sc := newScene(t, cliOptions{commit: true})
+	sc := newScene(t)
 	service := sc.service()
 	path := sc.failingCheck(t, service, 0)
 	ctx := context.Background()

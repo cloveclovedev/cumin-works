@@ -265,11 +265,53 @@ type SubIssue struct {
 	// cumin/status/ready, when that account is the Owner (IsOwner). It is
 	// empty when another account added it, and when it was not read.
 	ReadyOwner string
+	// Implementing are the facts that decide the way out of
+	// cumin/status/implementing (ImplementationEnd). It is nil when they
+	// were not read: the issue is in another state, its Implementer runs,
+	// or a read failed.
+	Implementing *ImplementingFacts
+}
+
+// ImplementingFacts is what cumin reads to decide the way out of
+// cumin/status/implementing for one implementation issue whose Implementer
+// does not run. The poll and the end of an Implementer run read the same
+// facts.
+type ImplementingFacts struct {
+	// StatusCounts says that the cumin-core App or an Owner added the
+	// newest cumin/status/implementing (StatusLabelCounts).
+	StatusCounts bool
+	// ImplementingAt is when cumin/status/implementing was last added.
+	ImplementingAt time.Time
+	// QuestionAt is when the newest decision request of the Implementer
+	// App or of cumin-core was written, or zero when there is none.
+	QuestionAt time.Time
+	// RequestedAgain says that the state file holds a second request of
+	// the implementation during this stay in cumin/status/implementing.
+	RequestedAgain bool
+	// ConflictRequested says that the state file holds a conflict
+	// resolution as the request of this stay.
+	ConflictRequested bool
+	// Branch is the branch that cumin chose for the issue, and OnBranch
+	// are the open pull requests whose head is that branch.
+	Branch   string
+	OnBranch []PullRequest
+	// Implementer is the login "<slug>[bot]" of the Implementer App.
+	Implementer string
+	// LocalHead is the head commit of the worktree of the issue, or empty
+	// when the Host holds no worktree.
+	LocalHead string
+	// MaxLinks is the most open closing pull requests that the poll reads
+	// for one issue (VerifyDone).
+	MaxLinks int
 }
 
 // PullRequest is an open pull request that closes a sub-issue.
 type PullRequest struct {
 	Number int
+	// NodeID is the GraphQL ID of the pull request. Only the pull requests
+	// of ImplementingFacts.OnBranch hold it; I2 adds the closing link with
+	// it.
+	NodeID string
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
 	// HeadBranch is the branch of the pull request. A request that
@@ -475,6 +517,40 @@ type StopSplit struct {
 	Reason   string
 }
 
+// WaitForChecks is the action "wait for the checks" (I2): the pull request
+// of the implementation issue passes the check, so the issue moves from
+// cumin/status/implementing to cumin/status/checking. With AddLink,
+// cumin-core first adds the closing link to the pull request.
+type WaitForChecks struct {
+	Number            int
+	PullRequest       int
+	PullRequestNodeID string
+	AddLink           bool
+}
+
+// RequestImplementationAgain is the action "request the implementation
+// again": the issue is in cumin/status/implementing, no Implementer runs,
+// and the pull request does not pass the check. It is sent once for each
+// stay in cumin/status/implementing.
+type RequestImplementationAgain struct {
+	Number int
+}
+
+// StopImplementation is the action "stop the implementation for the Owner":
+// the implementation issue moves from cumin/status/implementing to
+// cumin/status/awaiting-decision. With Question, the Implementer wrote a
+// decision request, and cumin writes no reason of its own. Otherwise Reason
+// is the sentence for the Owner, PullRequest the pull request that it is
+// about (0 for none), and Retried says that the implementation was
+// requested again before.
+type StopImplementation struct {
+	Number      int
+	Question    bool
+	Reason      string
+	PullRequest int
+	Retried     bool
+}
+
 // StartRequirement is the action of R3: the Owner let a sub-issue start, so
 // the requirement issue moves to cumin/status/implementing.
 type StartRequirement struct {
@@ -545,22 +621,25 @@ type Action interface {
 	isAction()
 }
 
-func (Claim) isAction()                   {}
-func (StartReview) isAction()             {}
-func (FixChecks) isAction()               {}
-func (ResolveConflict) isAction()         {}
-func (StopForUnreportedChecks) isAction() {}
-func (CopyLabels) isAction()              {}
-func (Plan) isAction()                    {}
-func (ReviewPlan) isAction()              {}
-func (StopSplit) isAction()               {}
-func (StartRequirement) isAction()        {}
-func (ReviewRemaining) isAction()         {}
-func (CheckAcceptance) isAction()         {}
-func (Accept) isAction()                  {}
-func (StopAcceptance) isAction()          {}
-func (MergeOwnerApproval) isAction()      {}
-func (FixOwnerReview) isAction()          {}
+func (Claim) isAction()                      {}
+func (StartReview) isAction()                {}
+func (FixChecks) isAction()                  {}
+func (ResolveConflict) isAction()            {}
+func (StopForUnreportedChecks) isAction()    {}
+func (CopyLabels) isAction()                 {}
+func (Plan) isAction()                       {}
+func (ReviewPlan) isAction()                 {}
+func (StopSplit) isAction()                  {}
+func (StartRequirement) isAction()           {}
+func (ReviewRemaining) isAction()            {}
+func (CheckAcceptance) isAction()            {}
+func (Accept) isAction()                     {}
+func (StopAcceptance) isAction()             {}
+func (MergeOwnerApproval) isAction()         {}
+func (FixOwnerReview) isAction()             {}
+func (WaitForChecks) isAction()              {}
+func (RequestImplementationAgain) isAction() {}
+func (StopImplementation) isAction()         {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -588,12 +667,16 @@ func (FixOwnerReview) isAction()          {}
 // R3 and R6 move a requirement issue and start no agent, so they come
 // first and take no room.
 //
+// The way out of cumin/status/implementing (ImplementationEnd) starts no
+// new issue, so it takes no room either: its issue already counts.
+//
 // I14 also holds for an issue in cumin/status/awaiting-merge-decision. Those
 // actions come after the candidates of I12 and of I13: a review of an Owner
 // on the conflicting head decides first, and the caller drops the conflict
 // resolution of an issue that I12 or I13 moved at this poll.
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string, now time.Time, checksWait time.Duration) []Action {
 	actions := requirementMoves(snapshot)
+	actions = append(actions, implementationEnds(snapshot)...)
 	actions = append(actions, conflictingSubIssues(snapshot)...)
 	actions = append(actions, reviewableSubIssues(snapshot, required)...)
 	actions = append(actions, failedSubIssues(snapshot, required)...)
@@ -615,7 +698,7 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 // issue, an approval of an Owner still merges, and required checks that do
 // not report in time still stop the issue for the Owner. The split, the
 // acceptance check, the claim, the review, the check fix, the conflict
-// resolution, and the fix of the
+// resolution, the second request of the implementation, and the fix of the
 // Owner's review wait for the next start of cumin; each of them starts from a label that no agent
 // works under, so nothing is lost (designs/cumin-core.md, the topic on the
 // stop).
@@ -623,7 +706,7 @@ func WithoutNewWork(actions []Action) []Action {
 	kept := make([]Action, 0, len(actions))
 	for _, action := range actions {
 		switch action.(type) {
-		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, ResolveConflict, FixOwnerReview:
+		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, ResolveConflict, FixOwnerReview, RequestImplementationAgain:
 		default:
 			kept = append(kept, action)
 		}
@@ -855,6 +938,95 @@ func SplitEnd(requirement RequirementIssue, running bool) Action {
 // for a label that another account than cumin-core or an Owner added.
 func SplitNeedsFacts(requirement RequirementIssue, running bool) bool {
 	return statusLabel(requirement.Labels) == LabelPlanning && !running && !statusOfAnother(requirement)
+}
+
+// ImplementationEnd decides the way out of cumin/status/implementing from
+// the facts on GitHub, for an implementation issue whose Implementer does
+// not run. The poll and the end of an Implementer run both decide with it,
+// so a restart of cumin during the run, or a failed read after it, loses
+// nothing.
+//
+//   - A decision request of the Implementer, written after the issue got
+//     cumin/status/implementing: stop the implementation for the Owner.
+//     cumin-core posts the blocked_reason of the Implementer, so its
+//     decision request counts too (QuestionAt).
+//   - The pull request passes the check (VerifyDone), but the request was
+//     a conflict resolution and the head commit is older than the label:
+//     the conflict resolution left the head commit, so stop the
+//     implementation for the Owner.
+//   - The pull request passes the check: wait for the checks.
+//   - The pull request fails the check: request the implementation again,
+//     once for each stay in cumin/status/implementing. The second time,
+//     stop the implementation for the Owner.
+//
+// It returns nil while the Implementer runs, in every other state, for a
+// closed issue, while the facts were not read, and while the status label
+// does not count: the next poll decides.
+func ImplementationEnd(sub SubIssue, running bool) Action {
+	facts := sub.Implementing
+	if !ImplementationNeedsFacts(sub, running) || facts == nil || !facts.StatusCounts || facts.ImplementingAt.IsZero() {
+		return nil
+	}
+	if !facts.QuestionAt.IsZero() && !facts.QuestionAt.Before(facts.ImplementingAt) {
+		return StopImplementation{Number: sub.Number, Question: true}
+	}
+	verification := VerifyDone(sub, facts.Branch, facts.OnBranch, facts.Implementer, facts.LocalHead, facts.MaxLinks)
+	switch {
+	case verification.Passed && facts.ConflictRequested && headOlderThan(sub, verification.PullRequest, facts.ImplementingAt):
+		return StopImplementation{Number: sub.Number, Reason: ConflictNotResolvedReason(verification.PullRequest), PullRequest: verification.PullRequest}
+	case verification.Passed:
+		nodeID := ""
+		for _, pr := range facts.OnBranch {
+			if pr.Number == verification.PullRequest {
+				nodeID = pr.NodeID
+			}
+		}
+		return WaitForChecks{Number: sub.Number, PullRequest: verification.PullRequest, PullRequestNodeID: nodeID, AddLink: verification.AddLink}
+	case facts.RequestedAgain:
+		return StopImplementation{Number: sub.Number, Reason: VerificationReason(verification.Failure), PullRequest: verification.PullRequest, Retried: true}
+	}
+	return RequestImplementationAgain{Number: sub.Number}
+}
+
+// ImplementationNeedsFacts reports whether the way out of
+// cumin/status/implementing needs the facts of the implementation issue: it
+// is open, in cumin/status/implementing, and its Implementer does not run.
+// While the Implementer runs, nothing is decided, so the poll reads nothing
+// more.
+func ImplementationNeedsFacts(sub SubIssue, running bool) bool {
+	return !sub.Closed && statusLabel(sub.Labels) == LabelImplementing && !running
+}
+
+// headOlderThan reports whether the head commit of the pull request of the
+// issue is older than at, the time of cumin/status/implementing: the
+// request left the head commit (issue-states.md, the text below the table
+// of the implementation issue). A commit time that was not read decides
+// nothing.
+func headOlderThan(sub SubIssue, pullRequest int, at time.Time) bool {
+	for _, pr := range sub.PullRequests {
+		if pr.Number == pullRequest {
+			return !pr.HeadCommittedAt.IsZero() && pr.HeadCommittedAt.Before(at)
+		}
+	}
+	return false
+}
+
+// implementationEnds returns the way out of cumin/status/implementing of
+// every sub-issue that has one (ImplementationEnd), lowest issue number
+// first.
+func implementationEnds(snapshot Snapshot) []Action {
+	var subs []SubIssue
+	for _, requirement := range snapshot.RequirementIssues {
+		subs = append(subs, requirement.SubIssues...)
+	}
+	slices.SortFunc(subs, func(a, b SubIssue) int { return a.Number - b.Number })
+	var actions []Action
+	for _, sub := range subs {
+		if action := ImplementationEnd(sub, snapshot.Running[sub.Number]); action != nil {
+			actions = append(actions, action)
+		}
+	}
+	return actions
 }
 
 // acceptanceChecks returns the starts of R4 before the limit: every

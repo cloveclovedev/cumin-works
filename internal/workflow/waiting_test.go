@@ -87,8 +87,8 @@ func TestQ4_AResumeWithNoWorkLeftNotifies(t *testing.T) {
 	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
 	sc.pollAndWait(t, service) // the claim and the run; I2 hands the issue back
 	sc.pollAndWait(t, service) // nothing to do
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 	if got := len(sc.q4Messages()); got != 1 {
 		t.Errorf("%d Q4 notifications, want 1", got)

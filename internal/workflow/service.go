@@ -620,6 +620,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		s.readReadyOwners(ctx, log, token, target, settings, &snapshot)
 	}
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
+	s.readImplementingFacts(ctx, log, token, target, settings, &snapshot)
 	s.writeFollowUpNotes(ctx, log, token, target, &snapshot)
 	s.cleanUp(ctx, log, target, snapshot)
 	var errs []error
@@ -692,6 +693,21 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			}
 		case StopSplit:
 			if err := s.stopSplit(ctx, token, target, snapshot, settings, a); err != nil {
+				errs = append(errs, err)
+			}
+		case WaitForChecks:
+			sub, _ := snapshot.SubIssue(a.Number)
+			if err := s.waitForChecks(ctx, log.With("issue", a.Number), token, target, settings, sub, a); err != nil {
+				errs = append(errs, err)
+			}
+		case StopImplementation:
+			sub, _ := snapshot.SubIssue(a.Number)
+			if err := s.stopImplementation(ctx, log.With("issue", a.Number), token, target, settings, sub, a); err != nil {
+				errs = append(errs, err)
+			}
+		case RequestImplementationAgain:
+			sub, _ := snapshot.SubIssue(a.Number)
+			if err := s.requestImplementationAgain(ctx, token, target, settings, sub, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Claim:
@@ -820,11 +836,19 @@ type implementerRequest struct {
 	ownerLogin string
 	// text builds the request text once the work directory is known.
 	text func(workDir string) string
-	// conflictHead is the head commit that conflicted with the default
-	// branch, for a conflict resolution (I6, I12, I14); empty otherwise. After done,
-	// a head that is still this commit stops the issue instead of I2, so
-	// that the same conflict does not go round the review again.
-	conflictHead string
+	// conflict says that the request is a conflict resolution (I6, I12,
+	// I14). The state file keeps it for this stay in
+	// cumin/status/implementing: a resolution that leaves the head commit
+	// stops the issue, so that the same conflict does not go round the
+	// review again (ImplementationEnd).
+	conflict bool
+	// again says that the implementation was already requested again
+	// during this stay in cumin/status/implementing.
+	again bool
+	// count says that the state file does not hold this second request
+	// yet. runImplementer counts it when the work directory is ready, and
+	// takes the count back when the agent did not start.
+	count bool
 }
 
 // stopForUnreportedChecks applies I15: a required check has not reported on
@@ -1006,6 +1030,28 @@ func (s *Service) goImplementer(ctx context.Context, target Target, settings *Re
 	return nil
 }
 
+// startStay writes, in the state file, the start of a new stay of the
+// implementation issue in cumin/status/implementing: no second request
+// yet, and whether the request is a conflict resolution.
+func (s *Service) startStay(repository string, number int, conflict bool) error {
+	stored := s.State.Issue(repository, number)
+	if stored.ImplementationRequests == 0 && stored.ConflictResolution == conflict {
+		return nil
+	}
+	stored.ImplementationRequests, stored.ConflictResolution = 0, conflict
+	return s.State.Set(repository, number, stored)
+}
+
+// countImplementationRequest changes, in the state file, how many times the
+// implementation was requested again during this stay in
+// cumin/status/implementing. delta is 1 before the second request starts,
+// and -1 when that run did not start.
+func (s *Service) countImplementationRequest(repository string, number, delta int) error {
+	stored := s.State.Issue(repository, number)
+	stored.ImplementationRequests = max(0, stored.ImplementationRequests+delta)
+	return s.State.Set(repository, number, stored)
+}
+
 // agentAttempts is how many times cumin starts one request: the first run,
 // and one more after an abnormal end (issue-states.md, the section on
 // abnormal ends). The count lives here, in the run, so a new claim (I1)
@@ -1070,18 +1116,20 @@ func (s *Service) readStatusActor(ctx context.Context, token string, target Targ
 	return actor, StatusLabelCounts(label, status, core), nil
 }
 
-// runImplementer prepares the worktree and runs one Implementer request to
-// its end. The end of the run is the trigger of I2, whatever the row of the
-// request: a done result goes to verifyDone, and a blocked result stops the
-// issue for the Owner.
+// runImplementer prepares the worktree and runs one Implementer request,
+// and decides its end as the poll does: it reads the issue again with the
+// facts of the way out of cumin/status/implementing, and ImplementationEnd
+// decides from the facts on GitHub. So every end is the same case: a done
+// result, an abnormal end, and a run that a restart of cumin cut off, which
+// the next poll finds. Only a blocked result is not read from GitHub: cumin
+// posts the blocked_reason and stops the issue for the Owner at once.
 //
-// An abnormal end starts the same request once more, in the same work
-// directory and in a new session (agent-run.md, the topic on the retry): a
-// session that ended abnormally is not resumed again. After the second one,
-// the issue goes back to the Owner with the kind of the end. While cumin is
-// stopping, the context ends the run as an abnormal end as well; nothing is
-// retried then, and no label changes, because the Owner restarts the issue
-// (cumin-core.md, the topic on the stop).
+// When the facts ask for the second request, it runs here in the same work
+// directory, in the kept session when the state file holds one. The quota
+// decides before the request is counted, so a run that hit the quota limit
+// does not use up the one second request. While cumin is stopping, nothing
+// is requested and no label changes. A failed read changes nothing: the
+// issue keeps cumin/status/implementing, and the next poll decides.
 func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	role := settings.Settings.Roles[config.RoleImplementer]
@@ -1129,29 +1177,38 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		SessionID:    req.sessionID,
 	}
 
-	var firstKind agent.EndKind
-	for attempt := 1; attempt <= agentAttempts; attempt++ {
+	repository := target.Repository.String()
+	again, counted := req.again, req.count
+	if !req.again {
+		if err := s.startStay(repository, number, req.conflict); err != nil {
+			log.Error(req.row+": the start of the stay in cumin/status/implementing was not kept", "error", err.Error())
+		}
+	}
+	if req.count {
+		if err := s.countImplementationRequest(repository, number, 1); err != nil {
+			log.Error("I2: the request was not counted; the next poll decides again", "error", err.Error())
+			return
+		}
+	}
+	for {
 		run, err := s.Agents.Start(ctx, request)
 		var abnormal *agent.AbnormalEnd
 		switch {
 		case errors.As(err, &abnormal):
 			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-				"session_id", abnormal.SessionID, "detail", abnormal.Detail, "attempt", attempt)
+				"session_id", abnormal.SessionID, "detail", abnormal.Detail)
 			if ctx.Err() != nil {
-				// cumin is stopping. The label stays, and the Owner
-				// restarts the issue with cumin/status/ready.
+				// cumin is stopping. The label stays, and the next start
+				// of cumin decides from the facts on GitHub.
 				return
 			}
-			if attempt < agentAttempts {
-				firstKind = abnormal.Kind
-				request.SessionID = ""
-				log.Info("I2: the same request runs again in the same work directory", "attempt", attempt+1)
-				continue
-			}
-			s.stopAfterAbnormalEnd(ctx, log, target, settings, RowI2, "Implementer", number, firstKind, abnormal.Kind)
-			return
 		case err != nil:
 			log.Error("the agent was not started", "error", err.Error())
+			if counted {
+				if err := s.countImplementationRequest(repository, number, -1); err != nil {
+					log.Error("I2: the count of the request that did not start was not taken back", "error", err.Error())
+				}
+			}
 			return
 		default:
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
@@ -1161,26 +1218,60 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
 				return
 			}
-			// The first try runs here. A try of the kept step runs in a poll.
-			kept := false
-			step := &keptStep{name: "verify done", log: log}
-			step.run = func(ctx context.Context) error {
-				again := kept
-				kept = true
-				return s.verifyDone(ctx, log, target, settings, number, req.branch, workDir, run.BotLogin, req.conflictHead, req.row, again)
+		}
+
+		token, err := target.Token(ctx)
+		if err != nil {
+			log.Error("I2: no token; the next poll decides the end of the implementation", "error", err.Error())
+			return
+		}
+		sub, ok := s.implementingNow(ctx, log, token, target, settings, number, req.branch)
+		if !ok {
+			return
+		}
+		sub.Implementing.RequestedAgain = sub.Implementing.RequestedAgain || again
+		switch a := ImplementationEnd(sub, false).(type) {
+		case WaitForChecks:
+			if err := s.waitForChecks(ctx, log, token, target, settings, sub, a); err != nil {
+				log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 			}
-			if err := step.run(ctx); err != nil && ctx.Err() == nil {
-				s.keepStep(inProgressKey{repository: target.Repository.String(), issue: number}, step, err)
+			return
+		case StopImplementation:
+			if err := s.stopImplementation(ctx, log, token, target, settings, sub, a); err != nil {
+				log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 			}
+			return
+		case RequestImplementationAgain:
+			if s.finishing.Load() {
+				log.Info("I2: cumin stops after its runs; the second request of the implementation waits for the next start of cumin")
+				return
+			}
+			// Q1: the quota decides before the request is counted.
+			if ok, err := s.quotaAllowsStart(ctx, RowI2, config.RoleImplementer, target, number); err != nil || !ok {
+				if err != nil {
+					log.Error("I2: the quota was not checked; the next poll decides again", "error", err.Error())
+				}
+				return
+			}
+			if err := s.countImplementationRequest(repository, number, 1); err != nil {
+				log.Error("I2: the request was not counted; the next poll decides again", "error", err.Error())
+				return
+			}
+			again, counted = true, true
+			request.SessionID = s.State.Issue(repository, number).SessionID
+			log.Info("I2: the pull request does not pass the check; the same request runs again in the same work directory",
+				"resumed", request.SessionID != "")
+		default:
+			log.Info("I2: the end of the implementation was not decided; the next poll decides", "labels", sub.Labels)
 			return
 		}
 	}
 }
 
 // stopAfterAbnormalEnd stops the issue after the second abnormal end of the
-// same request, with the row of the request (I2 for the Implementer, I3 for
-// the Reviewer): the comment names both kinds and says that cumin ran the
-// request again, and the issue goes to the Owner. The two runs can end in
+// same request of the Reviewer, with the row of the request (I3, I8): the
+// comment names both kinds and says that cumin ran the request again, and
+// the issue goes to the Owner. The two runs can end in
 // different ways, and the Owner needs the kind of each one to know where
 // to look.
 func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, first, second agent.EndKind) {
@@ -1233,114 +1324,240 @@ func labelsNow(sub SubIssue, ok bool) []string {
 	return sub.Labels
 }
 
-// verifyDone applies I2 after a done result. It reads the issue of the run
-// again, and only that issue, because a rule that the end of a run triggers
-// judges on the facts of that moment, not on those of the last poll
-// (cumin-core.md, the topic on the GitHub client). It then lists the open pull requests of
-// the branch of the run, reads the head commit of the worktree, and runs
-// the pure check.
-//
-// On a pass, when the issue has no closing link to the pull request,
-// cumin-core adds it and reads the issue once more to see it; then the
-// status label becomes cumin/status/checking. A failed check, a
-// failed link, and a link that is still missing hand the issue back to the
-// Owner through the stop step, with one sentence. Nothing of that is
-// retried: the Owner decides what to do next.
-//
-// A temporary failure of a call to GitHub (the token, a read, the label) is
-// returned, and the caller keeps the step (keptstep.go). The step then runs
-// again from its start, with again set: when the issue of the new read has
-// left cumin/status/implementing, the label was already changed, and the
-// step changes nothing. Every other failure is logged and returns nil, as
-// before.
-func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, branch, workDir, botLogin, conflictHead, row string, again bool) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
-	token, err := target.Token(ctx)
-	if err != nil {
-		log.Error("I2: no token", "error", err.Error())
-		return temporary(err)
+// readImplementingFacts adds the facts of the way out of
+// cumin/status/implementing to each sub-issue of the snapshot that needs
+// them (ImplementationNeedsFacts): it reads that issue again, so that the
+// decision judges on the pull requests and the labels of this moment. A
+// failed read leaves the facts out, so nothing is decided for that issue in
+// this poll.
+func (s *Service) readImplementingFacts(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
+	for i := range snapshot.RequirementIssues {
+		for j := range snapshot.RequirementIssues[i].SubIssues {
+			sub := &snapshot.RequirementIssues[i].SubIssues[j]
+			if !ImplementationNeedsFacts(*sub, snapshot.Running[sub.Number]) {
+				continue
+			}
+			if read, ok := s.implementingNow(ctx, log.With("issue", sub.Number), token, target, settings, sub.Number, ""); ok {
+				*sub = read
+			}
+		}
 	}
+}
+
+// implementingNow reads one implementation issue again, and only that
+// issue, with the facts that ImplementationEnd decides from: the account
+// and the time of the newest cumin/status/implementing, the decision
+// requests after it, the open pull requests of the branch, the head commit
+// of the worktree, and what the state file holds for this stay. branch is the branch of
+// the run; the poll passes none and takes the branch that a claim would
+// choose (ClaimBranch).
+//
+// The second value is false when a read failed, and when the issue is not
+// an open issue in cumin/status/implementing any more: nothing is decided
+// then. A label that does not count ends the read, and the Owner is told
+// once. A worktree that the Host does not hold gives an empty head commit,
+// so the pull request does not pass the check.
+func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int, branch string) (SubIssue, bool) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
 	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
-		log.Error("I2: the issue was not read again", "error", err.Error())
-		return temporary(err)
+		log.Error("I2: the issue was not read again; the next poll decides", "error", err.Error())
+		return SubIssue{}, false
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
-	if again && !slices.Contains(sub.Labels, LabelImplementing) {
-		log.Info("I2: the issue left cumin/status/implementing while verify done was kept; nothing changes", "labels", sub.Labels)
-		return nil
+	if !ImplementationNeedsFacts(sub, false) {
+		log.Info("I2: the issue is not in cumin/status/implementing; nothing changes", "labels", sub.Labels)
+		return sub, false
 	}
-	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, branch)
+	actor, counts, err := s.readStatusActor(ctx, token, target, number, LabelImplementing, false)
 	if err != nil {
-		log.Error("I2: the open pull requests of the branch were not read", "branch", branch, "error", err.Error())
-		return temporary(err)
+		log.Error("the actor of the newest "+LabelImplementing+" was not read; the next poll decides", "error", err.Error())
+		return sub, false
 	}
-	onBranch := make([]PullRequest, 0, len(listed))
-	nodeIDs := map[int]string{}
+	facts := &ImplementingFacts{StatusCounts: counts, ImplementingAt: actor.At, MaxLinks: github.MaxOpenClosingPullRequests}
+	sub.Implementing = facts
+	if !counts {
+		s.tellStatusOfAnother(ctx, log, target, settings, number, LabelImplementing, actor)
+		return sub, true
+	}
+	if s.Agents == nil {
+		return sub, false
+	}
+	if facts.Implementer, err = s.Agents.BotLogin(ctx, owner, config.RoleImplementer); err != nil {
+		log.Error("I2: the login of the Implementer App was not read; the next poll decides", "error", err.Error())
+		return sub, false
+	}
+	// cumin-core posts the blocked_reason of the Implementer, so its
+	// decision request is a question too.
+	askers := []string{facts.Implementer}
+	if target.Login != nil {
+		core, err := target.Login(ctx)
+		if err != nil {
+			log.Error("I2: the login of cumin-core was not read; the next poll decides", "error", err.Error())
+			return sub, false
+		}
+		askers = append(askers, core)
+	}
+	comments, rate, err := s.GitHub.ReadIssueComments(ctx, token, owner, repo, number, facts.ImplementingAt)
+	if err != nil {
+		log.Error("I2: the comments were not read; the next poll decides", "error", err.Error())
+		return sub, false
+	}
+	log.Debug("I2: read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	asked := make([]Comment, 0, len(comments))
+	for _, c := range comments {
+		asked = append(asked, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
+	}
+	facts.QuestionAt = QuestionAt(asked, askers...)
+	if facts.Branch = branch; branch == "" {
+		facts.Branch, _ = ClaimBranch(sub)
+	}
+	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, facts.Branch)
+	if err != nil {
+		log.Error("I2: the open pull requests of the branch were not read; the next poll decides", "branch", facts.Branch, "error", err.Error())
+		return sub, false
+	}
 	for _, pr := range listed {
-		onBranch = append(onBranch, PullRequest{Number: pr.Number, HeadCommit: pr.HeadCommit, HeadBranch: pr.HeadBranch, Author: pr.Author})
-		nodeIDs[pr.Number] = pr.NodeID
+		facts.OnBranch = append(facts.OnBranch, PullRequest{Number: pr.Number, NodeID: pr.NodeID, HeadCommit: pr.HeadCommit, HeadBranch: pr.HeadBranch, Author: pr.Author})
 	}
-	head, err := s.Workspace.Head(ctx, workDir)
-	if err != nil {
-		log.Error("I2: the head commit of the work directory was not read", "error", err.Error())
-		return nil
+	workDir := s.Workspace.Dir(agent.Checkout{Owner: owner, Repo: repo, Issue: number, Role: config.RoleImplementer, Branch: facts.Branch})
+	if facts.LocalHead, err = s.Workspace.Head(ctx, workDir); err != nil {
+		log.Info("I2: the head commit of the work directory was not read", "error", err.Error())
+		facts.LocalHead = ""
 	}
-	verification := VerifyDone(sub, branch, onBranch, botLogin, head, github.MaxOpenClosingPullRequests)
-	stopI2 := func(reason string, pullRequest int) {
+	stored := s.State.Issue(target.Repository.String(), number)
+	facts.RequestedAgain, facts.ConflictRequested = stored.ImplementationRequests > 0, stored.ConflictResolution
+	return sub, true
+}
+
+// waitForChecks applies "wait for the checks" (I2): the pull request passes
+// the check. When the issue has no closing link to the pull request,
+// cumin-core adds it and reads the issue once more to see it; then the
+// status label becomes cumin/status/checking. A link that GitHub refuses,
+// and a link that is still missing, hand the issue back to the Owner
+// through the stop step, with one sentence.
+//
+// A failed read or label change is returned and changes nothing more: the
+// issue keeps cumin/status/implementing, and the next poll decides again
+// from the same facts.
+func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, a WaitForChecks) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	stopI2 := func(reason string) {
 		s.stopForOwner(ctx, log, target, settings, stop{
 			row:     RowI2,
-			issue:   number,
+			issue:   a.Number,
 			labels:  sub.Labels,
 			reason:  reason,
-			comment: StopNote(RowI2, reason, pullRequest, false),
+			comment: StopNote(RowI2, reason, a.PullRequest, false),
 		})
 	}
-	if !verification.Passed {
-		log.Warn("I2: the verification failed", "failure", verification.Failure.String(),
-			"branch", branch, "pull_request", verification.PullRequest)
-		stopI2(VerificationReason(verification.Failure), verification.PullRequest)
-		return nil
-	}
-	if conflictHead != "" && head == conflictHead {
-		// The pull request passed, so its head is the head of the worktree.
-		// row is the row that found the conflict: I6, I12, or I14.
-		log.Warn(row+": the head did not change after the conflict resolution", "pull_request", verification.PullRequest)
-		s.stopForOwner(ctx, log, target, settings, stop{
-			row: row, issue: number, labels: sub.Labels, reason: ConflictNotResolvedReason(verification.PullRequest),
-			comment: StopNote(row, ConflictNotResolvedReason(verification.PullRequest), verification.PullRequest, false),
-		})
-		return nil
-	}
-	if verification.AddLink {
-		pr := verification.PullRequest
-		if err := s.GitHub.AddClosingLink(ctx, token, sub.NodeID, nodeIDs[pr]); err != nil {
+	if a.AddLink {
+		pr := a.PullRequest
+		if err := s.GitHub.AddClosingLink(ctx, token, sub.NodeID, a.PullRequestNodeID); err != nil {
+			if temporary(err) != nil {
+				return fmt.Errorf("I2: add the closing link of issue #%d: %w", a.Number, err)
+			}
 			log.Warn("I2: the closing link was not added", "pull_request", pr, "error", err.Error())
-			stopI2(LinkFailedReason(pr, githubAnswer(err)), pr)
+			stopI2(LinkFailedReason(pr, githubAnswer(err)))
 			return nil
 		}
-		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
+		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, a.Number)
 		if err != nil {
-			log.Error("I2: the issue was not read after the closing link", "error", err.Error())
-			return temporary(err)
+			return fmt.Errorf("I2: read issue #%d after the closing link: %w", a.Number, err)
 		}
-		log.Debug("read the issue again", "issue", number, "rate_limit_cost", again.RateLimit.Cost, "rate_limit_remaining", again.RateLimit.Remaining)
+		log.Debug("read the issue again", "issue", a.Number, "rate_limit_cost", again.RateLimit.Cost, "rate_limit_remaining", again.RateLimit.Remaining)
 		sub = toSubIssue(again.Issue)
 		if !linksPullRequest(sub, pr) {
 			log.Warn("I2: the closing link is missing after cumin-core added it", "pull_request", pr)
-			stopI2(LinkMissingReason(pr), pr)
+			stopI2(LinkMissingReason(pr))
 			return nil
 		}
 		log.Info("I2: added the closing link", "pull_request", pr)
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelChecking)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
-		log.Error("I2: the label was not changed", "error", err.Error())
-		return temporary(err)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+		return fmt.Errorf("I2: move issue #%d to checking: %w", a.Number, err)
 	}
-	log.Info("I2: verified the pull request", "pull_request", verification.PullRequest, "labels", labels)
+	log.Info("I2: verified the pull request", "pull_request", a.PullRequest, "labels", labels)
 	return nil
+}
+
+// stopImplementation applies "stop the implementation for the Owner": the
+// implementation issue moves from cumin/status/implementing to
+// cumin/status/awaiting-decision, and the Owner is notified. After a
+// question of the Implementer, its comment holds the reason, and cumin
+// writes none. Otherwise cumin writes the reason on the issue.
+//
+// The label moves first. When that fails, nothing else happens: the state
+// file keeps the count of the second request, so the next poll decides the
+// same stop and requests nothing.
+func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, a StopImplementation) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+		return fmt.Errorf("I2: move issue #%d to awaiting-decision: %w", a.Number, err)
+	}
+	if !a.Question {
+		log.Warn("I2: the implementation stops for the Owner", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row:       RowI2,
+			issue:     a.Number,
+			labelDone: true,
+			reason:    a.Reason,
+			comment:   StopNote(RowI2, a.Reason, a.PullRequest, a.Retried),
+		})
+		return nil
+	}
+	log = log.With("row", RowI2)
+	log.Info("I2: the Implementer asked a question; the issue waits for the Owner", "labels", labels)
+	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		Row:        RowI2,
+		Reason:     "The Implementer asked a question during the implementation.",
+		Repository: target.Repository.String(),
+		Subject:    fmt.Sprintf("issue #%d", a.Number),
+		Link:       github.IssueURL(owner, repo, a.Number),
+	})
+	return nil
+}
+
+// requestImplementationAgain applies "request the implementation again" at
+// a poll: the issue is in cumin/status/implementing, no Implementer runs,
+// and the pull request does not pass the check. The work continues on the
+// branch of the issue, in the kept session when the state file holds one.
+// The count of the state file is raised when the run is about to start
+// (runImplementer), so that the request is sent once for each stay in
+// cumin/status/implementing, and a start that failed does not use it up.
+func (s *Service) requestImplementationAgain(ctx context.Context, token string, target Target, settings *RepositorySettings, sub SubIssue, a RequestImplementationAgain) error {
+	// Q1: the quota decides before the request is counted.
+	if ok, err := s.quotaAllowsStart(ctx, RowI2, config.RoleImplementer, target, a.Number); err != nil || !ok {
+		if err != nil {
+			return fmt.Errorf("I2: issue #%d: %w", a.Number, err)
+		}
+		return nil
+	}
+	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	if err != nil {
+		return fmt.Errorf("I2: read the login of the Owner of issue #%d: %w", a.Number, err)
+	}
+	repository := target.Repository.String()
+	branch := sub.Implementing.Branch
+	req := implementerRequest{
+		row: RowI2, kind: "implement", branch: branch, ownerLogin: ownerLogin, again: true, count: true,
+		sessionID: s.State.Issue(repository, a.Number).SessionID,
+		text: func(workDir string) string {
+			return ImplementRequestText(repository, a.Number, branch, workDir)
+		},
+	}
+	if _, pullRequest := ClaimBranch(sub); pullRequest != 0 {
+		req.kind, req.pullRequest = "continue", pullRequest
+		req.text = func(workDir string) string {
+			return ContinueRequestText(repository, a.Number, pullRequest, branch, workDir)
+		}
+	}
+	s.logger().Info("I2: the pull request does not pass the check; the implementation is requested again",
+		"repository", repository, "issue", a.Number)
+	return s.goImplementer(ctx, target, settings, a.Number, req)
 }
 
 // temporary returns err when it is a temporary failure of a call to GitHub,
