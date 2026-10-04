@@ -47,7 +47,7 @@ cuminは、実装Issueの `cumin/status/*` と `risk/*` を、そのIssueを閉�
 1. cuminは、GitHub上の事実と、「このcuminが今そのIssueのAgentを動かしているか」だけで、次の動作を決める。同じ事実からは、いつも同じ動作を決める。決める時点は2つある。定期確認と、cuminが起動したAgentの実行が終わった直後である。どちらも同じ決め方をする。実行が終わった直後に決めるのは、次の定期確認を待たないためで、その時点を逃しても (cuminの再起動、GitHubの読み取りの失敗)、次の定期確認が同じ事実から同じ動作を決める。「実行が終わった」という出来事そのものは、条件に使わない。
 2. Agentの申告では判定しない。Agentには実行の最後に結果 (`done` か `blocked` か、と理由) を決まった形式で返させるが、`done` は条件に使わない。Pull Requestがあるか、checkが通ったか、レビューが出たかは、cuminがGitHubで確かめる。`blocked` の理由は、cuminがすぐにIssueのコメントとして書く。書いたあとは、そのコメントがGitHub上の事実になる。
 3. Agentへの依頼は、依頼より先にラベルを付け替えることで表す。同じIssueを二重に依頼しない。
-4. 状態を表すラベルは1つのIssueに常に1つだけで、付け替えは全てcuminが行う。例外は `cumin/status/ready` で、これだけはOwnerが付ける。
+4. 状態を表すラベルは1つのIssueに常に1つだけで、付け替えは全てcuminが行う。例外は `cumin/status/ready` で、これだけはOwnerが付ける。cuminは、`cumin-core` かOwnerが付けた状態ラベルだけを、状態として扱う (下の「状態ラベルを付けたアカウント」)。
 5. 判定に使うのは、Issueのラベルだけである。cuminは、実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestにもコピーする (I11)。コピーしたラベルは、OwnerがPull Requestの一覧で状態とriskを見分けるためのもので、cuminは読まない。Pull Requestの側でラベルを変えても、cuminがIssueのラベルで上書きする。Ownerの合図 (`cumin/status/ready`) は、常にIssueに付ける。
 6. cuminは、閉じた要求Issueには何もしない。読まず、ラベルを替えず、コメントも書かない。
 
@@ -86,6 +86,13 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 | `awaiting-decision` | 要求Issue、実装Issue | Ownerが答える。cuminが先に進めない理由は、Issueのコメントにある | `awaiting-owner-decision` |
 
 - 状態ラベルのないIssue (下書き) は、cuminが扱わない。
+
+状態ラベルを付けたアカウント:
+
+- GitHubでは、triageの権限でもラベルを付けられる。cuminは、状態から動作を決めるので、状態ラベルを付けられる人は誰でも、cuminを動かせることになる。そこで、cuminが状態として扱うのは、今付いている状態ラベルを最後に付けたのが、`cumin-core` のGitHub Appか、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) であるときだけにする
+- `cumin/status/ready` は、Ownerが付けたものだけを数える (下の「Ownerのready」)。ほかの状態ラベルは、`cumin-core` が付けたものと、Ownerが付けたものを数える。Ownerが手でラベルを直すことと、リポジトリを移す手順 (「ラベルの移行」) があるためである
+- それ以外のアカウントが付けた状態ラベルでは、cuminは何もしない。Agentを起動せず、mergeせず、ラベルも替えない。ログに1回だけ残し、Ownerに1回だけ通知する。同じラベルについて、定期確認のたびに繰り返さない。Ownerが正しいラベルを付け直すまで、そのIssueは進まない
+- 付けたアカウントは、GitHubがIssueのタイムラインに残すラベルのイベントから読む。cuminが確かめるのは、その状態から動作を起こす前である。どの時点で読むかと、そのコストは、設計メモで決める
 - `awaiting-decision` は、止まった理由ごとに分けない。理由が要求でも環境でも、Ownerが答えて `ready` を付ける、という出口が同じだからである。
 
 ## 要求Issueの状態遷移
@@ -164,13 +171,14 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | start the merge | I12 | `awaiting-merge-decision` → `merging` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `APPROVE` である。必須のcheckが全て通っている | ラベルを替える |
 | request a response to the Owner's review | I13 | `awaiting-merge-decision` → `implementing` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `REQUEST_CHANGES` である。そのレビューは、実装Issueが最後に `awaiting-merge-decision` になったあとに出されている | Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する |
 | close the merged issue | — | `merging` → 完了 | GitHubが、Pull Requestをmerge済みと返す | GitHubが実装Issueを閉じていなければ、閉じる。フォローアップノートは、I9が書く |
-| go back to the checks | — | `merging` → `checking` | Pull Requestがmergeされていない。mergeの条件 (今の先頭のコミットへの承認、必須のcheck) が、成り立たなくなった | ラベルを替える。mergeしない |
+| go back to the checks | — | `merging` → `checking` | Pull Requestがmergeされていない。mergeの条件 (下の「`merging` の中でcuminが行うこと」) が成り立たない | ラベルを替える。mergeしない |
 | request a conflict resolution | — | `merging` → `implementing` | GitHubが、衝突を理由にmergeを断った | Implementerの直前のセッションで、衝突の解消を依頼する |
 | stop the merge for the Owner | — | `merging` → `awaiting-decision` | GitHubが、衝突でも、既定のブランチが変わったことでもない、直らない理由でmergeを断った。または、mergeのあとで実装Issueを閉じられない | 理由をコメントに書く。Ownerに通知する |
 | — | — | `awaiting-merge-decision` → `ready`、`awaiting-decision` → `ready`、状態ラベルなし → `ready` | Ownerが `ready` を付けた | 何もしない。次にI1が成り立つ |
 
 `merging` の中でcuminが行うこと:
 
+- mergeの条件は、`merging` に入ってきた遷移の条件と同じである。必須のcheckが全て通っている。riskのラベルがちょうど1つである。riskが `risk/low` なら、Reviewerの最新のレビューが今の先頭のコミットに対する `APPROVE` である。riskが `risk/medium` または `risk/high` なら、それに加えて、Ownerが出した最新のレビューが今の先頭のコミットに対する `APPROVE` である。`merging` のラベルが付いていることは、条件の代わりにならない。cuminは、mergeを送るたびに、この条件を確かめ直す。
 - Pull Requestがmergeされておらず、mergeの条件が成り立つ間、cuminはmergeを送る。mergeの方法は、リポジトリの設定に従う。mergeに渡す先頭のコミットは、承認されたコミットである。承認のあとにpushされたコミットは、mergeしない。
 - mergeの答えが届かなかったときも、次の定期確認が、Pull Requestがmerge済みかを読む。merge済みなら「close the merged issue」、そうでなければ、もう一度mergeを送る。同じmergeを2回行うことはない。
 - GitHubが「既定のブランチが変わった」(405、Base branch was modified) という理由でmergeを断ったときは、Issueを止めない。`merging` のまま、次の定期確認でもう一度送る。ほかのPull Requestのmergeの直後に起きる、すぐに直る状態だからである。
