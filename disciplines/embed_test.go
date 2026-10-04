@@ -107,7 +107,7 @@ func TestRole_HoldsTheRuleOnLongChecksForEveryRole(t *testing.T) {
 
 // A review after an approval covers only the diff since the approved
 // commit, at the depth of round 1. The rule names the line of the start
-// request by its label (package agent writes it), so that the Reviewer
+// request by its label (the request of a review holds it), so that the Reviewer
 // finds the approved commit there. A request without that line gets the
 // full review of round 1.
 func TestRole_HoldsTheRuleOnTheApprovedCommitForTheReviewer(t *testing.T) {
@@ -120,9 +120,10 @@ func TestRole_HoldsTheRuleOnTheApprovedCommitForTheReviewer(t *testing.T) {
 		"`git diff <approved commit>..HEAD`",
 		"Do not review the approved part again",
 		"`high <approved commit>..HEAD`",
-		"`security-review`",
+		"and invoke the skill `security-review`",
 		"against that diff only",
 		"`git diff --name-only origin/HEAD...HEAD`",
+		"First check that the approved commit is an ancestor of the head commit",
 		"When it is not, do the full round 1 review above, and say so in the summary",
 		"A request with no `Approved commit` line gets the full round 1 review",
 	} {
