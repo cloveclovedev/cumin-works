@@ -1296,8 +1296,8 @@ func TestPoll_FailedLabelChangeStartsNoAgent(t *testing.T) {
 		t.Fatalf("second poll: %v", err)
 	}
 	service.Wait()
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 }
 
@@ -1570,8 +1570,8 @@ func TestPoll_AppliesTheSettingsOfTheRepository(t *testing.T) {
 	}
 	service.Wait()
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 	// The model of the repository reached the CLI of the agent. The
 	// arguments are separated by NUL.
