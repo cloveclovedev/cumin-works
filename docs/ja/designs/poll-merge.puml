@@ -16,10 +16,10 @@ on the issue? (DecideMerge)) then (no)
   stop
 elseif (Required checks pass
 on the head commit?) then (no)
-  :Back to cumin/status/awaiting-checks;
+  :Back to cumin/status/checking;
   stop
 elseif (risk/low?) then (no)
-  :I7: cumin/status/awaiting-owner-review,
+  :I7: cumin/status/awaiting-merge-decision,
   then cumin-core requests the review of the Owner
   (requested_reviewers; a failure is only logged),
   then one notification with the pull request;

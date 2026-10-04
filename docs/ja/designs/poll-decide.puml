@@ -35,21 +35,21 @@ partition "Poll (each repository)" {
 }
 partition "Decision (pure function, no I/O)" {
   :Collect I14 candidates
-  - open sub-issues with cumin/status/awaiting-checks
+  - open sub-issues with cumin/status/checking
   - the pull request is CONFLICTING
     (UNKNOWN and MERGEABLE are no candidates);
   :Collect I3 candidates
-  - open sub-issues with cumin/status/awaiting-checks
+  - open sub-issues with cumin/status/checking
   - the pull request is not CONFLICTING
   - every required check passed on the head commit
     of the pull request;
   :Collect I4 candidates
-  - open sub-issues with cumin/status/awaiting-checks
+  - open sub-issues with cumin/status/checking
   - the pull request is not CONFLICTING
   - a required check failed on the head commit
     of the pull request;
   :Collect I15 candidates
-  - open sub-issues with cumin/status/awaiting-checks
+  - open sub-issues with cumin/status/checking
   - the pull request is not CONFLICTING
   - no required check failed, and a required check
     has not reported on the head commit
@@ -61,7 +61,7 @@ partition "Decision (pure function, no I/O)" {
   :Count the issues in progress
   - requirement issues with cumin/status/planning
   - open sub-issues with implementing,
-    awaiting-checks, or reviewing;
+    checking, or reviewing;
   :Compute the free slots
   max_issues_in_progress - issues in progress;
   :Collect R1 candidates
@@ -81,18 +81,18 @@ partition "Decision (pure function, no I/O)" {
   then by issue number,
   and keep as many as the free slots;
   :Collect I12 candidates
-  - open sub-issues with cumin/status/awaiting-owner-review
+  - open sub-issues with cumin/status/awaiting-merge-decision
   - an APPROVED review of a person
     on the head commit of the pull request;
   :Collect I13 candidates
-  - open sub-issues with cumin/status/awaiting-owner-review
+  - open sub-issues with cumin/status/awaiting-merge-decision
     and without cumin/status/ready
   - a CHANGES_REQUESTED review of a person
     on the head commit of the pull request,
     submitted after the last
-    cumin/status/awaiting-owner-review of the issue;
+    cumin/status/awaiting-merge-decision of the issue;
   :Collect I14 candidates of the Owner's review
-  - open sub-issues with cumin/status/awaiting-owner-review
+  - open sub-issues with cumin/status/awaiting-merge-decision
     and without cumin/status/ready
   - the pull request is CONFLICTING
     (UNKNOWN and MERGEABLE are no candidates);
@@ -117,7 +117,7 @@ partition "Apply (in the order of the list)" {
     :hand it back to the Owner (row I4);
   endif
   :I15: change the label to
-  cumin/status/awaiting-owner-decision, then
+  cumin/status/awaiting-decision, then
   hand it back to the Owner (row I15) with
   the head commit, the required checks that
   have not reported, and the time waited
@@ -135,7 +135,7 @@ partition "Apply (in the order of the list)" {
   :I13: read the permission of each reviewer,
   and when the latest review of an Owner requests
   changes on the head commit, after the last
-  cumin/status/awaiting-owner-review, change the label to
+  cumin/status/awaiting-merge-decision, change the label to
   cumin/status/implementing, then ask the Implementer
   to address that review in the same session;
   :I14 of the Owner's review: when I12 and I13

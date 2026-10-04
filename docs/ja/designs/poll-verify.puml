@@ -43,7 +43,7 @@ if (Result?) then (done)
     endif
   endif
   if (Passed, and the link is there?) then (yes)
-    :Change the label to cumin/status/awaiting-checks;
+    :Change the label to cumin/status/checking;
     stop
   else (no)
     :Build the comment
@@ -61,7 +61,7 @@ endif
 
 partition "Hand back to the Owner (the row number is an argument)" {
   :Comment on the implementation issue;
-  :Change the label to cumin/status/awaiting-owner-decision;
+  :Change the label to cumin/status/awaiting-decision;
   :Notify the Owner
   (the link is the comment; a setting can turn it off);
 }
