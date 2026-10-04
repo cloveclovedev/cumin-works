@@ -30,6 +30,16 @@ const (
 	LabelReviewing             = "cumin/status/reviewing"
 	LabelAwaitingOwnerReview   = "cumin/status/awaiting-owner-review"
 	LabelAwaitingOwnerDecision = "cumin/status/awaiting-owner-decision"
+	// The seven labels below are the new names of the states
+	// (issue-states.md, the move of the labels). cumin creates them, and
+	// does not read or write them yet.
+	LabelChecking              = "cumin/status/checking"
+	LabelAccepting             = "cumin/status/accepting"
+	LabelMerging               = "cumin/status/merging"
+	LabelAwaitingPlanReview    = "cumin/status/awaiting-plan-review"
+	LabelAwaitingMergeDecision = "cumin/status/awaiting-merge-decision"
+	LabelAwaitingAcceptance    = "cumin/status/awaiting-acceptance"
+	LabelAwaitingDecision      = "cumin/status/awaiting-decision"
 
 	statusLabelPrefix = "cumin/status/"
 	riskLabelPrefix   = "risk/"

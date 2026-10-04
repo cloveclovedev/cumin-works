@@ -26,6 +26,13 @@ cuminの動作は、この文書の表を正とする。[cumin本体の要件](.
 | `cumin/status/reviewing` | 実装Issue | Reviewerが作業している | cumin |
 | `cumin/status/awaiting-owner-review` | 実装Issue、要求Issue | Ownerが見て承認するのを待っている。実装Issueでは、Pull RequestのmergeをOwnerが判断する。OwnerがGitHubのレビューで承認すると、cuminがmergeする (I12)。要求Issueでは、分割結果と受け入れ | cumin |
 | `cumin/status/awaiting-owner-decision` | 実装Issue、要求Issue | Agentが先に進めない。Ownerの回答を待っている | cumin |
+| `cumin/status/checking` | 実装Issue | GitHubが必須のcheckを動かしている。`cumin/status/awaiting-checks` を置き換える | cumin |
+| `cumin/status/accepting` | 要求Issue | Plannerが、mergeされた結果が要求を満たすかを確かめている | cumin |
+| `cumin/status/merging` | 実装Issue | cuminがPull Requestをmergeし、実装Issueを閉じている | cumin |
+| `cumin/status/awaiting-plan-review` | 要求Issue | Ownerが、分割の結果とsub-issueを確かめるのを待っている。`cumin/status/awaiting-owner-review` を置き換える | cumin |
+| `cumin/status/awaiting-merge-decision` | 実装Issue | OwnerがPull Requestを見て、mergeを決めるのを待っている。`cumin/status/awaiting-owner-review` を置き換える | cumin |
+| `cumin/status/awaiting-acceptance` | 要求Issue | Ownerが、受け入れるか差し戻すかを決めるのを待っている。`cumin/status/awaiting-owner-review` を置き換える | cumin |
+| `cumin/status/awaiting-decision` | 実装Issue、要求Issue | Ownerが答えるのを待っている。`cumin/status/awaiting-owner-decision` を置き換える | cumin |
 | `risk/low`、`risk/medium`、`risk/high` | 実装Issue | mergeのrisk。Plannerが仮に付け、Ownerが確定する | Planner、Owner |
 | 優先度のラベル (初期値は `cumin/priority/P0` 〜 `cumin/priority/P3`) | 要求Issue、実装Issue | 先に着手してほしい順番。`P0` が最も高い | Owner |
 
@@ -33,7 +40,7 @@ cuminは、実装Issueの `cumin/status/*` と `risk/*` を、そのIssueを閉�
 
 実装Issueであることを表すラベルは作らない。`cumin/type/requirement` の付いたIssueのsub-issueが、実装Issueである。
 
-この表は、cuminが今、対象のリポジトリに作るラベルである。下の「状態」の節は、状態を新しい名前で書く。新しい名前のラベルをこの表とcuminに足し、古い名前を消す順は、「ラベルの移行」の節にある。
+この表は、cuminが今、対象のリポジトリに作るラベルである。移行の間は、古い名前 (`cumin/status/awaiting-checks`、`cumin/status/awaiting-owner-review`、`cumin/status/awaiting-owner-decision`) と新しい名前の両方がある。cuminが新しい名前で判定するようになり、対象のリポジトリを移し終えたら、古い名前をこの表とcuminから消す。順は「ラベルの移行」の節にある。
 
 ## 原則
 
