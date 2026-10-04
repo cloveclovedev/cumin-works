@@ -735,6 +735,42 @@ func TestR2_TheStopAfterBlockedRunsAgainAtALaterPollAfterATemporaryFailure(t *te
 	}
 }
 
+// A blocked result whose stop wrote the comment and then failed to change
+// the label: cumin-core wrote the decision request, and the issue stays in
+// cumin/status/planning. The next poll reads that comment as the question
+// of the Planner: the issue goes to cumin/status/awaiting-decision with no
+// second request and no second comment.
+func TestPlanning_ABlockedResultWithAFailedLabelChangeStopsAtTheNextPollWithNoRequest(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl", holds: true})
+	// cumin-core posts the blocked_reason, so the comment is of its App.
+	sc.fake.SetCommentAuthor(cuminSlug)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
+	service := keptAfterPlanner(t, sc, func() {
+		sc.fake.FailNext(http.MethodPut, putRequirementLabelsPath, http.StatusForbidden)
+	})
+	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Fatalf("labels of #6 = %v, want %v after the failed label change", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
+		t.Fatalf("%d comments on #6 after the stop, want the decision request", n)
+	}
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	want = []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: no second request", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
+		t.Errorf("%d comments on #6, want still 1", n)
+	}
+}
+
 // The kept stop after blocked wrote nothing before it was kept. When
 // another hand changed the label in between, the kept stop still posts the
 // decision request of the Planner once and stops the issue for the Owner.

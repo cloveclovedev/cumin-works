@@ -806,7 +806,9 @@ func AcceptanceEnd(requirement RequirementIssue, running bool) Action {
 // during the split, or a failed read after it, loses nothing.
 //
 //   - A decision request of the Planner, written after the issue got
-//     cumin/status/planning: stop the split for the Owner. The question
+//     cumin/status/planning: stop the split for the Owner. cumin-core
+//     posts the blocked_reason of the Planner, so its decision request
+//     counts too (QuestionAt). The question
 //     decides before the check of the split: an issue that is planned again
 //     can hold sub-issues of an earlier split that pass the check.
 //   - The split passes the check (VerifySplit) and a sub-issue is open: ask
@@ -882,13 +884,16 @@ func AcceptanceCheckAt(comments []Comment, planner string) time.Time {
 	return newest
 }
 
-// QuestionAt returns when the newest decision request of the Planner App
+// QuestionAt returns when the newest decision request of one of the authors
 // was written: a comment whose first line starts with
-// DecisionRequestHeading. A comment of anyone else never counts.
-func QuestionAt(comments []Comment, planner string) time.Time {
+// DecisionRequestHeading. The authors are the Planner App and, for the
+// split, the App of cumin-core, which posts the blocked_reason of the
+// Planner. An empty author matches nothing, and a comment of anyone else
+// never counts.
+func QuestionAt(comments []Comment, authors ...string) time.Time {
 	var newest time.Time
 	for _, comment := range comments {
-		if planner == "" || comment.Author != planner || !strings.HasPrefix(firstBodyLine(comment.Body), DecisionRequestHeading) {
+		if comment.Author == "" || !slices.Contains(authors, comment.Author) || !strings.HasPrefix(firstBodyLine(comment.Body), DecisionRequestHeading) {
 			continue
 		}
 		if comment.CreatedAt.After(newest) {

@@ -614,10 +614,25 @@ func (s *Service) readAcceptanceComment(ctx context.Context, log *slog.Logger, t
 		return
 	}
 	// In cumin/status/planning, only a question after that label counts. A
-	// sub-issue that closes later must not hide it.
+	// sub-issue that closes later must not hide it. Without the time of the
+	// label, nothing is decided, so nothing is read. cumin-core posts the
+	// blocked_reason of the Planner there, so its decision request is a
+	// question too.
 	since := lastClose(*requirement)
+	askers := []string{planner}
 	if statusLabel(requirement.Labels) == LabelPlanning {
+		if !requirement.LabelTimesRead || requirement.ReviewAt.IsZero() {
+			return
+		}
 		since = requirement.ReviewAt
+		if target.Login != nil {
+			core, err := target.Login(ctx)
+			if err != nil {
+				log.Error("R2: the login of cumin-core was not read", "issue", requirement.Number, "error", err.Error())
+				return
+			}
+			askers = append(askers, core)
+		}
 	}
 	read, rate, err := s.GitHub.ReadIssueComments(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number, since)
 	if err != nil {
@@ -632,7 +647,7 @@ func (s *Service) readAcceptanceComment(ctx context.Context, log *slog.Logger, t
 	}
 	requirement.CommentsRead = true
 	requirement.AcceptanceCheckAt = AcceptanceCheckAt(comments, planner)
-	requirement.QuestionAt = QuestionAt(comments, planner)
+	requirement.QuestionAt = QuestionAt(comments, askers...)
 	stored := s.State.Issue(target.Repository.String(), requirement.Number)
 	requirement.AcceptanceRequestedAgain = stored.AcceptanceRequests > 0
 	requirement.SplitRequestedAgain = stored.SplitRequests > 0
