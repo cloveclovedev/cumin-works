@@ -67,7 +67,7 @@
 | | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (I12のOwnerの判定、起動の依頼のOwnerのログイン名) |
 | | `merge.go` | Pull Requestのmerge (衝突と先頭のコミットの移動の見分け)、mergeが済んだかの読み取り、Issueの開閉の読み取りと、完了として閉じること (I6、I12) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
-| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし、一次のレート制限の使い切り)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
+| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし、一次のレート制限の使い切り、書き込みを処理してから答えを落とす)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |

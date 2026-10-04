@@ -33,6 +33,16 @@ partition "Merge step (I6, and I12)" {
       :Send no second merge;
       break
     endif
+    if (A try of the kept step?) then (yes)
+      :Read the issue, the required checks,
+      and the reviews again, and decide again;
+      if (Still the merge?) then (no)
+        :End without a merge
+        (I6: I7, the checks, or the stop step,
+        I12: the next poll decides);
+        stop
+      endif
+    endif
     :cumin-core merges with merge_method
     and sha = the approved head commit;
   repeat while (Temporary failure of the token,
