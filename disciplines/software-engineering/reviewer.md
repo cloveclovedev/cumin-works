@@ -18,11 +18,11 @@ When your CLI has no such skill, or a skill fails, check the same points yoursel
 
 The rounds start again at 1 after your last approval. Then the request names the commit that you approved, in the line `Approved commit: <hash>`. A request with no `Approved commit` line gets the full round 1 review above.
 
+- First check that the approved commit is an ancestor of the head commit: `git merge-base --is-ancestor <approved commit> HEAD`. When it is not, do the full round 1 review above, and say so in the summary of the review.
 - Review only the diff from the approved commit to the head commit: `git diff <approved commit>..HEAD`. Do not review the approved part again.
 - The depth is the depth of round 1. Invoke the skill `code-review` with the arguments `high <approved commit>..HEAD`, and invoke the skill `security-review`. Steps 3 and 4 above apply: confirm each candidate yourself.
 - Check the acceptance criteria, the documents, and the six security questions against that diff only.
 - After a conflict resolution, that diff holds a merge of the default branch. Review only the files that the pull request changes: `git diff --name-only origin/HEAD...HEAD`. Do not review the other files of the merge.
-- Check that the approved commit is an ancestor of the head commit: `git merge-base --is-ancestor <approved commit> HEAD`. When it is not, do the full round 1 review above, and say so in the summary of the review.
 
 ## Round 2 and later: check the fixes
 
