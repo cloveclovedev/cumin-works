@@ -188,16 +188,24 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 			s.quotaAfterRun(ctx, log, target, number, run)
 			if run.Result.Result != agent.ResultDone {
-				question := firstLine(run.Result.BlockedReason)
-				log.Warn("the agent returned blocked", "reason", question)
-				s.runAndKeep(ctx, log, target, number, "the stop after blocked", func(ctx context.Context, again bool) error {
-					return s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.end, question, run.Result.BlockedReason, again)
+				log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
+				if req.end != RowR2 {
+					// Nothing is kept after an acceptance check: a later
+					// poll asks for the check again.
+					_ = s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.end, run.Result.BlockedReason, false)
+					return
+				}
+				s.runAndKeep(ctx, log, target, number, "the stop after blocked", func(ctx context.Context) error {
+					return s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.end, run.Result.BlockedReason, true)
 				})
 				return
 			}
 			if req.end == RowR2 {
-				s.runAndKeep(ctx, log, target, number, "the check of the split", func(ctx context.Context, again bool) error {
-					return s.verifySplit(ctx, log, target, settings, number, again)
+				try := &splitTry{}
+				s.runAndKeep(ctx, log, target, number, "the check of the split", func(ctx context.Context) error {
+					err := s.verifySplit(ctx, log, target, settings, number, try)
+					try.again = true
+					return err
 				})
 			}
 			return
@@ -207,46 +215,44 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 
 // runAndKeep runs a step after a Planner run, and keeps it when it ends
 // with a temporary failure of GitHub. The first try runs here. A try of the
-// kept step runs in a poll, with again set.
-func (s *Service) runAndKeep(ctx context.Context, log *slog.Logger, target Target, number int, name string, run func(ctx context.Context, again bool) error) {
-	kept := false
-	step := &keptStep{name: name, log: log}
-	step.run = func(ctx context.Context) error {
-		again := kept
-		kept = true
-		return run(ctx, again)
-	}
+// kept step runs in a poll.
+func (s *Service) runAndKeep(ctx context.Context, log *slog.Logger, target Target, number int, name string, run func(ctx context.Context) error) {
+	step := &keptStep{name: name, log: log, run: run}
 	s.tryStep(ctx, inProgressKey{repository: target.Repository.String(), issue: number}, step)
 }
 
 // stopAfterPlannerBlocked stops the requirement issue for the Owner after a
-// blocked result, on a new read of the requirement issue.
+// blocked result, on a new read of the requirement issue. comment is the
+// blocked_reason of the Planner.
 //
-// A temporary failure of the read after a split is returned, and the caller
-// keeps the step. The step then runs again from the read, with again set:
-// when the requirement issue has left cumin/status/planning, the stop
-// already happened, and the step changes nothing. After an acceptance check
-// (R4) nothing is kept: a later poll asks for the check again. Every other
+// With keep, a temporary failure of the read is returned, and the caller
+// keeps the step. The step then runs again from the read. The read comes
+// before every write of the stop, so the kept step wrote nothing yet: it
+// always posts the decision request, whatever the label is now. Every other
 // failed read stops the issue without a label change, as before.
-func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, row, question, comment string, again bool) error {
+func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, row, comment string, keep bool) error {
 	requirement, err := s.requirementIssueNow(ctx, log, target, number)
-	if row == RowR2 {
-		if temporary(err) != nil {
-			return err
-		}
-		if again && err == nil && !slices.Contains(requirement.Labels, LabelPlanning) {
-			log.Info("R2: the issue left cumin/status/planning while the stop after blocked was kept; nothing changes", "labels", requirement.Labels)
-			return nil
-		}
+	if keep && temporary(err) != nil {
+		return err
 	}
 	s.stopForOwner(ctx, log, target, settings, stop{
 		row:     row,
 		issue:   number,
 		labels:  labelsOf(requirement, err),
-		reason:  "the Planner returned blocked: " + question,
+		reason:  "the Planner returned blocked: " + firstLine(comment),
 		comment: comment,
 	})
 	return nil
+}
+
+// splitTry is what the check of the split remembers between its tries.
+type splitTry struct {
+	// again says that an earlier try was kept.
+	again bool
+	// lost is the status label of the label change of the last try, when
+	// that change ended with a temporary failure: it may have reached
+	// GitHub. Empty when the last try sent no label change.
+	lost string
 }
 
 // accept applies R7: the acceptance check comment exists, so the
@@ -327,13 +333,15 @@ func (s *Service) runningIssues(repository string) map[int]bool {
 //
 // A temporary failure of a call to GitHub (the token, the read, the label)
 // is returned, and the caller keeps the step (keptstep.go). The step then
-// runs again from its start, with again set: when the requirement issue of
-// the new read has left cumin/status/planning, the label was already
-// changed, and the step does not change it again. The notification follows
-// the label change, so it was not sent yet: the step sends it when the
-// requirement issue waits for the review of the Owner. Every other failure
-// is logged and returns nil, as before.
-func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, again bool) error {
+// runs again from its start. When the requirement issue of the new read has
+// left cumin/status/planning, the step does not change the label. When the
+// issue carries the label of a lost label change of the last try, that
+// change reached GitHub. The notification follows the label change, so it
+// was not sent yet: the step sends it when that label is
+// cumin/status/awaiting-owner-review. With any other label, another hand
+// changed it, and the step leaves the issue. Every other failure is logged
+// and returns nil, as before.
+func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, try *splitTry) error {
 	requirement, err := s.requirementIssueNow(ctx, log, target, number)
 	if err != nil {
 		return temporary(err)
@@ -348,8 +356,10 @@ func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Targ
 			Link:       github.IssueURL(owner, repo, number),
 		})
 	}
-	if again && !slices.Contains(requirement.Labels, LabelPlanning) {
-		if !slices.Contains(requirement.Labels, LabelAwaitingOwnerReview) {
+	lost := try.lost
+	try.lost = ""
+	if try.again && !slices.Contains(requirement.Labels, LabelPlanning) {
+		if lost != LabelAwaitingOwnerReview || !slices.Contains(requirement.Labels, lost) {
 			log.Info("R2: the issue left cumin/status/planning while the check of the split was kept; nothing changes", "labels", requirement.Labels)
 			return nil
 		}
@@ -379,6 +389,9 @@ func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Targ
 	labels := ReplaceStatusLabel(requirement.Labels, status)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
 		log.Error("R2: the label was not changed", "error", err.Error())
+		if temporary(err) != nil {
+			try.lost = status
+		}
 		return temporary(err)
 	}
 	if status == LabelImplementing {
