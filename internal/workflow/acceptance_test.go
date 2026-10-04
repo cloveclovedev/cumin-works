@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -195,6 +196,49 @@ func TestAccepting_ARestartAfterTheSecondRequestStopsWithNoRequest(t *testing.T)
 	}
 	if got := service.State.Issue("example-org/example-repo", 6); got != (state.Issue{}) {
 		t.Errorf("the state of #6 = %+v, want none after the stop", got)
+	}
+}
+
+// The label change of the stop fails once. The state file keeps the count
+// of the second request, and nothing is written: the next poll stops the
+// issue with one comment, one notification, and no new request.
+func TestAccepting_AFailedLabelChangeOfTheStopRequestsNothingAtTheNextPoll(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+	if err := service.State.Set("example-org/example-repo", 6, state.Issue{AcceptanceRequests: 1}); err != nil {
+		t.Fatal(err)
+	}
+	sc.fake.FailNext(http.MethodPut, putRequirementLabelsPath, http.StatusForbidden)
+
+	if err := service.Poll(t.Context()); err == nil {
+		t.Error("the poll with the failed label change returned no error")
+	}
+	service.Wait()
+	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/accepting") {
+		t.Errorf("labels of #6 = %v, want accepting after the failed label change", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 after the failed label change, want none", n)
+	}
+	if got := service.State.Issue("example-org/example-repo", 6).AcceptanceRequests; got != 1 {
+		t.Errorf("the count of the second request = %d, want still 1", got)
+	}
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 6); len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.NoAcceptanceCheckReason) {
+		t.Errorf("the comments of #6 = %+v, want one with the reason", comments)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+		t.Errorf("notifications = %v, want one", messages)
 	}
 }
 

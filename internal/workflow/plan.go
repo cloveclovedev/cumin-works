@@ -354,30 +354,30 @@ const NoAcceptanceCheckReason = "The Planner left no acceptance check comment. c
 // cumin/status/awaiting-decision, and the Owner is notified. After a
 // question of the Planner, its comment holds the reason, and cumin writes
 // none. Otherwise cumin writes the reason on the issue.
+//
+// The label moves first. When that fails, nothing else happens: the state
+// file keeps the count of the second request, so the next poll decides the
+// same stop and requests nothing.
 func (s *Service) stopAcceptance(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a StopAcceptance) error {
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number)
-	if !a.Question {
-		requirement, ok := snapshot.RequirementIssue(a.Number)
-		if !ok {
-			return fmt.Errorf("R4: issue #%d is not in the snapshot", a.Number)
-		}
-		s.stopForOwner(ctx, log, target, settings, stop{
-			row:     RowR4,
-			issue:   a.Number,
-			labels:  requirement.Labels,
-			reason:  NoAcceptanceCheckReason,
-			comment: StopNote(RowR4, NoAcceptanceCheckReason, 0, true),
-		})
-		s.clearAcceptance(log, target.Repository.String(), a.Number)
-		return nil
-	}
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingDecision)
 	if err != nil {
 		return fmt.Errorf("R4: %w", err)
 	}
+	s.clearAcceptance(log, target.Repository.String(), a.Number)
+	if !a.Question {
+		log.Info("R4: the Planner left no acceptance check comment after two requests; the issue waits for the Owner", "labels", labels)
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row:       RowR4,
+			issue:     a.Number,
+			labelDone: true,
+			reason:    NoAcceptanceCheckReason,
+			comment:   StopNote(RowR4, NoAcceptanceCheckReason, 0, true),
+		})
+		return nil
+	}
 	log = log.With("row", RowR4)
 	log.Info("R4: the Planner asked a question during the acceptance check; the issue waits for the Owner", "labels", labels)
-	s.clearAcceptance(log, target.Repository.String(), a.Number)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        RowR4,
 		Reason:     "The Planner asked a question during the acceptance check.",

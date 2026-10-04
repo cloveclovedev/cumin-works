@@ -278,7 +278,7 @@ checkの結果の読み方:
   - Plannerが動いている間は、何もしない。
   - 最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントがあれば、R7 (「ask the Owner to accept」) である。
   - Plannerの質問のコメントが、`cumin/status/accepting` が付いた時刻以降に書かれていれば、「stop the acceptance check for the Owner」である。cuminはコメントを書かず、ラベルを `cumin/status/awaiting-decision` に替えて通知する。
-  - どちらのコメントもなければ、「request the acceptance check again」である。この `cumin/status/accepting` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイルに持つ。依頼し直したあとにもコメントがなければ、理由をコメントに書いて `cumin/status/awaiting-decision` に替え、通知する。
+  - どちらのコメントもなければ、「request the acceptance check again」である。この `cumin/status/accepting` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイルに持つ。依頼し直したあとにもコメントがなければ、ラベルを `cumin/status/awaiting-decision` に替えてから、理由をコメントに書き、通知する。ラベルを替えられなければ、コメントも通知も出さず、状態ファイルの回数も消さない。次の定期確認が、依頼せずに同じ判定をやり直す。
   - コメントかラベルの時刻を読めなかったときは、決めない。次の定期確認が決める。
 - 状態ファイルを失うと、回数は0に戻る。そのときは、もう1回だけ余分に依頼する。Plannerは、同じ回の自分のコメントを書き直すので、コメントは増えない (Plannerの要件の「やり直しに備えること」)。
 - 要求Issueが `cumin/status/implementing` のままで、受け入れの確認のコメントが既にあるとき (ラベルを移す前のcuminが依頼した確認) は、今までどおり、依頼せずにR7で `cumin/status/awaiting-acceptance` に替える。
