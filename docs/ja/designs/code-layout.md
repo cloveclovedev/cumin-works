@@ -80,7 +80,7 @@
 | | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
 | | `keptstep.go` | 一時的な失敗で終わった、Agentの実行のあとの手順を持っておく。時刻が来た手順を、定期確認の最初にやり直す (I2、I5〜I8、I10、R2、mergeの手順)。手順の残り (Agentの実行、merge) は、別のgoroutineで動かす |
 | | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、`cumin/status/planning` の出口 (R2、依頼し直し、Ownerに戻すこと) と、`blocked` のあとの手順を一時的な失敗のあとに持っておくこと、受け入れの確認の依頼 (R4) と、`cumin/status/accepting` の出口 (R7、依頼し直し、Ownerに戻すこと) |
-| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り。R1とI1のための、Ownerのreadyの確認と、Ownerでないreadyのログと通知 |
+| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り。R1とI1のための、Ownerのreadyの確認と、Ownerでないreadyのログと通知。状態から決める要求Issueのための、状態ラベルを付けたアカウントの確認と、数えないラベルのログと通知 |
 | | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |
 | | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
 | | `merge.go` | 承認されたPull Requestの扱い (I6、I7)、Ownerの承認のあとのmerge (I12)、2つが使うmergeの手順、Ownerのレビューへの対応の依頼 (I13)、checkまたはOwnerの判断を待つ間の衝突の解消の依頼 (I14) |
