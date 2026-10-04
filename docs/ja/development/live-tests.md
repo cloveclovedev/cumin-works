@@ -41,7 +41,7 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run Te
 | `CUMIN_LIVE` | `1` のときだけ実行する。それ以外では skip する |
 | `CUMIN_LIVE_REPO` | sandbox のリポジトリ。`<owner>/<repo>` の形 |
 | `CUMIN_CONFIG` | Host の設定ファイル。省くと `~/.config/cumin/config.toml` |
-| `CUMIN_LIVE_OWNER` | `TestLiveMergeFacts` に要る。sandbox に admin か write の権限を持つ、人の GitHub の login。テストは、この login の権限を cumin-core の App で読む |
+| `CUMIN_LIVE_OWNER` | `TestLiveMergeFacts` と `TestLiveReviewRequestFacts` に要る。sandbox に admin か write の権限を持つ、人の GitHub の login。`TestLiveMergeFacts` は、この login の権限を cumin-core の App で読む。`TestLiveReviewRequestFacts` は、この login にレビューを依頼するので、その人に通知が届く |
 | `CUMIN_LIVE_MENTION` | 任意。GitHub の login。指定すると、`TestLiveGitHubFacts` が、その人を@メンションするコメントを1つ投稿する。通知が届いたかは、その人が目で確かめる |
 
 テストの最後に、結果の表 (番号、確かめたこと、期待、実際の結果) が Markdown で出力される。
@@ -68,6 +68,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | `TestLiveGitHubFacts` | cumin の実装が前提にする GitHub の事実。check run と commit status の読み取り、token の絞り込み、飛ばされた必須のcheckと merge、失敗したcheckについて読める範囲、レビューの `state` と `commit_id`、`Closes #N` で sub-issue が閉じること、GraphQL の項目、`rules/branches`、@メンション、Pull Request へのラベル |
 | `TestLiveCloseReferences` | I2 と merge のあとの Issue の閉じ方が前提にする事実。`Closes #N` の自動のリンクに頼らない。cumin-core の App が `addCloseIssueReferences` で Implementer App の Pull Request を Issue にリンクでき、そのリンクがすぐ `closedByPullRequestsReferences` に現れること。cumin-core の App が Issue を完了として閉じられ、閉じた Issue をもう一度閉じてもエラーにならず、`closed` のイベントが増えないこと。リンクした Pull Request を merge したときに GitHub が Issue を閉じるかは、記録するだけで、合否に使わない |
 | `TestLiveMergeFacts` | merge (I6、I12) が前提にする事実。cumin-core の App で、Owner、Implementer の bot、協力者でない人の権限 (`permission`、`user.type`) を読めること。`sha` が先頭と違う merge は 409 になること。衝突のない Pull Request の `sha` 付きの merge が 200 になること。衝突する Pull Request の merge の返事 (405) と、そのあとの `mergeable` が `false` になること。Agent も利用枠も使わない。main に小さなファイル (`live/<日時>-conflict.md`) が1つ残る |
+| `TestLiveReviewRequestFacts` | Owner へのレビューの依頼 (#305) が前提にする事実。cumin-core の App が、Implementer App の Pull Request で `CUMIN_LIVE_OWNER` のレビューを依頼でき (201)、その login が `requested_reviewers` に現れること。同じ依頼をもう一度送っても失敗せず、login が1つのままであること。協力者でない人への依頼が 422 になること。Agent も利用枠も使わない。Pull Request は閉じ、ブランチは消す |
 | `TestLiveDiagramsBranch` | Planner の App が書き込めるのは `cumin/diagrams` だけであること。Planner の App が `cumin/diagrams` にファイルを足せ、ほかのブランチの作成、既定のブランチの移動、タグの作成、`cumin/diagrams` の force push と削除を拒否されること。cumin-core の App も `cumin/diagrams` を削除できないこと。Implementer の App が今までどおりブランチを作って消せること。`scripts/setup-repo.sh` を `--core-app` と `--implementer-app` 付きで実行してあり、Planner の App の Contents の書き込みがインストールで承認されている必要がある。`cumin/diagrams` に `live/<日時>.svg` が1つ残る |
 | `TestLiveFollowUpFixture` | 場面 Follow-1 の準備だけを行う。`cumin/type/requirement` だけの要求Issue、その sub-issue、それを閉じる Implementer の App の Pull Request を作り、Reviewer の App が `(non-blocking)` の指摘を2つ書き、Implementer の App が1つに `Fixed` で返答する。何も閉じない。Owner が手で merge し、場面の手順で片付ける |
 | `TestLiveE2E` (`cmd/cumin`) | 場面 E2E-1 の全体。launchd で動く cumin に、1つの要求Issueを分割から受け入れの確認まで通させ、Owner の操作を `gh` のログインで代わりに行い、各段階を GitHub の事実と cumin のログで確かめる。利用枠を使い、1時間ほどかかる。下の「実機の場面 E2E-1」に従って実行する |
