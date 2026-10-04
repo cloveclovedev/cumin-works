@@ -74,6 +74,9 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 93 | `POST /repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by` の応答は、依存する側 (パスの `{n}`) のIssueであり、依存先のIssueではない | #9 のsub-issueに blocked by を張ったときに観測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
 | 99 | `GET /repos/{owner}/{repo}/contents/{path}` を installation token で呼ぶには、Contents の read が要る | 公式: Permissions required for GitHub Apps | 公式文書 | 2026-09-22 |
 | 122 | cumin-coreのinstallation tokenで、`GET /repos/{owner}/{repo}/collaborators/{username}/permission` を呼べ、どのアカウントの権限も読める。人のアカウントは `User`、botは `Bot` と分かる。公開リポジトリでは、協力者でない人も `read` と答える | 公式: Get repository permissions for a user (Metadata の読み取り)。#293 の M1 | 公式文書 + 実測 | 2026-10-01 |
+| 138 | cumin-coreのinstallation token (Pull requests の書き込み) で、`POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers` を呼べる。Implementer の App が作ったPull Requestで、admin か write の権限を持つ人の login を `reviewers` に渡すと201を返し、`GET .../pulls/{n}/requested_reviewers` の `users` にその login が1つ現れる。公式文書は、このendpointが通知を起こすとしている | 公式: Request reviewers for a pull request、Permissions required for GitHub Apps ("Pull requests" の書き込み、installation access token を受け付ける)。sandboxで実測 (#510 の V1) | 公式文書 + 実測 | 2026-10-04 |
+| 139 | すでにレビューを依頼してある login に、同じ依頼 (`POST .../pulls/{n}/requested_reviewers`) をもう一度送っても、201を返して失敗しない。`requested_reviewers` の `users` には、その login が1つのまま残る | sandboxで実測 (#510 の V2) | 実測 | 2026-10-04 |
+| 140 | 協力者でないアカウントを `reviewers` に渡した `POST .../pulls/{n}/requested_reviewers` は、422を返す。メッセージは「Reviews may only be requested from collaborators. One or more of the users or teams you specified is not a collaborator of the ... repository.」である。そのアカウントは `requested_reviewers` に現れない | 公式: Request reviewers for a pull request (422)。sandboxで実測 (#510 の V3) | 公式文書 + 実測 | 2026-10-04 |
 
 ## GraphQLとそのポイント
 
