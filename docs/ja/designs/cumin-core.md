@@ -29,7 +29,7 @@
 | 手元の状態 | `~/.local/state/cumin/state.json` | `cumin run` だけ |
 | 使い切りの許可 | `~/.local/state/cumin/quota-allowance.json` | `cumin quota allow` だけ |
 | 止める予約 | `~/.local/state/cumin/stop-request.json` | `cumin stop --after-current-runs` が書き、`cumin run` が消す |
-| 状態の表示 | `~/.local/state/cumin/status.json`。メニューバーのアプリが読む。cuminは読まない ([状態表示のファイルとメニューバーのアプリの設計](status-menu-bar.md)) | `cumin run` だけ |
+| モニターファイル | `~/.local/state/cumin/monitor.json`。cuminを外から見る道具 (メニューバーのアプリ) が読む。cuminは読まない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) | `cumin run` だけ |
 | ログ | `~/.local/state/cumin/cumin.log` (標準出力) と `cumin.err.log` (標準エラー出力) | launchd |
 | LaunchAgent | `~/Library/LaunchAgents/dev.cloveclove.cumin.plist` | `cumin setup launchd` |
 | Agentのskill | `~/.local/state/cumin/skills/.claude/skills/<名前>/SKILL.md`。起動時に毎回上書きする ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」) | `cumin run` だけ |
@@ -38,7 +38,7 @@
 - 手元の状態に入れるのは、要件が認めたものだけである: Issueごとの Agent のセッションの番号と check の修正を依頼した回数、枠ごとの最新の使用率とリセット時刻。使い切りの許可のファイルには、許可した5h枠のリセット時刻だけを入れる。止める予約のファイルには、予約した時刻だけを入れる。
 - 形式はJSONで、先頭に `version` を持つ。書くときは、同じディレクトリの一時ファイルに書いてから rename する。途中で止まっても、壊れたファイルが残らない。
 - 1つのファイルを書くプロセスは1つだけにする。`cumin quota allow` と `cumin status` は `cumin run` とは別のプロセスなので、ファイルを介してやりとりする。書く人を分ければ、ロックが要らない。`cumin run` は、定期確認のたびに許可のファイルを読む。止める予約のファイルだけは、`cumin stop` が書き、`cumin run` が消す。書くのも消すのも1回の操作 (rename と unlink) なので、ここでもロックは要らない。
-- ファイルを失っても、作業は失われない。セッションは新しく始まり、回数は0に戻り、使用率は次の着手の前に読み直す。使い切りの許可は、Ownerがもう一度出す。止める予約は、Ownerがもう一度コマンドを実行する。状態表示のファイルは、`cumin run` が次の定期確認で書き直す。読めないファイルは、ないものとして扱い、警告をログに出す。
+- ファイルを失っても、作業は失われない。セッションは新しく始まり、回数は0に戻り、使用率は次の着手の前に読み直す。使い切りの許可は、Ownerがもう一度出す。止める予約は、Ownerがもう一度コマンドを実行する。モニターファイルは、`cumin run` が次の定期確認で書き直す。読めないファイルは、ないものとして扱い、警告をログに出す。
 - 採らなかった案: データベース。持つものが少なく、失ってもよいためである。
 - ログのファイルは、cuminが開くのではなく、launchdが標準出力と標準エラー出力を向ける先である。cuminは、要件のとおり標準出力にJSONを出すだけで、ターミナルから動かしたときの見え方は変わらない。入れ替え (ローテーション) は行わないので、ファイルは増え続ける。
 
@@ -132,7 +132,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 - 待っている間にSIGTERMを受けたら、上の「止め方」のとおり、すぐに止まる。このときも、予約のファイルを消す。
 - `cumin status` は、予約のファイルがあれば、止まる途中であることと予約した時刻を表示する。待っている実行は、GitHubのラベルから読む一覧 (Agents at work) で示す。ラベルに出ない実行 (受け入れの確認、mergeの手順) は、一覧に載らない。
 - 採らなかった案: シグナル (SIGUSR1) で伝える。ターミナルから動かした `cumin run` に送るには、pidの記録が要る。古いpidに送ると、関係のないプロセスが、SIGUSR1の既定の動作で終わる。
-- `cumin run` が実行中として持つ実行の一覧は、状態表示のファイル (「Hostに置くファイル」) に載る。メニューバーのアプリが読むためのもので、`cumin status` は読まない。
+- `cumin run` が実行中として持つ実行の一覧は、モニターファイル (「Hostに置くファイル」) に載る。メニューバーのアプリが読むためのもので、`cumin status` は読まない。
 
 ### テストの2層
 
