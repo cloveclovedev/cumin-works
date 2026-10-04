@@ -39,7 +39,7 @@ jobs:
   # push of the Implementer cannot hold it even when the Implementer reads
   # this file: the number exists only once the pull request is open. The
   # Implementer learns the line from this failure. The job has no path filter: a
-  # required check that a path filter skips stays pending (row 20 of
+  # required check that a path filter skips stays pending (row 51 of
   # measured-constraints.md).
   live-check-1-required-line:
     name: live-check-1-required-line
