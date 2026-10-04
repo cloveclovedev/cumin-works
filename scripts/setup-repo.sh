@@ -376,6 +376,10 @@ move_status_labels() {
   for old in cumin/status/awaiting-checks cumin/status/awaiting-owner-decision cumin/status/awaiting-owner-review; do
     # The list holds issues and pull requests. sub_issues_summary counts the
     # sub-issues of an issue and the closed ones.
+    # Official: REST "List repository issues" (GET .../issues, 200) returns
+    # the schema "issue", whose sub_issues_summary has the integers total,
+    # completed, and percent_completed (the OpenAPI description of GitHub,
+    # github/rest-api-description, schema "sub-issues-summary").
     gh api --paginate --method GET "repos/$repo/issues" -f state=open -f labels="$old" -f per_page=100 \
       --jq '.[] | [.number, (if .pull_request then "pull-request" else "issue" end), (if ([.labels[].name] | index("cumin/type/requirement")) then "yes" else "no" end), (.sub_issues_summary.total // 0), (.sub_issues_summary.completed // 0)] | @tsv' \
       >"$work/label-holders" </dev/null || die "cannot list the open issues with the label $old"
@@ -411,6 +415,13 @@ move_status_labels() {
     gh api -X POST "repos/$repo/issues/$number/labels" -f "labels[]=$new" >/dev/null </dev/null ||
       die "cannot add the label $new to #$number"
     # A "/" of the label name is a part of the path, so it is encoded.
+    # Official: REST "Remove a label from an issue" (DELETE
+    # .../issues/{n}/labels/{name}) takes the name as a path parameter. The
+    # page does not speak of a "/" in the name.
+    # Measured on 2026-10-04 on cumin-works: GET .../labels/cumin%2Fstatus%2Fready
+    # returns the label cumin/status/ready, and the DELETE with %2F reaches
+    # this endpoint (the answer names its page). The token of the measurement
+    # may not remove a label, so a DELETE that succeeds is not measured.
     gh api -X DELETE "repos/$repo/issues/$number/labels/$(printf '%s' "$old" | sed 's|/|%2F|g')" >/dev/null </dev/null ||
       die "cannot remove the label $old from #$number"
     echo "replaced   #$number: $old -> $new"
