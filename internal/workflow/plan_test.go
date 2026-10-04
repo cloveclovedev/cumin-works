@@ -172,7 +172,7 @@ func TestR1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 
 // assertStoppedForTheOwner checks the stop step of R2 on the requirement
 // issue #6: one comment that holds each of body, the label
-// cumin/status/awaiting-owner-decision, and one notification that holds
+// cumin/status/awaiting-decision, and one notification that holds
 // each of message.
 func assertStoppedForTheOwner(t *testing.T, sc *scene, body, message []string) {
 	t.Helper()
@@ -198,7 +198,7 @@ func assertStoppedWithMessages(t *testing.T, sc *scene, messages, body, message 
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-decision"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
@@ -214,13 +214,13 @@ func assertStoppedWithMessages(t *testing.T, sc *scene, messages, body, message 
 
 // R2 (issue-states.md): after done, the requirement issue has one or more
 // sub-issues, each with exactly one risk label. Then it moves to
-// cumin/status/awaiting-owner-review, and the Owner is notified once.
+// cumin/status/awaiting-plan-review, and the Owner is notified once.
 func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Second", Labels: []string{"risk/high"}})
 	sc.pollAndWait(t, sc.service())
 
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
@@ -318,8 +318,8 @@ func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
-		t.Errorf("labels of #6 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Contains(got, "cumin/status/awaiting-decision") {
+		t.Errorf("labels of #6 = %v, want cumin/status/awaiting-decision", got)
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications, want 1", n)
@@ -396,11 +396,11 @@ func assertPlannerStepIsKept(t *testing.T, sc *scene, service *workflow.Service)
 }
 
 // assertSplitWaitsForTheOwner checks the end of R2 on a pass: the label
-// cumin/status/awaiting-owner-review, one notification, no comment, and no
+// cumin/status/awaiting-plan-review, one notification, no comment, and no
 // issue in work.
 func assertSplitWaitsForTheOwner(t *testing.T, sc *scene, service *workflow.Service) {
 	t.Helper()
-	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}
+	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v after the kept step ran", got, want)
 	}
@@ -484,7 +484,7 @@ func TestR2_ALabelChangeThatAlreadyHappenedIsNotMadeTwice(t *testing.T) {
 		sc.fake.CloseTimes(http.MethodPut, putRequirementLabelsPath, 1)
 	})
 	assertPlannerStepIsKept(t, sc, service)
-	if err := sc.fake.SetLabels(sc.repo, 6, []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}); err != nil {
+	if err := sc.fake.SetLabels(sc.repo, 6, []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}); err != nil {
 		t.Fatal(err)
 	}
 	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
@@ -602,7 +602,7 @@ func TestR2_ALostLabelChangeToImplementingIsNotMadeTwiceAndNotifiesNobody(t *tes
 	}
 }
 
-// Another hand set cumin/status/awaiting-owner-review while the check of
+// Another hand set cumin/status/awaiting-plan-review while the check of
 // the split was kept after a failed read. cumin sent no label change, so it
 // does not trust that label: it leaves the issue and notifies nobody.
 func TestR2_AKeptCheckLeavesALabelThatAnotherHandSet(t *testing.T) {
@@ -612,7 +612,7 @@ func TestR2_AKeptCheckLeavesALabelThatAnotherHandSet(t *testing.T) {
 		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
 	})
 	assertPlannerStepIsKept(t, sc, service)
-	labels := []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}
+	labels := []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}
 	if err := sc.fake.SetLabels(sc.repo, 6, labels); err != nil {
 		t.Fatal(err)
 	}
@@ -646,7 +646,7 @@ func TestR2_TheKeptStopAfterBlockedPostsTheDecisionRequestWhateverTheLabelIs(t *
 		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
 	})
 	assertPlannerStepIsKept(t, sc, service)
-	if err := sc.fake.SetLabels(sc.repo, 6, []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}); err != nil {
+	if err := sc.fake.SetLabels(sc.repo, 6, []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}); err != nil {
 		t.Fatal(err)
 	}
 

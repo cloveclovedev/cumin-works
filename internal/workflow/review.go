@@ -286,10 +286,10 @@ func (s *Service) afterReview(ctx context.Context, log *slog.Logger, target Targ
 	// The issue left cumin/status/reviewing while the step was kept. Only a
 	// label that the last try wrote lets the step go on: its answer was
 	// lost, and what follows the label is still to do. Nothing follows
-	// cumin/status/awaiting-checks, so that write ends the step.
+	// cumin/status/checking, so that write ends the step.
 	lost := try.lost
 	try.lost = ""
-	if try.again && !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelAwaitingChecks || !slices.Contains(sub.Labels, lost)) {
+	if try.again && !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelChecking || !slices.Contains(sub.Labels, lost)) {
 		log.Info("I3: the issue left cumin/status/reviewing while the check of the review was kept; nothing changes", "labels", sub.Labels)
 		return nil, nil
 	}
@@ -363,7 +363,7 @@ func (s *Service) checkReview(ctx context.Context, log *slog.Logger, target Targ
 
 // headMoved handles a head commit that moved while the Reviewer worked, for
 // example when the Owner pushed. Only the old head passed the required
-// checks, so the issue goes back to cumin/status/awaiting-checks: the checks
+// checks, so the issue goes back to cumin/status/checking: the checks
 // run on the new head, and I3 (or I4) decides again. A review that the
 // Reviewer gave on the old head stays on GitHub and counts as it is. It
 // returns a temporary failure, for the kept step.
@@ -373,7 +373,7 @@ func (s *Service) headMoved(ctx context.Context, log *slog.Logger, target Target
 		log.Error("I3: no token; the issue keeps its label", "error", err.Error())
 		return temporary(err)
 	}
-	labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingChecks, try)
+	labels, err := s.replaceStatus(ctx, token, target, sub, LabelChecking, try)
 	if err != nil {
 		log.Error("I3: the label was not changed", "error", err.Error())
 		return temporary(err)
@@ -438,7 +438,7 @@ func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, t
 // session that holds the rounds. cumin then looks for a comment of the
 // Reviewer that starts with the heading of a decision request and is not
 // older than the last review; with it, the issue goes to
-// cumin/status/awaiting-owner-decision and the Owner gets one notification
+// cumin/status/awaiting-decision and the Owner gets one notification
 // that links the comment. The Reviewer wrote the reason, so cumin writes
 // no comment of its own.
 //
@@ -531,7 +531,7 @@ func (s *Service) handOverExplanation(ctx context.Context, log *slog.Logger, tar
 		})
 		return
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerDecision)
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
 		// The notification still goes: the Owner must learn that the
 		// review did not end, as in the stop step.

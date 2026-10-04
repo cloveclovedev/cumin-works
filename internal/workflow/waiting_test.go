@@ -217,7 +217,7 @@ func TestQ4_OnlyWaitsForTheOwnerNotifyOnce(t *testing.T) {
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Add the logout screen",
 		Labels: []string{"cumin/status/implementing", "risk/low"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 12, Parent: 6, Title: "Add the profile screen",
-		Labels: []string{"cumin/status/awaiting-owner-decision", "risk/low"}})
+		Labels: []string{"cumin/status/awaiting-decision", "risk/low"}})
 	service := sc.service()
 	for range 3 {
 		sc.pollAndWait(t, service)

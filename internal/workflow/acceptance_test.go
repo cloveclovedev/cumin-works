@@ -37,7 +37,7 @@ func acceptanceComment(sc *scene, at time.Time, author string) {
 // Core-7 (cumin-core.md): when every sub-issue closes, the Planner is asked
 // for the acceptance check once, across polls and a restart; the label stays
 // cumin/status/implementing until the comment exists. Then R7 moves it to
-// cumin/status/awaiting-owner-review with one notification, although the
+// cumin/status/awaiting-acceptance with one notification, although the
 // table holds a Fail.
 func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.T) {
 	sc, closedAt := newAcceptanceScene(t, "planner-done.jsonl")
@@ -64,7 +64,7 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want still 1", n)
 	}
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"}
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
@@ -128,7 +128,7 @@ func TestR4_BlockedStopsForTheOwner(t *testing.T) {
 	if len(comments) != 1 || comments[0].Body != question {
 		t.Fatalf("the comments of #6 = %+v, want one with the blocked reason", comments)
 	}
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-decision"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}

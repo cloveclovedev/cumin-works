@@ -15,10 +15,10 @@ func TestReadLabelTimes_TheNewestEventOfEachLabel(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
-	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", "cumin/status/awaiting-owner-review"}, LabelEvents: []githubtest.LabelEvent{
-		{Label: "cumin/status/awaiting-owner-review", At: t0},
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", "cumin/status/awaiting-plan-review"}, LabelEvents: []githubtest.LabelEvent{
+		{Label: "cumin/status/awaiting-plan-review", At: t0},
 		{Label: "cumin/status/implementing", At: t0.Add(time.Hour)},
-		{Label: "cumin/status/awaiting-owner-review", At: t0.Add(2 * time.Hour)},
+		{Label: "cumin/status/awaiting-plan-review", At: t0.Add(2 * time.Hour)},
 	}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/ready"}, LabelEvents: []githubtest.LabelEvent{
 		{Label: "cumin/status/ready", At: t0.Add(3 * time.Hour)},
@@ -30,8 +30,8 @@ func TestReadLabelTimes_TheNewestEventOfEachLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadLabelTimes: %v", err)
 	}
-	if got, want := times[6]["cumin/status/awaiting-owner-review"], t0.Add(2*time.Hour); !got.Equal(want) {
-		t.Errorf("awaiting-owner-review of #6 at %v, want %v", got, want)
+	if got, want := times[6]["cumin/status/awaiting-plan-review"], t0.Add(2*time.Hour); !got.Equal(want) {
+		t.Errorf("awaiting-plan-review of #6 at %v, want %v", got, want)
 	}
 	if got, want := times[10]["cumin/status/ready"], t0.Add(3*time.Hour); !got.Equal(want) {
 		t.Errorf("ready of #10 at %v, want %v", got, want)

@@ -3,7 +3,7 @@ package workflow
 // This file holds the one place that stops an issue for the Owner. Every
 // row of issue-states.md that hands work back uses it with its own row
 // number: post one comment on the issue, replace the status label with
-// cumin/status/awaiting-owner-decision, then notify the Owner. I2, I4, and
+// cumin/status/awaiting-decision, then notify the Owner. I2, I4, and
 // R2, I3, I5, I8, I10, and I15 use it today.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
@@ -123,7 +123,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 		case len(st.labels) == 0:
 			log.Error(st.row + ": the labels of the issue were not read; the label was not changed")
 		default:
-			labels := ReplaceStatusLabel(st.labels, LabelAwaitingOwnerDecision)
+			labels := ReplaceStatusLabel(st.labels, LabelAwaitingDecision)
 			if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
 				log.Error(st.row+": the label was not changed", "error", err.Error())
 			} else {

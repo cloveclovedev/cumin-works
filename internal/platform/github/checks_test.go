@@ -101,7 +101,7 @@ func TestReadSnapshot_ReadsTheBranchTheLabelsAndTheChecksOfAPullRequest(t *testi
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
-	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/awaiting-checks", "risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/checking", "risk/low"}})
 	fake.AddPullRequest(repo, &githubtest.PullRequest{
 		Number:     21,
 		HeadCommit: "2222222222222222222222222222222222222222",

@@ -31,8 +31,10 @@ const (
 	LabelAwaitingOwnerReview   = "cumin/status/awaiting-owner-review"
 	LabelAwaitingOwnerDecision = "cumin/status/awaiting-owner-decision"
 	// The seven labels below are the new names of the states
-	// (issue-states.md, the move of the labels). cumin creates them, and
-	// does not read or write them yet.
+	// (issue-states.md, the move of the labels). cumin reads and writes
+	// them, except cumin/status/accepting and cumin/status/merging, which
+	// it only creates. The three old names above stay in RepositoryLabels
+	// until the last step of the move.
 	LabelChecking              = "cumin/status/checking"
 	LabelAccepting             = "cumin/status/accepting"
 	LabelMerging               = "cumin/status/merging"
@@ -60,18 +62,18 @@ type Snapshot struct {
 	// check (R4) keeps the label of the requirement issue, so only this
 	// shows that its Planner runs. A kept step whose label change reached
 	// GitHub without an answer leaves the issue in
-	// cumin/status/awaiting-checks, so the rules of that label skip a
+	// cumin/status/checking, so the rules of that label skip a
 	// running issue.
 	Running map[int]bool
 }
 
-// HasIssueAwaitingChecks reports whether an open sub-issue waits for the
+// HasIssueChecking reports whether an open sub-issue waits for the
 // required checks. The poll reads the required checks only then, because
 // that read is a REST call of its own.
-func (s Snapshot) HasIssueAwaitingChecks() bool {
+func (s Snapshot) HasIssueChecking() bool {
 	for _, requirement := range s.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if !sub.Closed && slices.Contains(sub.Labels, LabelAwaitingChecks) {
+			if !sub.Closed && slices.Contains(sub.Labels, LabelChecking) {
 				return true
 			}
 		}
@@ -114,7 +116,7 @@ func (s Snapshot) WithPullRequests(pullRequests map[int][]PullRequest) Snapshot 
 // HasIssueInWork reports whether an issue of the repository is in work:
 // an open requirement issue with cumin/status/ready or
 // cumin/status/planning, or an open sub-issue with cumin/status/ready,
-// cumin/status/implementing, cumin/status/awaiting-checks, or
+// cumin/status/implementing, cumin/status/checking, or
 // cumin/status/reviewing. An issue that waits for the Owner is not in work.
 func (s Snapshot) HasIssueInWork() bool {
 	for _, requirement := range s.RequirementIssues {
@@ -125,7 +127,7 @@ func (s Snapshot) HasIssueInWork() bool {
 			if sub.Closed {
 				continue
 			}
-			for _, label := range []string{LabelReady, LabelImplementing, LabelAwaitingChecks, LabelReviewing} {
+			for _, label := range []string{LabelReady, LabelImplementing, LabelChecking, LabelReviewing} {
 				if slices.Contains(sub.Labels, label) {
 					return true
 				}
@@ -179,11 +181,13 @@ type RequirementIssue struct {
 	// BlockedBy are the issues that block the requirement issue. The Owner
 	// links requirement issues to each other, and R1 waits for them.
 	BlockedBy []BlockedBy
-	// LabelTimesRead says that ReviewAt and the ReadyAt, AwaitingChecksAt,
-	// and AwaitingOwnerReviewAt of the sub-issues were read. The poll reads them
+	// LabelTimesRead says that ReviewAt and the ReadyAt, CheckingAt,
+	// and AwaitingMergeDecisionAt of the sub-issues were read. The poll reads them
 	// only when a rule needs them (NeedsLabelTimes).
 	LabelTimesRead bool
-	// ReviewAt is when cumin/status/awaiting-owner-review was last added.
+	// ReviewAt is when the status label of the issue was last added. R3
+	// reads it in cumin/status/awaiting-plan-review and in
+	// cumin/status/awaiting-acceptance.
 	ReviewAt time.Time
 	// CommentsRead says that AcceptanceCheckAt was read. The poll reads
 	// the comments only when R4 or R7 needs them (NeedsComments).
@@ -223,13 +227,13 @@ type SubIssue struct {
 	// ReadyAt is when cumin/status/ready was last added. It is read only
 	// when RequirementIssue.LabelTimesRead is true.
 	ReadyAt time.Time
-	// AwaitingChecksAt is when cumin/status/awaiting-checks was last added.
+	// CheckingAt is when cumin/status/checking was last added.
 	// It is read only when RequirementIssue.LabelTimesRead is true.
-	AwaitingChecksAt time.Time
-	// AwaitingOwnerReviewAt is when cumin/status/awaiting-owner-review was
+	CheckingAt time.Time
+	// AwaitingMergeDecisionAt is when cumin/status/awaiting-merge-decision was
 	// last added. It is read only when RequirementIssue.LabelTimesRead is
 	// true.
-	AwaitingOwnerReviewAt time.Time
+	AwaitingMergeDecisionAt time.Time
 	// ClosedAt is when a closed sub-issue closed.
 	ClosedAt time.Time
 	// ReadyRead says that ReadyOwner was read. The poll reads it only for
@@ -436,7 +440,7 @@ type StartRequirement struct {
 
 // ReviewRemaining is the action of R6: every open sub-issue has no status
 // label, so the requirement issue moves to
-// cumin/status/awaiting-owner-review and the Owner is told that the
+// cumin/status/awaiting-plan-review and the Owner is told that the
 // remaining sub-issues need a look.
 type ReviewRemaining struct {
 	Number int
@@ -449,14 +453,14 @@ type CheckAcceptance struct {
 }
 
 // Accept is the action of R7: the acceptance check comment exists, so the
-// requirement issue moves to cumin/status/awaiting-owner-review and the
+// requirement issue moves to cumin/status/awaiting-acceptance and the
 // Owner is told that it can be accepted.
 type Accept struct {
 	Number int
 }
 
 // MergeOwnerApproval is the candidate of I12: an implementation issue in
-// cumin/status/awaiting-owner-review whose pull request has an APPROVED
+// cumin/status/awaiting-merge-decision whose pull request has an APPROVED
 // review of a person on its head commit. Reviewers are the people whose
 // reviews decide (APPROVED or CHANGES_REQUESTED); the caller reads their
 // permission, and only then knows which of them is an Owner
@@ -468,7 +472,7 @@ type MergeOwnerApproval struct {
 }
 
 // FixOwnerReview is the candidate of I13: an implementation issue in
-// cumin/status/awaiting-owner-review whose pull request has a
+// cumin/status/awaiting-merge-decision whose pull request has a
 // CHANGES_REQUESTED review of a person on its head commit, submitted after
 // that label was last added. Reviewers are the people whose reviews decide,
 // as for MergeOwnerApproval; the caller reads their permission, and only
@@ -502,14 +506,14 @@ func (FixOwnerReview) isAction()          {}
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
 // of one repository that can be in cumin/status/planning, implementing,
-// awaiting-checks, or reviewing at the same time (cumin-core.md, the
+// checking, or reviewing at the same time (cumin-core.md, the
 // settings table). required are the checks that the rules of the default
 // branch require; the caller reads them only when an issue of the
 // repository waits for the checks. now is the time of the poll, and
 // checksWait is the setting "checks_wait_time"; I15 reads both.
 //
 // I14, I3, I4, and I15 come before the starts of R1 and I1: an issue that
-// leaves cumin/status/awaiting-checks keeps its place in the limit, so
+// leaves cumin/status/checking keeps its place in the limit, so
 // deciding it first never takes room from a start. I14 (the pull request
 // conflicts) comes before I3 and I4 for its issue, and I15 (the required
 // checks did not report in time) comes after them: only the first row that
@@ -525,7 +529,7 @@ func (FixOwnerReview) isAction()          {}
 // R3 and R6 move a requirement issue and start no agent, so they come
 // first and take no room.
 //
-// I14 also holds for an issue in cumin/status/awaiting-owner-review. Those
+// I14 also holds for an issue in cumin/status/awaiting-merge-decision. Those
 // actions come after the candidates of I12 and of I13: a review of an Owner
 // on the conflicting head decides first, and the caller drops the conflict
 // resolution of an issue that I12 or I13 moved at this poll.
@@ -608,8 +612,9 @@ func requirementMoves(snapshot Snapshot) []Action {
 
 // startsImplementing is R3. Without a status label, an open sub-issue with
 // cumin/status/ready is enough: the Owner wrote the sub-issues without the
-// Planner. In cumin/status/awaiting-owner-review, cumin/status/ready must
-// have been added after that label. A sub-issue that kept its
+// Planner. In cumin/status/awaiting-plan-review and in
+// cumin/status/awaiting-acceptance, cumin/status/ready must have been added
+// after that label. A sub-issue that kept its
 // cumin/status/ready from an earlier split must not move the requirement
 // issue before the Owner looked at the new sub-issues (issue-states.md, the
 // text below the table).
@@ -617,7 +622,7 @@ func startsImplementing(requirement RequirementIssue) bool {
 	switch statusLabel(requirement.Labels) {
 	case "":
 		return slices.ContainsFunc(requirement.SubIssues, openReady)
-	case LabelAwaitingOwnerReview:
+	case LabelAwaitingPlanReview, LabelAwaitingAcceptance:
 		if !requirement.LabelTimesRead {
 			return false
 		}
@@ -821,34 +826,36 @@ func readyOfAnother(read bool, owner string) bool { return read && owner == "" }
 
 // NeedsLabelTimes reports whether a rule needs the label times of the
 // requirement issue: R3 needs them (startNeedsLabelTimes), an open
-// sub-issue waits in cumin/status/awaiting-checks, whose wait is counted
+// sub-issue waits in cumin/status/checking, whose wait is counted
 // from the time of that label, or an open sub-issue in
-// cumin/status/awaiting-owner-review has a request for changes of a person
+// cumin/status/awaiting-merge-decision has a request for changes of a person
 // on its head commit, which I13 compares with the time of that label. Only
 // then does the poll read the times, so that the poll query keeps its cost.
 func NeedsLabelTimes(requirement RequirementIssue) bool {
 	return startNeedsLabelTimes(requirement) ||
-		slices.ContainsFunc(requirement.SubIssues, openAwaitingChecks) ||
+		slices.ContainsFunc(requirement.SubIssues, openChecking) ||
 		slices.ContainsFunc(requirement.SubIssues, openWithChangeRequest)
 }
 
 // startNeedsLabelTimes reports whether R3 needs the label times of the
-// requirement issue: it waits in cumin/status/awaiting-owner-review, and an
-// open sub-issue carries cumin/status/ready.
+// requirement issue: it waits in cumin/status/awaiting-plan-review or in
+// cumin/status/awaiting-acceptance, and an open sub-issue carries
+// cumin/status/ready.
 func startNeedsLabelTimes(requirement RequirementIssue) bool {
-	return statusLabel(requirement.Labels) == LabelAwaitingOwnerReview &&
+	status := statusLabel(requirement.Labels)
+	return (status == LabelAwaitingPlanReview || status == LabelAwaitingAcceptance) &&
 		slices.ContainsFunc(requirement.SubIssues, openReady)
 }
 
-func openAwaitingChecks(sub SubIssue) bool {
-	return !sub.Closed && slices.Contains(sub.Labels, LabelAwaitingChecks)
+func openChecking(sub SubIssue) bool {
+	return !sub.Closed && slices.Contains(sub.Labels, LabelChecking)
 }
 
 // openWithChangeRequest reports whether an open sub-issue in
-// cumin/status/awaiting-owner-review has a CHANGES_REQUESTED review of a
+// cumin/status/awaiting-merge-decision has a CHANGES_REQUESTED review of a
 // person on the head commit of its pull request.
 func openWithChangeRequest(sub SubIssue) bool {
-	if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingOwnerReview) {
+	if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingMergeDecision) {
 		return false
 	}
 	pr, ok := sub.LatestPullRequest()
@@ -939,13 +946,13 @@ func labelCopies(snapshot Snapshot) []Action {
 }
 
 // conflictingSubIssues returns the actions of I14 for the issues that wait
-// for the checks: open sub-issues in cumin/status/awaiting-checks whose
+// for the checks: open sub-issues in cumin/status/checking whose
 // open pull request GitHub reports as CONFLICTING, lowest issue number
 // first. UNKNOWN says that GitHub is still calculating, so it gives no
 // action: a later poll decides. A running issue gives no action.
 func conflictingSubIssues(snapshot Snapshot) []Action {
 	var actions []Action
-	for _, action := range conflictsUnder(snapshot, LabelAwaitingChecks) {
+	for _, action := range conflictsUnder(snapshot, LabelChecking) {
 		if !snapshot.Running[action.(ResolveConflict).Number] {
 			actions = append(actions, action)
 		}
@@ -954,7 +961,7 @@ func conflictingSubIssues(snapshot Snapshot) []Action {
 }
 
 // conflictingOwnerReviews returns the actions of I14 for the issues that
-// wait for the Owner: open sub-issues in cumin/status/awaiting-owner-review,
+// wait for the Owner: open sub-issues in cumin/status/awaiting-merge-decision,
 // not running now, whose open pull request GitHub reports as CONFLICTING,
 // lowest issue number first. The Owner then approves only a head that can
 // merge. An issue that also has cumin/status/ready is left to I1, as for
@@ -962,7 +969,7 @@ func conflictingSubIssues(snapshot Snapshot) []Action {
 // gives no action.
 func conflictingOwnerReviews(snapshot Snapshot) []Action {
 	var actions []Action
-	for _, action := range conflictsUnder(snapshot, LabelAwaitingOwnerReview) {
+	for _, action := range conflictsUnder(snapshot, LabelAwaitingMergeDecision) {
 		sub, _ := snapshot.SubIssue(action.(ResolveConflict).Number)
 		if snapshot.Running[sub.Number] || slices.Contains(sub.Labels, LabelReady) {
 			continue
@@ -996,7 +1003,7 @@ func conflictsUnder(snapshot Snapshot, status string) []Action {
 }
 
 // reviewableSubIssues returns the actions of I3: open sub-issues in
-// cumin/status/awaiting-checks whose open pull request has every required
+// cumin/status/checking whose open pull request has every required
 // check passed on its head commit. A pull request that conflicts belongs
 // to I14. A running issue gives no action: its agent runs, or its step
 // after the run is kept, and one issue has one agent.
@@ -1004,7 +1011,7 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || snapshot.Running[sub.Number] {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelChecking) || snapshot.Running[sub.Number] {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
@@ -1024,14 +1031,14 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 }
 
 // failedSubIssues returns the actions of I4: open sub-issues in
-// cumin/status/awaiting-checks whose open pull request has a failed
+// cumin/status/checking whose open pull request has a failed
 // required check on its head commit, lowest issue number first. A pull
 // request that conflicts belongs to I14. A running issue gives no action.
 func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || snapshot.Running[sub.Number] {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelChecking) || snapshot.Running[sub.Number] {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
@@ -1048,7 +1055,7 @@ func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 }
 
 // unreportedSubIssues returns the actions of I15: open sub-issues in
-// cumin/status/awaiting-checks whose open pull request has a required check
+// cumin/status/checking whose open pull request has a required check
 // that has not reported on its head commit after the wait time, lowest
 // issue number first. A pull request that conflicts belongs to I14, and a
 // failed required check belongs to I4. A sub-issue whose label time or
@@ -1060,12 +1067,12 @@ func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.T
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingChecks) || sub.AwaitingChecksAt.IsZero() || snapshot.Running[sub.Number] {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelChecking) || sub.CheckingAt.IsZero() || snapshot.Running[sub.Number] {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
 			if !ok {
-				if waited := now.Sub(sub.AwaitingChecksAt); waited >= checksWait {
+				if waited := now.Sub(sub.CheckingAt); waited >= checksWait {
 					actions = append(actions, StopForUnreportedChecks{Number: sub.Number, Waited: waited})
 				}
 				continue
@@ -1076,7 +1083,7 @@ func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.T
 			if pr.HeadCommittedAt.IsZero() {
 				continue
 			}
-			waited := now.Sub(ChecksWaitStart(sub.AwaitingChecksAt, pr.HeadCommittedAt))
+			waited := now.Sub(ChecksWaitStart(sub.CheckingAt, pr.HeadCommittedAt))
 			if waited < checksWait {
 				continue
 			}
@@ -1093,7 +1100,7 @@ func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.T
 }
 
 // ChecksWaitStart returns the start of the wait time of I15: the later one
-// of the time that the issue entered cumin/status/awaiting-checks and the
+// of the time that the issue entered cumin/status/checking and the
 // commit time of the head commit. A push while the issue waits gives a
 // newer head commit, so the wait starts again.
 func ChecksWaitStart(awaitingChecksAt, headCommittedAt time.Time) time.Time {
@@ -1110,7 +1117,7 @@ func ChecksWaitStart(awaitingChecksAt, headCommittedAt time.Time) time.Time {
 func CheckFixAllowed(count, limit int) bool { return count < limit }
 
 // LabelsAfterCheckFix returns the labels of a sub-issue after I4:
-// cumin/status/implementing in place of cumin/status/awaiting-checks.
+// cumin/status/implementing in place of cumin/status/checking.
 func LabelsAfterCheckFix(labels []string) []string {
 	return ReplaceStatusLabel(labels, LabelImplementing)
 }
@@ -1147,7 +1154,7 @@ func sameLabels(a, b []string) bool {
 }
 
 // inProgress counts the issues that fill the limit: open sub-issues in
-// implementing, awaiting-checks, or reviewing, and requirement issues in
+// implementing, checking, or reviewing, and requirement issues in
 // planning. A requirement issue in implementing (R3) has no agent of its
 // own, so it does not count.
 func inProgress(snapshot Snapshot) int {
@@ -1162,7 +1169,7 @@ func inProgress(snapshot Snapshot) int {
 			if sub.Closed {
 				continue
 			}
-			for _, label := range []string{LabelImplementing, LabelAwaitingChecks, LabelReviewing} {
+			for _, label := range []string{LabelImplementing, LabelChecking, LabelReviewing} {
 				if slices.Contains(sub.Labels, label) {
 					n++
 					break
@@ -1222,7 +1229,7 @@ func subIssueCandidates(snapshot Snapshot) []Claim {
 // and an issue whose agent no longer runs do not count. A ready that was
 // not read counts: the poll reads it when a slot is free.
 func (s Snapshot) MovesWithoutOwner() bool {
-	if s.HasIssueAwaitingChecks() {
+	if s.HasIssueChecking() {
 		return true
 	}
 	for _, plan := range requirementCandidates(s) {
@@ -1377,7 +1384,7 @@ func checkState(check RequiredCheck, results []CheckResult) ChecksState {
 }
 
 // LabelsAfterReview returns the labels of a sub-issue after I3:
-// cumin/status/reviewing in place of cumin/status/awaiting-checks.
+// cumin/status/reviewing in place of cumin/status/checking.
 func LabelsAfterReview(labels []string) []string {
 	return ReplaceStatusLabel(labels, LabelReviewing)
 }
@@ -1544,14 +1551,14 @@ func VerifySplit(requirement RequirementIssue) SplitVerification {
 
 // SplitStatus returns the status label of a requirement issue after R2
 // passed. With one or more open sub-issues, the Owner reviews the split:
-// cumin/status/awaiting-owner-review. With every sub-issue closed, the
+// cumin/status/awaiting-plan-review. With every sub-issue closed, the
 // Planner created none, as when the Owner resumes a requirement issue after
 // a blocked acceptance check: cumin/status/implementing, so that R4 asks for
 // the acceptance check again (issue-states.md, R2).
 func SplitStatus(requirement RequirementIssue) string {
 	for _, sub := range requirement.SubIssues {
 		if !sub.Closed {
-			return LabelAwaitingOwnerReview
+			return LabelAwaitingPlanReview
 		}
 	}
 	return LabelImplementing
@@ -1863,7 +1870,7 @@ func decides(state ReviewState) bool {
 }
 
 // ownerApprovals returns the candidates of I12, lowest issue number first:
-// open sub-issues in cumin/status/awaiting-owner-review, not running now,
+// open sub-issues in cumin/status/awaiting-merge-decision, not running now,
 // whose open pull request has an APPROVED review of a person on its head
 // commit. The candidate names every person whose review decides, because
 // the latest review of any Owner among them counts.
@@ -1879,7 +1886,7 @@ func ownerApprovals(snapshot Snapshot) []Action {
 // first: as ownerApprovals, with a CHANGES_REQUESTED review of a person on
 // the head commit. An issue that also has cumin/status/ready is not a
 // candidate: the Owner asked for a new start, and I1 takes it. The review
-// is newer than the last cumin/status/awaiting-owner-review of the issue
+// is newer than the last cumin/status/awaiting-merge-decision of the issue
 // (newChangeRequest), so that one review sends the pull request back once.
 func ownerChangeRequests(snapshot Snapshot) []Action {
 	var actions []Action
@@ -1895,7 +1902,7 @@ func ownerChangeRequests(snapshot Snapshot) []Action {
 
 // newChangeRequest reports whether the pull request of the sub-issue has a
 // CHANGES_REQUESTED review of a person on its head commit that was
-// submitted after cumin/status/awaiting-owner-review was last added to the
+// submitted after cumin/status/awaiting-merge-decision was last added to the
 // issue. While the label times are not read, or hold no time of that label,
 // the answer is no: I13 sends nothing back without the time.
 func newChangeRequest(snapshot Snapshot, sub SubIssue) bool {
@@ -1904,9 +1911,9 @@ func newChangeRequest(snapshot Snapshot, sub SubIssue) bool {
 			slices.ContainsFunc(requirement.SubIssues, func(s SubIssue) bool { return s.Number == sub.Number })
 	})
 	pr, ok := sub.LatestPullRequest()
-	return read && ok && !sub.AwaitingOwnerReviewAt.IsZero() && slices.ContainsFunc(pr.Reviews, func(review Review) bool {
+	return read && ok && !sub.AwaitingMergeDecisionAt.IsZero() && slices.ContainsFunc(pr.Reviews, func(review Review) bool {
 		return !isBot(review.Author) && review.State == ReviewChangesRequested &&
-			review.Commit == pr.HeadCommit && review.SubmittedAt.After(sub.AwaitingOwnerReviewAt)
+			review.Commit == pr.HeadCommit && review.SubmittedAt.After(sub.AwaitingMergeDecisionAt)
 	})
 }
 
@@ -1928,14 +1935,14 @@ func DecidingReviewers(reviews []Review) []string {
 }
 
 // ownerReviewCandidates returns, lowest issue number first, the open
-// sub-issues in cumin/status/awaiting-owner-review, not running now, whose
+// sub-issues in cumin/status/awaiting-merge-decision, not running now, whose
 // open pull request has a review of a person with the state on its head
 // commit. Each one names every person whose review decides.
 func ownerReviewCandidates(snapshot Snapshot, state ReviewState) []FixOwnerReview {
 	var candidates []FixOwnerReview
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
-			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingOwnerReview) || snapshot.Running[sub.Number] {
+			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingMergeDecision) || snapshot.Running[sub.Number] {
 				continue
 			}
 			pr, ok := sub.LatestPullRequest()
@@ -1968,7 +1975,7 @@ func OwnerApproved(reviews []Review, head string, owners map[string]bool) bool {
 // OwnerRequestedChanges applies the check of I13: of the reviews of the
 // Owners (owners holds their logins), the latest one that decides is
 // CHANGES_REQUESTED on the head commit, submitted after awaitingOwnerAt:
-// the time that cumin/status/awaiting-owner-review was last added to the
+// the time that cumin/status/awaiting-merge-decision was last added to the
 // issue. It returns that review, whose address the request names. A request
 // for changes on an older commit does not count, and a later APPROVED of an
 // Owner takes it back. A comment-only review decides nothing, and a review

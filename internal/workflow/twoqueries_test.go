@@ -23,12 +23,12 @@ func TestSubIssuesWithPullRequestRules_SelectsTheOpenSubIssuesWithAStatusLabel(t
 		{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{
 			{Number: 10, Labels: []string{LabelReady, "risk/low"}},
 			{Number: 11, Labels: []string{"risk/low"}},
-			{Number: 12, Closed: true, Labels: []string{LabelAwaitingChecks}},
-			{Number: 13, Labels: []string{LabelAwaitingOwnerDecision}},
+			{Number: 12, Closed: true, Labels: []string{LabelChecking}},
+			{Number: 13, Labels: []string{LabelAwaitingDecision}},
 		}},
 		// A requirement issue with no status label still has its sub-issues read.
 		{Number: 7, Labels: []string{LabelRequirement}, SubIssues: []SubIssue{
-			{Number: 14, Labels: []string{LabelAwaitingOwnerReview}},
+			{Number: 14, Labels: []string{LabelAwaitingMergeDecision}},
 			{Number: 15},
 		}},
 	}}
@@ -96,7 +96,7 @@ func TestReadSnapshot_SendsTheSecondQueryOnlyForSelectedSubIssues(t *testing.T) 
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", LabelImplementing}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"risk/low"}})
-	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Parent: 6, Closed: true, Labels: []string{LabelAwaitingChecks, "risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Parent: 6, Closed: true, Labels: []string{LabelChecking, "risk/low"}})
 	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 20, Closes: []int{10}})
 	service := &Service{GitHub: github.NewAppClient(server.URL, server.Client())}
 
@@ -163,17 +163,17 @@ func TestDecide_EachRuleThatReadsAPullRequestDecidesOnTheSnapshotOfTheTwoQueries
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", LabelImplementing}})
 	issue(10, nil, LabelReady, "risk/low")
 	pull(10, githubtest.PullRequest{HeadBranch: "cumin/10-x"})
-	issue(11, nil, LabelAwaitingChecks, "risk/low")
+	issue(11, nil, LabelChecking, "risk/low")
 	pull(11, githubtest.PullRequest{Checks: []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}}})
-	issue(12, nil, LabelAwaitingChecks, "risk/low")
+	issue(12, nil, LabelChecking, "risk/low")
 	pull(12, githubtest.PullRequest{Checks: []githubtest.Check{{Name: "ci", Conclusion: "FAILURE"}}})
-	issue(13, nil, LabelAwaitingChecks, "risk/low")
+	issue(13, nil, LabelChecking, "risk/low")
 	pull(13, githubtest.PullRequest{Conflict: true})
-	issue(14, []githubtest.LabelEvent{{Label: LabelAwaitingChecks, At: t0}}, LabelAwaitingChecks, "risk/low")
+	issue(14, []githubtest.LabelEvent{{Label: LabelChecking, At: t0}}, LabelChecking, "risk/low")
 	pull(14, githubtest.PullRequest{HeadCommittedAt: t0})
-	issue(15, []githubtest.LabelEvent{{Label: LabelAwaitingOwnerReview, At: t0}}, LabelAwaitingOwnerReview, "risk/medium")
+	issue(15, []githubtest.LabelEvent{{Label: LabelAwaitingMergeDecision, At: t0}}, LabelAwaitingMergeDecision, "risk/medium")
 	pull(15, githubtest.PullRequest{Reviews: []githubtest.Review{{Author: "example-owner", State: "APPROVED", Commit: head(15), SubmittedAt: t0.Add(time.Minute)}}})
-	issue(16, []githubtest.LabelEvent{{Label: LabelAwaitingOwnerReview, At: t0}}, LabelAwaitingOwnerReview, "risk/medium")
+	issue(16, []githubtest.LabelEvent{{Label: LabelAwaitingMergeDecision, At: t0}}, LabelAwaitingMergeDecision, "risk/medium")
 	pull(16, githubtest.PullRequest{Reviews: []githubtest.Review{{Author: "example-owner", State: "CHANGES_REQUESTED", Commit: head(16), SubmittedAt: t0.Add(time.Minute)}}})
 	issue(17, nil, LabelReviewing, "risk/low")
 	pull(17, githubtest.PullRequest{Labels: []string{LabelImplementing, "risk/low"}})

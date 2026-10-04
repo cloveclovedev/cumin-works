@@ -98,12 +98,12 @@ func TestStopAfterRuns_LetsTheRunEndAppliesItsNextStateAndStartsNothingNew(t *te
 
 	// The end of the run was verified (verify done), and the last poll gave
 	// the pull request the labels of the issue.
-	want := []string{"risk/low", workflow.LabelAwaitingChecks}
+	want := []string{"risk/low", workflow.LabelChecking}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #10 = %v, want %v", got, want)
 	}
-	if got := sc.fake.PullRequestLabels(sc.repo, 21); !slices.Contains(got, workflow.LabelAwaitingChecks) {
-		t.Errorf("labels of the pull request = %v, want cumin/status/awaiting-checks copied from the issue", got)
+	if got := sc.fake.PullRequestLabels(sc.repo, 21); !slices.Contains(got, workflow.LabelChecking) {
+		t.Errorf("labels of the pull request = %v, want cumin/status/checking copied from the issue", got)
 	}
 	// No required check: without the stop request, the review would start at once.
 	if n := sc.agentRuns(t); n != 1 {

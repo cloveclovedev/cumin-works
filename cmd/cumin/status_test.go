@@ -41,8 +41,11 @@ func readFake(t *testing.T) readRepository {
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/planning"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 7, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 7, Title: "a", Labels: []string{"cumin/status/reviewing", "risk/low"}})
-	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Parent: 7, Title: "b", Labels: []string{"cumin/status/awaiting-owner-decision", "risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Parent: 7, Title: "b", Labels: []string{"cumin/status/awaiting-decision", "risk/low"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 12, Parent: 7, Title: "c", Labels: []string{"cumin/status/ready", "risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 13, Parent: 7, Title: "d", Labels: []string{"cumin/status/awaiting-merge-decision", "risk/medium"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 8, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 9, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"}})
 	client := github.NewAppClient(server.URL, server.Client())
 	return func(ctx context.Context, r config.Repository) (github.RepositorySnapshot, error) {
 		return client.ReadSnapshot(ctx, githubtest.Token, r.Owner, r.Name)
@@ -74,7 +77,11 @@ func TestStatusShowsTheWorkTheWaitingIssuesAndTheQuota(t *testing.T) {
 		"weekly window: 20.0% used, pace limit 85.0%",
 		"new starts: stopped by the 5h window, next try at " + stamp(at.Add(2*time.Hour), statusZone),
 		"Agents at work (from the labels on GitHub):\n  example-org/example-repo #6 cumin/status/planning\n  example-org/example-repo #10 cumin/status/reviewing\n",
-		"Waiting for the Owner:\n  example-org/example-repo #11 cumin/status/awaiting-owner-decision\n",
+		"Waiting for the Owner:\n",
+		"  example-org/example-repo #11 cumin/status/awaiting-decision\n",
+		"  example-org/example-repo #13 cumin/status/awaiting-merge-decision\n",
+		"  example-org/example-repo #8 cumin/status/awaiting-plan-review\n",
+		"  example-org/example-repo #9 cumin/status/awaiting-acceptance\n",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the report has no %q:\n%s", want, text)
@@ -93,7 +100,7 @@ func TestStatusWithoutAUsageStillListsTheIssues(t *testing.T) {
 	if err := writeStatus(t.Context(), &out, statusSettings(), t.TempDir(), statusAt, statusZone, readFake(t)); err != nil {
 		t.Fatalf("writeStatus: %v", err)
 	}
-	if !strings.Contains(out.String(), "not read yet") || !strings.Contains(out.String(), "#11 cumin/status/awaiting-owner-decision") {
+	if !strings.Contains(out.String(), "not read yet") || !strings.Contains(out.String(), "#11 cumin/status/awaiting-decision") {
 		t.Errorf("the report:\n%s", out.String())
 	}
 }
