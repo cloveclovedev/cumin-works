@@ -427,6 +427,13 @@ checkの結果の読み方:
 - checkの結果は、この読み直しで読んだPull Requestのものを使う。レビューを確かめたあとに、checkがもう一度動くことがあるためである。Pull Requestが見つからないか、先頭のコミットが承認したものと違えば、checkが通っていないものとして扱う。
 - 必須のcheckが先頭のコミットで通っていなければ、ラベルを `cumin/status/awaiting-checks` に戻す。Reviewerの実行中に先頭のコミットが動いたとき (「Reviewerへの依頼」) と同じ扱いで、I3かI4が次の定期確認で決め直す。
 - `risk/low` ならmergeの手順に進む (I6)。それ以外の `risk/*` は、ラベルを `cumin/status/awaiting-owner-review` に替えて、Pull Requestのアドレスを入れた通知を1回出す (I7)。ラベルを替えられなくても、通知は出す。その手順はやり直さないので、Ownerが知る機会はそこだけだからである。ただし、ラベルの付け替えが一時的な失敗で終わったときは、通知を出さずに手順を持っておき、やり直した回で通知を出す。読み直しと必須のcheckの一覧の読み取りが一時的な失敗で終わったときも、手順を持っておく (「Reviewerへの依頼 (I3、I10)」)。
+- I7では、ラベルを替えたあと、通知の前に、`cumin-core` がOwnerのレビューを依頼する (`POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers`、`reviewers` にOwnerのログイン名を1つ。公式: Request reviewers for a pull request。要る権限は Pull requests の書き込み。公式: Permissions required for GitHub Apps。実測 138)。GitHubの「レビューの依頼」の一覧に、Ownerの判断を待つPull Requestだけを載せるためである。Ownerの決定は #305 にある。
+  - 依頼する相手は、実装Issueに最新の `cumin/status/ready` を付けたアカウントである。Ownerに当たるアカウントが複数あっても、依頼するのはこの1つだけである。Reviewerの実行の前に読んだ名前を使い、読み直さない (「Ownerのログイン名の読み取り」)。Ownerのログイン名がなければ、依頼しない。
+  - 依頼は、通知を出すときに必ず出す。I7が成り立つたびに出るので、Ownerの差し戻し (I13) や衝突の解消 (I14) のあとにも、もう一度出る。すでに依頼してあるアカウントへの同じ依頼は、失敗せず、一覧にも1つのまま残る (実測 139)。
+  - 依頼が失敗したら、ログに書くだけにする。Ownerに戻さず、一時的な失敗でも手順を持っておかず、通知はそのまま出す。Ownerは通知で知るので、依頼がなくてもIssueは進むためである。受け入れた不利益は、失敗した回のPull Requestが、次にI7が成り立つまで一覧に載らないことである。協力者でないアカウントへの依頼は422になる (実測 140) が、Ownerはwrite以上の権限を持つので、ふつうは起きない。
+  - 依頼は、cuminのどの判断も変えない。レビューの依頼はレビューではなく、I12は今までどおり、Ownerの `APPROVED` のレビューだけを読む (`OwnerApproved`)。
+  - 採らなかった案: `CODEOWNERS` のファイルで依頼する。GitHubは、Pull Requestが開いたときに依頼する (公式: About code owners) ので、cuminが自分でmergeする `risk/low` でも、Reviewerの承認の前でも依頼が出て、一覧が「Ownerの判断を待つ」を表さなくなる。ファイルに決まったログイン名を書くことにもなる。
+  - 採らなかった案: write以上の権限を持つ人の全員に依頼する。I7のたびに協力者の一覧を読むことになり、全員に全ての依頼が届く。
 - mergeの手順は、I6とI12の両方が使う。行の番号は引数で受け取る。
   - `cumin-core` が `PUT /repos/{owner}/{repo}/pulls/{n}/merge` を呼ぶ。`merge_method` はリポジトリの設定、`sha` は承認された先頭のコミットである。承認のあとにpushされたコミットは、mergeしない (409。実測は #286 の M2)。mergeの状態が `clean` になるのは待たない。"Restrict updates" のruleがあるブランチでは、常に `blocked` だからである (実測 62)。
   - 405は、衝突とrulesetの拒否の両方で返る (実測 62、#286 の M4)。405のあとにPull Requestを読み直し、`mergeable` が `false` なら衝突とみなす。merge の前に読んだ `mergeable` は古いことがある (#286 の M4、M5) ので、mergeの前には読まない。

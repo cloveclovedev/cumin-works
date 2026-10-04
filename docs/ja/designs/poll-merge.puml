@@ -20,7 +20,9 @@ on the head commit?) then (no)
   stop
 elseif (risk/low?) then (no)
   :I7: cumin/status/awaiting-owner-review,
-  one notification with the pull request;
+  then cumin-core requests the review of the Owner
+  (requested_reviewers; a failure is only logged),
+  then one notification with the pull request;
   stop
 else (yes)
 endif
