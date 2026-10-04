@@ -19,7 +19,7 @@ import (
 func keptVerifyDone(t *testing.T, sc *scene, fail func()) *workflow.Service {
 	t.Helper()
 	// A required check that does not report keeps the issue in
-	// cumin/status/awaiting-checks after verify done, so that the later
+	// cumin/status/checking after verify done, so that the later
 	// polls start no review.
 	sc.repo.DefaultBranch = "main"
 	sc.repo.RequiredChecks = append(sc.repo.RequiredChecks, githubtest.RequiredCheck{Name: "ci"})
@@ -99,7 +99,7 @@ func TestKeptStep_VerifyDoneRunsAgainAtALaterPollAfterATemporaryFailure(t *testi
 	if err := pollAtMinute(sc, service, 5); err != nil {
 		t.Fatalf("Poll at minute 5: %v", err)
 	}
-	want := []string{"risk/low", workflow.LabelAwaitingChecks}
+	want := []string{"risk/low", workflow.LabelChecking}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #10 = %v, want %v after the kept step ran", got, want)
 	}
@@ -136,7 +136,7 @@ func TestKeptStep_AStepThatFailsAgainWaitsOnceMore(t *testing.T) {
 	if err := pollAtMinute(sc, service, 10); err != nil {
 		t.Fatalf("Poll at minute 10: %v", err)
 	}
-	want := []string{"risk/low", workflow.LabelAwaitingChecks}
+	want := []string{"risk/low", workflow.LabelChecking}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #10 = %v, want %v after the second try", got, want)
 	}
@@ -167,7 +167,7 @@ func TestKeptStep_AfterARateLimitVerifyDoneRunsAfterTheResetTime(t *testing.T) {
 	if err := pollAtMinute(sc, service, 10); err != nil {
 		t.Fatalf("Poll at minute 10: %v", err)
 	}
-	want := []string{"risk/low", workflow.LabelAwaitingChecks}
+	want := []string{"risk/low", workflow.LabelChecking}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #10 = %v, want %v after the reset time", got, want)
 	}
@@ -185,7 +185,7 @@ func TestKeptStep_AVerificationThatFailsStillStopsTheIssueForTheOwner(t *testing
 	if err := pollAtMinute(sc, service, 5); err != nil {
 		t.Fatalf("Poll at minute 5: %v", err)
 	}
-	want := []string{"risk/low", workflow.LabelAwaitingOwnerDecision}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #10 = %v, want %v", got, want)
 	}
@@ -213,7 +213,7 @@ func TestKeptStep_AWriteThatAlreadyHappenedIsNotMadeTwice(t *testing.T) {
 		sc.fake.CloseTimes(http.MethodPut, putLabelsPath, 1)
 	})
 	assertVerifyDoneIsKept(t, sc, service)
-	labels := []string{"risk/low", workflow.LabelAwaitingChecks}
+	labels := []string{"risk/low", workflow.LabelChecking}
 	if err := sc.fake.SetLabels(sc.repo, 10, labels); err != nil {
 		t.Fatal(err)
 	}

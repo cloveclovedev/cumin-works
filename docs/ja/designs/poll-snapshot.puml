@@ -29,7 +29,7 @@ note bottom of pr
   I9 (follow-up note) reads merged pull requests separately.
 end note
 note left of sub
-  The time that cumin/status/awaiting-checks
+  The time that cumin/status/checking
   was last added comes from the label times
   query, not from this query.
 end note

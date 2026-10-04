@@ -82,13 +82,13 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 - Host の設定ファイルに、sandbox のリポジトリと、4つの App (`cumin-core` と3つの role) の Client ID がある。秘密鍵が Keychain にある。
 - `work_dir` が、捨ててよいディレクトリを指している。cumin はその下に clone と worktree を作る。
 - sandbox に、`cumin/status/ready` の付いた Issue と、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueが、確かめたいものだけある。ほかにあると、そちらにも着手する。
-- sandbox に、同時に進めるIssueの数に数えられるIssueが残っていない。`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いている sub-issue である。前の実行が途中で止まって残っていると、上限 (初期値は1) が埋まり、着手しない。閉じるか、ラベルを外す。
+- sandbox に、同時に進めるIssueの数に数えられるIssueが残っていない。`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の開いている sub-issue である。前の実行が途中で止まって残っていると、上限 (初期値は1) が埋まり、着手しない。閉じるか、ラベルを外す。
 
 止めるときは SIGTERM を送る。動いている Agent の実行が終わるまで待つので、すぐには終わらない。実行を待たずに終わらせたいときは、もう一度 SIGTERM を送らずに、動いている role の実行の時間の上限 (`roles.implementer.time_limit` や `roles.planner.time_limit`) を短くした設定で動かし直す。
 
 ## 実機の場面 Impl-1
 
-`cumin/status/ready` の付いた実装Issueから、Pull Request が開いて `cumin/status/awaiting-checks` に移るまでを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。
+`cumin/status/ready` の付いた実装Issueから、Pull Request が開いて `cumin/status/checking` に移るまでを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。
 
 ### 準備
 
@@ -130,7 +130,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end` | Claude Code の実行の始まりと終わり |
    | `the agent run ended` | 結果 (`done` か `blocked`) とセッションの番号 |
-   | `I2: verified the pull request` | 検証が通り、ラベルを `cumin/status/awaiting-checks` に替えた |
+   | `I2: verified the pull request` | 検証が通り、ラベルを `cumin/status/checking` に替えた |
 
 9. `I2: verified the pull request` が出たら、SIGTERM で止める。
 
@@ -138,7 +138,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/awaiting-checks` に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/checking` に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | Pull Request がちょうど1つ開いている。ブランチは `cumin/<Issue番号>-<短い説明>` で、`I1: requested the work` の `branch` と同じ | Pull Request |
 | 3 | Pull Request の本文に `Closes #<Issue番号>` があり、`pull-request.md` の見出しに従っている | Pull Request |
 | 4 | Pull Request の作成者が Implementer の App の bot である。GraphQL の `author` の型が `Bot` である | GraphQL の `closedByPullRequestsReferences` |
@@ -171,7 +171,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 ## 実機の場面 Fail-1
 
-Implementer が `blocked` を返したときに、cumin が理由をIssueに書き、ラベルを `cumin/status/awaiting-owner-decision` に替え、Discord に通知を1件送るところを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。
+Implementer が `blocked` を返したときに、cumin が理由をIssueに書き、ラベルを `cumin/status/awaiting-decision` に替え、Discord に通知を1件送るところを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。
 
 受け入れテストは偽の webhook を相手にするので、本物のメッセージが本物のチャンネルに届くことと、そのリンクが開くことは、この場面でだけ分かる。
 
@@ -197,7 +197,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
    | `the agent run ended` | 結果が `blocked` で返った |
    | `the agent returned blocked` | 理由の1行目 |
    | `I2: wrote the reason on the issue` | `blocked_reason` をコメントとして投稿した |
-   | `I2: the issue waits for the Owner` | ラベルを `cumin/status/awaiting-owner-decision` に替えた |
+   | `I2: the issue waits for the Owner` | ラベルを `cumin/status/awaiting-decision` に替えた |
    | `the Owner was notified` | Discord に送った |
 
 10. `the Owner was notified` が出たら、SIGTERM で止める。
@@ -206,7 +206,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/awaiting-owner-decision` に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/awaiting-decision` に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | 実装Issueにコメントが1つ付き、`## Decision needed:` で始まる決まった形式である ([decision-request.md](../../../templates/decision-request.md)) | Issue のコメント |
 | 3 | コメントの作成者が cumin本体の App の bot (`cumin-core[bot]`) である。文章はAgentが書き、投稿するのは cumin だからである | Issue のコメント |
 | 4 | Pull Request が作られていない。やり直しも起きていない (Claude Code の起動は2回だけ) | Pull Request の一覧と、cumin のログ |
@@ -251,12 +251,12 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
    | `I1: requested the work` | `kind` が `implement`。Implementer を新しいセッションで起動した |
    | `the agent run ended` | 1回目の実行が `done` で終わった |
-   | `I2: verified the pull request` | ラベルを `cumin/status/awaiting-checks` に替えた |
+   | `I2: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
    | `poll` | `required_checks` が1以上。check が終わるまで、何も起きない定期確認が続く |
    | `I4: a required check failed; the issue goes back to the Implementer` | `failed` に `live-check-1-required-line`、`check_fix_requests` が1 |
    | `I4: requested the work` | `kind` が `check fix`、`resumed` が `true` |
    | `the agent run ended` | 修正の実行が `done` で終わった |
-   | `I2: verified the pull request` | ラベルが `cumin/status/awaiting-checks` に戻った |
+   | `I2: verified the pull request` | ラベルが `cumin/status/checking` に戻った |
    | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた |
 
 11. 1回目の実行のあとの先頭のコミットで `live-check-1-required-line` が通ってしまったら (Implementer が Pull Request の番号を知ったあとで1行を足して push し直したとき)、I4 は起きずに I3 に進む。その回は数えずに、後片付けをしてからやり直す。Implementer は check を待たない約束なので、ふつうは起きない。
@@ -266,7 +266,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`implementing`、`awaiting-checks`、`reviewing` の順に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 1 | 実装Issueのラベルが `ready`、`implementing`、`checking`、`implementing`、`checking`、`reviewing` の順に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | Pull Request がちょうど1つ開いている。2回の実行が同じブランチに積んだ | Pull Request とそのコミット |
 | 3 | 1回目の先頭のコミットで `live-check-1-required-line` が落ち、修正のあとの先頭のコミットで通った。ほかの必須のcheckは通ったか飛ばされた | Pull Request の check |
 | 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は3回である | cumin のログ |
@@ -292,7 +292,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 
 ## 実機の場面 Plan-1
 
-`cumin/status/ready` の付いた要求Issueを、Planner が sub-issue に分割し、要求Issueが `cumin/status/awaiting-owner-review` に移るまでを、1回通して確かめる (R1、R2)。本物の Claude Code を2回起動する (使用率の最小の実行と、Planner の実行) ので、利用枠を使う。
+`cumin/status/ready` の付いた要求Issueを、Planner が sub-issue に分割し、要求Issueが `cumin/status/awaiting-plan-review` に移るまでを、1回通して確かめる (R1、R2)。本物の Claude Code を2回起動する (使用率の最小の実行と、Planner の実行) ので、利用枠を使う。
 
 ### 準備
 
@@ -316,7 +316,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `R1: requested the Planner` (`kind` が `plan`) | Planner を起動した |
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end`、`the agent run ended` | Claude Code の実行と、その結果 |
-   | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-owner-review` に替えた |
+   | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
    | `the Owner was notified` (`row` が `R2`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
 
 9. `R2: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`R2: ...` の行で止めると、通知が取り消されることがある。
@@ -325,7 +325,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 要求Issueのラベルが `cumin/status/ready` から `cumin/status/planning` を経て `cumin/status/awaiting-owner-review` に移った。状態ラベルは常に1つだけ | Issue のイベント |
+| 1 | 要求Issueのラベルが `cumin/status/ready` から `cumin/status/planning` を経て `cumin/status/awaiting-plan-review` に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | sub-issue が2つか3つあり、要求Issueの sub-issue になっている。作成者は Planner の App である | 要求Issueの sub-issue の一覧 |
 | 3 | 全ての sub-issue に `risk/*` がちょうど1つと、要求Issueのマイルストーンが付いている | 各 sub-issue |
 | 4 | 待つ必要のある sub-issue に blocked by がある | 各 sub-issue の依存関係 |
@@ -349,14 +349,14 @@ skill の一覧を探すときは、"The following skills are available for use 
 
 ## 実機の場面 Accept-1
 
-sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認のコメントを書き、要求Issueが `cumin/status/awaiting-owner-review` に移るまでを、1回通して確かめる (R4、R7)。本物の Claude Code を1回起動するので、利用枠を使う。受け入れの確認の依頼は新しい着手ではないので、使用率を読む最小の実行はしない。Plan-1 と同じ cumin の実行の中で続けてよい。
+sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認のコメントを書き、要求Issueが `cumin/status/awaiting-acceptance` に移るまでを、1回通して確かめる (R4、R7)。本物の Claude Code を1回起動するので、利用枠を使う。受け入れの確認の依頼は新しい着手ではないので、使用率を読む最小の実行はしない。Plan-1 と同じ cumin の実行の中で続けてよい。
 
 ### 準備
 
 1. Plan-1 の手順1と2と同じバイナリと設定ファイルを使う。
 2. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける。本文の Requirements には、sandbox の main で既に成り立つことを2つ書く (例: ルートの `README.md` の1行目の見出し)。確認の結果が Pass になり、Planner が根拠を書ける。
 3. その sub-issue を2つ作り、`risk/low` を付けて、completed で閉じる。
-4. 最後に、要求Issueに `cumin/status/implementing` を付ける。sub-issue が開いているうちに付けると R6 が成り立ち、要求Issueが `cumin/status/awaiting-owner-review` に移ってしまう。
+4. 最後に、要求Issueに `cumin/status/implementing` を付ける。sub-issue が開いているうちに付けると R6 が成り立ち、要求Issueが `cumin/status/awaiting-plan-review` に移ってしまう。
 
 ### 実行
 
@@ -368,7 +368,7 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    | `worktree removed`、`worktree created` | 前の依頼の worktree を消し、merge された main で開き直した。初めての要求Issueでは `worktree removed` は出ない |
    | `R4: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した。ラベルは替えない |
    | `agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ。使用率を読む `quota usage read` は出ない |
-   | `R7: the requirement issue waits for the acceptance of the Owner` | 次の定期確認で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-owner-review` に替えた |
+   | `R7: the requirement issue waits for the acceptance of the Owner` | 次の定期確認で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
    | `the Owner was notified` (`row` が `R7`) | 通知した |
 
    Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`R7: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
@@ -379,7 +379,7 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 要求Issueのラベルが、Planner の実行中も `cumin/status/implementing` のままで、確認のコメントのあとに `cumin/status/awaiting-owner-review` に移った | Issue のイベント |
+| 1 | 要求Issueのラベルが、Planner の実行中も `cumin/status/implementing` のままで、確認のコメントのあとに `cumin/status/awaiting-acceptance` に移った | Issue のイベント |
 | 2 | 要求Issueに、`## Acceptance check` で始まる Planner の App のコメントがちょうど1つある。Requirements の1項目ごとに1行あり、どの行にも根拠がある | 要求Issueのコメント |
 | 3 | 実行で Issue が作られず、sub-issue も変わらなかった | sandbox の Issue の一覧と、sub-issue の更新の時刻 |
 | 4 | Planner は、コメントの前に `cumin-acceptance-check` を呼んだ。skill の一覧は Plan-1 の7と同じ | Claude Code のセッションの記録 |
@@ -418,7 +418,7 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
    | ログの行 | 意味 |
    |---|---|
    | `I1: requested the work` | Implementer を新しいセッションで起動した |
-   | `I2: verified the pull request` | ラベルを `cumin/status/awaiting-checks` に替えた |
+   | `I2: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
    | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた。`round` が1 |
    | `I3: requested the review` | `round` が1、`resumed` が `false` |
    | `the agent run ended` | Reviewer の実行が `done` で終わった |
@@ -431,7 +431,7 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`reviewing` の順に移り、`reviewing` のまま残った | Issue のイベント |
+| 1 | 実装Issueのラベルが `ready`、`implementing`、`checking`、`reviewing` の順に移り、`reviewing` のまま残った | Issue のイベント |
 | 2 | Pull Request に、Reviewer の App の bot のレビューがちょうど1つあり、結果が `APPROVED` で、対象のコミットが Pull Request の先頭のコミットである | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` の `user.login`、`state`、`commit_id` |
 | 3 | レビューの本文が `review.md` の形に従い、`Result: Approved (round 1 of 3)` と、実行したレビューの skill の行がある | レビューの本文 |
 | 4 | Reviewer は `<Issue番号>-reviewer` の worktree で動き、その HEAD は detached で、Pull Request の先頭のコミットだった | `git -C <work_dir>/<owner>/<repo>/<Issue番号>-reviewer rev-parse HEAD` と `git ... status` |
@@ -477,7 +477,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 5. `./cumin run --config <設定ファイル>` を起動し、実装Issueに `cumin/status/ready` を付ける。
 6. `I2: verified the pull request` が出たら、すぐに SIGTERM で止める。必須のcheckが通る前に止めれば、I3 はまだ起きていない。ログの行を1秒ごとに見て SIGTERM を送る小さなループを使うと、確実に間に合う。GitHub が紐づけを作らないときは、その前に場面 Review-1 の「GitHub が紐づけを作らないとき」の手順が入る。止める前に `I3: the pull request is ready for review` が出てしまったら、その回は数えずに、後片付けをしてからやり直す。
 7. Pull Request のブランチの `live/review-2.md` の最後に、120文字を超える英語の1行を足すコミットを作って push する。`gh api -X PUT repos/<owner>/<repo>/contents/live/review-2.md` にブランチと元のファイルの `sha` を渡せば、手元にブランチを取らずにできる。コミットの作者は Owner のままでよい。先頭のコミットが変わるので、必須のcheckが走り直す。
-8. `./cumin run --config <設定ファイル>` を起動し直す。`cumin/status/awaiting-checks` のIssueは、再起動のあとも I3 と I4 で続きから進む。
+8. `./cumin run --config <設定ファイル>` を起動し直す。`cumin/status/checking` のIssueは、再起動のあとも I3 と I4 で続きから進む。
 9. 次の定期確認から、ログがこの順に出る。
 
    | ログの行 | 意味 |
@@ -486,7 +486,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
    | `I3: checked the review` | `result` が `changes requested` |
    | `I5: the Reviewer requested changes; the issue goes back to the Implementer` | `round` が1、`limit` が3。ラベルを `cumin/status/implementing` に替えた |
    | `I5: requested the work` | `kind` が `review fix`、`resumed` が `true` |
-   | `I2: verified the pull request` | 修正が push され、ラベルが `cumin/status/awaiting-checks` に戻った |
+   | `I2: verified the pull request` | 修正が push され、ラベルが `cumin/status/checking` に戻った |
    | `I3: requested the review` | `round` が2、`resumed` が `true` |
    | `I3: the Reviewer approved the head commit` | 2ラウンド目で承認された |
 
@@ -496,7 +496,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 
 | # | 確かめること | 見る場所 |
 |---|---|---|
-| 1 | 実装Issueのラベルが `ready`、`implementing`、`awaiting-checks`、`reviewing`、`implementing`、`awaiting-checks`、`reviewing` の順に移った | Issue のイベント |
+| 1 | 実装Issueのラベルが `ready`、`implementing`、`checking`、`reviewing`、`implementing`、`checking`、`reviewing` の順に移った | Issue のイベント |
 | 2 | Reviewer の1つめのレビューが、手順7のコミットに対する `CHANGES_REQUESTED` である。80文字の完了条件を `(blocking)` の指摘にし、`Why` と `Fix` がある | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` と、そのレビューのコメント |
 | 3 | Implementer の修正が、手順7の行を直すコミットとして同じブランチに積まれた。新しい Pull Request はない | Pull Request のコミット |
 | 4 | Implementer が、修正を求める指摘のスレッドに `Fixed in <SHA>.` で始まる返答を書いた (`review-reply.md`)。スレッドは解決済みにしていない。返答はレビューの API で書くので、Implementer の App の `COMMENTED` のレビューとしても現れる。cumin は Reviewer の App のレビューだけを数えるので、ラウンドは変わらない | Pull Request のレビューのスレッド |
@@ -528,7 +528,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 
 1. 場面 Review-1 の手順1〜3と同じ。ほかに、場面 Fail-1 の手順2と同じく webhook のアドレスを Keychain に入れ、`notify.discord.enabled` を `true` のままにする。
 2. sandbox に要求Issueを1つ作り、`cumin/type/requirement` だけを付ける。
-3. その sub-issue として、実装Issueを2つ作る。この順に作り、B の番号を小さくする。番号の小さい B から進むので、Owner の作業 (手順8) が早く来る。B が `cumin/status/awaiting-owner-review` で待つ間は、同時に進めるIssueの数に数えないので、A がその間に進む。どちらも本文の完了条件には「`live/<ファイル>` を作り、場面 Merge-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。
+3. その sub-issue として、実装Issueを2つ作る。この順に作り、B の番号を小さくする。番号の小さい B から進むので、Owner の作業 (手順8) が早く来る。B が `cumin/status/awaiting-merge-decision` で待つ間は、同時に進めるIssueの数に数えないので、A がその間に進む。どちらも本文の完了条件には「`live/<ファイル>` を作り、場面 Merge-1 が何を確かめるかを英語で2〜3文で書く」とだけ書く。
    - B: 題は `Describe the merge of risk/medium in Merge-1`、ファイルは `live/merge-1-<日時>-medium.md`、`risk/medium` を付ける。
    - A: 題は `Describe the merge of risk/low in Merge-1`、ファイルは `live/merge-1-<日時>-low.md`、`risk/low` を付ける。
    - `<日時>` は `20261001-1635` の形の、この実行の日時である。前の実行のファイルは main に残るので、実行ごとに名前を変える。
@@ -544,7 +544,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
    |---|---|
    | `I3: the Reviewer approved the head commit` | Reviewer が先頭のコミットを承認した |
    | `I6: decided on the approved pull request` | `decision` が `ask the Owner` |
-   | `I7: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-owner-review` に替えた |
+   | `I7: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
    | `the Owner was notified` | `row` が `I7`。Discord に1件届く |
 
 8. Owner が B の Pull Request を開き、GitHub のレビューで承認 (Approve) する。Reviewers に Owner を足す必要はない。
@@ -570,7 +570,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 |---|---|---|
 | 1 | A の Pull Request を merge したのが cumin-core の App で、merge の方法が squash である。A の実装Issueが閉じていて、理由が `completed` である | Pull Request の `merged_by`、main のコミット、Issue の `state_reason` |
 | 2 | A の実装Issueを閉じたのが、GitHub (Pull Request の merge) か cumin-core か | Issue のイベントの `closed` の `actor` と `commit_id` |
-| 3 | B の実装Issueのラベルが `reviewing` から `awaiting-owner-review` に移り、Discord の通知が1件だけ届いた。通知に Pull Request のリンクがある | Issue のイベント、Discord |
+| 3 | B の実装Issueのラベルが `reviewing` から `awaiting-merge-decision` に移り、Discord の通知が1件だけ届いた。通知に Pull Request のリンクがある | Issue のイベント、Discord |
 | 4 | B は、Owner が承認するまで merge されなかった | Pull Request の `merged_at` と、Owner のレビューの時刻 |
 | 5 | B の Pull Request を merge したのが cumin-core の App で、B の実装Issueが閉じた | 1と2と同じ |
 | 6 | 受け入れの確認 (R4) は動いていない。Planner の実行がない | cumin のログ |
@@ -579,7 +579,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 ### 後片付け
 
 - 要求Issueを閉じる。2つのファイルは main に残る。名前に日時があるので、次の実行の邪魔にならない。
-- 途中で止まったときは、開いたままの実装Issueと Pull Request を閉じ、そのブランチを消す。`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` のまま残すと、同時に進めるIssueの数を使い続け、次の実行が着手しない。
+- 途中で止まったときは、開いたままの実装Issueと Pull Request を閉じ、そのブランチを消す。`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` のまま残すと、同時に進めるIssueの数を使い続け、次の実行が着手しない。
 - `work_dir` の一時ディレクトリを消す。
 - launchd の cumin を止めたなら、戻す。
 
@@ -767,7 +767,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
    ```
 
    既に動いているなら、`scripts/install.sh --restart` で新しいバイナリに入れ替える。
-4. sandbox に、`cumin/status/ready`、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の付いた開いている Issue がないことを確かめる。あれば、テストは何も作らずに止まる。
+4. sandbox に、`cumin/status/ready`、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の付いた開いている Issue がないことを確かめる。あれば、テストは何も作らずに止まる。
 
 テストは launchd の job を入れることも、止めることもしない。動いていることを確かめるだけである。
 
@@ -782,26 +782,26 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run Te
 1. 要求Issueを作り、`cumin/type/requirement` と `cumin/status/ready` を付ける。内容は、`live/e2e-<日時>/` の下の小さなファイル2つである。どちらの Pull Request にも `Follow-up` に1行を残させるので、フォローアップノートが必ず2つ付く。
 2. 分割を待ち、sub-issue が2つで、risk が1つずつ付いていることを確かめる。
 3. Owner として risk を確定する。Planner が `risk/low` と `risk/medium` を1つずつ付けていれば、そのままにする。そうでなければ、番号の小さいほうを `risk/medium`、大きいほうを `risk/low` にする。そのあと、2つに `cumin/status/ready` を付ける。
-4. `risk/medium` の実装Issueが `cumin/status/awaiting-owner-review` に移ったら、Pull Request がまだ merge されていないことを確かめてから、`gh pr review --approve` で承認する。
-5. 2つの実装Issueが閉じ、受け入れの確認のコメントが付き、要求Issueが `cumin/status/awaiting-owner-review` に移るのを待つ。
+4. `risk/medium` の実装Issueが `cumin/status/awaiting-merge-decision` に移ったら、Pull Request がまだ merge されていないことを確かめてから、`gh pr review --approve` で承認する。
+5. 2つの実装Issueが閉じ、受け入れの確認のコメントが付き、要求Issueが `cumin/status/awaiting-acceptance` に移るのを待つ。
 6. 最後に、段階ごとの証拠の表を Markdown で出力する。
 
-途中でどれかの Issue が `cumin/status/awaiting-owner-decision` に移ったら、テストはそこで失敗する。
+途中でどれかの Issue が `cumin/status/awaiting-decision` に移ったら、テストはそこで失敗する。
 
 ### テストが確かめること
 
 | # | 確かめること | 見る事実 |
 |---|---|---|
-| 1 | 要求Issueの状態が `ready`、`planning`、`awaiting-owner-review`、`implementing`、`awaiting-owner-review` の順に移った。`ready` を付けたのは Owner で、ほかは cumin-core の App である | Issue のイベント |
+| 1 | 要求Issueの状態が `ready`、`planning`、`awaiting-plan-review`、`implementing`、`awaiting-acceptance` の順に移った。`ready` を付けたのは Owner で、ほかは cumin-core の App である | Issue のイベント |
 | 2 | sub-issue が2つで、作成者が Planner の App である。risk が1つずつ付いている。`## Plan for approval` のコメントが1つある | sub-issue の一覧、コメント |
-| 3 | 実装Issueの状態が `ready`、`implementing`、`awaiting-checks`、`reviewing` の順に始まる。`risk/medium` は最後に `awaiting-owner-review` に移る | Issue のイベント |
+| 3 | 実装Issueの状態が `ready`、`implementing`、`checking`、`reviewing` の順に始まる。`risk/medium` は最後に `awaiting-merge-decision` に移る | Issue のイベント |
 | 4 | 実装Issueごとに Pull Request がちょうど1つある。作成者は Implementer の App、ブランチは `cumin/<Issue番号>-...`、本文に `Closes #<Issue番号>` がある | 閉じるリンク、Pull Request |
 | 5 | Reviewer の App の最後のレビューが、先頭のコミットへの `APPROVED` である | レビュー |
 | 6 | merge したのが cumin-core の App で、merge のコミットの親が1つである。merge の方法は squash である。実装Issueが `completed` で閉じた | Pull Request、コミット、Issue、ログの `merge_method` |
 | 7 | `risk/medium` の Pull Request は、Owner が承認するまで merge されず、merge は先頭のコミットへの Owner の承認のあとである | Pull Request、レビューの時刻 |
 | 8 | Pull Request ごとに、cumin-core の App のフォローアップノートが目印付きで1つあり、受け入れの確認より前に書かれている。ノートにあるのは `Follow-up` の1行だけで、CLI の署名は入っていない | 要求Issueのコメント |
 | 8a | 分割の全体像、レビューの本文、受け入れの確認が、テンプレートの `###` の見出しを持っている | コメント、レビュー |
-| 9 | `## Acceptance check` で始まる Planner の App のコメントが1つあり、最後の実装Issueが閉じたあとに書かれている。要求Issueが `awaiting-owner-review` に移ったのは、そのあとである | 要求Issueのコメント、イベント |
+| 9 | `## Acceptance check` で始まる Planner の App のコメントが1つあり、最後の実装Issueが閉じたあとに書かれている。要求Issueが `awaiting-acceptance` に移ったのは、そのあとである | 要求Issueのコメント、イベント |
 | 10 | cumin のログに、Issue ごとの動作の行がこの順にある | `~/.local/state/cumin/cumin.log` の、テストの開始よりあとの行 |
 | 11 | 通知の行 (`the Owner was notified`) が、分割結果の確認 (R2)、merge の判断 (I7)、受け入れ (R7) で1行ずつある | 同じログ |
 | 12 | ログに token、秘密鍵、webhook のアドレス、使用率の数値がない | 同じログ |

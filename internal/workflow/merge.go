@@ -92,7 +92,7 @@ func (s *Service) decideApproved(ctx context.Context, log *slog.Logger, target T
 	if kept {
 		lost := try.lost
 		try.lost = ""
-		if !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelAwaitingChecks || !slices.Contains(sub.Labels, lost)) {
+		if !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelChecking || !slices.Contains(sub.Labels, lost)) {
 			log.Info("I6: the issue left cumin/status/reviewing while the merge was kept; nothing is merged", "labels", sub.Labels)
 			return false, sub, pr, read.DefaultBranch, nil
 		}
@@ -123,7 +123,7 @@ func (s *Service) decideApproved(ctx context.Context, log *slog.Logger, target T
 	case MergeAskOwner:
 		return false, sub, pr, read.DefaultBranch, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, try)
 	case MergeChecksNotPassed:
-		labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingChecks, try)
+		labels, err := s.replaceStatus(ctx, token, target, sub, LabelChecking, try)
 		if err != nil {
 			log.Error("I6: the label was not changed", "error", err.Error())
 			return false, sub, pr, read.DefaultBranch, temporary(err)
@@ -139,7 +139,7 @@ func (s *Service) decideApproved(ctx context.Context, log *slog.Logger, target T
 	return false, sub, pr, read.DefaultBranch, nil
 }
 
-// askOwnerToMerge applies I7: the label cumin/status/awaiting-owner-review,
+// askOwnerToMerge applies I7: the label cumin/status/awaiting-merge-decision,
 // then one notification that links the pull request. A label change that
 // ends with a temporary failure is returned, without the notification: the
 // kept step runs again, and notifies then. Any other failure of the label
@@ -147,7 +147,7 @@ func (s *Service) decideApproved(ctx context.Context, log *slog.Logger, target T
 // again, and the Owner must still learn that the pull request waits.
 func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest, try *reviewTry) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingOwnerReview, try)
+	labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingMergeDecision, try)
 	if err != nil {
 		log.Error("I7: the label was not changed", "error", err.Error())
 		if temporary(err) != nil {
@@ -366,7 +366,7 @@ func statusAnswer(err error) string {
 // After the approval of the Reviewer (I6) it is the login that the
 // Reviewer run holds, so nothing can fail. After the approval of the Owner
 // (I12) it is a read; when the read fails, the issue keeps
-// cumin/status/awaiting-owner-review, and I12 applies again at the next
+// cumin/status/awaiting-merge-decision, and I12 applies again at the next
 // poll.
 func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error)) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
@@ -400,7 +400,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 }
 
 // resolveConflictAtPoll applies I14: the pull request of an issue in
-// cumin/status/awaiting-checks or in cumin/status/awaiting-owner-review
+// cumin/status/checking or in cumin/status/awaiting-merge-decision
 // conflicts with the default branch. The
 // label becomes cumin/status/implementing first (principle 3), then the
 // Implementer resolves the conflict in the session of its last run, on the
@@ -516,7 +516,7 @@ func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target T
 // ownerStillApproves decides again for a try of the kept merge of I12: it
 // reads the issue, the required checks, and the permissions, and says
 // whether I12 still merges the pull request at the approved head commit.
-// The issue is still in cumin/status/awaiting-owner-review, the latest
+// The issue is still in cumin/status/awaiting-merge-decision, the latest
 // review of an Owner is APPROVED on that commit, and the risk label and
 // the required checks allow the merge. When it says no, nothing changes:
 // the issue leaves the set of issues in work, and the next poll decides on
@@ -537,7 +537,7 @@ func (s *Service) ownerStillApproves(ctx context.Context, log *slog.Logger, targ
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
 	pr, ok := sub.LatestPullRequest()
-	if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingOwnerReview) || !ok || pr.Number != approved.Number || pr.HeadCommit != approved.HeadCommit {
+	if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingMergeDecision) || !ok || pr.Number != approved.Number || pr.HeadCommit != approved.HeadCommit {
 		log.Info("I12: the issue or the head commit changed while the merge was kept", "labels", sub.Labels)
 		return false, nil
 	}
@@ -577,7 +577,7 @@ func (s *Service) readOwners(ctx context.Context, token string, target Target, r
 // fixOwnerReview applies I13 to a candidate: it reads the permission of each
 // person whose review decides, keeps the Owners (IsOwner), and checks that
 // the latest review of an Owner is CHANGES_REQUESTED on the head commit,
-// newer than the last cumin/status/awaiting-owner-review of the issue
+// newer than the last cumin/status/awaiting-merge-decision of the issue
 // (OwnerRequestedChanges). Then the label becomes cumin/status/implementing
 // first (principle 3), and the Implementer addresses that review in the
 // session of its last run, on the branch of the pull request. The end of
@@ -589,7 +589,7 @@ func (s *Service) readOwners(ctx context.Context, token string, target Target, r
 // The first value says whether I13 acted (the send-back), for Q4. A
 // permission or a login of the Owner that cannot be read, and a label that
 // does not change, are errors of the poll: nothing is requested, the issue
-// keeps cumin/status/awaiting-owner-review, and the next poll tries again.
+// keeps cumin/status/awaiting-merge-decision, and the next poll tries again.
 func (s *Service) fixOwnerReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixOwnerReview) (bool, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
@@ -606,7 +606,7 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 	if err != nil {
 		return false, fmt.Errorf("I13: issue #%d: %w", a.Number, err)
 	}
-	review, ok := OwnerRequestedChanges(pr.Reviews, pr.HeadCommit, owners, sub.AwaitingOwnerReviewAt)
+	review, ok := OwnerRequestedChanges(pr.Reviews, pr.HeadCommit, owners, sub.AwaitingMergeDecisionAt)
 	if !ok {
 		log.Debug("I13: no new request for changes of an Owner on the head commit", "pull_request", pr.Number)
 		return false, nil

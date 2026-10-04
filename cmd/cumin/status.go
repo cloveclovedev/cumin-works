@@ -130,7 +130,7 @@ var agentLabels = map[bool][]string{
 	false: {workflow.LabelImplementing, workflow.LabelReviewing},
 }
 
-var ownerLabels = []string{workflow.LabelAwaitingOwnerReview, workflow.LabelAwaitingOwnerDecision}
+var ownerLabels = []string{workflow.LabelAwaitingPlanReview, workflow.LabelAwaitingMergeDecision, workflow.LabelAwaitingAcceptance, workflow.LabelAwaitingDecision}
 
 // writeStatus writes the whole report. A repository that cannot be read
 // is named with the reason, and the report goes on; the error then says

@@ -20,7 +20,7 @@ if (Result?) then (done)
   if (A kept step, and the issue left
   cumin/status/planning?) then (yes)
     if (The lost label change of the last try set
-    cumin/status/awaiting-owner-review?) then (yes)
+    cumin/status/awaiting-plan-review?) then (yes)
       :Notify the Owner
       (the split needs a review);
     else (no)
@@ -43,7 +43,7 @@ if (Result?) then (done)
   if (Passed?) then (yes)
     if (An open sub-issue?) then (yes)
       :Change the label to
-      cumin/status/awaiting-owner-review;
+      cumin/status/awaiting-plan-review;
       :Notify the Owner
       (the split needs a review);
     else (no)
@@ -71,7 +71,7 @@ endif
 
 partition "Hand back to the Owner (the row number is R2)" {
   :Comment on the requirement issue;
-  :Change the label to cumin/status/awaiting-owner-decision;
+  :Change the label to cumin/status/awaiting-decision;
   :Notify the Owner;
 }
 stop

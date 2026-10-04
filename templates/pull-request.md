@@ -72,7 +72,7 @@ The failure branches of the I2 verification (diagram changed by this pull reques
 Hand the issue back to the Owner when the I2 verification (open pull request, author, head pushed) fails after `done`.
 
 Before: a failed verification was logged; the issue kept `cumin/status/implementing` with nothing on GitHub to say why.
-After: cumin posts one comment in a fixed shape (`templates/stop-note.md`), sets `cumin/status/awaiting-owner-decision`, and sends one notification that names the failed check. The comment is a template of cumin, not of an agent, so that its shape stays a contract.
+After: cumin posts one comment in a fixed shape (`templates/stop-note.md`), sets `cumin/status/awaiting-decision`, and sends one notification that names the failed check. The comment is a template of cumin, not of an agent, so that its shape stays a contract.
 
 ## Why
 A stopped issue was invisible to the Owner. The same sentence goes into the comment and the notification, so the Owner reads the same words in both places.

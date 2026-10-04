@@ -70,7 +70,7 @@ elseif (REQUEST_CHANGES) then
     (the same session);
     if (A decision request of the Reviewer
     after its last review?) then (yes)
-      :Change the label to cumin/status/awaiting-owner-decision;
+      :Change the label to cumin/status/awaiting-decision;
       :Notify the Owner (link: that comment);
     else (no, or blocked, or abnormal twice)
       :Hand back to the Owner (row I8);

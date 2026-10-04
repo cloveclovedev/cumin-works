@@ -222,7 +222,7 @@ func TestOwnerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
 		setup func(*scene)
 	}{
 		{name: "no start candidate", setup: func(sc *scene) {
-			sc.repo.Issues[10].Labels = []string{"cumin/status/awaiting-owner-decision", "risk/low"}
+			sc.repo.Issues[10].Labels = []string{"cumin/status/awaiting-decision", "risk/low"}
 		}},
 		{name: "an open blocked-by issue", setup: func(sc *scene) {
 			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 9, Parent: 6, Title: "The work before", Labels: []string{"risk/low"}})

@@ -228,7 +228,7 @@ func TestKeptStep_AMergeAfterTheApprovalOfTheOwnerIsKeptToo(t *testing.T) {
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	sc.fake.FailTimes(http.MethodPut, mergePath, 0, 1, http.StatusBadGateway)
 	service := sc.service()
-	waiting := []string{"risk/medium", workflow.LabelAwaitingOwnerReview}
+	waiting := []string{"risk/medium", workflow.LabelAwaitingMergeDecision}
 
 	sc.pollAndWait(t, service)
 	assertMergeStepIsKept(t, sc, service, waiting, "the merge", 1)
@@ -269,8 +269,8 @@ func TestKeptStep_ARiskLabelThatChangesWhileTheMergeIsKeptSendsNoMerge(t *testin
 	if sc.repo.PullRequests[21].Merged {
 		t.Error("pull request #21 is merged after the risk changed to risk/medium")
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
 	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
 		t.Errorf("notifications = %v, want one of I7", messages)
@@ -289,7 +289,7 @@ func TestKeptStep_ARequestForChangesOfTheOwnerWhileTheMergeIsKeptSendsNoMerge(t 
 	sc.fake.FailTimes(http.MethodPut, mergePath, 0, 1, http.StatusBadGateway)
 	service := sc.serviceWithSession(t)
 	sc.pollAndWait(t, service)
-	assertMergeStepIsKept(t, sc, service, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}, "the merge", 1)
+	assertMergeStepIsKept(t, sc, service, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}, "the merge", 1)
 
 	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, -1)
 	if err := pollAtMinute(sc, service, 5); err != nil {

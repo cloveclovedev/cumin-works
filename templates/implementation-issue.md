@@ -56,7 +56,7 @@ Out of scope:
 ## Where this fits
 ![implementation issue states, I4 in red](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/issue-156/check-fix.svg)
 
-The two red arrows of I4 (a required check failed, fix in the same session): back to `implementing`, and the exit to `awaiting-owner-decision` at the limit.
+The two red arrows of I4 (a required check failed, fix in the same session): back to `implementing`, and the exit to `awaiting-decision` at the limit.
 
 ## Context
 When a required check fails, cumin asks the Implementer to fix it in the session of the last run, with the failed checks and their content. The count of such requests lives on the Host; at the limit, the issue goes to the Owner (stop step of #81).
@@ -81,7 +81,7 @@ Out of scope:
 - [ ] The request resumes the last session of the issue and names every failed check with its content.
 - [ ] No new branch and no new pull request; after `done`, I2 runs again.
 - [ ] The count grows by one per request, survives a restart, and starts at zero after `cumin/status/ready`.
-- [ ] At the limit: one comment, `cumin/status/awaiting-owner-decision`, one notification, through the stop step with the row I4.
+- [ ] At the limit: one comment, `cumin/status/awaiting-decision`, one notification, through the stop step with the row I4.
 - [ ] Log lines start with `I4: `. `poll.md` and `getting-started.md` are updated. Tests for the new behavior are included.
 
 ## How to verify

@@ -105,7 +105,7 @@ func TestCore15_TheWeeklyPaceStopsEarlyAndResumesLater(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("later in the week: %d agent runs, want 1", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-checks") {
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/checking") {
 		t.Errorf("labels of #10 = %v, want the issue claimed and verified", got)
 	}
 }

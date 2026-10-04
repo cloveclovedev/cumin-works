@@ -20,7 +20,7 @@ const reviewerLogin = implementerSlug + "[bot]"
 // with.
 const fixtureSession = "11111111-2222-4333-8444-555555555555"
 
-// reviewing puts issue #10 in cumin/status/awaiting-checks with the pull
+// reviewing puts issue #10 in cumin/status/checking with the pull
 // request #21 at the head of the remote, no required check, and a state
 // file with the given entry. The next poll applies I3.
 func (sc *scene) reviewing(t *testing.T, service *workflow.Service, stored state.Issue) string {
@@ -234,8 +234,8 @@ func TestI3_ASecondRunWithoutAReviewStopsForTheOwner(t *testing.T) {
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I5") || !strings.Contains(comments[0].Body, workflow.MissingReviewReason) {
 		t.Fatalf("comments on #10 = %+v, want one stop note with the row I5", comments)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications, want 1", n)
@@ -258,8 +258,8 @@ func TestI10_ABlockedReviewerStopsWithoutARetry(t *testing.T) {
 	if len(comments) != 1 || !strings.HasPrefix(comments[0].Body, "## Decision needed") {
 		t.Fatalf("comments on #10 = %+v, want the blocked_reason of the Reviewer", comments)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications, want 1", n)
@@ -293,8 +293,8 @@ func TestI3_TwoAbnormalEndsOfTheReviewerStopForTheOwner(t *testing.T) {
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I3") || !strings.Contains(comments[0].Body, "Reviewer") {
 		t.Fatalf("comments on #10 = %+v, want one stop note with the row I3", comments)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestI3_TheReviewIsRequestedOnceAcrossPolls(t *testing.T) {
 }
 
 // The head can move while the Reviewer works. Only the old head passed the
-// required checks, so the issue goes back to cumin/status/awaiting-checks
+// required checks, so the issue goes back to cumin/status/checking
 // and nothing is reviewed on the new head yet (review of #244): the checks
 // run on it, and I3 or I4 decides again.
 func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
@@ -332,8 +332,8 @@ func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want only the review of the old head", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
@@ -384,8 +384,8 @@ func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
 		t.Errorf("the fix ran in %q, want %q", got, realPath(t, wantDir))
 	}
 	// The fix is pushed (the fake CLI adds no commit), so I2 passes.
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	got := state.Open(path, nil).Issue("example-org/example-repo", 10)
 	if got.SessionID != fixtureSession || got.ReviewerSessionID != fixtureSession {
@@ -412,7 +412,7 @@ func (sc *scene) atTheLimit(t *testing.T) {
 // I8 (issue-states.md): REQUEST_CHANGES at the limit of rounds does not
 // go to the Implementer. The Reviewer explains the cause in its session;
 // its decision request on the pull request is the reason, so cumin writes
-// no comment, moves the issue to cumin/status/awaiting-owner-decision, and
+// no comment, moves the issue to cumin/status/awaiting-decision, and
 // sends one notification that links the explanation.
 func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}, comments: []string{"NONE", "DECISION"}})
@@ -433,8 +433,8 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 		t.Errorf("the request text is not the explanation of I8:\n%s", text)
 	}
 	requireIssueOfTheRun(t, promptOf(t, args), 10, "implementation issue")
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none: the Reviewer wrote the reason", n)
@@ -472,8 +472,8 @@ func TestI8_WithoutTheExplanationTheStopStepHandsOverTheIssue(t *testing.T) {
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I8") || !strings.Contains(comments[0].Body, workflow.MissingExplanationReason) {
 		t.Fatalf("comments on #10 = %+v, want one stop note with the row I8", comments)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications, want 1", n)

@@ -17,7 +17,7 @@ const (
 	issue10Path = "/repos/example-org/example-repo/issues/10"
 )
 
-// approved puts issue #10 in cumin/status/awaiting-checks with the risk
+// approved puts issue #10 in cumin/status/checking with the risk
 // labels, one passed required check, and the Reviewer that approves the
 // head commit. One poll then runs I3, the review, and I6 or I7.
 func approved(t *testing.T, risks ...string) *scene {
@@ -26,7 +26,7 @@ func approved(t *testing.T, risks ...string) *scene {
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: append([]string{"cumin/status/awaiting-checks"}, risks...),
+		Labels: append([]string{"cumin/status/checking"}, risks...),
 	})
 	return sc
 }
@@ -127,8 +127,8 @@ func TestCore04_ARiskMediumPullRequestIsNotMerged(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
 	messages := sc.messagesExceptQ4()
 	if len(messages) != 1 {
@@ -151,8 +151,8 @@ func TestI7_ARiskHighPullRequestWaitsForTheOwner(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerReview) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingMergeDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-merge-decision", got)
 	}
 }
 
@@ -235,8 +235,8 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
 		}
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if sc.fake.Issue(sc.repo, 10).Closed || len(sc.fake.Comments(sc.repo, 10)) != 0 {
 		t.Error("the conflict closed or commented on #10")
@@ -278,7 +278,7 @@ func conflicting(t *testing.T, opts cliOptions) *scene {
 	return sc
 }
 
-// conflictingBeforeChecks puts issue #10 in cumin/status/awaiting-checks
+// conflictingBeforeChecks puts issue #10 in cumin/status/checking
 // with a pull request whose required check has not reported, and whose
 // mergeable value on GitHub is the given one.
 func conflictingBeforeChecks(t *testing.T, opts cliOptions, mergeable string) *scene {
@@ -294,7 +294,7 @@ func conflictingBeforeChecks(t *testing.T, opts cliOptions, mergeable string) *s
 // cumin/status/implementing before the request, exactly one conflict
 // resolution request resumes the Implementer session, and it does not
 // count as a check fix request. The run pushes a new head, so after done
-// I2 runs and the issue returns to cumin/status/awaiting-checks.
+// I2 runs and the issue returns to cumin/status/checking.
 func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChecks(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{movesHeadOnRun: 1}, "CONFLICTING")
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
@@ -329,8 +329,8 @@ func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChec
 	if strings.Contains(text, "could not merge") {
 		t.Errorf("the request text says that a merge failed:\n%s", text)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
@@ -408,8 +408,8 @@ func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
 		t.Errorf("%d notifications, want 1: %v", len(messages), messages)
@@ -444,7 +444,7 @@ func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 }
 
 // assertStoppedAtI6 checks the stop step of I6 for #10: one comment with
-// the reason, cumin/status/awaiting-owner-decision, and one notification.
+// the reason, cumin/status/awaiting-decision, and one notification.
 func (sc *scene) assertStoppedAtI6(t *testing.T, reason string) {
 	t.Helper()
 	comments := sc.fake.Comments(sc.repo, 10)
@@ -456,8 +456,8 @@ func (sc *scene) assertStoppedAtI6(t *testing.T, reason string) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	messages := sc.messagesExceptQ4()
 	if len(messages) != 1 || !strings.Contains(messages[0], "I6") {

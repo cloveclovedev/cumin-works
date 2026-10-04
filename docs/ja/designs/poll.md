@@ -33,7 +33,7 @@
   - 前回の定期確認で、何か動作をした。Ownerの承認とOwnerのレビューの候補 (I12、I13) は、mergeか差し戻しまで進んだときだけ動作に数える。候補は、Ownerが動くまで毎回の判定に出るためである。
   - そのリポジトリでAgentの実行が進んでいる。または、前回の定期確認のあとに実行が終わった。
   - 前回のスナップショットに、`cumin/status/ready` か `cumin/status/planning` の開いている要求Issueがある。
-  - 前回のスナップショットに、`cumin/status/ready`、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いているsub-issueがある。
+  - 前回のスナップショットに、`cumin/status/ready`、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の開いているsub-issueがある。
 - 判定は `internal/workflow` の純粋関数である。`Snapshot.HasIssueInWork` がスナップショットからIssueを見て、`RepositoryInWork` が前回の定期確認の結果と実行の有無から作業中かを返し、`PollIsDue` が前回からの時間と2つの間隔から、今回確かめるかを返す。時計を読むのは `Service.Poll` である。
 - 前回の定期確認の時刻と結果は、リポジトリごとにメモリに持つ。GitHub上の事実ではないが、失っても作業を失わない。cuminが起動し直すと、全てのリポジトリを1回確かめるだけである。
 - 作業中でないリポジトリが気付く速さ。Ownerが `cumin/status/ready` を付ける、Pull Requestを承認する、レビューで差し戻す、のどれにも、最長で `idle_poll_interval` (初期値は5分) のうちに気付く。気付いた定期確認は動作をするか、作業中のIssueを読むので、次の定期確認は `poll_interval` のあとに来る。
@@ -84,8 +84,8 @@
 | 行 | 対象のsub-issue | 含む理由 |
 |---|---|---|
 | I1 (readyの実装Issueに着手) | 開いていて `cumin/status/ready` | `cumin/status/ready` は状態ラベルである |
-| I3 (checkが通り、reviewへ)、I4 (checkが失敗し、修正へ)、I14 (衝突の解消の依頼)、I15 (checkが結果を返さない) | 開いていて `cumin/status/awaiting-checks` | `cumin/status/awaiting-checks` は状態ラベルである |
-| I12 (Ownerの承認のあとのmerge)、I13 (Ownerの指摘への対応の依頼)、I14 (衝突の解消の依頼) | 開いていて `cumin/status/awaiting-owner-review` | `cumin/status/awaiting-owner-review` は状態ラベルである |
+| I3 (checkが通り、reviewへ)、I4 (checkが失敗し、修正へ)、I14 (衝突の解消の依頼)、I15 (checkが結果を返さない) | 開いていて `cumin/status/checking` | `cumin/status/checking` は状態ラベルである |
+| I12 (Ownerの承認のあとのmerge)、I13 (Ownerの指摘への対応の依頼)、I14 (衝突の解消の依頼) | 開いていて `cumin/status/awaiting-merge-decision` | `cumin/status/awaiting-merge-decision` は状態ラベルである |
 | I11 (Pull Requestにラベルを写す) | 開いていて状態ラベルのあるsub-issue | cuminが作るPull Requestは、状態ラベルのある実装Issueのものである。状態ラベルが変わるたびに、選んだsub-issueとして写す |
 
 - I11は、状態ラベルのない開いたsub-issueと、閉じたsub-issueのPull Requestには、ラベルを写さなくなる。閉じたsub-issueのPull Requestはmerge済みで、開いていない。Ownerが状態ラベルを全て外したsub-issueでは、Pull Requestに前のラベルが残り、Ownerが次に状態ラベルを付けたときに写し直す。写したラベルは判定に使わない (原則5) ので、判定は変わらない。
@@ -124,10 +124,10 @@ mergeできるかと、先頭のコミットの時刻の読み方:
 
 ラベルが付いた時刻の使い方:
 
-- R3は、sub-issueに `cumin/status/ready` が付いた時刻が、要求Issueに `cumin/status/awaiting-owner-review` が付いた時刻よりあとかどうかで判定する。
+- R3は、sub-issueに `cumin/status/ready` が付いた時刻が、要求Issueに `cumin/status/awaiting-plan-review` または `cumin/status/awaiting-acceptance` が付いた時刻よりあとかどうかで判定する。
 - レビューのラウンドは、実装Issueに最後に `cumin/status/ready` が付いた時刻と、`cumin-reviewer` の最後の `APPROVE` の時刻の、新しいほうよりあとに出たレビューを数える (「レビューのラウンドの数え方」)。
-- I15の待ち時間は、実装Issueに最後に `cumin/status/awaiting-checks` が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える。cuminは、ラベルの時刻をsub-issueごとにスナップショットに入れる。
-- I13は、Ownerのレビューが出された時刻が、実装Issueに最後に `cumin/status/awaiting-owner-review` が付いた時刻よりあとかどうかを見る。cuminは、この時刻をsub-issueごとにスナップショットに入れる (「Ownerのレビューへの対応の依頼 (I13)」)。
+- I15の待ち時間は、実装Issueに最後に `cumin/status/checking` が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える。cuminは、ラベルの時刻をsub-issueごとにスナップショットに入れる。
+- I13は、Ownerのレビューが出された時刻が、実装Issueに最後に `cumin/status/awaiting-merge-decision` が付いた時刻よりあとかどうかを見る。cuminは、この時刻をsub-issueごとにスナップショットに入れる (「Ownerのレビューへの対応の依頼 (I13)」)。
 - 同じラベルが何度も付くので、ラベルごとに、いちばん新しい `LabeledEvent` を使う。今付いているかどうかは、`labels` で見る。
 
 閉じた要求Issueと、そのsub-issueは読まない。cuminは、閉じた要求Issueには何もしないためである (Issueのラベルと状態遷移の原則6)。
@@ -142,7 +142,7 @@ checkの結果の読み方:
 - 結論は、通った (`SUCCESS`、`SKIPPED`、`NEUTRAL`)、落ちた、まだ終わっていない、の3つに畳む (実測 51)。終わっていない check run (`status` が `COMPLETED` でない) と、`EXPECTED`、`PENDING` の commit status は、まだ終わっていないものとして扱う。
 - 知らない種類の context が来たら、そのリポジトリの定期確認をエラーにする。読めない check の上でI3を通すより、止まって知らせるほうがよい。
 - 必須のcheckがGitHub Appに紐づいているとき (rulesetの `integration_id`。sandboxの `cumin-protected-paths` がそれである) は、そのAppが出したcheckだけが条件を満たす。GitHubも同じに扱う。cuminは、必須のcheckのAppのidと、check runの `checkSuite.app.databaseId` を持ち、名前とAppの両方で照らす (I3、I4が使う)。commit statusにはAppのidがないので、Appを指定した必須のcheckは満たせない。この項目を足してもコストは変わらない (接続ではないため)。
-- 必須のcheckの一覧は、この問い合わせでは読めないのでRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。読むのは、`cumin/status/awaiting-checks` のIssueがそのリポジトリに1つ以上あるときだけである。RESTの上限はGraphQLと別なので、問い合わせのポイントは増えない。
+- 必須のcheckの一覧は、この問い合わせでは読めないのでRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。読むのは、`cumin/status/checking` のIssueがそのリポジトリに1つ以上あるときだけである。RESTの上限はGraphQLと別なので、問い合わせのポイントは増えない。
 - ラベル、checkの結果、レビュー、先頭のコミット (`commits`) は、Pull Requestの下の接続なので、1件のPull Requestにつき1ずつコストの係数を上げる。これらの接続は2つ目の問い合わせにあり、選んだsub-issueだけについて読む。Pull Requestを2件までにして、2つ目の問い合わせを、sub-issueが9件までで1ポイント、100件で9ポイントに収めている (2026-10-03に実測、[#449](https://github.com/cloveclovedev/cumin-works/pull/449))。接続の中の件数 (ラベル、check、レビュー、blocked by) はコストを変えないので、100件まで読む。式と見積もりは [cumin本体の設計メモ](cumin-core.md) の「GitHubクライアント」にある。
 
 失敗したcheckの内容の読み方 (I4の依頼に入れる):
@@ -173,12 +173,12 @@ checkの結果の読み方:
 
 ### ラベルの時刻の読み取り
 
-- R3は、要求Issueに `cumin/status/awaiting-owner-review` が付いた時刻と、sub-issueに `cumin/status/ready` が付いた時刻を比べる。時刻は、GitHubがIssueのタイムラインに残す `LabeledEvent` の `createdAt` から読む。
-- 定期確認の問い合わせには入れず、時刻が要る要求Issueのときだけ、別の問い合わせで読む。要るのは3つの場合である。1つは、R3が成り立ちうるとき、つまり要求Issueが `cumin/status/awaiting-owner-review` で、`cumin/status/ready` の付いた開いているsub-issueがあるときである。もう1つは、`cumin/status/awaiting-checks` の付いた開いているsub-issueがあるときで、そのsub-issueにラベルが最後に付いた時刻を読む (I15の待ち時間の起点)。最後の1つは、`cumin/status/awaiting-owner-review` の開いているsub-issueのPull Requestで、今の先頭のコミットに、人の `CHANGES_REQUESTED` のレビューがあるときで、そのsub-issueに `cumin/status/awaiting-owner-review` が最後に付いた時刻を読む (I13)。判定の純粋関数 (`NeedsLabelTimes`) がこれを決める。
+- R3は、要求Issueに `cumin/status/awaiting-plan-review` または `cumin/status/awaiting-acceptance` が付いた時刻と、sub-issueに `cumin/status/ready` が付いた時刻を比べる。時刻は、GitHubがIssueのタイムラインに残す `LabeledEvent` の `createdAt` から読む。
+- 定期確認の問い合わせには入れず、時刻が要る要求Issueのときだけ、別の問い合わせで読む。要るのは3つの場合である。1つは、R3が成り立ちうるとき、つまり要求Issueが `cumin/status/awaiting-plan-review` または `cumin/status/awaiting-acceptance` で、`cumin/status/ready` の付いた開いているsub-issueがあるときである。もう1つは、`cumin/status/checking` の付いた開いているsub-issueがあるときで、そのsub-issueにラベルが最後に付いた時刻を読む (I15の待ち時間の起点)。最後の1つは、`cumin/status/awaiting-merge-decision` の開いているsub-issueのPull Requestで、今の先頭のコミットに、人の `CHANGES_REQUESTED` のレビューがあるときで、そのsub-issueに `cumin/status/awaiting-merge-decision` が最後に付いた時刻を読む (I13)。判定の純粋関数 (`NeedsLabelTimes`) がこれを決める。
 - 1回の問い合わせで、要求Issueと、そのsub-issue (15件まで) のタイムラインを読む。各Issueは、新しいほうから100件の `LabeledEvent` を読み (`last: 100`)、ラベルごとに一番新しい時刻を使う。同じラベルが付いたり外れたりするためである。コストは1ポイントだった (2026-09-29にcumin-worksで実測)。
 - 読むのは状態ラベルがその形のあいだだけなので、ふだんの定期確認のコストは変わらない。Ownerが分割結果を確認している間 (前の分割の `cumin/status/ready` が残っているとき) と、sub-issueがcheckを待っている間と、Ownerの `CHANGES_REQUESTED` が今の先頭のコミットに残ったままsub-issueがOwnerの判断を待っている間は、その要求Issueごとに、定期確認のたびに1ポイント増える。1つの要求Issueで2つ以上が要るときも、問い合わせは1回である。
-- `cumin/status/awaiting-checks` の時刻だけが読めなかったときは、ほかの行を止めない。R3が成り立ちえない要求Issueでは、着手 (I1) も待たない。
-- 読めなかったときは、I13の候補にしない。Issueは `cumin/status/awaiting-owner-review` のままなので、次の定期確認でやり直す。
+- `cumin/status/checking` の時刻だけが読めなかったときは、ほかの行を止めない。R3が成り立ちえない要求Issueでは、着手 (I1) も待たない。
+- 読めなかったときは、I13の候補にしない。Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でやり直す。
 - 読めなかったときは、ログに出して、R3をその定期確認では判定しない。その要求Issueのsub-issueの着手 (I1) も、次の定期確認まで待つ。着手すると `cumin/status/ready` が外れ、R3が二度と成り立たなくなるためである。R3がラベルを替えられなかったときも、同じ理由で待つ。ほかの行は進める。
 - 採らなかった案: 定期確認の問い合わせに、sub-issueごとのタイムラインを入れる。1ページに要求Issue 10件 x sub-issue 15件のタイムラインが加わり、ページを小さくしても、R3が要らない定期確認のたびにコストが増える。
 
@@ -190,7 +190,7 @@ checkの結果の読み方:
 - コストは、GraphQLが1ポイント (2026-10-03にcumin-worksで実測。`LabeledEvent` に `actor` があることも、スキーマで確かめた) と、人のときのRESTの呼び出し1回である。起動のたびに増えるだけで、ふだんの定期確認のコストは変わらない。R1とI1の着手では、判定の前の読み取りを使うので、起動のときには増えない。
 - R1とI1では、判定の前の読み取り (「Ownerのreadyの確認 (R1、I1)」) がスナップショットに入れた名前を使い、読み直さない。ほかの起動では、次のとおりに読む。
 - 読むのは、ラベルを替える前である。順は、ログイン名を読む、ラベルを替える、依頼する、になる。読めなければ、ラベルを替えず、依頼もしない。次の定期確認でやり直す (I3のラウンドの読み取りと同じ形)。ラベルを依頼より先に替えることは変わらない (原則3)。
-- 読む場所は、定期確認が起動を決める所である: R4 (受け入れの確認)、I3 (review)、I4 (checkの修正)、I14 (checkまたはOwnerの判断を待つ間の衝突の解消)、I13 (Ownerのレビューへの対応)、I12 (Ownerの承認のあとのmerge) の衝突の解消。I12では、mergeが衝突したときだけ、ラベルを替える前に読む。読めなければ、Issueは `cumin/status/awaiting-owner-review` のままなので、次の定期確認でI12がもう一度成り立つ。
+- 読む場所は、定期確認が起動を決める所である: R4 (受け入れの確認)、I3 (review)、I4 (checkの修正)、I14 (checkまたはOwnerの判断を待つ間の衝突の解消)、I13 (Ownerのレビューへの対応)、I12 (Ownerの承認のあとのmerge) の衝突の解消。I12では、mergeが衝突したときだけ、ラベルを替える前に読む。読めなければ、Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でI12がもう一度成り立つ。
 - 1つの実行の続きで出す依頼は、その実行の前に読んだ名前を使い、読み直さない: 異常終了のあとのやり直し、I5の指摘の修正、I8の原因の整理、I6 (Reviewerの承認のあとのmerge) の衝突の解消。I6で読み直さないのは、そこで一時的でない失敗で読めないと、Issueが `cumin/status/reviewing` のまま残り、どの定期確認もやり直さないためである。
 - 読むのは、各Issueの新しいほうから100件のラベルのイベントだけである。最新の `cumin/status/ready` のあとに100件を超えるラベルのイベントがあると、そのイベントはないものとして扱う (要求Issueはsub-issueから読み、実装Issueは「ない」になる)。sub-issueから読むのは、依頼に書くログイン名だけである。R1とI1の条件の確認 (「Ownerのreadyの確認 (R1、I1)」) は、sub-issueから読まず、「Ownerでない」にする。
 - 読んだ名前は、`internal/agent` が事実のかたまりに書く ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」)。
@@ -269,23 +269,23 @@ checkの結果の読み方:
 図の元ファイル: [poll-decide.puml](poll-decide.puml)
 
 - 判定は `internal/workflow` の純粋関数である。スナップショットと、設定 (リポジトリごとに同時に進めるIssueの数、優先度のラベルの一覧、checkの待ち時間)、定期確認の時刻だけから、着手リストを返す。時刻は値として受け取り、時計を読まない。I/Oをしない。同じスナップショットからは、Issueの並び順によらず、同じ着手リストを返す。着手可能なIssue数は、定期確認のたびにラベルから数え直す。ファイルにもメモリにも持ち越さない。
-- 進行中として数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/awaiting-checks`、`cumin/status/reviewing` の開いているsub-issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。数えると、初期値の上限 (1) では、どのsub-issueにも着手できなくなる。
+- 進行中として数えるのは、`cumin/status/planning` の要求Issueと、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の開いているsub-issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。数えると、初期値の上限 (1) では、どのsub-issueにも着手できなくなる。
 - 動作の適用は、判定とは別の部分が行う。着手では、ラベルを替えてから依頼する (Issueのラベルと状態遷移の原則3)。ラベルを替えられなければ依頼せず、次の定期確認でやり直す。
 - 今の判定はR1、R3、R4、R6、R7、I1、I3、I4、I11、I12、I13、I14、I15である。I9は判定の前の別の手順である (「フォローアップノート (I9)」)。R2、I2、I5〜I8、I10は、実行の終わりに判定する。
 - R3、R6、R7は、要求Issueのラベルを替えるだけで、Agentを起動しない。そのため一番先に決め、上限の空きを使わない。R4は、R1、I1と同じく上限の空きを分け合い、同じ順番 (優先度、Issueの番号) で着手する。
-- R4の依頼中は、要求Issueのラベルが `cumin/status/implementing` のまま変わらない。そのため、Plannerが動いていることは、cuminが手元に持つ実行中のIssueの集合で判定に渡す (`Snapshot.Running`)。実行中の受け入れの確認は、同時に進めるIssueの数にも数える。cuminが再起動すると集合は空になり、コメントがなければR4がもう一度依頼する。Plannerは、同じ回の自分のコメントを書き直すので、コメントは増えない (Plannerの要件の「やり直しに備えること」)。R3は、要求Issueに状態ラベルがないときは `cumin/status/ready` の付いた開いているsub-issueがあれば成り立ち、`cumin/status/awaiting-owner-review` のときは、そのラベルよりあとに `cumin/status/ready` が付いたsub-issueがあれば成り立つ。R6は、`cumin/status/implementing` の要求Issueに開いているsub-issueがあり、その全てに状態ラベルがないときに成り立つ。`cumin/type/owner-task` のsub-issueも、状態ラベルがないので数える。
+- R4の依頼中は、要求Issueのラベルが `cumin/status/implementing` のまま変わらない。そのため、Plannerが動いていることは、cuminが手元に持つ実行中のIssueの集合で判定に渡す (`Snapshot.Running`)。実行中の受け入れの確認は、同時に進めるIssueの数にも数える。cuminが再起動すると集合は空になり、コメントがなければR4がもう一度依頼する。Plannerは、同じ回の自分のコメントを書き直すので、コメントは増えない (Plannerの要件の「やり直しに備えること」)。R3は、要求Issueに状態ラベルがないときは `cumin/status/ready` の付いた開いているsub-issueがあれば成り立ち、`cumin/status/awaiting-plan-review` または `cumin/status/awaiting-acceptance` のときは、そのラベルよりあとに `cumin/status/ready` が付いたsub-issueがあれば成り立つ。R6は、`cumin/status/implementing` の要求Issueに開いているsub-issueがあり、その全てに状態ラベルがないときに成り立つ。`cumin/type/owner-task` のsub-issueも、状態ラベルがないので数える。
 - R6の通知は、ラベルを替えたあとに1回だけ出す。次の定期確認では要求Issueがもう `cumin/status/implementing` ではないので、同じ通知を繰り返さない。ラベルを替えられなければ通知せず、次の定期確認でやり直す。
-- I14、I3、I4、I15は、着手 (R1、I1) より先に決める。`cumin/status/awaiting-checks` のIssueは、同時に進めるIssueの数に既に数えられているので、先に決めても着手の枠を奪わない。
+- I14、I3、I4、I15は、着手 (R1、I1) より先に決める。`cumin/status/checking` のIssueは、同時に進めるIssueの数に既に数えられているので、先に決めても着手の枠を奪わない。
 - checkの判定は純粋関数である。必須のcheckの一覧と、先頭のコミットのcheckの結果から、通った・落ちた・待ちの3つのどれかを返す。決まりは次のとおりである。
   - 必須のcheckが1つもなければ、すぐ通ったとみなす。
   - 名前が同じ結果が、その必須のcheckに当たる。rulesetがAppを指定していれば、そのAppの結果だけが当たる。
   - 1つでも落ちていれば、ほかがまだ終わっていなくても「落ちた」にする。I4の修正は、待つより先である。
   - 結果がない、または終わっていない必須のcheckがあれば「待ち」にする。必須のcheckの一覧はpushの前から決まっているので、現れていないcheckは、これから現れるcheckである。
   - 必須でないcheckは、落ちていても判定に入らない。
-- I4は、`cumin/status/awaiting-checks` のIssueで、Pull Requestの先頭のコミットの必須のcheckが「落ちた」ときに成り立つ。動作には、落ちた必須のcheckを、Appも含めて持たせる。上限に達したかどうかは、Hostの状態ファイルの回数を読む適用の側で、純粋関数 (回数 < `max_check_fix_requests`) に聞く。回数はGitHubの事実ではないので、スナップショットには入れない。
-- I14は、`cumin/status/awaiting-checks` または `cumin/status/awaiting-owner-review` のIssueで、スナップショットのPull Requestの `mergeable` が `CONFLICTING` のときに成り立つ。`UNKNOWN` と `MERGEABLE` では成り立たない。`UNKNOWN` は、GitHubがまだ計算している印なので、あとの定期確認が決める。I14が成り立つIssueには、I3もI4も出さない。1つの定期確認では、最初に成り立った行だけを動かすためである。
-- `cumin/status/awaiting-owner-review` のIssueのI14は、I12とI13の候補のあとに並べる。実行中のIssue (I12のmergeの手順が動いているIssue) と、`cumin/status/ready` も付いているIssue (I1が扱う) は除く。適用の順は「checkを待つ間の衝突の解消の依頼 (I14)」に書く。
-- I15は、`cumin/status/awaiting-checks` のIssueで、checkの判定が「待ち」のまま、checkの待ち時間 (リポジトリの設定 `checks_wait_time`) を過ぎたときに成り立つ。I14、I3、I4のあとに決めるので、衝突したPull RequestはI14、落ちたcheckはI4になり、I15にはならない。`mergeable` が `UNKNOWN` のままでも成り立つ。待ち時間の起点は、ラベルの時刻と先頭のコミットの時刻の、遅いほうである。待っている間に新しいコミットがpushされると、起点が新しくなる。ラベルの時刻か、先頭のコミットの時刻を読めなかった定期確認では決めず、あとの定期確認が決める。先頭のコミットの時刻が空のときは、新しいコミットがpushされた直後かもしれないためである。動作には、先頭のコミット、結果を返していない必須のcheck (結果がない、または終わっていない)、待った時間を持たせる。実装Issueを閉じる開いているPull Requestがないとき (誰かが閉じたなど) も、ラベルの時刻から待ち時間を過ぎたら成り立つ。先頭のコミットがないので、起点はラベルの時刻だけである。動作には、Pull Requestの番号を0にして、待った時間だけを持たせる。
+- I4は、`cumin/status/checking` のIssueで、Pull Requestの先頭のコミットの必須のcheckが「落ちた」ときに成り立つ。動作には、落ちた必須のcheckを、Appも含めて持たせる。上限に達したかどうかは、Hostの状態ファイルの回数を読む適用の側で、純粋関数 (回数 < `max_check_fix_requests`) に聞く。回数はGitHubの事実ではないので、スナップショットには入れない。
+- I14は、`cumin/status/checking` または `cumin/status/awaiting-merge-decision` のIssueで、スナップショットのPull Requestの `mergeable` が `CONFLICTING` のときに成り立つ。`UNKNOWN` と `MERGEABLE` では成り立たない。`UNKNOWN` は、GitHubがまだ計算している印なので、あとの定期確認が決める。I14が成り立つIssueには、I3もI4も出さない。1つの定期確認では、最初に成り立った行だけを動かすためである。
+- `cumin/status/awaiting-merge-decision` のIssueのI14は、I12とI13の候補のあとに並べる。実行中のIssue (I12のmergeの手順が動いているIssue) と、`cumin/status/ready` も付いているIssue (I1が扱う) は除く。適用の順は「checkを待つ間の衝突の解消の依頼 (I14)」に書く。
+- I15は、`cumin/status/checking` のIssueで、checkの判定が「待ち」のまま、checkの待ち時間 (リポジトリの設定 `checks_wait_time`) を過ぎたときに成り立つ。I14、I3、I4のあとに決めるので、衝突したPull RequestはI14、落ちたcheckはI4になり、I15にはならない。`mergeable` が `UNKNOWN` のままでも成り立つ。待ち時間の起点は、ラベルの時刻と先頭のコミットの時刻の、遅いほうである。待っている間に新しいコミットがpushされると、起点が新しくなる。ラベルの時刻か、先頭のコミットの時刻を読めなかった定期確認では決めず、あとの定期確認が決める。先頭のコミットの時刻が空のときは、新しいコミットがpushされた直後かもしれないためである。動作には、先頭のコミット、結果を返していない必須のcheck (結果がない、または終わっていない)、待った時間を持たせる。実装Issueを閉じる開いているPull Requestがないとき (誰かが閉じたなど) も、ラベルの時刻から待ち時間を過ぎたら成り立つ。先頭のコミットがないので、起点はラベルの時刻だけである。動作には、Pull Requestの番号を0にして、待った時間だけを持たせる。
 - I3は、`cumin/status/reviewing` に替えたあと、Reviewerを起動する (「Reviewerへの依頼 (I3、I10)」)。
 - I11は、Issueを閉じる開いているPull Requestごとに、そのラベルのうち `cumin/status/*` と `risk/*` を、Issueのものに置き換える。ほかのラベルは残す。並び順によらず同じなら、書き込まない。書き込みは、Issueと同じ "Set labels for an issue" で行う。GitHubでは、Pull RequestもこのAPIのIssueである。
 - I11がコピーするのは、その定期確認で読んだIssueのラベルである。同じ定期確認や実行の終わりで替えたラベルは、次の定期確認でPull Requestに届く。ラベルは、OwnerがPull Requestの一覧で見るためのもので、判定には使わないので、この遅れは困らない。
@@ -336,15 +336,15 @@ checkの結果の読み方:
 ### checkの修正の依頼 (I4)
 
 - I4を適用する順は、回数を1つ増やして状態ファイルに書く、ラベルを `cumin/status/implementing` に替える、失敗したcheckの内容を読む、依頼する、である。回数を先に書くのは、書けない状態ファイルで上限を越えて依頼し続けないためである。書けなければラベルを替えず、次の定期確認でやり直す。ラベルを依頼より先に替えるのは、同じ修正を二重に依頼しないためである (原則3)。ラベルを替えられなければ、依頼せずに回数を元に戻す。替えられない失敗が続いても、1回も修正しないまま上限に達しないためである。
-- 上限 (リポジトリの設定 `max_check_fix_requests`) に達していれば、依頼しない。「Ownerに戻す道」の手順を、行の番号I4で呼ぶ。ただし、ラベルを先に `cumin/status/awaiting-owner-decision` に替え、替えられたときだけコメントと通知に進む。定期確認が決める停止なので、ラベルが替わらないと、次の定期確認が同じ停止を決め、コメントと通知を繰り返すためである。実行の終わりが決める停止 (I2) は、実行ごとに1回しか起きないので、コメントを先に書く順のままにする。コメントと通知には、落ちたcheckの名前と、依頼した回数を書く。
+- 上限 (リポジトリの設定 `max_check_fix_requests`) に達していれば、依頼しない。「Ownerに戻す道」の手順を、行の番号I4で呼ぶ。ただし、ラベルを先に `cumin/status/awaiting-decision` に替え、替えられたときだけコメントと通知に進む。定期確認が決める停止なので、ラベルが替わらないと、次の定期確認が同じ停止を決め、コメントと通知を繰り返すためである。実行の終わりが決める停止 (I2) は、実行ごとに1回しか起きないので、コメントを先に書く順のままにする。コメントと通知には、落ちたcheckの名前と、依頼した回数を書く。
 - 依頼は、状態ファイルにある直前の実行のセッションを `--resume` で再開する。セッションがなければ (状態ファイルを失ったとき)、新しいセッションで始まる。依頼文には、落ちたcheckごとに、その内容 (「失敗したcheckの内容の読み方」) を載せる。内容はcheckの出力なので、指示ではなくデータとして読むよう依頼文に書く。
 - worktreeは、そのIssueのものを使う。ブランチは、Pull Requestのブランチである。前のworktreeは、続きの依頼 (I1) と同じく、GitHubにない作業を持っていなければ消して、`origin/<ブランチ>` から作り直す。ブランチの名前が変わったときや、新しいPull Requestができたときも、Pull Requestのブランチの上で直せる。
-- 実行の終わりは、I1の依頼と同じに扱う。`done` ならI2の検証をもう一度行い、通れば `cumin/status/awaiting-checks` に戻る。`blocked` ならOwnerに戻す。異常終了は1回だけやり直す。やり直しは新しいセッションで行い、異常終了したセッションを再開しない。
+- 実行の終わりは、I1の依頼と同じに扱う。`done` ならI2の検証をもう一度行い、通れば `cumin/status/checking` に戻る。`blocked` ならOwnerに戻す。異常終了は1回だけやり直す。やり直しは新しいセッションで行い、異常終了したセッションを再開しない。
 - 回数とセッションは、Ownerが `cumin/status/ready` を付け直したとき (I1) に消える。次の依頼は新しいセッションで、回数0から始まる。
 
 ### 必須のcheckが結果を返さないときの停止 (I15)
 
-- I15は、Agentに依頼しない。「Ownerに戻す道」の手順を、行の番号I15で呼ぶ。上限に達したI4と同じく、ラベルを先に `cumin/status/awaiting-owner-decision` に替え、替えられたときだけコメントと通知に進む。定期確認が決める停止なので、ラベルが替わらないと、次の定期確認が同じ停止を決め、コメントと通知を繰り返すためである。ラベルが替わると、次の定期確認ではI15が成り立たないので、停止は1回だけである。
+- I15は、Agentに依頼しない。「Ownerに戻す道」の手順を、行の番号I15で呼ぶ。上限に達したI4と同じく、ラベルを先に `cumin/status/awaiting-decision` に替え、替えられたときだけコメントと通知に進む。定期確認が決める停止なので、ラベルが替わらないと、次の定期確認が同じ停止を決め、コメントと通知を繰り返すためである。ラベルが替わると、次の定期確認ではI15が成り立たないので、停止は1回だけである。
 - コメントと通知には、同じ1文を入れる。Pull Requestの先頭のコミット、結果を返していない必須のcheckの名前、待った時間を書く。開いているPull Requestがないときは、そのことと待った時間を書き、コメントの `Pull request:` は `None` になる。理由は書かない。cuminは見える事実だけを書き、理由はOwnerが調べる。
 - 定期確認の時刻は、利用枠の判定と同じ時計 (`Service.now`) から1回読み、判定に値として渡す。
 - 実行を待って止める間も、この停止は適用する。Agentを起動しないためである。
@@ -352,16 +352,16 @@ checkの結果の読み方:
 ### checkを待つ間の衝突の解消の依頼 (I14)
 
 - GitHubは、衝突のあるPull Requestで `pull_request` のワークフローを動かさない。そのため、衝突したままでは必須のcheckが結果を返さず、I3もI4も成り立たない。I14は、定期確認のスナップショットの `mergeable` から衝突を見つけて、Implementerに戻す。
-- I14を適用する順は、Ownerのログイン名を読む、ラベルを `cumin/status/implementing` に替える、依頼する、である。ラベルを依頼より先に替えるのは、同じ依頼を二重に出さないためである (原則3)。ログイン名を読めないとき、ラベルを替えられないときは、依頼せず、Issueは `cumin/status/awaiting-checks` のまま残る。次の定期確認でやり直す。
+- I14を適用する順は、Ownerのログイン名を読む、ラベルを `cumin/status/implementing` に替える、依頼する、である。ラベルを依頼より先に替えるのは、同じ依頼を二重に出さないためである (原則3)。ログイン名を読めないとき、ラベルを替えられないときは、依頼せず、Issueは `cumin/status/checking` のまま残る。次の定期確認でやり直す。
 - 依頼は、mergeが衝突したとき (I6、I12) と同じ「衝突の解消」である。依頼文も同じで、既定のブランチの名前を入れる。依頼文の最初の文は、Pull Requestが既定のブランチと衝突していることだけを言い、mergeが失敗したとは言わない。I14では、cuminはまだmergeを呼んでいないためである。
-- 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開し、別のgoroutineで動かす。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証を行い、通れば `cumin/status/awaiting-checks` に戻る。
+- 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開し、別のgoroutineで動かす。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証を行い、通れば `cumin/status/checking` に戻る。
 - checkの修正を依頼した回数には数えない。衝突はImplementerの誤りではなく、並行して進むほかのPull Requestのmergeで起きるためである ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「checkを待つ間の行」)。
-- 衝突の解消の実行が `done` で終わっても、Pull Requestの先頭のコミットが衝突したときのままなら、I2に進まずに、行の番号I14でOwnerに戻す。そのまま `cumin/status/awaiting-checks` に戻すと、次の定期確認が同じ依頼を出し続けるためである。
+- 衝突の解消の実行が `done` で終わっても、Pull Requestの先頭のコミットが衝突したときのままなら、I2に進まずに、行の番号I14でOwnerに戻す。そのまま `cumin/status/checking` に戻すと、次の定期確認が同じ依頼を出し続けるためである。
 - 実行を待って止める間は、この依頼を落とす (`WithoutNewWork`)。Issueの状態ラベルは変わらないので、次の起動の定期確認でI14がそのまま成り立つ。
-- I14は、Ownerの判断を待つ間 (`cumin/status/awaiting-owner-review`) にも成り立つ。ほかのPull Requestのmergeで衝突したPull Requestを、Ownerが承認する前にImplementerに戻す。Ownerは、mergeできる先頭のコミットだけを判断すればよい。適用の手順、依頼文、先頭のコミットが変わらないときの停止 (行の番号I14) は、checkを待つ間と同じである。ログイン名を読めないとき、ラベルを替えられないときは、Issueは `cumin/status/awaiting-owner-review` のまま残り、次の定期確認でやり直す。解消のあとは、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。
+- I14は、Ownerの判断を待つ間 (`cumin/status/awaiting-merge-decision`) にも成り立つ。ほかのPull Requestのmergeで衝突したPull Requestを、Ownerが承認する前にImplementerに戻す。Ownerは、mergeできる先頭のコミットだけを判断すればよい。適用の手順、依頼文、先頭のコミットが変わらないときの停止 (行の番号I14) は、checkを待つ間と同じである。ログイン名を読めないとき、ラベルを替えられないときは、Issueは `cumin/status/awaiting-merge-decision` のまま残り、次の定期確認でやり直す。解消のあとは、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。
 - Ownerの判断を待つ間のI14は、同じ定期確認のI12とI13のあとに適用する。衝突した先頭のコミットにOwnerのレビューがあるときは、そのレビューが先に決める。I12が動いたとき (mergeの手順、または停止) と、I13が差し戻したときは、そのIssueのI14を適用しない。Ownerの承認は、今までどおりI12を通り、mergeの衝突から「衝突の解消」になる。Ownerが承認していても、必須のcheckが通っていなくてI12がmergeを待つときは、I12は動いていないので、I14を適用する。衝突したPull Requestでは、checkがもう動かないためである。I12かI13の確認がエラーで終わったときも、適用しない。次の定期確認が決める。Ownerのレビューかどうかは、権限を読まないと分からないので、純粋な判定は候補を並べるだけにして、適用の側が落とす。Ownerでない人のレビューしかないときは、I12もI13も動かないので、I14を適用する。
-- `UNKNOWN` と `MERGEABLE` では、Ownerの判断を待つIssueは何も変わらない。I15は `cumin/status/awaiting-checks` だけの行なので、`UNKNOWN` が続いても止めない。
-- `mergeable` は、定期確認の2つ目の問い合わせが、選んだsub-issueのPull Requestで読む。`cumin/status/awaiting-owner-review` は状態ラベルなので、Ownerの判断を待つ開いているIssueは選ばれ、そのPull Requestの `mergeable` も読む (「定期確認で読む内容」の2つの問い合わせの表)。
+- `UNKNOWN` と `MERGEABLE` では、Ownerの判断を待つIssueは何も変わらない。I15は `cumin/status/checking` だけの行なので、`UNKNOWN` が続いても止めない。
+- `mergeable` は、定期確認の2つ目の問い合わせが、選んだsub-issueのPull Requestで読む。`cumin/status/awaiting-merge-decision` は状態ラベルなので、Ownerの判断を待つ開いているIssueは選ばれ、そのPull Requestの `mergeable` も読む (「定期確認で読む内容」の2つの問い合わせの表)。
 
 ### Reviewerへの依頼 (I3、I10)
 
@@ -377,14 +377,14 @@ checkの結果の読み方:
 - ReviewerがこのPull Requestの前のコミットを承認しているときは、依頼文のラウンドの行の次に、最後に承認したコミットを `Approved commit: <コミット>` の行で入れる。承認のあとはラウンドが1から数え直され、前のラウンドでレビューしたコミットがないので、Reviewerがどこまで承認したかを依頼から読めるようにするためである。1ラウンド目では、指示の文も、そのコミットから今の先頭のコミットまでの差分だけを、1ラウンド目の深さで見るように言う。2ラウンド目以降は、行が加わるだけで、指示の文は変わらない。承認したコミットが今の先頭のコミットのときは、差分がないので、行を入れない。一度も承認していなければ、依頼文は今までと同じである。
 - 扱うIssueの事実は、review、やり直しのreview、原因の整理 (I8) のどれでも、実装Issueの番号と、種類「implementation issue」と、Ownerのログイン名である。I1と同じく、起動の依頼で渡す。Ownerのログイン名は、ラウンドと同じく、ラベルを替える前に読む (「Ownerのログイン名の読み取り」)。
 - 実行が `done` で終わったら、その実装Issueだけを読み直し (「実行終了の判定」)、ReviewerのAppのbotが最後に出したレビューを確かめる (純粋関数 `CheckReview`)。それが今の先頭のコミットに対する `APPROVE` か `REQUEST_CHANGES` なら、レビューが出たとみなす。そうでなければ、同じセッションで1回だけ依頼し直す。依頼文には、何が見つからなかったかだけを書く。2回目も見つからなければ、行の番号I5 (I5の「うまくいかないとき」) で「Ownerに戻す道」の手順を呼ぶ。
-- 読み直したPull Requestの先頭のコミットが、依頼したときと違えば (Reviewerの実行中にOwnerがpushしたときなど)、レビューを確かめずに、ラベルを `cumin/status/awaiting-checks` に戻す。必須のcheckが通ったのは古いコミットだけだからである。新しいコミットでcheckが走り、I3かI4がもう一度決める。古いコミットに出たレビューは、GitHubにあるとおりにラウンドに数える。
+- 読み直したPull Requestの先頭のコミットが、依頼したときと違えば (Reviewerの実行中にOwnerがpushしたときなど)、レビューを確かめずに、ラベルを `cumin/status/checking` に戻す。必須のcheckが通ったのは古いコミットだけだからである。新しいコミットでcheckが走り、I3かI4がもう一度決める。古いコミットに出たレビューは、GitHubにあるとおりにラウンドに数える。
 - `APPROVE` なら、「mergeの手順 (I6、I7)」に進む。`REQUEST_CHANGES` なら、「指摘の修正の依頼 (I5)」に進む。
 - `blocked` なら、I10である。やり直さず、行の番号I10で「Ownerに戻す道」の手順を呼ぶ。コメントは、Reviewerが書いた `blocked_reason` である。
 - Reviewerの実行のあとの手順は、GitHubの呼び出しが一時的な失敗 (`github.IsTemporary`) で終わったときに、捨てずに持っておく。仕組みは、I2と同じである (「実行終了の判定」、`keptstep.go`)。図の2つの戻る矢印がこれである。
   - `done` のあとの手順は、Issueの読み直しから、レビューが決める道のラベルの付け替えまでである。対象の呼び出しは、tokenの発行、Issueの読み直し、承認のあとの読み直しと必須のcheckの一覧 (I6、I7)、ラベルの付け替え (先頭のコミットが動いたとき、I5、I7、checkが通っていないとき) である。
   - `blocked` のあとの手順 (I10) は、Issueの読み直しである。読み直しが一時的な失敗で終わったら、コメントも通知も出さずに持っておく。あとの定期確認で読めたら、コメント、ラベル、通知を1回ずつ出す。
-  - 手順は、Issueの読み直しからやり直す。読み直したIssueに `cumin/status/reviewing` がもうなければ、何も書かずに終える。ただし、直前の回に一時的な失敗で終わったラベルの付け替えのラベルが付いていれば、その書き込みは届いていたので、ラベルは書かずに、その先 (I5の依頼、I7の通知) を1回だけ行う。`cumin/status/awaiting-checks` への付け替えには先がないので、そのまま終える。覚えておくラベルは、直前の回のものだけである。
-  - 届いていた付け替えで、持っておく間にIssueが `cumin/status/awaiting-checks` になることがある。定期確認の判定は、このラベルの行 (I3、I4、I14、I15) でも、実行中のIssue (`Snapshot.Running`) を候補にしない。持っておいた手順が終わる前に、同じIssueのAgentをもう1つ起動しないためである。I2の持っておいた手順でも同じである。
+  - 手順は、Issueの読み直しからやり直す。読み直したIssueに `cumin/status/reviewing` がもうなければ、何も書かずに終える。ただし、直前の回に一時的な失敗で終わったラベルの付け替えのラベルが付いていれば、その書き込みは届いていたので、ラベルは書かずに、その先 (I5の依頼、I7の通知) を1回だけ行う。`cumin/status/checking` への付け替えには先がないので、そのまま終える。覚えておくラベルは、直前の回のものだけである。
+  - 届いていた付け替えで、持っておく間にIssueが `cumin/status/checking` になることがある。定期確認の判定は、このラベルの行 (I3、I4、I14、I15) でも、実行中のIssue (`Snapshot.Running`) を候補にしない。持っておいた手順が終わる前に、同じIssueのAgentをもう1つ起動しないためである。I2の持っておいた手順でも同じである。
   - ラベルのあとに続く長い処理 (I5の依頼、I8の原因の整理、I6のmerge、レビューが見つからないときの依頼し直し) は、手順の残りである。失敗なく終わった回のあとで、1回だけ始める。持っておく対象ではないので、同じ依頼を二重に出すことはない。定期確認の中でやり直した回では、残りを別のgoroutineで動かし、定期確認は待たない。その間、Issueは作業中のIssueの集合に残る。
   - 一時的でない失敗は、今までどおりに扱う。ラベルを替えずにログに出す。
   - I8の原因の整理の実行のあとの読み取りは、まだ持っておかない。mergeの手順は持っておく (「mergeの手順 (I6、I7)」)。
@@ -396,19 +396,19 @@ checkの結果の読み方:
 
 - Reviewerの実行の終わりに、先頭のコミットに `REQUEST_CHANGES` が出ていたら、読み直したレビューからラウンドを数え直す。そのレビューのラウンドである。上限 (リポジトリの設定 `max_review_rounds`) 未満ならI5、上限に達していればI8である。判定は純粋関数 (ラウンド < `max_review_rounds`) である。
 - I5を適用する順は、ラベルを `cumin/status/implementing` に替える、依頼する、である。ラベルを替えられなければ依頼しない。実行の終わりが決める動作なので、次の定期確認が同じ依頼を決めることはない (Reviewerの実行ごとに1回しか起きない)。ラベルの付け替えが一時的な失敗で終わったときは、手順を持っておき、あとの定期確認で読み直しからやり直す (「Reviewerへの依頼 (I3、I10)」)。
-- 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開する。Reviewerのセッションではない。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証をもう一度行い、通れば `cumin/status/awaiting-checks` に戻る。そのあとI3が、次のラウンドのレビューを依頼する。
+- 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開する。Reviewerのセッションではない。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証をもう一度行い、通れば `cumin/status/checking` に戻る。そのあとI3が、次のラウンドのレビューを依頼する。
 - 依頼文 (「指摘の修正」) に入れるのは、リポジトリ、実装Issue、Pull Request、ブランチ、作業場所と、レビューのアドレスである。指摘そのものは依頼文に写さない。Implementerが、GitHubで指摘を読み、スレッドごとに返答するためである (返答のテンプレートはskill `cumin-review-reply`)。
 - Implementerの依頼は、Reviewerの実行と同じgoroutineで続けて行う。持っておいた手順が定期確認の中で依頼を決めたときは、別のgoroutineで行う。どちらでも、同じIssueのAgentは、いつも1つだけである。
 - 上限に達していれば、Implementerには依頼せず、「上限での原因の整理 (I8)」に進む。
 
 ### Ownerのレビューへの対応の依頼 (I13)
 
-- 定期確認の判定 (純粋関数) が、候補を集める。集め方はI12の候補と同じで、見るレビューだけが違う。`cumin/status/awaiting-owner-review` の開いた実装Issueで、Pull Requestの今の先頭のコミットに、人 (botでないアカウント) の `CHANGES_REQUESTED` のレビューがあるものである。実行中のIssueは除く。`cumin/status/ready` も付いているIssueは除く。Ownerが新しい着手を求めているので、I1が扱う。
-- 候補にするのは、そのレビューが、実装Issueに最後に `cumin/status/awaiting-owner-review` が付いた時刻よりあとに出されたときだけである。2つの時刻は、どちらもGitHubの事実である。レビューの時刻は定期確認の問い合わせの `submittedAt`、ラベルの時刻はラベルの時刻の問い合わせで読み、スナップショットのsub-issueに入れる (「ラベルの時刻の読み取り」)。cuminは手元に何も残さない。ラベルの時刻を読めなかった定期確認では、候補にしない。読めても、そのラベルの時刻がないとき (新しいほうから100件の `LabeledEvent` に入っていないとき) も、候補にしない。時刻が分からないまま差し戻すと、同じレビューで繰り返すためである。
-- 候補ごとに、判断のレビューを出した人たちの権限を、I12と同じ読み取りと同じ判定 (`IsOwner`) で確かめる。Ownerのレビューのうち、最新の判断のレビューが今の先頭のコミットへの `CHANGES_REQUESTED` で、実装Issueに最後に `cumin/status/awaiting-owner-review` が付いた時刻よりあとに出されていれば、I13が成り立つ (純粋関数 `OwnerRequestedChanges`)。古いコミットへのレビュー、botのレビュー、Ownerでない人のレビューは数えない。`COMMENTED` は判断のレビューではないので、コメントだけのレビューでは何も起きない。あとから出したOwnerの `APPROVED` は、差し戻しを取り消す。
-- I13を適用する順は、Ownerのログイン名を読む、ラベルを `cumin/status/implementing` に替える、依頼する、である。権限かログイン名を読めないとき、またはラベルを替えられないときは、依頼しない。Issueは `cumin/status/awaiting-owner-review` のままなので、次の定期確認でやり直す。ラベルを替えたあとは候補にならないので、同じ依頼を二度出さない。
+- 定期確認の判定 (純粋関数) が、候補を集める。集め方はI12の候補と同じで、見るレビューだけが違う。`cumin/status/awaiting-merge-decision` の開いた実装Issueで、Pull Requestの今の先頭のコミットに、人 (botでないアカウント) の `CHANGES_REQUESTED` のレビューがあるものである。実行中のIssueは除く。`cumin/status/ready` も付いているIssueは除く。Ownerが新しい着手を求めているので、I1が扱う。
+- 候補にするのは、そのレビューが、実装Issueに最後に `cumin/status/awaiting-merge-decision` が付いた時刻よりあとに出されたときだけである。2つの時刻は、どちらもGitHubの事実である。レビューの時刻は定期確認の問い合わせの `submittedAt`、ラベルの時刻はラベルの時刻の問い合わせで読み、スナップショットのsub-issueに入れる (「ラベルの時刻の読み取り」)。cuminは手元に何も残さない。ラベルの時刻を読めなかった定期確認では、候補にしない。読めても、そのラベルの時刻がないとき (新しいほうから100件の `LabeledEvent` に入っていないとき) も、候補にしない。時刻が分からないまま差し戻すと、同じレビューで繰り返すためである。
+- 候補ごとに、判断のレビューを出した人たちの権限を、I12と同じ読み取りと同じ判定 (`IsOwner`) で確かめる。Ownerのレビューのうち、最新の判断のレビューが今の先頭のコミットへの `CHANGES_REQUESTED` で、実装Issueに最後に `cumin/status/awaiting-merge-decision` が付いた時刻よりあとに出されていれば、I13が成り立つ (純粋関数 `OwnerRequestedChanges`)。古いコミットへのレビュー、botのレビュー、Ownerでない人のレビューは数えない。`COMMENTED` は判断のレビューではないので、コメントだけのレビューでは何も起きない。あとから出したOwnerの `APPROVED` は、差し戻しを取り消す。
+- I13を適用する順は、Ownerのログイン名を読む、ラベルを `cumin/status/implementing` に替える、依頼する、である。権限かログイン名を読めないとき、またはラベルを替えられないときは、依頼しない。Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でやり直す。ラベルを替えたあとは候補にならないので、同じ依頼を二度出さない。
 - 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開し、別のgoroutineで動かす。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証を行い、必須のcheck、Reviewerのレビュー (I3) を通って、I7でもう一度Ownerの判断を待つ。直したコミットで先頭が変わるので、前の `CHANGES_REQUESTED` は古いコミットへのレビューになり、もう数えない。Reviewerのラウンドは、Reviewerの最後の `APPROVE` のあとから数え直すので、1ラウンド目から始まる (「レビューのラウンドの数え方」)。
-- 1つの `CHANGES_REQUESTED` で差し戻すのは1回だけである。Implementerがコミットせずに答えると、先頭のコミットは変わらず、Ownerの `CHANGES_REQUESTED` はそのコミットに残る。Issueは、I2、必須のcheck、Reviewerのレビューを通って、I7で `cumin/status/awaiting-owner-review` に戻る。そのレビューは、このラベルが付いた時刻より前のものなので、I13はもう成り立たず、Ownerの判断を待つ。Ownerがもう一度 `CHANGES_REQUESTED` を出すと、そのレビューはラベルよりあとなので、1回だけ差し戻す。
+- 1つの `CHANGES_REQUESTED` で差し戻すのは1回だけである。Implementerがコミットせずに答えると、先頭のコミットは変わらず、Ownerの `CHANGES_REQUESTED` はそのコミットに残る。Issueは、I2、必須のcheck、Reviewerのレビューを通って、I7で `cumin/status/awaiting-merge-decision` に戻る。そのレビューは、このラベルが付いた時刻より前のものなので、I13はもう成り立たず、Ownerの判断を待つ。Ownerがもう一度 `CHANGES_REQUESTED` を出すと、そのレビューはラベルよりあとなので、1回だけ差し戻す。
 - 必須のcheckは読まない。I13はmergeしないためである。利用枠 (Q1) と、同時に進めるIssueの数も見ない。新しい着手ではなく、Ownerが求めた続きの作業だからである。実行を待って止める間は、この依頼を落とす (`WithoutNewWork`)。
 - 候補を確かめただけの定期確認は、待ち状態の通知 (Q4) では動作に数えない。差し戻したときに数える。I12と同じである。
 - 依頼文 (「Ownerのレビューへの対応」、`Request: owner review fix`) は、`internal/workflow` の純粋関数 `OwnerReviewFixRequestText` が組み立てる。入れるのは、リポジトリ、実装Issue、Pull Request、ブランチ、作業場所と、Ownerのレビューのアドレスである。
@@ -425,8 +425,8 @@ checkの結果の読み方:
 
 - Reviewerが今の先頭のコミットを承認したら、その実装Issueと必須のcheckの一覧を読み直し、純粋関数 `DecideMerge` で決める。読むのは、その実装Issueだけである (「実行終了の判定」)。既定のブランチの名前も、同じ問い合わせで読む。必須のcheckは、そのブランチのruleから読むためである。riskは実装Issueのラベルから読む (原則5)。riskのラベルがちょうど1つでなければ、行の番号I6でOwnerに戻す。riskを先に確かめるのは、ラベルの誤りが、checkの状態によらず必ず止まるようにするためである。
 - checkの結果は、この読み直しで読んだPull Requestのものを使う。レビューを確かめたあとに、checkがもう一度動くことがあるためである。Pull Requestが見つからないか、先頭のコミットが承認したものと違えば、checkが通っていないものとして扱う。
-- 必須のcheckが先頭のコミットで通っていなければ、ラベルを `cumin/status/awaiting-checks` に戻す。Reviewerの実行中に先頭のコミットが動いたとき (「Reviewerへの依頼」) と同じ扱いで、I3かI4が次の定期確認で決め直す。
-- `risk/low` ならmergeの手順に進む (I6)。それ以外の `risk/*` は、ラベルを `cumin/status/awaiting-owner-review` に替えて、Pull Requestのアドレスを入れた通知を1回出す (I7)。ラベルを替えられなくても、通知は出す。その手順はやり直さないので、Ownerが知る機会はそこだけだからである。ただし、ラベルの付け替えが一時的な失敗で終わったときは、通知を出さずに手順を持っておき、やり直した回で通知を出す。読み直しと必須のcheckの一覧の読み取りが一時的な失敗で終わったときも、手順を持っておく (「Reviewerへの依頼 (I3、I10)」)。
+- 必須のcheckが先頭のコミットで通っていなければ、ラベルを `cumin/status/checking` に戻す。Reviewerの実行中に先頭のコミットが動いたとき (「Reviewerへの依頼」) と同じ扱いで、I3かI4が次の定期確認で決め直す。
+- `risk/low` ならmergeの手順に進む (I6)。それ以外の `risk/*` は、ラベルを `cumin/status/awaiting-merge-decision` に替えて、Pull Requestのアドレスを入れた通知を1回出す (I7)。ラベルを替えられなくても、通知は出す。その手順はやり直さないので、Ownerが知る機会はそこだけだからである。ただし、ラベルの付け替えが一時的な失敗で終わったときは、通知を出さずに手順を持っておき、やり直した回で通知を出す。読み直しと必須のcheckの一覧の読み取りが一時的な失敗で終わったときも、手順を持っておく (「Reviewerへの依頼 (I3、I10)」)。
 - I7では、ラベルを替えたあと、通知の前に、`cumin-core` がOwnerのレビューを依頼する (`POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers`、`reviewers` にOwnerのログイン名を1つ。公式: Request reviewers for a pull request。要る権限は Pull requests の書き込み。公式: Permissions required for GitHub Apps。実測 138)。GitHubの「レビューの依頼」の一覧に、Ownerの判断を待つPull Requestだけを載せるためである。Ownerの決定は #305 にある。
   - 依頼する相手は、実装Issueに最新の `cumin/status/ready` を付けたアカウントである。Ownerに当たるアカウントが複数あっても、依頼するのはこの1つだけである。Reviewerの実行の前に読んだ名前を使い、読み直さない (「Ownerのログイン名の読み取り」)。Ownerのログイン名がなければ、依頼しない。
   - 依頼は、通知を出すときに必ず出す。I7が成り立つたびに出るので、Ownerの差し戻し (I13) や衝突の解消 (I14) のあとにも、もう一度出る。すでに依頼してあるアカウントへの同じ依頼は、失敗せず、一覧にも1つのまま残る (実測 139)。
@@ -444,7 +444,7 @@ checkの結果の読み方:
   - mergeの手順は、GitHubの呼び出しが一時的な失敗 (`github.IsTemporary`) で終わったときに、捨てずに持っておく。仕組みは、I2と同じである (「実行終了の判定」、`keptstep.go`)。図の2つの戻る矢印がこれである。I6でもI12でも同じである。持っておく間、Issueはラベルを保ち、コメントも通知も出さない。
     - 持っておく手順は2つある。「merge」は、トークン、Pull Requestの読み取り、mergeの呼び出しまでである。「mergeのあとに閉じること」は、Issueの読み取りと、閉じる操作である。mergeが済んだあとの失敗で、mergeをやり直さないためである。
     - mergeは取り消せず、書き込みなのでクライアントはやり直さない。答えが届かなくても、GitHubがmergeを済ませていることがある。そこで、持っておいた「merge」をやり直す回は、最初にPull Requestを読む (`GET /repos/{owner}/{repo}/pulls/{n}` の `merged`。公式: Get a pull request)。mergeが済んでいれば、mergeを呼ばずに、閉じる手順に進む。この読み取りが一時的な失敗で終わったら、mergeを呼ばずに、また持っておく。最初の回は読まない。判定で、開いているPull Requestを読んだばかりだからである。
-    - mergeの判断は、最初の回の前に決めたものである。持っておく間に、riskのラベル、必須のcheck、Ownerのレビューが変わることがある。そこで、やり直す回は、mergeが済んでいないと分かったあとに、Issueを読み直して同じ純粋関数で決め直す。mergeを呼ぶのは、決め直した結果もmergeのときだけである。I6では、最初の判断と同じ手順 (`decideApproved`) を通るので、`risk/low` でなくなっていればI7、checkが通っていなければ `cumin/status/awaiting-checks`、riskのラベルの誤りならOwnerに戻す。Issueが `cumin/status/reviewing` でなくなっていれば、何も変えない。I12では、Issueがまだ `cumin/status/awaiting-owner-review` で、先頭のコミットが同じで、Ownerの最新の判断が `APPROVED` で (`OwnerApproved`)、`DecideMerge` がmergeを許すことを確かめる (`ownerStillApproves`)。成り立たなければ、mergeせずに手順を終える。Issueは実行中でなくなり、次の定期確認が、このラベルの行 (I12、I13、I14) で決める。決め直しの読み取りが一時的な失敗で終わったら、mergeを呼ばずに、また持っておく。
+    - mergeの判断は、最初の回の前に決めたものである。持っておく間に、riskのラベル、必須のcheck、Ownerのレビューが変わることがある。そこで、やり直す回は、mergeが済んでいないと分かったあとに、Issueを読み直して同じ純粋関数で決め直す。mergeを呼ぶのは、決め直した結果もmergeのときだけである。I6では、最初の判断と同じ手順 (`decideApproved`) を通るので、`risk/low` でなくなっていればI7、checkが通っていなければ `cumin/status/checking`、riskのラベルの誤りならOwnerに戻す。Issueが `cumin/status/reviewing` でなくなっていれば、何も変えない。I12では、Issueがまだ `cumin/status/awaiting-merge-decision` で、先頭のコミットが同じで、Ownerの最新の判断が `APPROVED` で (`OwnerApproved`)、`DecideMerge` がmergeを許すことを確かめる (`ownerStillApproves`)。成り立たなければ、mergeせずに手順を終える。Issueは実行中でなくなり、次の定期確認が、このラベルの行 (I12、I13、I14) で決める。決め直しの読み取りが一時的な失敗で終わったら、mergeを呼ばずに、また持っておく。
     - やり直す回でも、`sha` は承認された先頭のコミットである。持っておく間にpushされたコミットは、mergeしない (409でOwnerに戻す)。
     - 衝突の解消の依頼と、mergeのあとの待ちは、手順の残りである。定期確認の中でやり直した回では、別のgoroutineで動かし、定期確認は待たない。
     - 持っておいた「mergeのあとに閉じること」をやり直す回は、待たずにIssueを読む。5分が過ぎているためである。閉じる操作の答えが届かなかったときも、読み直しで閉じていると分かる。
@@ -457,7 +457,7 @@ checkの結果の読み方:
 
 ### Ownerの承認のあとのmerge (I12)
 
-- 定期確認の判定 (純粋関数) が、候補を集める。`cumin/status/awaiting-owner-review` の開いた実装Issueで、Pull Requestの今の先頭のコミットに、人 (botでないアカウント) の `APPROVED` のレビューがあるものである。実行中のIssueは除く。候補には、判断のレビュー (`APPROVED` か `CHANGES_REQUESTED`) を出した人を全て入れる。
+- 定期確認の判定 (純粋関数) が、候補を集める。`cumin/status/awaiting-merge-decision` の開いた実装Issueで、Pull Requestの今の先頭のコミットに、人 (botでないアカウント) の `APPROVED` のレビューがあるものである。実行中のIssueは除く。候補には、判断のレビュー (`APPROVED` か `CHANGES_REQUESTED`) を出した人を全て入れる。
 - 候補ごとに、その人たちの権限を `cumin-core` で読む (`GET /repos/{owner}/{repo}/collaborators/{username}/permission`。公式: Get repository permissions for a user。要る権限は Metadata の read。実測は #286 の M1)。`permission` が `admin` か `write` で、`user.type` が `User` の人がOwnerである ([cumin本体の要件](../requirements/cumin-core.md) の「Owner」。maintainは `write` として返る)。候補がなければ、権限も必須のcheckも読まない。
 - Ownerのレビューのうち、最新の判断のレビューが今の先頭のコミットへの `APPROVED` なら、I12が成り立つ (純粋関数 `OwnerApproved`)。古いコミットへの承認、botの承認、Ownerでない人の承認は数えない。あとから出したOwnerの `CHANGES_REQUESTED` は、承認を取り消す。それが今の先頭のコミットへのレビューなら、I13が成り立つ (「Ownerのレビューへの対応の依頼 (I13)」)。
 - 「最新のレビュー」に、`COMMENTED` は数えない。GitHubも、mergeの判断には `APPROVED` と `CHANGES_REQUESTED` だけを使う。Ownerが承認のあとに質問のコメントを書いても、承認は残る。
@@ -469,7 +469,7 @@ checkの結果の読み方:
 
 - 上限のラウンドで `REQUEST_CHANGES` が出たら、そのラウンドのReviewerのセッションのまま、「原因の整理」を依頼する。作業場所は、そのラウンドのworktreeのままである。依頼文には、リポジトリ、実装Issue、Pull Request、上限、作業場所と、Pull RequestにOwner向けのコメントを1つ書き、レビューは出さないという短い指示を入れる。形式はskill `cumin-decision-request` にある。
 - 実行が `done` で終わったら、Pull Requestのコメントを、最後のレビューの時刻まで遡って読む (「要求Issueのコメントの読み取り」と同じ問い合わせ)。ReviewerのAppのbotが書き、1行目が `## Decision needed` で始まり、最後のレビューより古くないコメントがあれば、それが原因の整理である (純粋関数 `ExplanationOf`)。比べる時刻はどちらもGitHubの時刻なので、Hostの時計はずれてもよい。
-- 見つかれば、ラベルを `cumin/status/awaiting-owner-decision` に替え、Ownerに1回だけ通知する。通知のリンクは、そのコメントのアドレスである。理由はReviewerが書いたので、cuminはコメントを書かない。ラベルを替えられなくても、通知は出す (「Ownerに戻す道」と同じ考え方)。
+- 見つかれば、ラベルを `cumin/status/awaiting-decision` に替え、Ownerに1回だけ通知する。通知のリンクは、そのコメントのアドレスである。理由はReviewerが書いたので、cuminはコメントを書かない。ラベルを替えられなくても、通知は出す (「Ownerに戻す道」と同じ考え方)。
 - 見つからないとき、`blocked` のとき、2回目の異常終了のときは、行の番号I8で「Ownerに戻す道」の手順を呼ぶ。どの場合も、Ownerが決めることに変わりはないためである。`blocked` のコメントは、Reviewerの `blocked_reason` である。
 - I8は実行の終わりが決める動作なので、Reviewerの実行ごとに1回しか起きない。コメントと通知が二重になることはない。
 - 採らなかった案: 原因の整理が見つからないとき、Reviewerにもう一度依頼する。I8の表は「うまくいかないとき」を定めていない。上限に達した時点で、Ownerが決めることは決まっているので、stop noteで知らせれば足りる。
@@ -496,7 +496,7 @@ checkの結果の読み方:
   - 持っておくときに、warnのログを1行出す。理由と、次に試す時刻を入れる。
   - Reviewerの実行のあとの手順 (I5〜I8、I10) も、同じ仕組みで持っておく (「Reviewerへの依頼 (I3、I10)」)。R2の手順も同じように持っておく (下の「Plannerの実行のあとの手順」)。mergeの手順 (I6、I12) も、同じ仕組みで持っておく (「mergeの手順 (I6、I7)」)。
 - 採らなかった案: 全ての行で、ブランチの名前でPull Requestを見つける。スナップショット、I9、mergeのあとのIssueの閉じ方まで変わる。I2でリンクを付ければ、変わるのはI2だけで、GitHubがリンクを作るようになっても、そのまま動く。
-- 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号と、リンクを付けるかどうかである。通れば、リンクを付けてから、ラベルを `cumin/status/awaiting-checks` に替える。落ちたときは、次の話題の手順でOwnerに戻す。
+- 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号と、リンクを付けるかどうかである。通れば、リンクを付けてから、ラベルを `cumin/status/checking` に替える。落ちたときは、次の話題の手順でOwnerに戻す。
 - 判定に渡す3つの値は、Agentの実行の側から来る。ブランチは依頼に渡したものである。ImplementerのAppのbotのlogin (`<slug>[bot]`) は実行の結果に付いて返り、worktreeの先頭のコミットは `git rev-parse HEAD` で読む ([Agentの実行の設計](agent-run.md) の「作業場所」と「1回の依頼の手順」)。
 - 実行終了のあとの読み直しは、1つのIssueを番号で指定する問い合わせである (`ReadSubIssue`、`ReadRequirementIssue`)。リポジトリの全ページは読まない。R2、I2、I5〜I8、I10の判定が使うのは、1つのIssueの事実だけだからである。
   - 実装Issueでは、ラベル、blocked by、そのIssueを閉じる開いているPull Request (check、レビュー、先頭のコミット、`mergeable`)、親の要求Issueの状態とラベル、既定のブランチの名前を読む。要求Issueでは、ラベル、blocked by、sub-issueを読む。sub-issueの項目は、定期確認と同じである。
@@ -508,7 +508,7 @@ checkの結果の読み方:
   - そうでないIssueは、理由を入れたエラーにして、読めなかったときと同じに扱う: ラベルを替えず、mergeもせず、ログに出す。実行中に要求Issueが閉じられたときも、定期確認が動かないIssueを、実行終了の判定が動かさない。どの行も、定期確認と同じ事実から同じ動作を決める。
 - `blocked` の結果と異常終了は、この判定に入らない。`blocked` は次の話題の手順でOwnerに戻す。異常終了は、同じ依頼を1回だけやり直してから、次の話題の手順でOwnerに戻す。
 - Plannerの実行が `done` で終わったら、同じようにその要求Issueだけを、sub-issueと一緒に読み直し、R2の2つの確認を行う。sub-issueが1つ以上あること。全てのsub-issueに `risk/*` のラベルがちょうど1つ付いていること。閉じたsub-issueも数える。sub-issueは番号の小さい順に確かめ、最初に落ちたものの番号を結果に入れる。分割の中身は判定しない。見るのはOwnerである。
-- R2が通れば、開いているsub-issueがあるときは、要求Issueのラベルを `cumin/status/awaiting-owner-review` に替え、Ownerに「分割結果の確認が必要」と通知する。sub-issueが全て閉じているとき (受け入れの確認が `blocked` で止まったあとに、Ownerが `cumin/status/ready` で再開し、Plannerが何も作らなかったとき) は、`cumin/status/implementing` に替え、通知しない。次の定期確認でR4が成り立つ。行き先を決めるのは純粋関数 (`SplitStatus`) である。通知のリンクは要求Issueのアドレスである。通知は止まったことの知らせではないので、戻す道の手順を通らず、同じ通知の部分を直接呼ぶ。
+- R2が通れば、開いているsub-issueがあるときは、要求Issueのラベルを `cumin/status/awaiting-plan-review` に替え、Ownerに「分割結果の確認が必要」と通知する。sub-issueが全て閉じているとき (受け入れの確認が `blocked` で止まったあとに、Ownerが `cumin/status/ready` で再開し、Plannerが何も作らなかったとき) は、`cumin/status/implementing` に替え、通知しない。次の定期確認でR4が成り立つ。行き先を決めるのは純粋関数 (`SplitStatus`) である。通知のリンクは要求Issueのアドレスである。通知は止まったことの知らせではないので、戻す道の手順を通らず、同じ通知の部分を直接呼ぶ。
 - Plannerの `blocked` と異常終了は、I2と同じ扱いで、行の番号をR2にしてOwnerに戻す。Plannerのセッションは手元に残さない。
 - Plannerの実行のあとの手順: 分割の実行のあとの手順も、GitHubの呼び出しが一時的な失敗 (`github.IsTemporary`) で終わったときは、I2と同じ仕組み (`keptstep.go`) で持っておく (要件: [cumin本体の要件](../requirements/cumin-core.md) の「GitHubの呼び出しの失敗」)。次の図の戻る矢印がこれである。
 
@@ -520,13 +520,13 @@ checkの結果の読み方:
   - `done` のあとの対象は、tokenの発行、要求Issueの読み直し、ラベルの付け替えである。`blocked` のあとの対象は、Ownerに戻す前の、tokenの発行と要求Issueの読み直しである。Ownerに戻す手順の中の失敗は、今までどおり、ログに出して次に進む。
   - 持っておくもの、次に試す時刻 (5分後)、ログ、作業中のIssueの集合に残ることは、I2と同じである。要求Issueのラベルは `cumin/status/planning` のままで、進行中の数に数えられ、このIssueのPlannerは起動しない。
   - 手順は、要求Issueの読み直しからやり直す。検証が落ちれば、今までどおりOwnerに戻す。
-  - `done` のあとのやり直しで読み直した要求Issueに `cumin/status/planning` がもうなければ、ラベルを替えない。前の回のラベルの付け替えが一時的な失敗で終わっていて、そのラベルが要求Issueに付いているなら、付け替えは届いている。そのラベルが `cumin/status/awaiting-owner-review` なら、通知だけを出す。通知はラベルの付け替えのあとに出すので、まだ出ていないためである。`cumin/status/implementing` なら、何もしない。それ以外のとき (前の回が読み直しで失敗していた、または別のラベルが付いている) は、cumin以外がラベルを替えたので、何もせず、通知もしない。
+  - `done` のあとのやり直しで読み直した要求Issueに `cumin/status/planning` がもうなければ、ラベルを替えない。前の回のラベルの付け替えが一時的な失敗で終わっていて、そのラベルが要求Issueに付いているなら、付け替えは届いている。そのラベルが `cumin/status/awaiting-plan-review` なら、通知だけを出す。通知はラベルの付け替えのあとに出すので、まだ出ていないためである。`cumin/status/implementing` なら、何もしない。それ以外のとき (前の回が読み直しで失敗していた、または別のラベルが付いている) は、cumin以外がラベルを替えたので、何もせず、通知もしない。
   - `blocked` のあとのやり直しは、要求Issueのラベルが何であっても、Ownerに戻す手順を行う。持っておくのは読み直しが失敗したときだけで、読み直しはOwnerに戻す手順のどの書き込みよりも前にある。そのため、やり直しの時点で、コメントも通知もまだ出ていない。Plannerの `blocked_reason` を失わないためである。
   - 持っておかないもの: 異常終了のあとの読み直しと、受け入れの確認 (R4) の実行のあとの手順。R4は、ラベルが `cumin/status/implementing` のままなので、次の定期確認がもう一度決める。
 
 ### うまくいかなかったときに、Ownerに戻す道
 
-- 先に進めないときは、1か所の手順でOwnerに戻す。行の番号 (I2、R2 など) を引数で受け取り、順に、止まったIssue (I2では実装Issue、R2では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-owner-decision` に替え、Ownerに通知する。I4、I15 (必須のcheckが結果を返さない)、I3 (Reviewerの2回目の異常終了)、I5 (Reviewerのレビューが2回とも見つからない)、I10 (Reviewerの `blocked`) も、同じ手順を自分の行の番号で呼ぶ。あとの行 (I8) も同じである。
+- 先に進めないときは、1か所の手順でOwnerに戻す。行の番号 (I2、R2 など) を引数で受け取り、順に、止まったIssue (I2では実装Issue、R2では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-decision` に替え、Ownerに通知する。I4、I15 (必須のcheckが結果を返さない)、I3 (Reviewerの2回目の異常終了)、I5 (Reviewerのレビューが2回とも見つからない)、I10 (Reviewerの `blocked`) も、同じ手順を自分の行の番号で呼ぶ。あとの行 (I8) も同じである。
 - 順番に意味がある。理由がGitHubに残ってからラベルが替わり、最後に「見に来てほしい」と伝える。
 - 途中で1つ失敗しても、次を止めない。コメントを書けなくてもラベルは替え、ラベルを替えられなくても通知は出す。巻き戻しもしない。止まったIssueがあることは、どれか1つが落ちても伝わるほうがよい。失敗はログに出す。
 - 通知のリンクは、書いたコメントのアドレスにする。理由の全文がそこにあるためである。コメントを書けなかったときは、Issueのアドレスにする。
@@ -542,7 +542,7 @@ checkの結果の読み方:
 - 理由が同じかどうかは、失敗の文章が同じかどうかで見る。文章にはファイルの名前とキーの名前が入るので、同じ誤りなら同じ文章になる。
 - 通知には行の番号を入れない。cumin本体の要件の通知の表で、この行にだけ番号がないためである。リンクはリポジトリにする。Issueの問題ではないからである。
 - 通知を出すかどうかは、Hostの設定で決める。リポジトリの設定 (`notify.discord.enabled`) は、そのリポジトリのIssueについての通知に効く。定期確認そのものが失敗しているときは、リポジトリの設定を読めていないか、その誤りが原因であることがあるので、リポジトリの側には決めさせない。
-- 二重に送らないことを、何で保証するか。実行終了をきっかけにする通知 (`blocked`、検証の失敗、異常終了) は、GitHub上の事実で保証する。1回の実行の終わりに1回だけ通り、そのときラベルが `cumin/status/awaiting-owner-decision` に替わるので、同じ実行で二度は起きない。定期確認の失敗の数は、GitHub上に事実がないので、cuminがメモリで数える。
+- 二重に送らないことを、何で保証するか。実行終了をきっかけにする通知 (`blocked`、検証の失敗、異常終了) は、GitHub上の事実で保証する。1回の実行の終わりに1回だけ通り、そのときラベルが `cumin/status/awaiting-decision` に替わるので、同じ実行で二度は起きない。定期確認の失敗の数は、GitHub上に事実がないので、cuminがメモリで数える。
 - メモリで足りる理由。cuminが再起動すると数は0に戻るが、失敗が続いていれば3回の定期確認 (初期値で3分) のあとに改めて知らせる。遅れるだけで、失われない。要件が手元に持ってよいと認めたものの一覧 (cumin本体の要件の「状態の持ち方」) に、この数は入っていないので、ファイルにはしない。
 - 採らなかった案: 失敗のたびに知らせる。定期確認は60秒ごとなので、直らない誤りが通知の洪水になる。
 

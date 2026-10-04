@@ -589,7 +589,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// I4) or has an approval of a person to check (I12). Its budget is not
 	// the one of the snapshot query.
 	var required []RequiredCheck
-	if snapshot.HasIssueAwaitingChecks() || snapshot.HasOwnerApprovalCandidate() {
+	if snapshot.HasIssueChecking() || snapshot.HasOwnerApprovalCandidate() {
 		read, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
 		if err != nil {
 			return err
@@ -618,7 +618,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// A requirement issue that R3 could not move keeps its sub-issues
 	// waiting in this poll. A claim would take cumin/status/ready away from
 	// the sub-issue, and R3 would then never apply again: the requirement
-	// issue would stay in awaiting-owner-review while its work goes on.
+	// issue would stay in awaiting-plan-review while its work goes on.
 	notStarted := map[int]bool{}
 	// An issue that cumin moves on without the Owner keeps Q4 silent, even
 	// when this poll decides nothing for it.
@@ -832,7 +832,7 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 		log.Warn("I15: the required checks did not report within the wait time",
 			"head_commit", a.HeadCommit, "unreported", names, "waited", a.Waited.String())
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerDecision)
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 		return fmt.Errorf("I15: stop issue #%d for the Owner: %w", a.Number, err)
 	}
@@ -885,7 +885,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		log.Warn("I4: the limit of check fix requests is reached", "failed", names, "check_fix_requests", stored.CheckFixRequests)
 		// The label first: until it changes, the next poll decides the same
 		// stop, and must not post the comment and notify again.
-		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingOwnerDecision)
+		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 			return fmt.Errorf("I4: stop issue #%d for the Owner: %w", a.Number, err)
 		}
@@ -1208,7 +1208,7 @@ func labelsNow(sub SubIssue, ok bool) []string {
 //
 // On a pass, when the issue has no closing link to the pull request,
 // cumin-core adds it and reads the issue once more to see it; then the
-// status label becomes cumin/status/awaiting-checks. A failed check, a
+// status label becomes cumin/status/checking. A failed check, a
 // failed link, and a link that is still missing hand the issue back to the
 // Owner through the stop step, with one sentence. Nothing of that is
 // retried: the Owner decides what to do next.
@@ -1300,7 +1300,7 @@ func (s *Service) verifyDone(ctx context.Context, log *slog.Logger, target Targe
 		}
 		log.Info("I2: added the closing link", "pull_request", pr)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingChecks)
+	labels := ReplaceStatusLabel(sub.Labels, LabelChecking)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
 		log.Error("I2: the label was not changed", "error", err.Error())
 		return temporary(err)

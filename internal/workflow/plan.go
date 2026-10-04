@@ -256,12 +256,12 @@ type splitTry struct {
 }
 
 // accept applies R7: the acceptance check comment exists, so the
-// requirement issue moves to cumin/status/awaiting-owner-review and the
+// requirement issue moves to cumin/status/awaiting-acceptance and the
 // Owner is notified, whatever the table of the comment says. The next poll
 // no longer sees cumin/status/implementing, so one comment sends one
 // notification.
 func (s *Service) accept(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a Accept) error {
-	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingOwnerReview)
+	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingAcceptance)
 	if err != nil {
 		return fmt.Errorf("R7: %w", err)
 	}
@@ -325,7 +325,7 @@ func (s *Service) runningIssues(repository string) map[int]bool {
 
 // verifySplit applies R2 after a done result, on a new read of the
 // requirement issue. On a pass with an open sub-issue, the requirement issue moves
-// to cumin/status/awaiting-owner-review and the Owner is told that the
+// to cumin/status/awaiting-plan-review and the Owner is told that the
 // split needs a review. On a pass with every sub-issue closed, it moves to
 // cumin/status/implementing without a notification, so that R4 asks for the
 // acceptance check again (SplitStatus). A failed check stops the
@@ -338,7 +338,7 @@ func (s *Service) runningIssues(repository string) map[int]bool {
 // issue carries the label of a lost label change of the last try, that
 // change reached GitHub. The notification follows the label change, so it
 // was not sent yet: the step sends it when that label is
-// cumin/status/awaiting-owner-review. With any other label, another hand
+// cumin/status/awaiting-plan-review. With any other label, another hand
 // changed it, and the step leaves the issue. Every other failure is logged
 // and returns nil, as before.
 func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, try *splitTry) error {
@@ -359,7 +359,7 @@ func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Targ
 	lost := try.lost
 	try.lost = ""
 	if try.again && !slices.Contains(requirement.Labels, LabelPlanning) {
-		if lost != LabelAwaitingOwnerReview || !slices.Contains(requirement.Labels, lost) {
+		if lost != LabelAwaitingPlanReview || !slices.Contains(requirement.Labels, lost) {
 			log.Info("R2: the issue left cumin/status/planning while the check of the split was kept; nothing changes", "labels", requirement.Labels)
 			return nil
 		}

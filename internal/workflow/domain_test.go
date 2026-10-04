@@ -32,7 +32,7 @@ func TestDecide_I1(t *testing.T) {
 	}{
 		{
 			name:          "no ready sub-issue gives no action",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingOwnerReview))}},
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingMergeDecision))}},
 			maxInProgress: 1,
 		},
 		{
@@ -80,8 +80,8 @@ func TestDecide_I1(t *testing.T) {
 			maxInProgress: 1,
 		},
 		{
-			name:          "an awaiting-checks sub-issue fills limit 1",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingChecks), ready(11))}},
+			name:          "an checking sub-issue fills limit 1",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelChecking), ready(11))}},
 			maxInProgress: 1,
 		},
 		{
@@ -91,7 +91,7 @@ func TestDecide_I1(t *testing.T) {
 		},
 		{
 			name:          "a sub-issue that waits for the Owner does not fill the limit",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingOwnerDecision), ready(11))}},
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingDecision), ready(11))}},
 			maxInProgress: 1,
 			want:          []Action{Claim{Number: 11, RequirementIssue: 6}},
 		},
@@ -213,8 +213,8 @@ func TestDecide_R1(t *testing.T) {
 			want:          []Action{Claim{Number: 10, RequirementIssue: 7}, Plan{Number: 12}},
 		},
 		{
-			name:          "awaiting-owner-decision without ready gives no plan",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelAwaitingOwnerDecision, nil)}},
+			name:          "awaiting-decision without ready gives no plan",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelAwaitingDecision, nil)}},
 			maxInProgress: 1,
 		},
 	}
@@ -283,10 +283,13 @@ func TestDecide_R3AndR6(t *testing.T) {
 		requirement RequirementIssue
 		want        []Action
 	}{
-		{"R3: ready added after the review label", requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(time.Minute))), []Action{StartRequirement{Number: 6}}},
-		{"R3: ready from before the review label waits", requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(-time.Minute))), nil},
+		{"R3: ready added after the review label", requirement(LabelAwaitingPlanReview, readyAt(10, t0.Add(time.Minute))), []Action{StartRequirement{Number: 6}}},
+		{"R3: ready from before the review label waits", requirement(LabelAwaitingPlanReview, readyAt(10, t0.Add(-time.Minute))), nil},
+		{"R3: ready added after the acceptance label", requirement(LabelAwaitingAcceptance, closed, readyAt(10, t0.Add(time.Minute))), []Action{StartRequirement{Number: 6}}},
+		{"R3: ready from before the acceptance label waits", requirement(LabelAwaitingAcceptance, closed, readyAt(10, t0.Add(-time.Minute))), nil},
+		{"R3: the label of an implementation issue does not move a requirement issue", requirement(LabelAwaitingMergeDecision, readyAt(10, t0.Add(time.Minute))), nil},
 		{"R3: without the label times nothing moves", func() RequirementIssue {
-			r := requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(time.Minute)))
+			r := requirement(LabelAwaitingPlanReview, readyAt(10, t0.Add(time.Minute)))
 			r.LabelTimesRead = false
 			return r
 		}(), nil},
@@ -295,9 +298,9 @@ func TestDecide_R3AndR6(t *testing.T) {
 		{"R3: a closed sub-issue with ready does not count", requirement("", SubIssue{Number: 10, Closed: true, Labels: []string{LabelReady}}), nil},
 		{"R6: only sub-issues without a status label are open", requirement(LabelImplementing, closed, sub(10, "risk/low")), []Action{ReviewRemaining{Number: 6}}},
 		{"R6: an owner task left alone", requirement(LabelImplementing, closed, sub(10, LabelOwnerTask, "risk/high")), []Action{ReviewRemaining{Number: 6}}},
-		{"R6: an open sub-issue with a status label", requirement(LabelImplementing, sub(10, "risk/low"), sub(11, LabelAwaitingChecks, "risk/low")), nil},
+		{"R6: an open sub-issue with a status label", requirement(LabelImplementing, sub(10, "risk/low"), sub(11, LabelChecking, "risk/low")), nil},
 		{"R6: every sub-issue closed", requirement(LabelImplementing, closed), nil},
-		{"R6: not in awaiting-owner-review", requirement(LabelAwaitingOwnerReview, sub(10, "risk/low")), nil},
+		{"R6: not in awaiting-plan-review", requirement(LabelAwaitingPlanReview, sub(10, "risk/low")), nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -312,7 +315,7 @@ func TestDecide_R3AndR6(t *testing.T) {
 // Without the label times, R3 cannot be judged, and a claim would take
 // away the cumin/status/ready that it needs: the sub-issues wait.
 func TestDecide_ClaimsWaitForTheLabelTimes(t *testing.T) {
-	requirement := RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelAwaitingOwnerReview},
+	requirement := RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelAwaitingPlanReview},
 		SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelReady, "risk/low"}}}}
 	if got := decideReadyOfOwner(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
 		t.Errorf("Decide without the label times = %+v, want no action", got)
@@ -421,9 +424,9 @@ func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
 
 	// An issue that became an owner task while an agent works on it still
 	// counts by its status label: an agent may run or start for it (I4).
-	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelAwaitingChecks, "risk/high"}
+	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelChecking, "risk/high"}
 	if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
-		t.Errorf("Decide with an owner task in awaiting-checks = %+v, want no claim", got)
+		t.Errorf("Decide with an owner task in checking = %+v, want no claim", got)
 	}
 }
 
@@ -434,16 +437,18 @@ func TestNeedsLabelTimes(t *testing.T) {
 		r    RequirementIssue
 		want bool
 	}{
-		{"review with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{ready}}, true},
-		{"review without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{{Number: 10}}}, false},
+		{"review with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingPlanReview}, SubIssues: []SubIssue{ready}}, true},
+		{"review without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingPlanReview}, SubIssues: []SubIssue{{Number: 10}}}, false},
+		{"acceptance with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingAcceptance}, SubIssues: []SubIssue{ready}}, true},
+		{"acceptance without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingAcceptance}, SubIssues: []SubIssue{{Number: 10}}}, false},
 		{"implementing with a ready sub-issue", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{ready}}, false},
-		{"a sub-issue waits for its checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}}}}, true},
-		{"a closed sub-issue in awaiting-checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}}}}, false},
-		{"a sub-issue that waits for the Owner has a request for changes of a person on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+		{"a sub-issue waits for its checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelChecking}}}}, true},
+		{"a closed sub-issue in checking", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}}}}, false},
+		{"a sub-issue that waits for the Owner has a request for changes of a person on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingMergeDecision},
 			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewChangesRequested, Commit: "c2"}}}}}}}, true},
-		{"a sub-issue that waits for the Owner has a request for changes on an older commit", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+		{"a sub-issue that waits for the Owner has a request for changes on an older commit", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingMergeDecision},
 			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewChangesRequested, Commit: "c1"}}}}}}}, false},
-		{"a sub-issue that waits for the Owner has an approval on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+		{"a sub-issue that waits for the Owner has an approval on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingMergeDecision},
 			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewApproved, Commit: "c2"}}}}}}}, false},
 	}
 	for _, tt := range tests {
@@ -462,7 +467,7 @@ func TestSplitStatus_R2(t *testing.T) {
 		subs []SubIssue
 		want string
 	}{
-		{"one open sub-issue", []SubIssue{{Number: 10, Closed: true}, {Number: 11}}, LabelAwaitingOwnerReview},
+		{"one open sub-issue", []SubIssue{{Number: 10, Closed: true}, {Number: 11}}, LabelAwaitingPlanReview},
 		{"every sub-issue closed", []SubIssue{{Number: 10, Closed: true}, {Number: 11, Closed: true}}, LabelImplementing},
 	}
 	for _, tt := range tests {
@@ -489,7 +494,7 @@ func shuffle(snapshot Snapshot) Snapshot {
 
 func TestIsStatusLabel(t *testing.T) {
 	for name, want := range map[string]bool{
-		LabelReady: true, LabelImplementing: true, LabelAwaitingOwnerDecision: true,
+		LabelReady: true, LabelImplementing: true, LabelAwaitingDecision: true,
 		LabelRequirement: false, "risk/low": false, "status": false,
 	} {
 		if got := IsStatusLabel(name); got != want {
@@ -499,7 +504,7 @@ func TestIsStatusLabel(t *testing.T) {
 }
 
 func TestLabelsAfterClaim(t *testing.T) {
-	got := LabelsAfterClaim([]string{"cumin/status/awaiting-owner-decision", "risk/low", "cumin/status/ready", "question"})
+	got := LabelsAfterClaim([]string{"cumin/status/awaiting-decision", "risk/low", "cumin/status/ready", "question"})
 	if want := []string{"risk/low", "question", LabelImplementing}; !slices.Equal(got, want) {
 		t.Errorf("LabelsAfterClaim = %v, want %v", got, want)
 	}
@@ -509,8 +514,8 @@ func TestLabelsAfterClaim(t *testing.T) {
 }
 
 func TestReplaceStatusLabel(t *testing.T) {
-	got := ReplaceStatusLabel([]string{"cumin/status/implementing", "risk/low", "question"}, LabelAwaitingChecks)
-	if want := []string{"risk/low", "question", LabelAwaitingChecks}; !slices.Equal(got, want) {
+	got := ReplaceStatusLabel([]string{"cumin/status/implementing", "risk/low", "question"}, LabelChecking)
+	if want := []string{"risk/low", "question", LabelChecking}; !slices.Equal(got, want) {
 		t.Errorf("ReplaceStatusLabel = %v, want %v", got, want)
 	}
 }
@@ -578,7 +583,7 @@ func TestDecide_I11(t *testing.T) {
 			SubIssues: []SubIssue{{Number: 10, Labels: issue, PullRequests: prs}},
 		}}}
 	}
-	checks := []string{LabelAwaitingChecks, "risk/medium"}
+	checks := []string{LabelChecking, "risk/medium"}
 
 	tests := []struct {
 		name     string
@@ -588,26 +593,26 @@ func TestDecide_I11(t *testing.T) {
 		{
 			name:     "a pull request without labels gets the status and the risk",
 			snapshot: snapshotOf(checks, PullRequest{Number: 21}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name:     "equal labels in another order give no action",
-			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"risk/medium", "docs", LabelAwaitingChecks}}),
+			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"risk/medium", "docs", LabelChecking}}),
 		},
 		{
 			name:     "an old status and an old risk are replaced, and other labels stay",
 			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"docs", LabelImplementing, "risk/low"}}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{"docs", LabelAwaitingChecks, "risk/medium"}}},
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{"docs", LabelChecking, "risk/medium"}}},
 		},
 		{
 			name:     "a status that the Owner added to the pull request is removed",
-			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, LabelReady, "risk/medium"}}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{LabelChecking, LabelReady, "risk/medium"}}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name:     "an issue without a risk label removes the risk of the pull request",
-			snapshot: snapshotOf([]string{LabelAwaitingChecks}, PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, "risk/low"}}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks}}},
+			snapshot: snapshotOf([]string{LabelChecking}, PullRequest{Number: 21, Labels: []string{LabelChecking, "risk/low"}}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking}}},
 		},
 		{
 			name:     "labels of the issue that are not copied stay off the pull request",
@@ -616,9 +621,9 @@ func TestDecide_I11(t *testing.T) {
 		{
 			name: "each open pull request that closes the issue is made equal",
 			snapshot: snapshotOf(checks,
-				PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
+				PullRequest{Number: 21, Labels: []string{LabelChecking, "risk/medium"}},
 				PullRequest{Number: 22}),
-			want: []Action{CopyLabels{Issue: 10, PullRequest: 22, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			want: []Action{CopyLabels{Issue: 10, PullRequest: 22, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name: "a pull request that closes two issues follows the lower number, in any order",
@@ -629,7 +634,7 @@ func TestDecide_I11(t *testing.T) {
 					{Number: 10, Labels: checks, PullRequests: []PullRequest{{Number: 21}}},
 				},
 			}}},
-			want: []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			want: []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name: "the actions are in the order of the pull request numbers",
@@ -641,8 +646,8 @@ func TestDecide_I11(t *testing.T) {
 				},
 			}}},
 			want: []Action{
-				CopyLabels{Issue: 11, PullRequest: 22, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
-				CopyLabels{Issue: 10, PullRequest: 23, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
+				CopyLabels{Issue: 11, PullRequest: 22, Labels: []string{LabelChecking, "risk/medium"}},
+				CopyLabels{Issue: 10, PullRequest: 23, Labels: []string{LabelChecking, "risk/medium"}},
 			},
 		},
 	}
@@ -684,10 +689,10 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 		}
 		return n
 	}
-	if n := claims(decideReadyOfOwner(sub([]string{LabelAwaitingOwnerReview, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil, nil, time.Time{}, 0)); n != 0 {
+	if n := claims(decideReadyOfOwner(sub([]string{LabelAwaitingMergeDecision, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil, nil, time.Time{}, 0)); n != 0 {
 		t.Errorf("%d claims for a ready pull request of an issue in review, want 0", n)
 	}
-	if n := claims(decideReadyOfOwner(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingOwnerDecision}), 1, nil, nil, time.Time{}, 0)); n != 1 {
+	if n := claims(decideReadyOfOwner(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingDecision}), 1, nil, nil, time.Time{}, 0)); n != 1 {
 		t.Errorf("%d claims for a ready issue, want 1", n)
 	}
 }
@@ -749,9 +754,9 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 		want     bool
 	}{
 		{"no issue", Snapshot{}, false},
-		{"awaiting-checks counts", requirement(LabelImplementing, sub(10, LabelAwaitingChecks)), true},
-		{"a closed issue in awaiting-checks does not count", requirement(LabelImplementing,
-			SubIssue{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}}), false},
+		{"checking counts", requirement(LabelImplementing, sub(10, LabelChecking)), true},
+		{"a closed issue in checking does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Closed: true, Labels: []string{LabelChecking}}), false},
 		{"a ready sub-issue that waits for room under the limit counts", requirement(LabelImplementing,
 			sub(10, LabelImplementing), sub(11, LabelReady)), true},
 		{"a ready sub-issue whose blocked-by issues are closed counts", requirement(LabelImplementing, blocked(closed)), true},
@@ -762,8 +767,8 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 		{"planning without an agent does not count", requirement(LabelPlanning), false},
 		{"implementing without an agent does not count", requirement(LabelImplementing, sub(10, LabelImplementing)), false},
 		{"reviewing without an agent does not count", requirement(LabelImplementing, sub(10, LabelReviewing)), false},
-		{"awaiting-owner-review does not count", requirement(LabelAwaitingOwnerReview, sub(10, LabelAwaitingOwnerReview)), false},
-		{"awaiting-owner-decision does not count", requirement(LabelImplementing, sub(10, LabelAwaitingOwnerDecision)), false},
+		{"awaiting-plan-review does not count", requirement(LabelAwaitingPlanReview, sub(10, LabelAwaitingMergeDecision)), false},
+		{"awaiting-decision does not count", requirement(LabelImplementing, sub(10, LabelAwaitingDecision)), false},
 		{"a ready owner task does not count", requirement(LabelImplementing, sub(10, LabelOwnerTask, LabelReady)), false},
 		{"an issue with no status label does not count", requirement("", sub(10, "risk/low")), false},
 	}
@@ -778,9 +783,9 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 
 // The send-back after a request for changes of the Owner (I13) is decided
 // from the snapshot alone: an open sub-issue in
-// cumin/status/awaiting-owner-review, not running, with a CHANGES_REQUESTED
+// cumin/status/awaiting-merge-decision, not running, with a CHANGES_REQUESTED
 // review of a person on the head commit, submitted after
-// cumin/status/awaiting-owner-review was last added to the issue. Who of the
+// cumin/status/awaiting-merge-decision was last added to the issue. Who of the
 // reviewers is an Owner is decided later (OwnerRequestedChanges).
 func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t *testing.T) {
 	t.Parallel()
@@ -802,34 +807,34 @@ func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t 
 		reviews      []Review
 		want         []Action
 	}{
-		{name: "a request for changes of a person on the head", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes of a person on the head", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("owner", ReviewChangesRequested, head), review("other", ReviewApproved, old)},
 			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"other", "owner"}}}},
-		{name: "a request for changes from before the issue last waited for the Owner", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes from before the issue last waited for the Owner", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{answered}},
-		{name: "a new request for changes after an answered one", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a new request for changes after an answered one", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{answered, review("owner", ReviewChangesRequested, head)},
 			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"owner"}}}},
-		{name: "the label times are not read", labels: []string{LabelAwaitingOwnerReview}, timesNotRead: true,
+		{name: "the label times are not read", labels: []string{LabelAwaitingMergeDecision}, timesNotRead: true,
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
-		{name: "a request for changes on an older commit", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes on an older commit", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("owner", ReviewChangesRequested, old)}},
-		{name: "a request for changes of a bot", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes of a bot", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("app[bot]", ReviewChangesRequested, head)}},
-		{name: "a comment-only review", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a comment-only review", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("owner", ReviewCommented, head)}},
 		{name: "a pull request in another state", labels: []string{LabelReviewing},
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
-		{name: "a closed issue", labels: []string{LabelAwaitingOwnerReview}, closed: true,
+		{name: "a closed issue", labels: []string{LabelAwaitingMergeDecision}, closed: true,
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
-		{name: "an issue that runs now", labels: []string{LabelAwaitingOwnerReview}, running: true,
+		{name: "an issue that runs now", labels: []string{LabelAwaitingMergeDecision}, running: true,
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			snapshot := Snapshot{
 				RequirementIssues: []RequirementIssue{{
 					Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, LabelTimesRead: !tc.timesNotRead,
-					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels, AwaitingOwnerReviewAt: awaitingOwnerAt,
+					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels, AwaitingMergeDecisionAt: awaitingOwnerAt,
 						PullRequests: []PullRequest{{Number: 21, HeadCommit: head, Labels: tc.labels, Reviews: tc.reviews}}}},
 				}},
 				Running: map[int]bool{10: tc.running},
@@ -856,13 +861,13 @@ func TestHasIssueInWork(t *testing.T) {
 		{"ready requirement issue", requirement([]string{LabelReady}), true},
 		{"planning requirement issue", requirement([]string{LabelPlanning}), true},
 		{"implementing requirement issue with no sub-issue in work", requirement([]string{LabelImplementing},
-			SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerReview}}), false},
-		{"requirement issue that waits for the Owner", requirement([]string{LabelAwaitingOwnerReview}), false},
+			SubIssue{Number: 10, Labels: []string{LabelAwaitingMergeDecision}}), false},
+		{"requirement issue that waits for the Owner", requirement([]string{LabelAwaitingPlanReview}), false},
 		{"ready sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReady}}), true},
 		{"implementing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelImplementing}}), true},
-		{"sub-issue that waits for the checks", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingChecks}}), true},
+		{"sub-issue that waits for the checks", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelChecking}}), true},
 		{"reviewing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReviewing}}), true},
-		{"sub-issue that waits for the Owner", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerDecision}}), false},
+		{"sub-issue that waits for the Owner", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingDecision}}), false},
 		{"closed sub-issue", requirement(nil, SubIssue{Number: 10, Closed: true, Labels: []string{LabelImplementing}}), false},
 	}
 	for _, tt := range tests {

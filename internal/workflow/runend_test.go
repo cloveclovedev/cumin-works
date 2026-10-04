@@ -142,7 +142,7 @@ func TestI6_ARequirementIssueClosedDuringTheReviewerRunIsNotMerged(t *testing.T)
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: []string{"cumin/status/awaiting-checks", "risk/low"},
+		Labels: []string{"cumin/status/checking", "risk/low"},
 	})
 	service := sc.service()
 	if err := service.Poll(t.Context()); err != nil {

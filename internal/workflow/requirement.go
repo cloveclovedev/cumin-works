@@ -37,12 +37,12 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 		log.Info("read the label times", "issue", requirement.Number,
 			"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 		requirement.LabelTimesRead = true
-		requirement.ReviewAt = times[requirement.Number][LabelAwaitingOwnerReview]
+		requirement.ReviewAt = times[requirement.Number][statusLabel(requirement.Labels)]
 		for j := range requirement.SubIssues {
 			sub := &requirement.SubIssues[j]
 			sub.ReadyAt = times[sub.Number][LabelReady]
-			sub.AwaitingChecksAt = times[sub.Number][LabelAwaitingChecks]
-			sub.AwaitingOwnerReviewAt = times[sub.Number][LabelAwaitingOwnerReview]
+			sub.CheckingAt = times[sub.Number][LabelChecking]
+			sub.AwaitingMergeDecisionAt = times[sub.Number][LabelAwaitingMergeDecision]
 		}
 	}
 }
@@ -140,12 +140,12 @@ func (s *Service) startRequirement(ctx context.Context, token string, target Tar
 }
 
 // reviewRemaining applies R6: the requirement issue moves to
-// cumin/status/awaiting-owner-review, and the Owner is notified. The
+// cumin/status/awaiting-plan-review, and the Owner is notified. The
 // notification follows the label change, and the next poll no longer sees
 // cumin/status/implementing, so one move sends one notification. When the
 // label cannot change, nothing is sent, and the next poll tries again.
 func (s *Service) reviewRemaining(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ReviewRemaining) error {
-	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingOwnerReview)
+	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingPlanReview)
 	if err != nil {
 		return fmt.Errorf("R6: %w", err)
 	}

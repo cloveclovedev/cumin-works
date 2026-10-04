@@ -12,7 +12,7 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
 
-// reviewerScene puts issue #10 in cumin/status/awaiting-checks with the risk
+// reviewerScene puts issue #10 in cumin/status/checking with the risk
 // label, one passed required check, and a Reviewer run that holds and then
 // submits the review. The next poll applies I3.
 func reviewerScene(t *testing.T, opts cliOptions, risk string) (*scene, *workflow.Service) {
@@ -22,7 +22,7 @@ func reviewerScene(t *testing.T, opts cliOptions, risk string) (*scene, *workflo
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: []string{"cumin/status/awaiting-checks", risk},
+		Labels: []string{"cumin/status/checking", risk},
 	})
 	return sc, sc.serviceWithSession(t)
 }
@@ -127,8 +127,8 @@ func TestKeptStep_TheCheckOfTheReviewRunsAgainAndSendsOneFixRequest(t *testing.T
 		t.Errorf("%d fix requests in the log, want 1", n)
 	}
 	// The fix is pushed (the fake CLI adds no commit), so I2 passes.
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks after the fix", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking after the fix", got)
 	}
 	if got := workflow.InProgressIssues(service); len(got) != 0 {
 		t.Errorf("issues in work = %v, want none after the fix ended", got)
@@ -174,8 +174,8 @@ func TestKeptStep_TheCheckOfTheReviewRunsAgainAndReachesTheMergeDecision(t *test
 		if err := pollAtMinute(sc, service, 5); err != nil {
 			t.Fatalf("Poll at minute 5: %v", err)
 		}
-		if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-			t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+		if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+			t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 		}
 		if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
 			t.Errorf("notifications = %v, want one of I7", messages)
@@ -208,8 +208,8 @@ func TestKeptStep_AFailedReadOfTheRequiredChecksAfterAnApprovalKeepsTheStep(t *t
 	if err := pollAtMinute(sc, service, 5); err != nil {
 		t.Fatalf("Poll at minute 5: %v", err)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
 	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
 		t.Errorf("notifications = %v, want one of I7", messages)
@@ -222,7 +222,7 @@ func TestKeptStep_AFailedReadOfTheRequiredChecksAfterAnApprovalKeepsTheStep(t *t
 // Core-28 (cumin-core.md), I10: the Reviewer returned blocked, and every
 // try of the read of the issue fails. cumin keeps the stop and writes
 // nothing. At a later poll the issue reaches
-// cumin/status/awaiting-owner-decision with one comment.
+// cumin/status/awaiting-decision with one comment.
 func TestKeptStep_TheStopAfterABlockedReviewRunsAgainWithOneComment(t *testing.T) {
 	sc, service := reviewerScene(t, cliOptions{fixture: "blocked.jsonl"}, "risk/low")
 	keptReview(t, sc, service, failEveryRead(sc))
@@ -234,8 +234,8 @@ func TestKeptStep_TheStopAfterABlockedReviewRunsAgainWithOneComment(t *testing.T
 	if err := pollAtMinute(sc, service, 5); err != nil {
 		t.Fatalf("Poll at minute 5: %v", err)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 || !strings.HasPrefix(comments[0].Body, "## Decision needed") {
@@ -299,7 +299,7 @@ func TestKeptStep_AnIssueThatLeftTheReviewIsLeftAsItIs(t *testing.T) {
 	sc, service := reviewerScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES"}}, "risk/low")
 	keptReview(t, sc, service, failEveryRead(sc))
 	assertReviewStepIsKept(t, sc, service, "risk/low", "the check of the review")
-	labels := []string{"risk/low", workflow.LabelAwaitingOwnerDecision}
+	labels := []string{"risk/low", workflow.LabelAwaitingDecision}
 	if err := sc.fake.SetLabels(sc.repo, 10, labels); err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestKeptStep_AnIssueThatLeftTheReviewIsLeftAsItIs(t *testing.T) {
 }
 
 // The label change after a head that moved reached GitHub, and its answer
-// was lost: the issue has cumin/status/awaiting-checks with passed checks
+// was lost: the issue has cumin/status/checking with passed checks
 // while the step is kept. A poll before the delay starts no agent for the
 // issue in work. The poll after the delay ends the step: it writes nothing,
 // and no second agent run starts.
@@ -331,7 +331,7 @@ func TestKeptStep_AnIssueInWorkThatWaitsForTheChecksStartsNoSecondAgent(t *testi
 	sc, service := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 1}, "risk/low")
 	keptReview(t, sc, service, func() { sc.fake.CloseTimes(http.MethodPut, putLabelsPath, 1) })
 	assertReviewStepIsKept(t, sc, service, "risk/low", "the check of the review")
-	labels := []string{"risk/low", workflow.LabelAwaitingChecks}
+	labels := []string{"risk/low", workflow.LabelChecking}
 	if err := sc.fake.SetLabels(sc.repo, 10, labels); err != nil {
 		t.Fatal(err)
 	}
