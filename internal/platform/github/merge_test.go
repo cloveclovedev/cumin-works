@@ -89,3 +89,23 @@ func TestRepositoryPermission_ReadsThePermissionAndTheType(t *testing.T) {
 		}
 	}
 }
+
+// A merge whose answer is lost is a temporary failure, and the pull request
+// then reads as merged: the caller sends no second merge.
+func TestPullRequestIsMerged_ShowsAMergeWhoseAnswerWasLost(t *testing.T) {
+	ctx := context.Background()
+	fake, _, client := mergeScene(t)
+	merged, err := client.PullRequestIsMerged(ctx, githubtest.Token, "example-org", "example-repo", 21)
+	if err != nil || merged {
+		t.Fatalf("PullRequestIsMerged before the merge = %v, %v; want false", merged, err)
+	}
+	fake.DropAnswers(http.MethodPut, "/repos/example-org/example-repo/pulls/21/merge", 1)
+	err = client.MergePullRequest(ctx, githubtest.Token, "example-org", "example-repo", 21, head, "squash")
+	if !github.IsTemporary(err) {
+		t.Fatalf("error of the merge without an answer = %v, want a temporary failure", err)
+	}
+	merged, err = client.PullRequestIsMerged(ctx, githubtest.Token, "example-org", "example-repo", 21)
+	if err != nil || !merged {
+		t.Fatalf("PullRequestIsMerged after the merge = %v, %v; want true", merged, err)
+	}
+}
