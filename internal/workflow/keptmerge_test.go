@@ -245,3 +245,64 @@ func TestKeptStep_AMergeAfterTheApprovalOfTheOwnerIsKeptToo(t *testing.T) {
 	}
 	assertMergedAndClosedOnce(t, sc, service, 2)
 }
+
+// The decision to merge is older than a try of the kept merge. The Owner
+// changes risk/low to risk/medium while the merge is kept: the try decides
+// again, sends no merge, and asks the Owner (I7) with one notification.
+func TestKeptStep_ARiskLabelThatChangesWhileTheMergeIsKeptSendsNoMerge(t *testing.T) {
+	sc := approved(t, "risk/low")
+	sc.fake.FailTimes(http.MethodPut, mergePath, 0, 1, http.StatusBadGateway)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	assertMergeStepIsKept(t, sc, service, []string{"risk/low", workflow.LabelReviewing}, "the merge", 1)
+
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/medium", workflow.LabelReviewing}); err != nil {
+		t.Fatal(err)
+	}
+	if err := pollAtMinute(sc, service, 5); err != nil {
+		t.Fatalf("Poll at minute 5: %v", err)
+	}
+
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
+		t.Errorf("%d merge requests, want 1: the kept try sends no merge", n)
+	}
+	if sc.repo.PullRequests[21].Merged {
+		t.Error("pull request #21 is merged after the risk changed to risk/medium")
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
+		t.Errorf("notifications = %v, want one of I7", messages)
+	}
+	if got := workflow.InProgressIssues(service); len(got) != 0 {
+		t.Errorf("issues in work = %v, want none after the kept merge ended", got)
+	}
+}
+
+// The Owner requests changes on the same head commit while the merge of
+// I12 is kept: the request cancels the approval, and the kept try sends no
+// merge.
+func TestKeptStep_ARequestForChangesOfTheOwnerWhileTheMergeIsKeptSendsNoMerge(t *testing.T) {
+	sc := awaitingOwner(t)
+	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.fake.FailTimes(http.MethodPut, mergePath, 0, 1, http.StatusBadGateway)
+	service := sc.serviceWithSession(t)
+	sc.pollAndWait(t, service)
+	assertMergeStepIsKept(t, sc, service, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}, "the merge", 1)
+
+	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, -1)
+	if err := pollAtMinute(sc, service, 5); err != nil {
+		t.Fatalf("Poll at minute 5: %v", err)
+	}
+
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
+		t.Errorf("%d merge requests, want 1: the kept try sends no merge", n)
+	}
+	if sc.repo.PullRequests[21].Merged {
+		t.Error("pull request #21 is merged after the Owner requested changes")
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"I12: no approval of an Owner on the head commit any more"`) {
+		t.Errorf("the log does not say that the approval is gone:\n%s", sc.logs.String())
+	}
+}

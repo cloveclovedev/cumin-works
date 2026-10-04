@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/notify"
@@ -49,23 +50,57 @@ func (s *Service) closeWait() time.Duration {
 // caller runs it. A temporary failure of the token, of a read, or of a
 // label change is returned, for the kept step (keptstep.go).
 func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest, ownerLogin string, try *reviewTry) (func(context.Context), error) {
+	merge, sub, now, defaultBranch, err := s.decideApproved(ctx, log, target, settings, number, pr, try, false)
+	if err != nil || !merge {
+		return nil, err
+	}
+	return func(ctx context.Context) {
+		s.mergeStep(ctx, log, target, settings, RowI6, sub, now, defaultBranch,
+			func(string) (string, error) { return ownerLogin, nil },
+			// A try of the kept merge decides again, and applies I7 or
+			// the other paths as the first decision does.
+			func(ctx context.Context) (bool, error) {
+				merge, _, _, _, err := s.decideApproved(ctx, log, target, settings, number, pr, try, true)
+				return merge, err
+			})
+	}, nil
+}
+
+// decideApproved reads the issue and the required checks, decides on the
+// approved pull request (DecideMerge), and applies every path other than
+// the merge: I7, the way back to the checks, and the stop for a wrong risk
+// label. The first value says that the decision is the merge; the issue,
+// the pull request of this read, and the default branch come with it.
+//
+// kept says that the call is a try of the kept merge. Such a try changes
+// nothing when the issue left cumin/status/reviewing, unless the label is
+// one that the last try wrote without an answer (afterReview).
+func (s *Service) decideApproved(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest, try *reviewTry, kept bool) (bool, SubIssue, PullRequest, string, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("I6: no token; the issue keeps its label", "error", err.Error())
-		return nil, temporary(err)
+		return false, SubIssue{}, pr, "", temporary(err)
 	}
 	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
 		log.Error("I6: the issue was not read again; the issue keeps its label", "error", err.Error())
-		return nil, temporary(err)
+		return false, SubIssue{}, pr, "", temporary(err)
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
+	if kept {
+		lost := try.lost
+		try.lost = ""
+		if !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelAwaitingChecks || !slices.Contains(sub.Labels, lost)) {
+			log.Info("I6: the issue left cumin/status/reviewing while the merge was kept; nothing is merged", "labels", sub.Labels)
+			return false, sub, pr, read.DefaultBranch, nil
+		}
+	}
 	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
 	if err != nil {
 		log.Error("I6: the required checks were not read; the issue keeps its label", "error", err.Error())
-		return nil, temporary(err)
+		return false, sub, pr, read.DefaultBranch, temporary(err)
 	}
 	// The checks come from this read, not from the read that found the
 	// review: a check can run again in between. A pull request that is gone
@@ -84,17 +119,14 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 	log.Info("I6: decided on the approved pull request", "decision", decision.String(), "pull_request", pr.Number)
 	switch decision {
 	case MergeNow:
-		return func(ctx context.Context) {
-			s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, read.DefaultBranch,
-				func(string) (string, error) { return ownerLogin, nil })
-		}, nil
+		return true, sub, pr, read.DefaultBranch, nil
 	case MergeAskOwner:
-		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, try)
+		return false, sub, pr, read.DefaultBranch, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, try)
 	case MergeChecksNotPassed:
 		labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingChecks, try)
 		if err != nil {
 			log.Error("I6: the label was not changed", "error", err.Error())
-			return nil, temporary(err)
+			return false, sub, pr, read.DefaultBranch, temporary(err)
 		}
 		log.Info("I6: a required check does not pass on the approved commit; the issue waits for the checks again", "labels", labels)
 	default:
@@ -104,7 +136,7 @@ func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Ta
 			comment: StopNote(RowI6, reason, pr.Number, false),
 		})
 	}
-	return nil, nil
+	return false, sub, pr, read.DefaultBranch, nil
 }
 
 // askOwnerToMerge applies I7: the label cumin/status/awaiting-owner-review,
@@ -151,12 +183,22 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 // The merge cannot be undone, and its answer can get lost. So a try of the
 // kept step reads the pull request first, and sends no second merge for a
 // pull request that is merged.
-func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error)) {
+//
+// The decision to merge is older than a try of the kept step: the risk
+// label, a required check, or the approval can change during the wait. So
+// such a try calls decideAgain after that read, and sends the merge only
+// when the decision is still the merge. decideAgain returns an error only
+// for a temporary failure, which keeps the step.
+func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error), decideAgain func(ctx context.Context) (bool, error)) {
 	key := inProgressKey{repository: target.Repository.String(), issue: sub.Number}
 	again := false
 	step := &keptStep{name: "the merge", log: log}
 	step.run = func(ctx context.Context) error {
-		rest, err := s.merge(ctx, log, target, settings, row, sub, pr, defaultBranch, ownerLogin, again)
+		var check func(ctx context.Context) (bool, error)
+		if again {
+			check = decideAgain
+		}
+		rest, err := s.merge(ctx, log, target, settings, row, sub, pr, defaultBranch, ownerLogin, check)
 		again = true
 		step.rest = rest
 		return err
@@ -164,13 +206,14 @@ func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target
 	s.tryStep(ctx, key, step)
 }
 
-// merge is one try of the merge step, up to the answer of the merge. again
-// says that the step ran before: this try is one of the kept step. It
+// merge is one try of the merge step, up to the answer of the merge.
+// decideAgain is not nil when the step ran before: this try is one of the
+// kept step. It
 // returns the rest of the step, which can take long (the close of the
 // issue after the wait, or the conflict resolution), or nil when the step
 // ended. It returns an error only for a temporary failure, and the caller
 // keeps the step.
-func (s *Service) merge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error), again bool) (func(context.Context), error) {
+func (s *Service) merge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error), decideAgain func(ctx context.Context) (bool, error)) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	stopIssue := func(reason string) {
 		s.stopForOwner(ctx, log, target, settings, stop{
@@ -186,7 +229,7 @@ func (s *Service) merge(ctx context.Context, log *slog.Logger, target Target, se
 		log.Error(row+": no token; the issue keeps its label", "error", err.Error())
 		return nil, temporary(err)
 	}
-	if again {
+	if decideAgain != nil {
 		// The answer of an earlier merge can be lost. The pull request
 		// tells whether GitHub merged it.
 		merged, err := s.GitHub.PullRequestIsMerged(ctx, token, owner, repo, pr.Number)
@@ -201,6 +244,14 @@ func (s *Service) merge(ctx context.Context, log *slog.Logger, target Target, se
 		if merged {
 			log.Info(row+": the pull request is merged already; no second merge is sent", "pull_request", pr.Number)
 			return closeIssue, nil
+		}
+		still, err := decideAgain(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !still {
+			log.Info(row+": the decision is no longer the merge; the kept merge ends without a merge", "pull_request", pr.Number)
+			return nil, nil
 		}
 	}
 	method := string(settings.Settings.MergeMethod)
@@ -270,8 +321,10 @@ func (s *Service) closeMergedIssue(ctx context.Context, log *slog.Logger, target
 	}
 	token, err := target.Token(closeCtx)
 	if err != nil {
+		// The stop for the Owner needs a token too, so every failure of
+		// the token keeps the step: only a later try can close the issue.
 		log.Error(row+": no token; the issue is not closed", "error", err.Error())
-		return temporary(err)
+		return err
 	}
 	open, err := s.GitHub.IssueIsOpen(closeCtx, token, owner, repo, sub.Number)
 	if err != nil {
@@ -454,9 +507,57 @@ func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target T
 		defer s.running.Done()
 		defer done()
 		s.mergeStep(ctx, log, target, settings, RowI12, sub, pr, snapshot.DefaultBranch,
-			func(token string) (string, error) { return s.readOwnerLogin(ctx, token, target, a.Number) })
+			func(token string) (string, error) { return s.readOwnerLogin(ctx, token, target, a.Number) },
+			func(ctx context.Context) (bool, error) { return s.ownerStillApproves(ctx, log, target, a.Number, pr) })
 	}()
 	return true, nil
+}
+
+// ownerStillApproves decides again for a try of the kept merge of I12: it
+// reads the issue, the required checks, and the permissions, and says
+// whether I12 still merges the pull request at the approved head commit.
+// The issue is still in cumin/status/awaiting-owner-review, the latest
+// review of an Owner is APPROVED on that commit, and the risk label and
+// the required checks allow the merge. When it says no, nothing changes:
+// the issue leaves the set of issues in work, and the next poll decides on
+// it as on any issue with this label (I12, I13, I14). It returns an error
+// only for a temporary failure.
+func (s *Service) ownerStillApproves(ctx context.Context, log *slog.Logger, target Target, number int, approved PullRequest) (bool, error) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error("I12: no token; nothing is merged", "error", err.Error())
+		return false, temporary(err)
+	}
+	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
+	if err != nil {
+		log.Error("I12: the issue was not read again; nothing is merged", "error", err.Error())
+		return false, temporary(err)
+	}
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
+	sub := toSubIssue(read.Issue)
+	pr, ok := sub.LatestPullRequest()
+	if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingOwnerReview) || !ok || pr.Number != approved.Number || pr.HeadCommit != approved.HeadCommit {
+		log.Info("I12: the issue or the head commit changed while the merge was kept", "labels", sub.Labels)
+		return false, nil
+	}
+	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
+	if err != nil {
+		log.Error("I12: the required checks were not read; nothing is merged", "error", err.Error())
+		return false, temporary(err)
+	}
+	owners, err := s.readOwners(ctx, token, target, DecidingReviewers(pr.Reviews))
+	if err != nil {
+		log.Error("I12: the permissions were not read; nothing is merged", "error", err.Error())
+		return false, temporary(err)
+	}
+	if !OwnerApproved(pr.Reviews, pr.HeadCommit, owners) {
+		log.Info("I12: no approval of an Owner on the head commit any more", "pull_request", pr.Number)
+		return false, nil
+	}
+	decision := DecideMerge(sub.Labels, toRequiredChecks(required), pr.Checks)
+	log.Info("I12: decided again on the kept merge", "decision", decision.String(), "pull_request", pr.Number)
+	return decision == MergeNow || decision == MergeAskOwner, nil
 }
 
 // readOwners reads the permission of each person whose review decides, and
