@@ -1,0 +1,26 @@
+@startuml proposal-new-starts
+' cumin works - PROPOSAL: the state of cumin itself for new starts (quota). Q1 to Q4 of issue-states.md
+' are transitions of this machine, not of an issue.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "starting new work" as Starting
+Starting : do / start ready issues when a slot is free
+
+state "new starts stopped" as Stopped
+Stopped : do / finish the runs that go on, start nothing new
+
+[*] --> Starting
+Starting --> Stopped : [a quota window is at its limit]\n/ notify the Owner (Q1)
+Stopped --> Starting : the Owner allows the 5h window\n[weekly window under its limit] (Q2)
+Stopped --> Starting : [the time of the next try passed,\nboth windows under their limit] (Q3)
+
+note "In both states: [nothing can go on without the Owner,\nno agent runs] / tell the Owner once that cumin waits (Q4)." as Q4
+
+legend right
+  PROPOSAL. This machine has one instance for one cumin, not one for each issue.
+  It lives on the Host (the latest quota reading), not on GitHub.
+endlegend
+
+@enduml

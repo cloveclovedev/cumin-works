@@ -1,0 +1,56 @@
+@startuml proposal-requirement-issue-states
+' cumin works - PROPOSAL, not the rule of today: states of a requirement issue, as they could be.
+' Differences from today are marked NEW. See the draft pull request for the reasons.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "Draft (no status label)" as Draft
+Draft : do / the Owner writes the requirement
+
+state "ready" as Ready
+Ready : do / wait for a free slot
+
+state "planning" as Planning
+Planning : do / the Planner splits the requirement
+
+state "awaiting-split-review  (NEW name)" as PlanReview
+PlanReview : do / the Owner checks the sub-issues
+
+state "implementing" as Implementing
+Implementing : do / the sub-issues are worked on
+
+state "accepting  (NEW state)" as Accepting
+Accepting : do / the Planner checks the merged work
+
+state "awaiting-acceptance  (NEW name)" as Acceptance
+Acceptance : do / the Owner decides the acceptance
+
+state "awaiting-owner-decision" as Decision
+Decision : do / the Owner answers
+
+[*] --> Draft
+Draft --> Ready : the Owner adds ready
+Draft --> Implementing : ready added to a sub-issue
+Ready --> Planning : [ready is the Owner's, blockers closed,\nslot free, an open sub-issue or none]\n/ request the split
+Ready --> Accepting : [the same, and every sub-issue closed]\n/ request the acceptance check  (NEW)
+Planning --> PlanReview : [no agent runs, split verified]\n/ notify the Owner
+Planning --> Planning : [no agent runs, no result on GitHub,\nfirst time]\n/ request the split again  (NEW)
+Planning --> Decision : [no agent runs, split not verified,\nor the Planner asked a question]\n/ notify the Owner
+PlanReview --> Implementing : ready added to a sub-issue
+Implementing --> Accepting : [every sub-issue closed,\nfollow-up notes written, slot free]\n/ request the acceptance check
+Implementing --> PlanReview : [only sub-issues without\na status label remain]\n/ notify the Owner
+Accepting --> Acceptance : [acceptance check written]\n/ notify the Owner
+Accepting --> Accepting : [no agent runs, no acceptance check,\nfirst time]\n/ request the acceptance check again  (NEW)
+Accepting --> Decision : [the Planner asked a question]\n/ notify the Owner
+Acceptance --> Implementing : ready added to a sub-issue
+Acceptance --> [*] : the Owner closes the issue
+Decision --> Ready : the Owner adds ready
+
+legend right
+  PROPOSAL. A box is a state: a label on GitHub (written without "cumin/status/").
+  Every guard reads only facts on GitHub and "no agent of cumin runs for this issue".
+  No arrow needs the event "the run ended": a restart of cumin loses nothing.
+endlegend
+
+@enduml

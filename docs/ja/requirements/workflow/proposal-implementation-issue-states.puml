@@ -1,0 +1,64 @@
+@startuml proposal-implementation-issue-states
+' cumin works - PROPOSAL, not the rule of today: states of an implementation issue, as they could be.
+' Differences from today are marked NEW. See the draft pull request for the reasons.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "Draft (no status label)" as Draft
+Draft : do / the Planner or the Owner writes the issue
+
+state "ready" as Ready
+Ready : do / wait for a free slot
+
+state "implementing" as Implementing
+Implementing : do / the Implementer works
+
+state "awaiting-checks" as Checks
+Checks : do / the required checks run
+
+state "reviewing" as Reviewing
+Reviewing : do / the Reviewer reviews
+
+state "awaiting-merge-decision  (NEW name)" as OwnerReview
+OwnerReview : do / the Owner reviews the pull request
+
+state "merging  (NEW state)" as Merging
+Merging : do / cumin merges, then closes the issue
+
+state "awaiting-owner-decision" as Decision
+Decision : do / the Owner answers
+
+[*] --> Draft
+Draft --> Ready : the Owner adds ready
+Ready --> Implementing : [ready is the Owner's, blockers closed,\nslot free]\n/ request the implementation
+Implementing --> Checks : [no agent runs, pull request verified]\n/ add the closing link
+Implementing --> Implementing : [no agent runs, no verified pull request,\nfirst time]\n/ request the Implementer again  (NEW)
+Implementing --> Decision : [no agent runs, and: a question of the\nImplementer, or the second time]\n/ notify the Owner
+Checks --> Reviewing : [required checks passed]\n/ request the review
+Checks --> Implementing : [a required check failed,\nfix requests under the limit]\n/ request a check fix
+Checks --> Decision : [a required check failed, fix requests\nat the limit; or no result in time]\n/ notify the Owner
+Checks --> Implementing : [pull request conflicts]\n/ request a conflict resolution
+Reviewing --> Implementing : [no agent runs, changes requested on\nthe head commit, rounds under the limit]\n/ request a review fix
+Reviewing --> Merging : [no agent runs, approved on the head commit,\nchecks passed, risk/low]  (NEW target)
+Reviewing --> OwnerReview : [no agent runs, approved on the head commit,\nchecks passed, risk/medium or risk/high]\n/ notify the Owner
+Reviewing --> Checks : [no agent runs, head commit moved,\nor a check does not pass]
+Reviewing --> Reviewing : [no agent runs, no review on the\nhead commit, first time]\n/ request the review again
+Reviewing --> Decision : [no agent runs, and: rounds at the limit,\na question of the Reviewer, or the second time]\n/ notify the Owner
+OwnerReview --> Merging : [the Owner approved the head commit,\nchecks passed]  (NEW target)
+OwnerReview --> Implementing : [the Owner requested changes]\n/ request a response
+OwnerReview --> Implementing : [pull request conflicts]\n/ request a conflict resolution
+OwnerReview --> Ready : the Owner adds ready
+Merging --> [*] : [pull request merged]\n/ close the issue, write the follow-up note
+Merging --> Implementing : [merge refused: conflict]\n/ request a conflict resolution
+Merging --> Decision : [merge refused for another lasting reason]\n/ notify the Owner
+Decision --> Ready : the Owner adds ready
+
+legend right
+  PROPOSAL. A box is a state: a label on GitHub (written without "cumin/status/").
+  Every guard reads only facts on GitHub and "no agent of cumin runs for this issue".
+  No arrow needs the event "the run ended": a restart of cumin loses nothing.
+  "merging" makes a merge whose answer was lost visible: the next poll reads whether the pull request is merged.
+endlegend
+
+@enduml
