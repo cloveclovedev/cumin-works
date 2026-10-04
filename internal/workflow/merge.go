@@ -135,19 +135,42 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 }
 
 // mergeStep merges the pull request at its head commit with merge_method of
-// the repository settings, then closes the implementation issue once when
-// GitHub did not: it waits a short time, reads the issue, and closes it as
-// completed when it is open. It never closes the issue at a later poll, so
-// an issue that the Owner reopens stays open. row is I6 or I12, for the
-// log and the stop step.
+// the repository settings, then closes the implementation issue when GitHub
+// did not (closeAfterMerge). row is I6 or I12, for the log and the stop
+// step.
 //
-// The sha of the merge is the approved head commit, so a commit that was
-// pushed after the approval is never merged. A conflict goes back to the
-// Implementer (resolveConflict). Every other failure stops the issue for
-// the Owner with one sentence: a head that moved, any other answer of
-// GitHub, and a close that failed. ownerLogin gives the login of the Owner
-// for the conflict resolution request; it is called only on a conflict.
+// The sha of the merge is the approved head commit on every try, so a
+// commit that was pushed after the approval is never merged. A conflict
+// goes back to the Implementer (resolveConflict). A head that moved and any
+// other lasting answer of GitHub stop the issue for the Owner with one
+// sentence. ownerLogin gives the login of the Owner for the conflict
+// resolution request; it is called only on a conflict.
+//
+// A temporary failure of the token, of the read of the pull request, or of
+// the merge keeps the step (keptstep.go), and a later poll runs it again.
+// The merge cannot be undone, and its answer can get lost. So a try of the
+// kept step reads the pull request first, and sends no second merge for a
+// pull request that is merged.
 func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error)) {
+	key := inProgressKey{repository: target.Repository.String(), issue: sub.Number}
+	again := false
+	step := &keptStep{name: "the merge", log: log}
+	step.run = func(ctx context.Context) error {
+		rest, err := s.merge(ctx, log, target, settings, row, sub, pr, defaultBranch, ownerLogin, again)
+		again = true
+		step.rest = rest
+		return err
+	}
+	s.tryStep(ctx, key, step)
+}
+
+// merge is one try of the merge step, up to the answer of the merge. again
+// says that the step ran before: this try is one of the kept step. It
+// returns the rest of the step, which can take long (the close of the
+// issue after the wait, or the conflict resolution), or nil when the step
+// ended. It returns an error only for a temporary failure, and the caller
+// keeps the step.
+func (s *Service) merge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest, defaultBranch string, ownerLogin func(token string) (string, error), again bool) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	stopIssue := func(reason string) {
 		s.stopForOwner(ctx, log, target, settings, stop{
@@ -155,52 +178,116 @@ func (s *Service) mergeStep(ctx context.Context, log *slog.Logger, target Target
 			comment: StopNote(row, reason, pr.Number, false),
 		})
 	}
+	closeIssue := func(ctx context.Context) {
+		s.closeAfterMerge(ctx, log, target, settings, row, sub, pr)
+	}
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error(row+": no token; the issue keeps its label", "error", err.Error())
-		return
+		return nil, temporary(err)
+	}
+	if again {
+		// The answer of an earlier merge can be lost. The pull request
+		// tells whether GitHub merged it.
+		merged, err := s.GitHub.PullRequestIsMerged(ctx, token, owner, repo, pr.Number)
+		if err != nil {
+			log.Warn(row+": the pull request was not read before the merge", "pull_request", pr.Number, "error", err.Error())
+			if temporary(err) != nil {
+				return nil, err
+			}
+			stopIssue(MergeFailedReason(pr.Number, statusAnswer(err)))
+			return nil, nil
+		}
+		if merged {
+			log.Info(row+": the pull request is merged already; no second merge is sent", "pull_request", pr.Number)
+			return closeIssue, nil
+		}
 	}
 	method := string(settings.Settings.MergeMethod)
 	if err := s.GitHub.MergePullRequest(ctx, token, owner, repo, pr.Number, pr.HeadCommit, method); err != nil {
 		log.Warn(row+": the pull request was not merged", "pull_request", pr.Number, "error", err.Error())
 		switch {
+		case temporary(err) != nil:
+			return nil, err
 		case errors.Is(err, github.ErrConflict):
-			s.resolveConflict(ctx, log, target, settings, row, sub, pr, defaultBranch, ownerLogin)
+			return func(ctx context.Context) {
+				s.resolveConflict(ctx, log, target, settings, row, sub, pr, defaultBranch, ownerLogin)
+			}, nil
 		case errors.Is(err, github.ErrHeadMoved):
 			stopIssue(MergeHeadMovedReason(pr.Number))
 		default:
 			stopIssue(MergeFailedReason(pr.Number, statusAnswer(err)))
 		}
-		return
+		return nil, nil
 	}
 	log.Info(row+": merged the pull request", "pull_request", pr.Number, "merge_method", method, "head_commit", pr.HeadCommit)
+	return closeIssue, nil
+}
 
-	// The merge cannot be undone, and no later poll comes back to this
-	// issue: its pull request is no longer open. So a stop of cumin ends
-	// the wait early, and the close still runs, with its own time limit.
+// closeAfterMerge closes the implementation issue of a merged pull request
+// when GitHub did not: it waits a short time, reads the issue, and closes
+// it as completed when it is open. After the close, no later poll closes
+// the issue, so an issue that the Owner reopens stays open.
+//
+// The merge cannot be undone, and no poll decides on this issue again: its
+// pull request is no longer open. So a stop of cumin ends the wait early,
+// and the close still runs, with its own time limit. A temporary failure of
+// the read or of the close keeps the step; a later poll reads the issue
+// again, without the wait. Any other failure stops the issue for the Owner.
+func (s *Service) closeAfterMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest) {
 	select {
 	case <-ctx.Done():
 		log.Info(row + ": cumin is stopping; the issue is checked without the wait")
 	case <-time.After(s.closeWait()):
 	}
+	key := inProgressKey{repository: target.Repository.String(), issue: sub.Number}
+	step := &keptStep{name: "the close of the issue after the merge", log: log}
+	step.run = func(ctx context.Context) error {
+		return s.closeMergedIssue(ctx, log, target, settings, row, sub, pr)
+	}
+	s.tryStep(ctx, key, step)
+}
+
+// closeMergedIssue is one try of the close after a merge: it reads the
+// issue, and closes it as completed when it is open. It returns an error
+// only for a failure that keeps the step: a temporary failure, and a call
+// that the time limit of the close ended.
+func (s *Service) closeMergedIssue(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, sub SubIssue, pr PullRequest) error {
+	owner, repo := target.Repository.Owner, target.Repository.Name
 	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeLimit)
 	defer cancel()
+	// failed keeps the step, or stops the issue for the Owner.
+	failed := func(err error) error {
+		if github.IsTemporary(err) || errors.Is(closeCtx.Err(), context.DeadlineExceeded) {
+			return err
+		}
+		reason := CloseFailedReason(pr.Number, statusAnswer(err))
+		s.stopForOwner(ctx, log, target, settings, stop{
+			row: row, issue: sub.Number, labels: sub.Labels, reason: reason,
+			comment: StopNote(row, reason, pr.Number, false),
+		})
+		return nil
+	}
+	token, err := target.Token(closeCtx)
+	if err != nil {
+		log.Error(row+": no token; the issue is not closed", "error", err.Error())
+		return temporary(err)
+	}
 	open, err := s.GitHub.IssueIsOpen(closeCtx, token, owner, repo, sub.Number)
 	if err != nil {
 		log.Warn(row+": the issue was not read after the merge", "error", err.Error())
-		stopIssue(CloseFailedReason(pr.Number, statusAnswer(err)))
-		return
+		return failed(err)
 	}
 	if !open {
 		log.Info(row + ": GitHub closed the issue")
-		return
+		return nil
 	}
 	if err := s.GitHub.CloseIssueAsCompleted(closeCtx, token, owner, repo, sub.Number); err != nil {
 		log.Warn(row+": the issue was not closed after the merge", "error", err.Error())
-		stopIssue(CloseFailedReason(pr.Number, statusAnswer(err)))
-		return
+		return failed(err)
 	}
 	log.Info(row + ": closed the issue that GitHub left open after the merge")
+	return nil
 }
 
 // statusAnswer is the answer of GitHub in an error of the client: the

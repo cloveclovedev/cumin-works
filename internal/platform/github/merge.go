@@ -66,6 +66,20 @@ func (c *AppClient) mergeable(ctx context.Context, token, owner, repo string, nu
 	return pull.Mergeable, nil
 }
 
+// PullRequestIsMerged reads whether a pull request is merged. Official:
+// "Get a pull request" (merged). A merge whose answer got lost shows here,
+// so the merge step reads it before it sends the merge again.
+func (c *AppClient) PullRequestIsMerged(ctx context.Context, token, owner, repo string, number int) (bool, error) {
+	path := fmt.Sprintf("/repos/%s/%s/pulls/%d", owner, repo, number)
+	var pull struct {
+		Merged bool `json:"merged"`
+	}
+	if err := c.do(ctx, token, http.MethodGet, path, path, nil, http.StatusOK, &pull); err != nil {
+		return false, fmt.Errorf("github: read whether %s/%s#%d is merged: %w", owner, repo, number, err)
+	}
+	return pull.Merged, nil
+}
+
 // IssueIsOpen reads whether an issue is open. Official: "Get an issue"
 // (state).
 func (c *AppClient) IssueIsOpen(ctx context.Context, token, owner, repo string, number int) (bool, error) {
