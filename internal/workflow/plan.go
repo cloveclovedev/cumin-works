@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
@@ -110,6 +111,10 @@ func (s *Service) goPlanner(ctx context.Context, target Target, settings *Reposi
 // acceptance check changes nothing: the next poll finds the comment (R7)
 // or asks again (R4). While cumin is stopping, nothing is retried and no
 // label changes, as for I2.
+//
+// The step after a done or a blocked result of a split that ends with a
+// temporary failure of GitHub is kept (keptstep.go): a later poll runs it
+// again from the read of the requirement issue.
 func (s *Service) runPlanner(ctx context.Context, target Target, settings *RepositorySettings, number int, req plannerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RolePlanner)
 	role := settings.Settings.Roles[config.RolePlanner]
@@ -167,10 +172,11 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 				continue
 			}
 			reason := abnormalReason("Planner", firstKind, abnormal.Kind)
+			requirement, err := s.requirementIssueNow(ctx, log, target, number)
 			s.stopForOwner(ctx, log, target, settings, stop{
 				row:     req.end,
 				issue:   number,
-				labels:  labelsOf(s.requirementIssueNow(ctx, log, target, number)),
+				labels:  labelsOf(requirement, err),
 				reason:  reason,
 				comment: StopNote(req.end, reason, 0, true),
 			})
@@ -182,23 +188,71 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 			s.quotaAfterRun(ctx, log, target, number, run)
 			if run.Result.Result != agent.ResultDone {
-				question := firstLine(run.Result.BlockedReason)
-				log.Warn("the agent returned blocked", "reason", question)
-				s.stopForOwner(ctx, log, target, settings, stop{
-					row:     req.end,
-					issue:   number,
-					labels:  labelsOf(s.requirementIssueNow(ctx, log, target, number)),
-					reason:  "the Planner returned blocked: " + question,
-					comment: run.Result.BlockedReason,
+				log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
+				if req.end != RowR2 {
+					// Nothing is kept after an acceptance check: a later
+					// poll asks for the check again.
+					_ = s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.end, run.Result.BlockedReason, false)
+					return
+				}
+				s.runAndKeep(ctx, log, target, number, "the stop after blocked", func(ctx context.Context) error {
+					return s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.end, run.Result.BlockedReason, true)
 				})
 				return
 			}
 			if req.end == RowR2 {
-				s.verifySplit(ctx, log, target, settings, number)
+				try := &splitTry{}
+				s.runAndKeep(ctx, log, target, number, "the check of the split", func(ctx context.Context) error {
+					err := s.verifySplit(ctx, log, target, settings, number, try)
+					try.again = true
+					return err
+				})
 			}
 			return
 		}
 	}
+}
+
+// runAndKeep runs a step after a Planner run, and keeps it when it ends
+// with a temporary failure of GitHub. The first try runs here. A try of the
+// kept step runs in a poll.
+func (s *Service) runAndKeep(ctx context.Context, log *slog.Logger, target Target, number int, name string, run func(ctx context.Context) error) {
+	step := &keptStep{name: name, log: log, run: run}
+	s.tryStep(ctx, inProgressKey{repository: target.Repository.String(), issue: number}, step)
+}
+
+// stopAfterPlannerBlocked stops the requirement issue for the Owner after a
+// blocked result, on a new read of the requirement issue. comment is the
+// blocked_reason of the Planner.
+//
+// With keep, a temporary failure of the read is returned, and the caller
+// keeps the step. The step then runs again from the read. The read comes
+// before every write of the stop, so the kept step wrote nothing yet: it
+// always posts the decision request, whatever the label is now. Every other
+// failed read stops the issue without a label change, as before.
+func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, row, comment string, keep bool) error {
+	requirement, err := s.requirementIssueNow(ctx, log, target, number)
+	if keep && temporary(err) != nil {
+		return err
+	}
+	s.stopForOwner(ctx, log, target, settings, stop{
+		row:     row,
+		issue:   number,
+		labels:  labelsOf(requirement, err),
+		reason:  "the Planner returned blocked: " + firstLine(comment),
+		comment: comment,
+	})
+	return nil
+}
+
+// splitTry is what the check of the split remembers between its tries.
+type splitTry struct {
+	// again says that an earlier try was kept.
+	again bool
+	// lost is the status label of the label change of the last try, when
+	// that change ended with a temporary failure: it may have reached
+	// GitHub. Empty when the last try sent no label change.
+	lost string
 }
 
 // accept applies R7: the acceptance check comment exists, so the
@@ -276,10 +330,42 @@ func (s *Service) runningIssues(repository string) map[int]bool {
 // cumin/status/implementing without a notification, so that R4 asks for the
 // acceptance check again (SplitStatus). A failed check stops the
 // requirement issue for the Owner with the sentence of that check.
-func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int) {
-	requirement, ok := s.requirementIssueNow(ctx, log, target, number)
-	if !ok {
-		return
+//
+// A temporary failure of a call to GitHub (the token, the read, the label)
+// is returned, and the caller keeps the step (keptstep.go). The step then
+// runs again from its start. When the requirement issue of the new read has
+// left cumin/status/planning, the step does not change the label. When the
+// issue carries the label of a lost label change of the last try, that
+// change reached GitHub. The notification follows the label change, so it
+// was not sent yet: the step sends it when that label is
+// cumin/status/awaiting-owner-review. With any other label, another hand
+// changed it, and the step leaves the issue. Every other failure is logged
+// and returns nil, as before.
+func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, try *splitTry) error {
+	requirement, err := s.requirementIssueNow(ctx, log, target, number)
+	if err != nil {
+		return temporary(err)
+	}
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	notifySplit := func() {
+		s.notifyOwner(ctx, log.With("row", RowR2), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+			Row:        RowR2,
+			Reason:     "The split of the requirement issue needs a review.",
+			Repository: target.Repository.String(),
+			Subject:    fmt.Sprintf("issue #%d", number),
+			Link:       github.IssueURL(owner, repo, number),
+		})
+	}
+	lost := try.lost
+	try.lost = ""
+	if try.again && !slices.Contains(requirement.Labels, LabelPlanning) {
+		if lost != LabelAwaitingOwnerReview || !slices.Contains(requirement.Labels, lost) {
+			log.Info("R2: the issue left cumin/status/planning while the check of the split was kept; nothing changes", "labels", requirement.Labels)
+			return nil
+		}
+		log.Info("R2: the label was already changed while the check of the split was kept; the split waits for the Owner", "labels", requirement.Labels)
+		notifySplit()
+		return nil
 	}
 	verification := VerifySplit(requirement)
 	if !verification.Passed {
@@ -292,59 +378,57 @@ func (s *Service) verifySplit(ctx context.Context, log *slog.Logger, target Targ
 			reason:  reason,
 			comment: StopNote(RowR2, reason, 0, false),
 		})
-		return
+		return nil
 	}
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("R2: no token; the label was not changed", "error", err.Error())
-		return
+		return temporary(err)
 	}
 	status := SplitStatus(requirement)
 	labels := ReplaceStatusLabel(requirement.Labels, status)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
 		log.Error("R2: the label was not changed", "error", err.Error())
-		return
+		if temporary(err) != nil {
+			try.lost = status
+		}
+		return temporary(err)
 	}
 	if status == LabelImplementing {
 		// Nothing waits for the Owner: R4 asks for the acceptance check at
 		// the next poll, and R7 notifies when it is done.
 		log.Info("R2: every sub-issue is closed; the acceptance check follows", "sub_issues", len(requirement.SubIssues), "labels", labels)
-		return
+		return nil
 	}
 	log.Info("R2: the split waits for the Owner", "sub_issues", len(requirement.SubIssues), "labels", labels)
-	s.notifyOwner(ctx, log.With("row", RowR2), settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        RowR2,
-		Reason:     "The split of the requirement issue needs a review.",
-		Repository: target.Repository.String(),
-		Subject:    fmt.Sprintf("issue #%d", number),
-		Link:       github.IssueURL(owner, repo, number),
-	})
+	notifySplit()
+	return nil
 }
 
 // requirementIssueNow reads one requirement issue again with its
 // sub-issues, as subIssueNow does for a sub-issue. The read fails for an
 // issue that a poll does not read: a closed one, or one without the
-// requirement label (issue-states.md, principle 6).
-func (s *Service) requirementIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (RequirementIssue, bool) {
+// requirement label (issue-states.md, principle 6). The error is logged
+// here; the caller tells a temporary failure from it.
+func (s *Service) requirementIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (RequirementIssue, error) {
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("the issue was not read again: no token", "error", err.Error())
-		return RequirementIssue{}, false
+		return RequirementIssue{}, err
 	}
 	read, err := s.GitHub.ReadRequirementIssue(ctx, token, target.Repository.Owner, target.Repository.Name, number)
 	if err != nil {
 		log.Error("the issue was not read again", "error", err.Error())
-		return RequirementIssue{}, false
+		return RequirementIssue{}, err
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	return toRequirementIssue(read.Issue), true
+	return toRequirementIssue(read.Issue), nil
 }
 
 // labelsOf is the labels of the requirement issue that requirementIssueNow
 // read, or none when it could not be read.
-func labelsOf(requirement RequirementIssue, ok bool) []string {
-	if !ok {
+func labelsOf(requirement RequirementIssue, err error) []string {
+	if err != nil {
 		return nil
 	}
 	return requirement.Labels
