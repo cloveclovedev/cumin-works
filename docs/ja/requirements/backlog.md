@@ -121,7 +121,7 @@ cumin works v2 では、要求と要件を日本語のMarkdownで `docs/ja/requi
 | 要求Issue → 実装Issue | 分割の全体像の Requirement coverage。要求Issueの Requirements の1行ごとに、実装Issueを示す |
 | 実装Issue → Pull Request | 1つの実装Issueが1つのPull Requestになる。Pull Requestが実装Issueを閉じる |
 | 実装 → 受け入れ | 受け入れの確認の表。要求Issueの Requirements の1行が、表の1行になる |
-| 要件 → テスト | 要件の文書の行番号 (R1、I1、Q1、上位要件のテストの番号) を、テストの名前とコードのコメントに書く |
+| 要件 → テスト | 要件の文書の行の名前 (`issue-states.md` の「名前」の列) を、テストの名前とコードのコメントに書く。行の番号だけでは書かない |
 
 切れているのは、要件文書の行から要求Issueの行への1本だけである。要件文書は人がレビューし、考え、直しやすいように母国語のMarkdownで書いているが、そこに書いた要求が漏れなく要求Issueになっているかを確かめる手段がない。
 
