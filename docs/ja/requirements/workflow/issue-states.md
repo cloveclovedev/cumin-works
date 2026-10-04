@@ -2,7 +2,7 @@
 
 [メインワークフロー](main-workflow.puml) に出てくる要求Issueと実装Issueについて、状態を表すラベルと、状態が移る条件をまとめる。状態遷移図の書き方に合わせて、状態、その状態で進むこと、遷移 (きっかけ、条件、動作) を分けて書く。
 
-cuminの動作は、この文書の表を正とする。[cumin本体の要件](../cumin-core.md) と各Agentの要件は、この表の番号を参照する。
+cuminの動作は、この文書の表を正とする。[cumin本体の要件](../cumin-core.md) と各Agentの要件は、この表の遷移を名前で参照する。旧番号で参照している所は、順に名前に直す。
 
 ## ラベルの一覧
 
@@ -51,7 +51,8 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 - 状態は、ラベルである。図では箱で、`cumin/status/` を省いて書く。箱の中の `do /` は、その状態の間に進むことと、それを誰が行うかである。
 - 遷移は、図では矢印である。「きっかけ [条件] / 動作」の形で書く。きっかけを書かない遷移は、条件が成り立ったときに、cuminが定期確認か実行の終わりの直後に動かす。
 - 条件と動作には、誰が行うかを必ず書く。cumin、Planner、Implementer、Reviewer、Owner、GitHubのどれかである。
-- 遷移には番号を付ける。ほかの文書は、この番号で遷移を指す。1つの番号が、同じ状態から出る複数の矢印を持つことがある (R2、I2、I4、I8、I10)。番号は使い回さない。
+- 遷移には名前を付ける。名前は、その遷移でcuminが行う動作を、英語で短く言ったものである。ログ、通知、停止のコメント、テストの名前、ほかの文書は、この名前で遷移を指す。同じ動作が別の状態から起きるときは、同じ名前にする。
+- 「旧番号」の列は、前の表の行の番号である。ほかの文書とコードが、まだこの番号で指しているために残す。新しい遷移には、番号を付けない。番号で指している所を名前に直し終えたら、この列を消す。番号だけで遷移を指す書き方は、新しくしない。
 - 「Agentが動いていない」とは、このcuminが、そのIssueのAgentの実行を今は持っていないことである。作業が進む状態 (`planning`、`implementing`、`reviewing`、`accepting`) では、Agentが動いている間、cuminはそのIssueを動かさない。
 
 ## 状態
@@ -86,23 +87,23 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 
 図の元ファイル: [requirement-issue-states.puml](requirement-issue-states.puml)
 
-| # | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
-|---|---|---|---|
-| R1 | `ready` → `planning` | 最新の `ready` を付けたのがOwnerである (下の「Ownerのready」)。要求Issueの blocked by のIssueが全て閉じている。cuminに空きがある。sub-issueがあるかどうかは問わない | Plannerに分割を依頼する |
-| R2 | `planning` → `awaiting-plan-review` | Plannerが動いていない。分割が確認を通る (sub-issueが1つ以上あり、全てのsub-issueにriskのラベルがちょうど1つ付いている)。開いているsub-issueがある | Ownerに「分割結果の確認が必要」と通知する |
-| R2 | `planning` → `accepting` | Plannerが動いていない。分割が確認を通る。sub-issueが全て閉じている | Plannerに受け入れの確認を依頼する。通知しない |
-| R2 | `planning` → `awaiting-decision` | Plannerが動いていない。次のどちらかである。Plannerの質問のコメントが、`planning` になったあとに書かれている。または、分割が確認を通らず、R8を1回済ませている | 質問でなければ、理由をコメントに書く。Ownerに通知する |
-| R8 | `planning` → `planning` | Plannerが動いていない。分割が確認を通らない。Plannerの質問のコメントがない。この `planning` の間に、まだ依頼し直していない | Plannerに分割をもう一度依頼する。Plannerは、既にあるsub-issueを確かめて、同じものを二重に作らない |
-| R3 | `awaiting-plan-review` → `implementing`、`awaiting-acceptance` → `implementing`、状態ラベルなし → `implementing` | Ownerが、sub-issueのどれかに `ready` を付けた。要求Issueに状態ラベルがあるときは、その `ready` が、要求Issueが今の状態になったあとに付いている | ラベルを替える |
-| R4 | `implementing` → `accepting` | sub-issueが1つ以上あり、全て閉じている。最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントが、まだない。閉じたsub-issueのフォローアップノート (I9) を書き終えている。cuminに空きがある | Plannerに受け入れの確認を依頼する |
-| R6 | `implementing` → `awaiting-plan-review` | 開いているsub-issueが1つ以上あり、その全てに状態ラベルがない | Ownerに「残りのsub-issueの確認が必要」と通知する |
-| R7 | `accepting` → `awaiting-acceptance` | 最後のsub-issueが閉じたあとに書かれた、受け入れの確認のコメントがある | Ownerに「受け入れ可能になった」と通知する |
-| R9 | `accepting` → `accepting` | Plannerが動いていない。受け入れの確認のコメントも、Plannerの質問のコメントもない。この `accepting` の間に、まだ依頼し直していない | Plannerに受け入れの確認をもう一度依頼する |
-| R10 | `accepting` → `awaiting-decision` | Plannerが動いていない。次のどちらかである。Plannerの質問のコメントが、`accepting` になったあとに書かれている。または、受け入れの確認のコメントがなく、R9を1回済ませている | 質問でなければ、理由をコメントに書く。Ownerに通知する |
-| R5 | `awaiting-acceptance` → 完了 | Ownerが要求Issueを閉じた | 何もしない |
-| — | `awaiting-decision` → `ready`、状態ラベルなし → `ready` | Ownerが `ready` を付けた | 何もしない。次にR1が成り立つ |
+| 名前 | 旧番号 | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
+|---|---|---|---|---|
+| request the split | R1 | `ready` → `planning` | 最新の `ready` を付けたのがOwnerである (下の「Ownerのready」)。要求Issueの blocked by のIssueが全て閉じている。cuminに空きがある。sub-issueがあるかどうかは問わない | Plannerに分割を依頼する |
+| ask the Owner to review the plan | R2 | `planning` → `awaiting-plan-review` | Plannerが動いていない。分割が確認を通る (sub-issueが1つ以上あり、全てのsub-issueにriskのラベルがちょうど1つ付いている)。開いているsub-issueがある | Ownerに「分割結果の確認が必要」と通知する |
+| request the acceptance check | R2 | `planning` → `accepting` | Plannerが動いていない。分割が確認を通る。sub-issueが全て閉じている | Plannerに受け入れの確認を依頼する。通知しない |
+| stop the split for the Owner | R2 | `planning` → `awaiting-decision` | Plannerが動いていない。次のどちらかである。Plannerの質問のコメントが、`planning` になったあとに書かれている。または、分割が確認を通らず、「request the split again」を1回済ませている | 質問でなければ、理由をコメントに書く。Ownerに通知する |
+| request the split again | — | `planning` → `planning` | Plannerが動いていない。分割が確認を通らない。Plannerの質問のコメントがない。この `planning` の間に、まだ依頼し直していない | Plannerに分割をもう一度依頼する。Plannerは、既にあるsub-issueを確かめて、同じものを二重に作らない |
+| mark the requirement as in work | R3 | `awaiting-plan-review` → `implementing`、`awaiting-acceptance` → `implementing`、状態ラベルなし → `implementing` | Ownerが、sub-issueのどれかに `ready` を付けた。要求Issueに状態ラベルがあるときは、その `ready` が、要求Issueが今の状態になったあとに付いている | ラベルを替える |
+| request the acceptance check | R4 | `implementing` → `accepting` | sub-issueが1つ以上あり、全て閉じている。最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントが、まだない。閉じたsub-issueのフォローアップノート (I9) を書き終えている。cuminに空きがある | Plannerに受け入れの確認を依頼する |
+| ask the Owner about the remaining sub-issues | R6 | `implementing` → `awaiting-plan-review` | 開いているsub-issueが1つ以上あり、その全てに状態ラベルがない | Ownerに「残りのsub-issueの確認が必要」と通知する |
+| ask the Owner to accept | R7 | `accepting` → `awaiting-acceptance` | 最後のsub-issueが閉じたあとに書かれた、受け入れの確認のコメントがある | Ownerに「受け入れ可能になった」と通知する |
+| request the acceptance check again | — | `accepting` → `accepting` | Plannerが動いていない。受け入れの確認のコメントも、Plannerの質問のコメントもない。この `accepting` の間に、まだ依頼し直していない | Plannerに受け入れの確認をもう一度依頼する |
+| stop the acceptance check for the Owner | — | `accepting` → `awaiting-decision` | Plannerが動いていない。次のどちらかである。Plannerの質問のコメントが、`accepting` になったあとに書かれている。または、受け入れの確認のコメントがなく、「request the acceptance check again」を1回済ませている | 質問でなければ、理由をコメントに書く。Ownerに通知する |
+| — | R5 | `awaiting-acceptance` → 完了 | Ownerが要求Issueを閉じた | 何もしない |
+| — | — | `awaiting-decision` → `ready`、状態ラベルなし → `ready` | Ownerが `ready` を付けた | 何もしない。次にR1が成り立つ |
 
-- R8とR9の「依頼し直した回数」は、Hostの状態ファイルに持つ。失っても、依頼が1回増えるだけである ([cumin本体の要件](../cumin-core.md) の「状態の持ち方」)。
+- 「request the split again」と「request the acceptance check again」の「依頼し直した回数」は、Hostの状態ファイルに持つ。失っても、依頼が1回増えるだけである ([cumin本体の要件](../cumin-core.md) の「状態の持ち方」)。
 - R4は、空きを待つ。sub-issueが全て閉じた要求Issueが `implementing` のまま残っているときは、受け入れの確認の順番を待っている。
 
 差し戻しのとき、Ownerはsub-issueを追加して `cumin/status/ready` を付ける。これでR3が再び成り立ち、追加分が閉じるとR4が再び成り立つ。前の受け入れの確認のコメントは、追加分が閉じるより前に書かれたものなので、Plannerがもう一度確かめる。
@@ -111,7 +112,7 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 
 - 受け入れの確認のコメントとは、PlannerのGitHub Appが要求Issueに書いた、`## Acceptance check` で始まるコメントである。形式は [acceptance-check.md](../../../../templates/acceptance-check.md) に従う
 - cuminは、コメントがあるかどうかだけを見る。表の結果 (Pass か Fail か) は読まない。Failがあっても、R7で `cumin/status/awaiting-acceptance` に替える。差し戻すかどうかは、Ownerが決める
-- 受け入れの確認が済んだかどうかは、コメントの有無というGitHub上の事実で分かる。cuminが途中で止まっても、コメントがなければR9が、あればR7が、次の定期確認で成り立つ
+- 受け入れの確認が済んだかどうかは、コメントの有無というGitHub上の事実で分かる。cuminが途中で止まっても、コメントがなければ「request the acceptance check again」が、あればR7が、次の定期確認で成り立つ
 - R6では、受け入れの確認をしない。sub-issueが全て閉じたときにだけ行う
 
 R3が `cumin/status/ready` の付いた時刻を見るのは、要求Issueを見直す場面のためである。前の分割で `cumin/status/ready` が付いたsub-issueは、cuminが着手するまでそのラベルのまま残る。ラベルの有無だけで判定すると、Ownerが新しいsub-issueを確認する前に、要求Issueが `cumin/status/implementing` に替わってしまう。ラベルが付いた時刻は、GitHubがIssueのイベントとして記録している。
@@ -122,7 +123,7 @@ Ownerは、分割結果の確認のとき、一部のsub-issueにだけ `cumin/s
 
 Ownerは、要求Issueを書き終えたら `cumin/status/ready` を付ける。これでR1が成り立つ。分割に失敗して `cumin/status/awaiting-decision` になったときも、要求Issueを直してから `cumin/status/ready` を付ける。sub-issueが途中まで作られていても、Plannerは既にあるsub-issueを確かめて、同じものを二重に作らない。`cumin/type/requirement` は要求Issueである印なので、外さずに付けたままにする。Ownerの「進めてよい」の合図を、実装Issueと同じ `cumin/status/ready` に揃えるため、この形にしている。
 
-受け入れの確認でPlannerが質問して `cumin/status/awaiting-decision` になったとき (R10) も、Ownerは答えをコメントに書き、要求Issueに `cumin/status/ready` を付ける。R1が成り立ち、Plannerが要求Issueを読み直す。Requirementsを書き足していれば、Plannerは足りない分のsub-issueを作り、R2で分割結果の確認に進む。作るものがなければ、sub-issueは全て閉じたままなので、R2は要求Issueを `cumin/status/accepting` に替え、Plannerがもう一度受け入れを確かめる。要求Issueの `cumin/status/ready` は、いつも「Plannerが要求を読み直す」という1つの意味である。
+受け入れの確認でPlannerが質問して `cumin/status/awaiting-decision` になったとき (「stop the acceptance check for the Owner」) も、Ownerは答えをコメントに書き、要求Issueに `cumin/status/ready` を付ける。R1が成り立ち、Plannerが要求Issueを読み直す。Requirementsを書き足していれば、Plannerは足りない分のsub-issueを作り、R2で分割結果の確認に進む。作るものがなければ、sub-issueは全て閉じたままなので、R2は要求Issueを `cumin/status/accepting` に替え、Plannerがもう一度受け入れを確かめる。要求Issueの `cumin/status/ready` は、いつも「Plannerが要求を読み直す」という1つの意味である。
 
 要求Issueが他の要求Issueに依存するときは、Ownerが要求Issueどうしに blocked by を張る。先の要求Issueが閉じるまで、R1は成り立たない。先の要求の成果がまだ入っていないmainを読んで、Plannerが分割してしまうことを防ぐ。実装Issueの blocked by は、同じ要求Issueのsub-issueの間だけに張る。
 
@@ -134,45 +135,45 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 
 図の元ファイル: [implementation-issue-states.puml](implementation-issue-states.puml)
 
-| # | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
-|---|---|---|---|
-| I1 | `ready` → `implementing` | 最新の `ready` を付けたのがOwnerである。blocked by のIssueが全て閉じている。cuminに空きがある | 新しいセッションで、Implementerに実装を依頼する。Pull Requestが既にあれば、続きから進めるよう依頼する |
-| I2 | `implementing` → `checking` | Implementerが動いていない。Pull Requestが確認を通る (cuminがこのIssueのために決めたブランチに開いていて、作成者がImplementerのGitHub Appで、先頭のコミットがpushされている) | IssueにそのPull Requestを閉じるリンクがなければ、`cumin-core` がリンクを付け、付いたことを読み直して確かめる |
-| I2 | `implementing` → `awaiting-decision` | Implementerが動いていない。次のどれかである。Implementerの質問のコメントが、`implementing` になったあとに書かれている。Pull Requestが確認を通らず、I16を1回済ませている。衝突の解消を依頼したあとも、先頭のコミットが依頼の前のままである | 質問でなければ、理由をコメントに書く。Ownerに通知する |
-| I16 | `implementing` → `implementing` | Implementerが動いていない。Pull Requestが確認を通らない。Implementerの質問のコメントがない。この `implementing` の間に、まだ依頼し直していない | Implementerに、続きから進めるよう、もう一度依頼する |
-| I3 | `checking` → `reviewing` | 必須のcheckが、Pull Requestの先頭のコミットで全て通った。必須のcheckがなければ、すぐに成り立つ | Reviewerにレビューを依頼する |
-| I4 | `checking` → `implementing` | 必須のcheckのどれかが失敗した。checkの修正を依頼した回数が、上限 (2回) に達していない | 失敗したcheckの内容を添えて、同じセッションでImplementerに修正を依頼する |
-| I4 | `checking` → `awaiting-decision` | 必須のcheckのどれかが失敗した。checkの修正を依頼した回数が、上限に達している | Ownerに通知する |
-| I14 | `checking` → `implementing`、`awaiting-merge-decision` → `implementing` | GitHubが、Pull Requestを既定のブランチと衝突していると返した (GraphQLの `mergeable` が `CONFLICTING`) | Implementerの直前のセッションで、衝突の解消を依頼する |
-| I15 | `checking` → `awaiting-decision` | checkの待ち時間 ([cumin本体の要件](../cumin-core.md) の「設定」) を過ぎても、必須のcheckのどれかが、先頭のコミットで結果を返していない。実装Issueを閉じる開いているPull Requestがないときも、待ち時間を過ぎたら成り立つ | Ownerに「必須のcheckが結果を返さない」と通知する。通知には、先頭のコミット、結果を返していない必須のcheck、待った時間を書く。Pull Requestがないときは、そのことと待った時間を書く |
-| I5 | `reviewing` → `implementing` | Reviewerが動いていない。Reviewerの最新のレビューが、Pull Requestの今の先頭のコミットに対する `REQUEST_CHANGES` である。ラウンドが上限に達していない | Implementerに、指摘の修正を依頼する |
-| I6 | `reviewing` → `merging` | Reviewerが動いていない。Reviewerの最新のレビューが、今の先頭のコミットに対する `APPROVE` である。必須のcheckが全て通っている。riskが `risk/low` である | ラベルを替える。mergeは `merging` の中で行う |
-| I7 | `reviewing` → `awaiting-merge-decision` | I6と同じ。ただしriskが `risk/medium` または `risk/high` である | Pull Requestに、Ownerのレビューを依頼する。Ownerに「mergeの判断が必要」と通知する |
-| I8 | `reviewing` → `reviewing` | Reviewerが動いていない。最新のレビューが今の先頭のコミットに対する `REQUEST_CHANGES` で、ラウンドが上限に達している。Reviewerの原因の整理のコメントが、まだない | Reviewerに、「何が決まっていないことが原因か」の整理を依頼する |
-| I8 | `reviewing` → `awaiting-decision` | Reviewerの原因の整理のコメントが、Pull Requestに書かれている | Ownerに通知する |
-| I10 | `reviewing` → `awaiting-decision` | Reviewerが動いていない。次のどれかである。Reviewerの質問のコメントが、`reviewing` になったあとに書かれている。今の先頭のコミットにレビューがなく、I18を1回済ませている。riskのラベルがちょうど1つでない | 質問でなければ、理由をコメントに書く。Ownerに通知する |
-| I17 | `reviewing` → `checking` | Reviewerが動いていない。次のどちらかである。レビューの間に、先頭のコミットが変わった。`APPROVE` が出ているが、必須のcheckのどれかが今の先頭のコミットで通っていない | ラベルを替える。古いコミットへのレビューは、ラウンドに数えたまま残る |
-| I18 | `reviewing` → `reviewing` | Reviewerが動いていない。今の先頭のコミットに、Reviewerのレビューがない。Reviewerの質問のコメントがない。この `reviewing` の間に、まだ依頼し直していない | Reviewerにレビューをもう一度依頼する |
-| I12 | `awaiting-merge-decision` → `merging` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `APPROVE` である。必須のcheckが全て通っている | ラベルを替える |
-| I13 | `awaiting-merge-decision` → `implementing` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `REQUEST_CHANGES` である。そのレビューは、実装Issueが最後に `awaiting-merge-decision` になったあとに出されている | Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する |
-| I19 | `merging` → 完了 | GitHubが、Pull Requestをmerge済みと返す | GitHubが実装Issueを閉じていなければ、閉じる。フォローアップノートは、I9が書く |
-| I20 | `merging` → `checking` | Pull Requestがmergeされていない。mergeの条件 (今の先頭のコミットへの承認、必須のcheck) が、成り立たなくなった | ラベルを替える。mergeしない |
-| I21 | `merging` → `implementing` | GitHubが、衝突を理由にmergeを断った | Implementerの直前のセッションで、衝突の解消を依頼する |
-| I22 | `merging` → `awaiting-decision` | GitHubが、衝突でも、既定のブランチが変わったことでもない、直らない理由でmergeを断った。または、mergeのあとで実装Issueを閉じられない | 理由をコメントに書く。Ownerに通知する |
-| — | `awaiting-merge-decision` → `ready`、`awaiting-decision` → `ready`、状態ラベルなし → `ready` | Ownerが `ready` を付けた | 何もしない。次にI1が成り立つ |
+| 名前 | 旧番号 | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
+|---|---|---|---|---|
+| request the implementation | I1 | `ready` → `implementing` | 最新の `ready` を付けたのがOwnerである。blocked by のIssueが全て閉じている。cuminに空きがある | 新しいセッションで、Implementerに実装を依頼する。Pull Requestが既にあれば、続きから進めるよう依頼する |
+| wait for the checks | I2 | `implementing` → `checking` | Implementerが動いていない。Pull Requestが確認を通る (cuminがこのIssueのために決めたブランチに開いていて、作成者がImplementerのGitHub Appで、先頭のコミットがpushされている) | IssueにそのPull Requestを閉じるリンクがなければ、`cumin-core` がリンクを付け、付いたことを読み直して確かめる |
+| stop the implementation for the Owner | I2 | `implementing` → `awaiting-decision` | Implementerが動いていない。次のどれかである。Implementerの質問のコメントが、`implementing` になったあとに書かれている。Pull Requestが確認を通らず、「request the implementation again」を1回済ませている。衝突の解消を依頼したあとも、先頭のコミットが依頼の前のままである | 質問でなければ、理由をコメントに書く。Ownerに通知する |
+| request the implementation again | — | `implementing` → `implementing` | Implementerが動いていない。Pull Requestが確認を通らない。Implementerの質問のコメントがない。この `implementing` の間に、まだ依頼し直していない | Implementerに、続きから進めるよう、もう一度依頼する |
+| request the review | I3 | `checking` → `reviewing` | 必須のcheckが、Pull Requestの先頭のコミットで全て通った。必須のcheckがなければ、すぐに成り立つ | Reviewerにレビューを依頼する |
+| request a check fix | I4 | `checking` → `implementing` | 必須のcheckのどれかが失敗した。checkの修正を依頼した回数が、上限 (2回) に達していない | 失敗したcheckの内容を添えて、同じセッションでImplementerに修正を依頼する |
+| stop for failed checks | I4 | `checking` → `awaiting-decision` | 必須のcheckのどれかが失敗した。checkの修正を依頼した回数が、上限に達している | Ownerに通知する |
+| request a conflict resolution | I14 | `checking` → `implementing`、`awaiting-merge-decision` → `implementing` | GitHubが、Pull Requestを既定のブランチと衝突していると返した (GraphQLの `mergeable` が `CONFLICTING`) | Implementerの直前のセッションで、衝突の解消を依頼する |
+| stop for missing checks | I15 | `checking` → `awaiting-decision` | checkの待ち時間 ([cumin本体の要件](../cumin-core.md) の「設定」) を過ぎても、必須のcheckのどれかが、先頭のコミットで結果を返していない。実装Issueを閉じる開いているPull Requestがないときも、待ち時間を過ぎたら成り立つ | Ownerに「必須のcheckが結果を返さない」と通知する。通知には、先頭のコミット、結果を返していない必須のcheck、待った時間を書く。Pull Requestがないときは、そのことと待った時間を書く |
+| request a review fix | I5 | `reviewing` → `implementing` | Reviewerが動いていない。Reviewerの最新のレビューが、Pull Requestの今の先頭のコミットに対する `REQUEST_CHANGES` である。ラウンドが上限に達していない | Implementerに、指摘の修正を依頼する |
+| start the merge | I6 | `reviewing` → `merging` | Reviewerが動いていない。Reviewerの最新のレビューが、今の先頭のコミットに対する `APPROVE` である。必須のcheckが全て通っている。riskが `risk/low` である | ラベルを替える。mergeは `merging` の中で行う |
+| ask the Owner to decide the merge | I7 | `reviewing` → `awaiting-merge-decision` | I6と同じ。ただしriskが `risk/medium` または `risk/high` である | Pull Requestに、Ownerのレビューを依頼する。Ownerに「mergeの判断が必要」と通知する |
+| request the cause from the Reviewer | I8 | `reviewing` → `reviewing` | Reviewerが動いていない。最新のレビューが今の先頭のコミットに対する `REQUEST_CHANGES` で、ラウンドが上限に達している。Reviewerの原因の整理のコメントが、まだない | Reviewerに、「何が決まっていないことが原因か」の整理を依頼する |
+| stop at the round limit | I8 | `reviewing` → `awaiting-decision` | Reviewerの原因の整理のコメントが、Pull Requestに書かれている | Ownerに通知する |
+| stop the review for the Owner | I10 | `reviewing` → `awaiting-decision` | Reviewerが動いていない。次のどれかである。Reviewerの質問のコメントが、`reviewing` になったあとに書かれている。今の先頭のコミットにレビューがなく、「request the review again」を1回済ませている。riskのラベルがちょうど1つでない | 質問でなければ、理由をコメントに書く。Ownerに通知する |
+| go back to the checks | — | `reviewing` → `checking` | Reviewerが動いていない。次のどちらかである。レビューの間に、先頭のコミットが変わった。`APPROVE` が出ているが、必須のcheckのどれかが今の先頭のコミットで通っていない | ラベルを替える。古いコミットへのレビューは、ラウンドに数えたまま残る |
+| request the review again | — | `reviewing` → `reviewing` | Reviewerが動いていない。今の先頭のコミットに、Reviewerのレビューがない。Reviewerの質問のコメントがない。この `reviewing` の間に、まだ依頼し直していない | Reviewerにレビューをもう一度依頼する |
+| start the merge | I12 | `awaiting-merge-decision` → `merging` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `APPROVE` である。必須のcheckが全て通っている | ラベルを替える |
+| request a response to the Owner's review | I13 | `awaiting-merge-decision` → `implementing` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `REQUEST_CHANGES` である。そのレビューは、実装Issueが最後に `awaiting-merge-decision` になったあとに出されている | Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する |
+| close the merged issue | — | `merging` → 完了 | GitHubが、Pull Requestをmerge済みと返す | GitHubが実装Issueを閉じていなければ、閉じる。フォローアップノートは、I9が書く |
+| go back to the checks | — | `merging` → `checking` | Pull Requestがmergeされていない。mergeの条件 (今の先頭のコミットへの承認、必須のcheck) が、成り立たなくなった | ラベルを替える。mergeしない |
+| request a conflict resolution | — | `merging` → `implementing` | GitHubが、衝突を理由にmergeを断った | Implementerの直前のセッションで、衝突の解消を依頼する |
+| stop the merge for the Owner | — | `merging` → `awaiting-decision` | GitHubが、衝突でも、既定のブランチが変わったことでもない、直らない理由でmergeを断った。または、mergeのあとで実装Issueを閉じられない | 理由をコメントに書く。Ownerに通知する |
+| — | — | `awaiting-merge-decision` → `ready`、`awaiting-decision` → `ready`、状態ラベルなし → `ready` | Ownerが `ready` を付けた | 何もしない。次にI1が成り立つ |
 
 `merging` の中でcuminが行うこと:
 
 - Pull Requestがmergeされておらず、mergeの条件が成り立つ間、cuminはmergeを送る。mergeの方法は、リポジトリの設定に従う。mergeに渡す先頭のコミットは、承認されたコミットである。承認のあとにpushされたコミットは、mergeしない。
-- mergeの答えが届かなかったときも、次の定期確認が、Pull Requestがmerge済みかを読む。merge済みならI19、そうでなければ、もう一度mergeを送る。同じmergeを2回行うことはない。
+- mergeの答えが届かなかったときも、次の定期確認が、Pull Requestがmerge済みかを読む。merge済みなら「close the merged issue」、そうでなければ、もう一度mergeを送る。同じmergeを2回行うことはない。
 - GitHubが「既定のブランチが変わった」(405、Base branch was modified) という理由でmergeを断ったときは、Issueを止めない。`merging` のまま、次の定期確認でもう一度送る。ほかのPull Requestのmergeの直後に起きる、すぐに直る状態だからである。
 - 1回の定期確認で2つ以上のPull Requestをmergeするときは、1つmergeするごとに数秒待つ。GitHubが既定のブランチを更新する時間を置くためである。
 - cuminが実装Issueを閉じるのは、GitHubが閉じなかったときだけである。2026-09-30から、GitHubは、手で付けたリンクや `addCloseIssueReferences` で付けたリンクのPull Requestをmergeしても、Issueを閉じないことがある。`merging` を出たあとは、cuminは閉じない。Ownerが開き直したIssueは、開いたままになる。
 
-依頼し直し (I16、I18) と、質問のコメント:
+依頼し直し (「request the implementation again」、「request the review again」) と、質問のコメント:
 
 - 「依頼し直した回数」は、Hostの状態ファイルに持つ。失っても、依頼が1回増えるだけである。
-- Agentが `blocked` を返したら、cuminはその理由 (`blocked_reason`) を、すぐにIssueのコメントとして書く。これが「質問のコメント」である。書く前にcuminが止まったときは、コメントがないので、I16かI18が成り立ち、Agentがもう一度同じ質問を返す。
+- Agentが `blocked` を返したら、cuminはその理由 (`blocked_reason`) を、すぐにIssueのコメントとして書く。これが「質問のコメント」である。書く前にcuminが止まったときは、コメントがないので、「request the implementation again」か「request the review again」が成り立ち、Agentがもう一度同じ質問を返す。
 - Implementerが質問したとき (I2) は、依頼し直さずに、1回目から `cumin/status/awaiting-decision` に替える。実装に必要な要件が足りない、という場合が多いためである。Ownerは実装Issueか、その上の要求Issueを書き直して進められる状態にしてから、実装Issueに `cumin/status/ready` を付け直す。Reviewerが質問したとき (I10) も、同じ扱いにする。
 
 Ownerのready:
@@ -183,9 +184,9 @@ Ownerのready:
 
 I7のあと、OwnerはPull RequestをGitHubのレビューで判断する。
 
-- 承認するときは、今の先頭のコミットに `APPROVE` のレビューを出す。I12が成り立ち、cuminがmergeする。古いコミットへの承認は数えない。承認のあとにOwnerが `REQUEST_CHANGES` を出すと、最新のレビューが承認でなくなるので、mergeしない (`merging` に入ったあとなら、I20が成り立つ)。衝突の解消などで新しいコミットがpushされたら、Ownerはもう一度承認する
+- 承認するときは、今の先頭のコミットに `APPROVE` のレビューを出す。I12が成り立ち、cuminがmergeする。古いコミットへの承認は数えない。承認のあとにOwnerが `REQUEST_CHANGES` を出すと、最新のレビューが承認でなくなるので、mergeしない (`merging` に入ったあとなら、「go back to the checks」が成り立つ)。衝突の解消などで新しいコミットがpushされたら、Ownerはもう一度承認する
 - Ownerの判断を待つ間に、ほかのPull Requestのmergeで衝突したら、Ownerが承認する前に、I14がImplementerに解消させる。解消のあと、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。Ownerは、mergeできる先頭のコミットだけを判断すればよい
-- 衝突した先頭のコミットにOwnerのレビューがあるときは、そのレビューが先に決める。`REQUEST_CHANGES` ならI13が成り立ち、Implementerが指摘に対応する。そのあと、衝突は `cumin/status/checking` のI14で解消される。承認ならI12が成り立ち、`merging` でmergeが断られて、I21でImplementerが解消する。I12もI13も成り立たないIssueだけに、同じ定期確認でI14を適用する
+- 衝突した先頭のコミットにOwnerのレビューがあるときは、そのレビューが先に決める。`REQUEST_CHANGES` ならI13が成り立ち、Implementerが指摘に対応する。そのあと、衝突は `cumin/status/checking` のI14で解消される。承認ならI12が成り立ち、`merging` でmergeが断られて、「request a conflict resolution」でImplementerが解消する。I12もI13も成り立たないIssueだけに、同じ定期確認でI14を適用する
 - 差し戻すときは、今の先頭のコミットに `REQUEST_CHANGES` のレビューを出す。I13が成り立ち、cuminがImplementerに直させる。そのあと、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。Reviewerのレビューのラウンドは、Reviewerの最後の `APPROVE` のあとから数え直すので、差し戻しのあとは1ラウンド目から始まる
 - 1つの `REQUEST_CHANGES` で差し戻すのは1回だけである。Ownerが質問だけをして、Implementerがコミットせずに答えると、先頭のコミットは変わらず、Ownerの `REQUEST_CHANGES` はそのコミットに残る。I13は、実装Issueが最後に `cumin/status/awaiting-merge-decision` になったあとのレビューだけで成り立つので、Issueはそのまま、Ownerの判断に戻る。Ownerは答えを読んで、承認するか、もう一度 `REQUEST_CHANGES` を出す
 - コメントを書いて実装Issueに `cumin/status/ready` を付けて差し戻すこともできる。I1が成り立ち、続きの依頼になる
@@ -221,10 +222,10 @@ Ownerが `cumin/status/awaiting-merge-decision` や `cumin/status/awaiting-decis
 
 ## 状態を変えない動作
 
-| # | きっかけと条件 | cuminの動作 |
-|---|---|---|
-| I9 | 実装Issueが閉じていて、それを閉じるよう結び付いたPull Requestが、merge済みである。誰が閉じたか (GitHub、cumin、Owner) は問わない。フォローアップノートをまだ書いていない | 残った作業を、フォローアップノートとして要求Issueに転記する。実装Issueはこれで完了 |
-| I11 | 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする |
+| 名前 | 旧番号 | きっかけと条件 | cuminの動作 |
+|---|---|---|---|
+| write the follow-up note | I9 | 実装Issueが閉じていて、それを閉じるよう結び付いたPull Requestが、merge済みである。誰が閉じたか (GitHub、cumin、Owner) は問わない。フォローアップノートをまだ書いていない | 残った作業を、フォローアップノートとして要求Issueに転記する。実装Issueはこれで完了 |
+| copy the labels to the pull request | I11 | 実装Issueを閉じる開いているPull Requestのラベルが、実装Issueと違う | Pull Requestの `cumin/status/*` と `risk/*` のラベルを、実装Issueと同じにする |
 
 - I9とI11は、どの状態でも成り立つ。状態を変えない。
 - I9のフォローアップノートは、1つのPull Requestについて1つだけ書く。
@@ -248,7 +249,7 @@ Ownerが `cumin/status/awaiting-merge-decision` や `cumin/status/awaiting-decis
 - Ownerの介入を挟まない一続きの作業 (I4のcheckの修正、I5の指摘の修正、Reviewerの2ラウンド目以降) は、同じセッションで続ける。
 - Ownerのレビューへの対応 (I13) も、Implementerの直前のセッションで続ける。ほぼ出来上がったPull Requestへのコメントを直すことが多く、Issueが書き直されたわけではないので、前の文脈がそのまま役に立つためである
 - こうする理由は3つある。書き直される前のIssueを前提にした古い文脈を引きずらない。作業の状態はGitHubにあるので、セッションを捨てても失うものがない。Ownerの対応には時間が空くので、古いセッションを再開すると長い文脈を読み直す分だけ利用枠を余計に使う。
-- 依頼し直し (R8、R9、I16、I18) は、状態ファイルにセッションがあれば、そのセッションで続ける。なければ、新しいセッションで依頼する
+- 依頼し直し (「request the split again」、「request the acceptance check again」、「request the implementation again」、「request the review again」) は、状態ファイルにセッションがあれば、そのセッションで続ける。なければ、新しいセッションで依頼する
 
 ## cumin自身の状態 (新しい着手)
 
@@ -263,12 +264,12 @@ Ownerが `cumin/status/awaiting-merge-decision` や `cumin/status/awaiting-decis
 | 新しい着手を進める | cuminが、空きがあれば、`ready` のIssueに着手する (R1、I1) |
 | 新しい着手を止めている | cuminが、実行中のIssueは最後まで進め、新しい着手はしない |
 
-| # | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
-|---|---|---|---|
-| Q1 | 進める → 止めている | Agentの実行の終わり、または着手の直前の確認で、5h枠の使用率が今のしきい値以上になった。weekly枠の使用率がペースの上限以上になった。または、着手の直前の確認で使用率を読み取れなかった | Ownerに通知する。止めてから再開するまでに、同じ枠について (読み取れなかったときは、そのことについて) 通知するのは1回だけである |
-| Q2 | 止めている → 進める | Ownerが、Host上のコマンドで5h枠の使い切りを許可した。weekly枠の使用率がペースの上限未満である | 着手を再開する。許可は、その5h枠のリセットまで有効である |
-| Q3 | 止めている → 進める | 手元に残した使用率から決めた、次に試す時刻を過ぎた。着手の直前の確認で、どちらの枠も上限未満である | 着手を再開する |
-| Q4 | どちらの状態でも (状態は変わらない) | Ownerが動かなければ何も進まない。次の全てが成り立つときである。実行中のAgentがいない。R1もI1も成り立たない (利用枠だけで止まっている着手 (Q1) は、成り立つものとして数える。Q1が原因を知らせているためである)。cuminがOwnerなしで次に進めるIssueがない (下の表)。前回の通知のあとに、cuminが何か動作をした | Ownerに「待ち状態になった」と通知する |
+| 名前 | 旧番号 | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
+|---|---|---|---|---|
+| stop new starts | Q1 | 進める → 止めている | Agentの実行の終わり、または着手の直前の確認で、5h枠の使用率が今のしきい値以上になった。weekly枠の使用率がペースの上限以上になった。または、着手の直前の確認で使用率を読み取れなかった | Ownerに通知する。止めてから再開するまでに、同じ枠について (読み取れなかったときは、そのことについて) 通知するのは1回だけである |
+| resume new starts | Q2 | 止めている → 進める | Ownerが、Host上のコマンドで5h枠の使い切りを許可した。weekly枠の使用率がペースの上限未満である | 着手を再開する。許可は、その5h枠のリセットまで有効である |
+| resume new starts | Q3 | 止めている → 進める | 手元に残した使用率から決めた、次に試す時刻を過ぎた。着手の直前の確認で、どちらの枠も上限未満である | 着手を再開する |
+| tell the Owner that cumin waits | Q4 | どちらの状態でも (状態は変わらない) | Ownerが動かなければ何も進まない。次の全てが成り立つときである。実行中のAgentがいない。R1もI1も成り立たない (利用枠だけで止まっている着手 (Q1) は、成り立つものとして数える。Q1が原因を知らせているためである)。cuminがOwnerなしで次に進めるIssueがない (下の表)。前回の通知のあとに、cuminが何か動作をした | Ownerに「待ち状態になった」と通知する |
 
 Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 
@@ -302,7 +303,7 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 
 ## Agentの異常終了と、結果を残さなかった実行
 
-- Agentの実行が異常終了したとき (プロセスの失敗、タイムアウトなど) も、Agentが結果をGitHubに残さずに終わったときも、cuminの再起動でAgentの実行が切れたときも、扱いは同じである。GitHubを読めば、結果があるかどうかが分かる。結果がなければ、依頼し直しの遷移 (R8、R9、I16、I18) が成り立ち、同じ依頼を1回だけやり直す。それでも結果がなければ、`cumin/status/awaiting-decision` に替えてOwnerに通知する。
+- Agentの実行が異常終了したとき (プロセスの失敗、タイムアウトなど) も、Agentが結果をGitHubに残さずに終わったときも、cuminの再起動でAgentの実行が切れたときも、扱いは同じである。GitHubを読めば、結果があるかどうかが分かる。結果がなければ、依頼し直しの遷移 (「request the split again」、「request the acceptance check again」、「request the implementation again」、「request the review again」) が成り立ち、同じ依頼を1回だけやり直す。それでも結果がなければ、`cumin/status/awaiting-decision` に替えてOwnerに通知する。
 - 利用枠の上限に当たった場合は、やり直しに数えず、枠のリセットを待つ。
 - Agentの実行のあとで、GitHubの呼び出しが一時的な理由で失敗したときは、cuminは何も持っておかない。Issueは今の状態のまま残り、次の定期確認が、同じ事実から同じ動作を決める ([cumin本体の要件](../cumin-core.md) の「GitHubの呼び出しの失敗」)。
 
