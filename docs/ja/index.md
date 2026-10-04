@@ -16,6 +16,7 @@
 - [定期確認の設計](designs/poll.md)
 - [Agentの実行の設計](designs/agent-run.md)
 - [利用枠の設計](designs/quota.md)
+- [状態表示のファイルとメニューバーのアプリの設計](designs/status-menu-bar.md)
 
 ## ガイド
 
