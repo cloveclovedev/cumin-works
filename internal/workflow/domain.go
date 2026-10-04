@@ -1900,6 +1900,23 @@ func newChangeRequest(snapshot Snapshot, sub SubIssue) bool {
 	})
 }
 
+// DecidingReviewers returns, in the order of their logins, every person
+// whose review on the pull request decides (APPROVED or CHANGES_REQUESTED).
+// A bot is no person.
+func DecidingReviewers(reviews []Review) []string {
+	var reviewers []string
+	for _, review := range reviews {
+		if review.Author == "" || isBot(review.Author) || !decides(review.State) {
+			continue
+		}
+		if !slices.Contains(reviewers, review.Author) {
+			reviewers = append(reviewers, review.Author)
+		}
+	}
+	slices.Sort(reviewers)
+	return reviewers
+}
+
 // ownerReviewCandidates returns, lowest issue number first, the open
 // sub-issues in cumin/status/awaiting-owner-review, not running now, whose
 // open pull request has a review of a person with the state on its head
@@ -1915,21 +1932,11 @@ func ownerReviewCandidates(snapshot Snapshot, state ReviewState) []FixOwnerRevie
 			if !ok {
 				continue
 			}
-			candidate := false
-			var reviewers []string
-			for _, review := range pr.Reviews {
-				if review.Author == "" || isBot(review.Author) || !decides(review.State) {
-					continue
-				}
-				if !slices.Contains(reviewers, review.Author) {
-					reviewers = append(reviewers, review.Author)
-				}
-				if review.State == state && review.Commit == pr.HeadCommit {
-					candidate = true
-				}
-			}
+			candidate := slices.ContainsFunc(pr.Reviews, func(review Review) bool {
+				return review.Author != "" && !isBot(review.Author) && review.State == state && review.Commit == pr.HeadCommit
+			})
 			if candidate {
-				slices.Sort(reviewers)
+				reviewers := DecidingReviewers(pr.Reviews)
 				candidates = append(candidates, FixOwnerReview{Number: sub.Number, PullRequest: pr.Number, Reviewers: reviewers})
 			}
 		}

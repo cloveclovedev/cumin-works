@@ -392,6 +392,9 @@ type failure struct {
 	hang bool
 	// closed closes the connection without an answer, as CloseTimes set it.
 	closed bool
+	// dropped answers the request as usual and then closes the connection
+	// without the answer, as DropAnswers set it.
+	dropped bool
 	// limited answers a full primary rate limit with the reset time, as
 	// LimitTimes set it.
 	limited bool
@@ -672,6 +675,15 @@ func (f *Fake) CloseTimes(method, path string, times int) {
 	f.failThen(&failure{method: method, path: path, closed: true, times: times})
 }
 
+// DropAnswers makes the fake handle the next times requests with the
+// method and the path as usual, and then close the connection without the
+// answer: the write reached GitHub, and its answer got lost. The requests
+// are recorded, and they change the state. A failure of FailTimes or
+// CloseTimes that still waits comes first.
+func (f *Fake) DropAnswers(method, path string, times int) {
+	f.failThen(&failure{method: method, path: path, dropped: true, times: times})
+}
+
 // LimitTimes makes the fake answer the next times requests with the method
 // and the path as GitHub answers a full primary rate limit: the header
 // x-ratelimit-remaining with 0, and the reset time in x-ratelimit-reset. A
@@ -767,6 +779,13 @@ func (f *Fake) WaitForRequests(method, path string, n int, guard time.Duration) 
 	}
 }
 
+// droppedAnswer takes the answer of a request whose answer gets lost.
+type droppedAnswer struct{}
+
+func (droppedAnswer) Header() http.Header         { return http.Header{} }
+func (droppedAnswer) Write(b []byte) (int, error) { return len(b), nil }
+func (droppedAnswer) WriteHeader(int)             {}
+
 func key(owner, name string) string { return strings.ToLower(owner + "/" + name) }
 
 func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
@@ -792,6 +811,13 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		// this return, the Close of the server waits forever.
 		<-r.Context().Done()
 		return
+	}
+	if fail != nil && fail.dropped {
+		// The handlers below change the state. Their answer goes nowhere,
+		// and net/http closes the connection without an answer.
+		w = droppedAnswer{}
+		fail = nil
+		defer panic(http.ErrAbortHandler)
 	}
 	if fail != nil && fail.closed {
 		// net/http closes the connection without an answer.

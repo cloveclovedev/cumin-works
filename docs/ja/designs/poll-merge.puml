@@ -25,8 +25,29 @@ elseif (risk/low?) then (no)
 else (yes)
 endif
 partition "Merge step (I6, and I12)" {
-  :cumin-core merges with merge_method
-  and sha = the approved head commit;
+  repeat
+    if (A try of the kept step?) then (yes)
+      :Read the pull request;
+    endif
+    if (Merged already?) then (yes)
+      :Send no second merge;
+      break
+    endif
+    if (A try of the kept step?) then (yes)
+      :Read the issue, the required checks,
+      and the reviews again, and decide again;
+      if (Still the merge?) then (no)
+        :End without a merge
+        (I6: I7, the checks, or the stop step,
+        I12: the next poll decides);
+        stop
+      endif
+    endif
+    :cumin-core merges with merge_method
+    and sha = the approved head commit;
+  repeat while (Temporary failure of the token,
+of the read, or of the merge?) is (yes: keep the step,
+a poll 5 minutes later) not (no)
   if (Merged?) then (no)
     if (Conflict? (405, mergeable false)) then (yes)
       :cumin/status/implementing, then the Implementer
@@ -38,10 +59,14 @@ partition "Merge step (I6, and I12)" {
     stop
   endif
   :Wait a short time (10 seconds);
-  if (Is the issue open?) then (yes)
-    :cumin-core closes it as completed, once
-    (a failure: stop step of #81);
-  endif
+  repeat
+    if (Is the issue open?) then (yes)
+      :cumin-core closes it as completed
+      (a lasting failure: stop step of #81);
+    endif
+  repeat while (Temporary failure of the read
+or of the close?) is (yes: keep the step,
+a poll 5 minutes later) not (no)
 }
 stop
 @enduml
