@@ -707,7 +707,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			}
 		case RequestImplementationAgain:
 			sub, _ := snapshot.SubIssue(a.Number)
-			if err := s.requestImplementationAgain(ctx, token, target, settings, sub, a); err != nil {
+			if err := s.requestImplementationAgain(ctx, token, target, settings, sub, snapshot.DefaultBranch, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Claim:
@@ -836,18 +836,12 @@ type implementerRequest struct {
 	ownerLogin string
 	// text builds the request text once the work directory is known.
 	text func(workDir string) string
-	// conflict says that the request is a conflict resolution (I6, I12,
-	// I14). The state file keeps it for this stay in
-	// cumin/status/implementing: a resolution that leaves the head commit
-	// stops the issue, so that the same conflict does not go round the
-	// review again (ImplementationEnd).
-	conflict bool
 	// again says that the implementation was already requested again
 	// during this stay in cumin/status/implementing.
 	again bool
 	// count says that the state file does not hold this second request
-	// yet. runImplementer counts it when the work directory is ready, and
-	// takes the count back when the agent did not start.
+	// yet. runImplementer counts it before it prepares the work directory,
+	// and takes the count back when the agent did not start.
 	count bool
 }
 
@@ -902,7 +896,8 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 //
 // The count is saved before the label changes: a count that cumin cannot
 // keep would let the requests run past the limit, so the label stays and
-// the next poll tries again. The label changes before the request, so that
+// the next poll tries again. The same write starts the new stay in
+// cumin/status/implementing. The label changes before the request, so that
 // a later poll never requests the same fix twice (principle 3).
 func (s *Service) fixChecks(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixChecks) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
@@ -951,6 +946,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	}
 	counted := stored
 	counted.CheckFixRequests++
+	counted.ImplementationRequests, counted.ConflictResolution = 0, false
 	if err := s.State.Set(repository, a.Number, counted); err != nil {
 		return fmt.Errorf("I4: keep the count of check fix requests of issue #%d: %w", a.Number, err)
 	}
@@ -1032,7 +1028,14 @@ func (s *Service) goImplementer(ctx context.Context, target Target, settings *Re
 
 // startStay writes, in the state file, the start of a new stay of the
 // implementation issue in cumin/status/implementing: no second request
-// yet, and whether the request is a conflict resolution.
+// yet, and whether the request is a conflict resolution (I6, I12, I14). A
+// resolution that leaves the head commit stops the issue, so that the same
+// conflict does not go round the review again (ImplementationEnd).
+//
+// Every step that changes the label to cumin/status/implementing calls it
+// before the label changes, as the claim clears the state file: a restart
+// of cumin right after the label change then finds the new stay, not the
+// count of the earlier one.
 func (s *Service) startStay(repository string, number int, conflict bool) error {
 	stored := s.State.Issue(repository, number)
 	if stored.ImplementationRequests == 0 && stored.ConflictResolution == conflict {
@@ -1130,6 +1133,11 @@ func (s *Service) readStatusActor(ctx context.Context, token string, target Targ
 // does not use up the one second request. While cumin is stopping, nothing
 // is requested and no label changes. A failed read changes nothing: the
 // issue keeps cumin/status/implementing, and the next poll decides.
+//
+// A second request of a poll is counted before the work directory is
+// prepared. A work directory that is not prepared sends no request: the
+// next poll requests the implementation again, and the second failure stops
+// the implementation for the Owner (stopForWorkDirectory).
 func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	role := settings.Settings.Roles[config.RoleImplementer]
@@ -1139,6 +1147,13 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		Issue:  number,
 		Role:   config.RoleImplementer,
 		Branch: req.branch,
+	}
+	repository := target.Repository.String()
+	if req.count {
+		if err := s.countImplementationRequest(repository, number, 1); err != nil {
+			log.Error("I2: the request was not counted; the next poll decides again", "error", err.Error())
+			return
+		}
 	}
 	// A request on an open pull request (a continuation of I1, a check fix
 	// of I4) starts from the pull request on GitHub. A worktree of an
@@ -1152,6 +1167,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		removed, err := s.Workspace.RemoveIfPushed(ctx, checkout)
 		if err != nil {
 			log.Error(req.row+": the worktree of an earlier round was not checked", "error", err.Error())
+			s.stopForWorkDirectory(ctx, log, target, settings, number, req)
 			return
 		}
 		if !removed {
@@ -1161,6 +1177,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
 	if err != nil {
 		log.Error(req.row+": the work directory was not prepared", "error", err.Error())
+		s.stopForWorkDirectory(ctx, log, target, settings, number, req)
 		return
 	}
 	log.Info(req.row+": requested the work", "kind", req.kind, "branch", req.branch,
@@ -1177,19 +1194,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		SessionID:    req.sessionID,
 	}
 
-	repository := target.Repository.String()
 	again, counted := req.again, req.count
-	if !req.again {
-		if err := s.startStay(repository, number, req.conflict); err != nil {
-			log.Error(req.row+": the start of the stay in cumin/status/implementing was not kept", "error", err.Error())
-		}
-	}
-	if req.count {
-		if err := s.countImplementationRequest(repository, number, 1); err != nil {
-			log.Error("I2: the request was not counted; the next poll decides again", "error", err.Error())
-			return
-		}
-	}
 	for {
 		run, err := s.Agents.Start(ctx, request)
 		var abnormal *agent.AbnormalEnd
@@ -1237,6 +1242,10 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			}
 			return
 		case StopImplementation:
+			// The Owner needs the kind of the end to know where to look.
+			if abnormal != nil && !a.Question {
+				a.Reason = AfterAbnormalEndReason(a.Reason, abnormal.Kind)
+			}
 			if err := s.stopImplementation(ctx, log, token, target, settings, sub, a); err != nil {
 				log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 			}
@@ -1265,6 +1274,32 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			log.Info("I2: the end of the implementation was not decided; the next poll decides", "labels", sub.Labels)
 			return
 		}
+	}
+}
+
+// stopForWorkDirectory stops the implementation for the Owner when the work
+// directory of the second request of this stay was not prepared: the first
+// request and the second one both sent nothing to the Implementer, and a
+// third one would fail the same way. After the first failure nothing
+// changes here, and the next poll requests the implementation again. While
+// cumin is stopping, and when the issue left cumin/status/implementing,
+// nothing changes either.
+func (s *Service) stopForWorkDirectory(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req implementerRequest) {
+	if !req.again || ctx.Err() != nil {
+		return
+	}
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error("I2: no token; the next poll decides the end of the implementation", "error", err.Error())
+		return
+	}
+	sub, ok := s.subIssueNow(ctx, log, target, number)
+	if !ok || !ImplementationNeedsFacts(sub, false) {
+		return
+	}
+	a := StopImplementation{Number: number, Reason: WorkDirectoryReason(), PullRequest: req.pullRequest, Retried: true}
+	if err := s.stopImplementation(ctx, log, token, target, settings, sub, a); err != nil {
+		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 	}
 }
 
@@ -1525,10 +1560,12 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 // a poll: the issue is in cumin/status/implementing, no Implementer runs,
 // and the pull request does not pass the check. The work continues on the
 // branch of the issue, in the kept session when the state file holds one.
+// When the state file says that the stay is a conflict resolution, the
+// request is the conflict resolution again, as at the end of a run.
 // The count of the state file is raised when the run is about to start
 // (runImplementer), so that the request is sent once for each stay in
 // cumin/status/implementing, and a start that failed does not use it up.
-func (s *Service) requestImplementationAgain(ctx context.Context, token string, target Target, settings *RepositorySettings, sub SubIssue, a RequestImplementationAgain) error {
+func (s *Service) requestImplementationAgain(ctx context.Context, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, a RequestImplementationAgain) error {
 	// Q1: the quota decides before the request is counted.
 	if ok, err := s.quotaAllowsStart(ctx, RowI2, config.RoleImplementer, target, a.Number); err != nil || !ok {
 		if err != nil {
@@ -1554,9 +1591,15 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 		req.text = func(workDir string) string {
 			return ContinueRequestText(repository, a.Number, pullRequest, branch, workDir)
 		}
+		if sub.Implementing.ConflictRequested {
+			req.kind = "conflict resolution"
+			req.text = func(workDir string) string {
+				return ConflictResolutionRequestText(repository, a.Number, pullRequest, branch, workDir, defaultBranch)
+			}
+		}
 	}
 	s.logger().Info("I2: the pull request does not pass the check; the implementation is requested again",
-		"repository", repository, "issue", a.Number)
+		"repository", repository, "issue", a.Number, "kind", req.kind)
 	return s.goImplementer(ctx, target, settings, a.Number, req)
 }
 

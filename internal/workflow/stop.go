@@ -314,6 +314,21 @@ func SplitReason(v SplitVerification) string {
 	return "After the Planner run, " + failed + ". cumin requested the split again, and the check of the split failed again."
 }
 
+// WorkDirectoryReason is the sentence of a work directory that cumin did
+// not prepare for the first request and for the second request of one stay
+// in cumin/status/implementing. The error stays in the log of the Host,
+// because it can hold a path of the Host.
+func WorkDirectoryReason() string {
+	return "cumin did not prepare the work directory of this issue, so the Implementer did not start. cumin requested the implementation again, and the work directory was not prepared again. The log of the Host holds the error."
+}
+
+// AfterAbnormalEndReason adds, to the reason of a stop of the
+// implementation, the kind of the abnormal end of the run that the stop
+// follows: the Owner needs the kind to know where to look.
+func AfterAbnormalEndReason(reason string, kind fmt.Stringer) string {
+	return fmt.Sprintf("%s The last Implementer run ended abnormally (%s).", reason, kind)
+}
+
 // abnormalReason is the sentence of a second abnormal end of the same
 // request. The two runs can end in different ways, and the Owner needs the
 // kind of each one to know where to look.

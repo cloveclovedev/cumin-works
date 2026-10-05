@@ -412,6 +412,11 @@ func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, t
 		log.Error("I5: no token; the issue keeps its label", "error", err.Error())
 		return nil, temporary(err)
 	}
+	repository := target.Repository.String()
+	if err := s.startStay(repository, number, false); err != nil {
+		log.Error("I5: the start of the stay in cumin/status/implementing was not kept; the issue keeps its label", "error", err.Error())
+		return nil, nil
+	}
 	labels, err := s.replaceStatus(ctx, token, target, sub, LabelImplementing, try)
 	if err != nil {
 		log.Error("I5: the label was not changed; nothing is requested", "error", err.Error())
@@ -419,7 +424,6 @@ func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, t
 	}
 	log.Info("I5: the Reviewer requested changes; the issue goes back to the Implementer",
 		"round", round, "limit", limit, "review", latest.URL, "labels", labels)
-	repository := target.Repository.String()
 	branch := pr.HeadBranch
 	return func(ctx context.Context) {
 		s.runImplementer(ctx, target, settings, number, implementerRequest{
