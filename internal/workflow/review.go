@@ -576,6 +576,12 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 				// head commit. Every other decision is left to the next
 				// poll.
 				func(ctx context.Context) (bool, error) {
+					// The try can run long after the decision, so it takes a
+					// token of its own.
+					token, err := target.Token(ctx)
+					if err != nil {
+						return false, temporary(err)
+					}
 					now, _, ok, err := s.reviewingNow(ctx, log, token, target, settings, number)
 					if err != nil || !ok {
 						return false, temporary(err)
