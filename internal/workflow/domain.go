@@ -1829,8 +1829,8 @@ func conflictsUnder(snapshot Snapshot, status string) []Action {
 // reviewableSubIssues returns the actions of I3: open sub-issues in
 // cumin/status/checking whose open pull request has every required
 // check passed on its head commit. A pull request that conflicts belongs
-// to I14. A running issue gives no action: its agent runs, or its step
-// after the run is kept, and one issue has one agent.
+// to I14. A running issue gives no action: its agent runs, and one issue
+// has one agent.
 func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
