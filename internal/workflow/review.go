@@ -40,6 +40,10 @@ type reviewerRequest struct {
 	// again says that the request is "request the review again": the
 	// second request of this stay in cumin/status/reviewing.
 	again bool
+	// resumes says that the second request follows a run of this stay that
+	// ended and left its session: it resumes that session with the short
+	// text. Without it, the second request is the whole review request.
+	resumes bool
 	// cause is the review that the request "request the cause from the
 	// Reviewer" (I8) is about, or nil for a review request.
 	cause *Review
@@ -233,8 +237,12 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		request.Text = ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, req.review.Limit, workDir)
 		log.Info("I8: requested the explanation of the cause", "resumed", req.sessionID != "")
 	case req.again:
-		request.Text = ReviewAgainRequestText(req.review)
-		log.Warn("I3: no review on the head commit; the Reviewer is asked once more", "round", req.review.Round, "resumed", req.sessionID != "")
+		// Only a session that got the whole request gets the short text.
+		if req.resumes {
+			request.Text = ReviewAgainRequestText(req.review)
+		}
+		log.Warn("I3: no review on the head commit; the Reviewer is asked once more", "round", req.review.Round,
+			"resumed", req.sessionID != "", "whole_request", !req.resumes)
 	default:
 		log.Info("I3: requested the review", "round", req.review.Round, "limit", req.review.Limit,
 			"head_commit", req.review.HeadCommit, "resumed", req.sessionID != "")
@@ -307,7 +315,7 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 		return
 	}
 	ownerLogin := func(context.Context, string) (string, error) { return req.ownerLogin, nil }
-	rest, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, defaultBranch, ownerLogin, action)
+	rest, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, defaultBranch, ownerLogin, true, action)
 	if err != nil {
 		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 		return
@@ -462,8 +470,10 @@ func (s *Service) countReviewRequest(repository string, number, delta int) error
 // cumin/status/reviewing, and the next poll decides again from the same
 // facts. No request, comment, or notification goes out before the label
 // changed, so none goes out twice. ownerLogin gives the login of the Owner
-// for a request to an agent.
-func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, ownerLogin func(ctx context.Context, token string) (string, error), action Action) (func(context.Context), error) {
+// for a review fix. afterRun says that a Reviewer run of this stay just
+// ended and left its session; a poll passes false, because a restart of
+// cumin can have cut the run before its session was kept.
+func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, ownerLogin func(ctx context.Context, token string) (string, error), afterRun bool, action Action) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	number := sub.Number
@@ -554,16 +564,23 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if err != nil {
 			return nil, err
 		}
-		// Both requests go on in the session of the last Reviewer run, which
-		// holds the rounds.
-		req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
 		if cause, ok := a.(RequestCause); ok {
+			// The cause goes on in the session of the last Reviewer run,
+			// which holds the rounds.
 			log.Info("I8: blocking comments remain at the limit of rounds", "limit", req.review.Limit)
 			req.cause = &cause.Review
+			req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
 		} else {
 			// The second request has the round of the first one: no review
-			// of this round is on GitHub.
+			// of this round is on GitHub. After a run of this stay, it goes
+			// on in the session of that run, with the short text. At a
+			// poll, the state file can hold no session of this stay, so the
+			// request is the whole review request, in the session that a
+			// first request of this round takes (reviewRequestOf).
 			req.again = true
+			if req.resumes = afterRun; afterRun {
+				req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
+			}
 			if err := s.countReviewRequest(repository, number, 1); err != nil {
 				return nil, fmt.Errorf("I3: count the second request of the review of issue #%d: %w", number, err)
 			}
@@ -609,7 +626,7 @@ func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token s
 	ownerLogin := func(ctx context.Context, token string) (string, error) {
 		return s.readOwnerLogin(ctx, token, target, number)
 	}
-	rest, err := s.applyReviewEnd(ctx, log.With("issue", number), token, target, settings, sub, snapshot.DefaultBranch, ownerLogin, action)
+	rest, err := s.applyReviewEnd(ctx, log.With("issue", number), token, target, settings, sub, snapshot.DefaultBranch, ownerLogin, false, action)
 	if err != nil || rest == nil {
 		return err
 	}
@@ -620,7 +637,7 @@ func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token s
 // MissingReviewReason is the sentence of the stop after the second run
 // without a review on the head commit, for the comment and the
 // notification alike.
-const MissingReviewReason = "The Reviewer reported done twice, but its latest review is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
+const MissingReviewReason = "cumin requested the review twice, but the latest review of the Reviewer is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
 
 // MissingExplanationReason is the sentence of the stop of I8 when the
 // Reviewer wrote no decision request, for the comment and the

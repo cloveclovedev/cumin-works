@@ -195,8 +195,17 @@ func TestReviewing_ARestartWithNoReviewSendsOneSecondRequestThenStops(t *testing
 		t.Fatalf("Poll after the restart: %v", err)
 	}
 	waitForAgentRun(t, sc)
-	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "cumin found no review of yours on the head commit") {
-		t.Errorf("the request text is not the second request of the review:\n%s", text)
+	// The new cumin cannot know that the session of the state file got the
+	// request of this stay, so the second request is the whole review
+	// request, and not the short text for a session that holds it.
+	text := promptOf(t, sc.record(t, "agent.args"))
+	for _, want := range []string{"Request: review\n", "Implementation issue: #10", "Pull request: #21", "Work directory: "} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the second request after the restart does not hold %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "cumin found no review of yours") {
+		t.Errorf("the second request after the restart is the short text for a resumed session:\n%s", text)
 	}
 	sc.release(t)
 	restarted.Wait()
