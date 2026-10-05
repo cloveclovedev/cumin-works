@@ -1,5 +1,5 @@
 @startuml poll-merge
-' cumin works - the approved pull request (I6, I7) and the merge step that I12 reuses.
+' cumin works - the approved pull request (I6, I7) and the steps in cumin/status/merging.
 ' Document: poll.md, section on the merge step.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -25,50 +25,54 @@ elseif (risk/low?) then (no)
   then one notification with the pull request;
   stop
 else (yes)
+  :I6: cumin/status/merging
+  (only the label changes; I12 does the same
+  after the approval of the Owner);
 endif
-partition "Merge step (I6, and I12)" {
-  repeat
-    if (A try of the kept step?) then (yes)
-      :Read the pull request;
-    endif
-    if (Merged already?) then (yes)
-      :Send no second merge;
-      break
-    endif
-    if (A try of the kept step?) then (yes)
-      :Read the issue, the required checks,
-      and the reviews again, and decide again;
-      if (Still the merge?) then (no)
-        :End without a merge
-        (I6: I7, the checks, or the stop step,
-        I12: the next poll decides);
-        stop
-      endif
-    endif
-    :cumin-core merges with merge_method
-    and sha = the approved head commit;
-  repeat while (Temporary failure of the token,
-of the read, or of the merge?) is (yes: keep the step,
-a poll 5 minutes later) not (no)
-  if (Merged?) then (no)
-    if (Conflict? (405, mergeable false)) then (yes)
-      :cumin/status/implementing, then the Implementer
-      resolves it in the same session (then I2, checks, I3);
+partition "At every poll, for an issue in cumin/status/merging" {
+  :Read the issue again: the actor of the label,
+  the pull request, the reviews, the checks,
+  the permissions, and the required checks;
+  if (cumin-core or an Owner
+added the label?) then (no)
+    :Do nothing;
+    stop
+  endif
+  if (An open pull request?) then (no)
+    if (The newest linked pull request
+is merged?) then (yes)
+      :Close the merged issue:
+      cumin-core closes it as completed
+      when GitHub left it open
+      (a lasting failure: stop the merge for the Owner);
     else (no)
-      :Stop step of #81: head moved (409),
-      or the answer of GitHub;
+      :Go back to the checks:
+      cumin/status/checking;
     endif
     stop
   endif
-  :Wait a short time (10 seconds);
-  repeat
-    if (Is the issue open?) then (yes)
-      :cumin-core closes it as completed
-      (a lasting failure: stop step of #81);
-    endif
-  repeat while (Temporary failure of the read
-or of the close?) is (yes: keep the step,
-a poll 5 minutes later) not (no)
+  if (The conditions of the merge hold?
+(MergeConditionsHold)) then (no)
+    :Go back to the checks:
+    cumin/status/checking, no merge;
+    stop
+  endif
+  :Wait 5 seconds after an earlier merge of this poll.
+  cumin-core merges with merge_method
+  and sha = the approved head commit;
+  if (Merged, a lost answer, a temporary failure,
+or 405 "Base branch was modified"?) then (yes)
+    :Keep cumin/status/merging, no comment.
+    The next poll reads the pull request again;
+  elseif (Conflict? (405, mergeable false)) then (yes)
+    :Request a conflict resolution:
+    cumin/status/implementing, then the Implementer
+    resolves it in the same session;
+  else (no)
+    :Stop the merge for the Owner:
+    cumin/status/awaiting-decision, head moved (409),
+    or the answer of GitHub;
+  endif
 }
 stop
 @enduml

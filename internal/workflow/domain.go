@@ -115,8 +115,9 @@ func (s Snapshot) WithPullRequests(pullRequests map[int][]PullRequest) Snapshot 
 // HasIssueInWork reports whether an issue of the repository is in work:
 // an open requirement issue with cumin/status/ready,
 // cumin/status/planning, or cumin/status/accepting, or an open sub-issue with cumin/status/ready,
-// cumin/status/implementing, cumin/status/checking, or
-// cumin/status/reviewing. An issue that waits for the Owner is not in work.
+// cumin/status/implementing, cumin/status/checking,
+// cumin/status/reviewing, or cumin/status/merging. An issue that waits for
+// the Owner is not in work.
 func (s Snapshot) HasIssueInWork() bool {
 	for _, requirement := range s.RequirementIssues {
 		if slices.Contains(requirement.Labels, LabelReady) || slices.Contains(requirement.Labels, LabelPlanning) ||
@@ -127,7 +128,7 @@ func (s Snapshot) HasIssueInWork() bool {
 			if sub.Closed {
 				continue
 			}
-			for _, label := range []string{LabelReady, LabelImplementing, LabelChecking, LabelReviewing} {
+			for _, label := range []string{LabelReady, LabelImplementing, LabelChecking, LabelReviewing, LabelMerging} {
 				if slices.Contains(sub.Labels, label) {
 					return true
 				}
@@ -274,6 +275,31 @@ type SubIssue struct {
 	// cumin/status/reviewing (ReviewEnd). It is nil when they were not read:
 	// the issue is in another state, its Reviewer runs, or a read failed.
 	Reviewing *ReviewingFacts
+	// Merging are the facts that decide each step in cumin/status/merging
+	// (MergeEnd). It is nil when they were not read: the issue is in
+	// another state, a step of it runs, or a read failed.
+	Merging *MergingFacts
+}
+
+// MergingFacts is what cumin reads at every poll to decide the step of one
+// implementation issue in cumin/status/merging.
+type MergingFacts struct {
+	// StatusCounts says that the cumin-core App or an Owner added the
+	// newest cumin/status/merging (StatusLabelCounts).
+	StatusCounts bool
+	// Merged is the number of the newest pull request that is linked to
+	// close the issue, when that one is merged, or 0. A merged pull request
+	// of an earlier stay with a newer closed one does not count. It is read
+	// only when the issue has no open pull request.
+	Merged int
+	// Reviewer is the login "<slug>[bot]" of the Reviewer App.
+	Reviewer string
+	// Owners says, for each person whose review decides, whether that
+	// person is an Owner (IsOwner).
+	Owners map[string]bool
+	// Required are the checks that the rules of the default branch
+	// require.
+	Required []RequiredCheck
 }
 
 // ReviewingFacts is what cumin reads to decide the way out of
@@ -614,12 +640,37 @@ type AskOwnerToMerge struct {
 	PullRequest int
 }
 
-// MergeApproved is the merge after an approval with risk/low (I6). It keeps
-// the merge path of the Reviewer run until the state cumin/status/merging
-// exists.
-type MergeApproved struct {
+// StartMerge is the action "start the merge" after an approval with
+// risk/low (I6): only the label changes to cumin/status/merging. The merge
+// is sent inside that state (MergeEnd).
+type StartMerge struct {
 	Number      int
 	PullRequest int
+}
+
+// CloseMergedIssue is the action "close the merged issue": the pull request
+// of an issue in cumin/status/merging is merged, so cumin closes the issue
+// when GitHub did not.
+type CloseMergedIssue struct {
+	Number      int
+	PullRequest int
+}
+
+// SendMerge sends the merge of the approved head commit for an issue in
+// cumin/status/merging: the pull request is open, and the conditions of
+// the merge hold (MergeConditionsHold).
+type SendMerge struct {
+	Number      int
+	PullRequest int
+	HeadCommit  string
+}
+
+// LeaveMerge is the action "go back to the checks" from
+// cumin/status/merging: the pull request is not merged, and the conditions
+// of the merge do not hold. The issue moves to cumin/status/checking, and
+// no merge is sent.
+type LeaveMerge struct {
+	Number int
 }
 
 // RequestCause is the action "request the cause from the Reviewer" (I8):
@@ -763,7 +814,10 @@ func (RequestImplementationAgain) isAction() {}
 func (StopImplementation) isAction()         {}
 func (RequestReviewFix) isAction()           {}
 func (AskOwnerToMerge) isAction()            {}
-func (MergeApproved) isAction()              {}
+func (StartMerge) isAction()                 {}
+func (CloseMergedIssue) isAction()           {}
+func (SendMerge) isAction()                  {}
+func (LeaveMerge) isAction()                 {}
 func (RequestCause) isAction()               {}
 func (StopAtRoundLimit) isAction()           {}
 func (BackToChecks) isAction()               {}
@@ -773,7 +827,7 @@ func (StopReview) isAction()                 {}
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
 // of one repository that can be in cumin/status/planning, implementing,
-// checking, or reviewing at the same time (cumin-core.md, the
+// checking, reviewing, or merging at the same time (cumin-core.md, the
 // settings table). required are the checks that the rules of the default
 // branch require; the caller reads them only when an issue of the
 // repository waits for the checks. now is the time of the poll, and
@@ -798,7 +852,8 @@ func (StopReview) isAction()                 {}
 //
 // The way out of cumin/status/implementing (ImplementationEnd) starts no
 // new issue, so it takes no room either: its issue already counts. The same
-// holds for the way out of cumin/status/reviewing (ReviewEnd).
+// holds for the way out of cumin/status/reviewing (ReviewEnd), and for the
+// steps in cumin/status/merging (MergeEnd).
 //
 // I14 also holds for an issue in cumin/status/awaiting-merge-decision. Those
 // actions come after the candidates of I12 and of I13: a review of an Owner
@@ -808,6 +863,7 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 	actions := requirementMoves(snapshot)
 	actions = append(actions, implementationEnds(snapshot)...)
 	actions = append(actions, reviewEnds(snapshot)...)
+	actions = append(actions, mergeEnds(snapshot)...)
 	actions = append(actions, conflictingSubIssues(snapshot)...)
 	actions = append(actions, reviewableSubIssues(snapshot, required)...)
 	actions = append(actions, failedSubIssues(snapshot, required)...)
@@ -1207,7 +1263,7 @@ func ReviewEnd(sub SubIssue, running bool) Action {
 	case ReviewApprovedOnHead:
 		switch decision := DecideMerge(sub.Labels, facts.Required, pr.Checks); decision {
 		case MergeNow:
-			return MergeApproved{Number: sub.Number, PullRequest: pr.Number}
+			return StartMerge{Number: sub.Number, PullRequest: pr.Number}
 		case MergeAskOwner:
 			return AskOwnerToMerge{Number: sub.Number, PullRequest: pr.Number}
 		case MergeChecksNotPassed:
@@ -1242,7 +1298,7 @@ func ReviewEndIssue(action Action) int {
 		return a.Number
 	case AskOwnerToMerge:
 		return a.Number
-	case MergeApproved:
+	case StartMerge:
 		return a.Number
 	case RequestCause:
 		return a.Number
@@ -1287,6 +1343,82 @@ func reviewEnds(snapshot Snapshot) []Action {
 	var actions []Action
 	for _, sub := range subs {
 		if action := ReviewEnd(sub, snapshot.Running[sub.Number]); action != nil {
+			actions = append(actions, action)
+		}
+	}
+	return actions
+}
+
+// MergeEnd decides the step of an implementation issue in
+// cumin/status/merging from the facts on GitHub (issue-states.md, what
+// cumin does inside merging). The same facts always give the same step, so
+// a merge whose answer got lost and a restart of cumin need no memory:
+//
+//   - No open pull request closes the issue, and the newest linked pull
+//     request is merged: "close the merged issue".
+//   - The pull request is open, and the conditions of the merge hold
+//     (MergeConditionsHold): cumin sends the merge of the head commit, which
+//     is the approved commit.
+//   - Else "go back to the checks": the approval or the required checks no
+//     longer hold, or no pull request is left to merge.
+//
+// The label cumin/status/merging never stands in for the conditions. It
+// returns nil in every other state, for a closed issue, while a step of the
+// issue runs, while the facts were not read, and while the status label
+// does not count: the next poll decides.
+func MergeEnd(sub SubIssue, running bool) Action {
+	facts := sub.Merging
+	if !MergeNeedsFacts(sub, running) || facts == nil || !facts.StatusCounts {
+		return nil
+	}
+	pr, ok := sub.LatestPullRequest()
+	switch {
+	case !ok && facts.Merged > 0:
+		return CloseMergedIssue{Number: sub.Number, PullRequest: facts.Merged}
+	case ok && MergeConditionsHold(sub.Labels, facts.Required, pr, facts.Reviewer, facts.Owners):
+		return SendMerge{Number: sub.Number, PullRequest: pr.Number, HeadCommit: pr.HeadCommit}
+	}
+	return LeaveMerge{Number: sub.Number}
+}
+
+// MergeNeedsFacts reports whether the step in cumin/status/merging needs
+// the facts of the implementation issue: it is open, in
+// cumin/status/merging, and no step of it runs.
+func MergeNeedsFacts(sub SubIssue, running bool) bool {
+	return !sub.Closed && statusLabel(sub.Labels) == LabelMerging && !running
+}
+
+// MergeConditionsHold applies the conditions of the merge, the same as the
+// conditions of the transitions into cumin/status/merging: the issue has
+// exactly one risk/* label, every required check passes on the head commit,
+// and the latest review of the Reviewer is APPROVE on the head commit. With
+// risk/medium or risk/high, the latest review of an Owner that decides is
+// APPROVE on the head commit too (OwnerApproved). cumin checks them before
+// every merge that it sends.
+func MergeConditionsHold(labels []string, required []RequiredCheck, pr PullRequest, reviewer string, owners map[string]bool) bool {
+	if CheckReview(pr, reviewer) != ReviewApprovedOnHead {
+		return false
+	}
+	switch DecideMerge(labels, required, pr.Checks) {
+	case MergeNow:
+		return true
+	case MergeAskOwner:
+		return OwnerApproved(pr.Reviews, pr.HeadCommit, owners)
+	}
+	return false
+}
+
+// mergeEnds returns the step in cumin/status/merging of every sub-issue
+// that has one (MergeEnd), lowest issue number first.
+func mergeEnds(snapshot Snapshot) []Action {
+	var subs []SubIssue
+	for _, requirement := range snapshot.RequirementIssues {
+		subs = append(subs, requirement.SubIssues...)
+	}
+	slices.SortFunc(subs, func(a, b SubIssue) int { return a.Number - b.Number })
+	var actions []Action
+	for _, sub := range subs {
+		if action := MergeEnd(sub, snapshot.Running[sub.Number]); action != nil {
 			actions = append(actions, action)
 		}
 	}
@@ -1835,7 +1967,7 @@ func sameLabels(a, b []string) bool {
 }
 
 // inProgress counts the issues that fill the limit: open sub-issues in
-// implementing, checking, or reviewing, and requirement issues in
+// implementing, checking, reviewing, or merging, and requirement issues in
 // planning or accepting. A requirement issue in implementing (R3) has no
 // agent of its own, so it does not count.
 func inProgress(snapshot Snapshot) int {
@@ -1851,7 +1983,7 @@ func inProgress(snapshot Snapshot) int {
 			if sub.Closed {
 				continue
 			}
-			for _, label := range []string{LabelImplementing, LabelChecking, LabelReviewing} {
+			for _, label := range []string{LabelImplementing, LabelChecking, LabelReviewing, LabelMerging} {
 				if slices.Contains(sub.Labels, label) {
 					n++
 					break

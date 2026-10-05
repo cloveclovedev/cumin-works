@@ -74,10 +74,9 @@ type Service struct {
 	// after SIGINT or SIGTERM ended the context. Zero means
 	// DefaultStopGrace. Tests shorten it.
 	StopGrace time.Duration
-	// CloseWait is how long the merge step waits for GitHub to close the
-	// implementation issue before cumin reads it (I6, I12). Zero means
-	// DefaultCloseWait. Tests shorten it.
-	CloseWait time.Duration
+	// MergeWait is how long cumin waits between two merges of one poll of
+	// a repository. Zero means DefaultMergeWait. Tests shorten it.
+	MergeWait time.Duration
 	// Labels are the labels that Run creates in each target repository when
 	// they are missing. RepositoryLabels gives the list of cumin.
 	Labels []github.Label
@@ -622,6 +621,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
 	s.readImplementingFacts(ctx, log, token, target, settings, &snapshot)
 	s.readReviewingFacts(ctx, log, token, target, settings, &snapshot)
+	s.readMergingFacts(ctx, log, token, target, settings, &snapshot)
 	s.writeFollowUpNotes(ctx, log, token, target, &snapshot)
 	s.cleanUp(ctx, log, target, snapshot)
 	var errs []error
@@ -650,6 +650,8 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// first. A check of I12 or of I13 that failed keeps the issue too, so
 	// that the next poll decides it again.
 	ownerDecided := map[int]bool{}
+	// The merges that this poll sent, for the wait between two of them.
+	merges := 0
 	for _, action := range actions {
 		if a, ok := action.(ResolveConflict); ok && ownerDecided[a.Number] {
 			log.Info("I14: waits for the review of the Owner on the conflicting head", "issue", a.Number)
@@ -711,7 +713,11 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err := s.requestImplementationAgain(ctx, token, target, settings, sub, snapshot.DefaultBranch, a); err != nil {
 				errs = append(errs, err)
 			}
-		case RequestReviewFix, AskOwnerToMerge, MergeApproved, RequestCause, StopAtRoundLimit, BackToChecks, RequestReviewAgain, StopReview:
+		case CloseMergedIssue, SendMerge, LeaveMerge:
+			if err := s.mergeEndAtPoll(ctx, log, token, target, snapshot, settings, a, &merges); err != nil {
+				errs = append(errs, err)
+			}
+		case RequestReviewFix, AskOwnerToMerge, StartMerge, RequestCause, StopAtRoundLimit, BackToChecks, RequestReviewAgain, StopReview:
 			if err := s.reviewEndAtPoll(ctx, log, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}

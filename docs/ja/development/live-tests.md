@@ -554,16 +554,16 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
    | ログの行 | 意味 |
    |---|---|
    | `I6: decided on the approved pull request` | `decision` が `merge` |
-   | `I6: merged the pull request` | `merge_method` が `squash` |
-   | `I6: GitHub closed the issue` か `I6: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
+   | `I6: start the merge: the Reviewer approved the head commit`、次の定期確認で `merged the pull request` | `merge_method` が `squash` |
+   | GitHubが閉じなかったときは、次の定期確認で `close the merged issue: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
 
 10. Owner の承認のあとの定期確認で、B のログがこの順に出る。両方閉じると、手順5のループが cumin を止める。
 
    | ログの行 | 意味 |
    |---|---|
-   | `I12: the Owner approved the head commit` | Owner の権限を読み、最新の判断のレビューが承認だった |
-   | `I12: merged the pull request` | `merge_method` が `squash` |
-   | `I12: GitHub closed the issue` か `I12: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。止める合図が merge のあとの待ちの間に届いたときは、その前に `I12: cumin is stopping; the issue is checked without the wait` が出る |
+   | `I12: start the merge: the Owner approved the head commit` | Owner の権限を読み、最新の判断のレビューが承認だった |
+   | 次の定期確認で `merged the pull request` | `merge_method` が `squash` |
+   | GitHubが閉じなかったときは、次の定期確認で `close the merged issue: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
 
 ### 確かめること
 

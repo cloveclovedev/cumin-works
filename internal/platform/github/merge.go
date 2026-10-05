@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // The merge step of I6 and I12 (docs/ja/designs/poll.md, the topic on the
@@ -23,11 +24,21 @@ var ErrHeadMoved = errors.New("the head of the pull request is not the approved 
 // (measured in #286, M4 and M5).
 var ErrConflict = errors.New("the pull request has merge conflicts")
 
+// ErrBaseModified is the answer of a merge that GitHub refuses right after
+// another merge moved the base branch: 405 "Base branch was modified.
+// Review and try the merge again." (issue-states.md, what cumin does inside
+// merging). The state ends by itself, so the caller sends the merge again.
+var ErrBaseModified = errors.New("the base branch was modified")
+
+// baseModifiedMessage starts the message of GitHub for ErrBaseModified.
+const baseModifiedMessage = "Base branch was modified"
+
 // MergePullRequest merges the pull request with the method (squash, merge,
 // or rebase) when its head is sha. Official: "Merge a pull request"
 // (merge_method, sha); "Get a pull request" (mergeable). A conflict returns
 // an error that wraps ErrConflict, a moved head one that wraps
-// ErrHeadMoved; any other failure holds the answer of GitHub.
+// ErrHeadMoved, a base branch that just moved one that wraps
+// ErrBaseModified; any other failure holds the answer of GitHub.
 func (c *AppClient) MergePullRequest(ctx context.Context, token, owner, repo string, number int, sha, method string) error {
 	path := fmt.Sprintf("/repos/%s/%s/pulls/%d/merge", owner, repo, number)
 	body := map[string]any{"merge_method": method, "sha": sha}
@@ -43,6 +54,8 @@ func (c *AppClient) MergePullRequest(ctx context.Context, token, owner, repo str
 		return fmt.Errorf("github: merge %s/%s#%d: GitHub answered 200 without a merge", owner, repo, number)
 	case errors.As(err, &status) && status.Status == http.StatusConflict:
 		return fmt.Errorf("github: merge %s/%s#%d: %w (%s)", owner, repo, number, ErrHeadMoved, status.Message)
+	case errors.As(err, &status) && status.Status == http.StatusMethodNotAllowed && strings.HasPrefix(status.Message, baseModifiedMessage):
+		return fmt.Errorf("github: merge %s/%s#%d: %w (%s)", owner, repo, number, ErrBaseModified, status.Message)
 	case errors.As(err, &status) && status.Status == http.StatusMethodNotAllowed:
 		mergeable, readErr := c.mergeable(ctx, token, owner, repo, number)
 		if readErr == nil && mergeable != nil && !*mergeable {

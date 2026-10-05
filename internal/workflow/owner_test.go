@@ -59,7 +59,7 @@ func TestI12_AnApprovalOfTheOwnerOnTheHeadIsMergedOnce(t *testing.T) {
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	service := sc.service()
 
-	for range 2 {
+	for range 4 {
 		sc.pollAndWait(t, service)
 	}
 
@@ -72,11 +72,13 @@ func TestI12_AnApprovalOfTheOwnerOnTheHeadIsMergedOnce(t *testing.T) {
 	if issue := sc.fake.Issue(sc.repo, 10); !issue.Closed || issue.StateReason != "completed" {
 		t.Errorf("issue #10: closed %v, reason %q; want closed as completed", issue.Closed, issue.StateReason)
 	}
-	// Only the person is read: the bot of the Reviewer App is never an Owner.
-	if n := permissionReads(sc); n != 1 {
-		t.Errorf("%d permission reads, want 1 (the Owner)", n)
+	// Only the person is read: the bot of the Reviewer App is never an
+	// Owner. I12 reads the Owner once, and the merge reads the Owner again
+	// for its conditions.
+	if n := permissionReads(sc); n != 2 {
+		t.Errorf("%d permission reads, want 2 (the Owner, for I12 and for the merge)", n)
 	}
-	for _, want := range []string{`"msg":"I12: the Owner approved the head commit"`, `"msg":"I12: merged the pull request"`} {
+	for _, want := range []string{`"msg":"I12: start the merge: the Owner approved the head commit"`, `"msg":"merged the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -124,11 +126,12 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 // of the Owner after the approval, still count: comments decide nothing.
 func TestI12_ACommentOfTheOwnerKeepsTheApproval(t *testing.T) {
 	sc := awaitingOwner(t)
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 10)
 	sc.review(theOwner, false, "COMMENTED", sc.remoteHead, 5)
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -257,11 +260,12 @@ func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 	sc := awaitingOwner(t)
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
 	service := sc.serviceWithSession(t)
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if n := sc.agentRuns(t); n != 1 {
 		t.Fatalf("%d agent runs, want one resolution", n)
@@ -280,26 +284,30 @@ func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 	}
 }
 
-// A failed read of the login of the Owner at a conflict of the merge of I12
-// sends no request and changes no label, so I12 applies again at the next
-// poll.
+// A failed read of the login of the Owner at a conflict of the merge sends
+// no request and keeps cumin/status/merging, so the next poll sends the
+// merge again and requests the resolution.
 func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *testing.T) {
 	sc := awaitingOwner(t)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
 	service := sc.serviceWithSession(t)
-	// The first read of the permission is the one of the reviewer for I12;
-	// the second one is the read of the login of the Owner.
-	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 1, everyTry, http.StatusBadGateway)
+	// The first read of the permission is the one of the reviewer for I12,
+	// the second one is the same read for the conditions of the merge, and
+	// the third one is the read of the login of the Owner.
+	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 2, everyTry, http.StatusBadGateway)
 
 	sc.pollAndWait(t, service)
+	_ = service.Poll(t.Context())
+	service.Wait()
 
 	if n := sc.agentRuns(t); n != 0 {
 		t.Fatalf("%d agent runs, want none after a failed read", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingMergeDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-merge-decision: a failed read changes nothing", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
+		t.Errorf("labels of #10 = %v, want cumin/status/merging: a failed read changes nothing", got)
 	}
 
 	sc.pollAndWait(t, service)
@@ -486,7 +494,7 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 
 	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
 		Author: theOwner, State: "APPROVED", Commit: newHead, SubmittedAt: sceneNow.Add(time.Hour)})
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 2)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
