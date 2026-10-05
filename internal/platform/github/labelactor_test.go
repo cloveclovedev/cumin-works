@@ -11,15 +11,16 @@ import (
 
 const readyLabel = "cumin/status/ready"
 
-// The actor of the newest event of the label wins: an older event of the
-// same label by another account, and a newer event of another label, do
-// not.
-func TestReadLabelActor_TheActorOfTheNewestEventOfTheLabel(t *testing.T) {
+// The actor of the event that last put the label on the issue wins: an
+// event of the same label before the label was removed, and a newer event
+// of another label, do not.
+func TestReadLabelActor_TheActorOfTheEventThatLastPutTheLabel(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, LabelEvents: []githubtest.LabelEvent{
 		{Label: readyLabel, At: t0, Actor: "first-owner", ActorType: "User"},
+		{Label: readyLabel, At: t0.Add(30 * time.Minute), Removed: true},
 		{Label: readyLabel, At: t0.Add(time.Hour), Actor: "second-owner", ActorType: "User"},
 		{Label: "cumin/status/implementing", At: t0.Add(2 * time.Hour), Actor: "cumin-core", ActorType: "Bot"},
 	}})
@@ -34,6 +35,44 @@ func TestReadLabelActor_TheActorOfTheNewestEventOfTheLabel(t *testing.T) {
 	}
 	if rate.Cost == 0 {
 		t.Error("the rate limit of the call was not read")
+	}
+}
+
+// GitHub can record an event that adds a label again while the label is on
+// the issue, late and with another account (measured on 2026-10-05). The
+// event that put the label on the issue answers, with its time.
+func TestReadLabelActor_ARepeatedEventOfTheLabelDoesNotAnswer(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Labels: []string{readyLabel}, LabelEvents: []githubtest.LabelEvent{
+		{Label: readyLabel, At: t0, Actor: "example-owner", ActorType: "User"},
+		{Label: readyLabel, At: t0.Add(time.Minute), Actor: "cumin-planner", ActorType: "Bot"},
+	}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Labels: []string{readyLabel}, LabelEvents: []githubtest.LabelEvent{
+		{Label: readyLabel, At: t0, Actor: "example-owner", ActorType: "User"},
+		{Label: readyLabel, At: t0.Add(time.Minute), Actor: "cumin-planner", ActorType: "Bot"},
+		{Label: readyLabel, At: t0.Add(2 * time.Minute), Removed: true},
+		{Label: readyLabel, At: t0.Add(3 * time.Minute), Actor: "example-triager", ActorType: "User"},
+		{Label: readyLabel, At: t0.Add(4 * time.Minute), Actor: "cumin-planner", ActorType: "Bot"},
+	}})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	for number, want := range map[int]github.LabelActor{
+		10: {Login: "example-owner", Type: "User", At: t0},
+		11: {Login: "example-triager", Type: "User", At: t0.Add(3 * time.Minute)},
+	} {
+		for name, read := range map[string]func(context.Context, string, string, string, int, string) (github.LabelActor, github.RateLimit, error){
+			"ReadLabelActor": client.ReadLabelActor, "ReadOwnLabelActor": client.ReadOwnLabelActor,
+		} {
+			actor, _, err := read(context.Background(), githubtest.Token, "example-org", "example-repo", number, readyLabel)
+			if err != nil {
+				t.Fatalf("%s of #%d: %v", name, number, err)
+			}
+			if actor != want {
+				t.Errorf("%s of #%d = %+v, want %+v", name, number, actor, want)
+			}
+		}
 	}
 }
 

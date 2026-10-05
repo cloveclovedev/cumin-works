@@ -13,7 +13,7 @@ if (requirement issue in planning or accepting,\nand no Planner runs? (StatusAct
   stop
 else (yes)
 endif
-:read the newest event of the status label\n(1 GraphQL point);
+:read the event that put the status label\non the issue (1 GraphQL point);
 if (the account is a person?) then (yes)
   :read the permission (1 REST call);
 else (no)

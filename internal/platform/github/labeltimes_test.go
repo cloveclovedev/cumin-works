@@ -9,15 +9,17 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
 
-// The newest event of each label wins: the same label goes on and off an
-// issue more than once.
-func TestReadLabelTimes_TheNewestEventOfEachLabel(t *testing.T) {
+// The event that last put each label on the issue wins: the same label
+// goes on and off an issue more than once.
+func TestReadLabelTimes_TheEventThatLastPutEachLabel(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", "cumin/status/awaiting-plan-review"}, LabelEvents: []githubtest.LabelEvent{
 		{Label: "cumin/status/awaiting-plan-review", At: t0},
+		{Label: "cumin/status/awaiting-plan-review", At: t0.Add(time.Hour), Removed: true},
 		{Label: "cumin/status/implementing", At: t0.Add(time.Hour)},
+		{Label: "cumin/status/implementing", At: t0.Add(2 * time.Hour), Removed: true},
 		{Label: "cumin/status/awaiting-plan-review", At: t0.Add(2 * time.Hour)},
 	}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/ready"}, LabelEvents: []githubtest.LabelEvent{
@@ -44,6 +46,37 @@ func TestReadLabelTimes_TheNewestEventOfEachLabel(t *testing.T) {
 	}
 }
 
+// The time of a label is the time of the event that put it on the issue.
+// A later event that adds the label again, with no event that removed it
+// in between, does not move the time (measured on 2026-10-05: GitHub can
+// record such an event). A label that was removed keeps the time of the
+// event that last put it on the issue.
+func TestReadLabelTimes_ARepeatedEventOfALabelDoesNotMoveItsTime(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/checking"}, LabelEvents: []githubtest.LabelEvent{
+		{Label: "cumin/status/ready", At: t0},
+		{Label: "cumin/status/ready", At: t0.Add(time.Minute)},
+		{Label: "cumin/status/ready", At: t0.Add(time.Hour), Removed: true},
+		{Label: "cumin/status/checking", At: t0.Add(time.Hour)},
+		{Label: "cumin/status/checking", At: t0.Add(2 * time.Hour)},
+	}})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	times, _, err := client.ReadLabelTimes(context.Background(), githubtest.Token, "example-org", "example-repo", 6)
+	if err != nil {
+		t.Fatalf("ReadLabelTimes: %v", err)
+	}
+	if got, want := times[10]["cumin/status/ready"], t0; !got.Equal(want) {
+		t.Errorf("ready of #10 at %v, want %v", got, want)
+	}
+	if got, want := times[10]["cumin/status/checking"], t0.Add(time.Hour); !got.Equal(want) {
+		t.Errorf("checking of #10 at %v, want %v", got, want)
+	}
+}
+
 func TestReadLabelTimes_AnUnknownIssueIsAnError(t *testing.T) {
 	fake, server := githubtest.New(t)
 	fake.AddRepository("example-org", "example-repo")
@@ -63,6 +96,7 @@ func TestReadLabelTimes_ReadsOneImplementationIssue(t *testing.T) {
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/reviewing"}, LabelEvents: []githubtest.LabelEvent{
 		{Label: "cumin/status/ready", At: t0},
+		{Label: "cumin/status/ready", At: t0.Add(30 * time.Minute), Removed: true},
 		{Label: "cumin/status/ready", At: t0.Add(time.Hour)},
 	}})
 	client := github.NewAppClient(server.URL, server.Client())

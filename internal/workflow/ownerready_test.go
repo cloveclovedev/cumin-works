@@ -78,7 +78,7 @@ func TestOwnerReady_AReadyOfTheOwnerStartsTheImplementerOnce(t *testing.T) {
 // issue.
 func TestOwnerReady_AReadyOfTheOwnerStartsThePlannerOnce(t *testing.T) {
 	sc := newPlanScene(t)
-	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 60), readyBy(theOwner, 5)}
+	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 60), removedBefore(readyBy(theOwner, 5)), readyBy(theOwner, 5)}
 	sc.fake.SetPermission(theOwner, "write", "User")
 	service := sc.service()
 
@@ -121,7 +121,8 @@ func setNotOwnerPermissions(sc *scene) {
 
 // A ready of an account that is not the Owner changes no label and sends
 // no request (issue-states.md, the ready of the Owner), also when an older
-// ready was of the Owner. Across three polls, cumin logs it once and tells
+// ready was of the Owner: the label was removed, and the other account put
+// it on the issue again. Across three polls, cumin logs it once and tells
 // the Owner once.
 func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.T) {
 	scenes := []struct {
@@ -137,7 +138,7 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 		for _, tt := range notOwners {
 			t.Run(s.name+"/"+tt.name, func(t *testing.T) {
 				sc := s.scene(t)
-				sc.repo.Issues[s.number].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 60), tt.event}
+				sc.repo.Issues[s.number].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 60), removedBefore(tt.event), tt.event}
 				setNotOwnerPermissions(sc)
 				service := sc.service()
 
@@ -169,6 +170,51 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 	}
 }
 
+// GitHub can record an event that adds cumin/status/ready again while the
+// label is on the issue, late and with the GitHub App that created the
+// issue (measured on 2026-10-05). The event of the Owner put the label on
+// the issue, so the issue starts as the ready of the Owner.
+func TestOwnerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheOwner(t *testing.T) {
+	scenes := []struct {
+		name   string
+		number int
+		scene  func(*testing.T) *scene
+	}{
+		{name: "an implementation issue", number: 10, scene: func(t *testing.T) *scene {
+			sc := newScene(t)
+			sc.addUnlinkedPullRequest(21, sc.remoteHead)
+			return sc
+		}},
+		{name: "a requirement issue", number: 6, scene: newPlanScene},
+	}
+	for _, s := range scenes {
+		t.Run(s.name, func(t *testing.T) {
+			sc := s.scene(t)
+			sc.repo.Issues[s.number].LabelEvents = []githubtest.LabelEvent{
+				readyBy(theOwner, 5),
+				{Label: "cumin/status/ready", At: sceneNow.Add(-4 * time.Minute), Actor: plannerLogin, ActorType: "Bot"},
+			}
+			setNotOwnerPermissions(sc)
+			service := sc.service()
+
+			for range 3 {
+				_ = service.Poll(context.Background())
+			}
+			service.Wait()
+
+			if n := sc.agentRuns(t); n != 1 {
+				t.Errorf("%d agent runs, want 1", n)
+			}
+			if got := sc.fake.Issue(sc.repo, s.number).Labels; slices.Contains(got, "cumin/status/ready") {
+				t.Errorf("labels of #%d = %v, want no cumin/status/ready after the start", s.number, got)
+			}
+			if strings.Contains(sc.logs.String(), "is not of the Owner") {
+				t.Errorf("the ready of the Owner was logged as one of another account:\n%s", sc.logs.String())
+			}
+		})
+	}
+}
+
 // A new ready event of another account on the same issue is a new event:
 // cumin logs it once more.
 func TestOwnerReady_ANewReadyOfAnotherAccountIsLoggedAgain(t *testing.T) {
@@ -179,7 +225,7 @@ func TestOwnerReady_ANewReadyOfAnotherAccountIsLoggedAgain(t *testing.T) {
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
-	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy("a-triager", 1))
+	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, removedBefore(readyBy("a-triager", 1)), readyBy("a-triager", 1))
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
