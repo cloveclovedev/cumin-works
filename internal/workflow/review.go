@@ -37,8 +37,9 @@ type reviewerRequest struct {
 	// requests that follow in the same run (the review fix of I5, the
 	// explanation of the cause of I8) carry the same login.
 	ownerLogin string
-	// again says that the request is "request the review again": the
-	// second request of this stay in cumin/status/reviewing.
+	// again says that the request is the second one of its kind during this
+	// stay in cumin/status/reviewing: "request the review again", or the
+	// second request of the cause.
 	again bool
 	// resumes says that the second request follows a run of this stay that
 	// ended and left its session: it resumes that session with the short
@@ -80,7 +81,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	// after the label change then finds the head commit of the request, and
 	// not the count of an earlier stay.
 	stored := s.State.Issue(repository, a.Number)
-	stored.ReviewRequests, stored.ReviewHead = 0, pr.HeadCommit
+	stored.ReviewRequests, stored.CauseRequests, stored.ReviewHead = 0, 0, pr.HeadCommit
 	if err := s.State.Set(repository, a.Number, stored); err != nil {
 		return fmt.Errorf("I3: keep the start of the review of issue #%d: %w", a.Number, err)
 	}
@@ -173,14 +174,19 @@ func (s *Service) goInWork(ctx context.Context, target Target, number int, step 
 // one request to the Reviewer to its end: the review, the review again, or
 // the cause at the round limit (I8).
 //
-// An abnormal end starts the same request once more, in the same work
-// directory and in a new session; after the second one, the issue goes to
-// the Owner with the row of the request. A blocked result is I10: cumin
-// posts the blocked_reason and stops the issue for the Owner at once,
-// without a retry. After done, the end of the run decides as the poll does
-// (endReview): it reads the facts of the way out of cumin/status/reviewing,
-// and ReviewEnd decides. A failed read changes nothing: the issue keeps
-// cumin/status/reviewing, and the next poll decides from the same facts.
+// Every end but a blocked result is the same case: a done result and an
+// abnormal end are decided as the poll decides (endReview), from the facts
+// on GitHub, and ReviewEnd decides. Nothing is retried inside the run: the
+// second request is "request the review again", once for each stay in
+// cumin/status/reviewing. A blocked result is I10: cumin posts the
+// blocked_reason and stops the issue for the Owner at once. A failed read
+// changes nothing: the issue keeps cumin/status/reviewing, and the next
+// poll decides from the same facts.
+//
+// A request that did not start (the work directory, the start of the
+// agent) keeps its count. After the first one, the next poll requests
+// again; the second one stops the review for the Owner
+// (stopForReviewerStart).
 func (s *Service) runReviewer(ctx context.Context, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
 	repository := target.Repository.String()
 	log := s.logger().With("repository", repository, "issue", number,
@@ -189,15 +195,6 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	row := RowI3
 	if req.cause != nil {
 		row = RowI8
-	}
-	// uncount takes back the count of a second request that did not start.
-	uncount := func() {
-		if !req.again {
-			return
-		}
-		if err := s.countReviewRequest(repository, number, -1); err != nil {
-			log.Error(row+": the count of the request that did not start was not taken back", "error", err.Error())
-		}
 	}
 	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
@@ -211,13 +208,13 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	// nothing there, so nothing is lost (agent-run.md, the work directory).
 	if err := s.Workspace.Remove(ctx, checkout); err != nil {
 		log.Error(row+": the worktree of an earlier round was not removed", "error", err.Error())
-		uncount()
+		s.stopForReviewerStart(ctx, log, target, settings, row, number, req)
 		return
 	}
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
 	if err != nil {
 		log.Error(row+": the work directory was not prepared", "error", err.Error())
-		uncount()
+		s.stopForReviewerStart(ctx, log, target, settings, row, number, req)
 		return
 	}
 	req.review.WorkDir = workDir
@@ -235,7 +232,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	switch {
 	case req.cause != nil:
 		request.Text = ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, req.review.Limit, workDir)
-		log.Info("I8: requested the explanation of the cause", "resumed", req.sessionID != "")
+		log.Info("I8: requested the explanation of the cause", "resumed", req.sessionID != "", "again", req.again)
 	case req.again:
 		// Only a session that got the whole request gets the short text.
 		if req.resumes {
@@ -248,33 +245,22 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 			"head_commit", req.review.HeadCommit, "resumed", req.sessionID != "")
 	}
 
-	var firstKind agent.EndKind
-	for attempt := 1; ; attempt++ {
-		run, err := s.Agents.Start(ctx, request)
-		var abnormal *agent.AbnormalEnd
-		switch {
-		case errors.As(err, &abnormal):
-			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-				"session_id", abnormal.SessionID, "detail", abnormal.Detail, "attempt", attempt)
-			if ctx.Err() != nil {
-				// cumin is stopping. The label stays, and the next start of
-				// cumin decides from the facts on GitHub.
-				return
-			}
-			if attempt < agentAttempts {
-				firstKind = abnormal.Kind
-				request.SessionID = ""
-				log.Info(row+": the same request runs again in the same work directory", "attempt", attempt+1)
-				continue
-			}
-			s.stopAfterAbnormalEnd(ctx, log, target, settings, row, "Reviewer", number, firstKind, abnormal.Kind)
-			return
-		case err != nil:
-			log.Error("the agent was not started", "error", err.Error())
-			uncount()
+	run, err := s.Agents.Start(ctx, request)
+	var abnormal *agent.AbnormalEnd
+	switch {
+	case errors.As(err, &abnormal):
+		log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
+			"session_id", abnormal.SessionID, "detail", abnormal.Detail)
+		if ctx.Err() != nil {
+			// cumin is stopping. The label stays, and the next start of
+			// cumin decides from the facts on GitHub.
 			return
 		}
-
+	case err != nil:
+		log.Error("the agent was not started", "error", err.Error())
+		s.stopForReviewerStart(ctx, log, target, settings, row, number, req)
+		return
+	default:
 		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 		s.quotaAfterRun(ctx, log, target, number, run)
 		s.keepSession(log, target, config.RoleReviewer, number, run.SessionID)
@@ -285,16 +271,44 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 			s.stopAfterBlocked(ctx, log, target, settings, row, "Reviewer", number, run.Result.BlockedReason)
 			return
 		}
-		s.endReview(ctx, log, target, settings, number, req)
+	}
+	s.endReview(ctx, log, target, settings, number, req, abnormal)
+}
+
+// stopForReviewerStart stops the review for the Owner when the second
+// request of this stay did not start: the work directory was not prepared,
+// or the agent was not started. A third request would fail the same way.
+// After a first request that did not start, nothing changes here, and the
+// next poll requests again. While cumin is stopping, and when the issue
+// left cumin/status/reviewing, nothing changes either.
+func (s *Service) stopForReviewerStart(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, number int, req reviewerRequest) {
+	if !req.again || ctx.Err() != nil {
 		return
+	}
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error(row+": no token; the next poll decides the end of the review", "error", err.Error())
+		return
+	}
+	sub, ok := s.subIssueNow(ctx, log, target, number)
+	if !ok || !ReviewNeedsFacts(sub, false) {
+		return
+	}
+	a := StopReview{Number: number, Row: row, Reason: ReviewerNotStartedReason(), PullRequest: req.review.PullRequest, Retried: true}
+	if _, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, "", nil, false, a); err != nil {
+		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 	}
 }
 
-// endReview decides the end of a Reviewer run that returned done, as the
-// poll does: it reads the issue again with the facts of the way out of
-// cumin/status/reviewing, and applies what ReviewEnd decides. A step that
-// starts an agent (the review fix, the review again, the cause) runs here, in the goroutine of the run, so the issue stays in work.
-func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
+// endReview decides the end of a Reviewer run that returned done or that
+// ended abnormally (abnormal is then its end), as the poll does: it reads
+// the issue again with the facts of the way out of cumin/status/reviewing,
+// and applies what ReviewEnd decides. A step that starts an agent (the
+// review fix, the review again, the cause) runs here, in the goroutine of
+// the run, so the issue stays in work. While cumin stops after its runs, no
+// such step starts and no label changes: the issue keeps
+// cumin/status/reviewing, and the next start of cumin decides.
+func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, abnormal *agent.AbnormalEnd) {
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error("I3: no token; the next poll decides the end of the review", "error", err.Error())
@@ -304,17 +318,30 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 	if err != nil || !ok {
 		return
 	}
-	// The run knows its own request, also when the state file lost it.
-	sub.Reviewing.CauseRequested = req.cause != nil
-	sub.Reviewing.RequestedAgain = sub.Reviewing.RequestedAgain || req.again
+	// The run knows its own request, also when the state file lost it. Only
+	// a run that returned done says that the Reviewer wrote no cause.
+	cause := req.cause != nil
+	sub.Reviewing.CauseRequested = cause && abnormal == nil
+	sub.Reviewing.CauseRequestedAgain = sub.Reviewing.CauseRequestedAgain || (cause && req.again)
+	sub.Reviewing.RequestedAgain = sub.Reviewing.RequestedAgain || (!cause && req.again)
 	sub.Reviewing.RequestedHead = req.review.HeadCommit
 	action := ReviewEnd(sub, false)
 	if action == nil {
 		log.Info("I3: the end of the review was not decided; the next poll decides", "labels", sub.Labels)
 		return
 	}
+	if s.finishing.Load() && len(WithoutNewWork([]Action{action})) == 0 {
+		log.Info("I3: cumin stops after its runs; the next request waits for the next start of cumin", "action", fmt.Sprintf("%T", action))
+		return
+	}
+	// The Owner needs the kind of the end to know where to look.
+	if stop, ok := action.(StopReview); ok && abnormal != nil && stop.Retried {
+		stop.Reason = AfterAbnormalEndReason(stop.Reason, "Reviewer", abnormal.Kind)
+		action = stop
+	}
 	ownerLogin := func(context.Context, string) (string, error) { return req.ownerLogin, nil }
-	rest, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, defaultBranch, ownerLogin, true, action)
+	// Only a run that returned done left its session for the next request.
+	rest, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, defaultBranch, ownerLogin, abnormal == nil, action)
 	if err != nil {
 		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 		return
@@ -410,6 +437,7 @@ func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token stri
 	facts.ReadyAt = times[number][LabelReady]
 	stored := s.State.Issue(target.Repository.String(), number)
 	facts.RequestedAgain, facts.RequestedHead = stored.ReviewRequests > 0, stored.ReviewHead
+	facts.CauseRequestedAgain = stored.CauseRequests > 1
 	pr, ok := sub.LatestPullRequest()
 	if !ok {
 		log.Error("I3: the pull request of the review is no longer open")
@@ -449,13 +477,18 @@ func (s *Service) readComments(ctx context.Context, log *slog.Logger, token stri
 	return comments, nil
 }
 
-// countReviewRequest changes, in the state file, how many times the review
-// was requested again during this stay in cumin/status/reviewing. delta is
-// 1 before the second request starts, and -1 when that run did not start.
-func (s *Service) countReviewRequest(repository string, number, delta int) error {
+// countReviewRequest counts, in the state file, one request of this stay in
+// cumin/status/reviewing before it starts: a second request of the review,
+// or, with cause, a request of the cause. A request that did not start
+// keeps its count. It returns the new count.
+func (s *Service) countReviewRequest(repository string, number int, cause bool) (int, error) {
 	stored := s.State.Issue(repository, number)
-	stored.ReviewRequests = max(0, stored.ReviewRequests+delta)
-	return s.State.Set(repository, number, stored)
+	count := &stored.ReviewRequests
+	if cause {
+		count = &stored.CauseRequests
+	}
+	*count++
+	return *count, s.State.Set(repository, number, stored)
 }
 
 // applyReviewEnd applies one way out of cumin/status/reviewing that
@@ -470,8 +503,9 @@ func (s *Service) countReviewRequest(repository string, number, delta int) error
 // facts. No request, comment, or notification goes out before the label
 // changed, so none goes out twice. ownerLogin gives the login of the Owner
 // for a review fix. afterRun says that a Reviewer run of this stay just
-// ended and left its session; a poll passes false, because a restart of
-// cumin can have cut the run before its session was kept.
+// returned done and left its session; a poll passes false, because a
+// restart of cumin can have cut the run before its session was kept, and so
+// does the end of a run that ended abnormally.
 func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, ownerLogin func(ctx context.Context, token string) (string, error), afterRun bool, action Action) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
@@ -559,29 +593,47 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			})
 		}, nil
 	case RequestReviewAgain, RequestCause:
+		cause, isCause := a.(RequestCause)
+		row := RowI3
+		if isCause {
+			row = RowI8
+		}
+		// Q1: the quota decides before the request is counted, so a limit
+		// does not use up the one second request of the stay. It decides
+		// before the reads of the request, so a poll at a limit reads
+		// nothing more.
+		if ok, err := s.quotaAllowsStart(ctx, row, config.RoleReviewer, target, number); err != nil || !ok {
+			if err != nil {
+				return nil, fmt.Errorf("%s: issue #%d: %w", row, number, err)
+			}
+			return nil, nil
+		}
 		req, err := s.reviewRequestOf(ctx, token, target, settings, number, pr)
 		if err != nil {
 			return nil, err
 		}
-		if cause, ok := a.(RequestCause); ok {
+		count, err := s.countReviewRequest(repository, number, isCause)
+		if err != nil {
+			return nil, fmt.Errorf("%s: count the request to the Reviewer of issue #%d: %w", row, number, err)
+		}
+		if isCause {
 			// The cause goes on in the session of the last Reviewer run,
 			// which holds the rounds.
 			log.Info("I8: blocking comments remain at the limit of rounds", "limit", req.review.Limit)
 			req.cause = &cause.Review
+			req.again = count > 1
 			req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
 		} else {
 			// The second request has the round of the first one: no review
-			// of this round is on GitHub. After a run of this stay, it goes
-			// on in the session of that run, with the short text. At a
-			// poll, the state file can hold no session of this stay, so the
-			// request is the whole review request, in the session that a
-			// first request of this round takes (reviewRequestOf).
+			// of this round is on GitHub. After a run of this stay that
+			// returned done, it goes on in the session of that run, with
+			// the short text. At a poll, and after an abnormal end, the
+			// state file can hold no session of this stay, so the request
+			// is the whole review request, in the session that a first
+			// request of this round takes (reviewRequestOf).
 			req.again = true
 			if req.resumes = afterRun; afterRun {
 				req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
-			}
-			if err := s.countReviewRequest(repository, number, 1); err != nil {
-				return nil, fmt.Errorf("I3: count the second request of the review of issue #%d: %w", number, err)
 			}
 		}
 		return func(ctx context.Context) { s.runReviewer(ctx, target, settings, number, req) }, nil
@@ -618,6 +670,11 @@ func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token s
 // without a review on the head commit, for the comment and the
 // notification alike.
 const MissingReviewReason = "cumin requested the review twice, but the latest review of the Reviewer is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
+
+// MissingCauseReason is the sentence of the stop of I8 after the second
+// request of the cause of one stay that left no decision request, for the
+// comment and the notification alike.
+const MissingCauseReason = "Blocking comments remain at the limit of review rounds. cumin requested the cause from the Reviewer twice, but the Reviewer wrote no decision request on the pull request after its last review."
 
 // MissingExplanationReason is the sentence of the stop of I8 when the
 // Reviewer wrote no decision request, for the comment and the

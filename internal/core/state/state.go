@@ -61,6 +61,9 @@ type Issue struct {
 	// ReviewRequests is how many times cumin has requested the review again
 	// during this stay of an implementation issue in cumin/status/reviewing.
 	ReviewRequests int `json:"review_requests,omitempty"`
+	// CauseRequests is how many times cumin has requested the cause from
+	// the Reviewer during this stay in cumin/status/reviewing.
+	CauseRequests int `json:"cause_requests,omitempty"`
 	// ReviewHead is the head commit that the review of this stay in
 	// cumin/status/reviewing was requested on. A pull request with another
 	// head commit goes back to the checks.

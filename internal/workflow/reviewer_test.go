@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
@@ -274,27 +275,41 @@ func TestI10_ABlockedReviewerStopsWithoutARetry(t *testing.T) {
 	}
 }
 
-// An abnormal end of the Reviewer runs the same request once more, in a new
-// session; the second one stops the issue with the row I3.
+// An abnormal end of the Reviewer is decided as every other end: no review
+// is on the head commit, so the review is requested again once, in a new
+// session. A second end without a review stops the review for the Owner,
+// and the note names the kind of the abnormal end. The polls that follow
+// start nothing: one stay starts the Reviewer two times at most.
 func TestI3_TwoAbnormalEndsOfTheReviewerStopForTheOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "invalid-result.jsonl"})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
 
-	sc.pollAndWait(t, service)
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
 
 	if n := sc.agentRuns(t); n != 2 {
-		t.Errorf("%d agent runs, want 2", n)
+		t.Errorf("%d agent runs, want 2: the review and one second request", n)
 	}
 	if strings.Contains(sc.record(t, "agent.args"), "--resume") {
-		t.Error("the retry resumed a session")
+		t.Error("the second request resumed a session")
 	}
+	reason := workflow.AfterAbnormalEndReason(workflow.MissingReviewReason, "Reviewer", agent.EndInvalidResult)
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I3") || !strings.Contains(comments[0].Body, "Reviewer") {
-		t.Fatalf("comments on #10 = %+v, want one stop note with the row I3", comments)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
+	for _, want := range []string{"Row: I5", "Reason: " + reason, "ended abnormally (" + agent.EndInvalidResult.String() + ")", "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+		t.Errorf("notifications = %v, want one", messages)
 	}
 }
 

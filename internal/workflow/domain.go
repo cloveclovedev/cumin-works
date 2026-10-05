@@ -326,10 +326,13 @@ type ReviewingFacts struct {
 	// RequestedAgain says that the state file holds a second request of
 	// the review during this stay in cumin/status/reviewing.
 	RequestedAgain bool
-	// CauseRequested says that the Reviewer run that just ended was the
-	// request of the cause at the round limit. Only the end of that run
+	// CauseRequested says that the Reviewer run that just returned done was
+	// the request of the cause at the round limit. Only the end of that run
 	// sets it.
 	CauseRequested bool
+	// CauseRequestedAgain says that the state file holds a second request
+	// of the cause during this stay in cumin/status/reviewing.
+	CauseRequestedAgain bool
 	// Required are the checks that the rules of the default branch
 	// require. They are read only after an approval of the head commit.
 	Required []RequiredCheck
@@ -1234,8 +1237,9 @@ func implementationEnds(snapshot Snapshot) []Action {
 //   - REQUEST_CHANGES on the head commit: below the round limit, request a
 //     review fix. At the limit, stop at the round limit when the Reviewer
 //     explained the cause, and request the cause from the Reviewer
-//     otherwise; a request of the cause that left no explanation stops the
-//     review for the Owner.
+//     otherwise; a request of the cause that returned done and left no
+//     explanation stops the review for the Owner, and so does a second
+//     request of the cause of this stay that left none.
 //   - No review on the head commit: request the review again, once for each
 //     stay in cumin/status/reviewing. The second time, stop the review for
 //     the Owner.
@@ -1279,6 +1283,8 @@ func ReviewEnd(sub SubIssue, running bool) Action {
 			return RequestReviewFix{Number: sub.Number, PullRequest: pr.Number, Round: round, Review: latest}
 		case facts.Explained:
 			return StopAtRoundLimit{Number: sub.Number, Explanation: facts.Explanation}
+		case facts.CauseRequestedAgain:
+			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingCauseReason, PullRequest: pr.Number, Retried: true}
 		case facts.CauseRequested:
 			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingExplanationReason, PullRequest: pr.Number}
 		}

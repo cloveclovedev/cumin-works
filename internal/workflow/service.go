@@ -1066,12 +1066,6 @@ func (s *Service) countImplementationRequest(repository string, number, delta in
 	return s.State.Set(repository, number, stored)
 }
 
-// agentAttempts is how many times cumin starts one request: the first run,
-// and one more after an abnormal end (issue-states.md, the section on
-// abnormal ends). The count lives here, in the run, so a new claim (I1)
-// always starts at zero.
-const agentAttempts = 2
-
 // readOwnerLogin reads the login of the Owner for the facts of a start
 // request (docs/ja/requirements/agents/common.md, the facts of the start
 // request): the account that added the newest cumin/status/ready to the
@@ -1255,7 +1249,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		case StopImplementation:
 			// The Owner needs the kind of the end to know where to look.
 			if abnormal != nil && !a.Question {
-				a.Reason = AfterAbnormalEndReason(a.Reason, abnormal.Kind)
+				a.Reason = AfterAbnormalEndReason(a.Reason, "Implementer", abnormal.Kind)
 			}
 			if err := s.stopImplementation(ctx, log, token, target, settings, sub, a); err != nil {
 				log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
@@ -1314,28 +1308,6 @@ func (s *Service) stopForWorkDirectory(ctx context.Context, log *slog.Logger, ta
 	}
 }
 
-// stopAfterAbnormalEnd stops the issue after the second abnormal end of the
-// same request of the Reviewer, with the row of the request (I3, I8): the
-// comment names both kinds and says that cumin ran the request again, and
-// the issue goes to the Owner. The two runs can end in
-// different ways, and the Owner needs the kind of each one to know where
-// to look.
-func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, first, second agent.EndKind) {
-	reason := abnormalReason(role, first, second)
-	sub, _ := s.subIssueNow(ctx, log, target, number)
-	pullRequest := 0
-	if pr, ok := sub.LatestPullRequest(); ok {
-		pullRequest = pr.Number
-	}
-	s.stopForOwner(ctx, log, target, settings, stop{
-		row:     row,
-		issue:   number,
-		labels:  sub.Labels,
-		reason:  reason,
-		comment: StopNote(row, reason, pullRequest, true),
-	})
-}
-
 // stopAfterBlocked stops the issue for a blocked result, with the row of
 // the result (I2 for the Implementer, I10 for the Reviewer): the
 // blocked_reason of the agent becomes the comment, because the agent
@@ -1343,6 +1315,10 @@ func (s *Service) stopAfterAbnormalEnd(ctx context.Context, log *slog.Logger, ta
 // first line is the question for the Owner. Nothing is retried: a blocked
 // result usually means that a requirement is missing, so the Owner answers
 // first (issue-states.md, the paragraph on a blocked result).
+//
+// The label changes first, then the comment is written. A comment that
+// GitHub refuses then leaves the issue in cumin/status/awaiting-decision,
+// so no poll requests the same work again; its whole text goes to the log.
 func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, reason string) {
 	s.stopBlocked(ctx, log, target, settings, row, role, number, reason, labelsNow(s.subIssueNow(ctx, log, target, number)))
 }
@@ -1353,11 +1329,12 @@ func (s *Service) stopBlocked(ctx context.Context, log *slog.Logger, target Targ
 	question := firstLine(reason)
 	log.Warn(row+": the agent returned blocked", "reason", question)
 	s.stopForOwner(ctx, log, target, settings, stop{
-		row:     row,
-		issue:   number,
-		labels:  labels,
-		reason:  "the " + role + " returned blocked: " + question,
-		comment: reason,
+		row:        row,
+		issue:      number,
+		labels:     labels,
+		labelFirst: true,
+		reason:     "the " + role + " returned blocked: " + question,
+		comment:    reason,
 	})
 }
 

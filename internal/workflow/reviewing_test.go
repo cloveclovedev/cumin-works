@@ -3,11 +3,14 @@ package workflow_test
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
@@ -322,5 +325,264 @@ func TestReviewing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T
 	}
 	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of an Owner"); n != 1 {
 		t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
+	}
+}
+
+// At a quota limit, "request the review again" starts nothing and counts
+// nothing: the issue keeps cumin/status/reviewing. After the limit, one
+// poll sends the one second request of the stay.
+func TestReviewing_AQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"NONE", "APPROVE"}})
+	reset := sceneNow.Add(2 * time.Hour)
+	// The first review request has no quota check, so the Reviewer runs
+	// once over the limit and leaves no review.
+	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{})
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs at the limit, want 1: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).ReviewRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	want := []string{"risk/low", workflow.LabelReviewing}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs after the limit, want 2: one poll sends the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).ReviewRequests; n != 1 {
+		t.Errorf("the state file counts %d second requests, want 1", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, workflow.LabelReviewing) || slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want the way out of the approval", got)
+	}
+}
+
+// A Reviewer work directory that cannot be prepared sends no request, and
+// the request counts. The next poll requests the review again, and the
+// second failure stops the review for the Owner with the reason. The polls
+// that follow send nothing more.
+func TestReviewing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheReview(t *testing.T) {
+	sc := newScene(t)
+	sc.awaitingChecks(t, nil, nil)
+	service := sc.withoutARemote(t, filepath.Join(t.TempDir(), "state.json"))
+
+	for range 4 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	logs := sc.logs.String()
+	tries := strings.Count(logs, `"msg":"I3: the work directory was not prepared"`) +
+		strings.Count(logs, `"msg":"I3: the worktree of an earlier round was not removed"`)
+	if tries != 2 {
+		t.Errorf("%d requests that did not start, want 2: no third request", tries)
+	}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	reason := workflow.ReviewerNotStartedReason()
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"## Stopped for the Owner", "Row: I3", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
+	}
+}
+
+// A blocked result whose comment GitHub refuses: the label changes first,
+// so the issue is in cumin/status/awaiting-decision. The log holds the
+// whole text, the notification says that the comment was not written, and
+// no poll requests the review again.
+func TestReviewing_ABlockedResultWhoseCommentIsRefusedStillStopsTheReview(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{})
+	sc.fake.FailTimes(http.MethodPost, "/repos/example-org/example-repo/issues/10/comments", 0, everyTry, http.StatusInternalServerError)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: no review is requested again", n)
+	}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: GitHub refused the comment", len(comments))
+	}
+	logs := sc.logs.String()
+	for _, want := range []string{`"msg":"I10: the reason was not written on the issue; the whole text is here"`, `"comment":"## Decision needed: which sign-in method does the login screen use?"`} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the log has no %s", want)
+		}
+	}
+	messages := sc.messagesExceptQ4()
+	if len(messages) != 1 || !strings.Contains(messages[0], "cumin did not write the comment on the issue") {
+		t.Errorf("notifications = %v, want one that says that the comment was not written", messages)
+	}
+}
+
+// While cumin stops after the current runs, a Reviewer run that ends with a
+// change request starts no Implementer: the issue keeps
+// cumin/status/reviewing. The next start of cumin requests the review fix
+// once.
+func TestReviewing_AStopAfterTheRunsStartsNoReviewFixAndTheNextStartSendsOne(t *testing.T) {
+	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES"}}, "risk/low")
+	path, returned := stopAfterRunsScene(t, sc, stopped)
+	waitForAgentRun(t, sc)
+	requestStop(t, path)
+	waitForLog(t, sc, tookStopRequestLog)
+
+	sc.release(t)
+	select {
+	case err := <-returned:
+		if err != nil {
+			t.Fatalf("Run returned %v, want nil", err)
+		}
+	case <-time.After(hangGuard):
+		t.Fatalf("Run did not return after the run ended:\n%s", sc.logs.String())
+	}
+	assertStillReviewing(t, sc, stopped, "risk/low")
+	if !strings.Contains(sc.logs.String(), `"msg":"I3: cumin stops after its runs; the next request waits for the next start of cumin"`) {
+		t.Errorf("the log does not say that the review fix waits:\n%s", sc.logs.String())
+	}
+
+	restarted := sc.restartedWith(stopped)
+	sc.clock.Set(sceneNow.Add(time.Minute))
+	if err := restarted.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll after the restart: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelImplementing}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/implementing during the fix", got)
+	}
+	sc.clock.Set(sceneNow.Add(2 * time.Minute))
+	if err := restarted.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll during the fix: %v", err)
+	}
+	sc.release(t)
+	restarted.Wait()
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want the review and one fix", n)
+	}
+	if n := strings.Count(sc.logs.String(), `"msg":"I5: requested the work"`); n != 1 {
+		t.Errorf("%d fix requests in the log, want 1", n)
+	}
+}
+
+// A cause run that ends abnormally gets one second request of the cause. A
+// second end with no decision request stops the review for the Owner with
+// the row I8, and the note names the kind of the abnormal end. The polls
+// that follow start nothing: one stay requests the cause two times at most.
+func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
+	// The review of round 3 returns done; every run after it ends abnormally.
+	sc := newScene(t, cliOptions{secondFixture: "invalid-result.jsonl", reviews: []string{"REQUEST_CHANGES"}})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	sc.atTheLimit(t)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 3 {
+		t.Errorf("%d agent runs, want 3: the review and two requests of the cause", n)
+	}
+	if n := strings.Count(sc.logs.String(), `"msg":"I8: requested the explanation of the cause"`); n != 2 {
+		t.Errorf("%d requests of the cause in the log, want 2", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CauseRequests; n != 2 {
+		t.Errorf("the state file counts %d requests of the cause, want 2", n)
+	}
+	reason := workflow.AfterAbnormalEndReason(workflow.MissingCauseReason, "Reviewer", agent.EndInvalidResult)
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"Row: I8", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
+	}
+}
+
+// At a quota limit, "request the cause from the Reviewer" starts nothing
+// and counts nothing: the issue keeps cumin/status/reviewing. After the
+// limit, one poll sends the request.
+func TestReviewing_AQuotaLimitDoesNotUseUpTheRequestOfTheCause(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}, comments: []string{"NONE", "DECISION"}})
+	reset := sceneNow.Add(2 * time.Hour)
+	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	sc.atTheLimit(t)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs at the limit, want 1: the quota stops the request of the cause", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CauseRequests; n != 0 {
+		t.Errorf("the state file counts %d requests of the cause, want none", n)
+	}
+	want := []string{"risk/low", workflow.LabelReviewing}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs after the limit, want 2: one poll sends the request of the cause", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CauseRequests; n != 1 {
+		t.Errorf("the state file counts %d requests of the cause, want 1", n)
+	}
+	want = []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v: the Reviewer explained the cause", got, want)
 	}
 }
