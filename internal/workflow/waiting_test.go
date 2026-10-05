@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
+	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
 
 // q4Messages returns the notifications of Q4.
@@ -207,15 +208,45 @@ func TestQ4_AReadyIssueWaitingForRoomIsNotWaiting(t *testing.T) {
 	}
 }
 
+// Q4: an issue in cumin/status/merging or cumin/status/accepting with no
+// agent is an issue that cumin moves on at a later poll. The merge is
+// refused at every poll, and the quota stops the second request of the
+// acceptance check, so both issues keep their label; the Owner hears no
+// waiting notification.
+func TestQ4_AnIssueInMergingOrAcceptingWithNoAgentIsNotWaiting(t *testing.T) {
+	t.Run("merging", func(t *testing.T) {
+		sc := mergingScene(t, "risk/low")
+		sc.fake.RefuseMergesForBaseBranch(3)
+		sc.pollTimes(t, sc.service(), 3)
+		if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
+			t.Fatalf("labels of #10 = %v, want cumin/status/merging: the test would pass for a wrong reason", got)
+		}
+		if got := sc.q4Messages(); len(got) != 0 {
+			t.Errorf("Q4 notifications = %q, want none while an issue is in merging", got)
+		}
+	})
+	t.Run("accepting", func(t *testing.T) {
+		sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+		sc.setQuota(t, 0.90, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+		sc.pollTimes(t, sc.service(), 3)
+		if got := requirementLabels(t, sc); !slices.Contains(got, workflow.LabelAccepting) {
+			t.Fatalf("labels of #6 = %v, want cumin/status/accepting: the test would pass for a wrong reason", got)
+		}
+		if got := sc.q4Messages(); len(got) != 0 {
+			t.Errorf("Q4 notifications = %q, want none while an issue is in accepting", got)
+		}
+	})
+}
+
 // Q4: when every issue waits for the Owner, the Owner hears once across
-// polls. A ready issue behind an open blocked-by issue and an issue whose
-// agent no longer runs both wait for the Owner.
+// polls. A ready issue behind an open blocked-by issue and an issue that
+// is stopped for a decision both wait for the Owner.
 func TestQ4_OnlyWaitsForTheOwnerNotifyOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle,
 		Labels: []string{"cumin/status/ready", "risk/low"}, BlockedBy: []int{11}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Add the logout screen",
-		Labels: []string{"cumin/status/implementing", "risk/low"}})
+		Labels: []string{"cumin/status/awaiting-plan-review", "risk/low"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 12, Parent: 6, Title: "Add the profile screen",
 		Labels: []string{"cumin/status/awaiting-decision", "risk/low"}})
 	service := sc.service()

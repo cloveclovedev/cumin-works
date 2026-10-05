@@ -27,7 +27,7 @@
 図の元ファイル: [quota-start.puml](quota-start.puml)
 
 - 使用率を読む最小の実行は、`internal/workflow` が着手 (R1、I1) を決めたあと、ラベルを付け替える前に行う。上限に達していれば、ラベルは変わらない。同じ状態からは、いつも同じ動作になる。
-- `agent.Service.Start` は、使用率を読まない。着手でない依頼 (I4、I5、最初のレビューの依頼) は、上限に達していても進めるためである。実装の依頼し直し、レビューの依頼し直し、原因の整理の依頼は、呼び出し処理が、回数を数える前に同じ最小の実行で確かめる ([定期確認の設計](poll.md) の「実行終了の判定」と「Reviewerへの依頼 (I3、I10)」)。
+- `agent.Service.Start` は、使用率を読まない。着手でない依頼 (I4、I5、最初のレビューの依頼) は、上限に達していても進めるためである。実装の依頼し直し、レビューの依頼し直し、原因の整理の依頼、受け入れの確認の依頼し直しは、呼び出し処理が、回数を数える前に同じ最小の実行で確かめる ([定期確認の設計](poll.md) の「実行終了の判定」、「Reviewerへの依頼 (I3、I10)」、「定期確認の判定」)。
 - 最小の実行は、着手ごとに1回行う。同じ定期確認で別のリポジトリにも着手するときも、前の着手の値を使い回さない。要件の「着手の直前に読み直す」に従う。
 - 始まったばかりの実行は、まだ枠をほとんど使っていないので、読み直しても並行する実行の分は見えない。上限を超える分は、並行して動く実行 (リポジトリごとに `max_issues_in_progress`) の残りの分までであり、上限までの余白で受ける。
 - 採らなかった案: 1回の定期確認で読んだ値を、その定期確認の全ての着手に使う方法。並行する着手が、同じ古い値で全て通る。
@@ -64,7 +64,7 @@
 
 - Q1の通知は、枠ごとに、止めてから再開するまでに1回にする。読み取れなかったことの通知は、読み取れるまでに1回にする。
 - Q4の通知は、cuminが何か動作をするまでに1回にする。全てのリポジトリの定期確認が成功し、どのリポジトリでも判定が動作を1つも決めず、実行中のAgentもおらず、cuminがOwnerなしで次に進めるIssueがどのリポジトリにもないときに出す。利用枠で止まったR1とI1も、判定が決めた動作なので、Q4は出ない。定期確認が1つでも失敗したときは、送らない。読めなかったリポジトリに、進められるIssueがあるかもしれないためである。ただし、失敗した定期確認でも、決めた動作があれば印を消す。
-- cuminがOwnerなしで次に進めるIssueは、スナップショットの純粋関数 (`Snapshot.MovesWithoutOwner`) がリポジトリごとに決める。`cumin/status/checking` の開いているsub-issueと、着手できるのに同時に進めるIssueの数の上限だけで待っている `cumin/status/ready` のIssueである。blocked by のIssueが開いている `cumin/status/ready` のIssue、Ownerを待つIssue、Agentがいないまま残った `cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing` のIssueは数えない。1つのリポジトリにあれば、全てのリポジトリについてQ4を出さない。 最新の `cumin/status/ready` を付けたのがOwnerでないと読めたIssueは、Ownerがreadyを付け直すまで進まないので、数えない ([定期確認の設計](poll.md) の「Ownerのreadyの確認 (R1、I1)」)。
+- cuminがOwnerなしで次に進めるIssueは、スナップショットの純粋関数 (`Snapshot.MovesWithoutOwner`) がリポジトリごとに決める。`cumin/status/checking` の開いているsub-issueと、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing`、`cumin/status/accepting`、`cumin/status/merging` のIssueと、着手できるのに同時に進めるIssueの数の上限だけで待っている `cumin/status/ready` のIssueである。作業中のラベルのIssueは、Agentが動いていなくても数える。次の定期確認が、事実から次の動作を決めるためである。blocked by のIssueが開いている `cumin/status/ready` のIssueと、Ownerを待つIssueは数えない。`cumin-core` でもOwnerでもないアカウントが付けたと読めた作業中のラベルのIssueも、数えない。1つのリポジトリにあれば、全てのリポジトリについてQ4を出さない。 最新の `cumin/status/ready` を付けたのがOwnerでないと読めたIssueは、Ownerがreadyを付け直すまで進まないので、数えない ([定期確認の設計](poll.md) の「Ownerのreadyの確認 (R1、I1)」)。
 - そのIssueがあっても、cuminは何も動作をしていないので、印は変えない。通知を出さないだけである。必須のcheckがいつまでも結果を返さないときは、その間Q4は出ない。
 
 ![待ち状態の確認](quota-waiting.svg)

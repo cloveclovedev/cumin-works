@@ -215,6 +215,78 @@ func TestAccepting_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
 	}
 }
 
+// At a quota limit, "request the acceptance check again" starts no Planner
+// and counts nothing: the issue keeps cumin/status/accepting. After the
+// limit, one poll sends the one second request.
+func TestAccepting_AQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	reset := sceneNow.Add(2 * time.Hour)
+	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+
+	sc.pollTimes(t, service, 3)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs at the limit, want none: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 6).AcceptanceRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 at the limit, want none", n)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after the limit, want 1: one poll sends the second request", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: acceptance check") {
+		t.Errorf("the request text is not an acceptance check:\n%s", text)
+	}
+	// The Planner left no comment again, so the issue stops for the Owner:
+	// the request after the limit was the one second request.
+	stopped := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, stopped) {
+		t.Errorf("labels of #6 = %v, want %v", got, stopped)
+	}
+}
+
+// An acceptance check run that hit the quota limit does not use up the
+// second request: the end of the run checks the quota before the request is
+// counted, so the issue keeps cumin/status/accepting with a count of zero.
+func TestAccepting_ARunThatHitTheQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	// The first request has no quota check. The Planner run reports a
+	// weekly usage of 0.51 (planner-done.jsonl) against a target of 50, and
+	// leaves no comment.
+	sc.setQuota(t, 0.10, sceneNow.Add(time.Hour), 0.10, sceneNow.Add(time.Hour))
+	sc.quota.Weekly.Target = 50
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 6).AcceptanceRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none", n)
+	}
+}
+
 // A restart after the second request: the state file says that the
 // acceptance check was requested again, and no comment exists. The issue
 // goes to cumin/status/awaiting-decision with no request.

@@ -199,8 +199,7 @@ func (s *Service) subIssueNow(ctx context.Context, log *slog.Logger, target Targ
 	return sub, err == nil
 }
 
-// readSubIssueNow is subIssueNow with the error of the read, for a step
-// that is kept after a temporary failure (keptstep.go).
+// readSubIssueNow is subIssueNow with the error of the read.
 func (s *Service) readSubIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (SubIssue, error) {
 	token, err := target.Token(ctx)
 	if err != nil {

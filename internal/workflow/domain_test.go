@@ -387,18 +387,65 @@ func TestDecide_R4AndR7(t *testing.T) {
 	}
 }
 
-// A running acceptance check fills the limit, although the label of the
-// requirement issue does not show it.
-func TestDecide_ARunningAcceptanceCheckFillsTheLimit(t *testing.T) {
+// The limit counts only the working labels. Issues with cumin/status/ready
+// beyond the limit do not lower the free slots, also when the running set
+// still names one of them: with a limit of 2 and one issue in
+// cumin/status/implementing, exactly one ready issue starts.
+func TestDecide_ReadyIssuesBeyondTheLimitDoNotLowerTheFreeSlots(t *testing.T) {
+	ready := func(number int) SubIssue { return SubIssue{Number: number, Labels: []string{LabelReady, "risk/low"}} }
 	snapshot := Snapshot{
 		RequirementIssues: []RequirementIssue{
-			{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true}}, CommentsRead: true},
-			{Number: 7, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{{Number: 11, Labels: []string{LabelReady, "risk/low"}}}},
+			{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{
+				{Number: 10, Labels: []string{LabelImplementing, "risk/low"}}, ready(11), ready(12), ready(13),
+			}},
+			{Number: 7, Labels: []string{LabelRequirement, LabelReady}},
 		},
-		Running: map[int]bool{6: true},
+		Running: map[int]bool{7: true, 10: true, 13: true},
+	}
+	starts := 0
+	for _, action := range decideReadyOfOwner(snapshot, 2, nil, nil, time.Time{}, 0) {
+		switch action.(type) {
+		case Claim, Plan:
+			starts++
+		}
+	}
+	if starts != 1 {
+		t.Errorf("%d starts, want 1: one slot of 2 is free, whatever the number of ready issues", starts)
 	}
 	if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
-		t.Errorf("Decide = %+v, want no action while the acceptance check runs", got)
+		t.Errorf("Decide with a limit of 1 = %+v, want no action: the test would pass for a wrong reason", got)
+	}
+}
+
+// A running agent is never touched: with a running agent in each working
+// state, the poll decides no action for that issue, so it sends no request
+// and changes no label.
+func TestDecide_ARunningAgentInEachWorkingStateGetsNoAction(t *testing.T) {
+	requirement := func(status string, subs ...SubIssue) RequirementIssue {
+		return RequirementIssue{Number: 6, Labels: []string{LabelRequirement, status}, SubIssues: subs,
+			CommentsRead: true, StatusRead: true, StatusCounts: true}
+	}
+	sub := func(status string) SubIssue {
+		return SubIssue{Number: 10, Labels: []string{status, "risk/low"}}
+	}
+	tests := []struct {
+		name        string
+		requirement RequirementIssue
+		running     int
+	}{
+		{LabelPlanning, requirement(LabelPlanning), 6},
+		{LabelAccepting, requirement(LabelAccepting, SubIssue{Number: 10, Closed: true}), 6},
+		{LabelImplementing, requirement(LabelImplementing, sub(LabelImplementing)), 10},
+		{LabelReviewing, requirement(LabelImplementing, sub(LabelReviewing)), 10},
+		{LabelMerging, requirement(LabelImplementing, sub(LabelMerging)), 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{tt.running: true}}
+			if got := Decide(snapshot, 5, nil, nil, time.Time{}, 0); len(got) != 0 {
+				t.Errorf("Decide = %+v, want no action while the agent runs", got)
+			}
+		})
 	}
 }
 
@@ -895,8 +942,18 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 		{"a ready requirement issue with an open blocked-by issue does not count", Snapshot{RequirementIssues: []RequirementIssue{
 			{Number: 6, Labels: []string{LabelRequirement, LabelReady}, BlockedBy: open}}}, false},
 		{"planning without an agent counts: the next poll decides its way out", requirement(LabelPlanning), true},
-		{"implementing without an agent does not count", requirement(LabelImplementing, sub(10, LabelImplementing)), false},
-		{"reviewing without an agent does not count", requirement(LabelImplementing, sub(10, LabelReviewing)), false},
+		{"accepting without an agent counts", requirement(LabelAccepting), true},
+		{"implementing without an agent counts", requirement(LabelImplementing, sub(10, LabelImplementing)), true},
+		{"reviewing without an agent counts", requirement(LabelImplementing, sub(10, LabelReviewing)), true},
+		{"merging without an agent counts", requirement(LabelImplementing, sub(10, LabelMerging)), true},
+		{"a closed issue in merging does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Closed: true, Labels: []string{LabelMerging}}), false},
+		{"implementing of another account does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Labels: []string{LabelImplementing}, Implementing: &ImplementingFacts{}}), false},
+		{"reviewing of another account does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Labels: []string{LabelReviewing}, Reviewing: &ReviewingFacts{}}), false},
+		{"merging of another account does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Labels: []string{LabelMerging}, Merging: &MergingFacts{}}), false},
 		{"awaiting-plan-review does not count", requirement(LabelAwaitingPlanReview, sub(10, LabelAwaitingMergeDecision)), false},
 		{"awaiting-decision does not count", requirement(LabelImplementing, sub(10, LabelAwaitingDecision)), false},
 		{"a ready owner task does not count", requirement(LabelImplementing, sub(10, LabelOwnerTask, LabelReady)), false},

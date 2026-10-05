@@ -41,10 +41,10 @@ func endHeldRun(t *testing.T, sc *scene, service *workflow.Service, fail func())
 	service.Wait()
 }
 
-// keptReview polls once, so that the Reviewer of #10 runs, and ends the run
+// afterReviewerRun polls once, so that the Reviewer of #10 runs, and ends the run
 // while the fake GitHub answers as fail sets it. The issue then keeps
 // cumin/status/reviewing with no agent.
-func keptReview(t *testing.T, sc *scene, service *workflow.Service, fail func()) {
+func afterReviewerRun(t *testing.T, sc *scene, service *workflow.Service, fail func()) {
 	t.Helper()
 	if err := service.Poll(context.Background()); err != nil {
 		t.Fatalf("Poll: %v", err)
@@ -95,7 +95,7 @@ func (sc *scene) restartedWith(stopped *workflow.Service) *workflow.Service {
 // exactly one fix request.
 func TestReviewing_ARestartAfterAChangeRequestSendsExactlyOneFixRequest(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES"}}, "risk/low")
-	keptReview(t, sc, stopped, failEveryRead(sc))
+	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/low")
 
 	// The fix request runs outside the poll: the poll returns while the
@@ -138,7 +138,7 @@ func TestReviewing_ARestartAfterAChangeRequestSendsExactlyOneFixRequest(t *testi
 // that follow send nothing more.
 func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
-	keptReview(t, sc, stopped, failEveryRead(sc))
+	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/medium")
 
 	restarted := sc.restartedWith(stopped)
@@ -166,7 +166,7 @@ func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *test
 // either, and the next poll decides the same.
 func TestReviewing_AFailedReadOfTheRequiredChecksChangesNothingAndTheNextPollDecides(t *testing.T) {
 	sc, service := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
-	keptReview(t, sc, service, func() {
+	afterReviewerRun(t, sc, service, func() {
 		sc.fake.FailTimes(http.MethodGet, branchRulesPath, 0, everyTry, http.StatusBadGateway)
 	})
 	assertStillReviewing(t, sc, service, "risk/medium")
@@ -189,7 +189,7 @@ func TestReviewing_AFailedReadOfTheRequiredChecksChangesNothingAndTheNextPollDec
 // sends nothing more.
 func TestReviewing_ARestartWithNoReviewSendsOneSecondRequestThenStops(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{}, "risk/low")
-	keptReview(t, sc, stopped, failEveryRead(sc))
+	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/low")
 
 	restarted := sc.restartedWith(stopped)
@@ -237,7 +237,7 @@ func TestReviewing_ARestartWithNoReviewSendsOneSecondRequestThenStops(t *testing
 // commit whose checks did not run.
 func TestReviewing_ARestartAfterTheHeadMovedGoesBackToTheChecks(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 1}, "risk/low")
-	keptReview(t, sc, stopped, failEveryRead(sc))
+	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/low")
 	// The required check has not reported on the new head, so that the
 	// issue stays in cumin/status/checking.
