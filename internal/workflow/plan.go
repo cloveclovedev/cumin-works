@@ -118,6 +118,14 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 		return fmt.Errorf("R4: read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
 	if a.Again {
+		// Q1: the quota decides before the request is counted, so a limit
+		// does not use up the one second request of the stay.
+		if ok, err := s.quotaAllowsStart(ctx, RowR4, config.RolePlanner, target, a.Number); err != nil || !ok {
+			if err != nil {
+				return fmt.Errorf("R4: issue #%d: %w", a.Number, err)
+			}
+			return nil
+		}
 		req.again, req.count = true, true
 		req.sessionID = s.State.Issue(repository, a.Number).SessionID
 		s.logger().Info("R4: the Planner left no acceptance check comment; the acceptance check is requested again",
@@ -423,6 +431,13 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 			}
 			return
 		case CheckAcceptance:
+			// Q1: the quota decides before the request is counted.
+			if ok, err := s.quotaAllowsStart(ctx, RowR4, config.RolePlanner, target, number); err != nil || !ok {
+				if err != nil {
+					log.Error("R4: the quota was not checked; the next poll decides again", "error", err.Error())
+				}
+				return
+			}
 			if err := s.countPlannerRequest(repository, number, RowR4, 1); err != nil {
 				log.Error("R4: the request was not counted; the next poll decides again", "error", err.Error())
 				return

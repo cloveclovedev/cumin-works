@@ -309,7 +309,7 @@ checkの結果の読み方:
   - Plannerが動いている間は、何もしない。
   - 最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントがあれば、R7 (「ask the Owner to accept」) である。
   - Plannerの質問のコメントが、`cumin/status/accepting` が付いた時刻以降に書かれていれば、「stop the acceptance check for the Owner」である。cuminはコメントを書かず、ラベルを `cumin/status/awaiting-decision` に替えて通知する。
-  - どちらのコメントもなければ、「request the acceptance check again」である。この `cumin/status/accepting` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイルに持つ。依頼し直したあとにもコメントがなければ、ラベルを `cumin/status/awaiting-decision` に替えてから、理由をコメントに書き、通知する。ラベルを替えられなければ、コメントも通知も出さず、状態ファイルの回数も消さない。次の定期確認が、依頼せずに同じ判定をやり直す。
+  - どちらのコメントもなければ、「request the acceptance check again」である。この `cumin/status/accepting` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイルに持つ。依頼し直す前に、利用枠を確かめる (`quotaAllowsStart`。[利用枠の設計](quota.md) の「着手の前の確認」)。定期確認が決めたときも、受け入れの確認の実行の終わりが決めたときも同じである。上限に達していれば、何も依頼せず、回数も数えない。Issueは `cumin/status/accepting` のまま残り、あとの定期確認が同じ判定をやり直す。依頼し直したあとにもコメントがなければ、ラベルを `cumin/status/awaiting-decision` に替えてから、理由をコメントに書き、通知する。ラベルを替えられなければ、コメントも通知も出さず、状態ファイルの回数も消さない。次の定期確認が、依頼せずに同じ判定をやり直す。
   - コメントかラベルの時刻を読めなかったときは、決めない。次の定期確認が決める。
 - 動いているAgentの集合 (`Snapshot.Running`) は、定期確認の最初に、GitHubのどの読み取りよりも前に読む。スナップショットを読んだあとに終わった実行は、自分の終わりを既に決めて、Issueを動かしている。その実行は、この定期確認ではまだ「動いている」ので、定期確認は古いスナップショットから同じ終わりをもう一度決めない (ラベルの付け替え、通知、依頼を二重にしない)。次の定期確認が決める。実行を始めるのは定期確認だけなので、先に読んだ集合から漏れる実行はない。`cumin/status/planning` と `cumin/status/accepting` のどちらの出口も、この順番に頼る。
 - `cumin/status/planning` の出口は、純粋関数 `SplitEnd` が、要求Issueの事実と「Plannerが動いているか」(`Snapshot.Running`) から決める。定期確認も、Plannerの実行の終わりも、同じ関数で決める。そのため、分割の途中でcuminが再起動しても、実行のあとの読み取りが失敗しても、次の定期確認が同じ結果を出す。
