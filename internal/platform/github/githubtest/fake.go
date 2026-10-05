@@ -305,6 +305,9 @@ type Fake struct {
 	// closeOnMerge makes a merge close the issues that the pull request
 	// closes, as CloseIssuesOnMerge set it.
 	closeOnMerge bool
+	// baseModified is how many merges the fake still refuses with 405
+	// "Base branch was modified", as RefuseMergesForBaseBranch set it.
+	baseModified int
 	// permissions are the answers of the permission endpoint, by login, as
 	// SetPermission set them.
 	permissions map[string]Permission
@@ -349,6 +352,15 @@ func (f *Fake) CloseIssuesOnMerge() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.closeOnMerge = true
+}
+
+// RefuseMergesForBaseBranch makes the next merges answer 405 "Base branch
+// was modified. Review and try the merge again.", as GitHub does right
+// after another merge moved the base branch. Nothing is merged.
+func (f *Fake) RefuseMergesForBaseBranch(times int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.baseModified = times
 }
 
 // SetLinkErrors makes the closing link (addCloseIssueReferences) answer
@@ -1514,6 +1526,9 @@ func (f *Fake) serveMerge(w http.ResponseWriter, body []byte, owner, name string
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Pull Request is not mergeable"})
 	case request.SHA != "" && request.SHA != pr.HeadCommit:
 		writeJSON(w, http.StatusConflict, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
+	case f.baseModified > 0:
+		f.baseModified--
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Base branch was modified. Review and try the merge again."})
 	case pr.Conflict:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Pull Request has merge conflicts"})
 	default:
