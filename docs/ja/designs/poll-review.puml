@@ -86,7 +86,7 @@ partition "The way out of cumin/status/reviewing: every poll, and the end of a R
     (count in the state file)) then (no)
       :Count the request in the state file;
       :Ask the Reviewer once more
-      (after a run: the short text in its session;
+      (after a run: the short text in its session,
       at a poll: the whole review request);
     else (yes)
       :Hand back to the Owner (row I5);
