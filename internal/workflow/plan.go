@@ -358,6 +358,8 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			if ok, err := s.quotaAllowsStart(ctx, RowR2, config.RolePlanner, target, number); err != nil || !ok {
 				if err != nil {
 					log.Error("R2: the quota was not checked; the next poll decides again", "error", err.Error())
+				} else {
+					log.Info("R2: the quota is at a limit; a later poll requests the split again")
 				}
 				return
 			}

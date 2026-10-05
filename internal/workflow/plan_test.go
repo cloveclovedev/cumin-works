@@ -733,7 +733,9 @@ func assertSplitWaitsForThePoll(t *testing.T, sc *scene, service *workflow.Servi
 // written, and the issue is not in work. The next poll decides once from
 // the facts on GitHub, and no Planner runs again.
 func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl", holds: true})
+	// The blocked_reason has more than one line, so that the test tells the
+	// whole text from its first line.
+	sc := newScene(t, cliOptions{fixture: "planner-blocked-two-lines.jsonl", holds: true})
 	// No status label on the sub-issue, so that I1 does not start it.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	service := afterPlannerRun(t, sc, func() {
@@ -751,7 +753,7 @@ func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"msg":"R2: the stop after blocked failed for a temporary reason; the next poll decides"`,
-		`"comment":"## Decision needed: which sign-in method does the login screen use?"`,
+		`"comment":"## Decision needed: which sign-in method does the login screen use?\n\nOption A: a password. Option B: a passkey."`,
 	} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s:\n%s", want, sc.logs.String())
