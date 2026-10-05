@@ -621,6 +621,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	}
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
 	s.readImplementingFacts(ctx, log, token, target, settings, &snapshot)
+	s.readReviewingFacts(ctx, log, token, target, settings, &snapshot)
 	s.writeFollowUpNotes(ctx, log, token, target, &snapshot)
 	s.cleanUp(ctx, log, target, snapshot)
 	var errs []error
@@ -708,6 +709,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		case RequestImplementationAgain:
 			sub, _ := snapshot.SubIssue(a.Number)
 			if err := s.requestImplementationAgain(ctx, token, target, settings, sub, snapshot.DefaultBranch, a); err != nil {
+				errs = append(errs, err)
+			}
+		case RequestReviewFix, AskOwnerToMerge, MergeApproved, RequestCause, StopAtRoundLimit, BackToChecks, RequestReviewAgain, StopReview:
+			if err := s.reviewEndAtPoll(ctx, log, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
 		case Claim:

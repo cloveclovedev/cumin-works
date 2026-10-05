@@ -1,16 +1,16 @@
 package workflow
 
-// This file starts the Reviewer and handles the end of its run: I3 (the
-// required checks passed, so the Reviewer reviews the head commit), the
-// check of the review on GitHub after done, and I10 (the Reviewer returned
-// blocked). docs/ja/designs/poll.md, the topic on the Reviewer request.
+// This file starts the Reviewer (I3: the required checks passed, so the
+// Reviewer reviews the head commit) and applies the way out of
+// cumin/status/reviewing, which the poll and the end of a Reviewer run
+// decide with the same pure function (ReviewEnd).
+// docs/ja/designs/poll.md, the topic on the Reviewer request.
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
@@ -37,12 +37,19 @@ type reviewerRequest struct {
 	// requests that follow in the same run (the review fix of I5, the
 	// explanation of the cause of I8) carry the same login.
 	ownerLogin string
+	// again says that the request is "request the review again": the
+	// second request of this stay in cumin/status/reviewing.
+	again bool
+	// cause is the review that the request "request the cause from the
+	// Reviewer" (I8) is about, or nil for a review request.
+	cause *Review
 }
 
 // startReview applies I3: every required check passed on the head commit of
-// the pull request. cumin reads the round from GitHub first, then changes
-// the label to cumin/status/reviewing, then starts the Reviewer; a read
-// that fails changes nothing, and the next poll tries again (principle 3).
+// the pull request. cumin reads the round from GitHub first, writes the
+// start of the stay in the state file, then changes the label to
+// cumin/status/reviewing, then starts the Reviewer; a read that fails
+// changes nothing, and the next poll tries again (principle 3).
 //
 // Round 1 starts a new session. Round 2 and later resume the session of
 // the last Reviewer run of the issue, and name the commit of the last
@@ -52,9 +59,6 @@ type reviewerRequest struct {
 func (s *Service) startReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a StartReview) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
-	if s.Agents == nil {
-		return errors.New("I3: no agent service is configured")
-	}
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
 		return fmt.Errorf("I3: issue #%d is not in the snapshot", a.Number)
@@ -63,23 +67,56 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	if !ok || pr.Number != a.PullRequest {
 		return fmt.Errorf("I3: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
+	req, err := s.reviewRequestOf(ctx, token, target, settings, a.Number, pr)
+	if err != nil {
+		return err
+	}
+	// The stay starts before the label changes, as the stay in
+	// cumin/status/implementing does (startStay): a restart of cumin right
+	// after the label change then finds the head commit of the request, and
+	// not the count of an earlier stay.
+	stored := s.State.Issue(repository, a.Number)
+	stored.ReviewRequests, stored.ReviewHead = 0, pr.HeadCommit
+	if err := s.State.Set(repository, a.Number, stored); err != nil {
+		return fmt.Errorf("I3: keep the start of the review of issue #%d: %w", a.Number, err)
+	}
+	labels := LabelsAfterReview(sub.Labels)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+		return fmt.Errorf("I3: move issue #%d to the review: %w", a.Number, err)
+	}
+	s.logger().Info("I3: the pull request is ready for review",
+		"repository", repository, "issue", a.Number, "pull_request", a.PullRequest,
+		"round", req.review.Round, "labels", labels)
+	s.goReviewer(ctx, target, settings, a.Number, req)
+	return nil
+}
+
+// reviewRequestOf reads what a request to the Reviewer needs, for the pull
+// request as cumin read it: the login of the Reviewer App, the last
+// cumin/status/ready of the issue, which starts the count of the rounds,
+// and the login of the Owner. It changes nothing.
+func (s *Service) reviewRequestOf(ctx context.Context, token string, target Target, settings *RepositorySettings, number int, pr PullRequest) (reviewerRequest, error) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	repository := target.Repository.String()
+	if s.Agents == nil {
+		return reviewerRequest{}, errors.New("I3: no agent service is configured")
+	}
 	reviewer, err := s.Agents.BotLogin(ctx, owner, config.RoleReviewer)
 	if err != nil {
-		return fmt.Errorf("I3: read the login of the Reviewer App: %w", err)
+		return reviewerRequest{}, fmt.Errorf("I3: read the login of the Reviewer App: %w", err)
 	}
-	// The last cumin/status/ready of the issue starts the count of the
-	// rounds. The query of the label times reads one issue when it gets
-	// the number of an implementation issue.
-	times, rate, err := s.GitHub.ReadLabelTimes(ctx, token, owner, repo, a.Number)
+	// The query of the label times reads one issue when it gets the number
+	// of an implementation issue.
+	times, rate, err := s.GitHub.ReadLabelTimes(ctx, token, owner, repo, number)
 	if err != nil {
-		return fmt.Errorf("I3: read the label times of issue #%d: %w", a.Number, err)
+		return reviewerRequest{}, fmt.Errorf("I3: read the label times of issue #%d: %w", number, err)
 	}
-	s.logger().Debug("I3: read the label times", "repository", repository, "issue", a.Number,
+	s.logger().Debug("I3: read the label times", "repository", repository, "issue", number,
 		"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	readyAt := times[a.Number][LabelReady]
-	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	readyAt := times[number][LabelReady]
+	ownerLogin, err := s.readOwnerLogin(ctx, token, target, number)
 	if err != nil {
-		return fmt.Errorf("I3: read the login of the Owner of issue #%d: %w", a.Number, err)
+		return reviewerRequest{}, fmt.Errorf("I3: read the login of the Owner of issue #%d: %w", number, err)
 	}
 	round := ReviewRounds(pr.Reviews, reviewer, readyAt) + 1
 	// An approval of the head commit leaves no diff to name.
@@ -90,7 +127,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	req := reviewerRequest{
 		review: ReviewRequest{
 			Repository:   repository,
-			Issue:        a.Number,
+			Issue:        number,
 			PullRequest:  pr.Number,
 			HeadCommit:   pr.HeadCommit,
 			Round:        round,
@@ -103,45 +140,61 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 		ownerLogin: ownerLogin,
 	}
 	if round > 1 {
-		req.sessionID = s.State.Issue(repository, a.Number).ReviewerSessionID
+		req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
 	}
+	return req, nil
+}
 
-	labels := LabelsAfterReview(sub.Labels)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf("I3: move issue #%d to the review: %w", a.Number, err)
-	}
-	s.logger().Info("I3: the pull request is ready for review",
-		"repository", repository, "issue", a.Number, "pull_request", a.PullRequest,
-		"round", round, "labels", labels)
-	done := s.markInProgress(ctx, repository, a.Number)
+// goReviewer runs one Reviewer request in its own goroutine, so that the
+// poll goes on while the agent works.
+func (s *Service) goReviewer(ctx context.Context, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
+	s.goInWork(ctx, target, number, func(ctx context.Context) {
+		s.runReviewer(ctx, target, settings, number, req)
+	})
+}
+
+// goInWork runs a step of an issue in its own goroutine, and counts the
+// issue as in work until the step ends, so that no poll decides for it.
+func (s *Service) goInWork(ctx context.Context, target Target, number int, step func(context.Context)) {
+	done := s.markInProgress(ctx, target.Repository.String(), number)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
 		defer done()
-		s.runReviewer(ctx, target, settings, a.Number, req)
+		step(ctx)
 	}()
-	return nil
 }
 
 // runReviewer prepares the Reviewer worktree at the head commit and runs
-// one review request to its end.
+// one request to the Reviewer to its end: the review, the review again, or
+// the cause at the round limit (I8).
 //
 // An abnormal end starts the same request once more, in the same work
-// directory and in a new session, as for the Implementer; after the second
-// one, the issue goes to the Owner with the row I3. A blocked result is
-// I10: the issue goes to the Owner at once, without a retry. After done,
-// cumin reads the latest review of the Reviewer on GitHub; when it is not
-// on the head commit with APPROVE or REQUEST_CHANGES, cumin asks once more
-// in the same session, and the second miss stops the issue with the row
-// I5 (the Reviewer requirement, completion).
-//
-// The step after the run (the check of the review, and the stop after
-// blocked) is kept after a temporary failure of GitHub, and a later poll
-// runs it again from its read (keptstep.go).
+// directory and in a new session; after the second one, the issue goes to
+// the Owner with the row of the request. A blocked result is I10: cumin
+// posts the blocked_reason and stops the issue for the Owner at once,
+// without a retry. After done, the end of the run decides as the poll does
+// (endReview): it reads the facts of the way out of cumin/status/reviewing,
+// and ReviewEnd decides. A failed read changes nothing: the issue keeps
+// cumin/status/reviewing, and the next poll decides from the same facts.
 func (s *Service) runReviewer(ctx context.Context, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
-	log := s.logger().With("repository", target.Repository.String(), "issue", number,
+	repository := target.Repository.String()
+	log := s.logger().With("repository", repository, "issue", number,
 		"role", config.RoleReviewer, "pull_request", req.review.PullRequest)
 	role := settings.Settings.Roles[config.RoleReviewer]
+	row := RowI3
+	if req.cause != nil {
+		row = RowI8
+	}
+	// uncount takes back the count of a second request that did not start.
+	uncount := func() {
+		if !req.again {
+			return
+		}
+		if err := s.countReviewRequest(repository, number, -1); err != nil {
+			log.Error(row+": the count of the request that did not start was not taken back", "error", err.Error())
+		}
+	}
 	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
 		Repo:   target.Repository.Name,
@@ -153,17 +206,17 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	// it is; so the worktree of an earlier round goes. The Reviewer writes
 	// nothing there, so nothing is lost (agent-run.md, the work directory).
 	if err := s.Workspace.Remove(ctx, checkout); err != nil {
-		log.Error("I3: the worktree of an earlier round was not removed", "error", err.Error())
+		log.Error(row+": the worktree of an earlier round was not removed", "error", err.Error())
+		uncount()
 		return
 	}
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
 	if err != nil {
-		log.Error("I3: the work directory was not prepared", "error", err.Error())
+		log.Error(row+": the work directory was not prepared", "error", err.Error())
+		uncount()
 		return
 	}
 	req.review.WorkDir = workDir
-	log.Info("I3: requested the review", "round", req.review.Round, "limit", req.review.Limit,
-		"head_commit", req.review.HeadCommit, "resumed", req.sessionID != "")
 	request := agent.StartRequest{
 		Owner:        target.Repository.Owner,
 		Repo:         target.Repository.Name,
@@ -175,17 +228,20 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		Settings:     &role,
 		SessionID:    req.sessionID,
 	}
-	s.reviewRuns(ctx, log, target, settings, number, req, request, false)
-}
+	switch {
+	case req.cause != nil:
+		request.Text = ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, req.review.Limit, workDir)
+		log.Info("I8: requested the explanation of the cause", "resumed", req.sessionID != "")
+	case req.again:
+		request.Text = ReviewAgainRequestText(req.review)
+		log.Warn("I3: no review on the head commit; the Reviewer is asked once more", "round", req.review.Round, "resumed", req.sessionID != "")
+	default:
+		log.Info("I3: requested the review", "round", req.review.Round, "limit", req.review.Limit,
+			"head_commit", req.review.HeadCommit, "resumed", req.sessionID != "")
+	}
 
-// reviewRuns runs one request to the Reviewer to its end, and then the step
-// after the run. missed says that the request asks once more, after a run
-// that left no review on the head commit. See runReviewer.
-func (s *Service) reviewRuns(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, request agent.StartRequest, missed bool) {
-	key := inProgressKey{repository: target.Repository.String(), issue: number}
 	var firstKind agent.EndKind
-	attempt := 1
-	for {
+	for attempt := 1; ; attempt++ {
 		run, err := s.Agents.Start(ctx, request)
 		var abnormal *agent.AbnormalEnd
 		switch {
@@ -193,364 +249,369 @@ func (s *Service) reviewRuns(ctx context.Context, log *slog.Logger, target Targe
 			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
 				"session_id", abnormal.SessionID, "detail", abnormal.Detail, "attempt", attempt)
 			if ctx.Err() != nil {
-				// cumin is stopping. The label stays, and the Owner
-				// restarts the issue with cumin/status/ready.
+				// cumin is stopping. The label stays, and the next start of
+				// cumin decides from the facts on GitHub.
 				return
 			}
 			if attempt < agentAttempts {
-				attempt++
 				firstKind = abnormal.Kind
 				request.SessionID = ""
-				log.Info("I3: the same request runs again in the same work directory", "attempt", attempt)
+				log.Info(row+": the same request runs again in the same work directory", "attempt", attempt+1)
 				continue
 			}
-			s.stopAfterAbnormalEnd(ctx, log, target, settings, RowI3, "Reviewer", number, firstKind, abnormal.Kind)
+			s.stopAfterAbnormalEnd(ctx, log, target, settings, row, "Reviewer", number, firstKind, abnormal.Kind)
 			return
 		case err != nil:
 			log.Error("the agent was not started", "error", err.Error())
+			uncount()
 			return
 		}
 
 		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 		s.quotaAfterRun(ctx, log, target, number, run)
 		s.keepSession(log, target, config.RoleReviewer, number, run.SessionID)
-		// The first try runs here. A try of the kept step runs in a poll.
-		try := &reviewTry{}
 		if run.Result.Result != agent.ResultDone {
-			step := &keptStep{name: "the stop after a blocked review", log: log}
-			step.run = func(ctx context.Context) error {
-				again := try.again
-				try.again = true
-				return s.stopBlockedReview(ctx, log, target, settings, number, run.Result.BlockedReason, again)
+			if req.cause == nil {
+				row = RowI10
 			}
-			s.tryStep(ctx, key, step)
+			s.stopAfterBlocked(ctx, log, target, settings, row, "Reviewer", number, run.Result.BlockedReason)
 			return
 		}
-		step := &keptStep{name: "the check of the review", log: log}
-		step.run = func(ctx context.Context) error {
-			rest, err := s.afterReview(ctx, log, target, settings, number, req, request, run.SessionID, missed, try)
-			try.again = true
-			step.rest = rest
-			return err
-		}
-		s.tryStep(ctx, key, step)
+		s.endReview(ctx, log, target, settings, number, req)
 		return
 	}
 }
 
-// reviewTry is what the step after a Reviewer run keeps from one try to the
-// next.
-type reviewTry struct {
-	// again says that the step ran before: this try is one of the kept step.
-	again bool
-	// lost is the status label of a write of the last try that ended with
-	// a temporary failure. Its answer did not come, so the issue can have
-	// the label. Each try takes it and clears it.
-	lost string
+// endReview decides the end of a Reviewer run that returned done, as the
+// poll does: it reads the issue again with the facts of the way out of
+// cumin/status/reviewing, and applies what ReviewEnd decides. A step that
+// starts an agent (the review fix, the review again, the cause) or the
+// merge runs here, in the goroutine of the run, so the issue stays in work.
+func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
+	token, err := target.Token(ctx)
+	if err != nil {
+		log.Error("I3: no token; the next poll decides the end of the review", "error", err.Error())
+		return
+	}
+	sub, defaultBranch, ok, err := s.reviewingNow(ctx, log, token, target, settings, number)
+	if err != nil || !ok {
+		return
+	}
+	sub.Reviewing.CauseRequested = req.cause != nil
+	action := ReviewEnd(sub, false)
+	if action == nil {
+		log.Info("I3: the end of the review was not decided; the next poll decides", "labels", sub.Labels)
+		return
+	}
+	ownerLogin := func(context.Context, string) (string, error) { return req.ownerLogin, nil }
+	rest, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, defaultBranch, ownerLogin, action)
+	if err != nil {
+		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
+		return
+	}
+	if rest != nil {
+		rest(ctx)
+	}
 }
 
-// stopBlockedReview applies I10: it reads the issue for its labels, and
-// hands it to the Owner with the blocked_reason of the Reviewer. A
-// temporary failure of the read is returned, before anything is written,
-// and the caller keeps the step. A try of the kept step that finds the
-// issue out of cumin/status/reviewing changes nothing.
-func (s *Service) stopBlockedReview(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, reason string, again bool) error {
-	sub, err := s.readSubIssueNow(ctx, log, target, number)
-	if temporary(err) != nil {
-		return err
+// readReviewingFacts adds the facts of the way out of cumin/status/reviewing
+// to each sub-issue of the snapshot that needs them (ReviewNeedsFacts): it
+// reads that issue again, so that the decision judges on the reviews and
+// the labels of this moment. A failed read leaves the facts out, so nothing
+// is decided for that issue in this poll.
+func (s *Service) readReviewingFacts(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
+	for i := range snapshot.RequirementIssues {
+		for j := range snapshot.RequirementIssues[i].SubIssues {
+			sub := &snapshot.RequirementIssues[i].SubIssues[j]
+			if !ReviewNeedsFacts(*sub, snapshot.Running[sub.Number]) {
+				continue
+			}
+			if read, _, ok, err := s.reviewingNow(ctx, log.With("issue", sub.Number), token, target, settings, sub.Number); ok && err == nil {
+				*sub = read
+			}
+		}
 	}
-	if err == nil && again && !slices.Contains(sub.Labels, LabelReviewing) {
-		log.Info("I10: the issue left cumin/status/reviewing while the stop was kept; nothing changes", "labels", sub.Labels)
-		return nil
-	}
-	s.stopBlocked(ctx, log, target, settings, RowI10, "Reviewer", number, reason, labelsNow(sub, err == nil))
-	return nil
 }
 
-// afterReview is the step after a done result of the Reviewer: it reads the
-// issue again, checks the review, and applies the path of that review up to
-// the label change. It returns the rest of the step, which can take long
-// (the fix request of I5, the explanation of I8, the merge of I6, the same
-// request once more), or nil when the step ended.
+// reviewingNow reads one implementation issue again, and only that issue,
+// with the facts that ReviewEnd decides from: the account and the time of
+// the newest cumin/status/reviewing, the decision requests on the issue
+// after it, the last cumin/status/ready, the required checks after an
+// approval, the decision request of the Reviewer on the pull request at the
+// round limit, and what the state file holds for this stay. The string is
+// the default branch.
 //
-// A temporary failure of a call to GitHub (the token, a read, the required
-// checks, a label change) is returned, and the caller keeps the step. The
-// step then runs again from the read. The rest starts only after a try
-// without a failure, so no request is sent twice. Every other failure is
-// logged and ends the step, as before.
-func (s *Service) afterReview(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, request agent.StartRequest, sessionID string, missed bool, try *reviewTry) (func(context.Context), error) {
-	result, sub, pr, ok, err := s.checkReview(ctx, log, target, number, req)
+// The error is the one of a read that failed. The bool is false when the
+// issue is not an open issue in cumin/status/reviewing any more. Nothing is
+// decided in both cases. A label that does not count ends the read, and
+// the Owner is told once.
+func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int) (SubIssue, string, bool, error) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	failed := func(what string, err error) (SubIssue, string, bool, error) {
+		log.Error("the review: "+what+" was not read; the next poll decides", "error", err.Error())
+		return SubIssue{}, "", false, err
+	}
+	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
+	if err != nil {
+		return failed("the issue", err)
+	}
+	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
+	sub := toSubIssue(read.Issue)
+	if !ReviewNeedsFacts(sub, false) {
+		log.Info("the issue is not in cumin/status/reviewing; nothing changes", "labels", sub.Labels)
+		return sub, read.DefaultBranch, false, nil
+	}
+	actor, counts, err := s.readStatusActor(ctx, token, target, number, LabelReviewing, false)
+	if err != nil {
+		return failed("the actor of the newest "+LabelReviewing, err)
+	}
+	facts := &ReviewingFacts{StatusCounts: counts, ReviewingAt: actor.At, Limit: settings.Settings.MaxReviewRounds}
+	sub.Reviewing = facts
+	if !counts {
+		s.tellStatusOfAnother(ctx, log, target, settings, number, LabelReviewing, actor)
+		return sub, read.DefaultBranch, true, nil
+	}
+	if s.Agents == nil {
+		return failed("the login of the Reviewer App", errors.New("no agent service is configured"))
+	}
+	if facts.Reviewer, err = s.Agents.BotLogin(ctx, owner, config.RoleReviewer); err != nil {
+		return failed("the login of the Reviewer App", err)
+	}
+	// cumin-core posts the blocked_reason of the Reviewer, so its decision
+	// request is a question too.
+	askers := []string{facts.Reviewer}
+	if target.Login != nil {
+		core, err := target.Login(ctx)
+		if err != nil {
+			return failed("the login of cumin-core", err)
+		}
+		askers = append(askers, core)
+	}
+	asked, err := s.readComments(ctx, log, token, target, number, facts.ReviewingAt)
+	if err != nil {
+		return failed("the comments of the issue", err)
+	}
+	facts.QuestionAt = QuestionAt(asked, askers...)
+	times, rate, err := s.GitHub.ReadLabelTimes(ctx, token, owner, repo, number)
+	if err != nil {
+		return failed("the label times", err)
+	}
+	log.Debug("read the label times", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	facts.ReadyAt = times[number][LabelReady]
+	stored := s.State.Issue(target.Repository.String(), number)
+	facts.RequestedAgain, facts.RequestedHead = stored.ReviewRequests > 0, stored.ReviewHead
+	pr, ok := sub.LatestPullRequest()
 	if !ok {
-		return nil, temporary(err)
+		log.Error("I3: the pull request of the review is no longer open")
+		return sub, read.DefaultBranch, true, nil
 	}
-	// The issue left cumin/status/reviewing while the step was kept. Only a
-	// label that the last try wrote lets the step go on: its answer was
-	// lost, and what follows the label is still to do. Nothing follows
-	// cumin/status/checking, so that write ends the step.
-	lost := try.lost
-	try.lost = ""
-	if try.again && !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelChecking || !slices.Contains(sub.Labels, lost)) {
-		log.Info("I3: the issue left cumin/status/reviewing while the check of the review was kept; nothing changes", "labels", sub.Labels)
-		return nil, nil
+	if CheckReview(pr, facts.Reviewer) == ReviewApprovedOnHead {
+		// The required checks are a REST call of their own, so only an
+		// approval reads them.
+		required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
+		if err != nil {
+			return failed("the required checks", err)
+		}
+		facts.Required = toRequiredChecks(required)
 	}
-	if pr.HeadCommit != req.review.HeadCommit {
-		return nil, s.headMoved(ctx, log, target, sub, pr, try)
+	if latest, ok := ReviewNeedsExplanation(pr, facts.Reviewer, facts.ReadyAt, facts.Limit); ok {
+		comments, err := s.readComments(ctx, log, token, target, pr.Number, latest.SubmittedAt)
+		if err != nil {
+			return failed("the comments of the pull request", err)
+		}
+		facts.Explanation, facts.Explained = ExplanationOf(comments, facts.Reviewer, latest.SubmittedAt)
 	}
-	switch result {
-	case ReviewApprovedOnHead:
-		log.Info("I3: the Reviewer approved the head commit", "round", req.review.Round)
-		return s.afterApproval(ctx, log, target, settings, number, pr, req.ownerLogin, try)
-	case ReviewChangesRequestedOnHead:
-		return s.afterChangesRequested(ctx, log, target, settings, number, req, sub, pr, sessionID, try)
+	return sub, read.DefaultBranch, true, nil
+}
+
+// readComments reads the comments of an issue or of a pull request since a
+// time.
+func (s *Service) readComments(ctx context.Context, log *slog.Logger, token string, target Target, number int, since time.Time) ([]Comment, error) {
+	read, rate, err := s.GitHub.ReadIssueComments(ctx, token, target.Repository.Owner, target.Repository.Name, number, since)
+	if err != nil {
+		return nil, err
 	}
-	if !missed {
-		log.Warn("I3: no review on the head commit; the Reviewer is asked once more", "round", req.review.Round)
-		request.SessionID = sessionID
-		request.Text = ReviewAgainRequestText(req.review)
+	log.Debug("read the comments", "number", number, "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	comments := make([]Comment, 0, len(read))
+	for _, c := range read {
+		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
+	}
+	return comments, nil
+}
+
+// countReviewRequest changes, in the state file, how many times the review
+// was requested again during this stay in cumin/status/reviewing. delta is
+// 1 before the second request starts, and -1 when that run did not start.
+func (s *Service) countReviewRequest(repository string, number, delta int) error {
+	stored := s.State.Issue(repository, number)
+	stored.ReviewRequests = max(0, stored.ReviewRequests+delta)
+	return s.State.Set(repository, number, stored)
+}
+
+// applyReviewEnd applies one way out of cumin/status/reviewing that
+// ReviewEnd decided, for the poll and for the end of a Reviewer run alike.
+// It changes the label first where the action has one. It returns the rest
+// of the step, which can take long (an agent run, or the merge), or nil
+// when the step ended: the poll runs the rest in a goroutine of its own,
+// and the end of a run runs it in its goroutine.
+//
+// An error says that nothing more happened: the issue keeps
+// cumin/status/reviewing, and the next poll decides again from the same
+// facts. No request, comment, or notification goes out before the label
+// changed, so none goes out twice. ownerLogin gives the login of the Owner
+// for a request to an agent.
+func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, ownerLogin func(ctx context.Context, token string) (string, error), action Action) (func(context.Context), error) {
+	owner, repo := target.Repository.Owner, target.Repository.Name
+	repository := target.Repository.String()
+	number := sub.Number
+	pr, _ := sub.LatestPullRequest()
+	move := func(row, label string) ([]string, error) {
+		labels := ReplaceStatusLabel(sub.Labels, label)
+		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
+			return nil, fmt.Errorf("%s: move issue #%d to %s: %w", row, number, label, err)
+		}
+		return labels, nil
+	}
+	switch a := action.(type) {
+	case StopReview:
+		labels, err := move(a.Row, LabelAwaitingDecision)
+		if err != nil {
+			return nil, err
+		}
+		if !a.Question {
+			log.Warn(a.Row+": the review stops for the Owner", "reason", a.Reason, "retried", a.Retried, "labels", labels)
+			s.stopForOwner(ctx, log, target, settings, stop{
+				row: a.Row, issue: number, labelDone: true, reason: a.Reason,
+				comment: StopNote(a.Row, a.Reason, a.PullRequest, a.Retried),
+			})
+			return nil, nil
+		}
+		log.Info("I10: the Reviewer asked a question; the issue waits for the Owner", "labels", labels)
+		s.notifyOwner(ctx, log.With("row", RowI10), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+			Row:        RowI10,
+			Reason:     "The Reviewer asked a question during the review.",
+			Repository: repository,
+			Subject:    fmt.Sprintf("issue #%d", number),
+			Link:       github.IssueURL(owner, repo, number),
+		})
+	case BackToChecks:
+		labels, err := move(RowI3, LabelChecking)
+		if err != nil {
+			return nil, err
+		}
+		if a.HeadMoved {
+			log.Info("I3: the head commit moved during the review; the issue waits for the checks again",
+				"head_commit", pr.HeadCommit, "labels", labels)
+		} else {
+			log.Info("I6: a required check does not pass on the approved commit; the issue waits for the checks again", "labels", labels)
+		}
+	case AskOwnerToMerge:
+		log.Info("I3: the Reviewer approved the head commit")
+		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr)
+	case StopAtRoundLimit:
+		labels, err := move(RowI8, LabelAwaitingDecision)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("I8: the issue waits for the Owner", "labels", labels, "comment", a.Explanation.URL)
+		s.notifyOwner(ctx, log.With("row", RowI8), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+			Row:        RowI8,
+			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstBodyLine(a.Explanation.Body)),
+			Repository: repository,
+			Subject:    fmt.Sprintf("issue #%d", number),
+			Link:       a.Explanation.URL,
+		})
+	case RequestReviewFix:
+		login, err := ownerLogin(ctx, token)
+		if err != nil {
+			return nil, fmt.Errorf("I5: read the login of the Owner of issue #%d: %w", number, err)
+		}
+		if err := s.startStay(repository, number, false); err != nil {
+			return nil, fmt.Errorf("I5: keep the start of the stay of issue #%d in implementing: %w", number, err)
+		}
+		labels, err := move(RowI5, LabelImplementing)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("I5: the Reviewer requested changes; the issue goes back to the Implementer",
+			"round", a.Round, "limit", sub.Reviewing.Limit, "review", a.Review.URL, "labels", labels)
+		branch := pr.HeadBranch
 		return func(ctx context.Context) {
-			s.reviewRuns(ctx, log, target, settings, number, req, request, true)
+			s.runImplementer(ctx, target, settings, number, implementerRequest{
+				row: "I5", kind: "review fix", branch: branch, pullRequest: pr.Number,
+				sessionID:  s.State.Issue(repository, number).SessionID,
+				ownerLogin: login,
+				text: func(workDir string) string {
+					return ReviewFixRequestText(repository, number, pr.Number, branch, workDir, a.Review.URL)
+				},
+			})
 		}, nil
+	case RequestReviewAgain, RequestCause:
+		req, err := s.reviewRequestOf(ctx, token, target, settings, number, pr)
+		if err != nil {
+			return nil, err
+		}
+		// Both requests go on in the session of the last Reviewer run, which
+		// holds the rounds.
+		req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
+		if cause, ok := a.(RequestCause); ok {
+			log.Info("I8: blocking comments remain at the limit of rounds", "limit", req.review.Limit)
+			req.cause = &cause.Review
+		} else {
+			// The second request has the round of the first one: no review
+			// of this round is on GitHub.
+			req.again = true
+			if err := s.countReviewRequest(repository, number, 1); err != nil {
+				return nil, fmt.Errorf("I3: count the second request of the review of issue #%d: %w", number, err)
+			}
+		}
+		return func(ctx context.Context) { s.runReviewer(ctx, target, settings, number, req) }, nil
+	case MergeApproved:
+		log.Info("I3: the Reviewer approved the head commit")
+		return func(ctx context.Context) {
+			s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, defaultBranch,
+				func(token string) (string, error) { return ownerLogin(ctx, token) },
+				// A try of the kept merge decides again from the facts, and
+				// merges only when the decision is still the merge of this
+				// head commit. Every other decision is left to the next
+				// poll.
+				func(ctx context.Context) (bool, error) {
+					now, _, ok, err := s.reviewingNow(ctx, log, token, target, settings, number)
+					if err != nil || !ok {
+						return false, temporary(err)
+					}
+					head, _ := now.LatestPullRequest()
+					_, merge := ReviewEnd(now, false).(MergeApproved)
+					return merge && head.Number == pr.Number && head.HeadCommit == pr.HeadCommit, nil
+				})
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown way out of the review %T", action)
 	}
-	s.stopForOwner(ctx, log, target, settings, stop{
-		row:     RowI5,
-		issue:   number,
-		labels:  sub.Labels,
-		reason:  MissingReviewReason,
-		comment: StopNote(RowI5, MissingReviewReason, req.review.PullRequest, true),
-	})
 	return nil, nil
 }
 
-// replaceStatus replaces the status label of the issue, for a step that can
-// run again. A label that the issue already has is not written again: an
-// earlier try wrote it. A write that ends with a temporary failure is noted
-// in try, because GitHub can hold it. It returns the new labels.
-func (s *Service) replaceStatus(ctx context.Context, token string, target Target, sub SubIssue, label string, try *reviewTry) ([]string, error) {
-	labels := ReplaceStatusLabel(sub.Labels, label)
-	if slices.Contains(sub.Labels, label) {
-		return labels, nil
+// reviewEndAtPoll applies one way out of cumin/status/reviewing that a poll
+// decided. The rest of the step runs in its own goroutine, and the issue
+// counts as in work until it ends.
+func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token string, target Target, snapshot Snapshot, settings *RepositorySettings, action Action) error {
+	number := ReviewEndIssue(action)
+	sub, _ := snapshot.SubIssue(number)
+	ownerLogin := func(ctx context.Context, token string) (string, error) {
+		return s.readOwnerLogin(ctx, token, target, number)
 	}
-	err := s.GitHub.SetIssueLabels(ctx, token, target.Repository.Owner, target.Repository.Name, sub.Number, labels)
-	if github.IsTemporary(err) {
-		try.lost = label
+	rest, err := s.applyReviewEnd(ctx, log.With("issue", number), token, target, settings, sub, snapshot.DefaultBranch, ownerLogin, action)
+	if err != nil || rest == nil {
+		return err
 	}
-	return labels, err
+	s.goInWork(ctx, target, number, rest)
+	return nil
 }
 
 // MissingReviewReason is the sentence of the stop after the second run
 // without a review on the head commit, for the comment and the
 // notification alike.
 const MissingReviewReason = "The Reviewer reported done twice, but its latest review is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
-
-// checkReview reads the issue again and checks the latest review of the
-// Reviewer on the pull request of the request. The bool is false when the
-// issue or the pull request could not be read; that is logged, and the
-// issue keeps its label. The error is the one of a read that failed.
-func (s *Service) checkReview(ctx context.Context, log *slog.Logger, target Target, number int, req reviewerRequest) (ReviewResult, SubIssue, PullRequest, bool, error) {
-	sub, err := s.readSubIssueNow(ctx, log, target, number)
-	if err != nil {
-		return ReviewMissing, SubIssue{}, PullRequest{}, false, err
-	}
-	pr, ok := sub.LatestPullRequest()
-	if !ok || pr.Number != req.review.PullRequest {
-		log.Error("I3: the pull request of the review is no longer open")
-		return ReviewMissing, sub, PullRequest{}, false, nil
-	}
-	result := CheckReview(pr, req.reviewer)
-	log.Info("I3: checked the review", "result", result.String(), "head_commit", pr.HeadCommit)
-	return result, sub, pr, true, nil
-}
-
-// headMoved handles a head commit that moved while the Reviewer worked, for
-// example when the Owner pushed. Only the old head passed the required
-// checks, so the issue goes back to cumin/status/checking: the checks
-// run on the new head, and I3 (or I4) decides again. A review that the
-// Reviewer gave on the old head stays on GitHub and counts as it is. It
-// returns a temporary failure, for the kept step.
-func (s *Service) headMoved(ctx context.Context, log *slog.Logger, target Target, sub SubIssue, pr PullRequest, try *reviewTry) error {
-	token, err := target.Token(ctx)
-	if err != nil {
-		log.Error("I3: no token; the issue keeps its label", "error", err.Error())
-		return temporary(err)
-	}
-	labels, err := s.replaceStatus(ctx, token, target, sub, LabelChecking, try)
-	if err != nil {
-		log.Error("I3: the label was not changed", "error", err.Error())
-		return temporary(err)
-	}
-	log.Info("I3: the head commit moved during the review; the issue waits for the checks again",
-		"head_commit", pr.HeadCommit, "labels", labels)
-	return nil
-}
-
-// afterChangesRequested decides between I5 and I8 on a review that asked
-// for changes on the head commit. The round is counted again from the
-// reviews that cumin just read, so it is the round of that review.
-//
-// Below max_review_rounds, I5 moves the issue to cumin/status/implementing
-// first (principle 3), then asks the Implementer to fix the comments in the
-// session of its last run, on the branch of the pull request. The end of
-// that run is the end of any Implementer run: I2 verifies it, and the
-// checks and I3 follow. At the limit, I8 asks the Reviewer to explain the
-// cause, in the session of the run that just ended.
-//
-// The request is the rest of the step: the function returns it, and the
-// caller runs it. A temporary failure of the token or of the label change
-// is returned, for the kept step, and nothing is requested.
-func (s *Service) afterChangesRequested(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, sub SubIssue, pr PullRequest, sessionID string, try *reviewTry) (func(context.Context), error) {
-	round := ReviewRounds(pr.Reviews, req.reviewer, req.readyAt)
-	limit := settings.Settings.MaxReviewRounds
-	latest, _ := LatestReview(pr.Reviews, req.reviewer)
-	if !ReviewFixAllowed(round, limit) {
-		log.Info("I8: blocking comments remain at the limit of rounds", "round", round, "limit", limit)
-		return func(ctx context.Context) {
-			s.explainCause(ctx, log, target, settings, number, req, latest, sessionID)
-		}, nil
-	}
-	token, err := target.Token(ctx)
-	if err != nil {
-		log.Error("I5: no token; the issue keeps its label", "error", err.Error())
-		return nil, temporary(err)
-	}
-	repository := target.Repository.String()
-	if err := s.startStay(repository, number, false); err != nil {
-		log.Error("I5: the start of the stay in cumin/status/implementing was not kept; the issue keeps its label", "error", err.Error())
-		return nil, nil
-	}
-	labels, err := s.replaceStatus(ctx, token, target, sub, LabelImplementing, try)
-	if err != nil {
-		log.Error("I5: the label was not changed; nothing is requested", "error", err.Error())
-		return nil, temporary(err)
-	}
-	log.Info("I5: the Reviewer requested changes; the issue goes back to the Implementer",
-		"round", round, "limit", limit, "review", latest.URL, "labels", labels)
-	branch := pr.HeadBranch
-	return func(ctx context.Context) {
-		s.runImplementer(ctx, target, settings, number, implementerRequest{
-			row: "I5", kind: "review fix", branch: branch, pullRequest: pr.Number,
-			sessionID:  s.State.Issue(repository, number).SessionID,
-			ownerLogin: req.ownerLogin,
-			text: func(workDir string) string {
-				return ReviewFixRequestText(repository, number, pr.Number, branch, workDir, latest.URL)
-			},
-		})
-	}, nil
-}
-
-// explainCause applies I8: blocking comments remain at the limit of rounds.
-// The Reviewer writes one decision request on the pull request, in the
-// session that holds the rounds. cumin then looks for a comment of the
-// Reviewer that starts with the heading of a decision request and is not
-// older than the last review; with it, the issue goes to
-// cumin/status/awaiting-decision and the Owner gets one notification
-// that links the comment. The Reviewer wrote the reason, so cumin writes
-// no comment of its own.
-//
-// Without that comment, with a blocked result, or after a second abnormal
-// end, the stop step hands the issue to the Owner with the row I8: the
-// Owner must decide either way. The time of the last review comes from
-// GitHub, as the time of the comment does, so the clock of the Host plays
-// no part.
-func (s *Service) explainCause(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, latest Review, sessionID string) {
-	role := settings.Settings.Roles[config.RoleReviewer]
-	limit := req.review.Limit
-	log.Info("I8: requested the explanation of the cause", "resumed", sessionID != "")
-	request := agent.StartRequest{
-		Owner:        target.Repository.Owner,
-		Repo:         target.Repository.Name,
-		Role:         config.RoleReviewer,
-		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin, ProtectedPaths: settings.ProtectedPaths},
-		Text:         ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, limit, req.review.WorkDir),
-		WorkDir:      req.review.WorkDir,
-		Settings:     &role,
-		SessionID:    sessionID,
-	}
-	var firstKind agent.EndKind
-	for attempt := 1; attempt <= agentAttempts; attempt++ {
-		run, err := s.Agents.Start(ctx, request)
-		var abnormal *agent.AbnormalEnd
-		switch {
-		case errors.As(err, &abnormal):
-			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-				"session_id", abnormal.SessionID, "detail", abnormal.Detail, "attempt", attempt)
-			if ctx.Err() != nil {
-				return
-			}
-			if attempt < agentAttempts {
-				firstKind = abnormal.Kind
-				request.SessionID = ""
-				log.Info("I8: the same request runs again in the same work directory", "attempt", attempt+1)
-				continue
-			}
-			s.stopAfterAbnormalEnd(ctx, log, target, settings, RowI8, "Reviewer", number, firstKind, abnormal.Kind)
-			return
-		case err != nil:
-			log.Error("the agent was not started", "error", err.Error())
-			return
-		}
-		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-		s.keepSession(log, target, config.RoleReviewer, number, run.SessionID)
-		if run.Result.Result != agent.ResultDone {
-			s.stopAfterBlocked(ctx, log, target, settings, RowI8, "Reviewer", number, run.Result.BlockedReason)
-			return
-		}
-		s.handOverExplanation(ctx, log, target, settings, number, req, latest)
-		return
-	}
-}
-
-// handOverExplanation checks the comment of I8 and hands the issue to the
-// Owner. See explainCause.
-func (s *Service) handOverExplanation(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, latest Review) {
-	owner, repo := target.Repository.Owner, target.Repository.Name
-	pullRequest := req.review.PullRequest
-	sub, ok := s.subIssueNow(ctx, log, target, number)
-	if !ok {
-		return
-	}
-	token, err := target.Token(ctx)
-	if err != nil {
-		log.Error("I8: no token; the issue keeps its label", "error", err.Error())
-		return
-	}
-	read, rate, err := s.GitHub.ReadIssueComments(ctx, token, owner, repo, pullRequest, latest.SubmittedAt)
-	if err != nil {
-		log.Error("I8: the comments of the pull request were not read; the issue keeps its label", "error", err.Error())
-		return
-	}
-	log.Debug("I8: read the comments of the pull request", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	comments := make([]Comment, 0, len(read))
-	for _, c := range read {
-		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
-	}
-	explanation, found := ExplanationOf(comments, req.reviewer, latest.SubmittedAt)
-	if !found {
-		s.stopForOwner(ctx, log, target, settings, stop{
-			row:     RowI8,
-			issue:   number,
-			labels:  sub.Labels,
-			reason:  MissingExplanationReason,
-			comment: StopNote(RowI8, MissingExplanationReason, pullRequest, false),
-		})
-		return
-	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
-		// The notification still goes: the Owner must learn that the
-		// review did not end, as in the stop step.
-		log.Error("I8: the label was not changed", "error", err.Error())
-	} else {
-		log.Info("I8: the issue waits for the Owner", "labels", labels, "comment", explanation.URL)
-	}
-	s.notifyOwner(ctx, log.With("row", RowI8), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        RowI8,
-		Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", req.review.Limit, firstBodyLine(explanation.Body)),
-		Repository: target.Repository.String(),
-		Subject:    fmt.Sprintf("issue #%d", number),
-		Link:       explanation.URL,
-	})
-}
 
 // MissingExplanationReason is the sentence of the stop of I8 when the
 // Reviewer wrote no decision request, for the comment and the

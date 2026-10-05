@@ -270,6 +270,50 @@ type SubIssue struct {
 	// were not read: the issue is in another state, its Implementer runs,
 	// or a read failed.
 	Implementing *ImplementingFacts
+	// Reviewing are the facts that decide the way out of
+	// cumin/status/reviewing (ReviewEnd). It is nil when they were not read:
+	// the issue is in another state, its Reviewer runs, or a read failed.
+	Reviewing *ReviewingFacts
+}
+
+// ReviewingFacts is what cumin reads to decide the way out of
+// cumin/status/reviewing for one implementation issue whose Reviewer does
+// not run. The poll and the end of a Reviewer run read the same facts.
+type ReviewingFacts struct {
+	// StatusCounts says that the cumin-core App or an Owner added the
+	// newest cumin/status/reviewing (StatusLabelCounts).
+	StatusCounts bool
+	// ReviewingAt is when cumin/status/reviewing was last added.
+	ReviewingAt time.Time
+	// ReadyAt is when cumin/status/ready was last added: the start of the
+	// count of the rounds.
+	ReadyAt time.Time
+	// QuestionAt is when the newest decision request of the Reviewer App or
+	// of cumin-core was written on the issue, or zero when there is none.
+	QuestionAt time.Time
+	// Reviewer is the login "<slug>[bot]" of the Reviewer App.
+	Reviewer string
+	// RequestedHead is the head commit that the review of this stay was
+	// requested on, from the state file. It is empty when the state file
+	// does not hold it; then no head commit counts as moved.
+	RequestedHead string
+	// RequestedAgain says that the state file holds a second request of
+	// the review during this stay in cumin/status/reviewing.
+	RequestedAgain bool
+	// CauseRequested says that the Reviewer run that just ended was the
+	// request of the cause at the round limit. Only the end of that run
+	// sets it.
+	CauseRequested bool
+	// Required are the checks that the rules of the default branch
+	// require. They are read only after an approval of the head commit.
+	Required []RequiredCheck
+	// Limit is the setting max_review_rounds.
+	Limit int
+	// Explanation is the decision request that the Reviewer wrote on the
+	// pull request after its latest review, and Explained says that there
+	// is one. They are read only at the round limit.
+	Explanation Comment
+	Explained   bool
 }
 
 // ImplementingFacts is what cumin reads to decide the way out of
@@ -551,6 +595,83 @@ type StopImplementation struct {
 	Retried     bool
 }
 
+// RequestReviewFix is the action "request a review fix" (I5): the Reviewer
+// requested changes on the head commit below the round limit, so the issue
+// moves from cumin/status/reviewing to cumin/status/implementing, and the
+// Implementer fixes the comments of Review.
+type RequestReviewFix struct {
+	Number      int
+	PullRequest int
+	Round       int
+	Review      Review
+}
+
+// AskOwnerToMerge is the action "ask the Owner to decide the merge" (I7):
+// the Reviewer approved the head commit, the required checks pass, and the
+// risk is risk/medium or risk/high.
+type AskOwnerToMerge struct {
+	Number      int
+	PullRequest int
+}
+
+// MergeApproved is the merge after an approval with risk/low (I6). It keeps
+// the merge path of the Reviewer run until the state cumin/status/merging
+// exists.
+type MergeApproved struct {
+	Number      int
+	PullRequest int
+}
+
+// RequestCause is the action "request the cause from the Reviewer" (I8):
+// blocking comments remain at the round limit, and the Reviewer wrote no
+// decision request after Review yet.
+type RequestCause struct {
+	Number      int
+	PullRequest int
+	Review      Review
+}
+
+// StopAtRoundLimit is the action "stop at the round limit" (I8): the
+// Reviewer wrote Explanation on the pull request, so the issue moves to
+// cumin/status/awaiting-decision with one notification.
+type StopAtRoundLimit struct {
+	Number      int
+	Explanation Comment
+}
+
+// BackToChecks is the action "go back to the checks": the head commit moved
+// during the review, or a required check does not pass on the approved head
+// commit. The issue moves from cumin/status/reviewing to
+// cumin/status/checking. A review of the old head commit stays, and counts
+// as a round.
+type BackToChecks struct {
+	Number    int
+	HeadMoved bool
+}
+
+// RequestReviewAgain is the action "request the review again": the head
+// commit has no review of the Reviewer. It is sent once for each stay in
+// cumin/status/reviewing.
+type RequestReviewAgain struct {
+	Number      int
+	PullRequest int
+}
+
+// StopReview is the action "stop the review for the Owner" (I10): the
+// implementation issue moves from cumin/status/reviewing to
+// cumin/status/awaiting-decision. With Question, the Reviewer wrote a
+// decision request, and cumin writes no reason of its own. Otherwise Row and
+// Reason are the row and the sentence for the Owner, and Retried says that
+// the review was requested again before.
+type StopReview struct {
+	Number      int
+	Question    bool
+	Row         string
+	Reason      string
+	PullRequest int
+	Retried     bool
+}
+
 // StartRequirement is the action of R3: the Owner let a sub-issue start, so
 // the requirement issue moves to cumin/status/implementing.
 type StartRequirement struct {
@@ -640,6 +761,14 @@ func (FixOwnerReview) isAction()             {}
 func (WaitForChecks) isAction()              {}
 func (RequestImplementationAgain) isAction() {}
 func (StopImplementation) isAction()         {}
+func (RequestReviewFix) isAction()           {}
+func (AskOwnerToMerge) isAction()            {}
+func (MergeApproved) isAction()              {}
+func (RequestCause) isAction()               {}
+func (StopAtRoundLimit) isAction()           {}
+func (BackToChecks) isAction()               {}
+func (RequestReviewAgain) isAction()         {}
+func (StopReview) isAction()                 {}
 
 // Decide returns the actions for the snapshot, in the order to apply them.
 // maxInProgress is the setting "max_issues_in_progress": the number of issues
@@ -668,7 +797,8 @@ func (StopImplementation) isAction()         {}
 // first and take no room.
 //
 // The way out of cumin/status/implementing (ImplementationEnd) starts no
-// new issue, so it takes no room either: its issue already counts.
+// new issue, so it takes no room either: its issue already counts. The same
+// holds for the way out of cumin/status/reviewing (ReviewEnd).
 //
 // I14 also holds for an issue in cumin/status/awaiting-merge-decision. Those
 // actions come after the candidates of I12 and of I13: a review of an Owner
@@ -677,6 +807,7 @@ func (StopImplementation) isAction()         {}
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string, now time.Time, checksWait time.Duration) []Action {
 	actions := requirementMoves(snapshot)
 	actions = append(actions, implementationEnds(snapshot)...)
+	actions = append(actions, reviewEnds(snapshot)...)
 	actions = append(actions, conflictingSubIssues(snapshot)...)
 	actions = append(actions, reviewableSubIssues(snapshot, required)...)
 	actions = append(actions, failedSubIssues(snapshot, required)...)
@@ -706,7 +837,8 @@ func WithoutNewWork(actions []Action) []Action {
 	kept := make([]Action, 0, len(actions))
 	for _, action := range actions {
 		switch action.(type) {
-		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, ResolveConflict, FixOwnerReview, RequestImplementationAgain:
+		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, ResolveConflict, FixOwnerReview, RequestImplementationAgain,
+			RequestReviewFix, RequestCause, RequestReviewAgain:
 		default:
 			kept = append(kept, action)
 		}
@@ -1023,6 +1155,138 @@ func implementationEnds(snapshot Snapshot) []Action {
 	var actions []Action
 	for _, sub := range subs {
 		if action := ImplementationEnd(sub, snapshot.Running[sub.Number]); action != nil {
+			actions = append(actions, action)
+		}
+	}
+	return actions
+}
+
+// ReviewEnd decides the way out of cumin/status/reviewing from the facts on
+// GitHub, for an implementation issue whose Reviewer does not run. The poll
+// and the end of a Reviewer run both decide with it, so a restart of cumin
+// during the run, or a failed read after it, loses nothing. The first case
+// that holds decides:
+//
+//   - A decision request of the Reviewer, written after the issue got
+//     cumin/status/reviewing: stop the review for the Owner. cumin-core
+//     posts the blocked_reason of the Reviewer, so its decision request
+//     counts too.
+//   - The head commit is not the one of the request: go back to the checks.
+//   - APPROVE on the head commit: by DecideMerge, the merge of risk/low, ask
+//     the Owner to decide the merge, go back to the checks, or stop the
+//     review for the Owner (not exactly one risk label).
+//   - REQUEST_CHANGES on the head commit: below the round limit, request a
+//     review fix. At the limit, stop at the round limit when the Reviewer
+//     explained the cause, and request the cause from the Reviewer
+//     otherwise; a request of the cause that left no explanation stops the
+//     review for the Owner.
+//   - No review on the head commit: request the review again, once for each
+//     stay in cumin/status/reviewing. The second time, stop the review for
+//     the Owner.
+//
+// It returns nil while the Reviewer runs, in every other state, for a
+// closed issue, for an issue with no open pull request, while the facts
+// were not read, and while the status label does not count: the next poll
+// decides.
+func ReviewEnd(sub SubIssue, running bool) Action {
+	facts := sub.Reviewing
+	if !ReviewNeedsFacts(sub, running) || facts == nil || !facts.StatusCounts || facts.ReviewingAt.IsZero() {
+		return nil
+	}
+	pr, ok := sub.LatestPullRequest()
+	if !ok {
+		return nil
+	}
+	if !facts.QuestionAt.IsZero() && !facts.QuestionAt.Before(facts.ReviewingAt) {
+		return StopReview{Number: sub.Number, Question: true, Row: RowI10, PullRequest: pr.Number}
+	}
+	if facts.RequestedHead != "" && facts.RequestedHead != pr.HeadCommit {
+		return BackToChecks{Number: sub.Number, HeadMoved: true}
+	}
+	switch CheckReview(pr, facts.Reviewer) {
+	case ReviewApprovedOnHead:
+		switch decision := DecideMerge(sub.Labels, facts.Required, pr.Checks); decision {
+		case MergeNow:
+			return MergeApproved{Number: sub.Number, PullRequest: pr.Number}
+		case MergeAskOwner:
+			return AskOwnerToMerge{Number: sub.Number, PullRequest: pr.Number}
+		case MergeChecksNotPassed:
+			return BackToChecks{Number: sub.Number}
+		default:
+			return StopReview{Number: sub.Number, Row: RowI6, Reason: RiskLabelReason(decision), PullRequest: pr.Number}
+		}
+	case ReviewChangesRequestedOnHead:
+		latest, _ := LatestReview(pr.Reviews, facts.Reviewer)
+		round := ReviewRounds(pr.Reviews, facts.Reviewer, facts.ReadyAt)
+		switch {
+		case ReviewFixAllowed(round, facts.Limit):
+			return RequestReviewFix{Number: sub.Number, PullRequest: pr.Number, Round: round, Review: latest}
+		case facts.Explained:
+			return StopAtRoundLimit{Number: sub.Number, Explanation: facts.Explanation}
+		case facts.CauseRequested:
+			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingExplanationReason, PullRequest: pr.Number}
+		}
+		return RequestCause{Number: sub.Number, PullRequest: pr.Number, Review: latest}
+	}
+	if facts.RequestedAgain {
+		return StopReview{Number: sub.Number, Row: RowI5, Reason: MissingReviewReason, PullRequest: pr.Number, Retried: true}
+	}
+	return RequestReviewAgain{Number: sub.Number, PullRequest: pr.Number}
+}
+
+// ReviewEndIssue returns the number of the implementation issue of an
+// action that ReviewEnd decided, or 0 for another action.
+func ReviewEndIssue(action Action) int {
+	switch a := action.(type) {
+	case RequestReviewFix:
+		return a.Number
+	case AskOwnerToMerge:
+		return a.Number
+	case MergeApproved:
+		return a.Number
+	case RequestCause:
+		return a.Number
+	case StopAtRoundLimit:
+		return a.Number
+	case BackToChecks:
+		return a.Number
+	case RequestReviewAgain:
+		return a.Number
+	case StopReview:
+		return a.Number
+	}
+	return 0
+}
+
+// ReviewNeedsFacts reports whether the way out of cumin/status/reviewing
+// needs the facts of the implementation issue: it is open, in
+// cumin/status/reviewing, and its Reviewer does not run. While the Reviewer
+// runs, nothing is decided, so the poll reads nothing more.
+func ReviewNeedsFacts(sub SubIssue, running bool) bool {
+	return !sub.Closed && statusLabel(sub.Labels) == LabelReviewing && !running
+}
+
+// ReviewNeedsExplanation reports whether the decision needs the decision
+// request of the Reviewer on the pull request: the latest review requests
+// changes on the head commit, at the round limit. It returns that review.
+func ReviewNeedsExplanation(pr PullRequest, reviewer string, readyAt time.Time, limit int) (Review, bool) {
+	if CheckReview(pr, reviewer) != ReviewChangesRequestedOnHead || ReviewFixAllowed(ReviewRounds(pr.Reviews, reviewer, readyAt), limit) {
+		return Review{}, false
+	}
+	return LatestReview(pr.Reviews, reviewer)
+}
+
+// reviewEnds returns the way out of cumin/status/reviewing of every
+// sub-issue that has one (ReviewEnd), lowest issue number first.
+func reviewEnds(snapshot Snapshot) []Action {
+	var subs []SubIssue
+	for _, requirement := range snapshot.RequirementIssues {
+		subs = append(subs, requirement.SubIssues...)
+	}
+	slices.SortFunc(subs, func(a, b SubIssue) int { return a.Number - b.Number })
+	var actions []Action
+	for _, sub := range subs {
+		if action := ReviewEnd(sub, snapshot.Running[sub.Number]); action != nil {
 			actions = append(actions, action)
 		}
 	}
