@@ -1,12 +1,15 @@
 package workflow_test
 
 import (
+	"context"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
@@ -312,6 +315,64 @@ func TestMerging_AnIssueInMergingCountsTowardTheLimit(t *testing.T) {
 		return ok && claim.Number == 11
 	}) {
 		t.Errorf("actions with a limit of 2 = %+v, want the claim of #11: the test would pass for a wrong reason", got)
+	}
+}
+
+// While cumin stops after the current runs, a merge that GitHub refuses
+// for a conflict changes nothing: the merge is sent, the issue keeps
+// cumin/status/merging, and no Implementer starts. After the next start
+// of cumin, one poll requests the conflict resolution.
+func TestMerging_AConflictWhileCuminStopsAfterTheRunsWaitsForTheNextStart(t *testing.T) {
+	sc := mergingScene(t, "risk/low")
+	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theOwner, 30))
+	// The poll still reads MERGEABLE, so the conflict shows only at the
+	// merge.
+	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "MERGEABLE")
+	stopped := sc.service()
+	stopped.PollInterval = 10 * time.Millisecond
+	stopped.StopRequestPath = filepath.Join(t.TempDir(), state.StopRequestFileName)
+	// A request of the start, so that the first poll takes it
+	// (TestStopAfterRuns_ARequestOfTheStartIsKept).
+	if err := state.WriteStopRequest(stopped.StopRequestPath, state.StopRequest{RequestedAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := stopped.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
+		t.Errorf("%d merge requests, want 1: the merge is still sent while cumin stops", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none: the conflict resolution waits for the next start", n)
+	}
+	merging := []string{"risk/low", workflow.LabelMerging}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, merging) {
+		t.Errorf("labels of #10 = %v, want %v", got, merging)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, "/repos/example-org/example-repo/issues/10/labels"); n != 0 {
+		t.Errorf("%d label changes of #10, want none", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
+		t.Errorf("%d comments on #10, want none", n)
+	}
+	if !strings.Contains(sc.logs.String(), `"msg":"the merge conflicts; cumin stops after its runs, and the conflict resolution waits for the next start of cumin"`) {
+		t.Errorf("the log does not say that the conflict resolution waits:\n%s", sc.logs.String())
+	}
+
+	restarted := sc.restartedWith(stopped)
+	sc.pollAndWait(t, restarted)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after the restart, want one conflict resolution", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: conflict resolution") {
+		t.Errorf("the request text is not a conflict resolution:\n%s", text)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 2 {
+		t.Errorf("%d merge requests, want 2: the poll after the restart sends the merge again", n)
 	}
 }
 

@@ -11,7 +11,8 @@ if (Who decides?) then (the end of a Planner run of a split)
     :Read the requirement issue again;
     if (The read failed with
     a temporary failure?) then (yes)
-      :Log only. The label stays.
+      :Log the whole blocked_reason,
+      notify the Owner. The label stays.
       The next poll decides;
       stop
     else (no)
@@ -68,6 +69,12 @@ case (acceptance check)
   :Request the acceptance check.
   No notification;
 case (split again)
+  if (The quota is at a limit?) then (yes)
+    :Change nothing.
+    A later poll decides;
+    stop
+  else (no)
+  endif
   :Count the request
   in the state file;
   :Request the split again

@@ -270,16 +270,19 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 // and a run that a restart of cumin cut off, which the next poll finds.
 // Only a blocked result is not read from GitHub: cumin posts the
 // blocked_reason and stops the issue for the Owner at once. When the read
-// before that stop fails for a temporary reason, cumin only logs: the issue
-// keeps cumin/status/planning, and the next poll decides from the facts.
+// before that stop fails for a temporary reason, cumin writes nothing on
+// GitHub: the log holds the whole blocked_reason, the Owner gets one
+// notification, the issue keeps cumin/status/planning, and the next poll
+// decides from the facts.
 //
 // req.again says that the split was already requested again during this
 // stay in cumin/status/planning. When the facts ask for the second request,
 // it runs here in the same work directory. When every sub-issue is closed,
 // the issue moves to cumin/status/accepting, and the acceptance check runs
 // here. While cumin is stopping, nothing is requested and no label changes.
-// A failed read changes nothing: the issue keeps cumin/status/planning, and
-// the next poll decides.
+// At a quota limit, the second request is not sent and not counted. A
+// failed read changes nothing. In each of these cases the issue keeps
+// cumin/status/planning, and a later poll decides.
 func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, req plannerRequest) {
 	repository := target.Repository.String()
 	again, counted := req.again, req.count
@@ -349,6 +352,13 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 		case Plan:
 			if s.finishing.Load() {
 				log.Info("R2: cumin stops after its runs; the second request of the split waits for the next start of cumin")
+				return
+			}
+			// Q1: the quota decides before the request is counted.
+			if ok, err := s.quotaAllowsStart(ctx, RowR2, config.RolePlanner, target, number); err != nil || !ok {
+				if err != nil {
+					log.Error("R2: the quota was not checked; the next poll decides again", "error", err.Error())
+				}
 				return
 			}
 			if err := s.countPlannerRequest(repository, number, RowR2, 1); err != nil {
@@ -505,17 +515,34 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 	return nil
 }
 
+// PlannerQuestionNotWrittenReason is the sentence of the notification
+// after a blocked result of the Planner whose blocked_reason cumin did not
+// write, because the read of the issue failed for a temporary reason.
+const PlannerQuestionNotWrittenReason = "The Planner asked a question." + notWrittenNote
+
 // stopAfterPlannerBlocked stops the requirement issue for the Owner after a
 // blocked result, on a new read of the requirement issue. comment is the
 // blocked_reason of the Planner.
 //
 // With leave, a temporary failure of the read is returned, and nothing is
-// written: the read comes before every write of the stop, so the issue
-// keeps its label for the next poll. Every other failed read stops the
-// issue without a label change.
+// written on GitHub: the read comes before every write of the stop, so the
+// issue keeps its label for the next poll. cumin keeps nothing for that
+// poll, so the question of the Planner would be lost: the whole
+// blocked_reason goes to the log, and the Owner gets one notification that
+// says so. Every other failed read stops the issue without a label change.
 func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, row, comment string, leave bool) error {
 	requirement, err := s.requirementIssueNow(ctx, log, target, number)
 	if leave && temporary(err) != nil {
+		log = log.With("row", row)
+		log.Error(row+": the issue was not read after blocked; the issue keeps its label, and the blocked_reason was not written on the issue; the whole text is here",
+			"error", err.Error(), "comment", comment)
+		s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+			Row:        row,
+			Reason:     PlannerQuestionNotWrittenReason,
+			Repository: target.Repository.String(),
+			Subject:    fmt.Sprintf("issue #%d", number),
+			Link:       github.IssueURL(target.Repository.Owner, target.Repository.Name, number),
+		})
 		return err
 	}
 	s.stopForOwner(ctx, log, target, settings, stop{
