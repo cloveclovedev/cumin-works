@@ -22,17 +22,14 @@ cuminの動作は、この文書の表を正とする。[cumin本体の要件](.
 | `cumin/status/ready` | 実装Issue、要求Issue | Ownerが「進めてよい」と合図した | Owner |
 | `cumin/status/planning` | 要求Issue | Plannerが分割している | cumin |
 | `cumin/status/implementing` | 実装Issue、要求Issue | 実装Issueでは、Implementerが動いている (修正を含む)。要求Issueでは、sub-issueの実装が進んでいる | cumin |
-| `cumin/status/awaiting-checks` | 実装Issue | Implementerの実行が終わり、必須のcheckの完了を待っている。Agentは動いていない | cumin |
 | `cumin/status/reviewing` | 実装Issue | Reviewerが作業している | cumin |
-| `cumin/status/awaiting-owner-review` | 実装Issue、要求Issue | Ownerが見て承認するのを待っている。実装Issueでは、Pull RequestのmergeをOwnerが判断する。OwnerがGitHubのレビューで承認すると、cuminがmergeする (I12)。要求Issueでは、分割結果と受け入れ | cumin |
-| `cumin/status/awaiting-owner-decision` | 実装Issue、要求Issue | Agentが先に進めない。Ownerの回答を待っている | cumin |
-| `cumin/status/checking` | 実装Issue | GitHubが必須のcheckを動かしている。`cumin/status/awaiting-checks` を置き換える | cumin |
+| `cumin/status/checking` | 実装Issue | GitHubが必須のcheckを動かしている。Agentは動いていない | cumin |
 | `cumin/status/accepting` | 要求Issue | Plannerが、mergeされた結果が要求を満たすかを確かめている | cumin |
 | `cumin/status/merging` | 実装Issue | cuminがPull Requestをmergeし、実装Issueを閉じている | cumin |
-| `cumin/status/awaiting-plan-review` | 要求Issue | Ownerが、分割の結果とsub-issueを確かめるのを待っている。`cumin/status/awaiting-owner-review` を置き換える | cumin |
-| `cumin/status/awaiting-merge-decision` | 実装Issue | OwnerがPull Requestを見て、mergeを決めるのを待っている。`cumin/status/awaiting-owner-review` を置き換える | cumin |
-| `cumin/status/awaiting-acceptance` | 要求Issue | Ownerが、受け入れるか差し戻すかを決めるのを待っている。`cumin/status/awaiting-owner-review` を置き換える | cumin |
-| `cumin/status/awaiting-decision` | 実装Issue、要求Issue | Ownerが答えるのを待っている。`cumin/status/awaiting-owner-decision` を置き換える | cumin |
+| `cumin/status/awaiting-plan-review` | 要求Issue | Ownerが、分割の結果とsub-issueを確かめるのを待っている | cumin |
+| `cumin/status/awaiting-merge-decision` | 実装Issue | OwnerがPull Requestを見て、mergeを決めるのを待っている。OwnerがGitHubのレビューで承認すると、cuminがmergeする | cumin |
+| `cumin/status/awaiting-acceptance` | 要求Issue | Ownerが、受け入れるか差し戻すかを決めるのを待っている | cumin |
+| `cumin/status/awaiting-decision` | 実装Issue、要求Issue | cuminが先に進めない。Ownerが答えるのを待っている | cumin |
 | `risk/low`、`risk/medium`、`risk/high` | 実装Issue | mergeのrisk。Plannerが仮に付け、Ownerが確定する | Planner、Owner |
 | 優先度のラベル (初期値は `cumin/priority/P0` 〜 `cumin/priority/P3`) | 要求Issue、実装Issue | 先に着手してほしい順番。`P0` が最も高い | Owner |
 
@@ -40,7 +37,7 @@ cuminは、実装Issueの `cumin/status/*` と `risk/*` を、そのIssueを閉�
 
 実装Issueであることを表すラベルは作らない。`cumin/type/requirement` の付いたIssueのsub-issueが、実装Issueである。
 
-この表は、cuminが今、対象のリポジトリに作るラベルである。移行の間は、古い名前 (`cumin/status/awaiting-checks`、`cumin/status/awaiting-owner-review`、`cumin/status/awaiting-owner-decision`) と新しい名前の両方がある。cuminが新しい名前で判定するようになり、対象のリポジトリを移し終えたら、古い名前をこの表とcuminから消す。順は「ラベルの移行」の節にある。
+この表は、cuminが対象のリポジトリに作るラベルである。
 
 ## 原則
 
@@ -70,20 +67,20 @@ Agentの結果を決まった形式で受け取る手段として、Claude Code�
 - 人の番の状態: 名前が `awaiting-` で始まる。人が動くまで進まない。今は、どれもOwnerが行う。誰が行うかは、この文書の決まりであり、名前には入れない。
 - 順番を待つ状態: `ready`。Ownerが「進めてよい」と合図し、cuminが空きを待っている。
 
-| 状態 (`cumin/status/` を省く) | 付く対象 | その状態で進むこと | 今のラベル |
-|---|---|---|---|
-| `ready` | 要求Issue、実装Issue | cuminが空きを待つ | `ready` |
-| `planning` | 要求Issue | Plannerが要求を分割する | `planning` |
-| `awaiting-plan-review` | 要求Issue | Ownerが、分割の結果とsub-issueを確かめる | `awaiting-owner-review` |
-| `implementing` | 要求Issue | Agentがsub-issueを進める。要求Issueそのものには、誰も作業しない | `implementing` |
-| `accepting` | 要求Issue | Plannerが、mergeされた結果が要求を満たすかを確かめる | `implementing` (ラベルに出ていない) |
-| `awaiting-acceptance` | 要求Issue | Ownerが、受け入れるか差し戻すかを決める | `awaiting-owner-review` |
-| `implementing` | 実装Issue | Implementerが作業する (修正を含む) | `implementing` |
-| `checking` | 実装Issue | GitHubが必須のcheckを動かす | `awaiting-checks` |
-| `reviewing` | 実装Issue | ReviewerがPull Requestをレビューする | `reviewing` |
-| `awaiting-merge-decision` | 実装Issue | OwnerがPull Requestを見て、mergeを決める | `awaiting-owner-review` |
-| `merging` | 実装Issue | cuminがPull Requestをmergeし、実装Issueを閉じる | `reviewing`、`awaiting-owner-review` (ラベルに出ていない) |
-| `awaiting-decision` | 要求Issue、実装Issue | Ownerが答える。cuminが先に進めない理由は、Issueのコメントにある | `awaiting-owner-decision` |
+| 状態 (`cumin/status/` を省く) | 付く対象 | その状態で進むこと |
+|---|---|---|
+| `ready` | 要求Issue、実装Issue | cuminが空きを待つ |
+| `planning` | 要求Issue | Plannerが要求を分割する |
+| `awaiting-plan-review` | 要求Issue | Ownerが、分割の結果とsub-issueを確かめる |
+| `implementing` | 要求Issue | Agentがsub-issueを進める。要求Issueそのものには、誰も作業しない |
+| `accepting` | 要求Issue | Plannerが、mergeされた結果が要求を満たすかを確かめる |
+| `awaiting-acceptance` | 要求Issue | Ownerが、受け入れるか差し戻すかを決める |
+| `implementing` | 実装Issue | Implementerが作業する (修正を含む) |
+| `checking` | 実装Issue | GitHubが必須のcheckを動かす |
+| `reviewing` | 実装Issue | ReviewerがPull Requestをレビューする |
+| `awaiting-merge-decision` | 実装Issue | OwnerがPull Requestを見て、mergeを決める |
+| `merging` | 実装Issue | cuminがPull Requestをmergeし、実装Issueを閉じる |
+| `awaiting-decision` | 要求Issue、実装Issue | Ownerが答える。cuminが先に進めない理由は、Issueのコメントにある |
 
 - 状態ラベルのないIssue (下書き) は、cuminが扱わない。
 
@@ -95,7 +92,7 @@ cuminは、状態から動作を決める。GitHubでは、triageの権限でも
 | 状態ラベル | 数えるのは、誰が付けたときか |
 |---|---|
 | `cumin/status/ready` | Owner ([cumin本体の要件](../cumin-core.md) の「Owner」)。Ownerの「進めてよい」の合図だからである |
-| ほかの全ての状態ラベル | `cumin-core` のGitHub Appか、Owner。付け替えはcuminが行うものだが、Ownerが手で直すことと、リポジトリを移す手順 (「ラベルの移行」) があるためである |
+| ほかの全ての状態ラベル | `cumin-core` のGitHub Appか、Owner。付け替えはcuminが行うものだが、Ownerが手で直すことがあるためである |
 
 - 数えないアカウントが付けた状態ラベルでは、cuminは何もしない。Agentを起動せず、mergeせず、ラベルも替えない。ログに1回だけ残し、Ownerに1回だけ通知する。同じラベルについて、定期確認のたびに繰り返さない。
 - そのIssueは、Ownerが正しいラベルを付け直すまで進まない。待ち状態の通知 (「tell the Owner that cumin waits」) では、「Ownerなしで進めるIssue」に数えない。
@@ -347,25 +344,6 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 - mergeの前にmainの最新を取り込んでcheckをやり直すこと (I6、I12)。衝突がなく、実装時点の必須のcheckが通っていればmergeする。将来は、rulesetの "Require branches to be up to date before merging" を使う案がある。依存関係のあるIssueは、先のIssueがmergeされてから着手するので、この問題が起きるのは並行して進めた独立のIssueの間だけである。
 - 同じリポジトリを、2つのcuminが同時に動かすこと。「Agentが動いていない」は、1つのcuminの中の事実である。
 
-## ラベルの移行
-
-状態の名前を変えるので、ラベルを次の順に移す。どの時点でも、「ラベルの一覧」の表とcuminが作るラベルは一致する。
-
-1. 新しいラベルを足す。「ラベルの一覧」の表とcuminに、新しい名前を足す。古い名前は残す。
-2. cuminの判定と付け替えを、新しい名前に移す。
-3. 対象のリポジトリを移す。古いラベルの付いた開いているIssueとPull Requestを、新しいラベルに替える。
-4. 古いラベルを消す。「ラベルの一覧」の表とcuminから、古い名前を消す。
-
-| 古い名前 | 新しい名前 |
-|---|---|
-| `awaiting-checks` | `checking` |
-| `awaiting-owner-review` (要求Issue、分割の確認) | `awaiting-plan-review` |
-| `awaiting-owner-review` (要求Issue、受け入れ) | `awaiting-acceptance` |
-| `awaiting-owner-review` (実装Issue) | `awaiting-merge-decision` |
-| `awaiting-owner-decision` | `awaiting-decision` |
-| (なし) | `accepting`、`merging` |
-
 ## まだ確かめていないこと
 
 - `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、公式ドキュメント (permissions-required-for-github-apps) によれば、GitHub Appのtokenで呼べて、要る権限は Metadata: Read-only である。実機では、まだ確かめていない。
-- GitHubは、ラベルの名前を変えても、そのラベルを付けたIssueに付けたままにするか。対象のリポジトリを移す手順 (「ラベルの移行」の3) がこれに頼るなら、公式ドキュメントで確かめる。

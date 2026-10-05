@@ -9,8 +9,7 @@
 #       [--implementer-app <slug>] [--required-check <name>]... [--dry-run]
 #
 # The script asks before it creates a priority label, and creates none without
-# the answer "y". It creates the missing labels of cumin, and asks once before
-# it replaces the old status labels of the open issues and pull requests.
+# the answer "y". It creates the missing labels of cumin.
 # Running the script again with the same arguments changes nothing.
 # It needs only gh (logged in, with the "workflow" scope) and standard tools.
 set -eu
@@ -300,10 +299,7 @@ cumin/type/owner-task|5319E7|The Owner does this work by hand; cumin does not st
 cumin/status/ready|0E8A16|The Owner says: this issue can start
 cumin/status/planning|1D76DB|The Planner splits the requirement
 cumin/status/implementing|1D76DB|The Implementer works on the issue, or the sub-issues are in progress
-cumin/status/awaiting-checks|BFD4F2|The Implementer is done; waiting for the required checks
 cumin/status/reviewing|1D76DB|The Reviewer works on the pull request
-cumin/status/awaiting-owner-review|FBCA04|Waiting for the Owner to review and approve
-cumin/status/awaiting-owner-decision|D93F0B|The agent cannot continue; waiting for a decision of the Owner
 cumin/status/checking|BFD4F2|GitHub runs the required checks
 cumin/status/accepting|1D76DB|The Planner checks the merged work against the requirement
 cumin/status/merging|1D76DB|cumin merges the pull request and closes the issue
@@ -315,27 +311,6 @@ risk/low|C2E0C6|A few lines with an obvious effect; cumin merges
 risk/medium|FEF2C0|Everything else; the Owner merges
 risk/high|F9D0C4|Cannot be undone by a revert; the Owner merges
 LABELS
-}
-
-# new_status_label <old label> <requirement issue: yes|no> <sub-issues> <closed sub-issues>
-# Prints the new status label that replaces an old one: the table of the move
-# of the labels in issue-states.md. A requirement issue whose sub-issues are
-# all closed waits for the acceptance; any other one waits for the plan review.
-# A label that is not an old status label ends the function with status 1.
-new_status_label() {
-  case "$1" in
-    cumin/status/awaiting-checks) echo "cumin/status/checking" ;;
-    cumin/status/awaiting-owner-decision) echo "cumin/status/awaiting-decision" ;;
-    cumin/status/awaiting-owner-review)
-      if [ "$2" != "yes" ]; then
-        echo "cumin/status/awaiting-merge-decision"
-      elif [ "$3" -gt 0 ] && [ "$3" -eq "$4" ]; then
-        echo "cumin/status/awaiting-acceptance"
-      else
-        echo "cumin/status/awaiting-plan-review"
-      fi ;;
-    *) return 1 ;;
-  esac
 }
 
 # create_repository_labels
@@ -365,71 +340,7 @@ create_repository_labels() {
   fi
 }
 
-# move_status_labels
-# Lists the open issues and pull requests that carry an old status label, asks
-# once, and then replaces the label: it adds the new label first and removes
-# the old one after that, so that a failure in between leaves both and a
-# second run finishes the move. Run it only after the installed cumin decides
-# with the new names.
-move_status_labels() {
-  : >"$work/label-moves"
-  for old in cumin/status/awaiting-checks cumin/status/awaiting-owner-decision cumin/status/awaiting-owner-review; do
-    # The list holds issues and pull requests. sub_issues_summary counts the
-    # sub-issues of an issue and the closed ones.
-    # Official: REST "List repository issues" (GET .../issues, 200) returns
-    # the schema "issue", whose sub_issues_summary has the integers total,
-    # completed, and percent_completed (the OpenAPI description of GitHub,
-    # github/rest-api-description, schema "sub-issues-summary").
-    gh api --paginate --method GET "repos/$repo/issues" -f state=open -f labels="$old" -f per_page=100 \
-      --jq '.[] | [.number, (if .pull_request then "pull-request" else "issue" end), (if ([.labels[].name] | index("cumin/type/requirement")) then "yes" else "no" end), (.sub_issues_summary.total // 0), (.sub_issues_summary.completed // 0)] | @tsv' \
-      >"$work/label-holders" </dev/null || die "cannot list the open issues with the label $old"
-    while IFS='	' read -r number kind requirement total closed; do
-      [ -n "$number" ] || continue
-      new="$(new_status_label "$old" "$requirement" "$total" "$closed")" || die "no new label for $old"
-      printf '%s\t%s\t%s\t%s\n' "$number" "$kind" "$old" "$new" >>"$work/label-moves"
-    done <"$work/label-holders"
-  done
-  if [ ! -s "$work/label-moves" ]; then
-    echo "unchanged  no open issue or pull request carries an old status label"
-    return 0
-  fi
-  echo "old        status labels on open issues and pull requests:"
-  while IFS='	' read -r number kind old new; do
-    echo "           #$number ($kind): $old -> $new"
-  done <"$work/label-moves"
-  if [ "$dry_run" -eq 1 ]; then
-    echo "would ask  whether to replace them"
-    return 0
-  fi
-  printf 'Replace these labels in %s? Answer y only when the installed cumin decides with the new names. [y/N] ' "$repo"
-  answer=""
-  # No answer (the end of the input) replaces nothing.
-  IFS= read -r answer || answer=""
-  case "$answer" in
-    y|Y|yes|YES|Yes) ;;
-    *)
-      echo "kept       no label of an issue was replaced"
-      return 0 ;;
-  esac
-  while IFS='	' read -r number kind old new; do
-    gh api -X POST "repos/$repo/issues/$number/labels" -f "labels[]=$new" >/dev/null </dev/null ||
-      die "cannot add the label $new to #$number"
-    # A "/" of the label name is a part of the path, so it is encoded.
-    # Official: REST "Remove a label from an issue" (DELETE
-    # .../issues/{n}/labels/{name}) takes the name as a path parameter. The
-    # page does not speak of a "/" in the name.
-    # Measured on 2026-10-04 on cumin-works: GET .../labels/cumin%2Fstatus%2Fready
-    # returns the label cumin/status/ready, and the DELETE with %2F reaches
-    # this endpoint (the answer names its page). The token of the measurement
-    # may not remove a label, so a DELETE that succeeds is not measured.
-    gh api -X DELETE "repos/$repo/issues/$number/labels/$(printf '%s' "$old" | sed 's|/|%2F|g')" >/dev/null </dev/null ||
-      die "cannot remove the label $old from #$number"
-    echo "replaced   #$number: $old -> $new"
-  done <"$work/label-moves"
-}
-
 create_repository_labels
-move_status_labels
 
 # --- The rulesets ---------------------------------------------------------------
 

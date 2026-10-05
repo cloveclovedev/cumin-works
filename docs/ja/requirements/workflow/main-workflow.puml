@@ -64,7 +64,7 @@ Cumin -> Tracker : check that sub-issues exist and each has a risk
 
 == 3. Check the plan ==
 
-Cumin -> Tracker : change the label of the requirement issue to cumin/status/awaiting-owner-review
+Cumin -> Tracker : change the label of the requirement issue to cumin/status/awaiting-plan-review
 Cumin -> Owner : notify: the split needs a check
 Owner -> Tracker : check the split and the risks (the Owner fixes them if needed)
 Owner -> Tracker : if good, add cumin/status/ready to the implementation issues
@@ -98,7 +98,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   Impl -> Repo : push a branch and open a pull request
   Impl --> Cumin : implementation done (the agent run ended)
   Cumin -> Repo : check that the pull request is open
-  Cumin -> Tracker : change the label to cumin/status/awaiting-checks
+  Cumin -> Tracker : change the label to cumin/status/checking
   Cumin -> Repo : wait until every required check passes (on a failure, ask the Implementer for a fix; on a conflict, ask the Implementer to resolve it; when the checks do not report in time, ask the Owner; with no required check, it passes at once)
   note right of Cumin
     An open pull request alone does not mean the implementation is done.
@@ -117,19 +117,21 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
       Cumin -> Impl : request: fix the comments
       Impl -> Repo : push the fix
       Impl --> Cumin : fix done
-      Cumin -> Tracker : change the label to cumin/status/awaiting-checks
+      Cumin -> Tracker : change the label to cumin/status/checking
       Cumin -> Repo : wait until every required check passes
     end
   end
 
   alt approved, risk/low
-    Cumin -> Repo : merge (I6)
+    Cumin -> Tracker : change the label to cumin/status/merging
+    Cumin -> Repo : merge at the next poll (I6)
     Cumin -> Tracker : close the implementation issue once, when GitHub did not
   else approved, risk/medium or risk/high
-    Cumin -> Tracker : change the label to cumin/status/awaiting-owner-review
+    Cumin -> Tracker : change the label to cumin/status/awaiting-merge-decision
     Cumin -> Owner : notify: the merge needs a decision
     Owner -> Repo : approve the head commit with a review
-    Cumin -> Repo : merge at the next poll (I12)
+    Cumin -> Tracker : change the label to cumin/status/merging (I12)
+    Cumin -> Repo : merge at the next poll
     Cumin -> Tracker : close the implementation issue once, when GitHub did not
     note right of Owner
       To send it back, comment on the pull request and add cumin/status/ready to the implementation issue again.
@@ -138,7 +140,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   else blocking comments left after 3 rounds
     Cumin -> Rev : request: sort out what is not decided
     Rev -> Repo : post a short report for the Owner
-    Cumin -> Tracker : change the label to cumin/status/awaiting-owner-decision
+    Cumin -> Tracker : change the label to cumin/status/awaiting-decision
     Cumin -> Owner : notify: a decision is needed
     Owner -> Repo : answer
     Owner -> Tracker : add cumin/status/ready to the implementation issue again
@@ -156,11 +158,12 @@ end
 note over Cumin, Tracker
   Start: every sub-issue of the requirement issue is closed.
 end note
+Cumin -> Tracker : change the label of the requirement issue to cumin/status/accepting
 Cumin -> Planner : request: check the acceptance
 Planner -> Repo : check each item of Requirements of the requirement issue on the latest main
 Planner -> Tracker : comment the result, the evidence, and the remaining work on the requirement issue
 Planner --> Cumin : check done (the agent run ended)
-Cumin -> Tracker : check that the comment exists, change the label of the requirement issue to cumin/status/awaiting-owner-review
+Cumin -> Tracker : check that the comment exists, change the label of the requirement issue to cumin/status/awaiting-acceptance
 Cumin -> Owner : notify: the requirement can be accepted
 alt accept
   Owner -> Tracker : close the requirement issue (= accepted)
@@ -179,7 +182,7 @@ end
 
 == Exception: an agent cannot go on ==
 
-Cumin -> Tracker : change the label to cumin/status/awaiting-owner-decision
+Cumin -> Tracker : change the label to cumin/status/awaiting-decision
 Cumin -> Owner : notify: blocked, a decision is needed
 Owner -> Tracker : answer
 Owner -> Tracker : add cumin/status/ready to the implementation issue again

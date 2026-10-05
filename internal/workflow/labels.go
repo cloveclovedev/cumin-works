@@ -6,8 +6,7 @@ import "github.com/cloveclovedev/cumin-works/internal/platform/github"
 // repository when it starts, when they are missing: the table "Labels" of
 // docs/ja/requirements/workflow/issue-states.md. The colors are the ones of
 // the cumin-works repository. A test compares the names with the document.
-// Two type labels, fourteen status labels (seven of today and the seven new
-// names of the move of the labels), and three risk labels.
+// Two type labels, eleven status labels, and three risk labels.
 func RepositoryLabels() []github.Label {
 	return []github.Label{
 		{Name: LabelRequirement, Color: "5319E7", Description: "This is a requirement issue"},
@@ -15,10 +14,7 @@ func RepositoryLabels() []github.Label {
 		{Name: LabelReady, Color: "0E8A16", Description: "The Owner says: this issue can start"},
 		{Name: LabelPlanning, Color: "1D76DB", Description: "The Planner splits the requirement"},
 		{Name: LabelImplementing, Color: "1D76DB", Description: "The Implementer works on the issue, or the sub-issues are in progress"},
-		{Name: LabelAwaitingChecks, Color: "BFD4F2", Description: "The Implementer is done; waiting for the required checks"},
 		{Name: LabelReviewing, Color: "1D76DB", Description: "The Reviewer works on the pull request"},
-		{Name: LabelAwaitingOwnerReview, Color: "FBCA04", Description: "Waiting for the Owner to review and approve"},
-		{Name: LabelAwaitingOwnerDecision, Color: "D93F0B", Description: "The agent cannot continue; waiting for a decision of the Owner"},
 		{Name: LabelChecking, Color: "BFD4F2", Description: "GitHub runs the required checks"},
 		{Name: LabelAccepting, Color: "1D76DB", Description: "The Planner checks the merged work against the requirement"},
 		{Name: LabelMerging, Color: "1D76DB", Description: "cumin merges the pull request and closes the issue"},

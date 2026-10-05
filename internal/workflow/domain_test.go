@@ -346,6 +346,14 @@ func TestDecide_R4AndR7(t *testing.T) {
 	}
 	closed := SubIssue{Number: 10, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}}
 	later := SubIssue{Number: 11, Closed: true, ClosedAt: closedAt.Add(2 * time.Hour), Labels: []string{"risk/low"}}
+	// accepting is the requirement issue after cumin moved it to
+	// cumin/status/accepting: R7 is decided only there.
+	accepting := func(checkAt time.Time, subs ...SubIssue) RequirementIssue {
+		r := requirement(checkAt, subs...)
+		r.Labels = []string{LabelRequirement, LabelAccepting}
+		r.StatusRead, r.StatusCounts = true, true
+		return r
+	}
 
 	tests := []struct {
 		name     string
@@ -370,12 +378,13 @@ func TestDecide_R4AndR7(t *testing.T) {
 			return r
 		}()}}, 1, nil},
 		{"R7: a missing follow-up note does not stop it", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
-			r := requirement(closedAt.Add(3*time.Hour), closed, later)
+			r := accepting(closedAt.Add(3*time.Hour), closed, later)
 			r.FollowUpsDone = false
 			return r
 		}()}}, 0, []Action{Accept{Number: 6}}},
-		{"R7: a comment at the same second as the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(2*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
-		{"R7: a comment after the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(3*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+		{"R7: a comment at the same second as the last close", Snapshot{RequirementIssues: []RequirementIssue{accepting(closedAt.Add(2*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+		{"R7: a comment after the last close", Snapshot{RequirementIssues: []RequirementIssue{accepting(closedAt.Add(3*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+		{"in implementing, a comment after the last close does nothing: no rule requests a check there", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(3*time.Hour), closed, later)}}, 1, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
