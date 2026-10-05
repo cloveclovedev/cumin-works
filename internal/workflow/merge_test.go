@@ -54,7 +54,7 @@ func TestCore03_ARiskLowPullRequestIsMergedAndTheIssueCloses(t *testing.T) {
 	sc := approved(t, "risk/low")
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if got := sc.mergeMethod(t); got != "squash" {
 		t.Errorf("merge method = %q, want squash (the default merge_method)", got)
@@ -74,7 +74,7 @@ func TestCore03_ARiskLowPullRequestIsMergedAndTheIssueCloses(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPatch, issue10Path); n != 1 {
 		t.Errorf("%d closes of #10, want 1", n)
 	}
-	for _, want := range []string{`"msg":"I6: merged the pull request"`, `"msg":"I6: closed the issue that GitHub left open after the merge"`} {
+	for _, want := range []string{`"msg":"merged the pull request"`, `"msg":"close the merged issue: closed the issue that GitHub left open after the merge"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -90,7 +90,7 @@ func TestI6_AnIssueThatGitHubClosedIsLeftAsItIs(t *testing.T) {
 	sc.fake.CloseIssuesOnMerge()
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if !sc.fake.Issue(sc.repo, 10).Closed {
 		t.Error("issue #10 is open")
@@ -98,8 +98,8 @@ func TestI6_AnIssueThatGitHubClosedIsLeftAsItIs(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPatch, issue10Path); n != 0 {
 		t.Errorf("%d closes of #10, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I6: GitHub closed the issue"`) {
-		t.Error("the log does not say that GitHub closed the issue")
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
+		t.Errorf("%d merge requests, want 1", n)
 	}
 }
 
@@ -109,7 +109,7 @@ func TestI6_TheMergeMethodOfTheRepositorySettingsIsUsed(t *testing.T) {
 	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "merge_method = \"rebase\"\n"})
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if got := sc.mergeMethod(t); got != "rebase" {
 		t.Errorf("merge method = %q, want rebase", got)
@@ -177,7 +177,7 @@ func TestI6_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 			if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 				t.Errorf("%d merge requests, want none", n)
 			}
-			sc.assertStoppedAtI6(t, workflow.RiskLabelReason(tc.decision))
+			sc.assertStoppedAt(t, workflow.RowI6, workflow.RiskLabelReason(tc.decision))
 		})
 	}
 }
@@ -189,7 +189,7 @@ func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
 	sc.fake.FailNext(http.MethodPut, mergePath, http.StatusMethodNotAllowed)
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	sc.assertStoppedAtI6(t, workflow.MergeFailedReason(21, "status 405: Failure requested by the test"))
 	if sc.fake.Issue(sc.repo, 10).Closed {
@@ -208,16 +208,15 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	sc.fake.SetPermission(theOwner, "admin", "User")
 	service := sc.serviceWithSession(t)
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 2)
 
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one resolution", n)
 	}
-	// The resolution request carries the login of the Owner that the
-	// Reviewer run holds: one read of the actor and one of the permission,
-	// both before the review.
-	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission"); n != 1 {
-		t.Errorf("%d reads of the permission of the Owner, want 1", n)
+	// The login of the Owner is read for the review, and again for the
+	// resolution request, which a later poll sends.
+	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission"); n != 2 {
+		t.Errorf("%d reads of the permission of the Owner, want 2", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -242,8 +241,8 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	if sc.fake.Issue(sc.repo, 10).Closed || len(sc.fake.Comments(sc.repo, 10)) != 0 {
 		t.Error("the conflict closed or commented on #10")
 	}
-	for _, want := range []string{`"msg":"I6: the merge conflicts; the issue goes back to the Implementer"`,
-		`"msg":"I6: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
+	for _, want := range []string{`"msg":"the merge conflicts; the issue goes back to the Implementer"`,
+		`"msg":"merging: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -258,7 +257,7 @@ func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	service := sc.serviceWithSession(t)
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 2)
 
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one resolution", n)
@@ -463,7 +462,7 @@ func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 	sc.fake.FailNext(http.MethodPatch, issue10Path, http.StatusForbidden)
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -471,15 +470,23 @@ func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 	sc.assertStoppedAtI6(t, workflow.CloseFailedReason(21, "status 403: Failure requested by the test"))
 }
 
-// assertStoppedAtI6 checks the stop step of I6 for #10: one comment with
+// assertStoppedAtI6 checks "stop the merge for the Owner" for #10: one comment with
 // the reason, cumin/status/awaiting-decision, and one notification.
 func (sc *scene) assertStoppedAtI6(t *testing.T, reason string) {
+	t.Helper()
+	sc.assertStoppedAt(t, workflow.RowMerging, reason)
+}
+
+// assertStoppedAt checks a stop for the Owner of #10 with the row: one
+// comment with the reason, cumin/status/awaiting-decision, and one
+// notification.
+func (sc *scene) assertStoppedAt(t *testing.T, row, reason string) {
 	t.Helper()
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: I6", "Reason: " + reason, "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: " + row, "Reason: " + reason, "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -488,8 +495,8 @@ func (sc *scene) assertStoppedAtI6(t *testing.T, reason string) {
 		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	messages := sc.messagesExceptQ4()
-	if len(messages) != 1 || !strings.Contains(messages[0], "I6") {
-		t.Errorf("notifications = %v, want one of I6", messages)
+	if len(messages) != 1 || !strings.Contains(messages[0], row+": ") {
+		t.Errorf("notifications = %v, want one of %s", messages, row)
 	}
 }
 

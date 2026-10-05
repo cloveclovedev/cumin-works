@@ -87,11 +87,11 @@ func TestI3_Round1StartsANewSessionAtTheHeadCommit(t *testing.T) {
 	if got.ReviewerSessionID != fixtureSession || got.SessionID != "implementer-session" {
 		t.Errorf("state = %+v, want the new Reviewer session and the Implementer session kept", got)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelReviewing) {
-		t.Errorf("labels of #10 = %v, want cumin/status/reviewing to stay after APPROVE", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
+		t.Errorf("labels of #10 = %v, want cumin/status/merging after APPROVE with risk/low", got)
 	}
 	for _, want := range []string{`"msg":"I3: requested the review"`, `"round":1`, `"resumed":false`,
-		`"msg":"I3: the Reviewer approved the head commit"`} {
+		`"msg":"I6: start the merge: the Reviewer approved the head commit"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -213,7 +213,7 @@ func TestI3_AReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none: the second run left its review", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I3: the Reviewer approved the head commit"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"I6: start the merge: the Reviewer approved the head commit"`) {
 		t.Errorf("the log does not say that the head commit was approved: %s", sc.logs)
 	}
 }

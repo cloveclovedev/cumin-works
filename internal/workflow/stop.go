@@ -50,6 +50,10 @@ const (
 	// RowI12 is the merge after the approval of the Owner: a risk label
 	// that is not exactly one, a merge that failed, or a close that failed.
 	RowI12 = "I12"
+	// RowMerging names the steps in cumin/status/merging, which have no
+	// row code: a merge that GitHub refused for a lasting reason, or a
+	// close after the merge that failed.
+	RowMerging = "merging"
 	// RowI14 is a pull request that conflicts with the default branch
 	// while its issue waits for the checks: a conflict resolution that
 	// left the head where it was.

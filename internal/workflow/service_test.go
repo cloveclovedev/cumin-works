@@ -358,7 +358,7 @@ func (sc *scene) service() *workflow.Service {
 		Location:    sceneZone,
 		// The merge step waits for GitHub to close the issue; the fake
 		// answers at once.
-		CloseWait: time.Millisecond,
+		MergeWait: time.Millisecond,
 	}
 }
 
@@ -2078,27 +2078,23 @@ func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelReviewing}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/reviewing", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelMerging}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/merging after the approval", got)
 	}
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want one Reviewer run", n)
 	}
-	for _, want := range []string{"I3: the pull request is ready for review", "I3: the Reviewer approved the head commit"} {
+	for _, want := range []string{"I3: the pull request is ready for review", "I6: start the merge: the Reviewer approved the head commit"} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log does not say %q: %s", want, sc.logs)
 		}
 	}
-	// The issue leaves checking, so the next poll asks for nothing.
 	// The approval reads the required checks once more, for I6.
-	if err := service.Poll(context.Background()); err != nil {
-		t.Fatalf("second poll: %v", err)
-	}
 	if n := sc.fake.CountRequests(http.MethodGet, branchRulesPath); n != 2 {
 		t.Errorf("%d reads of the required checks, want 2 (I3 and I6)", n)
 	}
-	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
-		t.Errorf("%d label changes, want 1", n)
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
+		t.Errorf("%d label changes, want 2 (to the review, and to the merge)", n)
 	}
 }
 
@@ -2111,8 +2107,8 @@ func TestI3_AnEmptyListOfRequiredChecksPassesAtOnce(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelReviewing) {
-		t.Errorf("labels of #10 = %v, want cumin/status/reviewing", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
+		t.Errorf("labels of #10 = %v, want cumin/status/merging: the review ran and approved", got)
 	}
 }
 

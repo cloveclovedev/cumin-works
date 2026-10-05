@@ -65,8 +65,8 @@ func TestI6_TheApprovalOfTheReviewerReadsOnlyTheIssueOfTheRun(t *testing.T) {
 
 	sc.pollAndWait(t, sc.service())
 
-	if !strings.Contains(sc.logs.String(), `"msg":"I6: merged the pull request"`) {
-		t.Fatal("the log does not say that I6 merged the pull request")
+	if !strings.Contains(sc.logs.String(), `"msg":"I6: start the merge: the Reviewer approved the head commit"`) {
+		t.Fatal("the log does not say that I6 started the merge")
 	}
 	if n := sc.pollQueries(); n != 1 {
 		t.Errorf("%d poll queries, want 1 (the poll; none after the run)", n)

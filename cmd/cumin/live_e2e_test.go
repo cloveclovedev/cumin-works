@@ -573,11 +573,9 @@ func TestLiveE2E(t *testing.T) {
 	pulls := map[int]e2ePull{}
 	var lastClose time.Time
 	for _, number := range []int{low, medium} {
-		last := "reviewing"
-		if number == medium {
-			last = "awaiting-merge-decision"
-		}
-		path := e.checkStatusPath(t, number, []string{"ready", "implementing", "checking", "reviewing"}, last)
+		// Both issues end in merging: I6 starts the merge for risk/low, and
+		// I12 starts it after the approval of the Owner.
+		path := e.checkStatusPath(t, number, []string{"ready", "implementing", "checking", "reviewing"}, "merging")
 		linked := e.linkedPulls(t, number)
 		if len(linked) != 1 {
 			t.Fatalf("issue #%d has the pull requests %v, want exactly one", number, linked)
@@ -714,16 +712,16 @@ func TestLiveE2E(t *testing.T) {
 		"R4: moved the requirement issue to accepting", "R4: requested the Planner", "R7: the requirement issue waits for the acceptance of the Owner"))
 	e.record("Log of the risk/low sub-issue", checkLogOrder(t, lines, e.repo, low,
 		"I1: claimed the issue", "I2: verified the pull request", "I3: the pull request is ready for review",
-		"I3: the Reviewer approved the head commit", "I6: merged the pull request"))
+		"I6: start the merge: the Reviewer approved the head commit", "merged the pull request"))
 	e.record("Log of the risk/medium sub-issue", checkLogOrder(t, lines, e.repo, medium,
 		"I1: claimed the issue", "I2: verified the pull request", "I3: the pull request is ready for review",
 		"I3: the Reviewer approved the head commit", "I7: the merge waits for the Owner",
-		"I12: the Owner approved the head commit", "I12: merged the pull request"))
+		"I12: start the merge: the Owner approved the head commit", "merged the pull request"))
 	// One parent does not tell a squash from a rebase; the log names the
 	// method that cumin asked for.
 	merges := 0
 	for _, line := range lines {
-		if line.Repository == e.repo && (line.Issue == low || line.Issue == medium) && strings.HasSuffix(line.Msg, ": merged the pull request") {
+		if line.Repository == e.repo && (line.Issue == low || line.Issue == medium) && line.Msg == "merged the pull request" {
 			merges++
 			if line.MergeMethod != "squash" {
 				t.Errorf("issue #%d: merged with the method %q, want squash", line.Issue, line.MergeMethod)

@@ -293,8 +293,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 // endReview decides the end of a Reviewer run that returned done, as the
 // poll does: it reads the issue again with the facts of the way out of
 // cumin/status/reviewing, and applies what ReviewEnd decides. A step that
-// starts an agent (the review fix, the review again, the cause) or the
-// merge runs here, in the goroutine of the run, so the issue stays in work.
+// starts an agent (the review fix, the review again, the cause) runs here, in the goroutine of the run, so the issue stays in work.
 func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -462,7 +461,7 @@ func (s *Service) countReviewRequest(repository string, number, delta int) error
 // applyReviewEnd applies one way out of cumin/status/reviewing that
 // ReviewEnd decided, for the poll and for the end of a Reviewer run alike.
 // It changes the label first where the action has one. It returns the rest
-// of the step, which can take long (an agent run, or the merge), or nil
+// of the step, which can take long (an agent run), or nil
 // when the step ended: the poll runs the rest in a goroutine of its own,
 // and the end of a run runs it in its goroutine.
 //
@@ -586,31 +585,12 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			}
 		}
 		return func(ctx context.Context) { s.runReviewer(ctx, target, settings, number, req) }, nil
-	case MergeApproved:
-		log.Info("I3: the Reviewer approved the head commit")
-		return func(ctx context.Context) {
-			s.mergeStep(ctx, log, target, settings, RowI6, sub, pr, defaultBranch,
-				func(token string) (string, error) { return ownerLogin(ctx, token) },
-				// A try of the kept merge decides again from the facts, and
-				// merges only when the decision is still the merge of this
-				// head commit. Every other decision is left to the next
-				// poll.
-				func(ctx context.Context) (bool, error) {
-					// The try can run long after the decision, so it takes a
-					// token of its own.
-					token, err := target.Token(ctx)
-					if err != nil {
-						return false, temporary(err)
-					}
-					now, _, ok, err := s.reviewingNow(ctx, log, token, target, settings, number)
-					if err != nil || !ok {
-						return false, temporary(err)
-					}
-					head, _ := now.LatestPullRequest()
-					_, merge := ReviewEnd(now, false).(MergeApproved)
-					return merge && head.Number == pr.Number && head.HeadCommit == pr.HeadCommit, nil
-				})
-		}, nil
+	case StartMerge:
+		labels, err := move(RowI6, LabelMerging)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("I6: start the merge: the Reviewer approved the head commit", "pull_request", a.PullRequest, "head_commit", pr.HeadCommit, "labels", labels)
 	default:
 		return nil, fmt.Errorf("unknown way out of the review %T", action)
 	}
