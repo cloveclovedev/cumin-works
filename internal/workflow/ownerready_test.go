@@ -199,12 +199,13 @@ func TestOwnerReady_AReadyOfAnotherAccountTakesNoSlot(t *testing.T) {
 	setNotOwnerPermissions(sc)
 	service := sc.service()
 
-	// The run for #11 has no pull request to verify; only its start counts.
+	// The run for #11 leaves no pull request, so its implementation is
+	// requested again once; no run starts for #10.
 	_ = service.Poll(context.Background())
 	service.Wait()
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1 for #11", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 for #11", n)
 	}
 	if got := sc.fake.Issue(sc.repo, 11).Labels; slices.Contains(got, "cumin/status/ready") {
 		t.Errorf("labels of #11 = %v, want no cumin/status/ready: the Owner's ready starts", got)
@@ -229,7 +230,7 @@ func TestOwnerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
 			sc.repo.Issues[10].BlockedBy = []int{9}
 		}},
 		{name: "no free slot", setup: func(sc *scene) {
-			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Another issue", Labels: []string{"cumin/status/implementing", "risk/low"}})
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Another issue", Labels: []string{"cumin/status/reviewing", "risk/low"}})
 		}},
 	}
 	for _, tt := range tests {
@@ -264,8 +265,10 @@ func TestOwnerReady_AStartReadsTheActorAndThePermissionOnce(t *testing.T) {
 
 	sc.pollAndWait(t, sc.service())
 
-	if n := sc.readyActorReads(); n != 1 {
-		t.Errorf("%d reads of the actor of a label, want 1", n)
+	// The end of the run reads the actor of cumin/status/implementing; that
+	// account is cumin-core, so no permission is read for it.
+	if n := sc.readyActorReads(); n != 2 {
+		t.Errorf("%d reads of the actor of a label, want 2: the ready and the label of the run", n)
 	}
 	if n := sc.permissionReads(); n != 1 {
 		t.Errorf("%d reads of a permission, want 1", n)

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
@@ -254,6 +255,7 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 // the review again.
 func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
 	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}})
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	service := sc.serviceWithSession(t)
 
 	sc.pollAndWait(t, service)
@@ -261,7 +263,31 @@ func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one resolution", n)
 	}
-	sc.assertStoppedAtI6(t, workflow.ConflictNotResolvedReason(21))
+	sc.assertStoppedForAConflictThatStays(t)
+}
+
+// headBeforeTheLabel is a commit time of the head of a pull request that
+// is older than every label of a scene.
+var headBeforeTheLabel = time.Unix(1000, 0)
+
+// assertStoppedForAConflictThatStays checks that #10 stopped for the Owner
+// because a conflict resolution left the head commit: one stop note of
+// "stop the implementation for the Owner" (I2), and
+// cumin/status/awaiting-decision.
+func (sc *scene) assertStoppedForAConflictThatStays(t *testing.T) {
+	t.Helper()
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21", "Retried: no"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
+	}
 }
 
 // conflicting is approved with risk/low, and the pull request #21
@@ -386,10 +412,12 @@ func TestI14_UnknownWaitsForALaterPoll(t *testing.T) {
 }
 
 // I14: a resolution that ends with done and leaves the head at the commit
-// that conflicted stops the issue once for the Owner, with the row I14.
-// The polls that follow send nothing more.
+// that conflicted stops the issue once for the Owner: the head commit is
+// older than cumin/status/implementing. The polls that follow send nothing
+// more.
 func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{}, "CONFLICTING")
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	service := sc.serviceWithSession(t)
 
 	for range 3 {
@@ -403,7 +431,7 @@ func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: I14", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}

@@ -49,6 +49,15 @@ type Issue struct {
 	// SplitRequests is how many times cumin has requested the split again
 	// during this stay of a requirement issue in cumin/status/planning.
 	SplitRequests int `json:"split_requests,omitempty"`
+	// ImplementationRequests is how many times cumin has requested the
+	// implementation again during this stay of an implementation issue in
+	// cumin/status/implementing.
+	ImplementationRequests int `json:"implementation_requests,omitempty"`
+	// ConflictResolution says that the request of this stay in
+	// cumin/status/implementing is a conflict resolution. The way out of
+	// that state then stops the issue when the head commit is older than
+	// the label.
+	ConflictResolution bool `json:"conflict_resolution,omitempty"`
 }
 
 // empty reports whether the entry holds nothing, so that Set removes it.

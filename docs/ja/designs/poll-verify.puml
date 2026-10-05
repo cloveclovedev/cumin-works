@@ -1,73 +1,62 @@
 @startuml poll-verify
-' cumin works - the end of a run (I2): the checks after an Implementer run, the kept step after a temporary failure, and the way back to the Owner.
+' cumin works - the way out of cumin/status/implementing: the decision at the end of an Implementer run and at every poll.
 ' Document: poll.md, sections on the end of a run and the way back to the Owner.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
 
 start
-:The Implementer run ends;
-if (Result?) then (done)
-  repeat
-    :Read the issue of the run again
-    (one issue, the facts right after the run);
-    :List the open pull requests of the branch
-    that cumin chose (REST);
-    backward :Keep the step (in memory).
-    The issue stays in work, with its label.
-    A poll 5 minutes later runs it again;
-  repeat while (A call to GitHub of this step failed
-  with a temporary failure? (a read, or
-  the label change below)) is (yes) not (no)
-  :Read the head commit of the worktree;
-  partition "Decision (pure function, no I/O)" {
-    if (An open pull request
-    on the branch?) then (no)
-      :failed: no open pull request;
-    elseif (One by the bot of the
-    Implementer App (<slug>[bot])?) then (no)
-      :failed: another author;
-    elseif (Head commit of the pull request
-    equals the head of the worktree?) then (no)
-      :failed: head commit not pushed;
-    else (yes)
-      :passed; add the link
-      when the issue has none;
-    endif
-  }
-  if (Passed?) then (yes)
-    if (Add the link?) then (yes)
-      :cumin-core adds the link
-      (GraphQL addCloseIssueReferences);
-      :Read the issue of the run again;
-    endif
-  endif
-  if (Passed, and the link is there?) then (yes)
-    :Change the label to cumin/status/checking;
-    stop
-  else (no)
-    :Build the comment
-    (stop-note.md, one sentence for the failed check,
-    or the answer of GitHub);
-  endif
-elseif (blocked) then
-  :The comment is blocked_reason
-  (decision-request.md, written by the agent);
-else (abnormal end)
-  :Retry, then hand it back to the Owner
-  (the next implementation issue of this requirement);
+:The Implementer run ends, or a poll finds an issue in
+cumin/status/implementing with no Implementer running;
+if (The run returned blocked?) then (yes)
+  :Post blocked_reason on the issue,
+  change the label to cumin/status/awaiting-decision,
+  and notify the Owner;
   stop
+else (no: done, abnormal end, or no run in this cumin)
 endif
-
-partition "Hand back to the Owner (the row number is an argument)" {
-  :Comment on the implementation issue;
-  :Change the label to cumin/status/awaiting-decision;
-  :Notify the Owner
-  (the link is the comment; a setting can turn it off);
+:Read the issue again (one issue);
+:Read who added cumin/status/implementing, and when;
+:Read the decision requests after the label,
+the open pull requests of the branch (REST),
+the head commit of the worktree, and the state file;
+if (A read failed, or the label is not
+of cumin-core or of an Owner?) then (yes)
+  :Change nothing.
+  The next poll decides from the same facts;
+  stop
+else (no)
+endif
+partition "Decision (pure function ImplementationEnd, no I/O)" {
+  if (A decision request after the label?) then (yes)
+    :stop the implementation for the Owner
+    (the question is the reason);
+  elseif (The pull request passes the check?
+  (on the branch, by the Implementer App, head pushed)) then (yes)
+    if (The request was a conflict resolution, and
+    the head commit is older than the label?) then (yes)
+      :stop the implementation for the Owner
+      (the conflict is not resolved);
+    else (no)
+      :wait for the checks;
+    endif
+  elseif (Requested again during this stay?
+  (count in the state file)) then (yes)
+    :stop the implementation for the Owner
+    (the failed check, retried once);
+  else (no)
+    :request the implementation again;
+  endif
 }
 note right
-  One failure does not stop the next step.
-  Nothing is rolled back. Failures are logged.
+  wait for the checks: cumin-core adds the closing link
+  when it is missing, then cumin/status/checking.
+  stop: the label changes to cumin/status/awaiting-decision
+  first, then the comment (not for a question), then the
+  notification.
+  request again: the quota decides, the count rises, and the
+  Implementer runs in the kept session. Its end comes back
+  to the top of this diagram.
 end note
 stop
 @enduml

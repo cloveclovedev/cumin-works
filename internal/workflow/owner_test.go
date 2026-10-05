@@ -252,9 +252,10 @@ func TestI12_ACandidateThatDoesNothingLeavesQ4ToNotify(t *testing.T) {
 }
 
 // A conflict of the merge of I12 goes to the Implementer as for I6. A
-// resolution that leaves the head stops the issue with the row I12.
-func TestI12_AConflictThatStaysStopsTheIssueWithTheRowI12(t *testing.T) {
+// resolution that leaves the head stops the implementation for the Owner.
+func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 	sc := awaitingOwner(t)
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
@@ -273,9 +274,9 @@ func TestI12_AConflictThatStaysStopsTheIssueWithTheRowI12(t *testing.T) {
 		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I12") ||
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I2") ||
 		!strings.Contains(comments[0].Body, workflow.ConflictNotResolvedReason(21)) {
-		t.Errorf("comments of #10 = %+v, want one stop note of I12", comments)
+		t.Errorf("comments of #10 = %+v, want one stop note of the conflict that stays", comments)
 	}
 }
 

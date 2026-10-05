@@ -165,7 +165,7 @@ func TestQ1_TheEndOfARunAtALimitNotifiesOnce(t *testing.T) {
 // Q1 stops new starts only: a check fix (I4) goes on over a limit, and
 // makes no minimal run.
 func TestQ1_ACheckFixGoesOnOverALimitWithoutAMinimalRun(t *testing.T) {
-	sc := newScene(t, cliOptions{commit: true})
+	sc := newScene(t)
 	sc.setQuota(t, 0.99, sceneNow.Add(time.Hour), 0.99, sceneNow.Add(time.Hour))
 	service := sc.service()
 	sc.failingCheck(t, service, 0)
