@@ -380,19 +380,22 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, target 
 		log.Error(row+": the login of the Owner was not read; the issue keeps its label", "error", err.Error())
 		return
 	}
+	repository := target.Repository.String()
+	if err := s.startStay(repository, sub.Number, true); err != nil {
+		log.Error(row+": the start of the stay in cumin/status/implementing was not kept; the issue keeps its label", "error", err.Error())
+		return
+	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
 		log.Error(row+": the label was not changed; nothing is requested", "error", err.Error())
 		return
 	}
 	log.Info(row+": the merge conflicts; the issue goes back to the Implementer", "pull_request", pr.Number, "labels", labels)
-	repository := target.Repository.String()
 	branch := pr.HeadBranch
 	s.runImplementer(ctx, target, settings, sub.Number, implementerRequest{
 		row: row, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, sub.Number).SessionID,
 		ownerLogin: login,
-		conflict:   true,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)
 		},
@@ -431,6 +434,9 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	if err != nil {
 		return fmt.Errorf("I14: read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
+	if err := s.startStay(repository, a.Number, true); err != nil {
+		return fmt.Errorf("I14: keep the start of the stay of issue #%d in cumin/status/implementing: %w", a.Number, err)
+	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 		return fmt.Errorf("I14: move issue #%d back to the Implementer: %w", a.Number, err)
@@ -445,7 +451,6 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 		row: RowI14, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, a.Number).SessionID,
 		ownerLogin: ownerLogin,
-		conflict:   true,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, a.Number, pr.Number, branch, workDir, defaultBranch)
 		},
@@ -614,6 +619,9 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return false, fmt.Errorf("I13: read the login of the Owner of issue #%d: %w", a.Number, err)
+	}
+	if err := s.startStay(repository, a.Number, false); err != nil {
+		return false, fmt.Errorf("I13: keep the start of the stay of issue #%d in cumin/status/implementing: %w", a.Number, err)
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {

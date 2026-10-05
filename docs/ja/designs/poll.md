@@ -365,7 +365,7 @@ checkの結果の読み方:
 - 着手 (I1) は、ラベルを替えたあと、worktreeの用意からAgentの実行の終わりまでを、定期確認とは別のgoroutineで進める。定期確認とAgentの実行は並行して走り、定期確認は実行を待たない。1回の実行は最長50分続くので、待つと、その間に他のリポジトリの定期確認も、他のIssueの着手も止まる。
 - goroutineはIssueごとに1つである。同時に走る数は、着手の判定が数える進行中のIssueの数 (「定期確認の判定」) で決まる。実行中のIssueの集合は、ラベルから分かるので手元に持たない。
 - 依頼の種類は、I1の「実装」と「続き」、I4の「checkの修正」、I5の「指摘の修正」、I13の「Ownerのレビューへの対応」、I6、I12、I14の「衝突の解消」である。どれも同じ手順 (worktreeの用意、起動、実行の終わりの判定) を通り、違うのは行の番号、ブランチ、再開するセッション、依頼文だけである。Reviewerの依頼は、同じ形の別の手順である (「Reviewerへの依頼 (I3、I10)」)。
-- worktreeの用意に失敗したときは、Issueの番号を添えてログに出して、そのgoroutineを終える。ラベルは `cumin/status/implementing` のまま残る。cuminを止めたときに取り消された `git clone` の失敗も、Agentの異常終了ではなく、この用意の失敗として扱う (実測 96)。辻褄の合わないIssueの回収は、v0.1では作らない ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
+- worktreeの用意に失敗したときは、Issueの番号を添えてログに出して、そのgoroutineを終える。ラベルは `cumin/status/implementing` のまま残り、次の定期確認が実装を依頼し直す (「実行終了の判定」)。依頼し直した実行でも用意に失敗したら、Ownerに戻す。Issueを `cumin/status/implementing` に残し続けないためである。cuminを止めたときに取り消された `git clone` の失敗も、Agentの異常終了ではなく、この用意の失敗として扱う (実測 96)。辻褄の合わないIssueの回収は、v0.1では作らない ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「v0.1では実装しないこと」)。
 - 実行の終わりが、実行終了のきっかけになる (原則1)。判定は次の話題にある。
 - cuminがすぐに止まるときは、動いている実行を待ってから終わる。実行のcontextは定期確認のcontextなので、止めると実行は異常終了 (種類は「実行時間の上限」) になる。実行を待ってから止めるときは、contextを終わらせないので、実行は自分で終わる。
 - 採らなかった案: 実行の終わりを、別の仕組み (キュー、ファイル) に記録して、次の定期確認で拾う。実行はcuminの子プロセスなので、終わりはその場で分かる (原則1)。記録を挟むと、失っても困らないはずの手元の状態が増える。
@@ -524,13 +524,14 @@ checkの結果の読み方:
   - そのラベルの時刻よりあとのコメント。質問として数えるのは、ImplementerのAppか、cumin-coreのAppが書いた決定の依頼である。Implementerの `blocked_reason` は、cumin-coreがコメントに書くためである。
   - ブランチの開いているPull Request。実行の終わりでは、その実行のブランチである。定期確認では、着手のときと同じ決め方のブランチである (`ClaimBranch`)。
   - worktreeの先頭のコミット。Hostにworktreeがなければ空で、確認は通らない。
-  - Hostの状態ファイル: この `cumin/status/implementing` の間に依頼し直した回数 (`implementation_requests`) と、依頼が衝突の解消かどうか (`conflict_resolution`)。どちらも、新しい依頼で `cumin/status/implementing` に入るたびに書き直す。
+  - Hostの状態ファイル: この `cumin/status/implementing` の間に依頼し直した回数 (`implementation_requests`) と、依頼が衝突の解消かどうか (`conflict_resolution`)。どちらも、ラベルを `cumin/status/implementing` に替える場所で、ラベルを替える前に書き直す (`startStay`)。着手 (I1) は状態ファイルを消し、checkの修正 (I4) は回数と同じ書き込みで書き、指摘の修正 (I5)、衝突の解消 (I6、I12、I14)、Ownerのレビューへの対応 (I13) も同じ場所で書く。ラベルを替えた直後にcuminが再起動しても、前の `cumin/status/implementing` の回数が残らないためである。書けなければ、ラベルを替えず、依頼もしない。
 - `ImplementationEnd` は、次の順で決める。
   - ラベルよりあとに質問のコメントがあれば、「stop the implementation for the Owner」である。ラベルを `cumin/status/awaiting-decision` に替えて、通知する。コメントは書かない。
   - Pull Requestが確認を通り、依頼が衝突の解消で、先頭のコミットの時刻がラベルの時刻より前なら、「stop the implementation for the Owner」である。衝突の解消が先頭のコミットを変えなかったので、同じ衝突でレビューを繰り返さない。行の番号はI2である。
   - Pull Requestが確認を通れば、「wait for the checks」である。リンクがなければ付けて、ラベルを `cumin/status/checking` に替える。
-  - 確認を通らず、まだ依頼し直していなければ、「request the implementation again」である。この `cumin/status/implementing` の間に1回だけである。利用枠の判定 (Q1) は、回数を数える前に行う。上限に達していれば、依頼も数えることもせず、次の定期確認がやり直す。利用枠の上限に当たった実行を、やり直しに数えないためである。回数は、依頼し直す実行が始まる直前に数え、Agentを起動できなかったときは戻す。実行の終わりでは、同じ実行の中で、同じworktreeで、同じ依頼文で依頼し直す。定期確認では、Pull Requestがあれば「続き」、なければ「実装」の依頼文で依頼する。どちらも、状態ファイルにImplementerのセッションがあれば、その続きから始める。cuminが止まる途中なら、依頼し直さない。
+  - 確認を通らず、まだ依頼し直していなければ、「request the implementation again」である。この `cumin/status/implementing` の間に1回だけである。利用枠の判定 (Q1) は、回数を数える前に行う。上限に達していれば、依頼も数えることもせず、次の定期確認がやり直す。利用枠の上限に当たった実行を、やり直しに数えないためである。回数は、実行の終わりでは依頼し直す実行が始まる直前に、定期確認ではworktreeを用意する前に数え、Agentを起動できなかったときは戻す。実行の終わりでは、同じ実行の中で、同じworktreeで、同じ依頼文で依頼し直す。定期確認では、Pull Requestがあれば「続き」、なければ「実装」の依頼文で依頼する。状態ファイルが衝突の解消と言い、Pull Requestがあれば、実行の終わりと同じく「衝突の解消」の依頼文で依頼する。どちらも、状態ファイルにImplementerのセッションがあれば、その続きから始める。cuminが止まる途中なら、依頼し直さない。
   - 確認を通らず、依頼し直したあとなら、「stop the implementation for the Owner」である。落ちた確認の文をコメントに書く (`Retried: once`)。
+- worktreeを用意できなかった依頼は、Agentに何も送らない。最初の依頼で用意できなければ、何も替えず、次の定期確認が上の判定で依頼し直す。定期確認が依頼し直した実行でも用意できなければ、その場で「stop the implementation for the Owner」にする (`stopForWorkDirectory`)。コメントには、用意できなかったことと `Retried: once` を書く。エラーの文は、Hostのパスを含みうるので、コメントには書かず、Hostのログに出す。3回目の依頼は送らない。
 - Ownerに戻すときは、ラベルを先に替える。替えられなければ、コメントも通知も出さず、状態ファイルの回数も消さない。次の定期確認が、依頼せずに同じ判定をやり直す。
 - `blocked` だけは、GitHubから読まずに、`blocked_reason` をcuminがコメントに書いてOwnerに戻す。そのあとのラベルの付け替えが失敗したときは、次の定期確認が、そのコメントを質問として読み、ラベルを替える。
 - Pull Requestの確認は、I2の3つで、この順で行う。そのブランチに、ImplementerのAppの開いているPull Requestがあること。そのPull Requestの作成者が、ImplementerのAppのbot (`<slug>[bot]`) であること。Pull Requestの先頭のコミット (`headRefOid`) が、worktreeの先頭のコミットと同じであること (最後のコミットがpushされている)。
@@ -585,7 +586,7 @@ checkの結果の読み方:
 - `blocked` のときのコメントは、Agentが返した `blocked_reason` をそのまま載せる。Agentが [decision-request.md](../../../templates/decision-request.md) の形式で書いているためである。通知には、その1行目 (Ownerに決めてほしいこと) を入れる。やり直さない (Issueのラベルと状態遷移の、Implementerが `blocked` を返したときの決まり)。
 - ラベルを替えるには、そのIssueの今のラベルが要る。`blocked` の道では、実行終了のあとにそのIssueを読み直して取る。読み取れなければ、ラベルを替えずにログに出す。状態ラベルだけを書き込むと、riskのラベルが消えるためである。
 - 通知を出すかどうかは、そのリポジトリの設定 `notify.discord.enabled` で決まる。通知の失敗は error のログに出すだけである ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
-- Implementerの異常終了は、この手順を直接は呼ばない。`ImplementationEnd` が、依頼し直したあとにもPull Requestが確認を通らないと決めたときに、落ちた確認の1文と、依頼し直したこと (`Retried: once`) と、確かめたPull Requestの番号をコメントに書く (「実行終了の判定」)。異常終了の種類は、コメントには書かず、Hostのログに出す。
+- Implementerの異常終了は、この手順を直接は呼ばない。`ImplementationEnd` が、依頼し直したあとにもPull Requestが確認を通らないと決めたときに、落ちた確認の1文と、依頼し直したこと (`Retried: once`) と、確かめたPull Requestの番号をコメントに書く (「実行終了の判定」)。同じ実行の中で、異常終了に続いてOwnerに戻すときは、その異常終了の種類 (実行時間の上限など) を理由の文の終わりに足す。Ownerがどこから調べるかを知るためである。再起動のあとの定期確認が戻すときは、種類はHostのログにだけある。
 - Reviewerの異常終了のときは、同じ依頼を同じ作業場所で1回だけやり直す ([Agentの実行の設計](agent-run.md) の「異常終了のやり直し」)。2回目も異常終了なら、この手順でOwnerに戻す。コメントには、異常終了の種類と、やり直したことを書く。Agentが残したPull Requestがあれば、その番号も書く。作業がGitHubまで届いたかどうかを、Ownerが先に知れるためである。
 
 ### 定期確認が続けて失敗したとき

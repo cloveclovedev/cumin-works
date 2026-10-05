@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
@@ -254,5 +255,169 @@ func TestImplementing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testin
 	}
 	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of an Owner"); n != 1 {
 		t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
+	}
+}
+
+// withoutARemote returns a service on the scene whose remote repository
+// does not exist, so that no work directory can be prepared, with the state
+// file at path.
+func (sc *scene) withoutARemote(t *testing.T, path string) *workflow.Service {
+	t.Helper()
+	service := sc.service()
+	service.State = state.Open(path, nil)
+	service.Targets[0].RemoteURL = filepath.Join(t.TempDir(), "no-remote.git")
+	return service
+}
+
+// restarted returns a new service on the scene with the state file at path,
+// as a restart of cumin gives it.
+func (sc *scene) restarted(path string) *workflow.Service {
+	service := sc.service()
+	service.State = state.Open(path, nil)
+	return service
+}
+
+// The start of a stay is written where the label changes. A check fix
+// changes the label while the state file holds the second request of the
+// earlier stay, and cumin stops before the Implementer starts (here: the
+// work directory is not prepared). The new cumin still sends the one second
+// request of the new stay, and does not stop the issue.
+func TestImplementing_ARestartRightAfterACheckFixStillSendsOneSecondRequest(t *testing.T) {
+	sc := newScene(t)
+	path := filepath.Join(t.TempDir(), "state.json")
+	stopped := sc.withoutARemote(t, path)
+	sc.failingCheck(t, stopped, 0)
+	stopped.State = state.Open(path, nil)
+	if err := stopped.State.Set("example-org/example-repo", 10, state.Issue{SessionID: "earlier-session", ImplementationRequests: 1}); err != nil {
+		t.Fatal(err)
+	}
+	sc.pollAndWait(t, stopped)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelImplementing) {
+		t.Fatalf("labels of #10 = %v, want cumin/status/implementing after the check fix", got)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs before the restart, want none", n)
+	}
+
+	sc.pollAndWait(t, sc.restarted(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs after the restart, want one second request", n)
+	}
+	if !strings.Contains(sc.logs.String(), "the implementation is requested again") {
+		t.Errorf("the log does not say that the implementation is requested again:\n%s", sc.logs.String())
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
+	}
+}
+
+// A work directory that cannot be prepared sends no request. The next poll
+// requests the implementation again, and the second failure stops the
+// implementation for the Owner with the reason. The polls that follow send
+// nothing more.
+func TestImplementing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheIssue(t *testing.T) {
+	sc := newScene(t)
+	service := sc.withoutARemote(t, filepath.Join(t.TempDir(), "state.json"))
+
+	for range 4 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if n := strings.Count(sc.logs.String(), `: the work directory was not prepared"`); n != 2 {
+		t.Errorf("%d tries to prepare the work directory, want 2: no third request", n)
+	}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	reason := workflow.WorkDirectoryReason()
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"## Stopped for the Owner", "Reason: " + reason, "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
+	}
+}
+
+// A restart of cumin during a conflict resolution whose pull request fails
+// the check: the state file says that the stay is a conflict resolution, so
+// the second request of the poll is the conflict resolution again.
+func TestImplementing_ARestartDuringAConflictResolutionRequestsTheResolutionAgain(t *testing.T) {
+	sc := conflictingBeforeChecks(t, cliOptions{}, "CONFLICTING")
+	path := filepath.Join(t.TempDir(), "state.json")
+	sc.pollAndWait(t, sc.withoutARemote(t, path))
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelImplementing) {
+		t.Fatalf("labels of #10 = %v, want cumin/status/implementing after the conflict", got)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs before the restart, want none", n)
+	}
+
+	sc.pollAndWait(t, sc.restarted(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after the restart, want one second request", n)
+	}
+	wantDir := filepath.Join(sc.workRoot, "example-org", "example-repo", "10-implementer")
+	want := workflow.ConflictResolutionRequestText("example-org/example-repo", 10, 21, wantBranch, wantDir, "main")
+	if got := promptOf(t, sc.record(t, "agent.args")); !strings.HasSuffix(got, "\n\n"+want) {
+		t.Errorf("the request text after the restart = %q, want %q", got, want)
+	}
+}
+
+// The stop after a second abnormal end names the kind of that end, so that
+// the Owner knows where to look.
+func TestImplementing_TheStopAfterASecondAbnormalEndNamesItsKind(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "is-error.jsonl"})
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2", n)
+	}
+	reason := workflow.AfterAbnormalEndReason(workflow.VerificationReason(workflow.FailureNoOpenPullRequest), agent.EndError)
+	if !strings.Contains(reason, "error reported by the CLI") {
+		t.Errorf("the reason %q does not name the kind of the end", reason)
+	}
+	assertStopped(t, sc, reason, 0, "once")
+}
+
+// A run that hit the quota limit does not use up the second request: the
+// quota decides before the request is counted, so the issue keeps
+// cumin/status/implementing with a count of zero.
+func TestImplementing_ARunThatHitTheQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc := newScene(t)
+	// The minimal run passes; the agent run reports a weekly usage of 0.51
+	// (done.jsonl) against a target of 50, and leaves no pull request.
+	sc.setQuota(t, 0.10, sceneNow.Add(time.Hour), 0.10, sceneNow.Add(time.Hour))
+	sc.quota.Weekly.Target = 50
+	service := sc.service()
+	service.State = state.Open(filepath.Join(t.TempDir(), "state.json"), nil)
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).ImplementationRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	want := []string{"risk/low", workflow.LabelImplementing}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
 	}
 }

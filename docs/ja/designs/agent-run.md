@@ -120,7 +120,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - 見直す合図: 異常終了が頻発して、やり直しの利用枠が目立つようになったとき。種類ごとに分ける (結果の形式だけが誤っていたときは再開する、など) 案がある。
 - cuminが止まるとき (contextの取り消し) の異常終了は、やり直さない。新しい実行を始めずに終わり、ラベルも変えない ([cumin本体の設計メモ](cumin-core.md) の「止め方」)。
 - Reviewerでは、2回目も異常終了なら、呼び出し処理がIssueをOwnerに戻す ([定期確認の設計](poll.md) の「うまくいかなかったときに、Ownerに戻す道」)。ImplementerとPlannerでは、依頼し直したあとにも結果がなければ、Ownerに戻す。
-- Reviewerのやり直した回数は、1回の依頼の中の値である。手元のファイルにも、サービスの状態にも持たない。ImplementerとPlannerの依頼し直しの回数は、Hostの状態ファイルに持つ (Implementerは `implementation_requests`、Plannerは `split_requests` と `acceptance_requests`)。再起動のあとの定期確認も、同じ回数から決めるためである。Implementerの回数は、新しい依頼で `cumin/status/implementing` に入るたびに0に戻す。
+- Reviewerのやり直した回数は、1回の依頼の中の値である。手元のファイルにも、サービスの状態にも持たない。ImplementerとPlannerの依頼し直しの回数は、Hostの状態ファイルに持つ (Implementerは `implementation_requests`、Plannerは `split_requests` と `acceptance_requests`)。再起動のあとの定期確認も、同じ回数から決めるためである。Implementerの回数は、ラベルを `cumin/status/implementing` に替える場所で、ラベルを替える前に0に戻す。
 
 ### 実行時間の上限
 
