@@ -105,9 +105,6 @@ type Service struct {
 	inProgress map[inProgressKey]bool
 	// started counts the runs that cumin started. progressMu guards it.
 	started int
-	// keptSteps holds the steps after an agent run that wait for their next
-	// try (keptstep.go). progressMu guards it.
-	keptSteps map[inProgressKey]*keptStep
 	// startedAt is when Run started. A stop request from before it is
 	// for an earlier process (stopafterruns.go). Only Run and its polls use it.
 	startedAt time.Time
@@ -287,8 +284,7 @@ func (s *Service) stopGrace() time.Duration {
 	}
 }
 
-// inProgressIssues returns the issues whose agent is running or whose step
-// after the run is kept, as
+// inProgressIssues returns the issues whose agent is running, as
 // "<owner>/<repo>#<number>", in a fixed order.
 func (s *Service) inProgressIssues() []string {
 	s.progressMu.Lock()
@@ -302,8 +298,7 @@ func (s *Service) inProgressIssues() []string {
 }
 
 // markInProgress records that the agent of an issue is running, and
-// returns the function that removes it when the run ends. An issue whose
-// step after the run is kept stays: the kept step removes it when it ends.
+// returns the function that removes it when the run ends.
 //
 // After the stop signal the entry stays, even when the run ends at once
 // because its CLI follows SIGTERM. The issue keeps
@@ -322,20 +317,14 @@ func (s *Service) markInProgress(ctx context.Context, repository string, issue i
 	return func() { s.endRun(ctx, key) }
 }
 
-// endRun removes an issue from the set of issues in work when its run ends.
-// See markInProgress for the two cases that leave the entry.
+// endRun removes an issue from the set of issues in work when its run ends,
+// and wakes Run. See markInProgress for the case that leaves the entry.
 func (s *Service) endRun(ctx context.Context, key inProgressKey) {
 	s.progressMu.Lock()
 	defer s.progressMu.Unlock()
-	if ctx.Err() != nil || s.keptSteps[key] != nil {
+	if ctx.Err() != nil {
 		return
 	}
-	s.endInProgress(key)
-}
-
-// endInProgress removes an issue from the set of issues in work, and wakes
-// Run. The caller holds progressMu.
-func (s *Service) endInProgress(key inProgressKey) {
 	// The note comes first, so that a poll never sees neither the run
 	// nor its end.
 	s.noteRunEnded(key.repository)
@@ -411,8 +400,6 @@ func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
 	var all pollResult
 	finishing := s.stopRequested()
-	// The kept steps come first, so that the poll reads what they wrote.
-	s.runKeptSteps(ctx)
 	for _, target := range s.Targets {
 		// The stop signal came while this poll was running. Start nothing
 		// more: the requests that are going on are the ones to wait for.

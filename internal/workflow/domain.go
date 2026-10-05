@@ -56,13 +56,8 @@ type Snapshot struct {
 	// DefaultBranch is the branch whose rules name the required checks.
 	DefaultBranch     string
 	RequirementIssues []RequirementIssue
-	// Running are the issues whose agent runs in this cumin now, or whose
-	// step after the run is kept. A label shows most of them; an acceptance
-	// check (R4) keeps the label of the requirement issue, so only this
-	// shows that its Planner runs. A kept step whose label change reached
-	// GitHub without an answer leaves the issue in
-	// cumin/status/checking, so the rules of that label skip a
-	// running issue.
+	// Running are the issues whose agent runs in this cumin now. The rules
+	// of a working label skip a running issue: its run decides its own end.
 	Running map[int]bool
 }
 
@@ -1631,6 +1626,16 @@ func statusOfAnother(requirement RequirementIssue) bool {
 	return requirement.StatusRead && !requirement.StatusCounts
 }
 
+// subStatusOfAnother reports whether the facts of the working label of a
+// sub-issue were read, and say that another account than cumin-core or an
+// Owner added that label. No rule moves such an issue. Facts that were not
+// read do not say it.
+func subStatusOfAnother(sub SubIssue) bool {
+	return sub.Implementing != nil && !sub.Implementing.StatusCounts ||
+		sub.Reviewing != nil && !sub.Reviewing.StatusCounts ||
+		sub.Merging != nil && !sub.Merging.StatusCounts
+}
+
 // readyOfOwner reports whether the newest cumin/status/ready was read and
 // is the Owner's. R1 and I1 hold only then (issue-states.md, the ready of
 // the Owner).
@@ -1972,17 +1977,15 @@ func sameLabels(a, b []string) bool {
 	return slices.Equal(slices.Compact(a), slices.Compact(b))
 }
 
-// inProgress counts the issues that fill the limit: open sub-issues in
-// implementing, checking, reviewing, or merging, and requirement issues in
-// planning or accepting. A requirement issue in implementing (R3) has no
-// agent of its own, so it does not count.
+// inProgress counts the issues that fill the limit, by their working label
+// only: open sub-issues in implementing, checking, reviewing, or merging,
+// and requirement issues in planning or accepting. A requirement issue in
+// implementing (R3) has no agent of its own, so it does not count. An issue
+// with cumin/status/ready never counts, also when the running set names it.
 func inProgress(snapshot Snapshot) int {
 	n := 0
 	for _, requirement := range snapshot.RequirementIssues {
-		// A requirement issue whose Planner runs under another label counts
-		// by the running set.
-		if slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting) ||
-			snapshot.Running[requirement.Number] {
+		if slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting) {
 			n++
 		}
 		for _, sub := range requirement.SubIssues {
@@ -2043,22 +2046,33 @@ func subIssueCandidates(snapshot Snapshot) []Claim {
 // MovesWithoutOwner reports whether an issue exists that cumin moves on
 // without the Owner, so that cumin is not waiting (issue-states.md, the
 // table under Q4): an open sub-issue that waits for the required checks,
+// an issue in planning, implementing, reviewing, accepting, or merging,
 // or a ready issue that can start and waits only for room under the limit.
 // A ready issue with an open blocked-by issue, a ready issue whose ready
 // another account than the Owner added, a status label that another account
-// than cumin-core or an Owner added, an issue that waits for the Owner,
-// and an issue whose agent no longer runs do not count. A ready that was
-// not read counts: the poll reads it when a slot is free.
+// than cumin-core or an Owner added, and an issue that waits for the Owner
+// do not count. A ready that was not read counts: the poll reads it when a
+// slot is free.
 func (s Snapshot) MovesWithoutOwner() bool {
 	if s.HasIssueChecking() {
 		return true
 	}
-	// The next poll decides the way out of cumin/status/planning and of
-	// cumin/status/accepting from the facts, also when no Planner runs.
+	// The next poll decides the way out of a working label from the facts,
+	// also when no agent runs.
 	for _, requirement := range s.RequirementIssues {
 		if (slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting)) &&
 			!statusOfAnother(requirement) {
 			return true
+		}
+		for _, sub := range requirement.SubIssues {
+			if sub.Closed || subStatusOfAnother(sub) {
+				continue
+			}
+			for _, label := range []string{LabelImplementing, LabelReviewing, LabelMerging} {
+				if slices.Contains(sub.Labels, label) {
+					return true
+				}
+			}
 		}
 	}
 	for _, plan := range requirementCandidates(s) {

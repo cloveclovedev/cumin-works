@@ -269,8 +269,9 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 // GitHub. So every end is the same case: a done result, an abnormal end,
 // and a run that a restart of cumin cut off, which the next poll finds.
 // Only a blocked result is not read from GitHub: cumin posts the
-// blocked_reason and stops the issue for the Owner at once. That stop is
-// kept when it ends with a temporary failure of GitHub (keptstep.go).
+// blocked_reason and stops the issue for the Owner at once. When the read
+// before that stop fails for a temporary reason, cumin only logs: the issue
+// keeps cumin/status/planning, and the next poll decides from the facts.
 //
 // req.again says that the split was already requested again during this
 // stay in cumin/status/planning. When the facts ask for the second request,
@@ -301,9 +302,9 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			s.quotaAfterRun(ctx, log, target, number, run)
 			if run.Result.Result != agent.ResultDone {
 				log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
-				s.runAndKeep(ctx, log, target, number, "the stop after blocked", func(ctx context.Context) error {
-					return s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.end, run.Result.BlockedReason, true)
-				})
+				if err := s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.end, run.Result.BlockedReason, true); err != nil {
+					log.Warn("R2: the stop after blocked failed for a temporary reason; the next poll decides", "reason", err.Error())
+				}
 				return
 			}
 		}
@@ -504,26 +505,17 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 	return nil
 }
 
-// runAndKeep runs a step after a Planner run, and keeps it when it ends
-// with a temporary failure of GitHub. The first try runs here. A try of the
-// kept step runs in a poll.
-func (s *Service) runAndKeep(ctx context.Context, log *slog.Logger, target Target, number int, name string, run func(ctx context.Context) error) {
-	step := &keptStep{name: name, log: log, run: run}
-	s.tryStep(ctx, inProgressKey{repository: target.Repository.String(), issue: number}, step)
-}
-
 // stopAfterPlannerBlocked stops the requirement issue for the Owner after a
 // blocked result, on a new read of the requirement issue. comment is the
 // blocked_reason of the Planner.
 //
-// With keep, a temporary failure of the read is returned, and the caller
-// keeps the step. The step then runs again from the read. The read comes
-// before every write of the stop, so the kept step wrote nothing yet: it
-// always posts the decision request, whatever the label is now. Every other
-// failed read stops the issue without a label change, as before.
-func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, row, comment string, keep bool) error {
+// With leave, a temporary failure of the read is returned, and nothing is
+// written: the read comes before every write of the stop, so the issue
+// keeps its label for the next poll. Every other failed read stops the
+// issue without a label change.
+func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, row, comment string, leave bool) error {
 	requirement, err := s.requirementIssueNow(ctx, log, target, number)
-	if keep && temporary(err) != nil {
+	if leave && temporary(err) != nil {
 		return err
 	}
 	s.stopForOwner(ctx, log, target, settings, stop{

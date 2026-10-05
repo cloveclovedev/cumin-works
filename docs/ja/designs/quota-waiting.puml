@@ -22,7 +22,7 @@ if (the poll of every repository succeeded?) then (no)
   stop
 else (yes)
 endif
-if (an issue that cumin moves on without the Owner\nexists in any repository?\n(checking, or ready and waiting\nonly for room under the limit)) then (yes)
+if (an issue that cumin moves on without the Owner\nexists in any repository?\n(checking, a working label,\nor ready and waiting\nonly for room under the limit)) then (yes)
   :no notification;\nthe mark stays as it is;
   stop
 else (no)

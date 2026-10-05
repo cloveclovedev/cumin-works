@@ -8,12 +8,14 @@ skinparam defaultFontName sans-serif
 start
 if (Who decides?) then (the end of a Planner run of a split)
   if (Result?) then (blocked)
-    repeat
-      :Read the requirement issue again;
-      backward :Keep the step (in memory).
-      A poll 5 minutes later runs it again;
-    repeat while (The read failed with
-    a temporary failure?) is (yes) not (no)
+    :Read the requirement issue again;
+    if (The read failed with
+    a temporary failure?) then (yes)
+      :Log only. The label stays.
+      The next poll decides;
+      stop
+    else (no)
+    endif
     :Comment blocked_reason, change the label to
     cumin/status/awaiting-decision, notify the Owner;
     stop

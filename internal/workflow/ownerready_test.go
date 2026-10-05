@@ -385,7 +385,9 @@ func TestReadyActorReads_NamesTheStartCandidatesOnlyWithAFreeSlot(t *testing.T) 
 	}
 
 	// A ready that was not read can still start; a ready of another
-	// account waits for the Owner (the table under Q4).
+	// account waits for the Owner (the table under Q4). #12 leaves its
+	// working label, which would count by itself.
+	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{workflow.LabelAwaitingDecision}
 	if !snapshot.MovesWithoutOwner() {
 		t.Error("MovesWithoutOwner = false, want true while a ready was not read")
 	}

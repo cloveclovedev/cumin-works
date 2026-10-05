@@ -184,7 +184,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
   - クライアントは、installationごとにリセットの時刻を覚える (mutexの後ろの表)。その時刻より前は、同じinstallationの呼び出しを、RESTもGraphQLも、読み取りも書き込みも、送らずに同じ `RateLimitError` で返す。その時刻になると、次の呼び出しを送る。時計は、クライアントに差し込んだ `now` である。
     - 理由: 要件が、待つ間はそのinstallationでGitHubを呼ばない、と決めている。制限されている間に呼び続けると、GitHubがintegrationを止めることがある (同じ公式の文書)。
   - installationは、tokenから決める。クライアントは、installation token を発行したときに、tokenとinstallationの番号の組を覚える (期限が過ぎた組は、次の発行のときに捨てる)。同じinstallationの別のリポジトリのtokenも、同じ制限を分け合うためである。クライアントが発行していないtokenは、そのtokenだけを1つの単位とする。AppのJWTは呼び出しごとに新しいので、JWTの呼び出し (tokenの発行など) は止めない。
-  - 呼び出しの中では待たない。`cumin status` と `cumin setup` は、すぐにこの失敗を返す。リセットのあとにやり直すのは、定期確認と、持っておいた手順である。
+  - 呼び出しの中では待たない。`cumin status` と `cumin setup` は、すぐにこの失敗を返す。リセットのあとにやり直すのは、定期確認である。Agentの実行のあとの手順が失敗したIssueは、ラベルがそのまま残り、次の定期確認が事実から決める ([定期確認の設計](poll.md) の「実行終了の判定」)。
   - 使い切りを見つけたときに、warnのログを1行出す。要求のラベル (`request`)、枠の名前 (`resource`)、リセットの時刻 (`reset`) を持つ。tokenは持たない。送らなかった呼び出しでは、ログを出さない。
 - 二次のレート制限の応答を受けたら、GitHubが求める時間が過ぎるまで、そのinstallationの呼び出しを送らない (`ratelimit.go`。要件: 同じ節のレート制限の規則)。覚え方、installationの決め方、呼び出しの中で待たないことは、一次のレート制限と同じである。
   - 見分け方は、公式の文書のとおりである (公式: Rate limits for the REST API の「Exceeding the rate limit」、Rate limits and query limits for the GraphQL API の「Secondary rate limits」と「Exceeding the rate limit」)。RESTは、403か429の応答で、二次のレート制限を示すエラーメッセージを持つ。GraphQLは、statusが200か403で、同じメッセージを持つ。200のときは、本文の `errors` の中にある。ヘッダー `retry-after` があれば、待つ秒数である。
