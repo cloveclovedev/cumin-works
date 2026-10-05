@@ -287,9 +287,10 @@ type MergingFacts struct {
 	// StatusCounts says that the cumin-core App or an Owner added the
 	// newest cumin/status/merging (StatusLabelCounts).
 	StatusCounts bool
-	// Merged is the number of a merged pull request that is linked to
-	// close the issue, or 0 when there is none. It is read only when the
-	// issue has no open pull request.
+	// Merged is the number of the newest pull request that is linked to
+	// close the issue, when that one is merged, or 0. A merged pull request
+	// of an earlier stay with a newer closed one does not count. It is read
+	// only when the issue has no open pull request.
 	Merged int
 	// Reviewer is the login "<slug>[bot]" of the Reviewer App.
 	Reviewer string
@@ -1353,8 +1354,8 @@ func reviewEnds(snapshot Snapshot) []Action {
 // cumin does inside merging). The same facts always give the same step, so
 // a merge whose answer got lost and a restart of cumin need no memory:
 //
-//   - No open pull request closes the issue, and a linked pull request is
-//     merged: "close the merged issue".
+//   - No open pull request closes the issue, and the newest linked pull
+//     request is merged: "close the merged issue".
 //   - The pull request is open, and the conditions of the merge hold
 //     (MergeConditionsHold): cumin sends the merge of the head commit, which
 //     is the approved commit.

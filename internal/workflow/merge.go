@@ -124,10 +124,16 @@ func (s *Service) mergingNow(ctx context.Context, log *slog.Logger, token string
 			return failed("the linked pull requests", err)
 		}
 		log.Debug("read the linked pull requests", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+		// Only the newest linked pull request is the one of this merge. A
+		// merged pull request of an earlier stay does not close the issue.
+		var newest github.LinkedPullRequest
 		for _, l := range linked {
-			if l.Merged {
-				facts.Merged = max(facts.Merged, l.Number)
+			if l.Number > newest.Number {
+				newest = l
 			}
+		}
+		if newest.Merged {
+			facts.Merged = newest.Number
 		}
 		return sub, true, nil
 	}

@@ -329,3 +329,35 @@ func TestMerging_AHeadThatMovedStopsTheMergeForTheOwnerOnce(t *testing.T) {
 		t.Errorf("%d merge requests, want 1", n)
 	}
 }
+
+// The Owner reopened an issue whose first pull request #20 is merged. The
+// new pull request #21 reached cumin/status/merging, and was closed without
+// a merge. Only the newest linked pull request is the one of this merge, so
+// cumin does not close the issue: it goes back to the checks.
+func TestMerging_AnOldMergedPullRequestDoesNotCloseTheIssue(t *testing.T) {
+	sc := mergingScene(t, "risk/low")
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 20, HeadCommit: olderCommit, HeadBranch: "cumin/10-add-the-login-screen",
+		Author: implementerSlug, AuthorIsBot: true, Closes: []int{10}, Closed: true, Merged: true,
+	})
+	if err := sc.fake.ClosePullRequest(sc.repo, 21); err != nil {
+		t.Fatal(err)
+	}
+	service := sc.service()
+
+	sc.pollAndWait(t, service)
+
+	issue := sc.fake.Issue(sc.repo, 10)
+	if issue.Closed {
+		t.Error("issue #10 is closed for the merged pull request of an earlier stay")
+	}
+	if n := sc.fake.CountRequests(http.MethodPatch, issue10Path); n != 0 {
+		t.Errorf("%d closes of #10, want none", n)
+	}
+	if !slices.Equal(issue.Labels, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", issue.Labels)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none", n)
+	}
+}

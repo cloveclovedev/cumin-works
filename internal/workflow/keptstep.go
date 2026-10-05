@@ -25,7 +25,7 @@ type keptStep struct {
 	// temporary failure.
 	run func(ctx context.Context) error
 	// rest is what follows a try that ended without a failure: work that
-	// can take long, such as an agent run or the merge. run sets it at every
+	// can take long, such as an agent run. run sets it at every
 	// try, or leaves it nil. It runs once, and it is never tried again.
 	rest func(ctx context.Context)
 	// next is the time of the next try. A poll before it leaves the step.
