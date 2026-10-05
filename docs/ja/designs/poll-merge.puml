@@ -39,7 +39,8 @@ added the label?) then (no)
     stop
   endif
   if (An open pull request?) then (no)
-    if (A linked pull request is merged?) then (yes)
+    if (The newest linked pull request
+is merged?) then (yes)
       :Close the merged issue:
       cumin-core closes it as completed
       when GitHub left it open

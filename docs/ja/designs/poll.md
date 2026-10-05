@@ -427,9 +427,9 @@ checkの結果の読み方:
     - 定期確認が決めたときは、もとの「review」の依頼文をそのまま送る。セッションは、そのラウンドの最初の依頼と同じに選ぶ (1ラウンド目は新しいセッション、2ラウンド目以降は状態ファイルのセッション)。再起動で切れた実行はセッションを残さないので、状態ファイルのセッションが、この滞在の依頼を受け取ったとは限らないためである。
 - I3は、ラベルを替える前に、状態ファイルの `review_requests` を0に、`review_head` を依頼する先頭のコミットにする。ラベルを替えた直後にcuminが再起動しても、次の定期確認がこの滞在の値を読むためである。
 - 動作の適用は、定期確認でも実行の終わりでも同じ関数 (`applyReviewEnd`) が行う。ラベルを先に替え、替えられなければ、依頼もコメントも通知も出さない。Issueは `cumin/status/reviewing` のままなので、次の定期確認が同じ動作を決める。そのため、依頼も通知も二重にならない。
-- ラベルのあとに続く長い処理 (I5の依頼、I8の原因の整理、レビューの依頼し直し、I6のmerge) は、実行の終わりではReviewerの実行と同じgoroutineで続ける。定期確認が決めたときは、別のgoroutineで動かし、定期確認は待たない。どちらでも、その間、Issueは作業中のIssueの集合に残るので、同じIssueのAgentは、いつも1つだけである。
+- ラベルのあとに続く長い処理 (I5の依頼、I8の原因の整理、レビューの依頼し直し) は、実行の終わりではReviewerの実行と同じgoroutineで続ける。定期確認が決めたときは、別のgoroutineで動かし、定期確認は待たない。どちらでも、その間、Issueは作業中のIssueの集合に残るので、同じIssueのAgentは、いつも1つだけである。
 - `blocked` なら、I10である。やり直さず、行の番号I10で「Ownerに戻す道」の手順をすぐに呼ぶ。コメントは、Reviewerが書いた `blocked_reason` である。このコメントは `cumin-core` が書く質問のコメントなので、ラベルの付け替えが失敗しても、次の定期確認が「stop the review for the Owner」を決める。
-- 一時的な失敗のあとに手順を持っておく仕組み (`keptstep.go`) は、Reviewerの実行のあとには使わない。mergeの手順は、まだ持っておく (「mergeの手順 (I6、I7)」)。持っておく間、Issueは作業中のIssueの集合に残るので、定期確認は何も決めない。
+- 一時的な失敗のあとに手順を持っておく仕組み (`keptstep.go`) は、Reviewerの実行のあとには使わない。mergeも、手順を持っておかずに、`cumin/status/merging` の中で定期確認のたびに決める (「mergeの手順 (I6、I7)」)。
 - cuminが実行の終わりに止まるとき (「stop after the current runs」) は、定期確認は、I5の依頼、原因の整理の依頼、レビューの依頼し直しを控える (`WithoutNewWork`)。Issueは `cumin/status/reviewing` のまま、次の起動を待つ。
 - 異常終了は、同じ作業場所の新しいセッションで1回だけやり直す。2回目も異常終了なら、行の番号I3でOwnerに戻す。
 - 採らなかった案: レビューが見つからないときに、すぐOwnerに戻す。Reviewerの要件の「完了の条件」は、1回だけ依頼し直すと決めている。
@@ -482,7 +482,7 @@ checkの結果の読み方:
 - `cumin/status/merging` の中の手順は、定期確認のたびに、GitHub上の事実から決める (純粋関数 `MergeEnd`)。メモリに手順を持っておかないので、mergeの答えが届かなかったときも、再起動のあとも、同じ事実から同じ手順になる。
   - 定期確認は、`cumin/status/merging` の開いた実装Issueを1つずつ読み直す (`mergingNow`)。読むのは、最新の `cumin/status/merging` を付けたアカウント (「状態ラベルを付けたアカウントの確認」)、開いているPull Requestとそのレビューとcheck、Reviewer Appのログイン名、判断のレビューを出した人の権限、必須のcheckである。開いているPull Requestがないときだけ、Issueを閉じるリンクのPull Requestを読む (`ReadLinkedPullRequests`)。読み取りが失敗したら、その定期確認では何も決めない。
   - ラベルを付けたのが `cumin-core` でもOwnerでもなければ、何もしない。mergeもしない。
-  - 「close the merged issue」: 開いているPull Requestがなく、リンクのPull Requestがmerge済みなら、実装Issueを読み、開いていれば `cumin-core` が完了として閉じる。GitHubが閉じていれば、Issueは定期確認の対象から外れている。閉じるのはこの状態の中だけなので、Ownerが開き直したIssueは開いたままになる。読み取りと閉じる操作は、止める合図で取り消さず、10秒の上限で行う。一時的な失敗は定期確認のエラーにし、次の定期確認が同じことを決める。一時的でない失敗は、Ownerに戻す (「stop the merge for the Owner」)。
+  - 「close the merged issue」: 開いているPull Requestがなく、リンクのPull Requestのうち番号が最も大きいものがmerge済みなら、実装Issueを読み、開いていれば `cumin-core` が完了として閉じる。GitHubが閉じていれば、Issueは定期確認の対象から外れている。閉じるのはこの状態の中だけなので、Ownerが開き直したIssueは開いたままになる。読み取りと閉じる操作は、止める合図で取り消さず、10秒の上限で行う。一時的な失敗は定期確認のエラーにし、次の定期確認が同じことを決める。一時的でない失敗は、Ownerに戻す (「stop the merge for the Owner」)。
   - mergeの条件 (純粋関数 `MergeConditionsHold`) は、riskのラベルがちょうど1つ、必須のcheckが先頭のコミットで全て通っている、Reviewerの最新のレビューが先頭のコミットへの `APPROVE`、である。`risk/medium` と `risk/high` では、それに加えて、Ownerの最新の判断のレビューが先頭のコミットへの `APPROVED` である (`OwnerApproved`)。ラベルは条件の代わりにならないので、mergeを送る定期確認ごとに、読み直した事実で確かめる。
   - 条件が成り立てば、`cumin-core` が `PUT /repos/{owner}/{repo}/pulls/{n}/merge` を呼ぶ。`merge_method` はリポジトリの設定、`sha` は読み直した先頭のコミット、つまり承認されたコミットである。承認のあとにpushされたコミットは、条件が成り立たないので、mergeしない。mergeの状態が `clean` になるのは待たない。"Restrict updates" のruleがあるブランチでは、常に `blocked` だからである (実測 62)。mergeが通っても、ラベルは替えない。次の定期確認が、merge済みのPull Requestを読んで「close the merged issue」を決める。
   - 「go back to the checks」: Pull Requestがmergeされておらず、条件が成り立たなければ、ラベルを `cumin/status/checking` に替える。mergeは送らない。承認のあとのOwnerの `REQUEST_CHANGES`、checkの失敗、先頭のコミットの移動が、これに当たる。
@@ -545,14 +545,14 @@ checkの結果の読み方:
 - Issueを閉じる開いているPull Requestが、定期確認で読む上限 (2件) に既に達しているときは、リンクを付けずにOwnerに戻す。もう1つ付けると、そのIssueを読めなくなり、そのリポジトリの定期確認が毎回失敗するためである。
 - リンクを付けられなかったとき、または読み直してもリンクがないときは、行の番号I2でOwnerに戻す。一時的でない失敗は、やり直さない。
 - リンクを付ける呼び出し、付けたあとの読み直し、ラベルの付け替えが一時的な失敗 (`github.IsTemporary`) で終わったときも、何も持っておかない。Issueは `cumin/status/implementing` のまま残り、次の定期確認が同じ判定をやり直す。
-- 手順を持っておく仕組み (`keptstep.go`) は、Implementerの実行の終わりでも、Reviewerの実行の終わりでも使わない。Plannerの `blocked` のあとの手順と、mergeの手順が使う。GitHubの呼び出しが、クライアントのやり直しのあとも一時的な失敗で終わったときに、その手順を捨てずに持っておく。仕組みは次のとおりである。
+- 手順を持っておく仕組み (`keptstep.go`) は、Implementerの実行の終わりでも、Reviewerの実行の終わりでも使わない。mergeも使わない (「mergeの手順 (I6、I7)」)。使うのは、Plannerの `blocked` のあとの手順だけである。GitHubの呼び出しが、クライアントのやり直しのあとも一時的な失敗で終わったときに、その手順を捨てずに持っておく。仕組みは次のとおりである。
   - 持っておくものは、リポジトリ、Issueの番号、手順 (関数)、次に試す時刻である。`Service` のメモリの中だけにあり、cuminを再起動すると失われる。
   - 次に試す時刻は、持っておいた時刻の5分後 (固定の値) である。時計は `Service.Now` を使う。定期確認は、リポジトリを読む前に、時刻が来た手順を動かす。それより前の定期確認は、その手順を動かさない。
   - 手順は、最初 (tokenの発行とIssueの読み直し) からやり直す。
   - また一時的な失敗で終わったら、さらに5分待つ。レート制限のリセットの時刻より前は、クライアントが呼び出しを送らずに失敗を返すので、手順は同じようにさらに5分待つ。成功するか、一時的でない結果になるまで続ける。
   - 持っておく間、Issueは作業中のIssueの集合 (`markInProgress`) に残る。ラベルはそのままで、進行中の数に数えられ、このIssueのAgentは起動しない。`cumin stop --after-current-runs` は、持っておいた手順が終わるまで待つ。
   - 持っておくときに、warnのログを1行出す。理由と、次に試す時刻を入れる。
-  - Reviewerの実行のあとの手順 (I5〜I8、I10) は、持っておかない。定期確認が、事実から決め直す (「Reviewerへの依頼 (I3、I10)」)。Plannerの `blocked` のあとの手順も同じように持っておく (下の「Plannerの実行のあとの手順」)。mergeの手順 (I6、I12) も、同じ仕組みで持っておく (「mergeの手順 (I6、I7)」)。
+  - Reviewerの実行のあとの手順 (I5〜I8、I10) は、持っておかない。定期確認が、事実から決め直す (「Reviewerへの依頼 (I3、I10)」)。Plannerの `blocked` のあとの手順も同じように持っておく (下の「Plannerの実行のあとの手順」)。mergeの手順 (I6、I12) は、持っておかない。`cumin/status/merging` の中で、定期確認が事実から決め直す (「mergeの手順 (I6、I7)」)。
 - 採らなかった案: 全ての行で、ブランチの名前でPull Requestを見つける。スナップショット、I9、mergeのあとのIssueの閉じ方まで変わる。I2でリンクを付ければ、変わるのはI2だけで、GitHubがリンクを作るようになっても、そのまま動く。
 - 判定は純粋関数で、結果を値として返す。通ったかどうかと、落ちたときはどの確認で落ちたか (開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない) と、確かめたPull Requestの番号と、リンクを付けるかどうかである。通れば、リンクを付けてから、ラベルを `cumin/status/checking` に替える。落ちたときは、`ImplementationEnd` が、依頼し直すか、Ownerに戻すかを決める。
 - 判定に渡す3つの値は、Agentの実行の側から来る。ブランチは依頼に渡したものである。ImplementerのAppのbotのlogin (`<slug>[bot]`) は実行の結果に付いて返り、worktreeの先頭のコミットは `git rev-parse HEAD` で読む ([Agentの実行の設計](agent-run.md) の「作業場所」と「1回の依頼の手順」)。
