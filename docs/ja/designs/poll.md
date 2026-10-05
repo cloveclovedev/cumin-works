@@ -55,8 +55,8 @@
 | 要求Issueと、そのsub-issue。番号、id、開閉、今のラベル | `Issue.subIssues`、`labels` | R1〜R6、I1 |
 | sub-issueの題。依頼のブランチの名前に使う | `Issue.title` | I1 |
 | sub-issueのGraphQLのid。I2がリンクを付けるときに使う。スカラーなので、問い合わせのコストは変わらない | `Issue.id` | I2 |
-| 状態ラベルが付いた時刻。定期確認の問い合わせとは別の、小さな問い合わせで読む (「ラベルの時刻の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt` と `label` | R3、レビューのラウンド、I13、I15 |
-| 最新の `cumin/status/ready` を付けたアカウント。着手の候補 (R1、I1) では判定の前に、ほかの起動ではAgentを起動する前に、別の小さな問い合わせで読む (「Ownerのreadyの確認 (R1、I1)」「Ownerのログイン名の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT])` の `createdAt`、`label`、`actor { __typename login }` | R1とI1の条件 (Ownerのready)、起動の依頼の事実 (どのroleでも) |
+| 状態ラベルが付いた時刻。定期確認の問い合わせとは別の、小さな問い合わせで読む (「ラベルの時刻の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT])` の `createdAt` と `label` | R3、レビューのラウンド、I13、I15 |
+| 最新の `cumin/status/ready` を付けたアカウント。着手の候補 (R1、I1) では判定の前に、ほかの起動ではAgentを起動する前に、別の小さな問い合わせで読む (「Ownerのreadyの確認 (R1、I1)」「Ownerのログイン名の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT])` の `createdAt`、`label`、`actor { __typename login }` | R1とI1の条件 (Ownerのready)、起動の依頼の事実 (どのroleでも) |
 | blocked by のIssueの開閉。要求Issueとsub-issueの両方 | `Issue.blockedBy` | R1、I1 |
 | Issueを閉じる、開いているPull Request。番号、作成者、先頭のコミット、ブランチの名前 | `Issue.closedByPullRequestsReferences`、`author { __typename login }`、`headRefOid`、`headRefName` | I1、I2 (リンクがあるか)、I4、I6、I7、I11 |
 | 開いているPull Requestの、今のラベル | `PullRequest.labels` | I11 |
@@ -128,7 +128,7 @@ mergeできるかと、先頭のコミットの時刻の読み方:
 - レビューのラウンドは、実装Issueに最後に `cumin/status/ready` が付いた時刻と、`cumin-reviewer` の最後の `APPROVE` の時刻の、新しいほうよりあとに出たレビューを数える (「レビューのラウンドの数え方」)。
 - I15の待ち時間は、実装Issueに最後に `cumin/status/checking` が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える。cuminは、ラベルの時刻をsub-issueごとにスナップショットに入れる。
 - I13は、Ownerのレビューが出された時刻が、実装Issueに最後に `cumin/status/awaiting-merge-decision` が付いた時刻よりあとかどうかを見る。cuminは、この時刻をsub-issueごとにスナップショットに入れる (「Ownerのレビューへの対応の依頼 (I13)」)。
-- 同じラベルが何度も付くので、ラベルごとに、いちばん新しい `LabeledEvent` を使う。今付いているかどうかは、`labels` で見る。
+- 同じラベルが何度も付くので、ラベルごとに、そのラベルを最後にIssueに付けたイベントを使う (「ラベルを付けたイベントの決まり」)。今付いているかどうかは、`labels` で見る。
 
 閉じた要求Issueと、そのsub-issueは読まない。cuminは、閉じた要求Issueには何もしないためである (Issueのラベルと状態遷移の原則6)。
 
@@ -175,17 +175,28 @@ checkの結果の読み方:
 
 - R3は、要求Issueに `cumin/status/awaiting-plan-review` または `cumin/status/awaiting-acceptance` が付いた時刻と、sub-issueに `cumin/status/ready` が付いた時刻を比べる。時刻は、GitHubがIssueのタイムラインに残す `LabeledEvent` の `createdAt` から読む。
 - 定期確認の問い合わせには入れず、時刻が要る要求Issueのときだけ、別の問い合わせで読む。要るのは5つの場合である。1つは、要求Issueが `cumin/status/accepting` のときで、そのラベルが最後に付いた時刻を読む (Plannerの質問のコメントが、そのあとに書かれたかを見る)。1つは、R3が成り立ちうるとき、つまり要求Issueが `cumin/status/awaiting-plan-review` または `cumin/status/awaiting-acceptance` で、`cumin/status/ready` の付いた開いているsub-issueがあるときである。もう1つは、`cumin/status/checking` の付いた開いているsub-issueがあるときで、そのsub-issueにラベルが最後に付いた時刻を読む (I15の待ち時間の起点)。最後の1つは、`cumin/status/awaiting-merge-decision` の開いているsub-issueのPull Requestで、今の先頭のコミットに、人の `CHANGES_REQUESTED` のレビューがあるときで、そのsub-issueに `cumin/status/awaiting-merge-decision` が最後に付いた時刻を読む (I13)。残りの1つは、要求Issueが `cumin/status/planning` で、Plannerが動いていないときで、そのラベルが最後に付いた時刻を読む (質問のコメントが、そのあとに書かれたかを見る)。判定の純粋関数 (`NeedsLabelTimes` と、`cumin/status/planning` では `SplitNeedsFacts`) がこれを決める。
-- 1回の問い合わせで、要求Issueと、そのsub-issue (15件まで) のタイムラインを読む。各Issueは、新しいほうから100件の `LabeledEvent` を読み (`last: 100`)、ラベルごとに一番新しい時刻を使う。同じラベルが付いたり外れたりするためである。コストは1ポイントだった (2026-09-29にcumin-worksで実測)。
+- 1回の問い合わせで、要求Issueと、そのsub-issue (15件まで) のタイムラインを読む。各Issueは、新しいほうから100件の `LabeledEvent` と `UnlabeledEvent` を読み (`last: 100`)、ラベルごとに、そのラベルを最後にIssueに付けたイベントの時刻を使う (「ラベルを付けたイベントの決まり」)。同じラベルが付いたり外れたりするためである。コストは1ポイントである (2026-09-29にcumin-worksで実測。`UnlabeledEvent` を足したあとも1ポイントで、2026-10-05に実測した)。
 - 読むのは状態ラベルがその形のあいだだけなので、ふだんの定期確認のコストは変わらない。要求Issueが `cumin/status/accepting` の間と、`cumin/status/planning` でPlannerが動いていない間と、Ownerが分割結果を確認している間 (前の分割の `cumin/status/ready` が残っているとき) と、sub-issueがcheckを待っている間と、Ownerの `CHANGES_REQUESTED` が今の先頭のコミットに残ったままsub-issueがOwnerの判断を待っている間は、その要求Issueごとに、定期確認のたびに1ポイント増える。1つの要求Issueで2つ以上が要るときも、問い合わせは1回である。
 - `cumin/status/checking` の時刻だけが読めなかったときは、ほかの行を止めない。R3が成り立ちえない要求Issueでは、着手 (I1) も待たない。
 - 読めなかったときは、I13の候補にしない。Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でやり直す。
 - 読めなかったときは、ログに出して、R3をその定期確認では判定しない。その要求Issueのsub-issueの着手 (I1) も、次の定期確認まで待つ。着手すると `cumin/status/ready` が外れ、R3が二度と成り立たなくなるためである。R3がラベルを替えられなかったときも、同じ理由で待つ。ほかの行は進める。
 - 採らなかった案: 定期確認の問い合わせに、sub-issueごとのタイムラインを入れる。1ページに要求Issue 10件 x sub-issue 15件のタイムラインが加わり、ページを小さくしても、R3が要らない定期確認のたびにコストが増える。
 
+### ラベルを付けたイベントの決まり
+
+- ラベルを付けたアカウントと、ラベルが付いた時刻は、同じ1つのイベントから読む。そのラベルの最後の `UnlabeledEvent` のあとの、最初の `LabeledEvent` である。読んだイベントの中にそのラベルの `UnlabeledEvent` がなければ、読んだ中で最初の `LabeledEvent` である。ラベルが外れたあとも、最後に付けたイベントが答える (レビューのラウンドが使う、最後の `cumin/status/ready` の時刻)。
+- 間に `UnlabeledEvent` のない、同じラベルのあとの `LabeledEvent` は数えない。付いているラベルは、もう一度付けられないので、そのイベントはラベルをIssueに付けたイベントではない。
+- 理由は、GitHubが `LabeledEvent` を遅れて、別のアカウントで記録することがあるためである ([調査・実測で確定した制約](../evidence/measured-constraints.md) の141)。Ownerが付けた `cumin/status/ready` のあとに、Issueを作ったGitHub Appの名前で同じラベルのイベントが記録された。一番新しいイベントを使うと、Ownerのreadyが「Ownerでない」になり、何も始まらない。
+- 決まりは、`internal/platform/github` の関数 `puttingLabelEvents` の1つだけにある。ラベルの時刻の読み取り (`ReadLabelTimes`) と、ラベルを付けたアカウントの読み取り (`ReadLabelActor`、`ReadOwnLabelActor`) が、どれもこの関数を使う。`cumin/status/ready` も、ほかの状態ラベルも同じである。イベントは、タイムラインの順 (古いほうから) に見る。
+- この文書の「最新の `cumin/status/ready` を付けたアカウント」「ラベルが最後に付いた時刻」は、どれもこのイベントのアカウントと時刻のことである。
+- そのために、2つの問い合わせは `LabeledEvent` と一緒に `UnlabeledEvent` を読む (`itemTypes: [LABELED_EVENT, UNLABELED_EVENT]`)。コストはどちらも1ポイントのままである (2026-10-05にcumin-worksで実測。値は、この決まりを入れたPull Requestの説明にある)。定期確認のコストは変わらない。
+- 読む100件は、付けたイベントと外したイベントを合わせた数になる。状態ラベルは替わるたびに2つのイベントを残すので、読める範囲は、状態の移り変わりのおよそ50回ぶんである。範囲の外のイベントの扱いは、前と同じである (「Ownerのログイン名の読み取り」)。
+- 読んだ100件の先頭より前にラベルが付いていて、範囲の中に繰り返しのイベントだけがあるときは、その繰り返しのイベントが答える。範囲の外は見えないためである。
+
 ### Ownerのログイン名の読み取り
 
 - 起動の依頼の事実「Ownerのログイン名」([Agentに共通の要件](../requirements/agents/common.md) の「起動の依頼の事実」) のために、Agentを起動する前に、その実行が扱うIssueに最新の `cumin/status/ready` を付けたアカウントを読む。GitHubがIssueのタイムラインに残す `LabeledEvent` の `actor` から読む。
-- 問い合わせは、ラベルの時刻の問い合わせと同じ形に `actor { __typename login }` を足したものである (`ReadLabelActor`)。1回で、そのIssueと、そのsub-issue (15件まで) のタイムラインを、新しいほうから100件ずつ読む。Issue自身にイベントがあれば、その中で一番新しいものを使う。なければ、sub-issueのイベントの中で一番新しいものを使う (イベントのない要求Issue)。実装Issueにはsub-issueがないので、同じ問い合わせで足りる。
+- 問い合わせは、ラベルの時刻の問い合わせと同じ形に `actor { __typename login }` を足したものである (`ReadLabelActor`)。1回で、そのIssueと、そのsub-issue (15件まで) のタイムラインを、新しいほうから100件ずつ読む。Issue自身に、そのラベルを付けたイベント (「ラベルを付けたイベントの決まり」) があれば、それを使う。なければ、sub-issueごとのそのイベントの中で一番新しいものを使う (イベントのない要求Issue)。実装Issueにはsub-issueがないので、同じ問い合わせで足りる。
 - そのアカウントがOwnerかどうかは、I12と同じ読み取り (`RepositoryPermission`) と同じ判定 (`IsOwner`) で決める。Ownerの定義は [cumin本体の要件](../requirements/cumin-core.md) の「Owner」だけにある。次のどれかのときは、Ownerのログイン名はない: イベントがない、`actor` がnull (アカウントがもうない)、`actor` が人ではない (`__typename` が `User` でない。GitHub Appは `Bot`)、権限がwrite未満である。人ではないときは、権限を読まない。
 - コストは、GraphQLが1ポイント (2026-10-03にcumin-worksで実測。`LabeledEvent` に `actor` があることも、スキーマで確かめた) と、人のときのRESTの呼び出し1回である。起動のたびに増えるだけで、ふだんの定期確認のコストは変わらない。R1とI1の着手では、判定の前の読み取りを使うので、起動のときには増えない。
 - R1とI1では、判定の前の読み取り (「Ownerのreadyの確認 (R1、I1)」) がスナップショットに入れた名前を使い、読み直さない。ほかの起動では、次のとおりに読む。
@@ -219,13 +230,13 @@ checkの結果の読み方:
 
 図の元ファイル: [poll-status-actor.puml](poll-status-actor.puml)
 
-- cuminは、`cumin-core` のGitHub AppかOwnerが最後に付けた状態ラベルだけを、状態として扱う ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「状態ラベルを付けたアカウント」)。決まりは、純粋関数 `StatusLabelCounts` の1つだけにある。ラベルの名前と、最新のラベルのイベントのアカウントと、`cumin-core` のログイン名を受け取り、数えるかどうかを返す。人は `IsOwner` で決める。GitHub Appは、`cumin-core` であるときだけ数える。GraphQLはGitHub Appのログイン名を `[bot]` なしで返すので、どちらの形でも同じとして比べる。`cumin/status/ready` は、Ownerだけを数える (「Ownerのreadyの確認 (R1、I1)」と同じ決まり)。アカウントがもうないとき、イベントが見つからないときは、数えない。
+- cuminは、`cumin-core` のGitHub AppかOwnerが最後に付けた状態ラベルだけを、状態として扱う ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「状態ラベルを付けたアカウント」)。決まりは、純粋関数 `StatusLabelCounts` の1つだけにある。ラベルの名前と、そのラベルをIssueに付けたイベント (「ラベルを付けたイベントの決まり」) のアカウントと、`cumin-core` のログイン名を受け取り、数えるかどうかを返す。人は `IsOwner` で決める。GitHub Appは、`cumin-core` であるときだけ数える。GraphQLはGitHub Appのログイン名を `[bot]` なしで返すので、どちらの形でも同じとして比べる。`cumin/status/ready` は、Ownerだけを数える (「Ownerのreadyの確認 (R1、I1)」と同じ決まり)。アカウントがもうないとき、イベントが見つからないときは、数えない。
 - 今、この確認をするのは、定期確認が状態から決める3つの状態である: 要求Issueの `cumin/status/planning` と `cumin/status/accepting`、実装Issueの `cumin/status/implementing` (「実行終了の判定」)。実装Issueの `cumin/status/reviewing` と `cumin/status/merging` (「mergeの手順 (I6、I7)」) でも確かめる。`checking` の決まりは、作るときに同じ関数 (`StatusLabelCounts`、`readStatusActor`) を呼ぶ。人を待つ状態は、そこから出るときにOwnerを確かめるので、対象にしない。
 - 読むのは、cuminがその状態から動作を起こす直前だけである。読むIssueは、純粋関数 `StatusActorReads` が決める: `cumin/status/planning` か `cumin/status/accepting` の要求Issueで、Plannerが動いていないもの。Plannerが動いている間は、ラベルから何も決めないので、読まない。この2つの状態でPlannerが動いていないのは、ふつう、cuminの再起動のあとか、実行のあとの読み取りが失敗したあとの、1回の定期確認だけである。
 - 読む場所は2つある。定期確認では、ラベルの時刻とコメントを読む前に読み、結果をスナップショットに入れる (`readStatusActors`。`StatusRead` と `StatusCounts`)。Plannerの実行の終わりでは、Issueを読み直したあと、ラベルの時刻とコメントの前に読む (`readRequirementFacts`)。実行の間にラベルが付け替えられることがあるためである。
 - 判定 (`SplitEnd`、`AcceptanceEnd`) は、読めて、数えるラベルのときだけ動作を返す。数えないラベルと、読めなかったラベルでは、何も返さない。数えないラベルのIssueでは、ラベルの時刻もコメントも読まない (`SplitNeedsFacts`、`NeedsLabelTimes`、`NeedsComments`)。
 - 数えないラベルには、Agentを起動せず、ラベルも替えない。ログに1行 (warn) 残し、Ownerに1回通知する (`tellStatusOfAnother`)。同じラベルのイベントについては、定期確認のたびに繰り返さない。伝えたイベントの時刻は、readyと同じメモリ (`readyTold`) に持つ。1つのIssueの状態ラベルは1つなので、Issueごとに1つの時刻で足りる。cuminが再起動すると、もう一度だけ伝える。
-- 読み取りは、「Ownerのreadyの確認 (R1、I1)」と同じ問い合わせである (`ReadOwnLabelActor`)。そのIssue自身のイベントだけを使い、新しいほうから100件の中にそのラベルのイベントがなければ、数えない。
+- 読み取りは、「Ownerのreadyの確認 (R1、I1)」と同じ問い合わせである (`ReadOwnLabelActor`)。答えるイベントは、そのラベルをIssueに付けたイベントである (「ラベルを付けたイベントの決まり」)。そのIssue自身のイベントだけを使い、新しいほうから100件の中にそのラベルのイベントがなければ、数えない。
 - 読めなかったときは、ログにエラーを出し、そのIssueは「読んでいない」のままにする。その定期確認では何も決めず、次の定期確認で読み直す。ほかの行は進める。`cumin-core` のログイン名が読めなかったときも同じである。
 - 待ち状態の通知 (Q4) では、数えないラベルと読めたIssueを「Ownerなしで進めるIssue」に数えない (`MovesWithoutOwner`)。
 - コストは、読むIssue1つにつき、GraphQLが1ポイント (「Ownerのログイン名の読み取り」の実測) と、人のときのRESTの呼び出し1回である。状態から決めるIssueのない定期確認では、何も読まないので、ふだんの定期確認のコストは変わらない。増えるのは次のときである: Plannerの実行の終わりごとに1回、再起動のあとなどでPlannerが動いていない `planning` か `accepting` を決める定期確認で1回、数えないラベルが残る間は定期確認のたびに1回。数えないラベルでは、ラベルの時刻とコメントを読まないので、その分は減る。

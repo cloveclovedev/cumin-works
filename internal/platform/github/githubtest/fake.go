@@ -56,20 +56,25 @@ type Issue struct {
 	BlockedBy []int
 	// StateReason is the reason of the last close through the REST API.
 	StateReason string
-	// LabelEvents are the times at which labels were added, oldest first,
-	// as GitHub records them in the timeline. A test adds the events of the
-	// past; the fake adds one for each label that "Set labels" adds.
+	// LabelEvents are the times at which labels were added and removed,
+	// oldest first, as GitHub records them in the timeline. A test adds the
+	// events of the past; the fake adds one for each label that "Set
+	// labels" adds or removes.
 	LabelEvents []LabelEvent
 }
 
-// LabelEvent is one LabeledEvent of the timeline of an issue. Actor is the
-// login of the account that added the label and ActorType its type in
-// GraphQL ("User", "Bot"); an empty Actor answers a null actor.
+// LabelEvent is one LabeledEvent of the timeline of an issue, or one
+// UnlabeledEvent when Removed is true. Actor is the login of the account
+// that added the label and ActorType its type in GraphQL ("User", "Bot");
+// an empty Actor answers a null actor. GitHub can record a LabeledEvent
+// for a label that is already on the issue (measured on 2026-10-05), so a
+// test may repeat a label with no Removed event in between.
 type LabelEvent struct {
 	Label     string
 	At        time.Time
 	Actor     string
 	ActorType string
+	Removed   bool
 }
 
 // PullRequest is one pull request of the fake repository.
@@ -1330,6 +1335,11 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 	}
 	if isIssue {
 		now := f.now()
+		for _, label := range issue.Labels {
+			if !slices.Contains(*request.Labels, label) {
+				issue.LabelEvents = append(issue.LabelEvents, LabelEvent{Label: label, At: now, Removed: true})
+			}
+		}
 		for _, label := range *request.Labels {
 			if !slices.Contains(issue.Labels, label) {
 				event := LabelEvent{Label: label, At: now}
@@ -1984,8 +1994,8 @@ func withSeededLabelEvents(issue *Issue) []LabelEvent {
 
 // serveLabelTimes answers the query of the label times and the query of
 // the actor of a label: the newest label events of the issue and of each of
-// its sub-issues, each with its actor. Official: the LabeledEvent of the
-// timeline of an Issue.
+// its sub-issues, each with its actor. Official: the LabeledEvent and the
+// UnlabeledEvent of the timeline of an Issue.
 func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, subIssues, events int) {
 	issue, ok := repo.Issues[number]
 	if !ok {
@@ -2006,7 +2016,11 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 			if event.Actor != "" {
 				actor = map[string]any{"__typename": event.ActorType, "login": event.Actor}
 			}
-			nodes = append(nodes, map[string]any{"createdAt": event.At.UTC().Format(time.RFC3339Nano), "label": map[string]any{"name": event.Label}, "actor": actor})
+			node := map[string]any{"__typename": "LabeledEvent", "createdAt": event.At.UTC().Format(time.RFC3339Nano), "label": map[string]any{"name": event.Label}, "actor": actor}
+			if event.Removed {
+				node = map[string]any{"__typename": "UnlabeledEvent", "createdAt": node["createdAt"], "label": node["label"]}
+			}
+			nodes = append(nodes, node)
 		}
 		return map[string]any{"nodes": nodes}
 	}

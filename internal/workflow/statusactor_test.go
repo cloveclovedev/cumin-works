@@ -129,10 +129,11 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T
 		for _, tt := range others {
 			t.Run(s.label+"/"+tt.name, func(t *testing.T) {
 				sc := s.scene(t)
-				// An older event of the Owner does not count: the newest one decides.
+				// An older event of the Owner does not count: the label was
+				// removed, and the other account put it on the issue again.
 				older := statusBy(s.label, theOwner)
 				older.At = older.At.Add(-time.Hour)
-				sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{older, tt.event(s.label)}
+				sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{older, removedBefore(tt.event(s.label)), tt.event(s.label)}
 				setNotOwnerPermissions(sc)
 				service := sc.service()
 
@@ -197,6 +198,33 @@ func TestStatusLabel_ALabelOfCuminCoreOrOfAnOwnerDecidesAsBefore(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// GitHub can record an event that adds a status label again while the
+// label is on the issue, late and with another GitHub App (measured on
+// 2026-10-05). The event that put the label on the issue decides: the poll
+// requests the Planner as before.
+func TestStatusLabel_ARepeatedEventOfAnotherGitHubAppDoesNotHideTheAccount(t *testing.T) {
+	for _, s := range statusScenes {
+		t.Run(s.label, func(t *testing.T) {
+			sc := s.scene(t)
+			sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{
+				statusBy(s.label, theOwner),
+				{Label: s.label, At: sceneNow.Add(-30 * time.Minute), Actor: implementerSlug, ActorType: "Bot"},
+			}
+			setNotOwnerPermissions(sc)
+			service := sc.service()
+
+			sc.pollAndWait(t, service)
+
+			if n := sc.agentRuns(t); n != 1 {
+				t.Errorf("%d agent runs, want 1", n)
+			}
+			if strings.Contains(sc.logs.String(), "is not of cumin-core or of an Owner") {
+				t.Errorf("a label that counts was logged as one of another account:\n%s", sc.logs.String())
+			}
+		})
 	}
 }
 

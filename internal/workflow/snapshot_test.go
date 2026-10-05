@@ -58,7 +58,9 @@ func TestReadLabelTimes_ASubIssueThatWaitsForItsChecksCarriesTheTimeOfTheLabel(t
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{LabelChecking, "risk/low"}, LabelEvents: []githubtest.LabelEvent{
 		// The issue waited for its checks before; the newest event counts.
 		{Label: LabelChecking, At: t0},
+		{Label: LabelChecking, At: t0.Add(time.Minute), Removed: true},
 		{Label: LabelImplementing, At: t0.Add(time.Minute)},
+		{Label: LabelImplementing, At: t0.Add(2 * time.Minute), Removed: true},
 		{Label: LabelChecking, At: t0.Add(2 * time.Minute)},
 	}})
 	// No sub-issue of #7 waits for its checks, so its label times are not read.

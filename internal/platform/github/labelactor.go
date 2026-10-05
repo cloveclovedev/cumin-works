@@ -8,23 +8,25 @@ import (
 	"time"
 )
 
-// The query of the actor of the newest event that added a label to one
-// issue and to its sub-issues. It is the query of the label times with the
-// field `actor` of LabeledEvent. Measured on 2026-10-03 on cumin-works: the
+// The query of the actor of the event that put a label on one issue and on
+// its sub-issues (puttingLabelEvents). It is the query of the label times
+// with the field `actor` of LabeledEvent. Measured on 2026-10-03: the
 // schema of LabeledEvent has `actor` (an Actor, which can be null),
 // `__typename` of the actor is "User" for a person and "Bot" for a GitHub
-// App, and the query costs 1 point. It runs before each start of an agent
-// (docs/ja/designs/poll.md, the topic on the login of the Owner).
+// App, and the query costs 1 point. Measured on 2026-10-05 on cumin-works:
+// with UNLABELED_EVENT beside LABELED_EVENT, it still costs 1 point. It
+// runs before each start of an agent (docs/ja/designs/poll.md, the topic
+// on the login of the Owner).
 const labelActorQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $events: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
       number
-      timelineItems(itemTypes: [LABELED_EVENT], last: $events) { nodes { ...labeled } }
+      timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: $events) { nodes { __typename ...labeled ...unlabeled } }
       subIssues(first: $subIssues) {
         pageInfo { hasNextPage }
         nodes {
           number
-          timelineItems(itemTypes: [LABELED_EVENT], last: $events) { nodes { ...labeled } }
+          timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: $events) { nodes { __typename ...labeled ...unlabeled } }
         }
       }
     }
@@ -32,10 +34,12 @@ const labelActorQuery = `query($owner: String!, $name: String!, $number: Int!, $
   rateLimit { cost remaining }
 }
 
-fragment labeled on LabeledEvent { createdAt label { name } actor { __typename login } }`
+fragment labeled on LabeledEvent { createdAt label { name } actor { __typename login } }
+fragment unlabeled on UnlabeledEvent { createdAt label { name } }`
 
-// LabelActor is the account that added a label. Type is the type of the
-// account as GraphQL names it: "User" for a person, "Bot" for a GitHub App.
+// LabelActor is the account that put a label on an issue. Type is the type
+// of the account as GraphQL names it: "User" for a person, "Bot" for a
+// GitHub App.
 // The zero value says that no event added the label, or that the account
 // of the event no longer exists. At is the time of the event; it is zero
 // when no event added the label.
@@ -45,19 +49,20 @@ type LabelActor struct {
 	At    time.Time
 }
 
-// ReadLabelActor reads the actor of the newest event that added the label
-// to the issue. When the issue has no such event, the newest such event
-// among its sub-issues answers; an implementation issue has no sub-issues.
-// With no such event at all, the actor is the zero value.
+// ReadLabelActor reads the actor of the event that last put the label on
+// the issue (puttingLabelEvents). When the issue has no such event, the
+// newest such event among its sub-issues answers; an implementation issue
+// has no sub-issues. With no such event at all, the actor is the zero
+// value.
 func (c *AppClient) ReadLabelActor(ctx context.Context, token, owner, repo string, number int, label string) (LabelActor, RateLimit, error) {
 	return c.readLabelActor(ctx, token, owner, repo, number, label, true)
 }
 
-// ReadOwnLabelActor reads the actor of the newest event that added the
-// label to the issue itself, and never an event of a sub-issue. With no
-// such event among the newest events that are read, the actor is the zero
-// value. The check of who may start work uses it: an event of another
-// issue must not answer for this one.
+// ReadOwnLabelActor reads the actor of the event that last put the label
+// on the issue itself (puttingLabelEvents), and never an event of a
+// sub-issue. With no such event among the newest events that are read,
+// the actor is the zero value. The check of who may start work uses it:
+// an event of another issue must not answer for this one.
 func (c *AppClient) ReadOwnLabelActor(ctx context.Context, token, owner, repo string, number int, label string) (LabelActor, RateLimit, error) {
 	return c.readLabelActor(ctx, token, owner, repo, number, label, false)
 }
@@ -84,7 +89,7 @@ func (c *AppClient) readLabelActor(ctx context.Context, token, owner, repo strin
 		return LabelActor{}, rate, fmt.Errorf("github: read the actor of the label %s of %s/%s#%d: the response has no issue", label, owner, repo, number)
 	}
 	issue := resp.Data.Repository.Issue
-	if event, ok := newestLabelEvent(label, issue.TimelineItems.Nodes); ok {
+	if event, ok := puttingLabelEvents(issue.TimelineItems.Nodes)[label]; ok {
 		return event.labelActor(), rate, nil
 	}
 	if !subIssues {
@@ -93,27 +98,15 @@ func (c *AppClient) readLabelActor(ctx context.Context, token, owner, repo strin
 	if issue.SubIssues.PageInfo.HasNextPage {
 		return LabelActor{}, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, snapshotSubIssues)
 	}
-	var events []labelActorNode
-	for _, sub := range issue.SubIssues.Nodes {
-		events = append(events, sub.TimelineItems.Nodes...)
-	}
-	event, _ := newestLabelEvent(label, events)
-	return event.labelActor(), rate, nil
-}
-
-// newestLabelEvent returns the newest of the events that added the label.
-func newestLabelEvent(label string, events []labelActorNode) (labelActorNode, bool) {
-	var newest labelActorNode
+	var newest labelEventNode
 	found := false
-	for _, event := range events {
-		if event.Label == nil || event.Label.Name != label {
-			continue
-		}
-		if !found || event.CreatedAt.After(newest.CreatedAt) {
+	for _, sub := range issue.SubIssues.Nodes {
+		event, ok := puttingLabelEvents(sub.TimelineItems.Nodes)[label]
+		if ok && (!found || event.CreatedAt.After(newest.CreatedAt)) {
 			newest, found = event, true
 		}
 	}
-	return newest, found
+	return newest.labelActor(), rate, nil
 }
 
 // The GraphQL response. It stops in this package.
@@ -123,14 +116,14 @@ type labelActorResponse struct {
 			Issue *struct {
 				Number        int `json:"number"`
 				TimelineItems struct {
-					Nodes []labelActorNode `json:"nodes"`
+					Nodes []labelEventNode `json:"nodes"`
 				} `json:"timelineItems"`
 				SubIssues struct {
 					PageInfo pageInfo `json:"pageInfo"`
 					Nodes    []struct {
 						Number        int `json:"number"`
 						TimelineItems struct {
-							Nodes []labelActorNode `json:"nodes"`
+							Nodes []labelEventNode `json:"nodes"`
 						} `json:"timelineItems"`
 					} `json:"nodes"`
 				} `json:"subIssues"`
@@ -146,20 +139,7 @@ type labelActorResponse struct {
 	} `json:"errors"`
 }
 
-// labelActorNode is one LabeledEvent with its actor. The actor is null
-// when the account no longer exists.
-type labelActorNode struct {
-	CreatedAt time.Time `json:"createdAt"`
-	Label     *struct {
-		Name string `json:"name"`
-	} `json:"label"`
-	Actor *struct {
-		Type  string `json:"__typename"`
-		Login string `json:"login"`
-	} `json:"actor"`
-}
-
-func (n labelActorNode) labelActor() LabelActor {
+func (n labelEventNode) labelActor() LabelActor {
 	if n.Actor == nil {
 		return LabelActor{At: n.CreatedAt}
 	}
