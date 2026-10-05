@@ -386,7 +386,7 @@ func TestImplementing_TheStopAfterASecondAbnormalEndNamesItsKind(t *testing.T) {
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want 2", n)
 	}
-	reason := workflow.AfterAbnormalEndReason(workflow.VerificationReason(workflow.FailureNoOpenPullRequest), agent.EndError)
+	reason := workflow.AfterAbnormalEndReason(workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "Implementer", agent.EndError)
 	if !strings.Contains(reason, "error reported by the CLI") {
 		t.Errorf("the reason %q does not name the kind of the end", reason)
 	}

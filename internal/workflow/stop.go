@@ -31,7 +31,7 @@ const (
 	RowR2 = "R2"
 	// RowR4 is the end of a Planner run that checked the acceptance.
 	RowR4 = "R4"
-	// RowI3 is the end of a Reviewer run that ended abnormally twice.
+	// RowI3 is a request of the review that did not start, twice.
 	RowI3 = "I3"
 	// RowI5 is the end of a Reviewer run whose review cumin did not find
 	// on the head commit, twice (the failure column of I5).
@@ -90,6 +90,10 @@ type stop struct {
 	reason string
 	// comment is the text to post on the issue.
 	comment string
+	// labelFirst replaces the status label before the comment is written:
+	// the stop after a blocked result. A comment that GitHub refuses then
+	// leaves the issue with the Owner, and no poll requests the work again.
+	labelFirst bool
 	// labelDone says that the caller already replaced the status label.
 	// A stop that a poll decides (I4, I15) changes the label first: a label that
 	// cumin cannot change would otherwise repeat the comment and the
@@ -98,47 +102,59 @@ type stop struct {
 }
 
 // stopForOwner posts the comment, replaces the status label, and notifies
-// the Owner, in that order. Every step is logged with the row.
+// the Owner, in that order; with labelFirst, the label comes before the
+// comment. Every step is logged with the row.
 //
 // A step that fails is logged and does not stop the next one: the Owner
 // must learn about a stopped issue even when one call failed. Nothing is
 // undone. What cumin wrote on GitHub is the fact of the matter, and the
-// notification only asks the Owner to look.
+// notification only asks the Owner to look. A comment that was not written
+// goes to the log as a whole, and the notification says so.
 func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, st stop) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	log = log.With("row", st.row)
 	// The comment holds the whole reason, so the notification links to it.
 	// Until it is written, the issue itself is the link.
 	link := github.IssueURL(owner, repo, st.issue)
+	reason := st.reason
 
 	token, err := target.Token(ctx)
 	if err != nil {
 		log.Error(st.row+": no token; the issue keeps its label", "error", err.Error())
 	} else {
+		move := func() {
+			switch {
+			case st.labelDone:
+				// The caller changed the label and logged it.
+			case len(st.labels) == 0:
+				log.Error(st.row + ": the labels of the issue were not read; the label was not changed")
+			default:
+				labels := ReplaceStatusLabel(st.labels, LabelAwaitingDecision)
+				if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
+					log.Error(st.row+": the label was not changed", "error", err.Error())
+				} else {
+					log.Info(st.row+": the issue waits for the Owner", "labels", labels)
+				}
+			}
+		}
+		if st.labelFirst {
+			move()
+		}
 		if comment, err := s.GitHub.CreateIssueComment(ctx, token, owner, repo, st.issue, st.comment); err != nil {
-			log.Error(st.row+": the reason was not written on the issue", "error", err.Error())
+			log.Error(st.row+": the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
+			reason += " cumin did not write the comment on the issue; the log of the Host holds the whole text."
 		} else {
 			link = comment.URL
 			log.Info(st.row+": wrote the reason on the issue", "comment", comment.ID)
 		}
-		switch {
-		case st.labelDone:
-			// The caller changed the label and logged it.
-		case len(st.labels) == 0:
-			log.Error(st.row + ": the labels of the issue were not read; the label was not changed")
-		default:
-			labels := ReplaceStatusLabel(st.labels, LabelAwaitingDecision)
-			if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
-				log.Error(st.row+": the label was not changed", "error", err.Error())
-			} else {
-				log.Info(st.row+": the issue waits for the Owner", "labels", labels)
-			}
+		if !st.labelFirst {
+			move()
 		}
 	}
 
 	s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        st.row,
-		Reason:     st.reason,
+		Reason:     reason,
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", st.issue),
 		Link:       link,
@@ -326,16 +342,17 @@ func WorkDirectoryReason() string {
 	return "cumin did not prepare the work directory of this issue, so the Implementer did not start. cumin requested the implementation again, and the work directory was not prepared again. The log of the Host holds the error."
 }
 
-// AfterAbnormalEndReason adds, to the reason of a stop of the
-// implementation, the kind of the abnormal end of the run that the stop
-// follows: the Owner needs the kind to know where to look.
-func AfterAbnormalEndReason(reason string, kind fmt.Stringer) string {
-	return fmt.Sprintf("%s The last Implementer run ended abnormally (%s).", reason, kind)
+// ReviewerNotStartedReason is the sentence of a second request to the
+// Reviewer of one stay in cumin/status/reviewing that did not start. The
+// error stays in the log of the Host, because it can hold a path of the
+// Host.
+func ReviewerNotStartedReason() string {
+	return "cumin sent two requests to the Reviewer during this review, and the Reviewer did not start for the last one: cumin did not prepare the work directory, or did not start the agent. The log of the Host holds the error."
 }
 
-// abnormalReason is the sentence of a second abnormal end of the same
-// request. The two runs can end in different ways, and the Owner needs the
-// kind of each one to know where to look.
-func abnormalReason(role string, first, second fmt.Stringer) string {
-	return fmt.Sprintf("The %s run ended abnormally (%s). cumin ran the same request again, and it ended abnormally too (%s).", role, first, second)
+// AfterAbnormalEndReason adds, to the reason of a stop, the kind of the
+// abnormal end of the run of the role that the stop follows: the Owner
+// needs the kind to know where to look.
+func AfterAbnormalEndReason(reason, role string, kind fmt.Stringer) string {
+	return fmt.Sprintf("%s The last %s run ended abnormally (%s).", reason, role, kind)
 }

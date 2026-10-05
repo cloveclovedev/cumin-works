@@ -1303,6 +1303,8 @@ func TestReviewEnd_DecidesFromTheFacts(t *testing.T) {
 			StopAtRoundLimit{Number: 10, Explanation: explanation}},
 		{"the request of the cause left no explanation", reviewingSub(ReviewingFacts{CauseRequested: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
 			StopReview{Number: 10, Row: RowI8, Reason: MissingExplanationReason, PullRequest: 21}},
+		{"the second request of the cause left no explanation", reviewingSub(ReviewingFacts{CauseRequestedAgain: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			StopReview{Number: 10, Row: RowI8, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
 		{"approved with risk/medium", reviewingSub(ReviewingFacts{}, Review{State: ReviewApproved, Commit: "new"}),
 			AskOwnerToMerge{Number: 10, PullRequest: 21}},
 		{"approved, a required check does not pass", reviewingSub(ReviewingFacts{Required: []RequiredCheck{{Name: "ci"}}}, Review{State: ReviewApproved, Commit: "new"}),

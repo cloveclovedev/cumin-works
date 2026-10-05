@@ -11,8 +11,8 @@ start
 and the last cumin/status/ready of the issue;
 :Count the round from the reviews on GitHub
 (pure function);
-:Write the head commit and a zero count
-of second requests to the state file;
+:Write the head commit and zero counts
+of requests to the state file;
 :Change the label to cumin/status/reviewing;
 :Remove the Reviewer worktree,
 open the head commit detached;
@@ -29,9 +29,13 @@ else (no)
 endif
 :Run the Reviewer ("review");
 note right
-  blocked: hand back to the Owner at once (row I10).
-  Abnormal end: retry once in a new session,
-  then hand back to the Owner (row I3).
+  blocked: change the label, write the comment,
+  notify the Owner (row I10).
+  Done and abnormal end: the way out below decides.
+  Not started: the count stays; the second time,
+  hand back to the Owner (row I3 or I8).
+  cumin stops after its runs: the end of the run
+  starts no request, and changes no label.
 end note
 partition "The way out of cumin/status/reviewing: every poll, and the end of a Reviewer run" {
   if (A Reviewer runs for the issue?) then (yes)
@@ -75,21 +79,29 @@ partition "The way out of cumin/status/reviewing: every poll, and the end of a R
     after its last review?) then (yes)
       :I8: change the label to cumin/status/awaiting-decision;
       :Notify the Owner (link: that comment);
-    elseif (The cause was just requested?) then (yes)
+    elseif (The cause was just requested with done,
+    or requested twice in this stay?) then (yes)
       :Hand back to the Owner (row I8);
+    elseif (Quota at a limit?) then (yes)
+      :Request nothing, count nothing;
     else (no)
+      :Count the request in the state file;
       :I8: ask the Reviewer to explain the cause
       (the same session);
     endif
   else (none)
     if (Requested again in this stay?
-    (count in the state file)) then (no)
+    (count in the state file)) then (yes)
+      :Hand back to the Owner (row I5,
+      after an abnormal end: with its kind);
+    elseif (Quota at a limit?) then (yes)
+      :Request nothing, count nothing;
+    else (no)
       :Count the request in the state file;
       :Ask the Reviewer once more
-      (after a run: the short text in its session,
-      at a poll: the whole review request);
-    else (yes)
-      :Hand back to the Owner (row I5);
+      (after a done run: the short text in its session,
+      at a poll or after an abnormal end:
+      the whole review request);
     endif
   endif
 }

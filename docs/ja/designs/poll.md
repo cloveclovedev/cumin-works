@@ -191,7 +191,7 @@ checkの結果の読み方:
 - R1とI1では、判定の前の読み取り (「Ownerのreadyの確認 (R1、I1)」) がスナップショットに入れた名前を使い、読み直さない。ほかの起動では、次のとおりに読む。
 - 読むのは、ラベルを替える前である。順は、ログイン名を読む、ラベルを替える、依頼する、になる。読めなければ、ラベルを替えず、依頼もしない。次の定期確認でやり直す (I3のラウンドの読み取りと同じ形)。ラベルを依頼より先に替えることは変わらない (原則3)。
 - 読む場所は、定期確認が起動を決める所である: R4 (受け入れの確認)、I3 (review)、I4 (checkの修正)、I14 (checkまたはOwnerの判断を待つ間の衝突の解消)、I13 (Ownerのレビューへの対応)、I12 (Ownerの承認のあとのmerge) の衝突の解消。I12では、mergeが衝突したときだけ、ラベルを替える前に読む。読めなければ、Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でI12がもう一度成り立つ。
-- 1つの実行の続きで出す依頼は、その実行の前に読んだ名前を使い、読み直さない: 異常終了のあとのやり直し、同じ実行の中の実装の依頼し直し、Reviewerの実行の終わりが決めたI5の指摘の修正、I6 (Reviewerの承認のあとのmerge) の衝突の解消。
+- 1つの実行の続きで出す依頼は、その実行の前に読んだ名前を使い、読み直さない: 同じ実行の中の実装の依頼し直し、Reviewerの実行の終わりが決めたI5の指摘の修正、I6 (Reviewerの承認のあとのmerge) の衝突の解消。
 - `cumin/status/reviewing` の出口 (「Reviewerへの依頼 (I3、I10)」) では、次の依頼の前に読み直す: 定期確認が決めたI5の指摘の修正と、I6のmergeが衝突したときの解消。レビューの依頼し直しとI8の原因の整理は、定期確認が決めたときも、実行の終わりが決めたときも、依頼を組み立てる所 (`reviewRequestOf`) で読み直す。読めなければ、ラベルも状態ファイルも変えず、依頼もしない。Issueは `cumin/status/reviewing` のままなので、次の定期確認が同じ動作を決める。
 - 読むのは、各Issueの新しいほうから100件のラベルのイベントだけである。最新の `cumin/status/ready` のあとに100件を超えるラベルのイベントがあると、そのイベントはないものとして扱う (要求Issueはsub-issueから読み、実装Issueは「ない」になる)。sub-issueから読むのは、依頼に書くログイン名だけである。R1とI1の条件の確認 (「Ownerのreadyの確認 (R1、I1)」) は、sub-issueから読まず、「Ownerでない」にする。
 - 読んだ名前は、`internal/agent` が事実のかたまりに書く ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」)。
@@ -409,7 +409,7 @@ checkの結果の読み方:
 
 - I3を適用する順は、ラウンドを読む、ラベルを `cumin/status/reviewing` に替える、依頼する、である。ラウンドは、ReviewerのAppのbotのloginと、実装Issueに最後に `cumin/status/ready` が付いた時刻と、スナップショットのレビューから数える (「レビューのラウンドの数え方」)。読めなければラベルを替えず、次の定期確認でやり直す。ラベルを依頼より先に替えるのは、同じレビューを二重に依頼しないためである (原則3)。
 - ReviewerのAppのbotのloginは、Plannerと同じく、AppのJWTで `GET /app` を1回読んで作り、覚えておく。
-- 作業場所は、実装IssueとReviewerの組のworktreeで、Pull Requestの先頭のコミットをdetachedで開く ([Agentの実行の設計](agent-run.md) の「作業場所」)。依頼のたびに、前のラウンドのworktreeを消してから作り直す。ラウンドごとに先頭のコミットが変わるためである。異常終了のあとのやり直しは、同じworktreeで続ける。
+- 作業場所は、実装IssueとReviewerの組のworktreeで、Pull Requestの先頭のコミットをdetachedで開く ([Agentの実行の設計](agent-run.md) の「作業場所」)。依頼のたびに、前のラウンドのworktreeを消してから作り直す。ラウンドごとに先頭のコミットが変わるためである。レビューの依頼し直しと原因の整理の依頼も、同じ手順を通るので、worktreeを作り直す。
 - 1ラウンド目は新しいセッションで始める。2ラウンド目以降は、Hostの状態ファイルにあるReviewerのセッションを `--resume` で再開する。Reviewerのセッションは、Implementerのセッションと別の項目 (`reviewer_session_id`) に持つ。2つのroleはセッションを共有しない (Reviewerの要件の「いつ起動されるか」)。セッションがなければ (状態ファイルを失ったとき)、新しいセッションで始まる。Ownerが `cumin/status/ready` を付け直すと、I1が両方のセッションを消す。
 - 依頼文 (「review」) に入れるのは、リポジトリ、実装Issue、Pull Request、先頭のコミット、ラウンドと上限、作業場所と、2ラウンド目以降では前のラウンドでレビューしたコミットである。ラウンドごとに見る範囲は、roleの指示にある (Reviewerの要件の「ラウンドごとに見る範囲」)。
 - ReviewerがこのPull Requestの前のコミットを承認しているときは、依頼文のラウンドの行の次に、最後に承認したコミットを `Approved commit: <コミット>` の行で入れる。承認のあとはラウンドが1から数え直され、前のラウンドでレビューしたコミットがないので、Reviewerがどこまで承認したかを依頼から読めるようにするためである。1ラウンド目では、指示の文も、そのコミットから今の先頭のコミットまでの差分だけを、1ラウンド目の深さで見るように言う。2ラウンド目以降は、行が加わるだけで、指示の文は変わらない。承認したコミットが今の先頭のコミットのときは、差分がないので、行を入れない。一度も承認していなければ、依頼文は今までと同じである。
@@ -421,17 +421,19 @@ checkの結果の読み方:
   - Reviewerか `cumin-core` の質問のコメント (1行目が `## Decision needed`) が、`cumin/status/reviewing` より後にある: 「stop the review for the Owner」 (I10)。ラベルを `cumin/status/awaiting-decision` に替えて通知する。理由はそのコメントにあるので、cuminは書かない。
   - 先頭のコミットが、依頼したときのコミット (状態ファイルの `review_head`) と違う: 「go back to the checks」。ラベルを `cumin/status/checking` に戻す。必須のcheckが通ったのは古いコミットだけだからである。古いコミットに出たレビューは、GitHubにあるとおりにラウンドに数える。状態ファイルを失ったときは、この条件は成り立たない。
   - 先頭のコミットに `APPROVE` がある (純粋関数 `CheckReview`): `DecideMerge` で決める。`risk/low` はmergeの手順 (I6)、`risk/medium` と `risk/high` は「ask the Owner to decide the merge」 (I7)、必須のcheckが通っていなければ「go back to the checks」、riskのラベルがちょうど1つでなければ、行の番号I6で「stop the review for the Owner」である。
-  - 先頭のコミットに `REQUEST_CHANGES` がある: ラウンドが上限未満なら「request a review fix」 (I5)。上限に達していれば、Reviewerの原因の整理のコメントがあるときは「stop at the round limit」、ないときは「request the cause from the Reviewer」である (I8)。
-  - 先頭のコミットにレビューがない: 「request the review again」。この `cumin/status/reviewing` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイル (`review_requests`) に持つ。もう依頼し直していれば、行の番号I5で「stop the review for the Owner」である。
-    - Reviewerの実行の終わりが決めたときは、その実行のセッションを再開し、何が見つからなかったかだけを書いた短い依頼文を送る。そのセッションは、もとの依頼文を持っているためである。
-    - 定期確認が決めたときは、もとの「review」の依頼文をそのまま送る。セッションは、そのラウンドの最初の依頼と同じに選ぶ (1ラウンド目は新しいセッション、2ラウンド目以降は状態ファイルのセッション)。再起動で切れた実行はセッションを残さないので、状態ファイルのセッションが、この滞在の依頼を受け取ったとは限らないためである。
-- I3は、ラベルを替える前に、状態ファイルの `review_requests` を0に、`review_head` を依頼する先頭のコミットにする。ラベルを替えた直後にcuminが再起動しても、次の定期確認がこの滞在の値を読むためである。
+  - 先頭のコミットに `REQUEST_CHANGES` がある: ラウンドが上限未満なら「request a review fix」 (I5)。上限に達していれば、Reviewerの原因の整理のコメントがあるときは「stop at the round limit」、ないときは「request the cause from the Reviewer」である (I8)。原因の整理を依頼した回数は、Hostの状態ファイル (`cause_requests`) に持つ。この `cumin/status/reviewing` の間に2回依頼してもコメントがなければ、行の番号I8で「stop the review for the Owner」である。`done` で終わった原因の整理の実行がコメントを残さなかったときは、その実行の終わりが、1回目でもすぐに同じ行の番号で戻す。
+  - 先頭のコミットにレビューがない: 「request the review again」。この `cumin/status/reviewing` の間に1回だけ依頼し直す。依頼し直した回数は、Hostの状態ファイル (`review_requests`) に持つ。もう依頼し直していれば、行の番号I5で「stop the review for the Owner」である。Reviewerの実行が異常終了したときも、結果を残さなかった実行なので、この条件で決める。実行の中で同じ依頼をやり直すことはしない。そのため、1回の滞在でReviewerが起動するのは、2回までである。
+    - `done` で終わったReviewerの実行の終わりが決めたときは、その実行のセッションを再開し、何が見つからなかったかだけを書いた短い依頼文を送る。そのセッションは、もとの依頼文を持っているためである。
+    - 定期確認が決めたときと、異常終了した実行の終わりが決めたときは、もとの「review」の依頼文をそのまま送る。セッションは、そのラウンドの最初の依頼と同じに選ぶ (1ラウンド目は新しいセッション、2ラウンド目以降は状態ファイルのセッション)。再起動で切れた実行も、異常終了した実行も、セッションを残さないので、状態ファイルのセッションが、この滞在の依頼を受け取ったとは限らないためである。
+- レビューの依頼し直しと原因の整理の依頼の前に、利用枠を確かめる (`quotaAllowsStart`。[利用枠の設計](quota.md) の「着手の前の確認」)。上限に達していれば、何も依頼せず、回数も数えない。Issueは `cumin/status/reviewing` のままなので、あとの定期確認が同じ動作を決める。上限に当たって結果を残さなかった実行を、すぐにもう一度動かさないためである。最初のレビューの依頼 (I3) は確かめない。作業中のIssueは先に進めるためである。
+- 回数は、利用枠を確かめたあと、依頼の前に数える。数えたあとに起動できなかった依頼 (作業場所を用意できない、Agentを起動できない) も、1回に数えたままにする。最初の依頼が起動できなかったときは、何も変えず、次の定期確認が依頼し直す。この滞在の2回目の依頼も起動できなければ、行の番号 (レビューはI3、原因の整理はI8) で「stop the review for the Owner」にして、理由を書く (`stopForReviewerStart`)。3回目は依頼しない。Implementerの作業場所の扱い (`stopForWorkDirectory`) と同じ形である。誤りの内容は、Hostのパスを含むことがあるので、Hostのログにだけ出す。
+- I3は、ラベルを替える前に、状態ファイルの `review_requests` と `cause_requests` を0に、`review_head` を依頼する先頭のコミットにする。ラベルを替えた直後にcuminが再起動しても、次の定期確認がこの滞在の値を読むためである。
 - 動作の適用は、定期確認でも実行の終わりでも同じ関数 (`applyReviewEnd`) が行う。ラベルを先に替え、替えられなければ、依頼もコメントも通知も出さない。Issueは `cumin/status/reviewing` のままなので、次の定期確認が同じ動作を決める。そのため、依頼も通知も二重にならない。
 - ラベルのあとに続く長い処理 (I5の依頼、I8の原因の整理、レビューの依頼し直し) は、実行の終わりではReviewerの実行と同じgoroutineで続ける。定期確認が決めたときは、別のgoroutineで動かし、定期確認は待たない。どちらでも、その間、Issueは作業中のIssueの集合に残るので、同じIssueのAgentは、いつも1つだけである。
-- `blocked` なら、I10である。やり直さず、行の番号I10で「Ownerに戻す道」の手順をすぐに呼ぶ。コメントは、Reviewerが書いた `blocked_reason` である。このコメントは `cumin-core` が書く質問のコメントなので、ラベルの付け替えが失敗しても、次の定期確認が「stop the review for the Owner」を決める。
+- `blocked` なら、I10である。やり直さず、行の番号I10で「Ownerに戻す道」の手順をすぐに呼ぶ。コメントは、Reviewerが書いた `blocked_reason` である。順は、ラベルを替える、コメントを書く、通知する、である。コメントを先に書くと、コメントのあとでラベルを替えられなかったときは次の定期確認が質問のコメントから決められるが、コメントを書けなかったときは、レビューのない `cumin/status/reviewing` が残り、次の定期確認がレビューを依頼し直してしまう。ラベルを先に替えれば、コメントを書けなくても、IssueはOwnerの番にある。ラベルを替えられなかったときも、コメントは書く。このコメントは `cumin-core` が書く質問のコメントなので、次の定期確認が「stop the review for the Owner」を決める。
 - 一時的な失敗のあとに手順を持っておく仕組み (`keptstep.go`) は、Reviewerの実行のあとには使わない。mergeも、手順を持っておかずに、`cumin/status/merging` の中で定期確認のたびに決める (「mergeの手順 (I6、I7)」)。
-- cuminが実行の終わりに止まるとき (「stop after the current runs」) は、定期確認は、I5の依頼、原因の整理の依頼、レビューの依頼し直しを控える (`WithoutNewWork`)。Issueは `cumin/status/reviewing` のまま、次の起動を待つ。
-- 異常終了は、同じ作業場所の新しいセッションで1回だけやり直す。2回目も異常終了なら、行の番号I3でOwnerに戻す。
+- cuminが実行の終わりに止まるとき (「stop after the current runs」) は、定期確認も、Reviewerの実行の終わりも、I5の依頼、原因の整理の依頼、レビューの依頼し直しを控える (`WithoutNewWork`)。実行の終わりは、ラベルを替える前に戻る。Issueは `cumin/status/reviewing` のまま、次の起動を待つ。次の起動の定期確認が、同じ事実から同じ依頼を1回だけ決める。Agentの要らない出口 (mergeの手順、Ownerへの通知、checkへの戻り、Ownerに戻す道) は、実行の終わりでも行う。
+- 異常終了は、`done` と同じく `ReviewEnd` で決める。同じ実行の中で、異常終了に続いてレビューがないままOwnerに戻すときは、その異常終了の種類を理由の文の終わりに足す。cuminが止まるとき (contextの取り消し) の異常終了は、何も決めず、ラベルも変えない。
 - 採らなかった案: レビューが見つからないときに、すぐOwnerに戻す。Reviewerの要件の「完了の条件」は、1回だけ依頼し直すと決めている。
 - 採らなかった案: ReviewerとImplementerのセッションを1つの項目に持つ。I5はImplementerのセッションを、2ラウンド目のレビューはReviewerのセッションを再開するので、1つでは足りない。
 
@@ -511,7 +513,7 @@ checkの結果の読み方:
 - 上限のラウンドで `REQUEST_CHANGES` が出て、原因の整理のコメントがまだなければ、Reviewerのセッション (状態ファイルの `reviewer_session_id`) のまま、「原因の整理」を依頼する (「request the cause from the Reviewer」)。作業場所は、先頭のコミットを開き直したReviewerのworktreeである。依頼文には、リポジトリ、実装Issue、Pull Request、上限、作業場所と、Pull RequestにOwner向けのコメントを1つ書き、レビューは出さないという短い指示を入れる。形式はskill `cumin-decision-request` にある。
 - 判定の前に、Pull Requestのコメントを、最後のレビューの時刻まで遡って読む (「要求Issueのコメントの読み取り」と同じ問い合わせ)。ReviewerのAppのbotが書き、1行目が `## Decision needed` で始まり、最後のレビューより古くないコメントがあれば、それが原因の整理である (純粋関数 `ExplanationOf`)。比べる時刻はどちらもGitHubの時刻なので、Hostの時計はずれてもよい。
 - 見つかれば、「stop at the round limit」である。ラベルを `cumin/status/awaiting-decision` に替え、Ownerに1回だけ通知する。通知のリンクは、そのコメントのアドレスである。理由はReviewerが書いたので、cuminはコメントを書かない。ラベルを替えられなければ通知を出さず、次の定期確認が同じ動作を決める。
-- 原因の整理の実行が `done` で終わってもコメントが見つからないとき、`blocked` のとき、2回目の異常終了のときは、行の番号I8で「Ownerに戻す道」の手順を呼ぶ。どの場合も、Ownerが決めることに変わりはないためである。`blocked` のコメントは、Reviewerの `blocked_reason` である。
+- 原因の整理の実行が `done` で終わってもコメントが見つからないとき、`blocked` のとき、この滞在で2回依頼してもコメントがないとき (異常終了、再起動で切れた実行) は、行の番号I8でOwnerに戻す (「Reviewerへの依頼 (I3、I10)」)。どの場合も、Ownerが決めることに変わりはないためである。`blocked` のコメントは、Reviewerの `blocked_reason` である。
 - I8は、定期確認も決める。再起動のあと、コメントがあれば通知だけを出し、なければ原因の整理を依頼する。ラベルが替わったあとは `cumin/status/reviewing` ではないので、コメントと通知が二重になることはない。
 - 採らなかった案: 原因の整理が見つからないとき、Reviewerにもう一度依頼する。I8の表は「うまくいかないとき」を定めていない。上限に達した時点で、Ownerが決めることは決まっているので、stop noteで知らせれば足りる。
 
@@ -564,7 +566,7 @@ checkの結果の読み方:
   - ポイントは、実装Issueで1、要求Issueで2である (cumin-worksで実測、2026-10-03、`rateLimit.cost`、[#454](https://github.com/cloveclovedev/cumin-works/pull/454))。全ページを読み直すと、cumin-worksでは34ポイントだった ([#421](https://github.com/cloveclovedev/cumin-works/pull/421))。
   - 読み直しがIssueを返すのは、定期確認がそのIssueを読むときだけである (原則6: 閉じた要求Issueと、そのsub-issueは読まない)。要求Issueは、開いていて、`cumin/type/requirement` のラベルを持つこと。実装Issueは、親がそのような要求Issueであること。そのために、実装Issueの問い合わせは、親の状態とラベルも読む (`parent`)。
   - そうでないIssueは、理由を入れたエラーにして、読めなかったときと同じに扱う: ラベルを替えず、mergeもせず、ログに出す。実行中に要求Issueが閉じられたときも、定期確認が動かないIssueを、実行終了の判定が動かさない。どの行も、定期確認と同じ事実から同じ動作を決める。
-- `blocked` の結果は、この判定に入らない。次の話題の手順でOwnerに戻す。Implementerの異常終了は、`done` と同じく、この判定 (`ImplementationEnd`) で決める。異常終了のたびに同じ依頼をやり直すことはしない。Plannerの異常終了も、下のとおり、GitHubの事実から決める。Reviewerの異常終了だけは、同じ依頼を1回だけやり直してから、次の話題の手順でOwnerに戻す (「Reviewerへの依頼 (I3、I10)」)。
+- `blocked` の結果は、この判定に入らない。次の話題の手順でOwnerに戻す。Implementerの異常終了は、`done` と同じく、この判定 (`ImplementationEnd`) で決める。異常終了のたびに同じ依頼をやり直すことはしない。Plannerの異常終了も、下のとおり、GitHubの事実から決める。Reviewerの異常終了も、同じように `ReviewEnd` で決める (「Reviewerへの依頼 (I3、I10)」)。
 - Plannerの分割の実行が `done` か異常終了で終わったら、同じようにその要求Issueだけを、sub-issueと一緒に読み直し、続けてラベルの時刻とコメントを読む。そして、定期確認と同じ純粋関数 `SplitEnd` で決める (「定期確認の判定」の `cumin/status/planning` の出口)。分割の確認 (`VerifySplit`) は2つである。sub-issueが1つ以上あること。全てのsub-issueに `risk/*` のラベルがちょうど1つ付いていること。閉じたsub-issueも数える。sub-issueは番号の小さい順に確かめ、最初に落ちたものの番号を結果に入れる。分割の中身は判定しない。見るのはOwnerである。
 - 確認が通れば、開いているsub-issueがあるときは、要求Issueのラベルを `cumin/status/awaiting-plan-review` に替え、Ownerに「分割結果の確認が必要」と通知する。sub-issueが全て閉じているとき (受け入れの確認が `blocked` で止まったあとに、Ownerが `cumin/status/ready` で再開し、Plannerが何も作らなかったとき) は、`cumin/status/accepting` に替え、通知せずに、受け入れの確認を依頼する。行き先を決めるのは純粋関数 (`SplitStatus`) である。通知のリンクは要求Issueのアドレスである。通知は止まったことの知らせではないので、戻す道の手順を通らず、同じ通知の部分を直接呼ぶ。
 - Plannerの `blocked` は、I2と同じ扱いで、行の番号をR2にしてOwnerに戻す (`blocked_reason` をcuminがコメントに書く)。異常終了は、`done` と同じく事実から決める。異常終了のたびに同じ依頼をやり直すことはしない。分割のPlannerのセッションは手元に残さない。
@@ -582,16 +584,16 @@ checkの結果の読み方:
 
 ### うまくいかなかったときに、Ownerに戻す道
 
-- 先に進めないときは、1か所の手順でOwnerに戻す。行の番号 (I2、R2 など) を引数で受け取り、順に、止まったIssue (I2では実装Issue、R2では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-decision` に替え、Ownerに通知する。I4、I15 (必須のcheckが結果を返さない)、I3 (Reviewerの2回目の異常終了)、I5 (Reviewerのレビューが2回とも見つからない)、I10 (Reviewerの `blocked`) も、同じ手順を自分の行の番号で呼ぶ。あとの行 (I8) も同じである。
-- 順番に意味がある。理由がGitHubに残ってからラベルが替わり、最後に「見に来てほしい」と伝える。
+- 先に進めないときは、1か所の手順でOwnerに戻す。行の番号 (I2、R2 など) を引数で受け取り、順に、止まったIssue (I2では実装Issue、R2では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-decision` に替え、Ownerに通知する。I4、I15 (必須のcheckが結果を返さない)、I3 (Reviewerへの依頼が2回とも起動できない)、I5 (Reviewerのレビューが2回とも見つからない。異常終了を含む)、I10 (Reviewerの `blocked`) も、同じ手順を自分の行の番号で呼ぶ。あとの行 (I8) も同じである。
+- 順番に意味がある。理由がGitHubに残ってからラベルが替わり、最後に「見に来てほしい」と伝える。`blocked` の道だけは、ラベルを先に替えてからコメントを書く。コメントを書けなかったときに、次の定期確認が同じ作業を依頼し直さないためである。定期確認が決める停止も、ラベルを先に替える。
 - 途中で1つ失敗しても、次を止めない。コメントを書けなくてもラベルは替え、ラベルを替えられなくても通知は出す。巻き戻しもしない。止まったIssueがあることは、どれか1つが落ちても伝わるほうがよい。失敗はログに出す。
-- 通知のリンクは、書いたコメントのアドレスにする。理由の全文がそこにあるためである。コメントを書けなかったときは、Issueのアドレスにする。
+- 通知のリンクは、書いたコメントのアドレスにする。理由の全文がそこにあるためである。コメントを書けなかったときは、Issueのアドレスにする。そのときは、コメントの全文をHostのログに error で出し、通知の理由に、コメントを書けなかったことと、全文がHostのログにあることを足す。
 - 検証が落ちたときのコメントは、cuminが [stop-note.md](../../../templates/stop-note.md) の形式で書く。本文には、落ちた確認の1文 (I2では、ブランチに開いているPull Requestがない、作成者が違う、先頭のコミットがpushされていない、リンクの数が上限に達している、リンクを付けられなかった (GitHubの答えを入れる)、読み直してもリンクがない。R2では、sub-issueがない、あるsub-issueにriskのラベルがない、2つ以上ある) と、確かめたPull Requestの番号 (R2では「None」) を入れる。同じ1文を通知にも入れて、Ownerがどちらを読んでも同じ言葉になるようにする。
 - `blocked` のときのコメントは、Agentが返した `blocked_reason` をそのまま載せる。Agentが [decision-request.md](../../../templates/decision-request.md) の形式で書いているためである。通知には、その1行目 (Ownerに決めてほしいこと) を入れる。やり直さない (Issueのラベルと状態遷移の、Implementerが `blocked` を返したときの決まり)。
 - ラベルを替えるには、そのIssueの今のラベルが要る。`blocked` の道では、実行終了のあとにそのIssueを読み直して取る。読み取れなければ、ラベルを替えずにログに出す。状態ラベルだけを書き込むと、riskのラベルが消えるためである。
 - 通知を出すかどうかは、そのリポジトリの設定 `notify.discord.enabled` で決まる。通知の失敗は error のログに出すだけである ([cumin本体の設計メモ](cumin-core.md) の「Ownerへの通知」)。
 - Implementerの異常終了は、この手順を直接は呼ばない。`ImplementationEnd` が、依頼し直したあとにもPull Requestが確認を通らないと決めたときに、落ちた確認の1文と、依頼し直したこと (`Retried: once`) と、確かめたPull Requestの番号をコメントに書く (「実行終了の判定」)。同じ実行の中で、異常終了に続いてOwnerに戻すときは、その異常終了の種類 (実行時間の上限など) を理由の文の終わりに足す。Ownerがどこから調べるかを知るためである。再起動のあとの定期確認が戻すときは、種類はHostのログにだけある。
-- Reviewerの異常終了のときは、同じ依頼を同じ作業場所で1回だけやり直す ([Agentの実行の設計](agent-run.md) の「異常終了のやり直し」)。2回目も異常終了なら、この手順でOwnerに戻す。コメントには、異常終了の種類と、やり直したことを書く。Agentが残したPull Requestがあれば、その番号も書く。作業がGitHubまで届いたかどうかを、Ownerが先に知れるためである。
+- Reviewerの異常終了も、この手順を直接は呼ばない。`ReviewEnd` が、依頼し直したあとにも先頭のコミットにレビューがないと決めたときに、その1文と、依頼し直したこと (`Retried: once`) と、Pull Requestの番号をコメントに書く (「Reviewerへの依頼 (I3、I10)」)。同じ実行の中で、異常終了に続いてOwnerに戻すときは、Implementerと同じく、その異常終了の種類を理由の文の終わりに足す。
 
 ### 定期確認が続けて失敗したとき
 
