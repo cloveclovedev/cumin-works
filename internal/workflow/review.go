@@ -297,7 +297,10 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 	if err != nil || !ok {
 		return
 	}
+	// The run knows its own request, also when the state file lost it.
 	sub.Reviewing.CauseRequested = req.cause != nil
+	sub.Reviewing.RequestedAgain = sub.Reviewing.RequestedAgain || req.again
+	sub.Reviewing.RequestedHead = req.review.HeadCommit
 	action := ReviewEnd(sub, false)
 	if action == nil {
 		log.Info("I3: the end of the review was not decided; the next poll decides", "labels", sub.Labels)
