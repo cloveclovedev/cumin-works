@@ -317,6 +317,25 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 - 使い切りを許可できるのは5h枠だけである。許可があると、その5h枠のリセットまで、5h枠のしきい値を100%とする。weekly枠のペースの上限は、Ownerの許可でも上がらない。
 - しきい値、時間帯、目標、前倒しは、cuminの設定ファイルで変えられる。コードに埋め込まない。
 
+## Agentを起動する遷移と、利用枠の確認、cuminを止めるとき
+
+上の2つの状態遷移図の遷移を、3つに色分けした図である。状態と遷移は同じで、遷移は名前だけを書く。利用枠の確認と、`cumin stop --after-current-runs` で止めるときの動作に、抜けがないかを見るために使う。
+
+![要求Issueの遷移とAgentの起動](requirement-issue-agent-starts.svg)
+
+![実装Issueの遷移とAgentの起動](implementation-issue-agent-starts.svg)
+
+図の元ファイル: [requirement-issue-agent-starts.puml](requirement-issue-agent-starts.puml)、[implementation-issue-agent-starts.puml](implementation-issue-agent-starts.puml)
+
+| 色 | 遷移 | 利用枠 | 止めるとき (`cumin stop --after-current-runs`) |
+|---|---|---|---|
+| 赤 | Agentを起動する。着手 (「request the split」、「request the implementation」) と、依頼し直し (4つ) と、「request the cause from the Reviewer」 | 起動の前に使用率を読む。上限なら、起動せず、依頼し直した回数にも数えない。Issueは今の状態のまま残り、あとの定期確認が決め直す | 遷移しない。Issueは今の状態のまま残り、次の起動のあとの定期確認が決める |
+| 青 | Agentを起動する。実行中のIssueの続きの依頼である (レビュー、checkの修正、指摘の修正、衝突の解消、Ownerのレビューへの対応、受け入れの確認の最初の依頼) | 読まない。上限に達していても、実行中のIssueは最後まで進める | 遷移しない。赤と同じである |
+| 灰 | Agentを起動しない (ラベルの付け替え、コメント、通知、Issueを閉じること) | 関係しない | 遷移する。`merging` の中のmergeも送る |
+
+- 赤と青を合わせたものが、Agentを起動する遷移の全部である。ほかの遷移は、Agentを起動しない。
+- 破線は、Ownerの操作である。cuminが止まっていても、Ownerは操作できる。cuminは、次の起動のあとの定期確認で、その結果を読む。
+
 ## Agentの異常終了と、結果を残さなかった実行
 
 - Agentの実行が異常終了したとき (プロセスの失敗、タイムアウトなど) も、Agentが結果をGitHubに残さずに終わったときも、cuminの再起動でAgentの実行が切れたときも、扱いは同じである。GitHubを読めば、結果があるかどうかが分かる。結果がなければ、依頼し直しの遷移 (「request the split again」、「request the acceptance check again」、「request the implementation again」、「request the review again」) が成り立ち、同じ依頼を1回だけやり直す。それでも結果がなければ、`cumin/status/awaiting-decision` に替えてOwnerに通知する。

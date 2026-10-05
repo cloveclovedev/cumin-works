@@ -1,0 +1,59 @@
+@startuml implementation-issue-agent-starts
+' cumin works - states of an implementation issue: which transitions start an agent,
+' which of them read the quota usage first, and what cumin does while it stops after the current runs.
+' The states and the transitions are the ones of implementation-issue-states.puml; only the names are shown.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "Draft (no status label)" as Draft
+state "ready" as Ready
+state "implementing" as Implementing
+state "checking" as Checks
+state "reviewing" as Reviewing
+state "awaiting-merge-decision" as OwnerReview
+state "merging" as Merging
+Merging : do / cumin sends the merge (also while cumin stops)
+state "awaiting-decision" as Decision
+
+[*] --> Draft
+Draft -[#888888,dashed]-> Ready : the Owner adds ready
+Ready -[#D32F2F,bold]-> Implementing : <color:#D32F2F>request the implementation</color>
+Implementing -[#888888]-> Checks : wait for the checks
+Implementing -[#D32F2F,bold]-> Implementing : <color:#D32F2F>request the implementation again</color>
+Implementing -[#888888]-> Decision : stop the implementation for the Owner
+Checks -[#1565C0,bold]-> Reviewing : <color:#1565C0>request the review</color>
+Checks -[#1565C0,bold]-> Implementing : <color:#1565C0>request a check fix</color>
+Checks -[#888888]-> Decision : stop for failed checks
+Checks -[#1565C0,bold]-> Implementing : <color:#1565C0>request a conflict resolution</color>
+Checks -[#888888]-> Decision : stop for missing checks
+Reviewing -[#1565C0,bold]-> Implementing : <color:#1565C0>request a review fix</color>
+Reviewing -[#888888]-> Merging : start the merge
+Reviewing -[#888888]-> OwnerReview : ask the Owner to decide the merge
+Reviewing -[#D32F2F,bold]-> Reviewing : <color:#D32F2F>request the cause from the Reviewer</color>
+Reviewing -[#888888]-> Decision : stop at the round limit
+Reviewing -[#888888]-> Decision : stop the review for the Owner
+Reviewing -[#888888]-> Checks : go back to the checks
+Reviewing -[#D32F2F,bold]-> Reviewing : <color:#D32F2F>request the review again</color>
+OwnerReview -[#888888]-> Merging : start the merge
+OwnerReview -[#1565C0,bold]-> Implementing : <color:#1565C0>request a response to the Owner's review</color>
+OwnerReview -[#1565C0,bold]-> Implementing : <color:#1565C0>request a conflict resolution</color>
+OwnerReview -[#888888,dashed]-> Ready : the Owner adds ready
+Merging -[#888888]-> [*] : close the merged issue
+Merging -[#888888]-> Checks : go back to the checks
+Merging -[#1565C0,bold]-> Implementing : <color:#1565C0>request a conflict resolution</color>
+Merging -[#888888]-> Decision : stop the merge for the Owner
+Decision -[#888888,dashed]-> Ready : the Owner adds ready
+
+legend right
+  <color:#D32F2F>**Red**</color>: cumin starts an agent, and reads the quota usage first. At a limit, cumin starts nothing
+  and counts nothing; the issue keeps its state, and a later poll decides again.
+  <color:#1565C0>**Blue**</color>: cumin starts an agent, and reads no usage: an issue in work goes on.
+  Gray: cumin starts no agent (a label, a comment, a notification, a close). Dashed: the Owner acts.
+
+  While cumin stops after the current runs (cumin stop --after-current-runs):
+  cumin takes no red and no blue transition; the issue keeps its state until the next start.
+  cumin still takes the gray transitions, and still sends a merge.
+endlegend
+
+@enduml
