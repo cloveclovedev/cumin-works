@@ -101,6 +101,10 @@ type stop struct {
 	labelDone bool
 }
 
+// notWrittenNote is what the notification adds to the reason when the
+// comment was not written on the issue.
+const notWrittenNote = " cumin did not write the comment on the issue; the log of the Host holds the whole text."
+
 // stopForOwner posts the comment, replaces the status label, and notifies
 // the Owner, in that order; with labelFirst, the label comes before the
 // comment. Every step is logged with the row.
@@ -120,7 +124,8 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 
 	token, err := target.Token(ctx)
 	if err != nil {
-		log.Error(st.row+": no token; the issue keeps its label", "error", err.Error())
+		log.Error(st.row+": no token; the issue keeps its label, and the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
+		reason += notWrittenNote
 	} else {
 		move := func() {
 			switch {
@@ -142,7 +147,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 		}
 		if comment, err := s.GitHub.CreateIssueComment(ctx, token, owner, repo, st.issue, st.comment); err != nil {
 			log.Error(st.row+": the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
-			reason += " cumin did not write the comment on the issue; the log of the Host holds the whole text."
+			reason += notWrittenNote
 		} else {
 			link = comment.URL
 			log.Info(st.row+": wrote the reason on the issue", "comment", comment.ID)

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
@@ -495,5 +496,93 @@ func TestReviewing_AStopAfterTheRunsStartsNoReviewFixAndTheNextStartSendsOne(t *
 	}
 	if n := strings.Count(sc.logs.String(), `"msg":"I5: requested the work"`); n != 1 {
 		t.Errorf("%d fix requests in the log, want 1", n)
+	}
+}
+
+// A cause run that ends abnormally gets one second request of the cause. A
+// second end with no decision request stops the review for the Owner with
+// the row I8, and the note names the kind of the abnormal end. The polls
+// that follow start nothing: one stay requests the cause two times at most.
+func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
+	// The review of round 3 returns done; every run after it ends abnormally.
+	sc := newScene(t, cliOptions{secondFixture: "invalid-result.jsonl", reviews: []string{"REQUEST_CHANGES"}})
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	sc.atTheLimit(t)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 3 {
+		t.Errorf("%d agent runs, want 3: the review and two requests of the cause", n)
+	}
+	if n := strings.Count(sc.logs.String(), `"msg":"I8: requested the explanation of the cause"`); n != 2 {
+		t.Errorf("%d requests of the cause in the log, want 2", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CauseRequests; n != 2 {
+		t.Errorf("the state file counts %d requests of the cause, want 2", n)
+	}
+	reason := workflow.AfterAbnormalEndReason(workflow.MissingCauseReason, "Reviewer", agent.EndInvalidResult)
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"Row: I8", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	want := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
+	}
+}
+
+// At a quota limit, "request the cause from the Reviewer" starts nothing
+// and counts nothing: the issue keeps cumin/status/reviewing. After the
+// limit, one poll sends the request.
+func TestReviewing_AQuotaLimitDoesNotUseUpTheRequestOfTheCause(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}, comments: []string{"NONE", "DECISION"}})
+	reset := sceneNow.Add(2 * time.Hour)
+	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
+	sc.atTheLimit(t)
+
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs at the limit, want 1: the quota stops the request of the cause", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CauseRequests; n != 0 {
+		t.Errorf("the state file counts %d requests of the cause, want none", n)
+	}
+	want := []string{"risk/low", workflow.LabelReviewing}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 10); len(comments) != 0 {
+		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs after the limit, want 2: one poll sends the request of the cause", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CauseRequests; n != 1 {
+		t.Errorf("the state file counts %d requests of the cause, want 1", n)
+	}
+	want = []string{"risk/low", workflow.LabelAwaitingDecision}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #10 = %v, want %v: the Reviewer explained the cause", got, want)
 	}
 }

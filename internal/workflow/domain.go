@@ -1283,10 +1283,10 @@ func ReviewEnd(sub SubIssue, running bool) Action {
 			return RequestReviewFix{Number: sub.Number, PullRequest: pr.Number, Round: round, Review: latest}
 		case facts.Explained:
 			return StopAtRoundLimit{Number: sub.Number, Explanation: facts.Explanation}
-		case facts.CauseRequested:
-			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingExplanationReason, PullRequest: pr.Number}
 		case facts.CauseRequestedAgain:
 			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingCauseReason, PullRequest: pr.Number, Retried: true}
+		case facts.CauseRequested:
+			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingExplanationReason, PullRequest: pr.Number}
 		}
 		return RequestCause{Number: sub.Number, PullRequest: pr.Number, Review: latest}
 	}

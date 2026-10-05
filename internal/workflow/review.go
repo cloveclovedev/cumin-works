@@ -598,17 +598,19 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if isCause {
 			row = RowI8
 		}
-		req, err := s.reviewRequestOf(ctx, token, target, settings, number, pr)
-		if err != nil {
-			return nil, err
-		}
 		// Q1: the quota decides before the request is counted, so a limit
-		// does not use up the one second request of the stay.
+		// does not use up the one second request of the stay. It decides
+		// before the reads of the request, so a poll at a limit reads
+		// nothing more.
 		if ok, err := s.quotaAllowsStart(ctx, row, config.RoleReviewer, target, number); err != nil || !ok {
 			if err != nil {
 				return nil, fmt.Errorf("%s: issue #%d: %w", row, number, err)
 			}
 			return nil, nil
+		}
+		req, err := s.reviewRequestOf(ctx, token, target, settings, number, pr)
+		if err != nil {
+			return nil, err
 		}
 		count, err := s.countReviewRequest(repository, number, isCause)
 		if err != nil {
