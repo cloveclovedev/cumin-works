@@ -38,124 +38,18 @@ func (s *Service) closeWait() time.Duration {
 	return DefaultCloseWait
 }
 
-// afterApproval applies I6 or I7 when the Reviewer approved the head commit
-// of the pull request. It reads the issue again for the labels of the
-// issue now and for the default branch, whose rules name the required
-// checks. A read that fails is logged, and the issue keeps its label.
-// ownerLogin is the login of the Owner that the Reviewer run holds; a
-// conflict resolution carries it, because no later poll acts on an issue
-// in cumin/status/reviewing after a read that failed here.
-//
-// The merge is the rest of the step: the function returns it, and the
-// caller runs it. A temporary failure of the token, of a read, or of a
-// label change is returned, for the kept step (keptstep.go).
-func (s *Service) afterApproval(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest, ownerLogin string, try *reviewTry) (func(context.Context), error) {
-	merge, sub, now, defaultBranch, err := s.decideApproved(ctx, log, target, settings, number, pr, try, false)
-	if err != nil || !merge {
-		return nil, err
-	}
-	return func(ctx context.Context) {
-		s.mergeStep(ctx, log, target, settings, RowI6, sub, now, defaultBranch,
-			func(string) (string, error) { return ownerLogin, nil },
-			// A try of the kept merge decides again, and applies I7 or
-			// the other paths as the first decision does.
-			func(ctx context.Context) (bool, error) {
-				merge, _, _, _, err := s.decideApproved(ctx, log, target, settings, number, pr, try, true)
-				return merge, err
-			})
-	}, nil
-}
-
-// decideApproved reads the issue and the required checks, decides on the
-// approved pull request (DecideMerge), and applies every path other than
-// the merge: I7, the way back to the checks, and the stop for a wrong risk
-// label. The first value says that the decision is the merge; the issue,
-// the pull request of this read, and the default branch come with it.
-//
-// kept says that the call is a try of the kept merge. Such a try changes
-// nothing when the issue left cumin/status/reviewing, unless the label is
-// one that the last try wrote without an answer (afterReview).
-func (s *Service) decideApproved(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, pr PullRequest, try *reviewTry, kept bool) (bool, SubIssue, PullRequest, string, error) {
+// askOwnerToMerge applies "ask the Owner to decide the merge" (I7): the
+// label cumin/status/awaiting-merge-decision, then one notification that
+// links the pull request. A label change that fails is returned, without
+// the notification: the issue keeps cumin/status/reviewing, and the next
+// poll decides the same and notifies then.
+func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	token, err := target.Token(ctx)
-	if err != nil {
-		log.Error("I6: no token; the issue keeps its label", "error", err.Error())
-		return false, SubIssue{}, pr, "", temporary(err)
+	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingMergeDecision)
+	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
+		return fmt.Errorf("I7: move issue #%d to awaiting-merge-decision: %w", sub.Number, err)
 	}
-	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
-	if err != nil {
-		log.Error("I6: the issue was not read again; the issue keeps its label", "error", err.Error())
-		return false, SubIssue{}, pr, "", temporary(err)
-	}
-	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	sub := toSubIssue(read.Issue)
-	if kept {
-		lost := try.lost
-		try.lost = ""
-		if !slices.Contains(sub.Labels, LabelReviewing) && (lost == "" || lost == LabelChecking || !slices.Contains(sub.Labels, lost)) {
-			log.Info("I6: the issue left cumin/status/reviewing while the merge was kept; nothing is merged", "labels", sub.Labels)
-			return false, sub, pr, read.DefaultBranch, nil
-		}
-	}
-	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
-	if err != nil {
-		log.Error("I6: the required checks were not read; the issue keeps its label", "error", err.Error())
-		return false, sub, pr, read.DefaultBranch, temporary(err)
-	}
-	// The checks come from this read, not from the read that found the
-	// review: a check can run again in between. A pull request that is gone
-	// or whose head moved is treated as checks that do not pass.
-	approved := pr
-	found := false
-	for _, now := range sub.PullRequests {
-		if now.Number == approved.Number {
-			pr, found = now, true
-		}
-	}
-	decision := MergeChecksNotPassed
-	if found && pr.HeadCommit == approved.HeadCommit {
-		decision = DecideMerge(sub.Labels, toRequiredChecks(required), pr.Checks)
-	}
-	log.Info("I6: decided on the approved pull request", "decision", decision.String(), "pull_request", pr.Number)
-	switch decision {
-	case MergeNow:
-		return true, sub, pr, read.DefaultBranch, nil
-	case MergeAskOwner:
-		return false, sub, pr, read.DefaultBranch, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, try)
-	case MergeChecksNotPassed:
-		labels, err := s.replaceStatus(ctx, token, target, sub, LabelChecking, try)
-		if err != nil {
-			log.Error("I6: the label was not changed", "error", err.Error())
-			return false, sub, pr, read.DefaultBranch, temporary(err)
-		}
-		log.Info("I6: a required check does not pass on the approved commit; the issue waits for the checks again", "labels", labels)
-	default:
-		reason := RiskLabelReason(decision)
-		s.stopForOwner(ctx, log, target, settings, stop{
-			row: RowI6, issue: number, labels: sub.Labels, reason: reason,
-			comment: StopNote(RowI6, reason, pr.Number, false),
-		})
-	}
-	return false, sub, pr, read.DefaultBranch, nil
-}
-
-// askOwnerToMerge applies I7: the label cumin/status/awaiting-merge-decision,
-// then one notification that links the pull request. A label change that
-// ends with a temporary failure is returned, without the notification: the
-// kept step runs again, and notifies then. Any other failure of the label
-// does not hold back the notification, because that step does not run
-// again, and the Owner must still learn that the pull request waits.
-func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest, try *reviewTry) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
-	labels, err := s.replaceStatus(ctx, token, target, sub, LabelAwaitingMergeDecision, try)
-	if err != nil {
-		log.Error("I7: the label was not changed", "error", err.Error())
-		if temporary(err) != nil {
-			return err
-		}
-	} else {
-		log.Info("I7: the merge waits for the Owner", "labels", labels, "pull_request", pr.Number)
-	}
+	log.Info("I7: the merge waits for the Owner", "labels", labels, "pull_request", pr.Number)
 	s.notifyOwner(ctx, log.With("row", RowI7), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        RowI7,
 		Reason:     "the merge needs a decision",

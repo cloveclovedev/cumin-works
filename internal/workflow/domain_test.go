@@ -1268,3 +1268,84 @@ func TestWithoutNewWorkHoldsTheSecondRequestOfTheImplementation(t *testing.T) {
 		t.Errorf("WithoutNewWork = %#v, want %#v", got, want)
 	}
 }
+
+// reviewingSub is an implementation issue in cumin/status/reviewing with
+// the pull request #21 at the head commit "new", no Reviewer, and the
+// given reviews of the Reviewer.
+func reviewingSub(facts ReviewingFacts, reviews ...Review) SubIssue {
+	at := time.Date(2026, 1, 2, 3, 0, 0, 0, time.UTC)
+	facts.StatusCounts, facts.ReviewingAt, facts.Reviewer, facts.Limit = true, at, "reviewer[bot]", 2
+	for i := range reviews {
+		reviews[i].Author = "reviewer[bot]"
+		reviews[i].SubmittedAt = at.Add(time.Duration(i+1) * time.Minute)
+	}
+	return SubIssue{
+		Number:       10,
+		Labels:       []string{"risk/medium", LabelReviewing},
+		PullRequests: []PullRequest{{Number: 21, HeadCommit: "new", Reviews: reviews}},
+		Reviewing:    &facts,
+	}
+}
+
+func TestReviewEnd_DecidesFromTheFacts(t *testing.T) {
+	changes := Review{State: ReviewChangesRequested, Commit: "new"}
+	explanation := Comment{Author: "reviewer[bot]", Body: DecisionRequestHeading}
+	tests := []struct {
+		name string
+		sub  SubIssue
+		want Action
+	}{
+		{"changes requested below the limit", reviewingSub(ReviewingFacts{RequestedHead: "new"}, changes),
+			RequestReviewFix{Number: 10, PullRequest: 21, Round: 1}},
+		{"changes requested at the limit", reviewingSub(ReviewingFacts{}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			RequestCause{Number: 10, PullRequest: 21}},
+		{"the cause is explained", reviewingSub(ReviewingFacts{Explained: true, Explanation: explanation}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			StopAtRoundLimit{Number: 10, Explanation: explanation}},
+		{"the request of the cause left no explanation", reviewingSub(ReviewingFacts{CauseRequested: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			StopReview{Number: 10, Row: RowI8, Reason: MissingExplanationReason, PullRequest: 21}},
+		{"approved with risk/medium", reviewingSub(ReviewingFacts{}, Review{State: ReviewApproved, Commit: "new"}),
+			AskOwnerToMerge{Number: 10, PullRequest: 21}},
+		{"approved, a required check does not pass", reviewingSub(ReviewingFacts{Required: []RequiredCheck{{Name: "ci"}}}, Review{State: ReviewApproved, Commit: "new"}),
+			BackToChecks{Number: 10}},
+		{"the head commit moved", reviewingSub(ReviewingFacts{RequestedHead: "old"}, Review{State: ReviewChangesRequested, Commit: "old"}),
+			BackToChecks{Number: 10, HeadMoved: true}},
+		{"no review on the head commit", reviewingSub(ReviewingFacts{}),
+			RequestReviewAgain{Number: 10, PullRequest: 21}},
+		{"no review after the second request", reviewingSub(ReviewingFacts{RequestedAgain: true}),
+			StopReview{Number: 10, Row: RowI5, Reason: MissingReviewReason, PullRequest: 21, Retried: true}},
+		{"a question after the label", reviewingSub(ReviewingFacts{QuestionAt: time.Date(2026, 1, 2, 4, 0, 0, 0, time.UTC)}, changes),
+			StopReview{Number: 10, Question: true, Row: RowI10, PullRequest: 21}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ReviewEnd(tt.sub, false)
+			// The review of the action is the latest one of the scene.
+			switch a := got.(type) {
+			case RequestReviewFix:
+				a.Review = Review{}
+				got = a
+			case RequestCause:
+				a.Review = Review{}
+				got = a
+			}
+			if got != tt.want {
+				t.Errorf("ReviewEnd = %#v, want %#v", got, tt.want)
+			}
+			if running := ReviewEnd(tt.sub, true); running != nil {
+				t.Errorf("ReviewEnd while the Reviewer runs = %#v, want nil", running)
+			}
+		})
+	}
+}
+
+// A review of the old head commit stays on GitHub after the head commit
+// moved, and counts as a round.
+func TestReviewEnd_AReviewOfTheOldHeadStillCountsAsARound(t *testing.T) {
+	sub := reviewingSub(ReviewingFacts{RequestedHead: "old"}, Review{State: ReviewChangesRequested, Commit: "old"})
+	if got, want := ReviewEnd(sub, false), (BackToChecks{Number: 10, HeadMoved: true}); got != want {
+		t.Fatalf("ReviewEnd = %#v, want %#v", got, want)
+	}
+	if rounds := ReviewRounds(sub.PullRequests[0].Reviews, "reviewer[bot]", time.Time{}); rounds != 1 {
+		t.Errorf("%d rounds, want 1: the review of the old head commit counts", rounds)
+	}
+}

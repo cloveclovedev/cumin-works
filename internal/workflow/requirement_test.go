@@ -44,9 +44,10 @@ func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing
 	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/awaiting-plan-review") {
 		t.Fatalf("labels of #6 = %v, want awaiting-plan-review kept", got)
 	}
-	// The two queries of the poll, and the query of the label times.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
-		t.Errorf("%d GraphQL requests, want 3", n)
+	// The two queries of the poll, the query of the label times, and the
+	// reads for #19, which is in cumin/status/reviewing with no Reviewer.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 7 {
+		t.Errorf("%d GraphQL requests, want 7", n)
 	}
 
 	// The Owner reviews the new sub-issue and lets it start.
@@ -102,9 +103,10 @@ func TestR3_ARequirementIssueWithoutAStatusLabelFollowsAReadySubIssue(t *testing
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	// The two queries of the poll: #10 is open and has a status label.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
-		t.Errorf("%d GraphQL requests, want 2", n)
+	// The two queries of the poll: #10 is open and has a status label. The
+	// reads for #19 follow: it is in cumin/status/reviewing with no Reviewer.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
+		t.Errorf("%d GraphQL requests, want 6", n)
 	}
 }
 

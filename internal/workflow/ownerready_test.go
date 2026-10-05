@@ -230,7 +230,7 @@ func TestOwnerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
 			sc.repo.Issues[10].BlockedBy = []int{9}
 		}},
 		{name: "no free slot", setup: func(sc *scene) {
-			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Another issue", Labels: []string{"cumin/status/reviewing", "risk/low"}})
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Another issue", Labels: []string{"cumin/status/checking", "risk/low"}})
 		}},
 	}
 	for _, tt := range tests {

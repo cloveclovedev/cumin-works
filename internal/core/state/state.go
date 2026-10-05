@@ -58,6 +58,13 @@ type Issue struct {
 	// that state then stops the issue when the head commit is older than
 	// the label.
 	ConflictResolution bool `json:"conflict_resolution,omitempty"`
+	// ReviewRequests is how many times cumin has requested the review again
+	// during this stay of an implementation issue in cumin/status/reviewing.
+	ReviewRequests int `json:"review_requests,omitempty"`
+	// ReviewHead is the head commit that the review of this stay in
+	// cumin/status/reviewing was requested on. A pull request with another
+	// head commit goes back to the checks.
+	ReviewHead string `json:"review_head,omitempty"`
 }
 
 // empty reports whether the entry holds nothing, so that Set removes it.
