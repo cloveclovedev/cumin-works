@@ -1,0 +1,29 @@
+@startuml agent-start-single-caller
+' cumin works - the one check before a start and the single caller of Agents.Start, with the ways around that a test refuses.
+' Document: cumin-core.md, topic on the stop after the runs.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+rectangle "a request to an agent\n(at a poll, or at the end of a run)" as request
+rectangle "PermitStart\n(pure function, the one check)" as check
+rectangle "startAgent\n(takes the permit)" as caller
+rectangle "Agents.Start\n(starts the agent)" as start
+rectangle "other code of the package" as other #MistyRose
+
+request --> check : stop request read?\nquota allows?
+check --> request : StartPermit\n(granted or not)
+request --> caller : the permit
+caller --> start : the only call,\nonly with a granted permit
+
+other -[#red,dashed]-> start : refused: a call, a method value,\na copy of the field Agents
+other -[#red,dashed]-> caller : refused: a StartPermit literal\noutside PermitStart
+
+note bottom of other
+  A test reads the source of the package
+  and fails for each red arrow.
+  Other methods of Agents, a comparison
+  with nil, and an assignment to the field
+  stay allowed.
+end note
+@enduml
