@@ -163,14 +163,14 @@ func TestReadQuota_MissingExecutable(t *testing.T) {
 }
 
 func TestReadQuota_TimeLimitLeavesNoChild(t *testing.T) {
-	path, child := neverEndingCLI(t, exitOnTerm)
-	c := quiet(path)
-	// The grace period cannot pass, so SIGTERM alone ends the run.
-	c.Grace = farAboveHangGuard
-	c.QuotaTimeLimit = timeLimitTestLimit
-
 	var err error
-	guardAgainstHang(t, func() { _, err = c.ReadQuota(context.Background()) })
+	path, child := untilReadyBeforeTheLimit(t, exitOnTerm, func(path string, limit time.Duration) {
+		c := quiet(path)
+		// The grace period cannot pass, so SIGTERM alone ends the run.
+		c.Grace = farAboveHangGuard
+		c.QuotaTimeLimit = limit
+		_, err = c.ReadQuota(context.Background())
+	})
 
 	if q := quotaNotRead(t, err); !strings.Contains(q.Reason, "time limit") {
 		t.Errorf("Reason = %q, want the time limit", q.Reason)

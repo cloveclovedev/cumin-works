@@ -325,9 +325,30 @@ const hangGuard = time.Minute
 // a test. A run that ends below the hang guard ended before it.
 const farAboveHangGuard = 10 * hangGuard
 
-// timeLimitTestLimit is the time limit of the tests in which the limit
-// must pass. The fake CLI sets its trap and starts its child before it.
+// timeLimitTestLimit is the first time limit of the tests in which the
+// limit must pass. See untilReadyBeforeTheLimit.
 const timeLimitTestLimit = 3 * time.Second
+
+// untilReadyBeforeTheLimit makes a fake CLI of neverEndingCLI and calls run
+// with its path and a time limit, and returns that fake CLI. The time limit
+// counts from the call, not from the moment the fake CLI is ready, so on a
+// slow machine the limit can pass before the fake CLI set its trap. Such a
+// call says nothing about the stop of a run: it is repeated with a new fake
+// CLI and twice the limit. A call that hangs fails the test.
+func untilReadyBeforeTheLimit(t *testing.T, prologue string, run func(path string, limit time.Duration)) (path string, child <-chan string) {
+	t.Helper()
+	for limit := timeLimitTestLimit; ; limit *= 2 {
+		path, child = neverEndingCLI(t, prologue)
+		guardAgainstHang(t, func() { run(path, limit) })
+		if _, err := os.Stat(path + ".ready"); err == nil {
+			return path, child
+		}
+		if 2*limit >= hangGuard {
+			t.Fatalf("the fake CLI was not ready before the time limit of %s", limit)
+		}
+		t.Logf("the time limit of %s passed before the fake CLI was ready; again with twice the limit", limit)
+	}
+}
 
 // guardAgainstHang runs the call and fails the test when the call does
 // not return before the hang guard.
@@ -377,24 +398,29 @@ func fakePipe(t *testing.T, dir, name string) (path string, written <-chan strin
 	return path, ch
 }
 
-// Shell text for the prologue of neverEndingCLI. Each trap records SIGTERM
-// in the file of recordedSignals.
+// Shell text for the prologue of neverEndingCLI. Each one names in $on_term
+// what the CLI does on SIGTERM, and each trap records SIGTERM in the file of
+// recordedSignals.
 const (
 	// exitOnTerm ends the CLI on SIGTERM. The child gets the signal of the
 	// process group.
-	exitOnTerm = `trap 'echo TERM >> "$signals"; exit 143' TERM`
+	exitOnTerm = `on_term='echo TERM >> "$signals"; exit 143'`
 	// endChildOnTerm ends the child and exits on SIGTERM, as Claude Code
 	// does.
-	endChildOnTerm = `trap 'echo TERM >> "$signals"; kill $child; exit 143' TERM`
+	endChildOnTerm = `on_term='echo TERM >> "$signals"; kill $child; exit 143'`
 	// ignoreTerm keeps the CLI and its child alive after SIGTERM, so only
-	// SIGKILL ends them.
-	ignoreTerm = `trap 'echo TERM >> "$signals"' TERM` + "\n" + `child_command="trap '' TERM; exec sleep 300"`
+	// SIGKILL ends them. Only the child ignores SIGTERM from its start: the
+	// CLI keeps the default action until its trap is set, so a SIGTERM
+	// before the trap ends the CLI, and is not lost.
+	ignoreTerm = `on_term='echo TERM >> "$signals"'` + "\n" + `child_command="trap '' TERM; exec sleep 300"`
 )
 
-// neverEndingCLI writes a fake CLI that prints the init event, starts a
-// child, and waits. The child holds the write end of a named pipe; the
+// neverEndingCLI writes a fake CLI that starts a child, prints the init
+// event, and waits. It makes the file path + ".ready" when its trap is set
+// and the init event is printed. The child holds the write end of a named pipe; the
 // returned channel gives the child's process ID when the child is gone.
-// prologue is shell text that runs first (for example a trap).
+// prologue is shell text that runs first: one of exitOnTerm,
+// endChildOnTerm, and ignoreTerm.
 func neverEndingCLI(t *testing.T, prologue string) (path string, child <-chan string) {
 	t.Helper()
 	return neverEndingCLIWithInit(t, prologue, `{"type":"system","subtype":"init","session_id":"`+fixtureSessionID+`","plugins":[],"mcp_servers":[],"skills":[]}`)
@@ -407,14 +433,19 @@ func neverEndingCLIWithInit(t *testing.T, prologue, initLine string) (path strin
 	path = filepath.Join(dir, "fake-claude")
 	childPipe, child := fakePipe(t, dir, "child")
 	// The child starts before the init line, so that a run that is
-	// stopped at the init event has a recorded child to check. The loop
-	// waits again after a trap that does not exit.
+	// stopped at the init event has a recorded child to check. The trap is
+	// set after the child starts: a child that is forked under a trap takes
+	// a SIGTERM that comes before its exec with the handler of the shell,
+	// and lives on with the output of the CLI open (dash does this). The
+	// loop waits again after a trap that does not exit.
 	script := "#!/bin/sh\n" +
 		"signals=" + path + ".signals\n" +
 		"child_command='exec sleep 300'\n" +
 		prologue + "\n" +
 		startChild(childPipe, `eval "$child_command"`) +
+		"trap \"$on_term\" TERM\n" +
 		"printf '%s\\n' '" + initLine + "'\n" +
+		": > " + path + ".ready\n" +
 		"while kill -0 $child 2>/dev/null; do wait; done\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -618,15 +649,15 @@ func TestRun_NormalEndLeavesNoChild(t *testing.T) {
 }
 
 func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
-	path, child := neverEndingCLI(t, exitOnTerm)
-	c := quiet(path)
-	// The grace period cannot pass, so SIGTERM alone ends the run.
-	c.Grace = farAboveHangGuard
-	req := request(t)
-	req.TimeLimit = timeLimitTestLimit
-
 	var err error
-	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
+	path, child := untilReadyBeforeTheLimit(t, exitOnTerm, func(path string, limit time.Duration) {
+		c := quiet(path)
+		// The grace period cannot pass, so SIGTERM alone ends the run.
+		c.Grace = farAboveHangGuard
+		req := request(t)
+		req.TimeLimit = limit
+		_, err = c.Run(context.Background(), req)
+	})
 
 	end := abnormalEnd(t, err)
 	if end.Kind != EndTimeLimit {
@@ -646,15 +677,15 @@ func TestRun_TimeLimitStopsTheRunAndItsChild(t *testing.T) {
 func TestRun_TimeLimitKillsAfterGraceWhenTermIsIgnored(t *testing.T) {
 	// The CLI records SIGTERM and stays, and its child ignores SIGTERM, so
 	// only SIGKILL ends them.
-	path, child := neverEndingCLI(t, ignoreTerm)
-	c := quiet(path)
-	// The grace period must pass here. The CLI records SIGTERM within it.
-	c.Grace = 3 * time.Second
-	req := request(t)
-	req.TimeLimit = timeLimitTestLimit
-
 	var err error
-	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
+	path, child := untilReadyBeforeTheLimit(t, ignoreTerm, func(path string, limit time.Duration) {
+		c := quiet(path)
+		// The grace period must pass here. The CLI records SIGTERM within it.
+		c.Grace = 3 * time.Second
+		req := request(t)
+		req.TimeLimit = limit
+		_, err = c.Run(context.Background(), req)
+	})
 
 	if end := abnormalEnd(t, err); end.Kind != EndTimeLimit {
 		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
@@ -670,15 +701,15 @@ func TestRun_TimeLimitKillsAfterGraceWhenTermIsIgnored(t *testing.T) {
 }
 
 func TestRun_ExitOnTermEndsBeforeTheGracePeriod(t *testing.T) {
-	path, child := neverEndingCLI(t, endChildOnTerm)
-	c := quiet(path)
-	// The grace period cannot pass, so a run that ends did not wait for it.
-	c.Grace = farAboveHangGuard
-	req := request(t)
-	req.TimeLimit = timeLimitTestLimit
-
 	var err error
-	guardAgainstHang(t, func() { _, err = c.Run(context.Background(), req) })
+	path, child := untilReadyBeforeTheLimit(t, endChildOnTerm, func(path string, limit time.Duration) {
+		c := quiet(path)
+		// The grace period cannot pass, so a run that ends did not wait for it.
+		c.Grace = farAboveHangGuard
+		req := request(t)
+		req.TimeLimit = limit
+		_, err = c.Run(context.Background(), req)
+	})
 
 	if end := abnormalEnd(t, err); end.Kind != EndTimeLimit {
 		t.Errorf("Kind = %s, want %s", end.Kind, EndTimeLimit)
