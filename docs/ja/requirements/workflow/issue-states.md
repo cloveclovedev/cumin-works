@@ -175,14 +175,14 @@ OwnerがPlannerを通さずに、自分でsub-issueを書いてもよい。こ�
 | request a response to the Owner's review | I13 | `awaiting-merge-decision` → `implementing` | Ownerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `REQUEST_CHANGES` である。そのレビューは、実装Issueが最後に `awaiting-merge-decision` になったあとに出されている | Implementerの直前のセッションで、Ownerのレビューへの対応を依頼する |
 | close the merged issue | — | `merging` → 完了 | GitHubが、Pull Requestをmerge済みと返す | GitHubが実装Issueを閉じていなければ、閉じる。フォローアップノートは、I9が書く |
 | go back to the checks | — | `merging` → `checking` | Pull Requestがmergeされていない。mergeの条件 (下の「`merging` の中でcuminが行うこと」) が成り立たない | ラベルを替える。mergeしない |
-| request a conflict resolution | — | `merging` → `implementing` | GitHubが、衝突を理由にmergeを断った | Implementerの直前のセッションで、衝突の解消を依頼する |
+| request a conflict resolution | — | `merging` → `implementing` | mergeの条件は成り立つ。GitHubが、Pull Requestを既定のブランチと衝突していると返した (GraphQLの `mergeable` が `CONFLICTING`)、または、衝突を理由にmergeを断った | mergeは送らずに (断られたあとなら、送り直さずに)、Implementerの直前のセッションで、衝突の解消を依頼する |
 | stop the merge for the Owner | — | `merging` → `awaiting-decision` | GitHubが、衝突でも、既定のブランチが変わったことでもない、直らない理由でmergeを断った。または、mergeのあとで実装Issueを閉じられない | 理由をコメントに書く。Ownerに通知する |
 | — | — | `awaiting-merge-decision` → `ready`、`awaiting-decision` → `ready`、状態ラベルなし → `ready` | Ownerが `ready` を付けた | 何もしない。次にI1が成り立つ |
 
 `merging` の中でcuminが行うこと:
 
 - mergeの条件は、`merging` に入ってきた遷移の条件と同じである。必須のcheckが全て通っている。riskのラベルがちょうど1つである。riskが `risk/low` なら、Reviewerの最新のレビューが今の先頭のコミットに対する `APPROVE` である。riskが `risk/medium` または `risk/high` なら、それに加えて、Ownerが出した最新のレビューが今の先頭のコミットに対する `APPROVE` である。`merging` のラベルが付いていることは、条件の代わりにならない。cuminは、mergeを送るたびに、この条件を確かめ直す。
-- Pull Requestがmergeされておらず、mergeの条件が成り立つ間、cuminはmergeを送る。mergeの方法は、リポジトリの設定に従う。mergeに渡す先頭のコミットは、承認されたコミットである。承認のあとにpushされたコミットは、mergeしない。
+- Pull Requestがmergeされておらず、mergeの条件が成り立つ間、cuminはmergeを送る。GitHubが衝突していると既に返しているPull Requestには、mergeを送らない。断られると分かっているためである。そのときは「request a conflict resolution」が成り立つ。この依頼はAgentを起動するので、利用枠の上限の間と、cuminを止める途中では待つ。待っている間も、mergeは送らない。mergeの方法は、リポジトリの設定に従う。mergeに渡す先頭のコミットは、承認されたコミットである。承認のあとにpushされたコミットは、mergeしない。
 - mergeの答えが届かなかったときも、次の定期確認が、Pull Requestがmerge済みかを読む。merge済みなら「close the merged issue」、そうでなければ、もう一度mergeを送る。同じmergeを2回行うことはない。
 - GitHubが「既定のブランチが変わった」(405、Base branch was modified) という理由でmergeを断ったときは、Issueを止めない。`merging` のまま、次の定期確認でもう一度送る。ほかのPull Requestのmergeの直後に起きる、すぐに直る状態だからである。
 - 1回の定期確認で2つ以上のPull Requestをmergeするときは、1つmergeするごとに数秒待つ。GitHubが既定のブランチを更新する時間を置くためである。
