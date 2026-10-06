@@ -29,20 +29,20 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| Plannerによるフォローアップノートの整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがPlannerを起動する。Plannerは、受け入れの確認でまとめた残りの作業のうち、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Ownerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、Plannerは、受け入れの確認のコメントに残りの作業を一覧にするところまでを行う。Issueにはしない。Ownerが、やりたいものを新しい要求Issueに書く形で足りる | フォローアップノートに転記される作業が多く、Ownerが新しい要求Issueに書き直す手間が目立ってきたとき |
-| 次の要求Issueの草案づくり | 進められるIssueがなくなったとき、Agentが要件文書を読んで、次に出すべき要求Issueの草案を作る。Ownerは草案を直して提出するだけになる | v0.1では、待ち状態になったら通知するだけにした。「要求を書くのはOwnerだけ」という前提が変わる | 待ち状態の通知が頻繁に届き、稼働率の目標 (8〜9割) に届かないとき。課題の原因2 (自動のトリガーが成果に結びつかない) への根本の対策である |
-| 差し戻しでPlannerを通す | 受け入れでOwnerが差し戻すとき、追加のsub-issueをOwnerが書く代わりに、Plannerに分割させる | v0.1では、Ownerのほうが正しく決められると考え、Ownerが直接sub-issueを足す形にした | 差し戻しのたびにOwnerが実装Issueを書く手間が目立ってきたとき |
-| `risk/medium` の自動merge | `risk/medium` のPull Requestも、cuminがmergeする | 運用しながら、任せてよいかを判断すると決めた | `risk/medium` のPull Requestを、Ownerが続けて直さずにmergeしている実績がたまったとき |
-| mergeの前にmainの最新を取り込む | mergeの前に、mainの最新を取り込んで、必須のcheckをやり直す。GitHubのrulesetの "Require branches to be up to date before merging" を使う案がある。このとき、遅れたPull Requestは、cuminが `update-branch` のAPIで最新にできる (Implementerを起動しないので、利用枠を使わない)。取り込みだけのコミットなら、前の `APPROVE` を有効とみなして、再レビューを省く案もある | v0.1では、衝突がなく、実装の時点の必須のcheckが通っていればmergeする。rulesetでブランチが最新であることを求めると、Ownerが1つmergeするたびに、待っている他のPull Requestが全て遅れ、Ownerの手間と利用枠の消費が増える。v0.1で残る隙間は2つある。並行して進めた独立のIssueの間で、mergeのあとにmainのcheckが壊れること。Ownerが保護されたパスの一覧やworkflowをmainで変えても、既に開いているPull Requestは確かめ直されないこと。後者は、セットアップの手順書に「変えたら、開いているPull Requestのブランチを最新にする」と書いて塞ぐ | リポジトリごとに同時に進めるIssueの数を2以上にするとき。mergeのあとでmainのcheckが壊れることが起きたとき。保護されたパスの一覧やworkflowを、Pull Requestが開いている間に変えることが増えたとき |
+| Plannerによるフォローアップノートの整理 | 要求Issueのsub-issueが全て閉じたときに、cuminがPlannerを起動する。Plannerは、受け入れの確認でまとめた残りの作業のうち、やる価値のあるものだけを下書きの実装Issue (`cumin/status/ready` なし) にする。Maintainerは受け入れのときに、下書きごとに `cumin/status/ready` を付けるか、閉じるかを選ぶ | v0.1では、Plannerは、受け入れの確認のコメントに残りの作業を一覧にするところまでを行う。Issueにはしない。Maintainerが、やりたいものを新しい要求Issueに書く形で足りる | フォローアップノートに転記される作業が多く、Maintainerが新しい要求Issueに書き直す手間が目立ってきたとき |
+| 次の要求Issueの草案づくり | 進められるIssueがなくなったとき、Agentが要件文書を読んで、次に出すべき要求Issueの草案を作る。Maintainerは草案を直して提出するだけになる | v0.1では、待ち状態になったら通知するだけにした。「要求を書くのはMaintainerだけ」という前提が変わる | 待ち状態の通知が頻繁に届き、稼働率の目標 (8〜9割) に届かないとき。課題の原因2 (自動のトリガーが成果に結びつかない) への根本の対策である |
+| 差し戻しでPlannerを通す | 受け入れでMaintainerが差し戻すとき、追加のsub-issueをMaintainerが書く代わりに、Plannerに分割させる | v0.1では、Maintainerのほうが正しく決められると考え、Maintainerが直接sub-issueを足す形にした | 差し戻しのたびにMaintainerが実装Issueを書く手間が目立ってきたとき |
+| `risk/medium` の自動merge | `risk/medium` のPull Requestも、cuminがmergeする | 運用しながら、任せてよいかを判断すると決めた | `risk/medium` のPull Requestを、Maintainerが続けて直さずにmergeしている実績がたまったとき |
+| mergeの前にmainの最新を取り込む | mergeの前に、mainの最新を取り込んで、必須のcheckをやり直す。GitHubのrulesetの "Require branches to be up to date before merging" を使う案がある。このとき、遅れたPull Requestは、cuminが `update-branch` のAPIで最新にできる (Implementerを起動しないので、利用枠を使わない)。取り込みだけのコミットなら、前の `APPROVE` を有効とみなして、再レビューを省く案もある | v0.1では、衝突がなく、実装の時点の必須のcheckが通っていればmergeする。rulesetでブランチが最新であることを求めると、Maintainerが1つmergeするたびに、待っている他のPull Requestが全て遅れ、Maintainerの手間と利用枠の消費が増える。v0.1で残る隙間は2つある。並行して進めた独立のIssueの間で、mergeのあとにmainのcheckが壊れること。Maintainerが保護されたパスの一覧やworkflowをmainで変えても、既に開いているPull Requestは確かめ直されないこと。後者は、セットアップの手順書に「変えたら、開いているPull Requestのブランチを最新にする」と書いて塞ぐ | リポジトリごとに同時に進めるIssueの数を2以上にするとき。mergeのあとでmainのcheckが壊れることが起きたとき。保護されたパスの一覧やworkflowを、Pull Requestが開いている間に変えることが増えたとき |
 | Agentによる図の描き直し | 図はPlantUMLで、`scripts/render-diagrams.sh` がDockerで書き出す。Implementerの環境から `docker` に届くか、Agentが壊れたSVGを見分けられるかを、確かめていない。案は3つある。リポジトリのskillに手順と確かめ方を書く。CIで `.puml` を書き出し、コミットされたSVGと違えば落とす。Dockerの要らないrendererを使う。要求Issueの最後にPlannerが文書を仕上げる案は採らない。ImplementerがPull Requestごとに文書を直すほうが、差分で読めるためである | Implementerが図を変える場面が、まだない | 次にAgentを動かすlive scenarioで、`docker` に届くかを測ったとき。Implementerが `.puml` を変える実装Issueが出たとき |
-| 第三者のコメントの扱い | 公開リポジトリでは、Ownerでもcuminでもない第三者が、IssueやPull Requestにコメントできる。cuminが第三者のコメントを見つけて、無視してよいかをPlannerに相談する。または、テンプレートに沿ったコメントなら、Ownerのコメントと同じに扱う | 今は、第三者のコメントを判定に使わない。Agentは、起動の依頼の「Ownerのログイン名」のアカウントのコメントだけを、Ownerの指示として読む | 対象のリポジトリに、第三者のコメントが付くようになったとき |
-| 第三者のPull Requestの扱い | 公開リポジトリでは、第三者がforkからPull Requestを開ける。案: Ownerが実装Issueに結び付けて `cumin/status/ready` を付けたら、check、Reviewerのレビュー、Ownerのmergeの流れに乗せる。forkのブランチにはImplementerがpushできないので、指摘の修正を第三者に頼むか、Implementerが自分のブランチでPull Requestを作り直すかを決める必要がある | 今は、cuminはIssueに結び付かないPull Requestに触れない。第三者のPull Requestは、Ownerが手で扱う | 対象のリポジトリに、第三者のPull Requestが来たとき |
+| 第三者のコメントの扱い | 公開リポジトリでは、Maintainerでもcuminでもない第三者が、IssueやPull Requestにコメントできる。cuminが第三者のコメントを見つけて、無視してよいかをPlannerに相談する。または、テンプレートに沿ったコメントなら、Maintainerのコメントと同じに扱う | 今は、第三者のコメントを判定に使わない。Agentは、起動の依頼の「Issue Ownerのログイン名」のアカウントのコメントだけを、指示として読む | 対象のリポジトリに、第三者のコメントが付くようになったとき |
+| 第三者のPull Requestの扱い | 公開リポジトリでは、第三者がforkからPull Requestを開ける。案: Maintainerが実装Issueに結び付けて `cumin/status/ready` を付けたら、check、Reviewerのレビュー、Maintainerのmergeの流れに乗せる。forkのブランチにはImplementerがpushできないので、指摘の修正を第三者に頼むか、Implementerが自分のブランチでPull Requestを作り直すかを決める必要がある | 今は、cuminはIssueに結び付かないPull Requestに触れない。第三者のPull Requestは、Maintainerが手で扱う | 対象のリポジトリに、第三者のPull Requestが来たとき |
 | cuminの作業中のIssueに結び付いた第三者のPull Request | 第三者のPull Requestが、本文の `Closes #N` などで、cuminの作業中の実装Issueに結び付くことがある。I2はPull Requestをブランチと作成者で見つけるので混ざらないが、ほかの行はIssueとPull Requestのリンクで見つけるので、第三者のPull Requestが判定に混ざりうる。案: 判定に使うPull Requestを、cuminがそのIssueのために決めたブランチと、ImplementerのGitHub Appの作成者のものに限る | まだ起きておらず、起きたときの動きも確かめていない | 第三者のPull Requestが来たとき。または、cuminの作業中のIssueに、別のPull Requestが結び付いたとき |
-| Pull Requestに付けた `cumin/status/ready` を合図として読む | Ownerが差し戻すとき、実装Issueではなく、見ているPull Requestに `cumin/status/ready` を付けても、cuminが合図として扱う | v0.1では、判定に使うのはIssueのラベルだけにした。Pull Requestのラベルは、Issueからコピーしたものであり、cuminは読まない | OwnerがPull Requestの側に `cumin/status/ready` を付けてしまう間違いが続くとき |
-| コメントのスレッドを解決済みにする | Reviewerが、直ったことを確かめた指摘のスレッドを解決済みにする | v0.1では、cuminはレビューの結果だけで判定するので、要らない | Ownerがレビューを読むときに、どの指摘が済んだのかが分かりにくいと感じたとき |
+| Pull Requestに付けた `cumin/status/ready` を合図として読む | Maintainerが差し戻すとき、実装Issueではなく、見ているPull Requestに `cumin/status/ready` を付けても、cuminが合図として扱う | v0.1では、判定に使うのはIssueのラベルだけにした。Pull Requestのラベルは、Issueからコピーしたものであり、cuminは読まない | MaintainerがPull Requestの側に `cumin/status/ready` を付けてしまう間違いが続くとき |
+| コメントのスレッドを解決済みにする | Reviewerが、直ったことを確かめた指摘のスレッドを解決済みにする | v0.1では、cuminはレビューの結果だけで判定するので、要らない | Maintainerがレビューを読むときに、どの指摘が済んだのかが分かりにくいと感じたとき |
 | R3に失敗した回の着手の枠 | 要求Issueのラベルの付け替え (R3) が失敗すると、その回の定期確認では、その要求Issueのsub-issueのために取っておいた着手の枠が空いたままになる。ほかの `cumin/status/ready` のIssueが入れるとしても入らない。直すなら、失敗した付け替えが分かってから、空きを決める | 付け替えが失敗し続ける間だけ起きる。次の定期確認で空きは戻る (#205 のレビューの3回目で後回しにした) | R3の付け替えの失敗が、繰り返しログに出るとき |
-| Ownerのmerge待ちの上に次の実装を積む | `risk/medium` と `risk/high` のPull Requestが、Reviewerの承認のあとでOwnerのmergeの判断を待っている間に、それに依存する実装Issueにも着手する。依存先のPull Requestのブランチから切り、draftのPull Requestにして、依存先がmergeされるまではmergeしない。積むのは1段までにする。依存先にOwnerの指摘で修正が入ったら、積んだ側をrebaseし、checkとレビューをやり直す。依存先がsquash mergeされたら、mainの上にrebaseし直す。着手するときに、依存先のブランチが消えたときにGitHubがPull Requestのbaseをmainに切り替えるかを、公式文書で確かめる | v0.1では、Ownerのレビュー待ちは同時に進めるIssueの数に数えないので、依存のない作業は止まらない。止まるのは、残りの作業が全て待ちのIssueに依存しているときだけである。I1の条件、ブランチの土台、rebaseの依頼、I6のmergeの条件が変わり、依存先の方針をOwnerが退けると、積んだ分は作り直しになる | 要求Issueを複数 `cumin/status/ready` にしておいても、Ownerのレビュー待ちの間に、依存するIssueしか残らずにcuminが止まることが続いたとき。着手するときは、issue-states.md (I1、I6) と designs/poll.md に書く |
-| Ownerのアカウントを列挙する | Ownerを、Hostの設定に書いたアカウントだけにする。今の定義 (対象リポジトリに write 以上の権限を持つ人のアカウント、#222) より狭くする | 1人で使う間は、write を持つ人はOwnerだけである。write を渡すことは、mergeの判断を任せることと同じ意味にした | write の権限を持つ協力者を足すが、mergeの判断は任せたくないとき |
+| Maintainerのmerge待ちの上に次の実装を積む | `risk/medium` と `risk/high` のPull Requestが、Reviewerの承認のあとでMaintainerのmergeの判断を待っている間に、それに依存する実装Issueにも着手する。依存先のPull Requestのブランチから切り、draftのPull Requestにして、依存先がmergeされるまではmergeしない。積むのは1段までにする。依存先にMaintainerの指摘で修正が入ったら、積んだ側をrebaseし、checkとレビューをやり直す。依存先がsquash mergeされたら、mainの上にrebaseし直す。着手するときに、依存先のブランチが消えたときにGitHubがPull Requestのbaseをmainに切り替えるかを、公式文書で確かめる | v0.1では、Maintainerのレビュー待ちは同時に進めるIssueの数に数えないので、依存のない作業は止まらない。止まるのは、残りの作業が全て待ちのIssueに依存しているときだけである。I1の条件、ブランチの土台、rebaseの依頼、I6のmergeの条件が変わり、依存先の方針をMaintainerが退けると、積んだ分は作り直しになる | 要求Issueを複数 `cumin/status/ready` にしておいても、Maintainerのレビュー待ちの間に、依存するIssueしか残らずにcuminが止まることが続いたとき。着手するときは、issue-states.md (I1、I6) と designs/poll.md に書く |
+| Maintainerのアカウントを列挙する | Maintainerを、Hostの設定に書いたアカウントだけにする。今の定義 (対象リポジトリに write 以上の権限を持つ人のアカウント、#222) より狭くする | 1人で使う間は、write を持つ人はMaintainerだけである。write を渡すことは、mergeの判断を任せることと同じ意味にした | write の権限を持つ協力者を足すが、mergeの判断は任せたくないとき |
 | 失敗したcheckの読み方を固める | check runの再実行分も全て読み (`filter=all`)、定期確認のあとに再実行が通っても、失敗したときの内容を渡せるようにする。detailsのアドレスは、パスの終わりだけでなく、ホストがGitHub Actionsで、リポジトリがこのリポジトリであることまで確かめてから読む | #197 のレビューの4回目で出た指摘で、回数の上限で後回しにした。どちらも、今の使い方では誤った依頼にならない | 失敗の内容が空やずれたまま、Implementerに修正を依頼したことが起きたとき |
 | 続きの依頼で、別のブランチに残ったworktreeを使わない | GitHubに上がっていない作業が残ったworktreeが、Pull Requestと別のブランチにあると、続きの依頼でそのまま使われ、I2で止まる。止めるには、作業の破棄、ブランチの切り替え、Pull Requestの作り直しを同時に決める必要がある。forkからのPull Requestはブランチがforkにあるので、続きの依頼が `origin` に新しいブランチを作ってしまう | #200 のレビューの3回目で出た指摘で、回数の上限で後回しにした。cuminはforkのPull Requestを作らない | 続きの依頼がI2で止まることが、実際に起きたとき。forkのPull Requestを受け付けるとき |
 
@@ -50,7 +50,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| Plannerが要件文書の変更を下書きする | Ownerが決めた内容を受けて、Plannerが、要件文書の変更をPull Requestにする。Ownerの仕事は、文書を直すことから、読んでmergeすることに変わる。要件文書を変えられるのはOwnerのmergeだけ、という決まりは変えない | v0.1では、要件文書はOwnerが直す。Plannerの権限は、Issueの読み書きとコードの読み取りだけで、ブランチのpushとPull Requestの作成ができない。保護されたパスのcheckは、Botが作ったPull Requestの全てに掛かるので、Plannerを免除する一覧が要る。免除する相手を名前で指定する形なら、名前を間違えても、checkが動いて失敗する側に倒れる | 要件文書の変更の相談が続き、Ownerが文書を直す手間が目立ってきたとき |
+| Plannerが要件文書の変更を下書きする | Maintainerが決めた内容を受けて、Plannerが、要件文書の変更をPull Requestにする。Maintainerの仕事は、文書を直すことから、読んでmergeすることに変わる。要件文書を変えられるのはMaintainerのmergeだけ、という決まりは変えない | v0.1では、要件文書はMaintainerが直す。Plannerの権限は、Issueの読み書きとコードの読み取りだけで、ブランチのpushとPull Requestの作成ができない。保護されたパスのcheckは、Botが作ったPull Requestの全てに掛かるので、Plannerを免除する一覧が要る。免除する相手を名前で指定する形なら、名前を間違えても、checkが動いて失敗する側に倒れる | 要件文書の変更の相談が続き、Maintainerが文書を直す手間が目立ってきたとき |
 | roleごとの保護されたパス | 変更させないパスを、roleごとに指定する | v0.1では、コードをpushするのがImplementerだけなので、一覧は1つで足りる。checkは、Botが作ったPull Requestの全てに、同じ一覧で掛かる | pushできるroleが増えたとき |
 | AgentにMCPサーバを使わせる | 起動の記録の確認は、`mcp_servers` が空でなければ異常終了にするので、Agentはどの MCP サーバも使えない。使わせるなら、worktreeの `.mcp.json` (project scope) に書かれた名前だけを許し、`.mcp.json` を保護されたパスの初期値に足す。そうしないと、ブランチがサーバを足して、そのブランチのAgentがつなぐ | v0.1では、Agentが MCP サーバを使う必要がない。claude.aiのコネクタは `ENABLE_CLAUDEAI_MCP_SERVERS=false` で消す | Agentに MCP サーバを使わせたくなったとき。保護されたパスの初期値は要件文書なので、そのときに変える |
 | セキュリティだけを見るレビュー | 毎回のレビューとは別に、セキュリティだけを見るレビューを足す | v0.1では、毎回のReviewerの6つの問いと、GitHubのcheck (secret scanningなど) で見る | セキュリティを特に重く見るプロダクトを、cuminに任せるとき |
@@ -62,13 +62,14 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| 同時に動かすAgentの数を増やす | 設定の初期値を1から上げる。上げるときは、`Service.identity` がGitHubの呼び出しの間もサービス全体のmutexを持つことを直す (ロックはキャッシュの周りだけにする) | v0.1は単純さを優先した | 稼働率が目標に届かない原因が、Owner待ちではなく、Agentが1つしか動かないことにあると分かったとき |
+| 同時に動かすAgentの数を増やす | 設定の初期値を1から上げる。上げるときは、`Service.identity` がGitHubの呼び出しの間もサービス全体のmutexを持つことを直す (ロックはキャッシュの周りだけにする) | v0.1は単純さを優先した | 稼働率が目標に届かない原因が、Maintainer待ちではなく、Agentが1つしか動かないことにあると分かったとき |
 
-## Ownerとのやりとり
+## 人とのやりとり
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| 通知をまとめる | 通知を1件ずつではなく、「Ownerの対応待ちがN件」とまとめて送る | v0.1では、通知の量が分からない | 通知が多くて、読まなくなってきたとき |
+| 通知をまとめる | 通知を1件ずつではなく、「対応待ちがN件」とまとめて送る | v0.1では、通知の量が分からない | 通知が多くて、読まなくなってきたとき |
+| 2人以上のMaintainerで使うときの役割の分け方 | 今は1人がMaintainer、Issue Owner、Operatorを兼ねる ([cumin本体の要件](cumin-core.md) の「Maintainer、Issue Owner、Operator」)。2人以上になると、次の6つが食い違う。(1) 通知先はHostの設定の1か所で、Issue Ownerごとには届かない。(2) レビューを依頼する相手はIssue Ownerだが、承認はどのMaintainerのものでも数える。(3) Agentが指示として読むのはIssue Ownerのコメントだけで、ほかのMaintainerのコメントは読まない。(4) 別のMaintainerが `cumin/status/ready` を付け直すと、Issue Ownerが替わる。(5) 利用枠はOperatorのもので、MaintainerにもIssueにも分けていない。(6) 保護されたパスを変える手作業 (`cumin/type/owner-task`) は、rulesetを越えられる人にしかできない。案: Agentが読む相手を「Issue Ownerだけ」か「Maintainerの全員」かを設定で選ぶ。通知先をIssue Ownerごとに持つ | 1人で使う間は、どれも同じ人なので困らない。名前だけを先に分けた | 2人目のMaintainerを置くとき、またはOperatorとMaintainerが別の人になるとき |
 | 他の通知の手段 | ntfy、cumin専用のwebダッシュボード | 通知はDiscordのwebhookで足りる。通知の手段は差し替えられるように作る | Discordでは足りない見せ方 (一覧、履歴) が欲しくなったとき |
 
 ## 運用
@@ -76,9 +77,9 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
 | ハートビートと外部からの監視 | cuminがハートビートを出し、外部のマシンが死活を監視して通知する | v0.1では、落ちたらlaunchdが再起動するだけにした。Hostが再起動したあとは、人がcuminを起動することを期待する | HostがMac miniになり、常時動かすようになったとき |
-| GitHubのwebhookで定期確認を早める | GitHubのwebhookを受けて、そのリポジトリの定期確認をすぐ行う。判定は今のままGitHubの事実から行い、webhookはきっかけにだけ使う。何も起きないリポジトリは問い合わせが減り、Ownerの操作への反応も早くなる | 定期確認だけのほうが単純で壊れにくい。webhookには、HostにGitHubから届く公開の入口 (中継と署名の検証) が要る。届かないことやcuminが止まっている間の取りこぼしがあるので、拾うための定期確認も残り、仕組みが2つになる | アイドルの間隔と、定期確認の読み方の見直し (#414) のあとでも、GraphQLのポイントの枠や、Ownerの操作への反応の遅れが問題になったとき |
-| ラベルの付け替えを差分で行う | 着手のとき、cuminはIssueのラベルを、snapshotのラベルから作った一覧で丸ごと置き換える (`PUT`)。snapshotを読んでから付け替えるまでの数秒の間にOwnerが変えたラベルは消える。状態ラベルだけを足し引きするには、"Add labels to an issue" と "Remove a label from an issue" の2回の呼び出しが要る | 窓が数秒で、起きにくい。1回の呼び出しで済む単純さを優先した | この窓でOwnerのラベルの変更が消えたことが、実際に起きたとき |
-| 残ったworktreeの片付けのコマンド | Host に残ったworktreeを一覧にし、Ownerが確かめてから消すコマンドを作る。cuminが自動で消すのは、snapshotに出てくる閉じたsub-issueのworktreeだけで、GitHubにない作業を持つworktreeは残す (#239)。それ以外に残ったものは、今はOwnerが手で消す | 残るのは、GitHubにない作業を持つものと、snapshotから外れた要求Issueのものだけで、数が少ない | 残ったworktreeが増えて、ディスクや一覧の見通しが気になったとき |
+| GitHubのwebhookで定期確認を早める | GitHubのwebhookを受けて、そのリポジトリの定期確認をすぐ行う。判定は今のままGitHubの事実から行い、webhookはきっかけにだけ使う。何も起きないリポジトリは問い合わせが減り、Maintainerの操作への反応も早くなる | 定期確認だけのほうが単純で壊れにくい。webhookには、HostにGitHubから届く公開の入口 (中継と署名の検証) が要る。届かないことやcuminが止まっている間の取りこぼしがあるので、拾うための定期確認も残り、仕組みが2つになる | アイドルの間隔と、定期確認の読み方の見直し (#414) のあとでも、GraphQLのポイントの枠や、Maintainerの操作への反応の遅れが問題になったとき |
+| ラベルの付け替えを差分で行う | 着手のとき、cuminはIssueのラベルを、snapshotのラベルから作った一覧で丸ごと置き換える (`PUT`)。snapshotを読んでから付け替えるまでの数秒の間にMaintainerが変えたラベルは消える。状態ラベルだけを足し引きするには、"Add labels to an issue" と "Remove a label from an issue" の2回の呼び出しが要る | 窓が数秒で、起きにくい。1回の呼び出しで済む単純さを優先した | この窓でMaintainerのラベルの変更が消えたことが、実際に起きたとき |
+| 残ったworktreeの片付けのコマンド | Host に残ったworktreeを一覧にし、Operatorが確かめてから消すコマンドを作る。cuminが自動で消すのは、snapshotに出てくる閉じたsub-issueのworktreeだけで、GitHubにない作業を持つworktreeは残す (#239)。それ以外に残ったものは、今はOperatorが手で消す | 残るのは、GitHubにない作業を持つものと、snapshotから外れた要求Issueのものだけで、数が少ない | 残ったworktreeが増えて、ディスクや一覧の見通しが気になったとき |
 | 図のDockerイメージのCJKフォント | `tools/plantuml/Dockerfile` は、日本語のラベルを正しく測るために `fonts-noto-cjk` を入れている。図のラベルは全て英語になったので (#198)、このフォントは要らない。消すとイメージが小さくなり、書き出しも速くなる | 消すには、イメージを作り直し、全ての図を書き出し直して差分がないことを確かめる必要がある。今は困っていない | イメージの大きさや書き出しの時間が気になったとき。図に英語以外のラベルを使わないと改めて決めたとき |
 | 新しい版の状態ファイルを残す | 古いcuminが新しい版の状態ファイルを開くと、空として始め、次の着手で上書きする。残すなら、ファイル名を `state.json.v<版>` にする | 状態ファイルには、失ってよいものしか入れない。書き込みを拒むと、全ての着手が止まる (#190 のレビューの2回目で見送った) | cuminの版を戻して動かす必要が出たとき |
 | 保護されたパスを `.gitignore` と同じ書き方にする | ワイルドカードなどを含めて、`.gitignore` と完全に同じ決まりで照合する | v0.1は、`.gitignore` の一部 (名前、先頭の `/`、末尾の `/`) で足りる。一部なので、あとで広げても、今の一覧の意味は変わらない | 一覧にワイルドカードを書きたくなったとき |
@@ -89,15 +90,15 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | 別のHostへの移行の手順 | GitHub Appとそのインストールは使い回せるが、Keychainの項目とLaunchAgentは1台のものである。手順は、バイナリの組み込み、設定ファイルのコピー、Appごとの秘密鍵の発行とKeychainへの登録、`cumin setup launchd` になる。setup-guide.md に節を書く | まだ移す先がない | Mac miniに移すとき |
 | `scripts/install.sh` の弱点 | `--restart` は、ディスクのplistと入れたバイナリを突き合わせるが、`launchctl kickstart` はlaunchdが読み込み済みの定義を起動する。plistを書き換えて読み込み直していないと、別のパスのバイナリを起動して成功と報告しうる。スクリプトのテストもない (偽の `go` と `launchctl` が要る) | 差し替えは手順書のとおり `bootout` と `bootstrap` で行えば起きない | 差し替えで失敗したとき。他のHostに導入するとき |
 | `cumin setup notify` の試しの通知 | webhookのアドレスを保存したあとに、試しのメッセージを1つ送って、届く道を1回で確かめる | 通知の要求では、本物のメッセージをlive scenarioの1回だけにした | 設定したのに通知が届かない、という事故が起きたとき |
-| live scenarioの通知先を分ける | live scenarioが送る通知が、Ownerの運用のチャンネルに残る。sandbox用のwebhookをKeychainの別の項目にして、live scenarioではそれを使う | 通知を送るlive scenarioが、まだ1つしかない | 通知を送るlive scenarioが増えて、運用の通知に紛れるようになったとき |
+| live scenarioの通知先を分ける | live scenarioが送る通知が、Operatorの運用のチャンネルに残る。sandbox用のwebhookをKeychainの別の項目にして、live scenarioではそれを使う | 通知を送るlive scenarioが、まだ1つしかない | 通知を送るlive scenarioが増えて、運用の通知に紛れるようになったとき |
 | Linuxへの対応 | HostとしてLinuxを使えるようにする | Hostは Mac mini を想定している | Linuxのマシンで動かしたくなったとき |
 
 ## 対象を広げる
 
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
-| 個人のアカウントが持つリポジトリ | `cumin setup github-apps` と `scripts/setup-repo.sh` を、Organizationではなく、個人のアカウントが持つリポジトリでも使えるようにする。GitHub Appの登録の画面のアドレスが違うので、`--org` と並ぶオプションが要る。rulesetのbypassの指定が個人のリポジトリで働くかは、確かめていない | v0.1は、Organizationにだけ登録する。Organizationを持たない導入先には、無料のOrganizationを作って、リポジトリを移してもらう | Ownerの製品か導入先のリポジトリを、個人のアカウントの下に置き続ける必要が出たとき。知られたアドレスは資産であり、あとから移すのは高くつく |
-| privateなリポジトリ | 対象のリポジトリがprivateでも、cuminが動くようにする。cumin-coreのAppに、Checks、Commit statuses、Actions の読み取りの権限が要る見込みである。rulesetには、有料のプランが要る。権限の表を、公開とprivateで1つにするか、分けるかを決める必要がある | v0.1の対象は、公開リポジトリである。実機の確認は、全て公開の使い捨てのリポジトリで行った。GitHub Appの権限の表は、そこで動く最小のものである | Ownerの製品か導入先のリポジトリを、privateのままにする必要が出たとき |
+| 個人のアカウントが持つリポジトリ | `cumin setup github-apps` と `scripts/setup-repo.sh` を、Organizationではなく、個人のアカウントが持つリポジトリでも使えるようにする。GitHub Appの登録の画面のアドレスが違うので、`--org` と並ぶオプションが要る。rulesetのbypassの指定が個人のリポジトリで働くかは、確かめていない | v0.1は、Organizationにだけ登録する。Organizationを持たない導入先には、無料のOrganizationを作って、リポジトリを移してもらう | Maintainerの製品か導入先のリポジトリを、個人のアカウントの下に置き続ける必要が出たとき。知られたアドレスは資産であり、あとから移すのは高くつく |
+| privateなリポジトリ | 対象のリポジトリがprivateでも、cuminが動くようにする。cumin-coreのAppに、Checks、Commit statuses、Actions の読み取りの権限が要る見込みである。rulesetには、有料のプランが要る。権限の表を、公開とprivateで1つにするか、分けるかを決める必要がある | v0.1の対象は、公開リポジトリである。実機の確認は、全て公開の使い捨てのリポジトリで行った。GitHub Appの権限の表は、そこで動く最小のものである | Maintainerの製品か導入先のリポジトリを、privateのままにする必要が出たとき |
 | Issueの管理をJiraなどに広げる | 要求Issueと実装Issueを、GitHub Issues以外で管理する。ソースコードの置き場所はGitHubのままにする | v0.1はGitHubだけで作る。抽象化は先にしない。図と文書では、Issueの管理とリポジトリを別のものとして扱ってある | 本業でcuminを使うことが決まったとき |
 | SNSの運用 | 動画の取り込みから、ショート動画の予約投稿までを、cuminのワークフローに乗せる | v0.1の対象は、ソフトウェアの開発だけである | 開発のワークフローが安定して動くようになったとき |
 
@@ -113,7 +114,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 
 #### 背景
 
-cumin works v2 では、要求と要件を日本語のMarkdownで `docs/ja/requirements/` に書き、Ownerがそこから要求Issueを書く。要求Issueから下の対応づけは、既にある。
+cumin works v2 では、要求と要件を日本語のMarkdownで `docs/ja/requirements/` に書き、Maintainerがそこから要求Issueを書く。要求Issueから下の対応づけは、既にある。
 
 | 段階 | 対応づけの手段 |
 |---|---|
@@ -124,7 +125,7 @@ cumin works v2 では、要求と要件を日本語のMarkdownで `docs/ja/requi
 
 切れているのは、要件文書の行から要求Issueの行への1本だけである。要件文書は人がレビューし、考え、直しやすいように母国語のMarkdownで書いているが、そこに書いた要求が漏れなく要求Issueになっているかを確かめる手段がない。
 
-要件文書を正本として扱うのは、Ownerの選んだ書き方であって、cuminの前提ではない。思いついた要求Issueを直接書いて形にしていく使い方も、同じに動かなければならない。要件文書の書き方は好みが分かれるので、必須の要件にはしない。
+要件文書を正本として扱うのは、Maintainerの選んだ書き方であって、cuminの前提ではない。思いついた要求Issueを直接書いて形にしていく使い方も、同じに動かなければならない。要件文書の書き方は好みが分かれるので、必須の要件にはしない。
 
 #### 課題
 
@@ -153,7 +154,7 @@ cumin works v2 では、要求と要件を日本語のMarkdownで `docs/ja/requi
 
 #### 方針の案
 
-- 正本は Markdown である。要求の構造化したデータは生成物で、人が直接編集しない。Ownerが git の差分でレビューできる利点を守る。
+- 正本は Markdown である。要求の構造化したデータは生成物で、人が直接編集しない。Maintainerが git の差分でレビューできる利点を守る。
 - IDは、文書名と行番号で作る。既に `issue-states.md` の R1、I1、Q1 と、各文書の上位要件のテストの番号がある。足りないのは、文書をまたいで一意にする接頭辞と、「番号は使い回さない。消した行は残して、廃止と書く」という決まりである。粒度は、真偽を確かめられる1つの決まりが1つのIDである。受け入れの確認の1行と同じ粒度になる。
 - 要求Issueの Requirements の各行の先頭に、IDを書く。書くかどうかは任意である。Plannerは、分割の全体像と受け入れの確認に要求の文面をそのまま写すので、IDは下流に伝わる。テンプレートは変えない。
 - 構造的な検査は、決定論で行い、AIを使わない。検出するのは、未カバーの要求、文書にないIDへの参照、IDの重複、廃止した要求への参照、古い要求Issueである。古さは、要求IssueにリンクしたときのコミットSHAを書いておき、そのSHAと main で当該の行の文面を比べれば、git だけで分かる。意味が変わったかどうかは分からないが、見直す候補を出すには足りる。
@@ -170,7 +171,7 @@ cumin本体の外の道具として作る。本体に、プラグインを読み
 | 置き場所 | 内容 | 評価 |
 |---|---|---|
 | 対象のリポジトリの GitHub Actions の workflow | `cumin-protected-paths.yml` と同じ形。docs の変わった push と、Issueの編集で動く。`GITHUB_TOKEN` でIssueを読める。Host も cumin も要らない。setup-repo に、入れるかどうかを選べる形で足せる | 構造的な検査はこれで完結する。まずこれを作る |
-| 別の実行ファイル | Owner が Host で動かすか、定期実行する。別のリポジトリに置く | 同じモジュールに置くと cumin-works の一部になるので、置かない |
+| 別の実行ファイル | Operator が Host で動かすか、定期実行する。別のリポジトリに置く | 同じモジュールに置くと cumin-works の一部になるので、置かない |
 | cumin本体の中で `.cumin/config.toml` で有効化 | 本体の「受け持つこと」に1行増える | 採らない |
 
 本体との暗黙の依存が1つある。テンプレートが要求の文面をそのまま写すことである。テンプレートがこれをやめると、道具の側が切れる。道具の文書に、依存している約束として書く。
@@ -179,7 +180,7 @@ cumin本体の外の道具として作る。本体に、プラグインを読み
 
 #### 後回しにした理由
 
-v0.1 の目標は、cumin本体で peppercheck の再構築を動かすことである。要件文書の書き方は好みが分かれるので、本体の要件にしない。今の要件文書の大きさなら、Ownerが目で確かめられる。
+v0.1 の目標は、cumin本体で peppercheck の再構築を動かすことである。要件文書の書き方は好みが分かれるので、本体の要件にしない。今の要件文書の大きさなら、Maintainerが目で確かめられる。
 
 #### 見直すきっかけ
 
@@ -238,7 +239,7 @@ v0.1 の目標は、cumin本体で peppercheck の再構築を動かすことで
 - v0.1 が動き、外の人に見せる段階になったとき。文書の表の「英語版の文書と、文書のサイト」と同じ時期になる
 - disciplineの拡張の、最初の具体例が要るとき
 - 外の道具がAgentを使う必要が出たとき。作業Issueの案を、`issue-states.md` の行として書く
-- 着手するときは、事業の像を `overview.md` (Ownerが書く) に、本体の範囲を `cumin-core.md` の「受け持つこと」と「受け持たないこと」に書く
+- 着手するときは、事業の像を `overview.md` (Maintainerが書く) に、本体の範囲を `cumin-core.md` の「受け持つこと」と「受け持たないこと」に書く
 
 #### 関連
 
@@ -270,7 +271,7 @@ cuminのroleの指示は、性質の違う2つのことを1つのファイルに
 | 案 | 内容 | 良い点 | 悪い点 |
 |---|---|---|---|
 | A. リポジトリの指示だけで済ませる | 分野の基準も、対象のリポジトリの `CLAUDE.md` とskillに書く | 本体に足すものがない。v0.1はこれ | 同じ基準を、リポジトリの数だけ書き写す。1つのリポジトリで仕事の種類を分けられない |
-| B. リポジトリの設定で1つ選ぶ | `.cumin/config.toml` にdisciplineを1つ書く | 単純。保護されたパスなので、変更にOwnerの承認が要る | 1つのリポジトリに1つの分野しか置けない |
+| B. リポジトリの設定で1つ選ぶ | `.cumin/config.toml` にdisciplineを1つ書く | 単純。保護されたパスなので、変更にMaintainerの承認が要る | 1つのリポジトリに1つの分野しか置けない |
 | C. Issueのラベルで選び、なければリポジトリの既定 | `cumin/discipline/<名前>` を見て、なければBの既定を使う | 1つのリポジトリで分野を混ぜられる。判定に使うのはIssueのラベルだけ、という原則5に沿う | 解決の順序と、決まらないときの扱いを決める必要がある |
 | D. roleを増やす | 広報のroleをcuminに足す | 仕組みを足さなくてよい | GitHub App、Keychainの鍵、設定、cumin本体の要件に波及する。状態遷移は同じなのに、箱だけ増える |
 
@@ -282,8 +283,8 @@ cuminのroleの指示は、性質の違う2つのことを1つのファイルに
 - 指示の合成は、roleの指示、disciplineの指示、平易な英語の決まりの順である。disciplineはroleに足すだけで、roleの禁止事項を緩めない。食い違ったらroleが勝つ、とroleの側に書く。実際の強制は指示ではなく、GitHub Appの権限、rulesetと保護されたパスで行う。指示は権限ではない。
 - riskは2つに分ける。ラベルの意味 (誰がmergeを決めるか) は本体に残す。何をhighとするかの基準は、分野の判断なのでdisciplineが持つ。基準には既に3段の上書き (初期値、Host、リポジトリ) があるので、disciplineは初期値の段を差し替える形にし、段は増やさない。
 - 選び方は、実装Issueのラベル `cumin/discipline/<名前>`、親の要求Issueのラベル、リポジトリの `.cumin/config.toml` の既定、の順に解決する。
-- ラベルは、riskと同じ扱いにする。Plannerが実装Issueを作るときに仮に付け、Ownerが分割結果の確認で確定する。Agentが `cumin/*` のラベルを付けないという決まりの例外が、`risk/*` に続いて2つ目になるので、[Agentに共通の要件](agents/common.md) に書く。
-- 解決できないとき (知らない名前、または1つのIssueに2つ以上付いている) は、Agentを起動せず、`cumin/status/awaiting-decision` に替えてOwnerに通知する。ラベルが1つも付いていないのはエラーではなく、既定を使う。黙って既定に落とすのは、名前が付いていないときだけにする。間違った名前を既定で埋めると、違う基準のまま作業が進む。
+- ラベルは、riskと同じ扱いにする。Plannerが実装Issueを作るときに仮に付け、Maintainerが分割結果の確認で確定する。Agentが `cumin/*` のラベルを付けないという決まりの例外が、`risk/*` に続いて2つ目になるので、[Agentに共通の要件](agents/common.md) に書く。
+- 解決できないとき (知らない名前、または1つのIssueに2つ以上付いている) は、Agentを起動せず、`cumin/status/awaiting-decision` に替えて通知する。ラベルが1つも付いていないのはエラーではなく、既定を使う。黙って既定に落とすのは、名前が付いていないときだけにする。間違った名前を既定で埋めると、違う基準のまま作業が進む。
 - まずは、1つのroleに1つのdisciplineだけにする。複数を載せる案は、その次に考える。載せるときは、連結の順序を設定の並び順で決める。GitHubのラベルは集合であり順序を持たないので、ラベルに順序を求めると、同じ状態から同じ指示が組み立てられなくなる。
 - 本体はdisciplineの名前を1つも知らない。`software-engineering` も、追加のdisciplineとまったく同じ経路で読み込む。特別扱いを1つ作ると、同梱のdisciplineが通らない経路を、追加のdisciplineだけが通ることになる。
 - 追加のdisciplineが依存してよいもの (roleが定める見出し、`cumin-*` skillの存在、結果の形式) を契約として決め、cuminにその版を1つ持たせる。roleの指示を変えたときに、外のdisciplineが黙って壊れないようにする。
@@ -314,9 +315,9 @@ v0.1の目標は、cumin本体でpeppercheckの再構築を動かすことであ
 
 #### 背景
 
-v0.1の通知は一方向である。Ownerの対応が要るときに、Discordのwebhookで「見に来てほしい」と伝えるだけで、やりとりはIssueとPull Requestで行う ([cumin本体の要件](cumin-core.md) の通知)。
+v0.1の通知は一方向である。人の対応が要るときに、Discordのwebhookで「見に来てほしい」と伝えるだけで、やりとりはIssueとPull Requestで行う ([cumin本体の要件](cumin-core.md) の通知)。
 
-Ownerが通知を受けたあとに行う操作は、2つに分かれる。
+通知を受けた人が行う操作は、2つに分かれる。
 
 | 操作 | 場面 | 今の手段 |
 |---|---|---|
@@ -325,9 +326,9 @@ Ownerが通知を受けたあとに行う操作は、2つに分かれる。
 
 #### 課題
 
-1. Q2の許可が、Hostの前でしか出せない。Q1で着手が止まってから、OwnerがHostに触るまで、新しい着手が再開しない。その間、Agentは動かず、使われなかった5h枠は、リセットとともに消える。
-2. 5h枠の時間帯ごとのしきい値 (`quota.five_hour.bands`) で、止まる頻度は下げられる。ただしweekly枠のペースの上限は、Ownerの許可でも上がらない。weekly枠で止まったときは、Q2でも時間帯でも緩和できない。
-3. ラベルの付け替えが残る。Ownerが決定をコメントに書いても、`cumin/status/ready` を付け直すまで、cuminは動かない (原則4)。この手間の大きさは、まだ測っていない。
+1. Q2の許可が、Hostの前でしか出せない。Q1で着手が止まってから、OperatorがHostに触るまで、新しい着手が再開しない。その間、Agentは動かず、使われなかった5h枠は、リセットとともに消える。
+2. 5h枠の時間帯ごとのしきい値 (`quota.five_hour.bands`) で、止まる頻度は下げられる。ただしweekly枠のペースの上限は、Operatorの許可でも上がらない。weekly枠で止まったときは、Q2でも時間帯でも緩和できない。
+3. ラベルの付け替えが残る。Maintainerが決定をコメントに書いても、`cumin/status/ready` を付け直すまで、cuminは動かない (原則4)。この手間の大きさは、まだ測っていない。
 
 #### 検討した選択肢
 
@@ -341,8 +342,8 @@ Ownerが通知を受けたあとに行う操作は、2つに分かれる。
 
 - 通知の中身 (どの場面で何を書くか) と、送信の手段を分けて考える。長く残るのは、中身のほうである。
 - 送信のインターフェースは、botを作るときに切り出す。実装が1つの間は足さない。
-- botで受け付ける操作は、Q2の許可から始める。次に `cumin/status/ready` の付け直しを考える。後者は「`cumin/status/ready` を付けるのはOwnerである」という原則4に触れるので、そのときに要件を見直す。
-- 認可は、Ownerの1つのアカウントの発言だけを命令として受け付ける形から始める。
+- botで受け付ける操作は、Q2の許可から始める。次に `cumin/status/ready` の付け直しを考える。後者は「`cumin/status/ready` を付けるのはMaintainerである」という原則4に触れるので、そのときに要件を見直す。
+- 認可は、Operatorの1つのアカウントの発言だけを命令として受け付ける形から始める。
 - 案Bを選ぶなら、着手の前に公式ドキュメントで2つを確かめる。webhookの送信とbotのメッセージの送信が、同じ形のJSONを受け取るか。1つのメッセージの長さの上限はいくつか。前者が同じなら、文面の作り込みは差し替えのあとも残り、捨てるのは送信の呼び出しだけになる。後者は、通知を「1通で判断できる長さ」に収める制約になる。
 
 #### 後回しにした理由
@@ -355,11 +356,11 @@ botのtokenという秘密の値、常時つなぐ接続、誰の発言を命令
 
 - Q1で着手が止まってから再開するまでの時間が、5h枠のリセットの間隔を超えることが続くとき。使えたはずの枠を捨てている
 - weekly枠のペースの上限で止まることが増えたとき。Q2でも時間帯でも緩和できない
-- Ownerが通知に応える手間のうち、ラベルの付け替えが占める割合が大きいと分かったとき
+- Maintainerが通知に応える手間のうち、ラベルの付け替えが占める割合が大きいと分かったとき
 
 #### 関連
 
 - [cumin本体の要件](cumin-core.md) の通知
 - [Issueのラベルと状態遷移](workflow/issue-states.md) のQ1からQ4まで、および原則4
 - [設定の一覧](../development/configuration.md) の時間帯
-- Ownerとのやりとりの表: 通知をまとめる、他の通知の手段
+- 人とのやりとりの表: 通知をまとめる、他の通知の手段
