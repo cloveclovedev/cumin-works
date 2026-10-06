@@ -404,9 +404,9 @@ func TestQ3_ARestartWhileStoppedMakesNoMinimalRun(t *testing.T) {
 	}
 }
 
-// Q1: the usage of a run that ends is a read that succeeded, so a later
-// unread usage is a new failure and notifies again.
-func TestQ1_AReadAtTheEndOfARunEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
+// Q1: a usage that cumin keeps, as at the end of a run, is a read that
+// succeeded, so a later unread usage is a new failure and notifies again.
+func TestQ1_AKeptUsageEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
 	sc := newScene(t, cliOptions{commit: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "second", Labels: []string{"cumin/status/ready", "risk/low"}})
 	sc.failQuota(t)
