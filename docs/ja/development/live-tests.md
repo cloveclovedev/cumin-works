@@ -752,7 +752,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 ### Owner の操作に使う認証
 
-- テストは、Host の `gh` のログインで Owner の操作を行う。sandbox に write 以上の権限を持つ、人のアカウントでなければならない ([cumin本体の要件](../requirements/cumin-core.md) の「Owner」)。テストは最初にこれを確かめる。
+- テストは、Host の `gh` のログインで Owner の操作を行う。sandbox に write 以上の権限を持つ、人のアカウントでなければならない ([cumin本体の要件](../requirements/cumin-core.md) の「Maintainer、Issue Owner、Operator」)。テストは最初にこれを確かめる。
 - このログインは、テストが起動する `gh` のプロセスの中だけで使う。cumin と Agent には渡らない。cumin は launchd が起動した別のプロセスで、App の token だけを使う。
 - 実行の間、人もチャットも、cumin の代わりにラベルを替えたり、merge したり、コメントしたり、リンクを張ったり、Issue を閉じたりしない。cumin が先に進めなければ、テストは失敗する。それは不具合として記録し、直してからもう一度通す。
 

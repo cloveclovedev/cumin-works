@@ -91,7 +91,7 @@ cuminは、状態から動作を決める。GitHubでは、triageの権限でも
 
 | 状態ラベル | 数えるのは、誰が付けたときか |
 |---|---|
-| `cumin/status/ready` | Owner ([cumin本体の要件](../cumin-core.md) の「Owner」)。Ownerの「進めてよい」の合図だからである |
+| `cumin/status/ready` | Owner ([cumin本体の要件](../cumin-core.md) の「Maintainer、Issue Owner、Operator」)。Ownerの「進めてよい」の合図だからである |
 | ほかの全ての状態ラベル | `cumin-core` のGitHub Appか、Owner。付け替えはcuminが行うものだが、Ownerが手で直すことがあるためである |
 
 - 数えないアカウントが付けた状態ラベルでは、cuminは何もしない。Agentを起動せず、mergeせず、ラベルも替えない。ログに1回だけ残し、Ownerに1回だけ通知する。同じラベルについて、定期確認のたびに繰り返さない。
