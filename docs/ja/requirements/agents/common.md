@@ -95,7 +95,7 @@ cuminは、起動の依頼の先頭に、その実行の事実をラベル付き
 | 事実 | 中身 | 出どころ |
 |---|---|---|
 | 扱うIssue | この実行が扱うIssueの番号と種類 (要求Issueか実装Issueか)。Agentが止まるときは、このIssueを「止めたIssue」として、decision requestを書く | cuminの依頼 |
-| Ownerのログイン名 | このIssueに最新の `cumin/status/ready` を付けたアカウントが、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) であるときの、その名前。要求Issueにそのイベントがなければ、sub-issueの最新のものを使う。どれもないとき、またはそのアカウントがOwnerでないときは、「Ownerのログイン名はない」と書く。Agentは、このアカウントのコメントを、Ownerの指示として読む | GitHubのラベルのイベントと権限 |
+| Ownerのログイン名 | このIssueに最新の `cumin/status/ready` を付けたアカウントが、Owner ([cumin本体の要件](../cumin-core.md) の「Maintainer、Issue Owner、Operator」) であるときの、その名前。要求Issueにそのイベントがなければ、sub-issueの最新のものを使う。どれもないとき、またはそのアカウントがOwnerでないときは、「Ownerのログイン名はない」と書く。Agentは、このアカウントのコメントを、Ownerの指示として読む | GitHubのラベルのイベントと権限 |
 | 保護されたパス | 対象のリポジトリで効いている一覧と、その照合の決まり。cuminが既定のブランチの `.cumin/config.toml` から読む。一覧がなければ初期値 ([cumin本体の要件](../cumin-core.md) の「設定」) | リポジトリの設定 |
 
 時間の上限と終わる時刻も、同じ並びに書く (下の「プロセスとセッション」)。Plannerの起動の依頼には、ImplementerとReviewerの時間の上限 (`roles.<role>.time_limit`) も書く。Plannerが、1つの実装Issueがそれぞれの1回の実行に収まるように分けるためである ([実装Issueの分割基準](../policies/issue-sizing.md) の10)。

@@ -9,15 +9,44 @@ cumin本体は、Goで書くワークフローの基盤であり、Agentでは�
 
 この文書では、cumin本体を単にcuminと書く。
 
-## Owner
+## Maintainer、Issue Owner、Operator
 
-cuminが判定に使うOwnerは、対象のリポジトリに write 以上 (write、maintain、admin) の権限を持つ、人のアカウントである。botのアカウントは、権限があってもOwnerではない。cuminのGitHub AppはOwnerにならないので、ReviewerのAppの承認は、Ownerの承認に数えない。
+cuminに関わる人を、3つの名前で呼び分ける。1人が3つを兼ねてもよい。
 
-- adminだけに絞らないのは、リポジトリにadminを増やさずにOwnerを置けるようにするためである
+| 名前 | 誰か | 何人か |
+|---|---|---|
+| Maintainer | 対象のリポジトリに write 以上 (write、maintain、admin) の権限を持つ、人のアカウント | 何人でも |
+| Issue Owner | そのIssueに今付いている `cumin/status/ready` を付けたMaintainer | Issueごとに1人 |
+| Operator | Hostでcuminを動かしている人 | Hostごとに1人 |
+
+Maintainer:
+
+- cuminが判定に使う。`cumin/status/ready` を付けて「進めてよい」と合図できるのも、Pull Requestを承認してmergeさせられるのも、状態ラベルを手で直せるのも、Maintainerである
+- botのアカウントは、権限があってもMaintainerではない。cuminのGitHub AppはMaintainerにならないので、ReviewerのAppの承認は、Maintainerの承認に数えない
+- adminだけに絞らないのは、リポジトリにadminを増やさずにMaintainerを置けるようにするためである
 - 「write以上」だけにしないのは、cuminのGitHub Appもwriteの権限を持つためである
-- Ownerの一覧は設定に持たない。GitHub上の権限から、その都度決める
+- GitHubの役割の Maintain だけを指す名前ではない。Write と Admin の人も、Maintainerである
+- Maintainerの一覧は設定に持たない。GitHub上の権限から、その都度決める
 
-ほかの文書で「Owner」と書くときは、この定義に従う。
+Issue Owner:
+
+- どの付け方が「今付いている `cumin/status/ready` を付けた」に当たるかは、[Issueのラベルと状態遷移](workflow/issue-states.md) の「状態ラベルを付けたアカウント」に従う
+- Issueごとに決まる。要求Issueと、そのsub-issueで、違う人になりうる。sub-issueのIssue Ownerは、そのsub-issueに `cumin/status/ready` を付けた人である
+- cuminは、Agentを起動するときに、Issue Ownerのログイン名を渡す ([Agentに共通の要件](agents/common.md))。Agentは、その人のコメントを指示として読む
+- cuminがmergeの判断のためにレビューを依頼する相手は、実装IssueのIssue Ownerである。承認は、どのMaintainerのものでも数える
+- 止まったIssueに、別のMaintainerが `cumin/status/ready` を付け直すと、Issue Ownerはその人に替わる
+
+Operator:
+
+- Host上のコマンド (`cumin run`、`cumin status`、`cumin quota allow`、`cumin stop`、`cumin setup`)、Hostの設定ファイル、Keychain、バイナリの入れ替えを受け持つ
+- 利用枠は、HostのClaude Codeのアカウントのものである。「自分の作業のために利用枠を残す」のは、Operatorである
+- リポジトリの権限とは関係がない。OperatorがMaintainerでないこともありうる
+
+通知:
+
+- 通知先は、Hostの設定で決まる。誰がそれを読むかは、その設定しだいである。そこで、文書では「通知する」とだけ書き、相手の名前を書かない
+
+ほかの文書で「Owner」とだけ書いている箇所は、上の3つの名前への書き換えが済むまで、Maintainerのことである。
 
 ## 受け持つこと
 
