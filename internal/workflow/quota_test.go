@@ -662,3 +662,56 @@ func TestQ1_AStartWithNoStoredUsageCostsOneMinimalRun(t *testing.T) {
 		t.Errorf("%d agent runs, want 1", n)
 	}
 }
+
+// A read of the usage that fails is kept for the rest of the poll: two
+// waiting requests of one poll cost one minimal run, and neither changes a
+// label, counts a request, or starts an agent. The next poll reads again,
+// and both requests start when that read succeeds.
+func TestQ1_AFailedReadOfTheUsageIsKeptForTheRestOfThePoll(t *testing.T) {
+	sc := newScene(t, cliOptions{})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "second", Labels: []string{"cumin/status/ready", "risk/low"}})
+	sc.failQuota(t)
+	service := sc.service()
+	service.Settings.MaxIssuesInProgress = 2
+	sc.failingCheck(t, service, 0)
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs in the poll, want 1 for two waiting requests", n)
+	}
+	sc.assertNoStartAtTheLimit(t, []string{"cumin/status/checking", "risk/low"})
+	if n := service.State.Issue("example-org/example-repo", 10).CheckFixRequests; n != 0 {
+		t.Errorf("the state file counts %d check fix requests, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 11).Labels; !slices.Equal(got, []string{"cumin/status/ready", "risk/low"}) {
+		t.Errorf("labels of #11 = %v, want the ready issue as it was", got)
+	}
+	q1 := sc.q1Messages()
+	if len(q1) != 1 || !strings.Contains(q1[0], "The quota usage was not read before the start of an agent") {
+		t.Errorf("Q1 notifications = %q, want one about the unread usage", q1)
+	}
+
+	// The next poll reads again: the mark does not outlive the poll.
+	sc.pollAndWait(t, service)
+	if n := sc.quotaRuns(t); n != 2 {
+		t.Errorf("%d minimal runs after two polls, want 2: one for each poll", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs while the usage is not read, want 0", n)
+	}
+
+	// A read that succeeds sets no mark: both requests start in the same
+	// poll. The run of #11 ends with no pull request, so cumin requests its
+	// implementation again: the runs are counted for each issue.
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	sc.pollAndWait(t, service)
+	if id := service.State.Issue("example-org/example-repo", 11).SessionID; id == "" {
+		t.Error("the state file holds no session of #11 after the read, want its implementation started")
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CheckFixRequests; n != 1 {
+		t.Errorf("the state file counts %d check fix requests after the read, want 1", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 11).Labels; slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of #11 after the read = %v, want the issue out of cumin/status/ready", got)
+	}
+}

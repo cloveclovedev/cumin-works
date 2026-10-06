@@ -152,6 +152,9 @@ type Service struct {
 	// waitingTold says that the Owner heard Q4 (waiting) since cumin last
 	// did something (waiting.go). quotaMu guards it.
 	waitingTold bool
+	// quotaUnread says that the read of the usage failed in this poll
+	// (quota.go). quotaMu guards it.
+	quotaUnread bool
 	// quotaWaits holds the repositories where a start of an agent waits
 	// only for the quota (waiting.go). quotaMu guards it.
 	quotaWaits map[string]bool
@@ -403,6 +406,9 @@ func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
 	var all pollResult
 	finishing := s.stopRequested()
+	// A failed read of the quota usage is kept for one poll only: this
+	// poll reads again.
+	s.forgetQuotaUnread()
 	for _, target := range s.Targets {
 		// The stop signal came while this poll was running. Start nothing
 		// more: the requests that are going on are the ones to wait for.
