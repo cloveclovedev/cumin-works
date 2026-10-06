@@ -685,7 +685,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     | ログの行 | 意味 |
     |---|---|
     | `quota usage read` | 着手の前の最小の実行 |
-    | `Q1: no start; the quota limit is reached` (`windows` が `weekly`、`next_try` がweekly枠のリセット時刻) | 着手を止めた。ラベルは替えない |
+    | `stop agent starts: the quota limit is reached` (`windows` が `weekly`、`next_try` がweekly枠のリセット時刻) | 着手を止めた。ラベルは替えない |
     | `the Owner was notified` | Q1の通知 |
 
 11. 定期確認を3回以上待つ。`quota usage read` は増えない。読んでから5分以内は、残した使用率で判定する。そのあとは、次に試す時刻まで読まない (Q3)。`the Owner was notified` も増えない。
@@ -702,7 +702,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     | ログの行 | 意味 |
     |---|---|
     | `quota usage read` | 着手の前の最小の実行 |
-    | `Q1: no start; the quota limit is reached` (`windows` が `5h`、`next_try` が5h枠のリセット時刻) | 着手を止めた |
+    | `stop agent starts: the quota limit is reached` (`windows` が `5h`、`next_try` が5h枠のリセット時刻) | 着手を止めた |
     | `the Owner was notified` | Q1の通知。本文に `cumin quota allow` がある |
 
 18. `./cumin quota allow` を実行する。5h枠のリセット時刻と、weekly枠の上限は変わらないことが表示される。
