@@ -343,7 +343,7 @@ func untilReadyBeforeTheLimit(t *testing.T, prologue string, run func(path strin
 		if _, err := os.Stat(path + ".ready"); err == nil {
 			return path, child
 		}
-		if limit > hangGuard {
+		if 2*limit >= hangGuard {
 			t.Fatalf("the fake CLI was not ready before the time limit of %s", limit)
 		}
 		t.Logf("the time limit of %s passed before the fake CLI was ready; again with twice the limit", limit)
@@ -409,8 +409,10 @@ const (
 	// does.
 	endChildOnTerm = `on_term='echo TERM >> "$signals"; kill $child; exit 143'`
 	// ignoreTerm keeps the CLI and its child alive after SIGTERM, so only
-	// SIGKILL ends them. The child starts with SIGTERM ignored.
-	ignoreTerm = `on_term='echo TERM >> "$signals"'` + "\n" + `trap '' TERM`
+	// SIGKILL ends them. Only the child ignores SIGTERM from its start: the
+	// CLI keeps the default action until its trap is set, so a SIGTERM
+	// before the trap ends the CLI, and is not lost.
+	ignoreTerm = `on_term='echo TERM >> "$signals"'` + "\n" + `child_command="trap '' TERM; exec sleep 300"`
 )
 
 // neverEndingCLI writes a fake CLI that starts a child, prints the init
@@ -438,8 +440,9 @@ func neverEndingCLIWithInit(t *testing.T, prologue, initLine string) (path strin
 	// loop waits again after a trap that does not exit.
 	script := "#!/bin/sh\n" +
 		"signals=" + path + ".signals\n" +
+		"child_command='exec sleep 300'\n" +
 		prologue + "\n" +
-		startChild(childPipe, "exec sleep 300") +
+		startChild(childPipe, `eval "$child_command"`) +
 		"trap \"$on_term\" TERM\n" +
 		"printf '%s\\n' '" + initLine + "'\n" +
 		": > " + path + ".ready\n" +
