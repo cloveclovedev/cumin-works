@@ -263,25 +263,27 @@ Ownerが `cumin/status/awaiting-merge-decision` や `cumin/status/awaiting-decis
 - こうする理由は3つある。書き直される前のIssueを前提にした古い文脈を引きずらない。作業の状態はGitHubにあるので、セッションを捨てても失うものがない。Ownerの対応には時間が空くので、古いセッションを再開すると長い文脈を読み直す分だけ利用枠を余計に使う。
 - 依頼し直し (「request the split again」、「request the acceptance check again」、「request the implementation again」、「request the review again」) は、状態ファイルにセッションがあれば、そのセッションで続ける。なければ、新しいセッションで依頼する
 
-## cumin自身の状態 (新しい着手)
+## cumin自身の状態 (Agentの起動)
 
 利用枠に関する動作は、Issueの状態ではなく、cumin自身の状態を変える。cuminの状態は2つで、Hostの手元 (最新の使用率) で決まり、GitHubにはない。
 
-![新しい着手の状態](new-starts-states.svg)
+![Agentの起動の状態](agent-start-states.svg)
 
-図の元ファイル: [new-starts-states.puml](new-starts-states.puml)
+図の元ファイル: [agent-start-states.puml](agent-start-states.puml)
 
 | 状態 | その状態で進むこと |
 |---|---|
-| 新しい着手を進める | cuminが、空きがあれば、`ready` のIssueに着手する (R1、I1) |
-| 新しい着手を止めている | cuminが、実行中のIssueは最後まで進め、新しい着手はしない |
+| Agentの起動を進める | cuminが、Agentに依頼する遷移のたびに、Agentを起動する |
+| Agentの起動を止めている | cuminが、どのAgentも起動しない。動いているAgentは、止めずに最後まで動かす。Agentを起動しない遷移 (ラベルの付け替え、コメント、通知、merge、Issueを閉じること) は続ける |
+
+Agentの起動を止めている間、Agentに依頼する遷移は成り立たない。着手 (R1、I1) も、実行中のIssueの続きの依頼 (レビュー、checkの修正、指摘の修正、衝突の解消、Ownerのレビューへの対応、受け入れの確認) も、依頼し直しも同じである。Issueは今の状態のまま残り、ラベルも替わらない。再開したあとの定期確認が、同じ事実から同じ動作を決める。
 
 | 名前 | 旧番号 | 前の状態 → 次の状態 | きっかけと条件 | cuminの動作 |
 |---|---|---|---|---|
-| stop new starts | Q1 | 進める → 止めている | Agentの実行の終わり、または着手の直前の確認で、5h枠の使用率が今のしきい値以上になった。weekly枠の使用率がペースの上限以上になった。または、着手の直前の確認で使用率を読み取れなかった | Ownerに通知する。止めてから再開するまでに、同じ枠について (読み取れなかったときは、そのことについて) 通知するのは1回だけである |
-| resume new starts | Q2 | 止めている → 進める | Ownerが、Host上のコマンドで5h枠の使い切りを許可した。weekly枠の使用率がペースの上限未満である | 着手を再開する。許可は、その5h枠のリセットまで有効である |
-| resume new starts | Q3 | 止めている → 進める | 手元に残した使用率から決めた、次に試す時刻を過ぎた。着手の直前の確認で、どちらの枠も上限未満である | 着手を再開する |
-| tell the Owner that cumin waits | Q4 | どちらの状態でも (状態は変わらない) | Ownerが動かなければ何も進まない。次の全てが成り立つときである。実行中のAgentがいない。R1もI1も成り立たない (利用枠だけで止まっている着手 (Q1) は、成り立つものとして数える。Q1が原因を知らせているためである)。cuminがOwnerなしで次に進めるIssueがない (下の表)。前回の通知のあとに、cuminが何か動作をした | Ownerに「待ち状態になった」と通知する |
+| stop agent starts | Q1 | 進める → 止めている | Agentの実行の終わり、またはAgentの起動の前の確認で、5h枠の使用率が今のしきい値以上になった。weekly枠の使用率がペースの上限以上になった。または、Agentの起動の前の確認で使用率を読み取れなかった | Ownerに通知する。止めてから再開するまでに、同じ枠について (読み取れなかったときは、そのことについて) 通知するのは1回だけである |
+| resume agent starts | Q2 | 止めている → 進める | Ownerが、Host上のコマンドで5h枠の使い切りを許可した。weekly枠の使用率がペースの上限未満である | Agentの起動を再開する。許可は、その5h枠のリセットまで有効である |
+| resume agent starts | Q3 | 止めている → 進める | 手元に残した使用率から決めた、次に試す時刻を過ぎた。Agentの起動の前の確認で、どちらの枠も上限未満である | Agentの起動を再開する |
+| tell the Owner that cumin waits | Q4 | どちらの状態でも (状態は変わらない) | Ownerが動かなければ何も進まない。次の全てが成り立つときである。実行中のAgentがいない。R1もI1も成り立たない。利用枠だけで待っているIssueがない (Q1が原因を知らせているためである)。cuminがOwnerなしで次に進めるIssueがない (下の表)。前回の通知のあとに、cuminが何か動作をした | Ownerに「待ち状態になった」と通知する |
 
 Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 
@@ -290,22 +292,23 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 | `cumin/status/checking` | 数える。Q4を出さない | 必須のcheckが終われば、cuminがI3かI4で進める。衝突すればI14で、checkの待ち時間を過ぎればI15で進める |
 | `cumin/status/ready` で、着手できるのに、同時に進めるIssueの数の上限だけで待っている | 数える。Q4を出さない | 空きができれば、cuminがR1かI1で着手する |
 | `cumin/status/ready` で、blocked by のIssueが開いている | 数えない | 前のIssueが閉じるまで動けない。前のIssueがcuminの作業中なら、そちらがQ4を止める |
-| `cumin/status/ready` で、利用枠だけで止まっている | (Q1に任せる) | 上の行のとおり、R1とI1が成り立つものとして数える |
+| どの状態でも、Agentへの依頼が利用枠だけで待っている | 数える。Q4を出さない | Q1が原因を知らせている。枠が戻れば、cuminが依頼する |
 | `cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing`、`cumin/status/accepting`、`cumin/status/merging` | 数える。Q4を出さない | Agentが動いていなくても、次の定期確認で、cuminが事実から次の動作を決める |
 | `cumin/status/awaiting-plan-review`、`cumin/status/awaiting-merge-decision`、`cumin/status/awaiting-acceptance`、`cumin/status/awaiting-decision` | 数えない | 人の番である |
 | `cumin/type/owner-task`、状態ラベルのないIssue | 数えない | Ownerが動くまで進まない |
 
 使用率の読み方:
 
-- 使用率は、Agentの実行結果から読む。加えて、着手 (R1、I1) の直前にも読み直す。同じアカウントの利用枠は、cuminの外 (Ownerの作業など) でも使われるためである。
-- 着手でない依頼 (I4、I5、Reviewerへの最初の依頼など) の前には、読み直さない。上限に達していても、実行中のIssueは最後まで進めるためである。
-- 例外は、依頼し直し (「request the split again」、「request the acceptance check again」、「request the implementation again」、「request the review again」) と、「request the cause from the Reviewer」である。この前には読み直す。上限に達していれば、依頼せず、依頼し直した回数にも数えない。Issueは今の状態のまま残り、あとの定期確認が決め直す。上限に当たった実行のすぐあとに同じ依頼を出しても、また上限に当たるだけだからである。
+- cuminは、Agentを起動する前に、必ず使用率から決める。着手も、実行中のIssueの続きの依頼も、依頼し直しも同じである。Agentを起動する遷移は、下の「Agentを起動する遷移と、利用枠の確認、cuminを止めるとき」の図の赤い矢印の全部である。
+- 上限に達していれば、Agentを起動せず、その起動のためのラベルの付け替えもせず、依頼し直した回数にも数えない。Issueは今の状態のまま残り、あとの定期確認が決め直す。
+- 使用率は、Agentの実行結果から読む。同じアカウントの利用枠は、cuminの外 (Ownerの作業など) でも使われるので、手元の使用率が古いときは、起動の前に読み直す。直前のAgentの実行で読んだばかりの使用率があれば、読み直さずにそれを使う。どこまでを「読んだばかり」とするかは、設計で決める。
+- 動いているAgentは、利用枠のために止めない。
 - 読んだ使用率は、枠ごとのリセット時刻と、読んだ時刻とともに、Hostの状態ファイルに残す。
-- 止めている間は、残した使用率から、次に着手を試みる時刻を決める。その時刻までは、使用率を読むためだけの実行をしない。使用率はリセットまで下がらないので、その時刻より前に上限を下回ることはない。
+- 止めている間は、残した使用率から、次にAgentの起動を試みる時刻を決める。その時刻までは、使用率を読むためだけの実行をしない。使用率はリセットまで下がらないので、その時刻より前に上限を下回ることはない。
   - 5h枠が止めているときは、5h枠のリセット時刻と、しきい値が残した使用率を上回る時間帯の始まりのうち、早いほうである。
   - weekly枠が止めているときは、ペースの上限が残した使用率を上回る時刻と、weekly枠のリセット時刻のうち、早いほうである。
   - 両方の枠が止めているときは、両方の時刻のうち、遅いほうである。
-- 着手の直前に使用率を読み取れなければ、着手せずに、Ownerに通知する。次の定期確認で、読み直す。
+- Agentの起動の前に使用率を読み取れなければ、起動せずに、Ownerに通知する。次の定期確認で、読み直す。
 
 上限の決め方:
 
@@ -316,7 +319,7 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 
 ## Agentを起動する遷移と、利用枠の確認、cuminを止めるとき
 
-上の2つの状態遷移図の遷移を、3つに色分けした図である。状態と遷移は同じで、遷移は名前だけを書く。利用枠の確認と、`cumin stop --after-current-runs` で止めるときの動作に、抜けがないかを見るために使う。
+上の2つの状態遷移図の遷移を、2つに色分けした図である。状態と遷移は同じで、遷移は名前だけを書く。利用枠の確認と、`cumin stop --after-current-runs` で止めるときの動作に、抜けがないかを見るために使う。
 
 ![要求Issueの遷移とAgentの起動](requirement-issue-agent-starts.svg)
 
@@ -326,17 +329,16 @@ Q4で「cuminがOwnerなしで次に進めるIssue」に数えるかどうか:
 
 | 色 | 遷移 | 利用枠 | 止めるとき (`cumin stop --after-current-runs`) |
 |---|---|---|---|
-| 赤 | Agentを起動する。着手 (「request the split」、「request the implementation」) と、依頼し直し (4つ) と、「request the cause from the Reviewer」 | 起動の前に使用率を読む。上限なら、起動せず、依頼し直した回数にも数えない。Issueは今の状態のまま残り、あとの定期確認が決め直す | 遷移しない。Issueは今の状態のまま残り、次の起動のあとの定期確認が決める |
-| 青 | Agentを起動する。実行中のIssueの続きの依頼である (レビュー、checkの修正、指摘の修正、衝突の解消、Ownerのレビューへの対応、受け入れの確認の最初の依頼) | 読まない。上限に達していても、実行中のIssueは最後まで進める | 遷移しない。赤と同じである |
-| 灰 | Agentを起動しない (ラベルの付け替え、コメント、通知、Issueを閉じること) | 関係しない | 遷移する。`merging` の中のmergeも送る |
+| 赤 | Agentを起動する。着手、実行中のIssueの続きの依頼、依頼し直しの全部である | 起動の前に、使用率から決める。上限なら、起動せず、ラベルも替えず、依頼し直した回数にも数えない。Issueは今の状態のまま残り、あとの定期確認が決め直す | 遷移しない。Issueは今の状態のまま残り、次の起動のあとの定期確認が決める |
+| 灰 | Agentを起動しない (ラベルの付け替え、コメント、通知、Issueを閉じること) | 関係しない。上限に達していても、遷移する | 遷移する。`merging` の中のmergeも送る |
 
-- 赤と青を合わせたものが、Agentを起動する遷移の全部である。ほかの遷移は、Agentを起動しない。
+- 赤い矢印が、Agentを起動する遷移の全部である。利用枠の確認と、止めるときの確認は、この全部が通る1か所で行う。新しい種類の依頼を足しても、確認なしでAgentを起動することはできない。
 - 破線は、Ownerの操作である。cuminが止まっていても、Ownerは操作できる。cuminは、次の起動のあとの定期確認で、その結果を読む。
 
 ## Agentの異常終了と、結果を残さなかった実行
 
 - Agentの実行が異常終了したとき (プロセスの失敗、タイムアウトなど) も、Agentが結果をGitHubに残さずに終わったときも、cuminの再起動でAgentの実行が切れたときも、扱いは同じである。GitHubを読めば、結果があるかどうかが分かる。結果がなければ、依頼し直しの遷移 (「request the split again」、「request the acceptance check again」、「request the implementation again」、「request the review again」) が成り立ち、同じ依頼を1回だけやり直す。それでも結果がなければ、`cumin/status/awaiting-decision` に替えてOwnerに通知する。
-- 利用枠の上限に当たった場合は、やり直しに数えず、枠のリセットを待つ。
+- 利用枠の上限に当たった場合は、やり直しに数えず、枠のリセットを待つ (「cumin自身の状態 (Agentの起動)」)。
 - Agentの実行のあとで、GitHubの呼び出しが一時的な理由で失敗したときは、cuminは何も持っておかない。Issueは今の状態のまま残り、次の定期確認が、同じ事実から同じ動作を決める ([cumin本体の要件](../cumin-core.md) の「GitHubの呼び出しの失敗」)。
 
 ## 実装しないこと
