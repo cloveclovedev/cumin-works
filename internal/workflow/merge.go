@@ -190,7 +190,9 @@ func (s *Service) mergeEndAtPoll(ctx context.Context, log *slog.Logger, token st
 //
 //   - The base branch was modified: the issue keeps its label with no
 //     comment, and the next poll sends the merge again.
-//   - A conflict: "request a conflict resolution" (resolveConflict).
+//   - A conflict: "request a conflict resolution" (resolveConflict). While
+//     cumin stops after its runs, nothing changes instead: the issue keeps
+//     cumin/status/merging, and the next start of cumin decides again.
 //   - Any other lasting reason: "stop the merge for the Owner".
 //
 // Before the second and each later merge of one poll, cumin waits
@@ -234,6 +236,10 @@ func (s *Service) sendMerge(ctx context.Context, log *slog.Logger, token string,
 		log.Info("the base branch was modified; the next poll sends the merge again", "pull_request", pr.Number)
 		return nil
 	case errors.Is(err, github.ErrConflict):
+		if s.finishing.Load() {
+			log.Info("the merge conflicts; cumin stops after its runs, and the conflict resolution waits for the next start of cumin", "pull_request", pr.Number)
+			return nil
+		}
 		return s.resolveConflict(ctx, log, token, target, settings, sub, pr, defaultBranch)
 	case errors.Is(err, github.ErrHeadMoved):
 		return stopIssue(MergeHeadMovedReason(pr.Number))

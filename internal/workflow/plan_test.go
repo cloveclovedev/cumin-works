@@ -459,6 +459,57 @@ func TestPlanning_ARestartWithNoSubIssueRequestsTheSplitOnceMoreAndThenStopsForT
 	}
 }
 
+// A split run that hit the quota limit and left no split does not use up
+// the second request: the end of the run checks the quota before the
+// request is counted, so the issue keeps cumin/status/planning with a count
+// of zero. After the limit, one poll sends the second request.
+func TestPlanning_ARunThatHitTheQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	// The sub-issue of newScene belongs to no requirement issue here.
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
+	// The minimal run before the first request passes. The Planner run
+	// reports a weekly usage of 0.51 (planner-done.jsonl) against a target
+	// of 50, and leaves no split.
+	reset := sceneNow.Add(time.Hour)
+	sc.setQuota(t, 0.10, reset, 0.10, reset)
+	sc.quota.Weekly.Target = 50
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+
+	sc.pollTimes(t, service, 3)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 6).SplitRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	planning := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, planning) {
+		t.Errorf("labels of #6 = %v, want %v", got, planning)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 at the limit, want none", n)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs after the limit, want 2: one poll sends the second request", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: plan") {
+		t.Errorf("the request text is not a split:\n%s", text)
+	}
+	// The Planner left no split again, so the issue stops for the Owner:
+	// the request after the limit was the one second request.
+	stopped := []string{githubtest.RequirementLabel, workflow.LabelAwaitingDecision}
+	if got := requirementLabels(t, sc); !slices.Equal(got, stopped) {
+		t.Errorf("labels of #6 = %v, want %v", got, stopped)
+	}
+}
+
 // A restart after the second request: the state file says that the split
 // was requested again, and no sub-issue exists. The issue goes to
 // cumin/status/awaiting-decision with no request.
@@ -676,26 +727,63 @@ func assertSplitWaitsForThePoll(t *testing.T, sc *scene, service *workflow.Servi
 }
 
 // After blocked, the fake GitHub fails every try of the read before the
-// stop. cumin keeps nothing and only logs: the label stays, no comment is
+// stop. cumin keeps nothing for a later step, so the question of the
+// Planner must not be lost: the log holds the whole blocked_reason, and the
+// Owner gets one notification that says so. The label stays, no comment is
 // written, and the issue is not in work. The next poll decides once from
 // the facts on GitHub, and no Planner runs again.
 func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl", holds: true})
+	// The blocked_reason has more than one line, so that the test tells the
+	// whole text from its first line.
+	sc := newScene(t, cliOptions{fixture: "planner-blocked-two-lines.jsonl", holds: true})
 	// No status label on the sub-issue, so that I1 does not start it.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	service := afterPlannerRun(t, sc, func() {
 		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
 	})
-	assertSplitWaitsForThePoll(t, sc, service)
-	if !strings.Contains(sc.logs.String(), `"msg":"R2: the stop after blocked failed for a temporary reason; the next poll decides"`) {
-		t.Errorf("the log does not say that the stop after blocked failed:\n%s", sc.logs.String())
+	planning := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, planning) {
+		t.Errorf("labels of #6 = %v, want %v until the next poll", got, planning)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none until the next poll", n)
+	}
+	if got := workflow.InProgressIssues(service); len(got) != 0 {
+		t.Errorf("issues in work = %v, want none: cumin keeps no step", got)
+	}
+	for _, want := range []string{
+		`"msg":"R2: the stop after blocked failed for a temporary reason; the next poll decides"`,
+		`"comment":"## Decision needed: which sign-in method does the login screen use?\n\nOption A: a password. Option B: a passkey."`,
+	} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s:\n%s", want, sc.logs.String())
+		}
+	}
+	messages := sc.messagesExceptQ4()
+	if len(messages) != 1 || !strings.Contains(messages[0], workflow.PlannerQuestionNotWrittenReason) || !strings.Contains(messages[0], "issue #6") {
+		t.Fatalf("notifications = %v, want one that says that the Planner asked a question and that the log holds the text", messages)
 	}
 	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
 
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
-	assertSplitWaitsForTheOwner(t, sc, service)
+	// The polls decide from the split on GitHub, and send their own
+	// notification; the one about the question is not sent again.
+	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none", n)
+	}
+	messages = sc.messagesExceptQ4()
+	if len(messages) != 2 || !strings.Contains(messages[1], "needs a review") {
+		t.Errorf("notifications = %v, want the one about the question and one that says that the split needs a review", messages)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
 	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
 		t.Errorf("%d label changes of #6 by the polls, want 1", n-writes)
 	}
