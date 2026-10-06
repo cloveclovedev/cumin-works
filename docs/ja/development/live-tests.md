@@ -689,7 +689,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     | `the Owner was notified` | Q1の通知 |
 
 11. 定期確認を3回以上待つ。`quota usage read` は増えない。読んでから5分以内は、残した使用率で判定する。そのあとは、次に試す時刻まで読まない (Q3)。`the Owner was notified` も増えない。
-12. `./cumin status --config <前半の設定ファイル>` を実行する。`new starts: stopped by the weekly window` が出る。
+12. `./cumin status --config <前半の設定ファイル>` を実行する。`agent starts: stopped by the weekly window` が出る。
 13. `./cumin quota allow` を実行し、定期確認を2回待つ。着手は起きない (Core-16: 許可はweekly枠のペースの上限を上げない)。
 14. SIGTERM で止める。
 
