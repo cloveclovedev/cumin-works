@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -721,33 +722,60 @@ func TestQ1_AFailedReadOfTheUsageIsKeptForTheRestOfThePoll(t *testing.T) {
 	}
 }
 
+// runEnd is the time at which the Implementer run of implementerRunEnded
+// ends: more than 5 minutes after the minimal run before it. The usage of
+// that minimal run is then too old for the next start, so that only the
+// usage of the run end can save a minimal run.
+var runEnd = sceneNow.Add(10 * time.Minute)
+
 // implementerRunEnded polls once on a ready issue: one minimal run reads a
-// usage below every limit, and the Implementer run ends through the fake
-// CLI, whose done.jsonl reports a usage below every limit too. cumin stores
-// that usage by itself (quotaAfterRun); the test writes no usage.
+// usage below every limit at sceneNow, and the Implementer run ends through
+// the fake CLI at runEnd, where its done.jsonl reports a usage below every
+// limit too. cumin stores that usage by itself (quotaAfterRun); the test
+// writes no usage. Every agent run of the scene holds until a release.
 func implementerRunEnded(t *testing.T) (*scene, *workflow.Service) {
 	t.Helper()
-	sc := newScene(t, cliOptions{reviews: []string{"NONE", "APPROVE"}})
+	sc := newScene(t, cliOptions{reviews: []string{"NONE", "APPROVE"}, holds: true})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
 	service := sc.service()
 	withState(t, service)
-	sc.pollAndWait(t, service)
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs after the first poll, want 1: the Implementer", n)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
 	}
+	waitForAgentRun(t, sc)
 	if n := sc.quotaRuns(t); n != 1 {
 		t.Fatalf("%d minimal runs before the Implementer, want 1", n)
+	}
+	sc.clock.Set(runEnd)
+	sc.release(t)
+	service.Wait()
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after the first poll, want 1: the Implementer", n)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/checking") {
 		t.Fatalf("labels of #10 after the Implementer = %v, want cumin/status/checking", got)
 	}
+	// The state holds the usage that done.jsonl reports, read at the end
+	// of the run.
+	stored, ok := service.State.Quota()
+	if !ok || !stored.ReadAt.Equal(runEnd) || stored.Weekly.Utilization != 0.51 {
+		t.Fatalf("stored usage = %+v, %v, want the weekly 0.51 of the run, read at %v", stored, ok, runEnd)
+	}
 	return sc, service
 }
 
-// assertTheReviewerStarted checks that the second agent run is the review.
-func (sc *scene) assertTheReviewerStarted(t *testing.T) {
+// reviewerStartsAt polls at the time, and checks that the poll starts the
+// Reviewer as the second agent run. It lets that run end.
+func (sc *scene) reviewerStartsAt(t *testing.T, service *workflow.Service, at time.Time) {
 	t.Helper()
+	sc.clock.Set(at)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want 2: the Implementer and the Reviewer", n)
 	}
@@ -757,14 +785,14 @@ func (sc *scene) assertTheReviewerStarted(t *testing.T) {
 }
 
 // The usage that the end of an Implementer run reports reaches the next
-// start: the checks pass, the Reviewer starts within 5 minutes, and no
-// minimal run happens before it. The two starts cost one minimal run.
+// start: the checks pass, the Reviewer starts 5 minutes after the end of
+// the run, and no minimal run happens before it. The minimal run before
+// the Implementer is 15 minutes old then, so the usage of the run end alone
+// saves the minimal run. The two starts cost one minimal run.
 func TestQ1_TheUsageOfARunEndLetsTheNextStartSkipTheMinimalRun(t *testing.T) {
 	sc, service := implementerRunEnded(t)
-	sc.clock.Set(sceneNow.Add(5 * time.Minute))
-	sc.pollAndWait(t, service)
+	sc.reviewerStartsAt(t, service, runEnd.Add(5*time.Minute))
 
-	sc.assertTheReviewerStarted(t)
 	if n := sc.quotaRuns(t); n != 1 {
 		t.Errorf("%d minimal runs, want 1: none before the Reviewer", n)
 	}
@@ -774,10 +802,8 @@ func TestQ1_TheUsageOfARunEndLetsTheNextStartSkipTheMinimalRun(t *testing.T) {
 // starts later than that costs exactly one more minimal run.
 func TestQ1_TheUsageOfARunEndThatIsOlderCostsOneMinimalRun(t *testing.T) {
 	sc, service := implementerRunEnded(t)
-	sc.clock.Set(sceneNow.Add(5*time.Minute + time.Second))
-	sc.pollAndWait(t, service)
+	sc.reviewerStartsAt(t, service, runEnd.Add(5*time.Minute+time.Second))
 
-	sc.assertTheReviewerStarted(t)
 	if n := sc.quotaRuns(t); n != 2 {
 		t.Errorf("%d minimal runs, want 2: exactly one before the Reviewer", n)
 	}
