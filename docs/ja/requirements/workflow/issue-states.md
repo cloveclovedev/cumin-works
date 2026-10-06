@@ -198,7 +198,7 @@ I7のあと、MaintainerはPull RequestをGitHubのレビューで判断する�
 
 - 承認するときは、今の先頭のコミットに `APPROVE` のレビューを出す。I12が成り立ち、cuminがmergeする。古いコミットへの承認は数えない。承認のあとにMaintainerが `REQUEST_CHANGES` を出すと、最新のレビューが承認でなくなるので、mergeしない (`merging` に入ったあとなら、「go back to the checks」が成り立つ)。衝突の解消などで新しいコミットがpushされたら、Maintainerはもう一度承認する
 - Maintainerの判断を待つ間に、ほかのPull Requestのmergeで衝突したら、Maintainerが承認する前に、I14がImplementerに解消させる。解消のあと、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Maintainerの判断を待つ。Maintainerは、mergeできる先頭のコミットだけを判断すればよい
-- 衝突した先頭のコミットにMaintainerのレビューがあるときは、そのレビューが先に決める。`REQUEST_CHANGES` ならI13が成り立ち、Implementerが指摘に対応する。そのあと、衝突は `cumin/status/checking` のI14で解消される。承認ならI12が成り立ち、`merging` でmergeが断られて、「request a conflict resolution」でImplementerが解消する。I12もI13も成り立たないIssueだけに、同じ定期確認でI14を適用する
+- 衝突した先頭のコミットにMaintainerのレビューがあるときは、そのレビューが先に決める。`REQUEST_CHANGES` ならI13が成り立ち、Implementerが指摘に対応する。そのあと、衝突は `cumin/status/checking` のI14で解消される。承認ならI12が成り立ち、`merging` で「request a conflict resolution」が成り立って、Implementerが解消する。GitHubが衝突していると既に返していれば、mergeは送らない。I12もI13も成り立たないIssueだけに、同じ定期確認でI14を適用する
 - 差し戻すときは、今の先頭のコミットに `REQUEST_CHANGES` のレビューを出す。I13が成り立ち、cuminがImplementerに直させる。そのあと、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Maintainerの判断を待つ。Reviewerのレビューのラウンドは、Reviewerの最後の `APPROVE` のあとから数え直すので、差し戻しのあとは1ラウンド目から始まる
 - 1つの `REQUEST_CHANGES` で差し戻すのは1回だけである。Maintainerが質問だけをして、Implementerがコミットせずに答えると、先頭のコミットは変わらず、Maintainerの `REQUEST_CHANGES` はそのコミットに残る。I13は、実装Issueが最後に `cumin/status/awaiting-merge-decision` になったあとのレビューだけで成り立つので、Issueはそのまま、Maintainerの判断に戻る。Maintainerは答えを読んで、承認するか、もう一度 `REQUEST_CHANGES` を出す
 - コメントを書いて実装Issueに `cumin/status/ready` を付けて差し戻すこともできる。I1が成り立ち、続きの依頼になる
