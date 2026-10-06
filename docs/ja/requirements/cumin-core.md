@@ -56,7 +56,7 @@ Ownerが使うコマンド:
 | コマンド | 内容 |
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
-| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Ownerの対応を待っているIssue、利用枠だけで待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、実行が終わるのを待って止まる途中かどうか |
+| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Ownerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、Agentの起動を止めているかどうかとその原因の枠、実行が終わるのを待って止まる途中かどうか |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
 | `cumin stop --after-current-runs` | 実行中のAgentの実行が終わるのを待ってから、cuminを止める。新しい依頼は始めない。Agentの要らない動作は、止まるまで続ける |
 | `cumin --version` | cuminの版を表示する |
