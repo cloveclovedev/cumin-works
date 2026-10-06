@@ -352,6 +352,9 @@ func (sc *scene) service() *workflow.Service {
 		// The stop sends SIGTERM to the process group of the CLI and
 		// SIGKILL after this grace. The tests must not wait ten seconds.
 		Grace: 200 * time.Millisecond,
+		// The read time of a usage comes from the clock of the scene, as
+		// the workflow decides with that clock.
+		Now: sc.clock.Now,
 	}
 	return &workflow.Service{
 		GitHub:    sc.client,
