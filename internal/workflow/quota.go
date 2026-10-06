@@ -3,7 +3,8 @@ package workflow
 // This file applies Q1 to Q3 of issue-states.md: before a new start (R1,
 // I1), and at the end of each agent run, the quota usage decides whether
 // cumin starts new work; while it stops, the stored usage decides when to
-// try again. The limits are the pure rules of internal/quota.
+// try again. A stored usage that is new enough decides a start without a
+// minimal run. The limits are the pure rules of internal/quota.
 // docs/ja/designs/quota.md records the design; the minimal run that reads
 // the usage is in internal/agent.
 
@@ -58,11 +59,12 @@ func (s *Service) location() *time.Location {
 	return time.Local
 }
 
-// quotaAllowsStart applies Q1 before a new start: one minimal run reads the
-// usage, and the limits decide. It runs before the label changes, so that
+// quotaAllowsStart applies Q1 before a new start: the usage decides
+// against the limits. A stored usage that is new enough (quota.Fresh)
+// decides without a minimal run; an older or missing one costs one minimal
+// run that reads the usage again. It runs before the label changes, so that
 // a stopped start leaves every label as it was and the next poll decides
-// again. Each start reads the usage again, also a second start in the same
-// poll, so that parallel starts never pass on the same old value.
+// again.
 //
 // It reports false when the start must not go on: the usage was not read,
 // or a window is at or above its limit. The Owner hears once for each
@@ -72,6 +74,13 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		return false, errors.New("no agent service is configured")
 	}
 	log := s.logger().With("repository", target.Repository.String(), "issue", number)
+	// A stored usage that is new enough decides, with no minimal run.
+	if usage, fresh := s.freshUsage(); fresh {
+		// Each poll decides again while the usage is new enough, so a stop
+		// is a debug line here. The Owner still hears once.
+		log.Debug("Q1: the stored quota usage is new enough; no minimal run", "row", row)
+		return s.usageAllowsStart(ctx, log, slog.LevelDebug, row, target, number, usage), nil
+	}
 	// Q3: while the stored usage stops the starts, no minimal run happens
 	// before the next try time. Usage only rises until a reset, so no
 	// earlier read could pass.
@@ -100,20 +109,36 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		}
 		return false, nil
 	}
-	usage := s.keepUsage(log, read)
+	return s.usageAllowsStart(ctx, log, slog.LevelInfo, row, target, number, s.keepUsage(log, read)), nil
+}
+
+// usageAllowsStart decides one start from a usage, stored or just read. At
+// a limit, the Owner hears once for each window, and the stop is logged at
+// level.
+func (s *Service) usageAllowsStart(ctx context.Context, log *slog.Logger, level slog.Level, row string, target Target, number int, usage quota.Usage) bool {
 	decision := s.decideQuota(log, usage)
 	if decision.Allows() {
-		return true, nil
+		return true
 	}
 	next, _ := quota.NextTry(usage, s.quotaSettings(), s.allowance(log), s.now(), s.location())
-	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
+	log.Log(ctx, level, "Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
-	return false, nil
+	return false
+}
+
+// freshUsage returns the stored usage when cumin read it a short time ago
+// (quota.Fresh), so that a start decides from it without a minimal run.
+func (s *Service) freshUsage() (quota.Usage, bool) {
+	stored, ok := s.State.Quota()
+	if !ok || !quota.Fresh(stored.ReadAt, s.now()) {
+		return quota.Usage{}, false
+	}
+	return storedUsage(stored), true
 }
 
 // quotaAfterRun applies Q1 at the end of an agent run: the usage that the
 // run reported decides whether new starts stop now, before the next start
-// reads the usage again. The run itself is done; nothing else changes.
+// decides. The run itself is done; nothing else changes.
 func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Target, number int, run *agent.Run) {
 	if run == nil || !run.QuotaRead {
 		return
@@ -149,8 +174,9 @@ func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) quota.Usage
 		if stored.ReadAt.After(readAt) {
 			readAt = stored.ReadAt
 		}
-		usage.FiveHour = quota.Newer(usage.FiveHour, quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt})
-		usage.Weekly = quota.Newer(usage.Weekly, quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt})
+		kept := storedUsage(stored)
+		usage.FiveHour = quota.Newer(usage.FiveHour, kept.FiveHour)
+		usage.Weekly = quota.Newer(usage.Weekly, kept.Weekly)
 	}
 	err := s.State.SetQuota(state.Quota{
 		FiveHour: state.QuotaWindow{Utilization: usage.FiveHour.Utilization, ResetsAt: usage.FiveHour.ResetsAt},
@@ -170,12 +196,8 @@ func (s *Service) nextTry() (time.Time, bool) {
 	if !ok {
 		return time.Time{}, false
 	}
-	usage := quota.Usage{
-		FiveHour: quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt},
-		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
-	}
 	now := s.now()
-	next, stopped := quota.NextTry(usage, s.quotaSettings(), s.allowance(s.logger()), now, s.location())
+	next, stopped := quota.NextTry(storedUsage(stored), s.quotaSettings(), s.allowance(s.logger()), now, s.location())
 	if !stopped || !now.Before(next) {
 		return time.Time{}, false
 	}
@@ -278,6 +300,13 @@ func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Targ
 		Subject:    fmt.Sprintf("issue #%d", number),
 		Link:       github.IssueURL(target.Repository.Owner, target.Repository.Name, number),
 	})
+}
+
+func storedUsage(stored state.Quota) quota.Usage {
+	return quota.Usage{
+		FiveHour: quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt},
+		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
+	}
 }
 
 func toUsage(read agent.QuotaUsage) quota.Usage {

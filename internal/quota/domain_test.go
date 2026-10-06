@@ -302,3 +302,28 @@ func TestQ2_AnAllowanceLiftsOnlyTheFiveHourLimit(t *testing.T) {
 		t.Error("a new allowance does not end the wait")
 	}
 }
+
+// A stored usage is new enough for 5 minutes after its read, the fifth
+// minute included. A missing time of the read and a time after now are not
+// new enough.
+func TestFresh_AStoredUsageIsNewEnoughForFiveMinutes(t *testing.T) {
+	now := weeklyReset.Add(-time.Hour)
+	tests := []struct {
+		name   string
+		readAt time.Time
+		want   bool
+	}{
+		{"read now", now, true},
+		{"read one minute ago", now.Add(-time.Minute), true},
+		{"read 5 minutes ago", now.Add(-5 * time.Minute), true},
+		{"read 5 minutes and one second ago", now.Add(-5*time.Minute - time.Second), false},
+		{"read one hour ago", now.Add(-time.Hour), false},
+		{"never read", time.Time{}, false},
+		{"read after now", now.Add(time.Second), false},
+	}
+	for _, tt := range tests {
+		if got := Fresh(tt.readAt, now); got != tt.want {
+			t.Errorf("%s: Fresh = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

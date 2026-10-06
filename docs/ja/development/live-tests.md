@@ -77,7 +77,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 定期確認や着手を sandbox で確かめるときは、`go build -o cumin ./cmd/cumin` で組み込んだバイナリを動かす。`go run` で動かすと、親のプロセスに送った SIGTERM が `cumin` の子プロセスに届かず、止め方の確認にならない (2026-09-21 に確かめた)。launchd は組み込んだバイナリを起動するので、Host の運用には関係しない。
 
-`cumin run` は、`cumin/status/ready` の付いた sub-issue を見つけると本物の Implementer を、`cumin/status/ready` の付いた要求Issueか、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueを見つけると本物の Planner を起動する。どれも利用枠を使う。新しい着手 (R1、I1) は使用率の最小の実行と Agent の実行で2回、受け入れの確認 (R4) と続きの依頼 (I4、I5、Reviewer) は Agent の実行の1回である。動かす前に確かめること。
+`cumin run` は、`cumin/status/ready` の付いた sub-issue を見つけると本物の Implementer を、`cumin/status/ready` の付いた要求Issueか、sub-issue が全て閉じた `cumin/status/implementing` の要求Issueを見つけると本物の Planner を起動する。どれも利用枠を使う。新しい着手 (R1、I1) は、使用率の最小の実行が0回か1回と、Agent の実行が1回である。読んだばかり (5分以内) の使用率が状態ファイルにあれば、最小の実行はなく、`quota usage read` も出ない ([利用枠の設計](../designs/quota.md) の「着手の前の確認」)。前の Agent の実行が終わってから5分以内の着手が、これに当たる。受け入れの確認 (R4) と続きの依頼 (I4、I5、Reviewer) は Agent の実行の1回である。下の場面に書いた起動の回数は、最小の実行を毎回行ったときの数であり、最小の実行の分だけ少なくなりうる。動かす前に確かめること。
 
 - Host の設定ファイルに、sandbox のリポジトリと、4つの App (`cumin-core` と3つの role) の Client ID がある。秘密鍵が Keychain にある。
 - `work_dir` が、捨ててよいディレクトリを指している。cumin はその下に clone と worktree を作る。
@@ -88,7 +88,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 ## 実機の場面 Impl-1
 
-`cumin/status/ready` の付いた実装Issueから、Pull Request が開いて `cumin/status/checking` に移るまでを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。
+`cumin/status/ready` の付いた実装Issueから、Pull Request が開いて `cumin/status/checking` に移るまでを、1回通して確かめる。本物の Claude Code を最大2回起動する (使用率の最小の実行が0回か1回と、Implementer の実行) ので、利用枠を使う。
 
 ### 準備
 
@@ -123,7 +123,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
    | ログの行 | 意味 |
    |---|---|
-   | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1) |
+   | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1)。読んだばかり (5分以内) の使用率が状態ファイルにあれば、この行は出ない |
    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
    | `clone created`、`worktree created` | 作業場所を用意した |
    | `I1: requested the work` | ブランチの名前を決めて、Implementer を起動した |
@@ -171,7 +171,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 ## 実機の場面 Fail-1
 
-Implementer が `blocked` を返したときに、cumin が理由をIssueに書き、ラベルを `cumin/status/awaiting-decision` に替え、Discord に通知を1件送るところを、1回通して確かめる。本物の Claude Code を2回起動する (使用率の最小の実行と、Implementer の実行) ので、利用枠を使う。
+Implementer が `blocked` を返したときに、cumin が理由をIssueに書き、ラベルを `cumin/status/awaiting-decision` に替え、Discord に通知を1件送るところを、1回通して確かめる。本物の Claude Code を最大2回起動する (使用率の最小の実行が0回か1回と、Implementer の実行) ので、利用枠を使う。
 
 受け入れテストは偽の webhook を相手にするので、本物のメッセージが本物のチャンネルに届くことと、そのリンクが開くことは、この場面でだけ分かる。
 
@@ -209,7 +209,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
 | 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/awaiting-decision` に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | 実装Issueにコメントが1つ付き、`## Decision needed:` で始まる決まった形式である ([decision-request.md](../../../templates/decision-request.md)) | Issue のコメント |
 | 3 | コメントの作成者が cumin本体の App の bot (`cumin-core[bot]`) である。文章はAgentが書き、投稿するのは cumin だからである | Issue のコメント |
-| 4 | Pull Request が作られていない。やり直しも起きていない (Claude Code の起動は2回だけ) | Pull Request の一覧と、cumin のログ |
+| 4 | Pull Request が作られていない。やり直しも起きていない (Claude Code の起動は、使用率の最小の実行を除いて1回だけ) | Pull Request の一覧と、cumin のログ |
 | 5 | Discord にメッセージが1件だけ届いた。1行目に `I2` と理由が入っている | Discord のチャンネル |
 | 6 | そのメッセージのリンクが、2のコメントを開く | Discord のメッセージ |
 | 7 | ログに token、秘密鍵、webhook のアドレス、使用率の数値が出ていない | cumin のログ |
@@ -226,7 +226,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
 
 ## 実機の場面 Check-1
 
-Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセッションで修正を1回だけ依頼し (I4)、修正でcheckが通って、Issue が `cumin/status/reviewing` に移る (I3) までを、1回通して確かめる。本物の Claude Code を3回起動する (使用率の最小の実行と、最初の依頼と修正の依頼の Implementer の実行。修正の依頼は新しい着手ではないので、使用率を読まない) ので、利用枠を使う。
+Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセッションで修正を1回だけ依頼し (I4)、修正でcheckが通って、Issue が `cumin/status/reviewing` に移る (I3) までを、1回通して確かめる。本物の Claude Code を最大3回起動する (使用率の最小の実行が0回か1回と、最初の依頼と修正の依頼の Implementer の実行。修正の依頼は新しい着手ではないので、使用率を読まない) ので、利用枠を使う。
 
 受け入れテストは偽の GitHub と偽の CLI を相手にするので、本物の check の失敗の内容が依頼に載ること、`--resume` で本物のセッションが続くこと、修正の push で check が走り直すことは、この場面でだけ分かる。
 
@@ -269,7 +269,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 | 1 | 実装Issueのラベルが `ready`、`implementing`、`checking`、`implementing`、`checking`、`reviewing` の順に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | Pull Request がちょうど1つ開いている。2回の実行が同じブランチに積んだ | Pull Request とそのコミット |
 | 3 | 1回目の先頭のコミットで `live-check-1-required-line` が落ち、修正のあとの先頭のコミットで通った。ほかの必須のcheckは通ったか飛ばされた | Pull Request の check |
-| 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は3回である | cumin のログ |
+| 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は、使用率の最小の実行を除いて2回である | cumin のログ |
 | 5 | 修正の依頼が、1回目の実行のセッションを再開した。2回の `the agent run ended` のセッションの番号が同じである。公式文書が新しい番号を与えると書くのは `--fork-session` と `/branch` だけなので、再開で番号が変わらないことはこの場面で確かめる | cumin のログ (番号は記録に書かない) |
 | 6 | 修正の依頼文に、落ちたcheckの名前と、annotation の文 (決まった1行を含む) が載っていた | Claude Code のセッションの記録で、`Request: check fix` で始まるユーザの入力 |
 | 7 | 修正のあとの `live/check-1.md` に、Pull Request の番号の入った決まった1行がある。最初のコミットにはない | Pull Request のコミットごとの差分 |
@@ -292,7 +292,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 
 ## 実機の場面 Plan-1
 
-`cumin/status/ready` の付いた要求Issueを、Planner が sub-issue に分割し、要求Issueが `cumin/status/awaiting-plan-review` に移るまでを、1回通して確かめる (R1、R2)。本物の Claude Code を2回起動する (使用率の最小の実行と、Planner の実行) ので、利用枠を使う。
+`cumin/status/ready` の付いた要求Issueを、Planner が sub-issue に分割し、要求Issueが `cumin/status/awaiting-plan-review` に移るまでを、1回通して確かめる (R1、R2)。本物の Claude Code を最大2回起動する (使用率の最小の実行が0回か1回と、Planner の実行) ので、利用枠を使う。
 
 ### 準備
 
@@ -310,7 +310,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 
    | ログの行 | 意味 |
    |---|---|
-   | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1) |
+   | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1)。読んだばかり (5分以内) の使用率が状態ファイルにあれば、この行は出ない |
    | `R1: moved the requirement issue to planning` | ラベルを `cumin/status/planning` に替えた |
    | `clone created`、`worktree created` | 既定のブランチを detached で開いた |
    | `R1: requested the Planner` (`kind` が `plan`) | Planner を起動した |
@@ -397,7 +397,7 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
 
 ## 実機の場面 Review-1
 
-必須のcheckが通った Pull Request を、cumin が Reviewer に渡し (I3)、Reviewer が先頭のコミットに `APPROVE` を出すまでを、1回通して確かめる。本物の Claude Code を4回起動する (使用率の最小の実行と Agent の実行を、Implementer と Reviewer で1組ずつ)。Reviewer の1ラウンド目は組み込みのレビューの skill も動かすので、利用枠を多めに使う。
+必須のcheckが通った Pull Request を、cumin が Reviewer に渡し (I3)、Reviewer が先頭のコミットに `APPROVE` を出すまでを、1回通して確かめる。本物の Claude Code を最大4回起動する (使用率の最小の実行と Agent の実行を、Implementer と Reviewer で1組ずつ)。Reviewer の1ラウンド目は組み込みのレビューの skill も動かすので、利用枠を多めに使う。
 
 受け入れテストは偽の CLI がレビューを出すので、本物の Reviewer が `commit_id` を付けて先頭のコミットにレビューを出すこと、組み込みのレビューの skill を headless の実行で呼べることは、この場面でだけ分かる。
 
@@ -460,7 +460,7 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
 
 ## 実機の場面 Review-2
 
-Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implementer に同じセッションで修正を依頼し (I5)、Implementer が返答のテンプレートで答えて直し、2ラウンド目の Reviewer が同じセッションで `APPROVE` を出すまでを、1回通して確かめる。本物の Claude Code を8回起動する (使用率の最小の実行と Agent の実行を、Implementer の実装、Reviewer の1ラウンド目、Implementer の修正、Reviewer の2ラウンド目で1組ずつ)。
+Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implementer に同じセッションで修正を依頼し (I5)、Implementer が返答のテンプレートで答えて直し、2ラウンド目の Reviewer が同じセッションで `APPROVE` を出すまでを、1回通して確かめる。本物の Claude Code を最大8回起動する (使用率の最小の実行と Agent の実行を、Implementer の実装、Reviewer の1ラウンド目、Implementer の修正、Reviewer の2ラウンド目で1組ずつ)。
 
 修正を求める指摘を確実に起こすため、Implementer の Pull Request に、完了条件を1つ破るコミットを人が足してから、レビューに進める。
 
@@ -521,7 +521,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 
 ## 実機の場面 Merge-1
 
-Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge して実装Issueが閉じること (I6)、`risk/medium` の Pull Request は merge せずに Owner に1回だけ知らせること (I7)、Owner が先頭のコミットをレビューで承認すると cumin-core が merge すること (I12) を、1回通して確かめる。本物の Claude Code を6回起動する (2つの実装Issueごとに、着手 (I1) の使用率の最小の実行、Implementer の実行、Reviewer の実行)。Reviewer への依頼は着手ではないので、使用率を読み直さない。途中で Owner が GitHub でレビューを1つ出す。
+Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge して実装Issueが閉じること (I6)、`risk/medium` の Pull Request は merge せずに Owner に1回だけ知らせること (I7)、Owner が先頭のコミットをレビューで承認すると cumin-core が merge すること (I12) を、1回通して確かめる。本物の Claude Code を最大6回起動する (2つの実装Issueごとに、着手 (I1) の使用率の最小の実行が0回か1回、Implementer の実行、Reviewer の実行)。Reviewer への依頼は着手ではないので、使用率を読み直さない。途中で Owner が GitHub でレビューを1つ出す。
 
 受け入れテストは偽の GitHub で merge するので、本物の ruleset のもとで cumin-core の merge が通ること、GitHub がリンクした実装Issueを閉じるかどうかと cumin の閉じ方、Owner のレビューを権限で見分けることは、この場面でだけ分かる。
 
@@ -643,13 +643,13 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 ## 実機の場面 Quota-1
 
-本物の Claude Code の使用率で、cumin が着手の前に止まり、Owner に1回だけ知らせ、`cumin quota allow` で再開するところを、1回通して確かめる (Q1、Q2、Q3、Core-6、Core-16)。前半は weekly 枠、後半は 5h 枠で止める。しきい値を今の使用率より低くして、止まる場面を作る。本物の Claude Code を、最小の実行で3回と、後半の Implementer の実行で1回起動するので、利用枠を使う。
+本物の Claude Code の使用率で、cumin が着手の前に止まり、Owner に1回だけ知らせ、`cumin quota allow` で再開するところを、1回通して確かめる (Q1、Q2、Q3、Core-6、Core-16)。前半は weekly 枠、後半は 5h 枠で止める。しきい値を今の使用率より低くして、止まる場面を作る。本物の Claude Code を、最小の実行で2回か3回と、後半の Implementer の実行で1回起動するので、利用枠を使う。
 
 ### 準備
 
 1. `go build -o cumin ./cmd/cumin` でバイナリを作る。
 2. Host で launchd の cumin が動いていれば止める (場面 Check-1 の手順4と同じ理由)。
-3. Host の状態ディレクトリ (`~/.local/state/cumin/`) の `state.json` と `quota-allowance.json` を、同じディレクトリの別の名前に移す (例: 末尾に `.before-quota-1` を付ける)。残した使用率があると、Q3 が最小の実行を飛ばし、止まる場面と通知が起きないためである。中身は開かない。
+3. Host の状態ディレクトリ (`~/.local/state/cumin/`) の `state.json` と `quota-allowance.json` を、同じディレクトリの別の名前に移す (例: 末尾に `.before-quota-1` を付ける)。残した使用率があると、cumin が最小の実行を飛ばし (読んだばかりの使用率か、Q3)、手順10のログにならないためである。中身は開かない。
 4. 前半の設定ファイルを作る。Impl-1 の手順2の形に、次の表を足す。目標を1%にし、前倒しを0にすると、ペースの上限は1%以下になる。5h枠のしきい値は100%にして、5h枠では止まらないようにする。
 
    ```toml
@@ -687,7 +687,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     | `Q1: no start; the quota limit is reached` (`windows` が `weekly`、`next_try` がweekly枠のリセット時刻) | 着手を止めた。ラベルは替えない |
     | `the Owner was notified` | Q1の通知 |
 
-11. 定期確認を3回以上待つ。`quota usage read` は増えない (Q3: 次に試す時刻まで読まない)。
+11. 定期確認を3回以上待つ。`quota usage read` は増えない。読んでから5分以内は、残した使用率で判定する。そのあとは、次に試す時刻まで読まない (Q3)。`the Owner was notified` も増えない。
 12. `./cumin status --config <前半の設定ファイル>` を実行する。`new starts: stopped by the weekly window` が出る。
 13. `./cumin quota allow` を実行し、定期確認を2回待つ。着手は起きない (Core-16: 許可はweekly枠のペースの上限を上げない)。
 14. SIGTERM で止める。
@@ -709,7 +709,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
     | ログの行 | 意味 |
     |---|---|
-    | `quota usage read` | 許可で次に試す時刻の待ちが終わり、読み直した (Q2) |
+    | `quota usage read` | 許可で次に試す時刻の待ちが終わり、読み直した (Q2)。手順17の `quota usage read` から5分以内なら、この行は出ない。残した使用率と許可で判定し、次の行に進む |
     | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
     | `I1: requested the work`、`agent start`、`agent end`、`the agent run ended` | Implementer の実行 |
 
@@ -726,7 +726,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 | 3 | 前半で、`quota usage read` は1行だけである。手順11と13の定期確認で増えていない | cumin のログ |
 | 4 | 前半で、`cumin quota allow` のあとも着手しない | cumin のログ、Issue のイベント |
 | 5 | 後半の Q1 の通知は1件で、5h枠の停止と `cumin quota allow` を知らせている | Discord |
-| 6 | 後半で、`cumin quota allow` のあとの定期確認で使用率を読み直して着手し、ラベルが `cumin/status/implementing` に替わった | cumin のログ、Issue のイベント |
+| 6 | 後半で、`cumin quota allow` のあとの定期確認で着手し (手順17の読み取りから5分を過ぎていれば、使用率を読み直してから)、ラベルが `cumin/status/implementing` に替わった | cumin のログ、Issue のイベント |
 | 7 | `cumin status` の表示に、使用率を読んだ時刻、今の上限、止まっている枠が出た | ターミナル |
 | 8 | ログと通知に、token、秘密鍵、webhook のアドレス、使用率の数値が出ていない。`cumin status` の表示の数値は、記録に写さない | cumin のログ、Discord |
 
@@ -747,7 +747,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 ほかの場面と違い、手順書ではなく Go のテスト `TestLiveE2E` (`cmd/cumin/live_e2e_test.go`) が全体を動かす。テストは Owner の代わりをする。要求Issueを書き、risk を確定し、`cumin/status/ready` を付け、`risk/medium` の Pull Request を承認する。それ以外は全て cumin の仕事で、テストはほかの状態ラベルを替えず、merge もコメントもしない。
 
-本物の Claude Code を、Planner で2回、Implementer で2回、Reviewer で2回以上起動する。着手 (R1、I1) の前には、使用率の最小の実行も入る。1回の実行は1時間ほどかかる。
+本物の Claude Code を、Planner で2回、Implementer で2回、Reviewer で2回以上起動する。着手 (R1、I1) の前には、読んだばかりの使用率がなければ、使用率の最小の実行も入る。1回の実行は1時間ほどかかる。
 
 ### Owner の操作に使う認証
 

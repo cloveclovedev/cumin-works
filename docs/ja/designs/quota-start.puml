@@ -7,6 +7,9 @@ skinparam defaultFontName sans-serif
 
 start
 :poll: an issue can start (R1 or I1);
+if (stored usage read at most 5 minutes ago?) then (yes)
+  :no minimal run;\nthe stored usage decides;
+else (no)
 if (stopped, the next try time is still ahead\n(from the stored usage), and no new allowance (Q2)) then (yes)
   :no start, no minimal run;
   stop
@@ -19,6 +22,7 @@ if (usage read?) then (no)
 else (yes)
 endif
 :store the usage, its reset times,\nand the time of the read;
+endif
 :5h limit = threshold of the current time band\n(100% while the allowance of Q2 holds);
 :weekly limit = pace limit\ntarget x min(1, (elapsed + lead) / 7 days);
 if (5h usage >= 5h limit\nor weekly usage >= weekly limit?) then (yes)
@@ -28,7 +32,7 @@ else (no)
   :change the label, then start the agent\n(R1 or I1);
 endif
 :the agent run ends;
-:store the usage of the run;
+:store the usage of the run\nand the time of the read;
 if (a limit is reached?) then (yes)
   :Q1: stop new starts;\nnotify once for each window;
 else (no)

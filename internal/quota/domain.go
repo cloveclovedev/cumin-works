@@ -1,7 +1,8 @@
 // Package quota holds the pure rules of the quota limits (Q1 to Q3 of
 // docs/ja/requirements/workflow/issue-states.md): the pace limit of the
-// weekly window, the limit of the 5h window by time band, and whether a
-// window stops a new start. docs/ja/designs/quota.md records the design.
+// weekly window, the limit of the 5h window by time band, whether a
+// window stops a new start, and whether a stored usage is new enough to
+// decide a start. docs/ja/designs/quota.md records the design.
 //
 // Nothing here reads a clock, a file, or a CLI. The caller gives the usage,
 // the settings, the time, and the location of the clock time, so that a test
@@ -197,6 +198,26 @@ func weeklyNextTry(w Window, settings config.WeeklyQuota) time.Time {
 		return w.ResetsAt
 	}
 	return t
+}
+
+// FreshFor is how long a stored usage is new enough to decide a start
+// without a minimal run. It is a fixed value, not a setting
+// (docs/ja/designs/quota.md, the section on the check before a start).
+const FreshFor = 5 * time.Minute
+
+// Fresh reports whether a usage that cumin read at readAt is new enough at
+// now to decide a start without a minimal run. A missing time of the read,
+// and a time of the read after now, are not new enough: one minimal run
+// reads the usage again.
+func Fresh(readAt, now time.Time) bool {
+	// Round(0) removes the monotonic clock reading, so that the two times
+	// compare by the wall clock. The monotonic clock can stop while the
+	// Host sleeps, and a usage from before the sleep would stay new enough.
+	readAt, now = readAt.Round(0), now.Round(0)
+	if readAt.IsZero() || readAt.After(now) {
+		return false
+	}
+	return now.Sub(readAt) <= FreshFor
 }
 
 // Newer returns the newer of two readings of the same window, whatever
