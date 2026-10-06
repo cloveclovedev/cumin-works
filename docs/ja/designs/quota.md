@@ -94,10 +94,15 @@ Agentの起動を止めるかどうかを、使用率からどう決めるかを
 
 ### `cumin status` の表示
 
+![cumin statusの表示](quota-status.svg)
+
+図の元ファイル: [quota-status.puml](quota-status.puml)
+
 - `cumin status` は、状態ファイルと許可のファイルを読むだけで、最小の実行をしない。表示する使用率は、最後に読んだ値とその時刻である。時刻は、上限の計算と同じHostのタイムゾーンで表示する。
 - 実行中のAgentとOwnerの対応を待つIssueは、GitHubのラベルから読む。`cumin run` とプロセスが違い、手元に実行中の一覧を持たないためである。Agentが動くのは、`cumin/status/planning` と `cumin/status/accepting` の要求Issueと、`cumin/status/implementing` と `cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issueは、Agentが動いていないので数えない (R3)。
-- Agentの起動を止めているかどうかは、1行で表示する。`agent starts: go on` または `agent starts: stopped by the <枠> window` で、止めているときは次に試す時刻を添える。止めるのは、新しい着手だけでなく、すべてのAgentの起動である。
-- 利用枠を待つIssueの一覧は表示しない。「Agentを起動するかどうか」は、Issueごとの判断ではなく、cuminの1つの判断だからである。そのため、状態ファイルにも待つIssueの一覧を持たない。代わりに、実行中のAgentの見出しが、Agentの起動を止めている間はこの一覧のIssueがAgentなしで利用枠を待つことがある、と述べる。ラベルは、Agentが今動いているかどうかまでは示さない。
+- 使用率を読んだあとは、Agentの起動を止めているかどうかを1行で表示する。`agent starts: go on` または `agent starts: stopped by the <枠> window` で、止めているときは次に試す時刻を添える。止めるのは、新しい着手だけでなく、すべてのAgentの起動である。
+- 使用率を最初に読む前は、使用率をまだ読んでいないことを `not read yet` の1行で表示する。このときは、枠の行も `agent starts` の行もない。状態ファイルに使用率がないので、止めているかどうかを計算できないためである。
+- 利用枠を待つIssueの一覧は表示しない。「Agentを起動するかどうか」は、Issueごとの判断ではなく、cuminの1つの判断だからである。そのため、状態ファイルにも待つIssueの一覧を持たない。代わりに、実行中のAgentの見出し `Agents at work (from the labels on GitHub):` のすぐ下に、注記を1行、いつも表示する。一覧が空のときも表示する。注記は、この一覧のIssueがAgentなしで待つことがあり、それはAgentの起動を止めている間か、今の実行のあとに止まる予約がある間だけである、と述べる。ラベルは、Agentが今動いているかどうかまでは示さない。
 - GitHubは、`cumin run` と同じ `cumin-core` のtokenで読む。定期確認と同じスナップショットの問い合わせを使うので、GitHubから見た身元も読むものも増えない。Keychainの秘密鍵を読むので、`cumin run` と同じHostのユーザで実行する。読む鍵は `cumin-core` の分だけで、リポジトリごとに読む。鍵が読めない持ち主のリポジトリだけが「読めなかった」になり、利用枠とほかのリポジトリは表示する。
 - 読めなかったリポジトリは、理由を添えて表示し、終了コードを0以外にする。ほかのリポジトリと利用枠は表示する。
 
