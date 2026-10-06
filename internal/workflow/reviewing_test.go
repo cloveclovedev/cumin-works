@@ -134,12 +134,16 @@ func TestReviewing_ARestartAfterAChangeRequestSendsExactlyOneFixRequest(t *testi
 
 // A restart of cumin in cumin/status/reviewing after an approval with
 // risk/medium: the poll of the new cumin moves the issue to
-// cumin/status/awaiting-merge-decision with one notification. The polls
-// that follow send nothing more.
+// cumin/status/awaiting-merge-decision with one request of the review of
+// the Owner and one notification. The polls that follow send nothing more.
 func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
+	sc.readyByTheOwner()
 	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/medium")
+	if n := sc.reviewRequests(); n != 0 {
+		t.Fatalf("%d requests of the review of the Owner before the label changed, want none", n)
+	}
 
 	restarted := sc.restartedWith(stopped)
 	for minute := 1; minute <= 2; minute++ {
@@ -157,8 +161,69 @@ func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *test
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
 	}
+	if n := sc.reviewRequests(); n != 1 {
+		t.Errorf("%d requests of the review of the Owner, want 1", n)
+	}
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A failed read of the login of the Owner in the poll that decides I7 after
+// a restart changes nothing: the read comes before the label change, so the
+// issue keeps cumin/status/reviewing with no review request and no
+// notification. The next poll reads the login, and sends one label change,
+// one review request, and one notification.
+func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPollAsksTheOwner(t *testing.T) {
+	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
+	sc.readyByTheOwner()
+	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
+	assertStillReviewing(t, sc, stopped, "risk/medium")
+	awaitingLabel := func() int {
+		n := 0
+		for _, r := range sc.fake.Requests() {
+			if r.Method == http.MethodPut && strings.HasSuffix(r.Path, "/issues/10/labels") && strings.Contains(string(r.Body), workflow.LabelAwaitingMergeDecision) {
+				n++
+			}
+		}
+		return n
+	}
+
+	restarted := sc.restartedWith(stopped)
+	// The read of the permission of the actor of cumin/status/ready is the
+	// last step of the read of the login of the Owner.
+	permissionPath := "/repos/example-org/example-repo/collaborators/" + theOwner + "/permission"
+	sc.fake.FailTimes(http.MethodGet, permissionPath, 0, everyTry, http.StatusBadGateway)
+	_ = pollAtMinute(sc, restarted, 1)
+
+	if !strings.Contains(sc.logs.String(), "I7: read the login of the Owner of issue #10") {
+		t.Errorf("the log does not name the failed read of the login of the Owner:\n%s", sc.logs.String())
+	}
+	assertStillReviewing(t, sc, restarted, "risk/medium")
+	if n := awaitingLabel(); n != 0 {
+		t.Errorf("%d label changes to cumin/status/awaiting-merge-decision after the failed read, want none", n)
+	}
+	if n := sc.reviewRequests(); n != 0 {
+		t.Errorf("%d requests of the review of the Owner after the failed read, want none", n)
+	}
+
+	for minute := 2; minute <= 3; minute++ {
+		if err := pollAtMinute(sc, restarted, minute); err != nil {
+			t.Fatalf("Poll at minute %d: %v", minute, err)
+		}
+	}
+
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
+	}
+	if n := awaitingLabel(); n != 1 {
+		t.Errorf("%d label changes to cumin/status/awaiting-merge-decision, want 1", n)
+	}
+	if n := sc.reviewRequests(); n != 1 {
+		t.Errorf("%d requests of the review of the Owner, want 1", n)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
+		t.Errorf("notifications = %v, want one that asks for the merge decision", messages)
 	}
 }
 

@@ -546,6 +546,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
    | `I3: the Reviewer approved the head commit` | Reviewer が先頭のコミットを承認した |
    | `I6: decided on the approved pull request` | `decision` が `ask the Owner` |
    | `I7: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
+   | `I7: requested the review of the Owner` | `reviewer` が、実装Issueに最新の `cumin/status/ready` を付けたOwnerのログイン名。GitHubの「レビューの依頼」の一覧にPull Requestが載る |
    | `the Owner was notified` | `row` が `I7`。Discord に1件届く |
 
 8. Owner が B の Pull Request を開き、GitHub のレビューで承認 (Approve) する。Reviewers に Owner を足す必要はない。

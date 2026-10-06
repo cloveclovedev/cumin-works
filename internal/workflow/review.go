@@ -502,10 +502,10 @@ func (s *Service) countReviewRequest(repository string, number int, cause bool) 
 // cumin/status/reviewing, and the next poll decides again from the same
 // facts. No request, comment, or notification goes out before the label
 // changed, so none goes out twice. ownerLogin gives the login of the Owner
-// for a review fix. afterRun says that a Reviewer run of this stay just
-// returned done and left its session; a poll passes false, because a
-// restart of cumin can have cut the run before its session was kept, and so
-// does the end of a run that ended abnormally.
+// for a review fix and for the review request of I7. afterRun says that a
+// Reviewer run of this stay just returned done and left its session; a poll
+// passes false, because a restart of cumin can have cut the run before its
+// session was kept, and so does the end of a run that ended abnormally.
 func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, ownerLogin func(ctx context.Context, token string) (string, error), afterRun bool, action Action) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
@@ -553,7 +553,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		}
 	case AskOwnerToMerge:
 		log.Info("I3: the Reviewer approved the head commit")
-		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr)
+		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, ownerLogin)
 	case StopAtRoundLimit:
 		labels, err := move(RowI8, LabelAwaitingDecision)
 		if err != nil {

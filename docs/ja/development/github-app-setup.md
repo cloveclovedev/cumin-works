@@ -23,6 +23,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 
 - Pull Requestのmergeに必要な権限は Pull requests ではなく Contents: Read & write である。`cumin-core` に Contents の書き込みが要るのはこのため。
 - ブランチのpushにも Contents: Read & write が要る。つまり `cumin-implementer` は権限の上ではmainにもpushできてしまう。これを防ぐのが、後述のrulesetである。
+- `cumin-core` の Pull requests: Read & write は、Ownerの判断を待つPull Request (I7) で、Ownerのレビューを依頼するために使う (`POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers`。公式: Request reviewers for a pull request)。
 - `cumin-core` の Issues: Read & write は、状態ラベルの付け替えとコメントの投稿に使う。
 - `cumin-planner` の Contents: Read & write は、sub-issue の図をブランチ `cumin/diagrams` に置くためだけに使う。Contents の書き込みは全てのブランチとタグに及ぶので、`scripts/setup-repo.sh` の ruleset (`cumin-branches`、`cumin-diagrams`、`cumin-tags`) で、書き込めるブランチを `cumin/diagrams` だけにし、タグを作れないようにする ([セットアップの手順](setup-guide.md) の手順3)。
 - ruleset が止めるのは、ブランチとタグへの書き込みだけである。Contents の書き込みで使える次の操作は、ruleset では止まらない: 既にあるタグへの release の作成、release と release asset の編集と削除、`repository_dispatch` (workflow の起動)、コミットへのコメントの編集と削除。`cumin-implementer` は、同じ権限で同じ操作が既にできる。Planner に同じ危険を持たせることは、#198 で Owner が選んだ (案A)。これらを使う必要があるリポジトリでは、導入の前に見直す。
