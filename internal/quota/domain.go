@@ -1,7 +1,7 @@
 // Package quota holds the pure rules of the quota limits (Q1 to Q3 of
 // docs/ja/requirements/workflow/issue-states.md): the pace limit of the
 // weekly window, the limit of the 5h window by time band, whether a
-// window stops a new start, and whether a stored usage is new enough to
+// window stops the start of an agent, and whether a stored usage is new enough to
 // decide a start. docs/ja/designs/quota.md records the design.
 //
 // Nothing here reads a clock, a file, or a CLI. The caller gives the usage,
@@ -60,7 +60,7 @@ type Decision struct {
 	Stopped []Name
 }
 
-// Allows reports whether a new start may go on.
+// Allows reports whether an agent may start.
 func (d Decision) Allows() bool { return len(d.Stopped) == 0 }
 
 // Decide compares the usage with the limit of each window at now. The time

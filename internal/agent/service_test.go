@@ -133,8 +133,8 @@ func TestStart_TokenThenIdentityThenRunWithoutAQuotaRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A request is not always a new start, so Start reads no usage; the
-	// caller reads it before R1 and I1 (designs/quota.md).
+	// Start reads no usage; the caller reads it in its one check before
+	// every start of an agent (designs/quota.md).
 	if got := strings.TrimSpace(string(order)); got != "agent" {
 		t.Errorf("order of the runs = %q, want only the agent run", got)
 	}

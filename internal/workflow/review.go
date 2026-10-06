@@ -74,7 +74,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	if !ok || pr.Number != a.PullRequest {
 		return fmt.Errorf("I3: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
-	permit, ok := s.permitStart(s.logger().With("repository", repository, "issue", a.Number), "review")
+	permit, ok := s.permitStart(ctx, s.logger().With("repository", repository, "issue", a.Number), "review", config.RoleReviewer, target, a.Number)
 	if !ok {
 		return nil
 	}
@@ -571,7 +571,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			Link:       a.Explanation.URL,
 		})
 	case RequestReviewFix:
-		permit, ok := s.permitStart(log, "review fix")
+		permit, ok := s.permitStart(ctx, log, "review fix", config.RoleImplementer, target, number)
 		if !ok {
 			return nil, nil
 		}
@@ -606,18 +606,8 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if isCause {
 			row, request = RowI8, "cause"
 		}
-		permit, ok := s.permitStart(log, request)
+		permit, ok := s.permitStart(ctx, log, request, config.RoleReviewer, target, number)
 		if !ok {
-			return nil, nil
-		}
-		// Q1: the quota decides before the request is counted, so a limit
-		// does not use up the one second request of the stay. It decides
-		// before the reads of the request, so a poll at a limit reads
-		// nothing more.
-		if ok, err := s.quotaAllowsStart(ctx, row, config.RoleReviewer, target, number); err != nil || !ok {
-			if err != nil {
-				return nil, fmt.Errorf("%s: issue #%d: %w", row, number, err)
-			}
 			return nil, nil
 		}
 		req, err := s.reviewRequestOf(ctx, token, target, settings, number, pr)

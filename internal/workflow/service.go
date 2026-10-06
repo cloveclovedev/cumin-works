@@ -145,7 +145,7 @@ type Service struct {
 	readyTold    map[string]time.Time
 	pollFailures map[string]*repeatedFailure
 
-	// quota keeps which Q1 notifications the Owner already got
+	// quota keeps which notifications of "stop agent starts" the Owner already got
 	// (quota.go). The polls and the ends of the runs share it.
 	quotaMu sync.Mutex
 	quota   quotaNotices
@@ -626,7 +626,8 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// An issue that I12 or I13 took at this poll gets no conflict resolution
 	// of I14: the review of the Owner on the conflicting head decides
 	// first. A check of I12 or of I13 that failed keeps the issue too, so
-	// that the next poll decides it again.
+	// that the next poll decides it again. So does a request for changes of
+	// the Owner that waits for the permit of its start.
 	ownerDecided := map[int]bool{}
 	// The merges that this poll sent, for the wait between two of them.
 	merges := 0
@@ -737,11 +738,11 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 				result.note(action)
 			}
 		case FixOwnerReview:
-			acted, err := s.fixOwnerReview(ctx, token, target, snapshot, settings, a)
+			acted, waits, err := s.fixOwnerReview(ctx, token, target, snapshot, settings, a)
 			if err != nil {
 				errs = append(errs, err)
 			}
-			ownerDecided[a.Number] = ownerDecided[a.Number] || acted || err != nil
+			ownerDecided[a.Number] = ownerDecided[a.Number] || acted || waits || err != nil
 			if acted {
 				result.note(action)
 			}
@@ -761,15 +762,8 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if !ok {
 		return fmt.Errorf("I1: issue #%d is not in the snapshot", c.Number)
 	}
-	permit, ok := s.permitStart(s.logger().With("repository", target.Repository.String(), "issue", c.Number), "claim")
+	permit, ok := s.permitStart(ctx, s.logger().With("repository", target.Repository.String(), "issue", c.Number), "claim", config.RoleImplementer, target, c.Number)
 	if !ok {
-		return nil
-	}
-	// Q1: the quota decides before anything changes, the state included.
-	if ok, err := s.quotaAllowsStart(ctx, "I1", config.RoleImplementer, target, c.Number); err != nil || !ok {
-		if err != nil {
-			return fmt.Errorf("I1: issue #%d: %w", c.Number, err)
-		}
 		return nil
 	}
 	// The Owner added cumin/status/ready, so the work starts again from a
@@ -936,7 +930,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	}
 
 	// The stop at the limit above starts no agent, so it needs no permit.
-	permit, ok := s.permitStart(log, "check fix")
+	permit, ok := s.permitStart(ctx, log, "check fix", config.RoleImplementer, target, a.Number)
 	if !ok {
 		return nil
 	}
@@ -1012,13 +1006,18 @@ func (s *Service) startImplementer(ctx context.Context, permit StartPermit, targ
 // (PermitStart). Every request calls it before its label change and before
 // its count. Without a permit the request does nothing more: the issue
 // keeps its state, and a later poll decides the same step again. request
-// names the request for the log.
-func (s *Service) permitStart(log *slog.Logger, request string) (StartPermit, bool) {
-	permit, ok := PermitStart(s.finishing.Load())
-	if !ok {
+// names the request for the log, and role is the role whose agent would
+// read the quota usage in a minimal run.
+//
+// While cumin stops after the current runs, no usage is read: the request
+// waits for the next start of cumin in any case.
+func (s *Service) permitStart(ctx context.Context, log *slog.Logger, request string, role config.Role, target Target, number int) (StartPermit, bool) {
+	stopsAfterRuns := s.finishing.Load()
+	if stopsAfterRuns {
 		log.Info("stop after the current runs: the request waits for the next start of cumin", "request", request)
 	}
-	return permit, ok
+	quotaAllows := !stopsAfterRuns && s.quotaAllowsStart(ctx, log, request, role, target, number)
+	return PermitStart(stopsAfterRuns, quotaAllows)
 }
 
 // startAgent starts an agent and waits for the end of its run. It is the
@@ -1268,14 +1267,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			}
 			return
 		case RequestImplementationAgain:
-			if permit, ok = s.permitStart(log, "implementation again"); !ok {
-				return
-			}
-			// Q1: the quota decides before the request is counted.
-			if ok, err := s.quotaAllowsStart(ctx, RowI2, config.RoleImplementer, target, number); err != nil || !ok {
-				if err != nil {
-					log.Error("I2: the quota was not checked; the next poll decides again", "error", err.Error())
-				}
+			if permit, ok = s.permitStart(ctx, log, "implementation again", config.RoleImplementer, target, number); !ok {
 				return
 			}
 			if err := s.countImplementationRequest(repository, number, 1); err != nil {
@@ -1565,15 +1557,8 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 // (runImplementer), so that the request is sent once for each stay in
 // cumin/status/implementing, and a start that failed does not use it up.
 func (s *Service) requestImplementationAgain(ctx context.Context, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, a RequestImplementationAgain) error {
-	permit, ok := s.permitStart(s.logger().With("repository", target.Repository.String(), "issue", a.Number), "implementation again")
+	permit, ok := s.permitStart(ctx, s.logger().With("repository", target.Repository.String(), "issue", a.Number), "implementation again", config.RoleImplementer, target, a.Number)
 	if !ok {
-		return nil
-	}
-	// Q1: the quota decides before the request is counted.
-	if ok, err := s.quotaAllowsStart(ctx, RowI2, config.RoleImplementer, target, a.Number); err != nil || !ok {
-		if err != nil {
-			return fmt.Errorf("I2: issue #%d: %w", a.Number, err)
-		}
 		return nil
 	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)

@@ -81,7 +81,7 @@ type QuotaWindow struct {
 }
 
 // Quota is the latest quota usage that cumin read, and when it read it.
-// While new starts stop, cumin decides from it when to try again, so that
+// While agent starts are stopped, cumin decides from it when to try again, so that
 // a restart makes no minimal run before that time (Q3). The file keeps
 // only the numbers of the account; it holds no token.
 type Quota struct {
