@@ -156,6 +156,19 @@ func (sc *scene) failQuota(t *testing.T) {
 	}
 }
 
+// failQuotaOnce makes the next minimal run print no rate_limit_event. The
+// minimal runs after it read the usage again.
+func (sc *scene) failQuotaOnce(t *testing.T) {
+	t.Helper()
+	data, err := os.ReadFile(fixturePath(t, "no-quota.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sc.cliDir, "quota-once.jsonl"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // quotaRuns returns the number of minimal runs of the fake CLI.
 func (sc *scene) quotaRuns(t *testing.T) int {
 	t.Helper()
@@ -543,6 +556,8 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
 		"[ $n = quota ] && [ -f " + filepath.Join(dir, "quota-override.jsonl") + " ] && f=" + filepath.Join(dir, "quota-override.jsonl") + "\n" +
+		// quota-once.jsonl is the answer of the next minimal run only.
+		"[ $n = quota ] && [ -f " + filepath.Join(dir, "quota-once.jsonl") + " ] && { f=" + filepath.Join(dir, "quota-once-used.jsonl") + "; mv " + filepath.Join(dir, "quota-once.jsonl") + " $f; }\n" +
 		"echo $n >> " + filepath.Join(dir, "order") + "\n" +
 		second +
 		"for a in \"$@\"; do printf '%s\\0' \"$a\"; done > " + filepath.Join(dir, "$n.args") + "\n" +

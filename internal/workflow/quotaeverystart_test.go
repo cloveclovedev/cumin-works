@@ -274,3 +274,32 @@ func TestStopAgentStarts_TheFirstAcceptanceCheckWaitsAtALimit(t *testing.T) {
 	sc.release(t)
 	service.Wait()
 }
+
+// A request for changes of the Owner on a conflicting head that waits for
+// its permit keeps the issue for the poll: the first read of the usage
+// fails, a second read would succeed, and no conflict resolution starts.
+// The conflict resolution would move the head commit away from the review
+// of the Owner. The next poll requests the fix of that review.
+func TestStopAgentStarts_AWaitingReviewOfTheOwnerKeepsTheConflictResolutionBack(t *testing.T) {
+	sc := awaitingOwner(t)
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
+	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.failQuotaOnce(t)
+	service := sc.serviceWithSession(t)
+	sc.pollAndWait(t, service)
+
+	sc.assertNoStartAtTheLimit(t, []string{"risk/medium", workflow.LabelAwaitingMergeDecision})
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs, want 1: the conflict resolution asks for no permit in this poll", n)
+	}
+
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after the read, want 1", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: owner review fix") {
+		t.Errorf("the request is not an owner review fix:\n%s", text)
+	}
+}

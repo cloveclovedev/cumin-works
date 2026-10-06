@@ -626,7 +626,8 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// An issue that I12 or I13 took at this poll gets no conflict resolution
 	// of I14: the review of the Owner on the conflicting head decides
 	// first. A check of I12 or of I13 that failed keeps the issue too, so
-	// that the next poll decides it again.
+	// that the next poll decides it again. So does a request for changes of
+	// the Owner that waits for the permit of its start.
 	ownerDecided := map[int]bool{}
 	// The merges that this poll sent, for the wait between two of them.
 	merges := 0
@@ -737,11 +738,11 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 				result.note(action)
 			}
 		case FixOwnerReview:
-			acted, err := s.fixOwnerReview(ctx, token, target, snapshot, settings, a)
+			acted, waits, err := s.fixOwnerReview(ctx, token, target, snapshot, settings, a)
 			if err != nil {
 				errs = append(errs, err)
 			}
-			ownerDecided[a.Number] = ownerDecided[a.Number] || acted || err != nil
+			ownerDecided[a.Number] = ownerDecided[a.Number] || acted || waits || err != nil
 			if acted {
 				result.note(action)
 			}

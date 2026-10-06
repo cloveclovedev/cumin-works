@@ -506,45 +506,49 @@ func (s *Service) readOwners(ctx context.Context, token string, target Target, r
 // counts its rounds again from the last APPROVE of the Reviewer
 // (issue-states.md, the rounds).
 //
-// The first value says whether I13 acted (the send-back), for Q4. A
+// The first value says whether I13 acted (the send-back), for Q4. The
+// second value says that an Owner requested changes, and that the request
+// waits for the permit of its start (permitStart): the poll then keeps the
+// issue, so that no conflict resolution moves the head commit away from the
+// review of the Owner. A
 // permission or a login of the Owner that cannot be read, and a label that
 // does not change, are errors of the poll: nothing is requested, the issue
 // keeps cumin/status/awaiting-merge-decision, and the next poll tries again.
-func (s *Service) fixOwnerReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixOwnerReview) (bool, error) {
+func (s *Service) fixOwnerReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixOwnerReview) (acted, waits bool, err error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	log := s.logger().With("repository", repository, "issue", a.Number)
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
-		return false, fmt.Errorf("I13: issue #%d is not in the snapshot", a.Number)
+		return false, false, fmt.Errorf("I13: issue #%d is not in the snapshot", a.Number)
 	}
 	pr, ok := sub.LatestPullRequest()
 	if !ok || pr.Number != a.PullRequest {
-		return false, fmt.Errorf("I13: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
+		return false, false, fmt.Errorf("I13: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
 	owners, err := s.readOwners(ctx, token, target, a.Reviewers)
 	if err != nil {
-		return false, fmt.Errorf("I13: issue #%d: %w", a.Number, err)
+		return false, false, fmt.Errorf("I13: issue #%d: %w", a.Number, err)
 	}
 	review, ok := OwnerRequestedChanges(pr.Reviews, pr.HeadCommit, owners, sub.AwaitingMergeDecisionAt)
 	if !ok {
 		log.Debug("I13: no new request for changes of an Owner on the head commit", "pull_request", pr.Number)
-		return false, nil
+		return false, false, nil
 	}
 	permit, ok := s.permitStart(ctx, log, "owner review fix", config.RoleImplementer, target, a.Number)
 	if !ok {
-		return false, nil
+		return false, true, nil
 	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
-		return false, fmt.Errorf("I13: read the login of the Owner of issue #%d: %w", a.Number, err)
+		return false, false, fmt.Errorf("I13: read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
 	if err := s.startStay(repository, a.Number, false); err != nil {
-		return false, fmt.Errorf("I13: keep the start of the stay of issue #%d in cumin/status/implementing: %w", a.Number, err)
+		return false, false, fmt.Errorf("I13: keep the start of the stay of issue #%d in cumin/status/implementing: %w", a.Number, err)
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return false, fmt.Errorf("I13: move issue #%d back to the Implementer: %w", a.Number, err)
+		return false, false, fmt.Errorf("I13: move issue #%d back to the Implementer: %w", a.Number, err)
 	}
 	log.Info("I13: the Owner requested changes; the issue goes back to the Implementer",
 		"pull_request", pr.Number, "review", review.URL, "labels", labels)
@@ -558,7 +562,7 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 		},
 	})
 	if err != nil {
-		return true, fmt.Errorf("I13: request the fix for issue #%d: %w", a.Number, err)
+		return true, false, fmt.Errorf("I13: request the fix for issue #%d: %w", a.Number, err)
 	}
-	return true, nil
+	return true, false, nil
 }

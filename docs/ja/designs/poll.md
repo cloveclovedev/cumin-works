@@ -466,7 +466,7 @@ checkの結果の読み方:
 - I13を適用する順は、Ownerのログイン名を読む、ラベルを `cumin/status/implementing` に替える、依頼する、である。権限かログイン名を読めないとき、またはラベルを替えられないときは、依頼しない。Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でやり直す。ラベルを替えたあとは候補にならないので、同じ依頼を二度出さない。
 - 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開し、別のgoroutineで動かす。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証を行い、必須のcheck、Reviewerのレビュー (I3) を通って、I7でもう一度Ownerの判断を待つ。直したコミットで先頭が変わるので、前の `CHANGES_REQUESTED` は古いコミットへのレビューになり、もう数えない。Reviewerのラウンドは、Reviewerの最後の `APPROVE` のあとから数え直すので、1ラウンド目から始まる (「レビューのラウンドの数え方」)。
 - 1つの `CHANGES_REQUESTED` で差し戻すのは1回だけである。Implementerがコミットせずに答えると、先頭のコミットは変わらず、Ownerの `CHANGES_REQUESTED` はそのコミットに残る。Issueは、I2、必須のcheck、Reviewerのレビューを通って、I7で `cumin/status/awaiting-merge-decision` に戻る。そのレビューは、このラベルが付いた時刻より前のものなので、I13はもう成り立たず、Ownerの判断を待つ。Ownerがもう一度 `CHANGES_REQUESTED` を出すと、そのレビューはラベルよりあとなので、1回だけ差し戻す。
-- 必須のcheckは読まない。I13はmergeしないためである。同時に進めるIssueの数も見ない。新しい着手ではなく、Ownerが求めた続きの作業だからである。実行を待って止める間と、利用枠が上限に達している間 (Q1、stop agent starts) は、起動の許可がないので、この依頼を始めない。ラベルも替えない。
+- 必須のcheckは読まない。I13はmergeしないためである。同時に進めるIssueの数も見ない。新しい着手ではなく、Ownerが求めた続きの作業だからである。実行を待って止める間と、利用枠が上限に達している間 (Q1、stop agent starts) は、起動の許可がないので、この依頼を始めない。ラベルも替えない。Ownerが変更を求めていて、依頼が起動の許可を待つ間は、その定期確認では同じIssueの衝突の解消 (I14) も始めない。衝突の解消が先頭のコミットを動かすと、Ownerのレビューが先頭のコミットのものでなくなるためである。
 - 候補を確かめただけの定期確認は、待ち状態の通知 (Q4) では動作に数えない。差し戻したときに数える。I12と同じである。
 - 依頼文 (「Ownerのレビューへの対応」、`Request: owner review fix`) は、`internal/workflow` の純粋関数 `OwnerReviewFixRequestText` が組み立てる。入れるのは、リポジトリ、実装Issue、Pull Request、ブランチ、作業場所と、Ownerのレビューのアドレスである。
 - 依頼文は、そのレビューとコメントをGitHubで読むこと、Pull Requestのブランチで直すこと、新しいPull Requestを作らないことを伝える。コメントそのものは依頼文に写さない。Implementerが、GitHubでコメントを読み、スレッドごとに返答するためである (返答のテンプレートはskill `cumin-review-reply`)。
