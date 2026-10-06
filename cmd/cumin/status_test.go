@@ -46,6 +46,7 @@ func readFake(t *testing.T) readRepository {
 	fake.AddIssue(repo, &githubtest.Issue{Number: 13, Parent: 7, Title: "d", Labels: []string{"cumin/status/awaiting-merge-decision", "risk/medium"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 8, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 9, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 14, Labels: []string{githubtest.RequirementLabel, "cumin/status/accepting"}})
 	client := github.NewAppClient(server.URL, server.Client())
 	return func(ctx context.Context, r config.Repository) (github.RepositorySnapshot, error) {
 		return client.ReadSnapshot(ctx, githubtest.Token, r.Owner, r.Name)
@@ -75,8 +76,8 @@ func TestStatusShowsTheWorkTheWaitingIssuesAndTheQuota(t *testing.T) {
 		"read at " + stamp(at.Add(-time.Minute), statusZone),
 		"5h window:     90.0% used, limit 85.0%",
 		"weekly window: 20.0% used, pace limit 85.0%",
-		"new starts: stopped by the 5h window, next try at " + stamp(at.Add(2*time.Hour), statusZone),
-		"Agents at work (from the labels on GitHub):\n  example-org/example-repo #6 cumin/status/planning\n  example-org/example-repo #10 cumin/status/reviewing\n",
+		"agent starts: stopped by the 5h window, next try at " + stamp(at.Add(2*time.Hour), statusZone),
+		"Agents at work (from the labels on GitHub; while agent starts are stopped, an issue here can wait for the quota with no agent):\n  example-org/example-repo #6 cumin/status/planning\n  example-org/example-repo #10 cumin/status/reviewing\n  example-org/example-repo #14 cumin/status/accepting\n",
 		"Waiting for the Owner:\n",
 		"  example-org/example-repo #11 cumin/status/awaiting-decision\n",
 		"  example-org/example-repo #13 cumin/status/awaiting-merge-decision\n",
@@ -123,7 +124,7 @@ func TestStatusShowsTheAllowance(t *testing.T) {
 	if err := writeStatus(t.Context(), &out, statusSettings(), dir, at, statusZone, readFake(t)); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"limit 100.0%", "allowance: the 5h limit is 100% until " + stamp(until, statusZone), "new starts: go on"} {
+	for _, want := range []string{"limit 100.0%", "allowance: the 5h limit is 100% until " + stamp(until, statusZone), "agent starts: go on"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("the report has no %q:\n%s", want, out.String())
 		}

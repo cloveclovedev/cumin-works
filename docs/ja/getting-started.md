@@ -83,7 +83,7 @@ Implementer の実行は、本物の Claude Code を起動し、利用枠を使�
 
 5h枠のしきい値で着手が止まったとき、その5h枠を使い切ってよければ、Hostで `cumin quota allow` を実行する (Q2)。`cumin run` が最後に読んだ5h枠のリセット時刻を、`~/.local/state/cumin/quota-allowance.json` に書く。次の定期確認から、その時刻まで5h枠のしきい値が100%になる。weekly枠のペースの上限は変わらない。`cumin run` がまだ使用率を読んでいないとき、または最後に読んだ5h枠が既にリセットされたときは、何も書かずに0以外の終了コードで終わる。
 
-`cumin status` は、今の状態を表示する。Agentが動いているIssueとOwnerの対応を待つIssue (GitHubのラベルから読む)、`cumin run` が最後に読んだ両方の枠の使用率とその時刻、今の上限、許可、新しい着手が止まっているかどうかと次に試す時刻である。`cumin stop --after-current-runs` の予約があるあいだは、止まる途中であることと、予約した時刻も表示する。使用率の数値はターミナルにだけ出し、ログには出さない。`cumin run` と同じく `--config` で設定ファイルを変えられる。Keychainの秘密鍵を読むので、`cumin run` と同じユーザで実行する。
+`cumin status` は、今の状態を表示する。Agentが動いているIssueとOwnerの対応を待つIssue (GitHubのラベルから読む)、`cumin run` が最後に読んだ両方の枠の使用率とその時刻、今の上限、許可、Agentの起動を止めているかどうか (`agent starts: go on` または `agent starts: stopped`) と次に試す時刻である。Agentの起動を止めている間は、Agentが動いているIssueの一覧のIssueが、Agentなしで利用枠を待つことがある。`cumin stop --after-current-runs` の予約があるあいだは、止まる途中であることと、予約した時刻も表示する。使用率の数値はターミナルにだけ出し、ログには出さない。`cumin run` と同じく `--config` で設定ファイルを変えられる。Keychainの秘密鍵を読むので、`cumin run` と同じユーザで実行する。
 
 `cumin --version` は、cuminの版と、ビルドしたコミットを表示する。
 
