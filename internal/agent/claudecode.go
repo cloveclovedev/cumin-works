@@ -40,6 +40,9 @@ type ClaudeCode struct {
 	// QuotaTimeLimit bounds the minimal run of ReadQuota. Zero means
 	// defaultQuotaTimeLimit. Tests shorten it.
 	QuotaTimeLimit time.Duration
+	// Now is the clock that gives the read time of a quota usage. Nil
+	// means time.Now. Tests set it.
+	Now func() time.Time
 }
 
 func (c ClaudeCode) grace() time.Duration {
@@ -47,6 +50,14 @@ func (c ClaudeCode) grace() time.Duration {
 		return c.Grace
 	}
 	return defaultGrace
+}
+
+// now returns the time of the clock of the adapter.
+func (c ClaudeCode) now() time.Time {
+	if c.Now != nil {
+		return c.Now()
+	}
+	return time.Now()
 }
 
 // args builds the command line of one request.
@@ -427,7 +438,7 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 		// replaces an earlier one with "no usage", so that a changed
 		// shape is not hidden by an older value.
 		s.quota = nil
-		if q, ok := quotaOf(e.RateLimitInfo); ok {
+		if q, ok := quotaOf(e.RateLimitInfo, c.now()); ok {
 			s.quota = &q
 			log.Debug("agent quota usage",
 				"five_hour", q.FiveHour.Utilization, "five_hour_resets_at", q.FiveHour.ResetsAt,
@@ -718,8 +729,8 @@ func statusOf(info *rateLimitInfo) string {
 
 // quotaOf converts the rate limit event. It reports false when a window
 // or one of its fields is missing, so that a changed event format is
-// read as "no usage" and not as zero usage.
-func quotaOf(info *rateLimitInfo) (QuotaUsage, bool) {
+// read as "no usage" and not as zero usage. readAt is the time of the read.
+func quotaOf(info *rateLimitInfo, readAt time.Time) (QuotaUsage, bool) {
 	if info == nil || !info.UnifiedWindows.FiveHour.complete() || !info.UnifiedWindows.SevenDay.complete() {
 		return QuotaUsage{}, false
 	}
@@ -729,7 +740,7 @@ func quotaOf(info *rateLimitInfo) (QuotaUsage, bool) {
 	return QuotaUsage{
 		FiveHour: window(info.UnifiedWindows.FiveHour),
 		Weekly:   window(info.UnifiedWindows.SevenDay),
-		ReadAt:   time.Now(),
+		ReadAt:   readAt,
 	}, true
 }
 
