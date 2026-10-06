@@ -130,6 +130,12 @@ var agentLabels = map[bool][]string{
 	false: {workflow.LabelImplementing, workflow.LabelReviewing},
 }
 
+// agentsAtWorkNote is the line under the heading of the agents at work. The
+// labels do not say whether the agent of an issue runs: an issue keeps its
+// label and waits for the next start at a quota limit, and while cumin stops
+// after the current runs.
+const agentsAtWorkNote = "(an issue here can wait with no agent, only while agent starts are stopped or a stop after the current runs is requested)"
+
 var ownerLabels = []string{workflow.LabelAwaitingPlanReview, workflow.LabelAwaitingMergeDecision, workflow.LabelAwaitingAcceptance, workflow.LabelAwaitingDecision}
 
 // writeStatus writes the whole report. A repository that cannot be read
@@ -167,9 +173,7 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 			}
 		}
 	}
-	// The labels do not say whether the agent of an issue runs: at a quota
-	// limit, an issue keeps its label and waits for the next start.
-	writeList(w, "Agents at work (from the labels on GitHub; while agent starts are stopped, an issue here can wait for the quota with no agent):", working)
+	writeList(w, "Agents at work (from the labels on GitHub):\n"+agentsAtWorkNote, working)
 	writeList(w, "Waiting for the Owner:", waiting)
 	if len(failed) > 0 {
 		writeList(w, "Repositories not read:", failed)
