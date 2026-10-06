@@ -200,8 +200,7 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
    - `priority_labels` がなければ、何も尋ねない。cumin が初期値のラベル (`cumin/priority/P0` 〜 `cumin/priority/P3`) を自分で作る。
    - ひな形を足したばかりのリポジトリには `priority_labels` がない。Organization のラベルを使うときは、`priority_labels` を足す Pull Request を merge してから、スクリプトをもう一度実行する。
 4. cumin のラベル (`cumin/type/*`、`cumin/status/*`、`risk/*`。[Issueの状態](../requirements/workflow/issue-states.md) の「ラベルの一覧」) のうち、リポジトリにないものを作る。色と説明は、cumin が起動のときに作るものと同じである。cumin も同じラベルを作るので、尋ねない。
-5. 古い状態のラベルが付いた、開いているIssueと Pull Request を一覧にして、新しいラベルに替えるかどうかを1度だけ尋ねる (下の「古い状態のラベルを替える」)。
-6. 次の ruleset を作る。
+5. 次の ruleset を作る。
 
 | ruleset | 対象 | 内容 | bypass list |
 |---|---|---|---|
@@ -234,31 +233,6 @@ Owner が Pull Request を merge するとき:
 - `.cumin/config.toml` が既にあれば、内容が違っていても上書きしない。そのリポジトリの設定だからである。
 - workflow のファイルが違う内容で既にあれば、違いを表示して、上書きしない。ruleset は当てたうえで、最後にエラーで終わる。Pull Request で直してから、もう一度実行する。
 - ruleset は名前で探す。あればファイルの内容に合わせ、なければ作る。
-
-
-### 古い状態のラベルを替える
-
-状態の名前を変えたので ([Issueの状態](../requirements/workflow/issue-states.md) の「ラベルの移行」)、古いラベルの付いた開いているIssueと Pull Request を、スクリプトで新しいラベルに替える。順は次のとおりである。
-
-1. 新しい名前で判定するバイナリを Host に入れる (`cumin stop --after-current-runs` のあと `scripts/install.sh`。手順4)。cumin は止めたままにする。
-2. 対象のリポジトリごとに `scripts/setup-repo.sh` を実行し、一覧を確かめて `y` と答える。
-3. cumin を起動する。
-
-バイナリが先である。古い名前で判定するバイナリは、新しいラベルの付いたIssueを進めないからである。
-
-| 古いラベル | Issueの種類 | 新しいラベル |
-|---|---|---|
-| `cumin/status/awaiting-checks` | どれでも | `cumin/status/checking` |
-| `cumin/status/awaiting-owner-decision` | どれでも | `cumin/status/awaiting-decision` |
-| `cumin/status/awaiting-owner-review` | 実装Issueと Pull Request | `cumin/status/awaiting-merge-decision` |
-| `cumin/status/awaiting-owner-review` | 要求Issue。sub-issue があり、全て閉じている | `cumin/status/awaiting-acceptance` |
-| `cumin/status/awaiting-owner-review` | 要求Issue。それ以外 | `cumin/status/awaiting-plan-review` |
-
-- `y` と答えたときだけ替える。ほかの答えと、答えがないときは、Issueのラベルを何も変えない。`--dry-run` は、一覧を表示するだけで尋ねない。
-- 1件ごとに、新しいラベルを付けてから、古いラベルを外す。途中で失敗すると両方が残り、もう一度実行すると続きから替える。
-- GitHub のラベルの名前は変えない。古いラベルは、リポジトリに残る。
-- 新しいラベルは、替えた時刻に付く。cumin は、承認と `cumin/status/ready` を、状態のラベルが付いた時刻と比べる。替える前に Owner が出した承認と `cumin/status/ready` は数えられないことがあるので、替えたあとに、一覧に出たIssueでもう一度出す。
-- 替えるものがなければ、`unchanged` と表示して、何も変えない。
 
 ## 手順4: cumin を常駐させる (launchd)
 

@@ -26,14 +26,7 @@ const (
 	LabelReady                 = "cumin/status/ready"
 	LabelPlanning              = "cumin/status/planning"
 	LabelImplementing          = "cumin/status/implementing"
-	LabelAwaitingChecks        = "cumin/status/awaiting-checks"
 	LabelReviewing             = "cumin/status/reviewing"
-	LabelAwaitingOwnerReview   = "cumin/status/awaiting-owner-review"
-	LabelAwaitingOwnerDecision = "cumin/status/awaiting-owner-decision"
-	// The seven labels below are the new names of the states
-	// (issue-states.md, the move of the labels). cumin reads and writes
-	// them, except cumin/status/merging, which it only creates. The three old names above stay in RepositoryLabels
-	// until the last step of the move.
 	LabelChecking              = "cumin/status/checking"
 	LabelAccepting             = "cumin/status/accepting"
 	LabelMerging               = "cumin/status/merging"
@@ -932,8 +925,6 @@ func requirementMoves(snapshot Snapshot) []Action {
 			actions = append(actions, StartRequirement{Number: requirement.Number})
 		case remainingNeedReview(requirement):
 			actions = append(actions, ReviewRemaining{Number: requirement.Number})
-		case accepted(requirement):
-			actions = append(actions, Accept{Number: requirement.Number})
 		default:
 			running := snapshot.Running[requirement.Number]
 			if action := AcceptanceEnd(requirement, running); action != nil {
@@ -1035,13 +1026,6 @@ func lastClose(requirement RequirementIssue) time.Time {
 func checked(requirement RequirementIssue) bool {
 	return requirement.CommentsRead && !requirement.AcceptanceCheckAt.IsZero() &&
 		!requirement.AcceptanceCheckAt.Before(lastClose(requirement))
-}
-
-// accepted is R7 for a requirement issue in cumin/status/implementing: the
-// comment exists before cumin moved the issue to cumin/status/accepting, so
-// no request is needed. AcceptanceEnd is R7 in cumin/status/accepting.
-func accepted(requirement RequirementIssue) bool {
-	return everySubIssueClosed(requirement) && checked(requirement)
 }
 
 // AcceptanceEnd decides the way out of cumin/status/accepting from the

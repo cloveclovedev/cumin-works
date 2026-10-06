@@ -45,7 +45,7 @@ func TestRepositoryLabels_MatchTheDocument(t *testing.T) {
 	}
 	// Two type labels, fourteen status labels (the old and the new names
 	// during the move of the labels), three risk labels.
-	if len(got) != 19 {
-		t.Errorf("%d labels, want 19", len(got))
+	if len(got) != 16 {
+		t.Errorf("%d labels, want 16", len(got))
 	}
 }
