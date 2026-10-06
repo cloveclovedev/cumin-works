@@ -236,10 +236,6 @@ func (s *Service) sendMerge(ctx context.Context, log *slog.Logger, token string,
 		log.Info("the base branch was modified; the next poll sends the merge again", "pull_request", pr.Number)
 		return nil
 	case errors.Is(err, github.ErrConflict):
-		if s.finishing.Load() {
-			log.Info("the merge conflicts; cumin stops after its runs, and the conflict resolution waits for the next start of cumin", "pull_request", pr.Number)
-			return nil
-		}
 		return s.resolveConflict(ctx, log, token, target, settings, sub, pr, defaultBranch)
 	case errors.Is(err, github.ErrHeadMoved):
 		return stopIssue(MergeHeadMovedReason(pr.Number))
@@ -321,6 +317,10 @@ func statusAnswer(err error) string {
 func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, pr PullRequest, defaultBranch string) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
+	permit, ok := s.permitStart(log, "conflict resolution")
+	if !ok {
+		return nil
+	}
 	login, err := s.readOwnerLogin(ctx, token, target, sub.Number)
 	if err != nil {
 		return fmt.Errorf("request a conflict resolution: read the login of the Owner of issue #%d: %w", sub.Number, err)
@@ -337,7 +337,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 	err = s.goImplementer(ctx, target, settings, sub.Number, implementerRequest{
 		row: RowMerging, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, sub.Number).SessionID,
-		ownerLogin: login,
+		ownerLogin: login, permit: permit,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)
 		},
@@ -376,6 +376,10 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	if !ok || pr.Number != a.PullRequest {
 		return fmt.Errorf("I14: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
+	permit, ok := s.permitStart(log, "conflict resolution")
+	if !ok {
+		return nil
+	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return fmt.Errorf("I14: read the login of the Owner of issue #%d: %w", a.Number, err)
@@ -396,7 +400,7 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		row: RowI14, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, a.Number).SessionID,
-		ownerLogin: ownerLogin,
+		ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, a.Number, pr.Number, branch, workDir, defaultBranch)
 		},
@@ -511,6 +515,10 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 		log.Debug("I13: no new request for changes of an Owner on the head commit", "pull_request", pr.Number)
 		return false, nil
 	}
+	permit, ok := s.permitStart(log, "owner review fix")
+	if !ok {
+		return false, nil
+	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return false, fmt.Errorf("I13: read the login of the Owner of issue #%d: %w", a.Number, err)
@@ -528,7 +536,7 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		row: "I13", kind: "owner review fix", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, a.Number).SessionID,
-		ownerLogin: ownerLogin,
+		ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {
 			return OwnerReviewFixRequestText(repository, a.Number, pr.Number, branch, workDir, review.URL)
 		},

@@ -358,7 +358,7 @@ func TestMerging_AConflictWhileCuminStopsAfterTheRunsWaitsForTheNextStart(t *tes
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"the merge conflicts; cumin stops after its runs, and the conflict resolution waits for the next start of cumin"`) {
+	if !strings.Contains(sc.logs.String(), `"request":"conflict resolution"`) {
 		t.Errorf("the log does not say that the conflict resolution waits:\n%s", sc.logs.String())
 	}
 

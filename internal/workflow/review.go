@@ -48,6 +48,8 @@ type reviewerRequest struct {
 	// cause is the review that the request "request the cause from the
 	// Reviewer" (I8) is about, or nil for a review request.
 	cause *Review
+	// permit is the permit of the start of this request (permitStart).
+	permit StartPermit
 }
 
 // startReview applies I3: every required check passed on the head commit of
@@ -72,10 +74,15 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	if !ok || pr.Number != a.PullRequest {
 		return fmt.Errorf("I3: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
+	permit, ok := s.permitStart(s.logger().With("repository", repository, "issue", a.Number), "review")
+	if !ok {
+		return nil
+	}
 	req, err := s.reviewRequestOf(ctx, token, target, settings, a.Number, pr)
 	if err != nil {
 		return err
 	}
+	req.permit = permit
 	// The stay starts before the label changes, as the stay in
 	// cumin/status/implementing does (startStay): a restart of cumin right
 	// after the label change then finds the head commit of the request, and
@@ -245,7 +252,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 			"head_commit", req.review.HeadCommit, "resumed", req.sessionID != "")
 	}
 
-	run, err := s.Agents.Start(ctx, request)
+	run, err := s.startAgent(ctx, req.permit, request)
 	var abnormal *agent.AbnormalEnd
 	switch {
 	case errors.As(err, &abnormal):
@@ -328,10 +335,6 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 	action := ReviewEnd(sub, false)
 	if action == nil {
 		log.Info("I3: the end of the review was not decided; the next poll decides", "labels", sub.Labels)
-		return
-	}
-	if s.finishing.Load() && len(WithoutNewWork([]Action{action})) == 0 {
-		log.Info("I3: cumin stops after its runs; the next request waits for the next start of cumin", "action", fmt.Sprintf("%T", action))
 		return
 	}
 	// The Owner needs the kind of the end to know where to look.
@@ -568,6 +571,10 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			Link:       a.Explanation.URL,
 		})
 	case RequestReviewFix:
+		permit, ok := s.permitStart(log, "review fix")
+		if !ok {
+			return nil, nil
+		}
 		login, err := ownerLogin(ctx, token)
 		if err != nil {
 			return nil, fmt.Errorf("I5: read the login of the Owner of issue #%d: %w", number, err)
@@ -586,7 +593,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			s.runImplementer(ctx, target, settings, number, implementerRequest{
 				row: "I5", kind: "review fix", branch: branch, pullRequest: pr.Number,
 				sessionID:  s.State.Issue(repository, number).SessionID,
-				ownerLogin: login,
+				ownerLogin: login, permit: permit,
 				text: func(workDir string) string {
 					return ReviewFixRequestText(repository, number, pr.Number, branch, workDir, a.Review.URL)
 				},
@@ -595,8 +602,13 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 	case RequestReviewAgain, RequestCause:
 		cause, isCause := a.(RequestCause)
 		row := RowI3
+		request := "review again"
 		if isCause {
-			row = RowI8
+			row, request = RowI8, "cause"
+		}
+		permit, ok := s.permitStart(log, request)
+		if !ok {
+			return nil, nil
 		}
 		// Q1: the quota decides before the request is counted, so a limit
 		// does not use up the one second request of the stay. It decides
@@ -612,6 +624,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if err != nil {
 			return nil, err
 		}
+		req.permit = permit
 		count, err := s.countReviewRequest(repository, number, isCause)
 		if err != nil {
 			return nil, fmt.Errorf("%s: count the request to the Reviewer of issue #%d: %w", row, number, err)

@@ -32,6 +32,10 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	if !ok {
 		return fmt.Errorf("R1: issue #%d is not in the snapshot", p.Number)
 	}
+	req := planRequest
+	if req.permit, ok = s.permitStart(s.logger().With("repository", target.Repository.String(), "issue", p.Number), "split"); !ok {
+		return nil
+	}
 	// Q1: the quota decides before the label changes.
 	if ok, err := s.quotaAllowsStart(ctx, RowR1, config.RolePlanner, target, p.Number); err != nil || !ok {
 		if err != nil {
@@ -41,7 +45,6 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	}
 	// The poll read the Owner of the newest cumin/status/ready before the
 	// decision (readReadyOwners); R1 holds only with that Owner.
-	req := planRequest
 	req.ownerLogin = requirement.ReadyOwner
 	repository := target.Repository.String()
 	if p.Again {
@@ -113,6 +116,9 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 		return fmt.Errorf("R4: issue #%d is not in the snapshot", a.Number)
 	}
 	req := acceptanceRequest
+	if req.permit, ok = s.permitStart(s.logger().With("repository", repository, "issue", a.Number), "acceptance check"); !ok {
+		return nil
+	}
 	var err error
 	if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, a.Number); err != nil {
 		return fmt.Errorf("R4: read the login of the Owner of issue #%d: %w", a.Number, err)
@@ -175,6 +181,8 @@ type plannerRequest struct {
 	// yet. runPlanner counts it when the work directory is ready, and takes
 	// the count back when the agent did not start.
 	count bool
+	// permit is the permit of the start of this request (permitStart).
+	permit StartPermit
 }
 
 var (
@@ -257,7 +265,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 	}
 	if req.end == RowR4 {
 		request.SessionID = req.sessionID
-		s.runAcceptanceCheck(ctx, log, target, settings, number, request, req.again, req.count)
+		s.runAcceptanceCheck(ctx, log, target, settings, number, request, req.permit, req.again, req.count)
 		return
 	}
 
@@ -285,9 +293,9 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 // cumin/status/planning, and a later poll decides.
 func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, req plannerRequest) {
 	repository := target.Repository.String()
-	again, counted := req.again, req.count
+	again, counted, permit := req.again, req.count, req.permit
 	for {
-		run, err := s.Agents.Start(ctx, request)
+		run, err := s.startAgent(ctx, permit, request)
 		var abnormal *agent.AbnormalEnd
 		switch {
 		case errors.As(err, &abnormal):
@@ -336,8 +344,9 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			}
 			return
 		case CheckAcceptance:
-			if s.finishing.Load() {
-				log.Info("R2: cumin stops after its runs; the acceptance check waits for the next start of cumin")
+			acceptance := acceptanceRequest
+			var ok bool
+			if acceptance.permit, ok = s.permitStart(log, "acceptance check"); !ok {
 				return
 			}
 			log.Info("R2: every sub-issue is closed; the acceptance check follows", "sub_issues", len(requirement.SubIssues))
@@ -345,13 +354,12 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 				log.Error("the requirement issue was not moved; the next poll decides again", "error", err.Error())
 				return
 			}
-			acceptance := acceptanceRequest
 			acceptance.ownerLogin = req.ownerLogin
 			s.runPlanner(ctx, target, settings, number, acceptance)
 			return
 		case Plan:
-			if s.finishing.Load() {
-				log.Info("R2: cumin stops after its runs; the second request of the split waits for the next start of cumin")
+			var ok bool
+			if permit, ok = s.permitStart(log, "split again"); !ok {
 				return
 			}
 			// Q1: the quota decides before the request is counted.
@@ -391,10 +399,10 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 // work directory. While cumin is stopping, nothing is requested again and
 // no label changes. A failed read changes nothing: the issue keeps
 // cumin/status/accepting, and the next poll decides.
-func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, again, counted bool) {
+func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, permit StartPermit, again, counted bool) {
 	repository := target.Repository.String()
 	for {
-		run, err := s.Agents.Start(ctx, request)
+		run, err := s.startAgent(ctx, permit, request)
 		var abnormal *agent.AbnormalEnd
 		switch {
 		case errors.As(err, &abnormal):
@@ -444,6 +452,10 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 			}
 			return
 		case CheckAcceptance:
+			var ok bool
+			if permit, ok = s.permitStart(log, "acceptance check again"); !ok {
+				return
+			}
 			// Q1: the quota decides before the request is counted.
 			if ok, err := s.quotaAllowsStart(ctx, RowR4, config.RolePlanner, target, number); err != nil || !ok {
 				if err != nil {

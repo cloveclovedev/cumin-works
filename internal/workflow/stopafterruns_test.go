@@ -2,6 +2,9 @@ package workflow_test
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,7 +47,7 @@ func requestStop(t *testing.T, path string) {
 // sent a read, since one poll sends more than one.
 const (
 	tookStopRequestLog = `"msg":"stop after the current runs: no new work starts; cumin exits when the agent runs have ended"`
-	heldBackLog        = `"msg":"stop after the current runs: new work is held back"`
+	heldBackLog        = `"msg":"stop after the current runs: the request waits for the next start of cumin"`
 )
 
 // stopRequestExists reports whether a stop request is there.
@@ -299,5 +302,171 @@ func TestStopAfterRuns_ARequestOfTheStartIsKept(t *testing.T) {
 	}
 	if stopRequestExists(t, service.StopRequestPath) {
 		t.Error("the stop request is still there after the exit")
+	}
+}
+
+// runWithAStopRequestOfTheStart runs the service to its end with a stop
+// request that the first poll takes
+// (TestStopAfterRuns_ARequestOfTheStartIsKept): every poll of the run
+// decides while cumin stops after the current runs.
+func runWithAStopRequestOfTheStart(t *testing.T, service *workflow.Service) {
+	t.Helper()
+	service.PollInterval = 10 * time.Millisecond
+	service.StopRequestPath = filepath.Join(t.TempDir(), state.StopRequestFileName)
+	if err := state.WriteStopRequest(service.StopRequestPath, state.StopRequest{RequestedAt: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+}
+
+// While cumin stops after the current runs, a Planner run that ends with
+// no acceptance check comment starts no second request: no agent starts,
+// the request is not counted, and the issue keeps cumin/status/accepting.
+// The last poll decides the same second request, and starts nothing either.
+func TestStopAfterRuns_APlannerRunWithNoAcceptanceCheckCommentStartsNoSecondRequest(t *testing.T) {
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	service := sc.service()
+	path, returned := stopAfterRunsScene(t, sc, service)
+	waitForAgentRun(t, sc)
+	requestStop(t, path)
+	waitForLog(t, sc, tookStopRequestLog)
+	changes := sc.labelChanges()
+
+	sc.release(t)
+	select {
+	case err := <-returned:
+		if err != nil {
+			t.Fatalf("Run returned %v, want nil", err)
+		}
+	case <-time.After(hangGuard):
+		t.Fatalf("Run did not return after the run ended:\n%s", sc.logs.String())
+	}
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: the second request of the acceptance check waits for the next start", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := sc.labelChanges(); n != changes {
+		t.Errorf("%d label changes, want %d: no label changes for a start that waits", n, changes)
+	}
+	if got := service.State.Issue("example-org/example-repo", 6).AcceptanceRequests; got != 0 {
+		t.Errorf("the count of the second request = %d, want 0", got)
+	}
+	logs := sc.logs.String()
+	for _, want := range []string{heldBackLog, `"request":"acceptance check again"`} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the log has no %s:\n%s", want, logs)
+		}
+	}
+}
+
+// While cumin stops after the current runs, the steps that start no agent
+// still run. A merged pull request closes its issue.
+func TestStopAfterRuns_AMergedPullRequestStillClosesItsIssue(t *testing.T) {
+	sc := mergingScene(t, "risk/low")
+	pr := sc.repo.PullRequests[21]
+	pr.Closed, pr.Merged = true, true
+	service := sc.service()
+
+	runWithAStopRequestOfTheStart(t, service)
+
+	assertMergedAndClosedOnce(t, sc, service, 0)
+}
+
+// While cumin stops after the current runs, the steps that start no agent
+// still run. A failed required check at the limit of check fix requests
+// stops the issue for the Owner, with the label and the comment, and no
+// Implementer starts.
+func TestStopAfterRuns_AFailedCheckAtTheLimitStillStopsForTheOwner(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	// 3 is max_check_fix_requests of the scene.
+	sc.failingCheck(t, service, 3)
+
+	runWithAStopRequestOfTheStart(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want %s", got, workflow.LabelAwaitingDecision)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
+		t.Errorf("%d comments on #10, want 1 with the reason of the stop", n)
+	}
+}
+
+// While cumin stops after the current runs, a failed required check below
+// the limit starts no check fix: no label changes, and the count of check
+// fix requests stays.
+func TestStopAfterRuns_AFailedCheckStartsNoCheckFixAndCountsNothing(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	sc.failingCheck(t, service, 1)
+	before := slices.Clone(sc.fake.Issue(sc.repo, 10).Labels)
+
+	runWithAStopRequestOfTheStart(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, before) {
+		t.Errorf("labels of #10 = %v, want %v untouched", got, before)
+	}
+	if got := service.State.Issue("example-org/example-repo", 10).CheckFixRequests; got != 1 {
+		t.Errorf("check fix requests = %d, want still 1", got)
+	}
+	if logs := sc.logs.String(); !strings.Contains(logs, heldBackLog) || !strings.Contains(logs, `"request":"check fix"`) {
+		t.Errorf("the log does not say that the check fix waits:\n%s", logs)
+	}
+}
+
+// Every start of an agent passes the one check: Agents.Start has one caller
+// in the package, the function startAgent, which takes the permit of the
+// start. A new request that calls Agents.Start by itself fails here.
+func TestAgentsStartHasOneCallerInTheWorkflowPackage(t *testing.T) {
+	t.Parallel()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var callers []string
+	fset := token.NewFileSet()
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				start, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || start.Sel.Name != "Start" {
+					return true
+				}
+				if agents, ok := start.X.(*ast.SelectorExpr); ok && agents.Sel.Name == "Agents" {
+					callers = append(callers, name+": "+fn.Name.Name)
+				}
+				return true
+			})
+		}
+	}
+	if want := []string{"service.go: startAgent"}; !slices.Equal(callers, want) {
+		t.Errorf("callers of Agents.Start = %v, want %v: every start of an agent goes through startAgent with a permit", callers, want)
 	}
 }

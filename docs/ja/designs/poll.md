@@ -346,7 +346,7 @@ checkの結果の読み方:
 - 並べ替えるのは、着手できる候補だけである。blocked by のIssueが開いている候補は先に落ちていて、空きの数は並べ替えのあとで当てるので、優先度はどちらも越えない。利用枠は、着手を適用するときに確かめる (次の項目)。
 - 優先度のラベルの一覧は、リポジトリの設定を重ねたあとの値を渡す。`priority_labels` はリポジトリの設定ファイルにだけ書ける。Hostの設定に書けるようにすると、cuminは初期値のラベルを作らず、`scripts/setup-repo.sh` もHostの設定を読まないので、ラベルを用意する人がいなくなる。書かれていないリポジトリでは、初期値のラベルを使い、足りないものをcuminが作る。作るのは、起動時ではなく定期確認の中である。設定に書かれているかどうかは、リポジトリの `.cumin/config.toml` を読むまで分からないためである。設定を読み直すたびに1回だけ確かめ、失敗したら次の定期確認でやり直す。設定に書かれたラベルはOrganizationのものなので、cuminは作らず、変えない。
 - R1とI1は、ラベルを替える前に、使用率を上限と比べる (Q1)。読んだばかりの使用率が手元になければ、読み直す。上限に達していれば、ラベルも手元の状態も変えずに、その着手を飛ばす。次の定期確認で、判定からやり直す。手順は [利用枠の設計](quota.md) の「着手の前の確認」にある。
-- Ownerが実行を待ってから止めるよう頼んだあと ([cumin本体の設計メモ](cumin-core.md) の「実行を待ってから止める」) は、判定の結果から、Agentに新しい依頼を出す動作を落としてから適用する。判定そのものは変えない。
+- Ownerが実行を待ってから止めるよう頼んだあと ([cumin本体の設計メモ](cumin-core.md) の「実行を待ってから止める」) も、判定は変えず、判定の結果を全て適用する。Agentの起動は、どれも、その前に1つの確認 (`PermitStart`) を通る。Agentに依頼する動作は、ラベルを替える前、依頼し直しを数える前に、起動の許可を取る。止める間は許可がないので、何も変えずに戻る。Agentを起動する関数 (`startAgent`) は1つだけで、許可を受け取る。
 - 採らなかった案: 定期確認の中で、GitHubを読みながら判定する。判定の途中で事実が変わりうるうえ、表形式のテストができない。
 
 ### Implementerへの依頼
@@ -407,7 +407,7 @@ checkの結果の読み方:
 - 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開し、別のgoroutineで動かす。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証を行い、通れば `cumin/status/checking` に戻る。
 - checkの修正を依頼した回数には数えない。衝突はImplementerの誤りではなく、並行して進むほかのPull Requestのmergeで起きるためである ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「checkを待つ間の行」)。
 - 衝突の解消の実行が `done` で終わっても、Pull Requestの先頭のコミットが衝突したときのままなら、I2に進まずに、行の番号I14でOwnerに戻す。そのまま `cumin/status/checking` に戻すと、次の定期確認が同じ依頼を出し続けるためである。
-- 実行を待って止める間は、この依頼を落とす (`WithoutNewWork`)。Issueの状態ラベルは変わらないので、次の起動の定期確認でI14がそのまま成り立つ。
+- 実行を待って止める間は、起動の許可がないので、この依頼を始めない。Issueの状態ラベルは変わらないので、次の起動の定期確認でI14がそのまま成り立つ。
 - I14は、Ownerの判断を待つ間 (`cumin/status/awaiting-merge-decision`) にも成り立つ。ほかのPull Requestのmergeで衝突したPull Requestを、Ownerが承認する前にImplementerに戻す。Ownerは、mergeできる先頭のコミットだけを判断すればよい。適用の手順、依頼文、先頭のコミットが変わらないときの停止 (行の番号I14) は、checkを待つ間と同じである。ログイン名を読めないとき、ラベルを替えられないときは、Issueは `cumin/status/awaiting-merge-decision` のまま残り、次の定期確認でやり直す。解消のあとは、I2、必須のcheck、Reviewerのレビュー (I3) を通り、I7でもう一度Ownerの判断を待つ。
 - Ownerの判断を待つ間のI14は、同じ定期確認のI12とI13のあとに適用する。衝突した先頭のコミットにOwnerのレビューがあるときは、そのレビューが先に決める。I12が動いたとき (mergeの手順、または停止) と、I13が差し戻したときは、そのIssueのI14を適用しない。Ownerの承認は、今までどおりI12を通り、mergeの衝突から「衝突の解消」になる。Ownerが承認していても、必須のcheckが通っていなくてI12がmergeを待つときは、I12は動いていないので、I14を適用する。衝突したPull Requestでは、checkがもう動かないためである。I12かI13の確認がエラーで終わったときも、適用しない。次の定期確認が決める。Ownerのレビューかどうかは、権限を読まないと分からないので、純粋な判定は候補を並べるだけにして、適用の側が落とす。Ownerでない人のレビューしかないときは、I12もI13も動かないので、I14を適用する。
 - `UNKNOWN` と `MERGEABLE` では、Ownerの判断を待つIssueは何も変わらない。I15は `cumin/status/checking` だけの行なので、`UNKNOWN` が続いても止めない。
@@ -444,7 +444,7 @@ checkの結果の読み方:
 - ラベルのあとに続く長い処理 (I5の依頼、I8の原因の整理、レビューの依頼し直し) は、実行の終わりではReviewerの実行と同じgoroutineで続ける。定期確認が決めたときは、別のgoroutineで動かし、定期確認は待たない。どちらでも、その間、Issueは作業中のIssueの集合に残るので、同じIssueのAgentは、いつも1つだけである。
 - `blocked` なら、I10である。やり直さず、行の番号I10で「Ownerに戻す道」の手順をすぐに呼ぶ。コメントは、Reviewerが書いた `blocked_reason` である。順は、ラベルを替える、コメントを書く、通知する、である。コメントを先に書くと、コメントのあとでラベルを替えられなかったときは次の定期確認が質問のコメントから決められるが、コメントを書けなかったときは、レビューのない `cumin/status/reviewing` が残り、次の定期確認がレビューを依頼し直してしまう。ラベルを先に替えれば、コメントを書けなくても、IssueはOwnerの番にある。ラベルを替えられなかったときも、コメントは書く。このコメントは `cumin-core` が書く質問のコメントなので、次の定期確認が「stop the review for the Owner」を決める。
 - Reviewerの実行のあとの手順が一時的な失敗で終わっても、cuminは手順をメモリに持たない。mergeも、`cumin/status/merging` の中で定期確認のたびに決める (「mergeの手順 (I6、I7)」)。
-- cuminが実行の終わりに止まるとき (「stop after the current runs」) は、定期確認も、Reviewerの実行の終わりも、I5の依頼、原因の整理の依頼、レビューの依頼し直しを控える (`WithoutNewWork`)。実行の終わりは、ラベルを替える前に戻る。Issueは `cumin/status/reviewing` のまま、次の起動を待つ。次の起動の定期確認が、同じ事実から同じ依頼を1回だけ決める。Agentの要らない出口 (mergeの手順、Ownerへの通知、checkへの戻り、Ownerに戻す道) は、実行の終わりでも行う。
+- cuminが実行の終わりに止まるとき (「stop after the current runs」) は、定期確認も、Reviewerの実行の終わりも、I5の依頼、原因の整理の依頼、レビューの依頼し直しを始めない。起動の許可がないためである (`PermitStart`)。どちらも、ラベルを替える前に戻る。Issueは `cumin/status/reviewing` のまま、次の起動を待つ。次の起動の定期確認が、同じ事実から同じ依頼を1回だけ決める。Agentの要らない出口 (mergeの手順、Ownerへの通知、checkへの戻り、Ownerに戻す道) は、実行の終わりでも行う。
 - 異常終了は、`done` と同じく `ReviewEnd` で決める。同じ実行の中で、異常終了に続いてレビューがないままOwnerに戻すときは、その異常終了の種類を理由の文の終わりに足す。cuminが止まるとき (contextの取り消し) の異常終了は、何も決めず、ラベルも変えない。
 - 採らなかった案: レビューが見つからないときに、すぐOwnerに戻す。Reviewerの要件の「完了の条件」は、1回だけ依頼し直すと決めている。
 - 採らなかった案: ReviewerとImplementerのセッションを1つの項目に持つ。I5はImplementerのセッションを、2ラウンド目のレビューはReviewerのセッションを再開するので、1つでは足りない。
@@ -466,7 +466,7 @@ checkの結果の読み方:
 - I13を適用する順は、Ownerのログイン名を読む、ラベルを `cumin/status/implementing` に替える、依頼する、である。権限かログイン名を読めないとき、またはラベルを替えられないときは、依頼しない。Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でやり直す。ラベルを替えたあとは候補にならないので、同じ依頼を二度出さない。
 - 依頼は、状態ファイルにあるImplementerのセッションを `--resume` で再開し、別のgoroutineで動かす。worktree、ブランチ、実行の終わりの扱いは、checkの修正 (I4) と同じである。`done` ならI2の検証を行い、必須のcheck、Reviewerのレビュー (I3) を通って、I7でもう一度Ownerの判断を待つ。直したコミットで先頭が変わるので、前の `CHANGES_REQUESTED` は古いコミットへのレビューになり、もう数えない。Reviewerのラウンドは、Reviewerの最後の `APPROVE` のあとから数え直すので、1ラウンド目から始まる (「レビューのラウンドの数え方」)。
 - 1つの `CHANGES_REQUESTED` で差し戻すのは1回だけである。Implementerがコミットせずに答えると、先頭のコミットは変わらず、Ownerの `CHANGES_REQUESTED` はそのコミットに残る。Issueは、I2、必須のcheck、Reviewerのレビューを通って、I7で `cumin/status/awaiting-merge-decision` に戻る。そのレビューは、このラベルが付いた時刻より前のものなので、I13はもう成り立たず、Ownerの判断を待つ。Ownerがもう一度 `CHANGES_REQUESTED` を出すと、そのレビューはラベルよりあとなので、1回だけ差し戻す。
-- 必須のcheckは読まない。I13はmergeしないためである。利用枠 (Q1) と、同時に進めるIssueの数も見ない。新しい着手ではなく、Ownerが求めた続きの作業だからである。実行を待って止める間は、この依頼を落とす (`WithoutNewWork`)。
+- 必須のcheckは読まない。I13はmergeしないためである。利用枠 (Q1) と、同時に進めるIssueの数も見ない。新しい着手ではなく、Ownerが求めた続きの作業だからである。実行を待って止める間は、起動の許可がないので、この依頼を始めない。ラベルも替えない。
 - 候補を確かめただけの定期確認は、待ち状態の通知 (Q4) では動作に数えない。差し戻したときに数える。I12と同じである。
 - 依頼文 (「Ownerのレビューへの対応」、`Request: owner review fix`) は、`internal/workflow` の純粋関数 `OwnerReviewFixRequestText` が組み立てる。入れるのは、リポジトリ、実装Issue、Pull Request、ブランチ、作業場所と、Ownerのレビューのアドレスである。
 - 依頼文は、そのレビューとコメントをGitHubで読むこと、Pull Requestのブランチで直すこと、新しいPull Requestを作らないことを伝える。コメントそのものは依頼文に写さない。Implementerが、GitHubでコメントを読み、スレッドごとに返答するためである (返答のテンプレートはskill `cumin-review-reply`)。
@@ -504,7 +504,7 @@ checkの結果の読み方:
   - 405で、答えが "Base branch was modified" で始まるとき (`github.ErrBaseModified`) は、Issueを止めない。`cumin/status/merging` のまま、コメントも通知も出さず、次の定期確認がもう一度送る。
   - それ以外の405は、衝突とrulesetの拒否の両方で返る (実測 62、#286 の M4)。405のあとにPull Requestを読み直し、`mergeable` が `false` なら衝突とみなす。mergeの前に読んだ `mergeable` は古いことがある (#286 の M4、M5) ので、mergeの前には読まない。
   - 「request a conflict resolution」: 衝突なら、Ownerのログイン名を読み、ラベルを `cumin/status/implementing` に替えてから、Implementerに「衝突の解消」を依頼する。セッションは、状態ファイルにあるImplementerのセッションの続きである。worktree、ブランチ、実行の終わりの扱いは、指摘の修正 (I5) と同じで、`done` のあとはI2、必須のcheck、I3を通る。依頼文には、既定のブランチの名前を入れる。ログイン名の読み取りかラベルの付け替えが失敗したら、依頼せず、次の定期確認がもう一度mergeを送る。
-  - 実行を待って止める間は、mergeは送るが、衝突でも何も変えない。ラベルを替えず、Implementerも起動せず、ログに1行出す。Issueは `cumin/status/merging` のまま残り、次の起動の定期確認が、もう一度mergeを送って同じ衝突から依頼する。Agentへのほかの依頼と同じく、次の起動を待つためである。
+  - 実行を待って止める間は、mergeは送るが、衝突でも何も変えない。衝突の解消は起動の許可を取れないので、ラベルを替えず、Implementerも起動せず、ログに1行出す。Issueは `cumin/status/merging` のまま残り、次の起動の定期確認が、もう一度mergeを送って同じ衝突から依頼する。Agentへのほかの依頼と同じく、次の起動を待つためである。
   - 衝突の解消は、既定のブランチをPull Requestのブランチにmergeして行う。Implementerの指示は強制pushを禁じており、rebaseしたブランチはpushできないためである。新しい先頭のコミットには、Reviewerの新しい承認が要る。ラウンドは、最後の `APPROVE` から数え直す (「レビューのラウンドの数え方」)。
   - 衝突の解消の実行が `done` で終わっても、Pull Requestの先頭のコミットが衝突したときのままなら、`cumin/status/implementing` の出口の判定がOwnerに戻す。そのまま通すと、同じ衝突がレビューとmergeを何度も回るためである。
   - 「stop the merge for the Owner」: 先頭のコミットが動いたという答え (409) と、それ以外の一時的でない拒否 (GitHubの答えを入れる) は、ラベルを `cumin/status/awaiting-decision` に替えてから、1文のコメントと通知でOwnerに戻す。コメントの `Row` は `merging` である。ただし、拒否のあとにPull Requestを読んでmerge済みなら、止めない。前のmergeの答えが届かなかった場合で、次の定期確認が閉じる。
