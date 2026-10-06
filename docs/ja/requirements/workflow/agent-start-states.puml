@@ -12,11 +12,11 @@ state "agent starts stopped" as Stopped
 Stopped : do / cumin lets the runs that go on end,\nand starts no agent. Every issue keeps its state
 
 [*] --> Starting
-Starting --> Stopped : stop agent starts\n[cumin reads a quota window at its limit,\nor cannot read the usage]\n/ cumin notifies the Owner
-Stopped --> Starting : resume agent starts\nthe Owner allows the 5h window\n[the weekly window is under its limit]
+Starting --> Stopped : stop agent starts\n[cumin reads a quota window at its limit,\nor cannot read the usage]\n/ cumin notifies
+Stopped --> Starting : resume agent starts\nthe Operator allows the 5h window\n[the weekly window is under its limit]
 Stopped --> Starting : resume agent starts\n[the time of cumin's next try passed,\nboth windows are under their limit]
 
-note "tell the Owner that cumin waits, in both states: [nothing can go on without the Owner,\nno agent runs, no issue waits only for the quota] / cumin tells the Owner once that it waits." as Q4
+note "tell that cumin waits, in both states: [nothing can go on without a Maintainer,\nno agent runs, no issue waits only for the quota] / cumin tells once that it waits." as Q4
 
 legend right
   This machine has one instance for one cumin, not one for each issue.
