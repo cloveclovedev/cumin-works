@@ -60,7 +60,7 @@
 | blocked by のIssueの開閉。要求Issueとsub-issueの両方 | `Issue.blockedBy` | R1、I1 |
 | Issueを閉じる、開いているPull Request。番号、作成者、先頭のコミット、ブランチの名前 | `Issue.closedByPullRequestsReferences`、`author { __typename login }`、`headRefOid`、`headRefName` | I1、I2 (リンクがあるか)、I4、I6、I7、I11 |
 | 開いているPull Requestの、今のラベル | `PullRequest.labels` | I11 |
-| 開いているPull Requestが、既定のブランチにmergeできるか。`MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つ | `PullRequest.mergeable` | I14 |
+| 開いているPull Requestが、既定のブランチにmergeできるか。`MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つ | `PullRequest.mergeable` | I14、mergeの手順 |
 | 先頭のコミットの時刻 | `PullRequest.commits(last: 1)` の `commit { oid committedDate }` | I15 |
 | レビュー。出した人、結果、対象のコミット、時刻 | `PullRequest.reviews` の `author`、`state`、`commit`、`submittedAt` | I5〜I8、レビューのラウンド |
 | 先頭のコミットのcheckの結果 | `PullRequest.statusCheckRollup` の `contexts` | I3、I4 |
@@ -120,7 +120,7 @@ mergeできるかと、先頭のコミットの時刻の読み方:
 - 先頭のコミットの時刻は、`Commit.committedDate` である。`Commit.pushedDate` は、GitHubがもう返さない (スキーマに「no longer supported」とある)。項目は、公式のGraphQL reference (Objects の `PullRequest` と `Commit`、Enums の `MergeableState`) と、2026-10-03 の introspection で確かめた。
 - 先頭のコミットは、`commits(last: 1)` で読む。`PullRequest.headRef` は接続ではないのでコストを変えないが、cumin-worksの開いているPull Requestで `null` を返したので使わない (実測 128)。
 - `commits(last: 1)` のコミットが `headRefOid` と違うとき (2つの項目のあいだにpushが入ったとき) は、時刻を空にする。次の定期確認で読み直す。時刻が空のあいだ、I15は決めない。
-- `mergeable` は、I14の判定が読む (「checkを待つ間の衝突の解消の依頼 (I14)」)。先頭のコミットの時刻は、I15の判定が読む (「必須のcheckが結果を返さないときの停止 (I15)」)。mergeの手順 (I6、I12) がRESTで読む `mergeable` は、これとは別で、変わらない。
+- `mergeable` は、I14の判定が読む (「checkを待つ間の衝突の解消の依頼 (I14)」)。`cumin/status/merging` の中の手順も、読み直した値を読む (「mergeの手順 (I6、I7)」)。先頭のコミットの時刻は、I15の判定が読む (「必須のcheckが結果を返さないときの停止 (I15)」)。mergeの手順 (I6、I12) が、mergeを断られたあとにRESTで読む `mergeable` は、これとは別で、変わらない。
 
 ラベルが付いた時刻の使い方:
 
@@ -498,18 +498,19 @@ checkの結果の読み方:
   - ラベルを付けたのが `cumin-core` でもOwnerでもなければ、何もしない。mergeもしない。
   - 「close the merged issue」: 開いているPull Requestがなく、リンクのPull Requestのうち番号が最も大きいものがmerge済みなら、実装Issueを読み、開いていれば `cumin-core` が完了として閉じる。GitHubが閉じていれば、Issueは定期確認の対象から外れている。閉じるのはこの状態の中だけなので、Ownerが開き直したIssueは開いたままになる。読み取りと閉じる操作は、止める合図で取り消さず、10秒の上限で行う。一時的な失敗は定期確認のエラーにし、次の定期確認が同じことを決める。一時的でない失敗は、Ownerに戻す (「stop the merge for the Owner」)。
   - mergeの条件 (純粋関数 `MergeConditionsHold`) は、riskのラベルがちょうど1つ、必須のcheckが先頭のコミットで全て通っている、Reviewerの最新のレビューが先頭のコミットへの `APPROVE`、である。`risk/medium` と `risk/high` では、それに加えて、Ownerの最新の判断のレビューが先頭のコミットへの `APPROVED` である (`OwnerApproved`)。ラベルは条件の代わりにならないので、mergeを送る定期確認ごとに、読み直した事実で確かめる。
-  - 条件が成り立てば、`cumin-core` が `PUT /repos/{owner}/{repo}/pulls/{n}/merge` を呼ぶ。`merge_method` はリポジトリの設定、`sha` は読み直した先頭のコミット、つまり承認されたコミットである。承認のあとにpushされたコミットは、条件が成り立たないので、mergeしない。mergeの状態が `clean` になるのは待たない。"Restrict updates" のruleがあるブランチでは、常に `blocked` だからである (実測 62)。mergeが通っても、ラベルは替えない。次の定期確認が、merge済みのPull Requestを読んで「close the merged issue」を決める。
+  - 条件が成り立ち、読み直したPull Requestの `mergeable` が `CONFLICTING` なら、mergeを送らずに「request a conflict resolution」を決める (`ResolveMergeConflict`)。GitHubが衝突を返しているPull Requestのmergeは、必ず断られるためである。Agentの起動を止めている間は、衝突の解消が待つので、mergeを送ると、定期確認のたびに断られるmergeを1回送ることになる。条件が成り立たないときは、`CONFLICTING` でも「go back to the checks」である。
+  - 条件が成り立ち、`mergeable` が `MERGEABLE` か `UNKNOWN` なら、`cumin-core` が `PUT /repos/{owner}/{repo}/pulls/{n}/merge` を呼ぶ。`merge_method` はリポジトリの設定、`sha` は読み直した先頭のコミット、つまり承認されたコミットである。承認のあとにpushされたコミットは、条件が成り立たないので、mergeしない。mergeの状態が `clean` になるのは待たない。"Restrict updates" のruleがあるブランチでは、常に `blocked` だからである (実測 62)。mergeが通っても、ラベルは替えない。次の定期確認が、merge済みのPull Requestを読んで「close the merged issue」を決める。
   - 「go back to the checks」: Pull Requestがmergeされておらず、条件が成り立たなければ、ラベルを `cumin/status/checking` に替える。mergeは送らない。承認のあとのOwnerの `REQUEST_CHANGES`、checkの失敗、先頭のコミットの移動が、これに当たる。
   - mergeの答えが届かなかったとき、または一時的な失敗 (`github.IsTemporary`) のときは、定期確認のエラーにする。Issueは `cumin/status/merging` のままで、コメントも通知も出さない。次の定期確認が、Pull Requestがmerge済みかを読んで続けるので、同じmergeを2回行うことはない。
   - 405で、答えが "Base branch was modified" で始まるとき (`github.ErrBaseModified`) は、Issueを止めない。`cumin/status/merging` のまま、コメントも通知も出さず、次の定期確認がもう一度送る。
-  - それ以外の405は、衝突とrulesetの拒否の両方で返る (実測 62、#286 の M4)。405のあとにPull Requestを読み直し、`mergeable` が `false` なら衝突とみなす。mergeの前に読んだ `mergeable` は古いことがある (#286 の M4、M5) ので、mergeの前には読まない。
-  - 「request a conflict resolution」: 衝突なら、Ownerのログイン名を読み、ラベルを `cumin/status/implementing` に替えてから、Implementerに「衝突の解消」を依頼する。セッションは、状態ファイルにあるImplementerのセッションの続きである。worktree、ブランチ、実行の終わりの扱いは、指摘の修正 (I5) と同じで、`done` のあとはI2、必須のcheck、I3を通る。依頼文には、既定のブランチの名前を入れる。ログイン名の読み取りかラベルの付け替えが失敗したら、依頼せず、次の定期確認がもう一度mergeを送る。
-  - 実行を待って止める間は、mergeは送るが、衝突でも何も変えない。衝突の解消は起動の許可を取れないので、ラベルを替えず、Implementerも起動せず、ログに1行出す。Issueは `cumin/status/merging` のまま残り、次の起動の定期確認が、もう一度mergeを送って同じ衝突から依頼する。Agentへのほかの依頼と同じく、次の起動を待つためである。
+  - それ以外の405は、衝突とrulesetの拒否の両方で返る (実測 62、#286 の M4)。405のあとにPull Requestを読み直し、`mergeable` が `false` なら衝突とみなす。mergeの前に読んだ `mergeable` は、古い `MERGEABLE` のことがある (#286 の M4、M5)。そのため、`MERGEABLE` と `UNKNOWN` ではmergeを送り、衝突はmergeの答えから決める。
+  - 「request a conflict resolution」: 定期確認が読んだ `mergeable` が `CONFLICTING` のとき (mergeは送らない) と、送ったmergeが衝突で断られたときは、同じ手順 (`resolveConflict`) である。起動の許可を取り (`permitStart`)、Ownerのログイン名を読み、ラベルを `cumin/status/implementing` に替えてから、Implementerに「衝突の解消」を依頼する。セッションは、状態ファイルにあるImplementerのセッションの続きである。worktree、ブランチ、実行の終わりの扱いは、指摘の修正 (I5) と同じで、`done` のあとはI2、必須のcheck、I3を通る。依頼文には、既定のブランチの名前を入れる。ログイン名の読み取りかラベルの付け替えが失敗したら、依頼せず、次の定期確認が同じ事実から決め直す。
+  - 実行を待って止める間と、利用枠が上限に達している間 (Q1、stop agent starts) は、衝突でも何も変えない。衝突の解消は起動の許可を取れないので、ラベルを替えず、Implementerも起動せず、ログに1行出す。Issueは `cumin/status/merging` のまま残り、許可が取れる定期確認が、同じ衝突から依頼する。Agentへのほかの依頼と同じく、起動を待つためである。その間、`mergeable` が `CONFLICTING` のPull Requestにはmergeを送らない。`MERGEABLE` か `UNKNOWN` と読んだPull Requestには、mergeを送り、断られたら待つ。
   - 衝突の解消は、既定のブランチをPull Requestのブランチにmergeして行う。Implementerの指示は強制pushを禁じており、rebaseしたブランチはpushできないためである。新しい先頭のコミットには、Reviewerの新しい承認が要る。ラウンドは、最後の `APPROVE` から数え直す (「レビューのラウンドの数え方」)。
   - 衝突の解消の実行が `done` で終わっても、Pull Requestの先頭のコミットが衝突したときのままなら、`cumin/status/implementing` の出口の判定がOwnerに戻す。そのまま通すと、同じ衝突がレビューとmergeを何度も回るためである。
   - 「stop the merge for the Owner」: 先頭のコミットが動いたという答え (409) と、それ以外の一時的でない拒否 (GitHubの答えを入れる) は、ラベルを `cumin/status/awaiting-decision` に替えてから、1文のコメントと通知でOwnerに戻す。コメントの `Row` は `merging` である。ただし、拒否のあとにPull Requestを読んでmerge済みなら、止めない。前のmergeの答えが届かなかった場合で、次の定期確認が閉じる。
   - 1回の定期確認で、1つのリポジトリに2つ以上のmergeを送るときは、2つ目からは送る前に5秒待つ (`DefaultMergeWait`)。GitHubが既定のブランチを更新する時間を置くためである。待つ時間は設定の表にないので、コードに置く。
-- 採らなかった案: mergeの前に `mergeable` を読み、衝突なら呼ばない。読んだ値が古く、衝突を見落とす (#286 の M4)。呼んでから読むほうが、1回の読み取りで確かに分かる。
+- 採らなかった案: mergeの前に読んだ `mergeable` だけで衝突を決め、mergeの答えからは決めない。読んだ値が古い `MERGEABLE` のことがあり、衝突を見落とす (#286 の M4)。`CONFLICTING` と読んだときだけmergeを省き、ほかは呼んでから読むほうが、確かに分かる。
 
 ### Ownerの承認のあとのmerge (I12)
 

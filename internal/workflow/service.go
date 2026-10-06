@@ -699,7 +699,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err := s.requestImplementationAgain(ctx, token, target, settings, sub, snapshot.DefaultBranch, a); err != nil {
 				errs = append(errs, err)
 			}
-		case CloseMergedIssue, SendMerge, LeaveMerge:
+		case CloseMergedIssue, SendMerge, ResolveMergeConflict, LeaveMerge:
 			if err := s.mergeEndAtPoll(ctx, log, token, target, snapshot, settings, a, &merges); err != nil {
 				errs = append(errs, err)
 			}

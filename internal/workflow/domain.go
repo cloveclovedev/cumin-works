@@ -656,6 +656,16 @@ type SendMerge struct {
 	HeadCommit  string
 }
 
+// ResolveMergeConflict is the action "request a conflict resolution" from
+// cumin/status/merging: the pull request is open, the conditions of the
+// merge hold, and GitHub reports that it conflicts with the default branch.
+// No merge is sent, and the issue goes back to the Implementer for a
+// conflict resolution, in the same session.
+type ResolveMergeConflict struct {
+	Number      int
+	PullRequest int
+}
+
 // LeaveMerge is the action "go back to the checks" from
 // cumin/status/merging: the pull request is not merged, and the conditions
 // of the merge do not hold. The issue moves to cumin/status/checking, and
@@ -808,6 +818,7 @@ func (AskOwnerToMerge) isAction()            {}
 func (StartMerge) isAction()                 {}
 func (CloseMergedIssue) isAction()           {}
 func (SendMerge) isAction()                  {}
+func (ResolveMergeConflict) isAction()       {}
 func (LeaveMerge) isAction()                 {}
 func (RequestCause) isAction()               {}
 func (StopAtRoundLimit) isAction()           {}
@@ -1344,9 +1355,13 @@ func reviewEnds(snapshot Snapshot) []Action {
 //
 //   - No open pull request closes the issue, and the newest linked pull
 //     request is merged: "close the merged issue".
-//   - The pull request is open, and the conditions of the merge hold
-//     (MergeConditionsHold): cumin sends the merge of the head commit, which
-//     is the approved commit.
+//   - The pull request is open, the conditions of the merge hold
+//     (MergeConditionsHold), and GitHub reports a conflict with the default
+//     branch (Conflicting): "request a conflict resolution", with no merge.
+//   - The pull request is open, and the conditions of the merge hold: cumin
+//     sends the merge of the head commit, which is the approved commit. This
+//     is so for MERGEABLE and for UNKNOWN; a conflict that only the merge
+//     shows comes back as the answer of the merge.
 //   - Else "go back to the checks": the approval or the required checks no
 //     longer hold, or no pull request is left to merge.
 //
@@ -1364,6 +1379,9 @@ func MergeEnd(sub SubIssue, running bool) Action {
 	case !ok && facts.Merged > 0:
 		return CloseMergedIssue{Number: sub.Number, PullRequest: facts.Merged}
 	case ok && MergeConditionsHold(sub.Labels, facts.Required, pr, facts.Reviewer, facts.Owners):
+		if pr.Mergeable == Conflicting {
+			return ResolveMergeConflict{Number: sub.Number, PullRequest: pr.Number}
+		}
 		return SendMerge{Number: sub.Number, PullRequest: pr.Number, HeadCommit: pr.HeadCommit}
 	}
 	return LeaveMerge{Number: sub.Number}

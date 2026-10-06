@@ -190,6 +190,13 @@ func (s *Service) mergeEndAtPoll(ctx context.Context, log *slog.Logger, token st
 	case SendMerge:
 		sub, _ := snapshot.SubIssue(a.Number)
 		return s.sendMerge(ctx, log.With("issue", a.Number), token, target, settings, sub, snapshot.DefaultBranch, a, sent)
+	case ResolveMergeConflict:
+		sub, _ := snapshot.SubIssue(a.Number)
+		pr, ok := sub.LatestPullRequest()
+		if !ok || pr.Number != a.PullRequest {
+			return fmt.Errorf("request a conflict resolution: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
+		}
+		return s.resolveConflict(ctx, log.With("issue", a.Number), token, target, settings, sub, pr, snapshot.DefaultBranch)
 	}
 	return fmt.Errorf("unknown step of the merge %T", action)
 }
@@ -320,8 +327,9 @@ func statusAnswer(err error) string {
 }
 
 // resolveConflict applies "request a conflict resolution" from
-// cumin/status/merging: GitHub refused the merge for a conflict with the
-// default branch. The label becomes cumin/status/implementing first
+// cumin/status/merging: GitHub reports a conflict with the default branch
+// at the poll (ResolveMergeConflict, no merge is sent), or it refused the
+// merge for one. The label becomes cumin/status/implementing first
 // (principle 3), then the Implementer resolves the conflict in the session
 // of its last run, on the branch of the pull request. The end of that run
 // is the end of any Implementer run: the checks and the review follow, and
@@ -329,7 +337,8 @@ func statusAnswer(err error) string {
 //
 // A login of the Owner that cannot be read and a label that does not
 // change are errors of the poll: nothing is requested, the issue keeps
-// cumin/status/merging, and the next poll sends the merge again.
+// cumin/status/merging, and the next poll decides again. The same holds
+// while the start waits for its permit (permitStart).
 func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, pr PullRequest, defaultBranch string) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
