@@ -28,10 +28,18 @@ func TestRequestReview_RequestsTheReviewOfOneLogin(t *testing.T) {
 	if got := fake.RequestedReviewers(repo, 21); !slices.Equal(got, []string{"the-owner"}) {
 		t.Errorf("requested reviewers = %v, want the-owner once", got)
 	}
+	requests := 0
 	for _, r := range fake.Requests() {
-		if r.Method == http.MethodPost && r.Path == reviewRequestPath && strings.TrimSpace(string(r.Body)) != `{"reviewers":["the-owner"]}` {
+		if r.Method != http.MethodPost || r.Path != reviewRequestPath {
+			continue
+		}
+		requests++
+		if strings.TrimSpace(string(r.Body)) != `{"reviewers":["the-owner"]}` {
 			t.Errorf("body of the request = %s", r.Body)
 		}
+	}
+	if requests != 2 {
+		t.Errorf("%d requests, want 2", requests)
 	}
 }
 
