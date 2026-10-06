@@ -883,38 +883,17 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 	}
 }
 
-// While cumin stops after its runs, the actions that ask an agent for new work are held
-// back, and the ones that need no agent stay, in their order.
-func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
+// The one check before a start of an agent: while cumin stops after the
+// current runs, no start gets a permit; at any other time every start gets
+// one. The zero value of the permit permits nothing.
+func TestPermitStart_GivesNoPermitWhileCuminStopsAfterTheCurrentRuns(t *testing.T) {
 	t.Parallel()
-	all := []Action{
-		StartRequirement{Number: 1},
-		ReviewRemaining{Number: 2},
-		Accept{Number: 3},
-		StartReview{Number: 10, PullRequest: 20},
-		FixChecks{Number: 11, PullRequest: 21},
-		ResolveConflict{Number: 15, PullRequest: 25},
-		StopForUnreportedChecks{Number: 16, PullRequest: 26},
-		Plan{Number: 4},
-		CheckAcceptance{Number: 5},
-		Claim{Number: 12, RequirementIssue: 1},
-		MergeOwnerApproval{Number: 13, PullRequest: 23},
-		FixOwnerReview{Number: 14, PullRequest: 24},
-		CopyLabels{Issue: 10, PullRequest: 20},
+	if permit, ok := PermitStart(true); ok || permit != (StartPermit{}) {
+		t.Errorf("PermitStart(true) = %#v, %v, want no permit", permit, ok)
 	}
-	want := []Action{
-		StartRequirement{Number: 1},
-		ReviewRemaining{Number: 2},
-		Accept{Number: 3},
-		StopForUnreportedChecks{Number: 16, PullRequest: 26},
-		MergeOwnerApproval{Number: 13, PullRequest: 23},
-		CopyLabels{Issue: 10, PullRequest: 20},
-	}
-	if got := WithoutNewWork(all); !reflect.DeepEqual(got, want) {
-		t.Errorf("WithoutNewWork = %#v, want %#v", got, want)
-	}
-	if got := WithoutNewWork(nil); len(got) != 0 {
-		t.Errorf("WithoutNewWork(nil) = %#v, want none", got)
+	permit, ok := PermitStart(false)
+	if !ok || permit == (StartPermit{}) {
+		t.Errorf("PermitStart(false) = %#v, %v, want a permit that holds", permit, ok)
 	}
 }
 
@@ -1321,17 +1300,6 @@ func TestImplementationEnd(t *testing.T) {
 				t.Errorf("Decide does not return %#v", tt.want)
 			}
 		})
-	}
-}
-
-// While cumin stops after its runs, the second request of the
-// implementation is held back, and the two ways out that start no agent
-// are kept.
-func TestWithoutNewWorkHoldsTheSecondRequestOfTheImplementation(t *testing.T) {
-	actions := []Action{WaitForChecks{Number: 10}, RequestImplementationAgain{Number: 11}, StopImplementation{Number: 12}}
-	want := []Action{WaitForChecks{Number: 10}, StopImplementation{Number: 12}}
-	if got := WithoutNewWork(actions); !slices.Equal(got, want) {
-		t.Errorf("WithoutNewWork = %#v, want %#v", got, want)
 	}
 }
 

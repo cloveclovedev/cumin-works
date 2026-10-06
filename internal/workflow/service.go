@@ -623,15 +623,6 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	result.issueInWork = snapshot.HasIssueInWork()
 	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames(),
 		s.now(), settings.Settings.ChecksWaitTime)
-	if finishing {
-		// The work that is held back waits under its label for the next
-		// start of cumin.
-		kept := WithoutNewWork(actions)
-		if held := len(actions) - len(kept); held > 0 {
-			log.Info("stop after the current runs: new work is held back", "actions", held)
-		}
-		actions = kept
-	}
 	// An issue that I12 or I13 took at this poll gets no conflict resolution
 	// of I14: the review of the Owner on the conflicting head decides
 	// first. A check of I12 or of I13 that failed keeps the issue too, so
@@ -770,6 +761,10 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if !ok {
 		return fmt.Errorf("I1: issue #%d is not in the snapshot", c.Number)
 	}
+	permit, ok := s.permitStart(s.logger().With("repository", target.Repository.String(), "issue", c.Number), "claim")
+	if !ok {
+		return nil
+	}
 	// Q1: the quota decides before anything changes, the state included.
 	if ok, err := s.quotaAllowsStart(ctx, "I1", config.RoleImplementer, target, c.Number); err != nil || !ok {
 		if err != nil {
@@ -796,7 +791,7 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 		"requirement_issue", c.RequirementIssue, "labels", labels)
 	// The poll read the Owner of the newest cumin/status/ready before the
 	// decision (readReadyOwners); I1 holds only with that Owner.
-	if err := s.startImplementer(ctx, target, settings, sub, sub.ReadyOwner); err != nil {
+	if err := s.startImplementer(ctx, permit, target, settings, sub, sub.ReadyOwner); err != nil {
 		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
@@ -841,6 +836,8 @@ type implementerRequest struct {
 	// yet. runImplementer counts it before it prepares the work directory,
 	// and takes the count back when the agent did not start.
 	count bool
+	// permit is the permit of the start of this request (permitStart).
+	permit StartPermit
 }
 
 // stopForUnreportedChecks applies I15: a required check has not reported on
@@ -938,6 +935,11 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		return nil
 	}
 
+	// The stop at the limit above starts no agent, so it needs no permit.
+	permit, ok := s.permitStart(log, "check fix")
+	if !ok {
+		return nil
+	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return fmt.Errorf("I4: read the login of the Owner of issue #%d: %w", a.Number, err)
@@ -976,7 +978,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	}
 	return s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		row: "I4", kind: "check fix", branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
-		ownerLogin: ownerLogin,
+		ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {
 			return CheckFixRequestText(repository, a.Number, pr.Number, branch, workDir, texts)
 		},
@@ -988,11 +990,11 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 // already closes the issue; the work then goes on on the branch of that
 // pull request (ClaimBranch). The session is new in both cases
 // (issue-states.md, the section on the sessions of an agent).
-func (s *Service) startImplementer(ctx context.Context, target Target, settings *RepositorySettings, sub SubIssue, ownerLogin string) error {
+func (s *Service) startImplementer(ctx context.Context, permit StartPermit, target Target, settings *RepositorySettings, sub SubIssue, ownerLogin string) error {
 	branch, pullRequest := ClaimBranch(sub)
 	repository := target.Repository.String()
 	req := implementerRequest{
-		row: "I1", kind: "implement", branch: branch, ownerLogin: ownerLogin,
+		row: "I1", kind: "implement", branch: branch, ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, sub.Number, branch, workDir)
 		},
@@ -1004,6 +1006,29 @@ func (s *Service) startImplementer(ctx context.Context, target Target, settings 
 		}
 	}
 	return s.goImplementer(ctx, target, settings, sub.Number, req)
+}
+
+// permitStart gets the permit of one start of an agent from the one check
+// (PermitStart). Every request calls it before its label change and before
+// its count. Without a permit the request does nothing more: the issue
+// keeps its state, and a later poll decides the same step again. request
+// names the request for the log.
+func (s *Service) permitStart(log *slog.Logger, request string) (StartPermit, bool) {
+	permit, ok := PermitStart(s.finishing.Load())
+	if !ok {
+		log.Info("stop after the current runs: the request waits for the next start of cumin", "request", request)
+	}
+	return permit, ok
+}
+
+// startAgent starts an agent and waits for the end of its run. It is the
+// only caller of Agents.Start in this package, and it takes the permit of
+// the start, so no request reaches an agent without the one check.
+func (s *Service) startAgent(ctx context.Context, permit StartPermit, request agent.StartRequest) (*agent.Run, error) {
+	if !permit.granted {
+		return nil, errors.New("the start of the agent has no permit")
+	}
+	return s.Agents.Start(ctx, request)
 }
 
 // goImplementer runs one Implementer request in its own goroutine, so that
@@ -1186,9 +1211,9 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		SessionID:    req.sessionID,
 	}
 
-	again, counted := req.again, req.count
+	again, counted, permit := req.again, req.count, req.permit
 	for {
-		run, err := s.Agents.Start(ctx, request)
+		run, err := s.startAgent(ctx, permit, request)
 		var abnormal *agent.AbnormalEnd
 		switch {
 		case errors.As(err, &abnormal):
@@ -1243,8 +1268,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			}
 			return
 		case RequestImplementationAgain:
-			if s.finishing.Load() {
-				log.Info("I2: cumin stops after its runs; the second request of the implementation waits for the next start of cumin")
+			if permit, ok = s.permitStart(log, "implementation again"); !ok {
 				return
 			}
 			// Q1: the quota decides before the request is counted.
@@ -1541,6 +1565,10 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 // (runImplementer), so that the request is sent once for each stay in
 // cumin/status/implementing, and a start that failed does not use it up.
 func (s *Service) requestImplementationAgain(ctx context.Context, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, a RequestImplementationAgain) error {
+	permit, ok := s.permitStart(s.logger().With("repository", target.Repository.String(), "issue", a.Number), "implementation again")
+	if !ok {
+		return nil
+	}
 	// Q1: the quota decides before the request is counted.
 	if ok, err := s.quotaAllowsStart(ctx, RowI2, config.RoleImplementer, target, a.Number); err != nil || !ok {
 		if err != nil {
@@ -1555,7 +1583,7 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 	repository := target.Repository.String()
 	branch := sub.Implementing.Branch
 	req := implementerRequest{
-		row: RowI2, kind: "implement", branch: branch, ownerLogin: ownerLogin, again: true, count: true,
+		row: RowI2, kind: "implement", branch: branch, ownerLogin: ownerLogin, again: true, count: true, permit: permit,
 		sessionID: s.State.Issue(repository, a.Number).SessionID,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, a.Number, branch, workDir)

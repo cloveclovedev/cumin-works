@@ -536,7 +536,7 @@ func TestReviewing_AStopAfterTheRunsStartsNoReviewFixAndTheNextStartSendsOne(t *
 		t.Fatalf("Run did not return after the run ended:\n%s", sc.logs.String())
 	}
 	assertStillReviewing(t, sc, stopped, "risk/low")
-	if !strings.Contains(sc.logs.String(), `"msg":"I3: cumin stops after its runs; the next request waits for the next start of cumin"`) {
+	if !strings.Contains(sc.logs.String(), `"request":"review fix"`) {
 		t.Errorf("the log does not say that the review fix waits:\n%s", sc.logs.String())
 	}
 

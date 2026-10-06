@@ -870,27 +870,27 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 	return append(actions, labelCopies(snapshot)...)
 }
 
-// WithoutNewWork returns the actions that cumin still applies while it
-// stops after its runs: the ones that ask no agent for new work. A requirement issue
-// still changes its label, a pull request still gets the labels of its
-// issue, an approval of an Owner still merges, and required checks that do
-// not report in time still stop the issue for the Owner. The split, the
-// acceptance check, the claim, the review, the check fix, the conflict
-// resolution, the second request of the implementation, and the fix of the
-// Owner's review wait for the next start of cumin; each of them starts from a label that no agent
-// works under, so nothing is lost (designs/cumin-core.md, the topic on the
-// stop).
-func WithoutNewWork(actions []Action) []Action {
-	kept := make([]Action, 0, len(actions))
-	for _, action := range actions {
-		switch action.(type) {
-		case Plan, CheckAcceptance, Claim, StartReview, FixChecks, ResolveConflict, FixOwnerReview, RequestImplementationAgain,
-			RequestReviewFix, RequestCause, RequestReviewAgain:
-		default:
-			kept = append(kept, action)
-		}
+// StartPermit is the permit of one start of an agent. Only PermitStart
+// gives one that holds, and the one function that starts an agent takes it
+// (startAgent). The zero value permits nothing.
+type StartPermit struct{ granted bool }
+
+// PermitStart is the one check before every start of an agent: the split,
+// the acceptance check, the claim, the review, the check fix, the conflict
+// resolution, the fix of a review, the fix of the Owner's review, the
+// explanation of the cause, and the second request of each of them. A
+// request gets the permit before its label change and before its count, so
+// a start without a permit leaves the issue as it was, and a later poll
+// decides the same step again.
+//
+// stopsAfterRuns says that cumin stops after the current runs: then no
+// agent starts. The steps that start no agent need no permit, and go on
+// (designs/cumin-core.md, the topic on the stop).
+func PermitStart(stopsAfterRuns bool) (StartPermit, bool) {
+	if stopsAfterRuns {
+		return StartPermit{}, false
 	}
-	return kept
+	return StartPermit{granted: true}, true
 }
 
 // PriorityRank returns the place of an issue in the order of the starts: 0
