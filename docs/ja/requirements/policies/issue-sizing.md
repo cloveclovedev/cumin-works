@@ -14,14 +14,14 @@ Plannerが要求Issueを実装Issueに分割するときの判断基準。1つ�
 |---|---|---|---|
 | 1 | 目的が1つ。変更内容を「〜と〜」を使わずに1文で説明できる | 分割する。リファクタリング、機能追加、バグ修正は混ぜない。リファクタリングを先のIssueにする | Google、GitHub、Claude Code |
 | 2 | 完了条件を検証できる。Agentがコマンド (テスト、ビルド、lint) を実行して完了を確かめられる。テストと文書の期待も書いてある | 書き直す。これは分割の問題ではなく、仕様の問題 | INVEST、Copilot、Codex、Claude Code、METR |
-| 3 | 未決事項がない。進め方が分かっている。要求が曖昧だったり、意味のある設計案が複数あったりしない | 実装Issueにしない。何が決まっていないかを要求Issueに書き、Ownerに戻す | Copilot、Humanizing Work、SPIDR |
+| 3 | 未決事項がない。進め方が分かっている。要求が曖昧だったり、意味のある設計案が複数あったりしない | 実装Issueにしない。何が決まっていないかを要求Issueに書き、Maintainerに戻す | Copilot、Humanizing Work、SPIDR |
 | 4 | 単独でmergeできる。このPull Requestだけをmergeしてもmainが壊れない。同じ要求Issueに紐づく他のsub-issueと内容が重ならない。順序の依存は blocked by で明示してある | 分け方を変える。未完成の機能は、フラグで隠す、expand/contractで段階的に入れる、などで単独mergeできる形にする | Wake (INVEST)、Google、DORA、Fowler |
 | 5 | 動く機能の単位で切ってある、または下準備だと明記してある。このIssueだけで、外から見て分かる振る舞いの変化がある。そのために必要な層 (画面、API、データベースなど) を、1つのIssueでまとめて変更する。そうでなければ、下準備 (リファクタリングのみ、インターフェースやスタブの追加、expandの段階) だと明記してある | 切り直す。「データベースだけ」「APIだけ」のように層ごとに分けると、他のIssueと合わせるまで動くものができない。下準備だと明記していない、層だけの変更にしない | Humanizing Work、Google、DORA |
 | 6 | 大きさが目安に収まる。想定される差分は100〜200行が目標。400行、または10ファイルを超えない | 分割する。1000行は理由の明記がない限り不可。ファイルの丸ごと削除、生成コード、信頼できる機械的なリファクタリングは対象外 | Google、SmartBear/Cisco、Google ICSE 2018、Microsoft Research |
 | 7 | 作業量が目安に収まる。事情を知らないエンジニアが数時間から1日で終えられる | 1〜2日を超えるなら分割する | DORA、Wake、trunkbaseddevelopment.com、METR |
 | 8 | risk/high の変更が隔離してある。revertで戻せない変更 (DBマイグレーション、デプロイやCIの設定、認証や決済、外部サービスへの副作用、公開APIの契約、cumin自身のルール) に触れるなら、その変更だけの最小のIssueになっている | 分割する。expandとcontractは別のIssueにする。こうすると、同じ要求Issueに紐づく他のsub-issueが risk/low や risk/medium のままでいられる | DORA、Fowler、Copilot、Microsoft Research (組み合わせは推論) |
-| 9 | Implementerが変更できないファイルの変更を要しない。保護されたパス (対象のリポジトリの `.cumin/config.toml` の `protected_paths`。Plannerには、起動の依頼で渡される) と、ImplementerのGitHub Appの権限では書けないファイル (`.github/workflows/` の下) がこれに当たる | その変更を、Ownerが手で行うsub-issueとして作る。`cumin/type/owner-task` と `risk/high` を付け、状態ラベルは付けず、Contextに理由を書く。依存する実装Issueに blocked by を張り、分割の全体像の Please check にOwnerの作業として書く。cuminはこのsub-issueに着手せず、Ownerが閉じるまで依存する実装Issueは止まる | cumin (Implementerの要件と、GitHub Appの権限) |
-| 10 | 1回の実行に収まる。Implementerが、自分の時間の上限の中で実装と確認 (テストやcheckの確認を含む) を終えられ、Reviewerが、自分の時間の上限の中でレビューを終えられる。2つの上限は、Plannerの起動の依頼で渡される | 分割する。分けても収まらない作業 (例えば、まとめて流す必要がある長いテスト) は、分割の全体像の「Please check」にその作業を書いてOwnerに返す。上限を延ばすか、条件を変えるか、その作業をやめるかは、Ownerが決める | Owner (2026-10-03) |
+| 9 | Implementerが変更できないファイルの変更を要しない。保護されたパス (対象のリポジトリの `.cumin/config.toml` の `protected_paths`。Plannerには、起動の依頼で渡される) と、ImplementerのGitHub Appの権限では書けないファイル (`.github/workflows/` の下) がこれに当たる | その変更を、Maintainerが手で行うsub-issueとして作る。`cumin/type/owner-task` と `risk/high` を付け、状態ラベルは付けず、Contextに理由を書く。依存する実装Issueに blocked by を張り、分割の全体像の Please check にMaintainerの作業として書く。cuminはこのsub-issueに着手せず、Maintainerが閉じるまで依存する実装Issueは止まる | cumin (Implementerの要件と、GitHub Appの権限) |
+| 10 | 1回の実行に収まる。Implementerが、自分の時間の上限の中で実装と確認 (テストやcheckの確認を含む) を終えられ、Reviewerが、自分の時間の上限の中でレビューを終えられる。2つの上限は、Plannerの起動の依頼で渡される | 分割する。分けても収まらない作業 (例えば、まとめて流す必要がある長いテスト) は、分割の全体像の「Please check」にその作業を書いてMaintainerに返す。上限を延ばすか、条件を変えるか、その作業をやめるかは、Maintainerが決める | Maintainer (2026-10-03) |
 
 ### 分割しすぎを防ぐ基準
 
