@@ -189,6 +189,26 @@ func TestStopAgentStarts_AConflictResolutionWaitsAtALimit(t *testing.T) {
 	}
 }
 
+// At a limit, a pull request under cumin/status/merging that GitHub reports
+// as CONFLICTING gets no merge over two polls: no Implementer starts, and
+// the issue keeps cumin/status/merging. After cumin quota allow, one poll
+// requests the conflict resolution exactly once, still with no merge.
+func TestStopAgentStarts_AKnownConflictAtALimitSendsNoMerge(t *testing.T) {
+	sc := knownConflictScene(t)
+	reset := sc.atAQuotaLimit(t)
+	service := sc.serviceWithSession(t)
+	sc.pollTimes(t, service, 2)
+
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests at the limit, want none", n)
+	}
+	sc.assertNoStartAtTheLimit(t, []string{"risk/low", workflow.LabelMerging})
+
+	allow(t, service, reset)
+	sc.pollAndWait(t, service)
+	assertOneConflictResolutionWithoutAMerge(t, sc)
+}
+
 // Core-33: at a limit, an approved pull request under cumin/status/merging
 // merges. The steps that start no agent go on, and no usage is read.
 func TestCore33_AnApprovedPullRequestMergesAtALimit(t *testing.T) {

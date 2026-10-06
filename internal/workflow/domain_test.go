@@ -1390,3 +1390,55 @@ func TestReviewEnd_AReviewOfTheOldHeadStillCountsAsARound(t *testing.T) {
 		t.Errorf("%d rounds, want 1: the review of the old head commit counts", rounds)
 	}
 }
+
+// The steps in cumin/status/merging (issue-states.md, what cumin does inside
+// merging): the same facts always give the same step. A pull request that
+// GitHub reports as conflicting gets a conflict resolution request and no
+// merge; MERGEABLE and UNKNOWN still send the merge.
+func TestMergeEnd(t *testing.T) {
+	const reviewer = "cumin-reviewer[bot]"
+	facts := func() *MergingFacts {
+		return &MergingFacts{StatusCounts: true, Reviewer: reviewer, Required: []RequiredCheck{{Name: "ci"}}}
+	}
+	pull := func(mergeable MergeableState, conclusion CheckConclusion) PullRequest {
+		return PullRequest{
+			Number: 21, HeadCommit: "head", Mergeable: mergeable,
+			Checks:  []CheckResult{{Name: "ci", Conclusion: conclusion}},
+			Reviews: []Review{{Author: reviewer, State: ReviewApproved, Commit: "head", SubmittedAt: time.Unix(1, 0)}},
+		}
+	}
+	merging := func(facts *MergingFacts, prs ...PullRequest) SubIssue {
+		return SubIssue{Number: 10, Labels: []string{"risk/low", LabelMerging}, PullRequests: prs, Merging: facts}
+	}
+	send := SendMerge{Number: 10, PullRequest: 21, HeadCommit: "head"}
+	tests := []struct {
+		name    string
+		sub     SubIssue
+		running bool
+		want    Action
+	}{
+		{name: "MERGEABLE sends the merge", sub: merging(facts(), pull(Mergeable, CheckPassed)), want: send},
+		{name: "UNKNOWN sends the merge", sub: merging(facts(), pull(MergeableUnknown, CheckPassed)), want: send},
+		{name: "CONFLICTING requests a conflict resolution, with no merge",
+			sub: merging(facts(), pull(Conflicting, CheckPassed)), want: ResolveMergeConflict{Number: 10, PullRequest: 21}},
+		{name: "CONFLICTING with conditions that do not hold goes back to the checks",
+			sub: merging(facts(), pull(Conflicting, CheckFailed)), want: LeaveMerge{Number: 10}},
+		{name: "conditions that do not hold go back to the checks",
+			sub: merging(facts(), pull(Mergeable, CheckFailed)), want: LeaveMerge{Number: 10}},
+		{name: "a merged pull request closes the issue",
+			sub: merging(&MergingFacts{StatusCounts: true, Merged: 21}), want: CloseMergedIssue{Number: 10, PullRequest: 21}},
+		{name: "no pull request goes back to the checks", sub: merging(facts()), want: LeaveMerge{Number: 10}},
+		{name: "CONFLICTING while a step of the issue runs decides nothing",
+			sub: merging(facts(), pull(Conflicting, CheckPassed)), running: true},
+		{name: "CONFLICTING without the facts decides nothing", sub: merging(nil, pull(Conflicting, CheckPassed))},
+		{name: "CONFLICTING under a label that does not count decides nothing",
+			sub: merging(&MergingFacts{Reviewer: reviewer, Required: []RequiredCheck{{Name: "ci"}}}, pull(Conflicting, CheckPassed))},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MergeEnd(tt.sub, tt.running); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("MergeEnd = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}

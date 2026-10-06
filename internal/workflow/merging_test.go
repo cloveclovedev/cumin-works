@@ -422,3 +422,106 @@ func TestMerging_AnOldMergedPullRequestDoesNotCloseTheIssue(t *testing.T) {
 		t.Errorf("%d merge requests, want none", n)
 	}
 }
+
+// knownConflictScene is mergingScene with a pull request that GitHub
+// reports as CONFLICTING at the poll. The fake would refuse a merge too.
+func knownConflictScene(t *testing.T, opts ...cliOptions) *scene {
+	t.Helper()
+	sc := newScene(t, opts...)
+	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 10, Parent: 6, Title: subIssueTitle,
+		Labels: []string{"risk/low", workflow.LabelMerging},
+		LabelEvents: []githubtest.LabelEvent{
+			{Label: workflow.LabelMerging, At: sceneNow.Add(-10 * time.Minute), Actor: cuminSlug, ActorType: "Bot"},
+			readyBy(theOwner, 30),
+		},
+	})
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
+	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
+	return sc
+}
+
+// assertOneConflictResolutionWithoutAMerge checks that no merge was sent,
+// that the first label change of #10 is cumin/status/implementing, and that
+// exactly one agent ran, with a conflict resolution request.
+func assertOneConflictResolutionWithoutAMerge(t *testing.T, sc *scene) {
+	t.Helper()
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none: GitHub reports the conflict already", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want one conflict resolution", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: conflict resolution") {
+		t.Errorf("the request text is not a conflict resolution:\n%s", text)
+	}
+	for _, r := range sc.fake.Requests() {
+		if r.Method != http.MethodPut || r.Path != putLabelsPath {
+			continue
+		}
+		if !strings.Contains(string(r.Body), workflow.LabelImplementing) {
+			t.Errorf("the first label change of #10 = %s, want %s", r.Body, workflow.LabelImplementing)
+		}
+		return
+	}
+	t.Errorf("no label change of #10, want %s", workflow.LabelImplementing)
+}
+
+// "Request a conflict resolution" (issue-states.md, from merging to
+// implementing): a pull request that GitHub reports as CONFLICTING gets no
+// merge. The label becomes cumin/status/implementing, and exactly one
+// conflict resolution request resumes the Implementer session. The run
+// pushes a new head, so the issue goes on to the checks.
+func TestMerging_AKnownConflictSendsOneResolutionRequestAndNoMerge(t *testing.T) {
+	sc := knownConflictScene(t, cliOptions{movesHeadOnRun: 1})
+	service := sc.serviceWithSession(t)
+
+	sc.pollAndWait(t, service)
+
+	assertOneConflictResolutionWithoutAMerge(t, sc)
+	if got := argumentOf(t, sc.record(t, "agent.args"), "--resume"); got != "implementer-session" {
+		t.Errorf("--resume = %q, want the Implementer session", got)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking after the run", got)
+	}
+	if sc.fake.Issue(sc.repo, 10).Closed || len(sc.fake.Comments(sc.repo, 10)) != 0 {
+		t.Error("the conflict closed or commented on #10")
+	}
+}
+
+// While cumin stops after the current runs, a pull request that GitHub
+// reports as CONFLICTING changes nothing over two runs of cumin: no merge
+// is sent, the issue keeps cumin/status/merging, and no Implementer starts.
+// After the next start of cumin, one poll requests the conflict resolution
+// exactly once.
+func TestMerging_AKnownConflictWhileCuminStopsAfterTheRunsSendsNoMerge(t *testing.T) {
+	sc := knownConflictScene(t)
+	stopped := sc.serviceWithSession(t)
+	runWithAStopRequestOfTheStart(t, stopped)
+	runWithAStopRequestOfTheStart(t, sc.restartedWith(stopped))
+
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
+		t.Errorf("%d merge requests, want none while cumin stops", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none: the conflict resolution waits for the next start", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 0 {
+		t.Errorf("%d label changes of #10, want none", n)
+	}
+	merging := []string{"risk/low", workflow.LabelMerging}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, merging) {
+		t.Errorf("labels of #10 = %v, want %v", got, merging)
+	}
+	if logs := sc.logs.String(); strings.Count(logs, heldBackLog) < 2 || !strings.Contains(logs, `"request":"conflict resolution"`) {
+		t.Errorf("the log does not say twice that the conflict resolution waits:\n%s", logs)
+	}
+
+	sc.pollAndWait(t, sc.restartedWith(stopped))
+
+	assertOneConflictResolutionWithoutAMerge(t, sc)
+}
