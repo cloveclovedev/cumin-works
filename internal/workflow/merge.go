@@ -38,17 +38,33 @@ func (s *Service) mergeWait() time.Duration {
 }
 
 // askOwnerToMerge applies "ask the Owner to decide the merge" (I7): the
-// label cumin/status/awaiting-merge-decision, then one notification that
-// links the pull request. A label change that fails is returned, without
-// the notification: the issue keeps cumin/status/reviewing, and the next
-// poll decides the same and notifies then.
-func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest) error {
+// label cumin/status/awaiting-merge-decision, then the request of the
+// review of the Owner, then one notification that links the pull request.
+// ownerLogin gives the login of the Owner; it is read before the label
+// changes, and a failed read is returned with nothing changed. A label
+// change that fails is returned, without the review request and the
+// notification: the issue keeps cumin/status/reviewing, and the next poll
+// decides the same and notifies then. The review request changes no
+// decision: without an Owner login none is sent, and one that fails is only
+// logged. The notification goes out in both cases.
+func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest, ownerLogin func(ctx context.Context, token string) (string, error)) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
+	login, err := ownerLogin(ctx, token)
+	if err != nil {
+		return fmt.Errorf("I7: read the login of the Owner of issue #%d: %w", sub.Number, err)
+	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingMergeDecision)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
 		return fmt.Errorf("I7: move issue #%d to awaiting-merge-decision: %w", sub.Number, err)
 	}
 	log.Info("I7: the merge waits for the Owner", "labels", labels, "pull_request", pr.Number)
+	if login == "" {
+		log.Info("I7: there is no Owner login; the review of the Owner is not requested", "pull_request", pr.Number)
+	} else if err := s.GitHub.RequestReview(ctx, token, owner, repo, pr.Number, login); err != nil {
+		log.Error("I7: the review of the Owner was not requested; the notification still goes out", "pull_request", pr.Number, "error", err.Error())
+	} else {
+		log.Info("I7: requested the review of the Owner", "pull_request", pr.Number, "reviewer", login)
+	}
 	s.notifyOwner(ctx, log.With("row", RowI7), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        RowI7,
 		Reason:     "the merge needs a decision",

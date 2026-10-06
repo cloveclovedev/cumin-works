@@ -116,6 +116,9 @@ type PullRequest struct {
 	HeadCommittedAt time.Time
 	// MergeMethod is the method of the merge that merged it.
 	MergeMethod string
+	// RequestedReviewers are the logins whose review is requested, each
+	// once, in the order of the first request.
+	RequestedReviewers []string
 }
 
 // ReviewThread is one thread of review comments on a line of a pull
@@ -549,6 +552,17 @@ func (f *Fake) Reviews(r *Repository, number int) []Review {
 	return nil
 }
 
+// RequestedReviewers returns a copy of the logins whose review is requested
+// on one pull request.
+func (f *Fake) RequestedReviewers(r *Repository, number int) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if pr, ok := r.PullRequests[number]; ok {
+		return slices.Clone(pr.RequestedReviewers)
+	}
+	return nil
+}
+
 // Issue returns a copy of one issue, or nil.
 func (f *Fake) Issue(r *Repository, number int) *Issue {
 	f.mu.Lock()
@@ -950,6 +964,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	annotations := annotationsPath.FindStringSubmatch(r.URL.Path)
 	jobLog := jobLogPath.FindStringSubmatch(r.URL.Path)
 	reviews := reviewsPath.FindStringSubmatch(r.URL.Path)
+	reviewRequest := reviewRequestPath.FindStringSubmatch(r.URL.Path)
 	moveHead := moveHeadPath.FindStringSubmatch(r.URL.Path)
 	pulls := pullsPath.FindStringSubmatch(r.URL.Path)
 	pull := pullPath.FindStringSubmatch(r.URL.Path)
@@ -1007,6 +1022,9 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && reviews != nil:
 		number, _ := strconv.Atoi(reviews[3])
 		f.serveCreateReview(w, body, reviews[1], reviews[2], number)
+	case r.Method == http.MethodPost && reviewRequest != nil:
+		number, _ := strconv.Atoi(reviewRequest[3])
+		f.serveRequestReviewers(w, body, reviewRequest[1], reviewRequest[2], number)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
@@ -1024,6 +1042,7 @@ var (
 	annotationsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/check-runs/(\d+)/annotations$`)
 	jobLogPath        = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/jobs/(\d+)/logs$`)
 	reviewsPath       = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/reviews$`)
+	reviewRequestPath = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/requested_reviewers$`)
 	pullsPath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls$`)
 	pullPath          = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)$`)
 	mergePath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/merge$`)
@@ -1469,6 +1488,51 @@ func (f *Fake) serveCreateReview(w http.ResponseWriter, body []byte, owner, name
 	}
 	pr.Reviews = append(pr.Reviews, review)
 	writeJSON(w, http.StatusOK, map[string]any{"id": f.lastCommentID, "state": state, "commit_id": commit, "html_url": review.URL})
+}
+
+// serveRequestReviewers answers POST
+// /repos/{owner}/{repo}/pulls/{number}/requested_reviewers (official:
+// "Request reviewers for a pull request") with 201. A login that is
+// requested already stays listed once (measured in #510, V2). A login that
+// is not a collaborator answers 422 and requests nobody (V3): in the fake,
+// a collaborator is SeedActor or a login that SetPermission gave a
+// permission other than none.
+func (f *Fake) serveRequestReviewers(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	pr, ok := repo.PullRequests[number]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	var request struct {
+		Reviewers []string `json:"reviewers"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || len(request.Reviewers) == 0 {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	for _, login := range request.Reviewers {
+		if p, set := f.permissions[login]; login != SeedActor && (!set || p.Permission == "none") {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Reviews may only be requested from collaborators. " +
+				"One or more of the users or teams you specified is not a collaborator of the " + owner + "/" + name + " repository."})
+			return
+		}
+	}
+	for _, login := range request.Reviewers {
+		if !slices.Contains(pr.RequestedReviewers, login) {
+			pr.RequestedReviewers = append(pr.RequestedReviewers, login)
+		}
+	}
+	requested := make([]map[string]any, 0, len(pr.RequestedReviewers))
+	for _, login := range pr.RequestedReviewers {
+		requested = append(requested, map[string]any{"login": login})
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"number": number, "requested_reviewers": requested})
 }
 
 // serveListPulls answers GET .../pulls. Official: "List pull requests",

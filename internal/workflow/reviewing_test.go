@@ -134,12 +134,16 @@ func TestReviewing_ARestartAfterAChangeRequestSendsExactlyOneFixRequest(t *testi
 
 // A restart of cumin in cumin/status/reviewing after an approval with
 // risk/medium: the poll of the new cumin moves the issue to
-// cumin/status/awaiting-merge-decision with one notification. The polls
-// that follow send nothing more.
+// cumin/status/awaiting-merge-decision with one request of the review of
+// the Owner and one notification. The polls that follow send nothing more.
 func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
+	sc.readyByTheOwner()
 	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/medium")
+	if n := sc.reviewRequests(); n != 0 {
+		t.Fatalf("%d requests of the review of the Owner before the label changed, want none", n)
+	}
 
 	restarted := sc.restartedWith(stopped)
 	for minute := 1; minute <= 2; minute++ {
@@ -156,6 +160,9 @@ func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *test
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
+	}
+	if n := sc.reviewRequests(); n != 1 {
+		t.Errorf("%d requests of the review of the Owner, want 1", n)
 	}
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
