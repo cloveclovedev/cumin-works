@@ -8,7 +8,7 @@
 hide empty description
 
 state "Draft (no status label)" as Draft
-Draft : do / the Planner or the Owner writes the issue
+Draft : do / the Planner or a Maintainer writes the issue
 
 state "ready" as Ready
 Ready : do / cumin waits for a free slot
@@ -22,43 +22,43 @@ Checks : do / GitHub runs the required checks
 state "reviewing" as Reviewing
 Reviewing : do / the Reviewer reviews the pull request
 
-state "awaiting-merge-decision" as OwnerReview
-OwnerReview : do / the Owner reviews the pull request
+state "awaiting-merge-decision" as MergeDecision
+MergeDecision : do / a Maintainer reviews the pull request
 
 state "merging" as Merging
 Merging : do / cumin merges the pull request,\nthen closes the issue
 
 state "awaiting-decision" as Decision
-Decision : do / the Owner answers
+Decision : do / a Maintainer answers
 
 [*] --> Draft
-Draft --> Ready : the Owner adds ready
-Ready --> Implementing : request the implementation\n[the Owner added ready, the blockers are closed,\ncumin has a free slot]\n/ cumin requests the implementation\nfrom the Implementer
+Draft --> Ready : a Maintainer adds ready
+Ready --> Implementing : request the implementation\n[a Maintainer added ready, the blockers are closed,\ncumin has a free slot]\n/ cumin requests the implementation\nfrom the Implementer
 Implementing --> Checks : wait for the checks\n[no Implementer runs, cumin verified\nthe pull request]\n/ cumin adds the closing link
 Implementing --> Implementing : request the implementation again\n[no Implementer runs, cumin could not verify\nthe pull request, first time]\n/ cumin requests the Implementer again
-Implementing --> Decision : stop the implementation for the Owner\n[no Implementer runs, and: the Implementer asked\na question, cumin could not verify the pull request\nthe second time, or a conflict resolution left the head commit]\n/ cumin notifies the Owner
+Implementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked\na question, cumin could not verify the pull request\nthe second time, or a conflict resolution left the head commit]\n/ cumin notifies
 Checks --> Reviewing : request the review\n[the required checks passed]\n/ cumin requests the review from the Reviewer
 Checks --> Implementing : request a check fix\n[a required check failed, cumin's fix\nrequests are under the limit]\n/ cumin requests a check fix from the Implementer
-Checks --> Decision : stop for failed checks\n[a required check failed, the fix requests\nare at the limit]\n/ cumin notifies the Owner
+Checks --> Decision : stop for failed checks\n[a required check failed, the fix requests\nare at the limit]\n/ cumin notifies
 Checks --> Implementing : request a conflict resolution\n[the pull request conflicts]\n/ cumin requests a conflict resolution\nfrom the Implementer
-Checks --> Decision : stop for missing checks\n[a required check gave no result in time]\n/ cumin notifies the Owner
+Checks --> Decision : stop for missing checks\n[a required check gave no result in time]\n/ cumin notifies
 Reviewing --> Implementing : request a review fix\n[no Reviewer runs, the Reviewer requested changes\non the head commit, the rounds are under the limit]\n/ cumin requests a review fix from the Implementer
 Reviewing --> Merging : start the merge\n[no Reviewer runs, the Reviewer approved the\nhead commit, the checks passed, risk/low]\n/ cumin changes the label
-Reviewing --> OwnerReview : ask the Owner to decide the merge\n[no Reviewer runs, the Reviewer approved the\nhead commit, the checks passed,\nrisk/medium or risk/high]\n/ cumin requests the Owner's review\nand notifies the Owner
-Reviewing --> Reviewing : request the cause from the Reviewer\n[no Reviewer runs, the Reviewer requested changes,\nthe rounds are at the limit, no explanation yet]\n/ cumin requests the cause from the Reviewer
-Reviewing --> Decision : stop at the round limit\n[the Reviewer wrote the explanation of the cause]\n/ cumin notifies the Owner
-Reviewing --> Decision : stop the review for the Owner\n[no Reviewer runs, and: the Reviewer asked a question,\nor the Reviewer left no review the second time]\n/ cumin notifies the Owner
+Reviewing --> MergeDecision : ask for the merge decision\n[no Reviewer runs, the Reviewer approved the\nhead commit, the checks passed,\nrisk/medium or risk/high]\n/ cumin requests the Issue Owner's review\nand notifies
+Reviewing --> Reviewing : request the cause\n[no Reviewer runs, the Reviewer requested changes,\nthe rounds are at the limit, no explanation yet]\n/ cumin requests the cause from the Reviewer
+Reviewing --> Decision : stop at the round limit\n[the Reviewer wrote the explanation of the cause]\n/ cumin notifies
+Reviewing --> Decision : stop the review\n[no Reviewer runs, and: the Reviewer asked a question,\nor the Reviewer left no review the second time]\n/ cumin notifies
 Reviewing --> Checks : go back to the checks\n[no Reviewer runs, and: the head commit moved,\nor a required check does not pass]\n/ cumin changes the label
 Reviewing --> Reviewing : request the review again\n[no Reviewer runs, the Reviewer left no review\non the head commit, first time]\n/ cumin requests the review again
-OwnerReview --> Merging : start the merge\n[the Owner approved the head commit,\nthe checks passed]\n/ cumin changes the label
-OwnerReview --> Implementing : request a response to the Owner's review\n[the Owner requested changes]\n/ cumin requests a response from the Implementer
-OwnerReview --> Implementing : request a conflict resolution\n[the pull request conflicts]\n/ cumin requests a conflict resolution\nfrom the Implementer
-OwnerReview --> Ready : the Owner adds ready
+MergeDecision --> Merging : start the merge\n[a Maintainer approved the head commit,\nthe checks passed]\n/ cumin changes the label
+MergeDecision --> Implementing : send back for changes\n[a Maintainer requested changes]\n/ cumin requests a response from the Implementer
+MergeDecision --> Implementing : request a conflict resolution\n[the pull request conflicts]\n/ cumin requests a conflict resolution\nfrom the Implementer
+MergeDecision --> Ready : a Maintainer adds ready
 Merging --> [*] : close the merged issue\n[GitHub shows the pull request as merged]\n/ cumin closes the issue
 Merging --> Checks : go back to the checks\n[the pull request is not merged, the approval\nor the checks no longer hold]\n/ cumin changes the label
 Merging --> Implementing : request a conflict resolution\n[GitHub refused the merge: conflict]\n/ cumin requests a conflict resolution\nfrom the Implementer
-Merging --> Decision : stop the merge for the Owner\n[GitHub refused the merge for another\nlasting reason]\n/ cumin notifies the Owner
-Decision --> Ready : the Owner adds ready
+Merging --> Decision : stop the merge\n[GitHub refused the merge for another\nlasting reason]\n/ cumin notifies
+Decision --> Ready : a Maintainer adds ready
 
 note "copy the labels to the pull request: in every state, the labels of the issue differ from\nthose of its pull request / cumin copies the labels." as I11
 note "write the follow-up note: the issue is closed and its pull request is merged\n/ cumin writes the follow-up note." as I9

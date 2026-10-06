@@ -7,7 +7,7 @@
 hide empty description
 
 state "Draft (no status label)" as Draft
-Draft : do / the Owner writes the requirement
+Draft : do / a Maintainer writes the requirement
 
 state "ready" as Ready
 Ready : do / cumin waits for a free slot
@@ -16,7 +16,7 @@ state "planning" as Planning
 Planning : do / the Planner splits the requirement
 
 state "awaiting-plan-review" as PlanReview
-PlanReview : do / the Owner reviews the plan and the sub-issues
+PlanReview : do / a Maintainer reviews the plan and the sub-issues
 
 state "implementing" as Implementing
 Implementing : do / the agents work on the sub-issues
@@ -25,28 +25,28 @@ state "accepting" as Accepting
 Accepting : do / the Planner checks the merged work
 
 state "awaiting-acceptance" as Acceptance
-Acceptance : do / the Owner decides the acceptance
+Acceptance : do / a Maintainer decides the acceptance
 
 state "awaiting-decision" as Decision
-Decision : do / the Owner answers
+Decision : do / a Maintainer answers
 
 [*] --> Draft
-Draft --> Ready : the Owner adds ready
-Draft --> Implementing : mark the requirement as in work\nthe Owner adds ready to a sub-issue\n/ cumin changes the label
-Ready --> Planning : request the split\n[the Owner added ready, the blockers are closed,\ncumin has a free slot]\n/ cumin requests the split from the Planner
-Planning --> PlanReview : ask the Owner to review the plan\n[no Planner runs, cumin verified the split,\na sub-issue is open]\n/ cumin notifies the Owner
+Draft --> Ready : a Maintainer adds ready
+Draft --> Implementing : mark the requirement as in work\na Maintainer adds ready to a sub-issue\n/ cumin changes the label
+Ready --> Planning : request the split\n[a Maintainer added ready, the blockers are closed,\ncumin has a free slot]\n/ cumin requests the split from the Planner
+Planning --> PlanReview : ask for the plan review\n[no Planner runs, cumin verified the split,\na sub-issue is open]\n/ cumin notifies
 Planning --> Accepting : request the acceptance check\n[no Planner runs, cumin verified the split,\nevery sub-issue is closed]\n/ cumin requests the acceptance check\nfrom the Planner
 Planning --> Planning : request the split again\n[no Planner runs, cumin could not verify\nthe split, first time]\n/ cumin requests the split again
-Planning --> Decision : stop the split for the Owner\n[no Planner runs, and: the Planner asked\na question, or cumin could not verify the split\nthe second time]\n/ cumin notifies the Owner
-PlanReview --> Implementing : mark the requirement as in work\nthe Owner adds ready to a sub-issue\n/ cumin changes the label
+Planning --> Decision : stop the split\n[no Planner runs, and: the Planner asked\na question, or cumin could not verify the split\nthe second time]\n/ cumin notifies
+PlanReview --> Implementing : mark the requirement as in work\na Maintainer adds ready to a sub-issue\n/ cumin changes the label
 Implementing --> Accepting : request the acceptance check\n[every sub-issue is closed, cumin wrote the\nfollow-up notes, cumin has a free slot]\n/ cumin requests the acceptance check\nfrom the Planner
-Implementing --> PlanReview : ask the Owner about the remaining sub-issues\n[only sub-issues without a status label remain]\n/ cumin notifies the Owner
-Accepting --> Acceptance : ask the Owner to accept\n[the Planner wrote the acceptance check]\n/ cumin notifies the Owner
+Implementing --> PlanReview : ask about the remaining sub-issues\n[only sub-issues without a status label remain]\n/ cumin notifies
+Accepting --> Acceptance : ask for the acceptance\n[the Planner wrote the acceptance check]\n/ cumin notifies
 Accepting --> Accepting : request the acceptance check again\n[no Planner runs, the Planner wrote no\nacceptance check, first time]\n/ cumin requests the acceptance check again
-Accepting --> Decision : stop the acceptance check for the Owner\n[no Planner runs, and: the Planner asked\na question, or no acceptance check the second time]\n/ cumin notifies the Owner
-Acceptance --> Implementing : mark the requirement as in work\nthe Owner adds ready to a sub-issue\n/ cumin changes the label
-Acceptance --> [*] : the Owner closes the issue
-Decision --> Ready : the Owner adds ready
+Accepting --> Decision : stop the acceptance check\n[no Planner runs, and: the Planner asked\na question, or no acceptance check the second time]\n/ cumin notifies
+Acceptance --> Implementing : mark the requirement as in work\na Maintainer adds ready to a sub-issue\n/ cumin changes the label
+Acceptance --> [*] : a Maintainer closes the issue
+Decision --> Ready : a Maintainer adds ready
 
 legend right
   A box is a state: a label on GitHub, without "cumin/status/". "do /" says who works in the state.
