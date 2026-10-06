@@ -76,8 +76,10 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 	log := s.logger().With("repository", target.Repository.String(), "issue", number)
 	// A stored usage that is new enough decides, with no minimal run.
 	if usage, fresh := s.freshUsage(); fresh {
+		// Each poll decides again while the usage is new enough, so a stop
+		// is a debug line here. The Owner still hears once.
 		log.Debug("Q1: the stored quota usage is new enough; no minimal run", "row", row)
-		return s.usageAllowsStart(ctx, log, row, target, number, usage), nil
+		return s.usageAllowsStart(ctx, log, slog.LevelDebug, row, target, number, usage), nil
 	}
 	// Q3: while the stored usage stops the starts, no minimal run happens
 	// before the next try time. Usage only rises until a reset, so no
@@ -107,18 +109,19 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		}
 		return false, nil
 	}
-	return s.usageAllowsStart(ctx, log, row, target, number, s.keepUsage(log, read)), nil
+	return s.usageAllowsStart(ctx, log, slog.LevelInfo, row, target, number, s.keepUsage(log, read)), nil
 }
 
 // usageAllowsStart decides one start from a usage, stored or just read. At
-// a limit, the Owner hears once for each window.
-func (s *Service) usageAllowsStart(ctx context.Context, log *slog.Logger, row string, target Target, number int, usage quota.Usage) bool {
+// a limit, the Owner hears once for each window, and the stop is logged at
+// level.
+func (s *Service) usageAllowsStart(ctx context.Context, log *slog.Logger, level slog.Level, row string, target Target, number int, usage quota.Usage) bool {
 	decision := s.decideQuota(log, usage)
 	if decision.Allows() {
 		return true
 	}
 	next, _ := quota.NextTry(usage, s.quotaSettings(), s.allowance(log), s.now(), s.location())
-	log.Info("Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
+	log.Log(ctx, level, "Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 	return false
 }
@@ -171,8 +174,9 @@ func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) quota.Usage
 		if stored.ReadAt.After(readAt) {
 			readAt = stored.ReadAt
 		}
-		usage.FiveHour = quota.Newer(usage.FiveHour, quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt})
-		usage.Weekly = quota.Newer(usage.Weekly, quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt})
+		kept := storedUsage(stored)
+		usage.FiveHour = quota.Newer(usage.FiveHour, kept.FiveHour)
+		usage.Weekly = quota.Newer(usage.Weekly, kept.Weekly)
 	}
 	err := s.State.SetQuota(state.Quota{
 		FiveHour: state.QuotaWindow{Utilization: usage.FiveHour.Utilization, ResetsAt: usage.FiveHour.ResetsAt},

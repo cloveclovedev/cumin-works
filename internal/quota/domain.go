@@ -210,6 +210,10 @@ const FreshFor = 5 * time.Minute
 // and a time of the read after now, are not new enough: one minimal run
 // reads the usage again.
 func Fresh(readAt, now time.Time) bool {
+	// Round(0) removes the monotonic clock reading, so that the two times
+	// compare by the wall clock. The monotonic clock can stop while the
+	// Host sleeps, and a usage from before the sleep would stay new enough.
+	readAt, now = readAt.Round(0), now.Round(0)
 	if readAt.IsZero() || readAt.After(now) {
 		return false
 	}
