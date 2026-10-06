@@ -1,27 +1,27 @@
 # GitHubに残す文章のテンプレート
 
-OwnerとAgentがGitHubに残す文章の型を定める。テンプレートそのものは英語で、リポジトリの直下の `templates/` にある。この文書は、それぞれの狙いと、決めた理由を説明する。
+MaintainerとAgentがGitHubに残す文章の型を定める。テンプレートそのものは英語で、リポジトリの直下の `templates/` にある。この文書は、それぞれの狙いと、決めた理由を説明する。
 
-GitHubに残す文章は、平易な英語で書く。読み手は、英語を母語としないOwnerと、他のAgentである。
+GitHubに残す文章は、平易な英語で書く。読み手は、英語を母語としないMaintainerと、他のAgentである。
 
 ## テンプレートの一覧
 
 | テンプレート | 書く人 | 読む人 | 使う場面 |
 |---|---|---|---|
 | [writing-rules.md](../../../../templates/writing-rules.md) | 全てのAgent | — | 平易な英語の決まり。全ての文章に当てはまる |
-| [requirement-issue.md](../../../../templates/requirement-issue.md) | Owner | Planner | 要求Issueを書く |
+| [requirement-issue.md](../../../../templates/requirement-issue.md) | Maintainer | Planner | 要求Issueを書く |
 | [implementation-issue.md](../../../../templates/implementation-issue.md) | Planner | Implementer、Reviewer | 実装Issueを作る |
-| [plan-summary.md](../../../../templates/plan-summary.md) | Planner | Owner | 要求Issueに、分割の全体像をコメントする |
-| [acceptance-check.md](../../../../templates/acceptance-check.md) | Planner | Owner | sub-issueが全て閉じたあとに、要求が満たされているかを確かめた結果を、要求Issueにコメントする |
-| [pull-request.md](../../../../templates/pull-request.md) | Implementer | Reviewer、Owner | Pull Requestの説明を書く |
-| [review.md](../../../../templates/review.md) | Reviewer | Implementer、Owner | レビューの指摘と、レビューのまとめを書く |
-| [review-reply.md](../../../../templates/review-reply.md) | Implementer | Reviewer、Owner | レビューの指摘に返答する |
-| [decision-request.md](../../../../templates/decision-request.md) | 全てのAgent | Owner | Ownerに判断を求める。`blocked` のときと、3ラウンドで指摘が残ったとき |
-| [follow-up-note.md](../../../../templates/follow-up-note.md) | cumin (Agentではない) | Owner | mergeのあとに、残った作業をフォローアップノートとして要求Issueに転記する |
+| [plan-summary.md](../../../../templates/plan-summary.md) | Planner | Maintainer | 要求Issueに、分割の全体像をコメントする |
+| [acceptance-check.md](../../../../templates/acceptance-check.md) | Planner | Maintainer | sub-issueが全て閉じたあとに、要求が満たされているかを確かめた結果を、要求Issueにコメントする |
+| [pull-request.md](../../../../templates/pull-request.md) | Implementer | Reviewer、Maintainer | Pull Requestの説明を書く |
+| [review.md](../../../../templates/review.md) | Reviewer | Implementer、Maintainer | レビューの指摘と、レビューのまとめを書く |
+| [review-reply.md](../../../../templates/review-reply.md) | Implementer | Reviewer、Maintainer | レビューの指摘に返答する |
+| [decision-request.md](../../../../templates/decision-request.md) | 全てのAgent | Maintainer | Maintainerに判断を求める。`blocked` のときと、3ラウンドで指摘が残ったとき |
+| [follow-up-note.md](../../../../templates/follow-up-note.md) | cumin (Agentではない) | Maintainer | mergeのあとに、残った作業をフォローアップノートとして要求Issueに転記する |
 
 ## どのテンプレートにも共通の決まり
 
-- 見出しは、テンプレートの通りに書く。見出しは、AgentとcuminとOwnerの間の約束である。
+- 見出しは、テンプレートの通りに書く。見出しは、AgentとcuminとMaintainerの間の約束である。
 - 書くことがない節は、消さずに「None」と書く。
 - 1つの実装Issueが、1つのPull Requestになる。
 - 太字は使わない。
@@ -30,7 +30,7 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 
 ### 要求Issue
 
-- Ownerが書くのは「何が欲しいか」と「なぜか」である。作り方は、制約でない限り書かない。大きなOSSの機能要望のテンプレートも、人が書く欄はこの2つに絞っている。
+- Maintainerが書くのは「何が欲しいか」と「なぜか」である。作り方は、制約でない限り書かない。大きなOSSの機能要望のテンプレートも、人が書く欄はこの2つに絞っている。
 - 要求は、正しいか正しくないかを確かめられる決まりとして、1行に1つ書く。
 - 1つの要求Issueの大きさは、[要求Issueの分割基準](requirement-sizing.md) に従う。
 - 決めていないことは「Open questions」に書く。Plannerは、分割が変わるような未決事項に当たったら、推測せずに `blocked` を返す。
@@ -44,17 +44,17 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 
 ### 分割の全体像
 
-- Ownerが、実装Issueを1つずつ開かなくても、分割の全体をつかめるようにする。
+- Maintainerが、実装Issueを1つずつ開かなくても、分割の全体をつかめるようにする。
 - 「Requirement coverage」で、要求の1つ1つが、どの実装Issueで満たされるかを示す。抜けがあれば、ここで見つかる。
-- 「Assumptions」に、要求に書かれていなかったのでPlannerが決めたことを書く。Ownerは、作業が始まる前に直せる。
+- 「Assumptions」に、要求に書かれていなかったのでPlannerが決めたことを書く。Maintainerは、作業が始まる前に直せる。
 - 承認の方法は、返信ではなく、実装Issueに `cumin/status/ready` を付けることである。
 
 ### 受け入れの確認
 
-- Ownerが、自分で確かめ直さなくても、受け入れるかどうかを決められるようにする。
+- Maintainerが、自分で確かめ直さなくても、受け入れるかどうかを決められるようにする。
 - 要求Issueの Requirements の1項目を、表の1行にする。要求と結果が、1対1で対応する。
-- 証拠の欄に、実行したコマンドと結果を書かせる。確かめ方の間違いで、不具合があるように見えることがある。証拠があれば、Ownerが切り分けられる。
-- Failがあっても、Plannerは直さない。Issueも作らない。どう直すかの提案を書く。差し戻すかどうかは、Ownerが決める。提案があれば、Ownerは差し戻しのsub-issueを、提案を写して書ける。
+- 証拠の欄に、実行したコマンドと結果を書かせる。確かめ方の間違いで、不具合があるように見えることがある。証拠があれば、Maintainerが切り分けられる。
+- Failがあっても、Plannerは直さない。Issueも作らない。どう直すかの提案を書く。差し戻すかどうかは、Maintainerが決める。提案があれば、Maintainerは差し戻しのsub-issueを、提案を写して書ける。
 - 見出しの `## Acceptance check` は、cuminが確認の済んだことを判定するのに使う。
 
 ### Pull Requestの説明
@@ -75,34 +75,34 @@ GitHubに残す文章は、平易な英語で書く。読み手は、英語を�
 
 - 返答は、`Fixed`、`Not changed`、`Deferred`、`Answer` のどれかで始める。
 - 同意しないときは、事実 (テストの結果、文書、相手の案の具体的な問題) を示してから、質問を1つする。
-- 同じ反論を繰り返さない。3ラウンドで決着しなければ、Ownerが決める。
+- 同じ反論を繰り返さない。3ラウンドで決着しなければ、Maintainerが決める。
 - コメントのスレッドを解決済みにする操作は、v0.1ではどのAgentも行わない。cuminは、レビューの結果だけで判定する。
 
-### Ownerに判断を求める
+### Maintainerに判断を求める
 
-- 1行目に、決めてほしいことを書く。Ownerが、残りを読まなくても問いが分かるようにする。
+- 1行目に、決めてほしいことを書く。Maintainerが、残りを読まなくても問いが分かるようにする。
 - 「Not decided」に、何が決まっていないのか、それをどこに書くべきかを書く。3ラウンドで指摘が残るのは、多くの場合、要求の側に決まっていないことがあるためである。
 - 選択肢を2つか3つ、良い点と悪い点を付けて示し、1つを勧める。
-- 続け方も書く。Ownerは、コメントで答えるかIssueを直してから、止めたIssue (起動の依頼の「扱うIssue」。要求Issueのことも、実装Issueのこともある) に `cumin/status/ready` を付ける。文章は、roleの名前やIssueの種類を決め打ちせず、「止めたIssue」と書く。
+- 続け方も書く。Maintainerは、コメントで答えるかIssueを直してから、止めたIssue (起動の依頼の「扱うIssue」。要求Issueのことも、実装Issueのこともある) に `cumin/status/ready` を付ける。文章は、roleの名前やIssueの種類を決め打ちせず、「止めたIssue」と書く。
 - Agentが `blocked` を返すときは、この形式の文章を `blocked_reason` に入れる。cuminが、それをIssueのコメントとして投稿する。
 
 ### フォローアップノート
 
 - Implementerが `Follow-up` に書いた範囲の外の作業と、対応されなかった `(non-blocking)` の指摘は、mergeされるとPull Requestの中に埋もれる。cuminがこれを、フォローアップノートとして要求Issueに転記する。
 - cuminはAIの判断を使わない。機械的に拾えるのは、指摘に必ず `(blocking)` か `(non-blocking)` が付き、返答が `Fixed` などの決まった言葉で始まるからである。テンプレートの形式は、このためにも守らせる。
-- フォローアップノートは記録であり、Issueにはしない。Ownerがやりたいものを新しい要求Issueに書けば、通常のフローで実装Issueになる。
+- フォローアップノートは記録であり、Issueにはしない。Maintainerがやりたいものを新しい要求Issueに書けば、通常のフローで実装Issueになる。
 
 ## 長さと図
 
-Ownerは、GitHubに残る文章の多くを、スマートフォンで、1回だけ読む。読む時間を減らすために、[writing-rules.md](../../../../templates/writing-rules.md) の11〜14で、次を決めている。
+Maintainerは、GitHubに残る文章の多くを、スマートフォンで、1回だけ読む。読む時間を減らすために、[writing-rules.md](../../../../templates/writing-rules.md) の11〜14で、次を決めている。
 
-- 長さの上限。実装Issueは40行、Pull Requestの説明は40行、Ownerに判断を求める文章は20行、分割の全体像と受け入れの確認は表と15行、Ownerへのその他のコメントは15行。コマンドの出力や長い一覧は、畳める `<details>` に入れる。
-- 文書の行や規則の番号、状態の名前を単独で書かない。「I3 (checkが通り、reviewingへ)」のように、5語以内の意味を毎回添える。Ownerは番号を覚えていない。
+- 長さの上限。実装Issueは40行、Pull Requestの説明は40行、Maintainerに判断を求める文章は20行、分割の全体像と受け入れの確認は表と15行、Maintainerへのその他のコメントは15行。コマンドの出力や長い一覧は、畳める `<details>` に入れる。
+- 文書の行や規則の番号、状態の名前を単独で書かない。「I3 (checkが通り、reviewingへ)」のように、5語以内の意味を毎回添える。Maintainerは番号を覚えていない。
 - 流れや状態は、文章より先に図で示す。図は、リポジトリが持つSVGを、コミットを指定した画像として貼る。Issueのために描いた図 (ブランチ `cumin/diagrams` の `issue-<番号>/<名前>.svg`。対象に色を付ける) か、設計文書のSVGである。画像のラベルは全て英語にする。色を付けた箱か矢印を、1文で名指しする。文字の図は、箱が1列に並ぶ4個までの流れにだけ使う。分岐や状態は必ずSVGにする。Mermaidは、GitHubのアプリで描画されないので使わない。文章は、図に書けないことだけを書く。
 - 位置づけ (製品のどの部分を変えるか) は、Plannerが実装Issueの「Where this fits」で決める。粒度は、読み手が図の1か所を指せること。Plannerは、実装Issueごとに設計文書の図から描いた図を `cumin/diagrams` に置き、その画像を貼る。Pull Requestは同じ見出し「Where this fits」にそれをそのまま写し、実装で変わったときだけ書き直す。書き直すときは、Implementerが直した図を `cumin/diagrams` の `issue-<実装Issueの番号>/` に新しいファイルとして足す。Pull Requestのブランチには置かない。Pull Requestが設計文書の図を変えたときは、そのブランチのコミットの設計文書のSVGを貼る。図がない部分は、実装Issueの完了条件に「設計文書にこの部分の図を足す」と書く。
 - 最初の2行に要点を書く。IssueやテンプレートやIssueに書いてあることを繰り返さず、リンクする。
 
-Pull Requestの説明は、「Where this fits」(実装Issueと同じ位置づけ) のあとの「What」に、設計メモの差分が与えるのと同じ情報を書く。前はどう動いていて、このPull Requestで何をどういう方針で変えるか (Before と After、または図)。Ownerは、それと「How it was checked」の表を読めば、方針の正しさを判断できる。「How it was checked」は、変えたものごとに、何を、どう確かめ、結果がどうだったかを1行の表にする。テストの一覧やコマンドの出力は、畳んで添える。
+Pull Requestの説明は、「Where this fits」(実装Issueと同じ位置づけ) のあとの「What」に、設計メモの差分が与えるのと同じ情報を書く。前はどう動いていて、このPull Requestで何をどういう方針で変えるか (Before と After、または図)。Maintainerは、それと「How it was checked」の表を読めば、方針の正しさを判断できる。「How it was checked」は、変えたものごとに、何を、どう確かめ、結果がどうだったかを1行の表にする。テストの一覧やコマンドの出力は、畳んで添える。
 
 ## 平易な英語の決まり
 
@@ -112,7 +112,7 @@ Pull Requestの説明は、「Where this fits」(実装Issueと同じ位置づ�
 
 | テンプレート | 置き場所 |
 |---|---|
-| 要求Issue | 対象のリポジトリの `.github/ISSUE_TEMPLATE/` に置くと、OwnerがGitHubの画面でIssueを作るときに使える |
+| 要求Issue | 対象のリポジトリの `.github/ISSUE_TEMPLATE/` に置くと、MaintainerがGitHubの画面でIssueを作るときに使える |
 | Pull Requestの説明 | 対象のリポジトリの `.github/pull_request_template.md` に置いてもよい。ただし、AgentがAPIでPull Requestを作るときには使われない (実測 52) ので、cuminがskillとして渡す |
 | それ以外 | cuminが、依頼のたびに、roleとしての指示と一緒にskillとして渡す。テンプレートごとに1つのskillにし、Agentはその文章を書く直前にskillを読む。skillはroleごとのディレクトリに置き、そのroleが書く文章のものだけを渡す。roleが書かない文章のskillを見せると、そのroleがしてはいけない行動を誘うためである。平易な英語の決まりだけは、全ての文章に当てはまるので、指示の本文に入れる |
 
