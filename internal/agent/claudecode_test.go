@@ -377,24 +377,26 @@ func fakePipe(t *testing.T, dir, name string) (path string, written <-chan strin
 	return path, ch
 }
 
-// Shell text for the prologue of neverEndingCLI. Each trap records SIGTERM
-// in the file of recordedSignals.
+// Shell text for the prologue of neverEndingCLI. Each one names in $on_term
+// what the CLI does on SIGTERM, and each trap records SIGTERM in the file of
+// recordedSignals.
 const (
 	// exitOnTerm ends the CLI on SIGTERM. The child gets the signal of the
 	// process group.
-	exitOnTerm = `trap 'echo TERM >> "$signals"; exit 143' TERM`
+	exitOnTerm = `on_term='echo TERM >> "$signals"; exit 143'`
 	// endChildOnTerm ends the child and exits on SIGTERM, as Claude Code
 	// does.
-	endChildOnTerm = `trap 'echo TERM >> "$signals"; kill $child; exit 143' TERM`
+	endChildOnTerm = `on_term='echo TERM >> "$signals"; kill $child; exit 143'`
 	// ignoreTerm keeps the CLI and its child alive after SIGTERM, so only
-	// SIGKILL ends them.
-	ignoreTerm = `trap 'echo TERM >> "$signals"' TERM` + "\n" + `child_command="trap '' TERM; exec sleep 300"`
+	// SIGKILL ends them. The child starts with SIGTERM ignored.
+	ignoreTerm = `on_term='echo TERM >> "$signals"'` + "\n" + `trap '' TERM`
 )
 
 // neverEndingCLI writes a fake CLI that prints the init event, starts a
 // child, and waits. The child holds the write end of a named pipe; the
 // returned channel gives the child's process ID when the child is gone.
-// prologue is shell text that runs first (for example a trap).
+// prologue is shell text that runs first: one of exitOnTerm,
+// endChildOnTerm, and ignoreTerm.
 func neverEndingCLI(t *testing.T, prologue string) (path string, child <-chan string) {
 	t.Helper()
 	return neverEndingCLIWithInit(t, prologue, `{"type":"system","subtype":"init","session_id":"`+fixtureSessionID+`","plugins":[],"mcp_servers":[],"skills":[]}`)
@@ -407,13 +409,16 @@ func neverEndingCLIWithInit(t *testing.T, prologue, initLine string) (path strin
 	path = filepath.Join(dir, "fake-claude")
 	childPipe, child := fakePipe(t, dir, "child")
 	// The child starts before the init line, so that a run that is
-	// stopped at the init event has a recorded child to check. The loop
-	// waits again after a trap that does not exit.
+	// stopped at the init event has a recorded child to check. The trap is
+	// set after the child starts: a child that is forked under a trap takes
+	// a SIGTERM that comes before its exec with the handler of the shell,
+	// and lives on with the output of the CLI open (dash does this). The
+	// loop waits again after a trap that does not exit.
 	script := "#!/bin/sh\n" +
 		"signals=" + path + ".signals\n" +
-		"child_command='exec sleep 300'\n" +
 		prologue + "\n" +
-		startChild(childPipe, `eval "$child_command"`) +
+		startChild(childPipe, "exec sleep 300") +
+		"trap \"$on_term\" TERM\n" +
 		"printf '%s\\n' '" + initLine + "'\n" +
 		"while kill -0 $child 2>/dev/null; do wait; done\n"
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
