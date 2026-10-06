@@ -582,3 +582,97 @@ func TestQ3_ALateReadingKeepsTheLaterReadTime(t *testing.T) {
 		t.Errorf("read_at = %v, want the later %v", stored.ReadAt, sceneNow)
 	}
 }
+
+// storeUsage keeps a usage that cumin read at readAt, as the end of an
+// agent run does.
+func storeUsage(service *workflow.Service, fiveHour float64, readAt time.Time) {
+	workflow.KeepUsage(service, agent.QuotaUsage{
+		FiveHour: agent.QuotaWindow{Utilization: fiveHour, ResetsAt: sceneNow.Add(2 * time.Hour)},
+		Weekly:   agent.QuotaWindow{Utilization: 0.10, ResetsAt: sceneNow.Add(time.Hour)},
+		ReadAt:   readAt,
+	})
+}
+
+// A start within 5 minutes after a read makes no minimal run: the stored
+// usage decides it. A minimal run would read a usage at the limit here, and
+// would stop the start.
+func TestQ1_AStoredUsageThatIsNewEnoughDecidesTheStartWithoutAMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.setQuota(t, 0.90, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	storeUsage(service, 0.10, sceneNow.Add(-5*time.Minute))
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 0 {
+		t.Errorf("%d minimal runs, want 0", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A start more than 5 minutes after the read makes exactly one minimal
+// run, and the usage of that run decides.
+func TestQ1_AStoredUsageThatIsOlderCostsOneMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	storeUsage(service, 0.10, sceneNow.Add(-5*time.Minute-time.Second))
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A stored usage at a limit that is new enough stops the start with no
+// minimal run, and the Owner hears once over several polls.
+func TestQ1_AStoredUsageAtALimitThatIsNewEnoughStopsTheStartAndNotifiesOnce(t *testing.T) {
+	sc := newScene(t)
+	// A minimal run would read a usage below the limit, and would start.
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	storeUsage(service, 0.90, sceneNow.Add(-time.Minute))
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.quotaRuns(t); n != 0 {
+		t.Errorf("%d minimal runs, want 0", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want 0", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of #10 = %v, want cumin/status/ready kept", got)
+	}
+	q1 := sc.q1Messages()
+	if len(q1) != 1 || !strings.Contains(q1[0], "The 5h quota window reached its limit") {
+		t.Errorf("Q1 notifications = %q, want one about the 5h window", q1)
+	}
+}
+
+// A start with no stored usage makes one minimal run.
+func TestQ1_AStartWithNoStoredUsageCostsOneMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
