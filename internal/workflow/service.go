@@ -152,6 +152,9 @@ type Service struct {
 	// waitingTold says that the Owner heard Q4 (waiting) since cumin last
 	// did something (waiting.go). quotaMu guards it.
 	waitingTold bool
+	// quotaWaits holds the repositories where a start of an agent waits
+	// only for the quota (waiting.go). quotaMu guards it.
+	quotaWaits map[string]bool
 
 	// kept are the worktrees of closed issues that the cleanup kept,
 	// because they hold work that is not on GitHub. The cleanup does not
@@ -427,6 +430,7 @@ func (s *Service) Poll(ctx context.Context) error {
 	// action ends the silence even when another repository failed. A stop request
 	// holds work back, so having nothing to do is not news then.
 	if !finishing {
+		all.waitsForQuota = s.startWaitsForQuota()
 		s.waitingCheck(ctx, all, len(errs) == 0)
 	}
 	return errors.Join(errs...)
@@ -559,6 +563,9 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// its snapshot: the next poll decides. A poll starts every run itself,
 	// so no run is missing from a set that is read first.
 	running := s.runningIssues(target.Repository.String())
+	// This poll decides every start of the repository again, so a start
+	// that waited only for the quota at an earlier poll is forgotten first.
+	s.forgetQuotaWaits(target.Repository.String())
 	token, err := target.Token(ctx)
 	if err != nil {
 		return err
@@ -1011,12 +1018,18 @@ func (s *Service) startImplementer(ctx context.Context, permit StartPermit, targ
 //
 // While cumin stops after the current runs, no usage is read: the request
 // waits for the next start of cumin in any case.
+//
+// A start that only the quota stops is noted for the waiting notification
+// (noteQuotaWait), at a poll and at the end of a run alike.
 func (s *Service) permitStart(ctx context.Context, log *slog.Logger, request string, role config.Role, target Target, number int) (StartPermit, bool) {
 	stopsAfterRuns := s.finishing.Load()
 	if stopsAfterRuns {
 		log.Info("stop after the current runs: the request waits for the next start of cumin", "request", request)
 	}
 	quotaAllows := !stopsAfterRuns && s.quotaAllowsStart(ctx, log, request, role, target, number)
+	if !stopsAfterRuns && !quotaAllows {
+		s.noteQuotaWait(target.Repository.String())
+	}
 	return PermitStart(stopsAfterRuns, quotaAllows)
 }
 
