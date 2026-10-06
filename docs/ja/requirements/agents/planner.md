@@ -6,7 +6,7 @@
 
 要求Issueを1つ受け取り、実装Issueに分割する。実装Issueどうしの依存関係を記録し、それぞれにriskを仮に付ける。sub-issueが全て閉じたら、まとめた結果が要求を満たしているかを確かめる (受け入れの確認)。
 
-Plannerは分割に責任を持つ。コードは書かない。分割結果を承認するのはOwnerである。
+Plannerは分割に責任を持つ。コードは書かない。分割結果を承認するのはMaintainerである。
 
 ## いつ起動されるか
 
@@ -14,7 +14,7 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 
 | 依頼の種類 | きっかけ | セッション |
 |---|---|---|
-| 分割 | R1: Ownerが、`cumin/type/requirement` の付いた要求Issueに `cumin/status/ready` を付けた | 新しいセッション |
+| 分割 | R1: Maintainerが、`cumin/type/requirement` の付いた要求Issueに `cumin/status/ready` を付けた | 新しいセッション |
 | 受け入れの確認 | R4: 要求Issueのsub-issueが全て閉じた | 新しいセッション |
 
 ## 入力
@@ -36,11 +36,11 @@ Plannerが自分で読むもの:
 GitHubに残すもの:
 
 - 実装Issue。要求Issueのsub-issueとして作る。1つの実装Issueが、1つのPull Requestになる
-- 実装Issueどうしの依存関係 (blocked by)。同じ要求Issueのsub-issueの間だけに張る。他の要求Issueへの依存は、Ownerが要求Issueどうしに張る
+- 実装Issueどうしの依存関係 (blocked by)。同じ要求Issueのsub-issueの間だけに張る。他の要求Issueへの依存は、Maintainerが要求Issueどうしに張る
 - それぞれの実装Issueに、`risk/*` のラベルをちょうど1つ
 - 要求Issueにmilestoneが付いていれば、それぞれの実装Issueに同じmilestoneを付ける
-- Implementerが変更できないファイルの変更が要るときは、その変更をOwnerが手で行うsub-issueとして作る (分割基準9)。`cumin/type/owner-task` と `risk/high` を付け、状態ラベルは付けない。Contextに、Ownerが行う理由を書く。それに依存する実装Issueに blocked by を張り、分割の全体像の Please check に書く
-- 要求Issueへのコメントを1つ。分割の全体像を、Ownerが確認しやすい形で書く。形式は [plan-summary.md](../../../../templates/plan-summary.md) に従う
+- Implementerが変更できないファイルの変更が要るときは、その変更をMaintainerが手で行うsub-issueとして作る (分割基準9)。`cumin/type/owner-task` と `risk/high` を付け、状態ラベルは付けない。Contextに、Maintainerが行う理由を書く。それに依存する実装Issueに blocked by を張り、分割の全体像の Please check に書く
+- 要求Issueへのコメントを1つ。分割の全体像を、Maintainerが確認しやすい形で書く。形式は [plan-summary.md](../../../../templates/plan-summary.md) に従う
 
 実装Issueの本文は、[implementation-issue.md](../../../../templates/implementation-issue.md) の6つの節で書く。
 
@@ -62,7 +62,7 @@ GitHubに残すもの:
 - 要求Issueへのコメントを1つ。形式は [acceptance-check.md](../../../../templates/acceptance-check.md) に従う
 - mainの最新の内容で、要求Issueの Requirements と Constraints を1項目ずつ確かめる。項目ごとに、結果 (Pass か Fail)、証拠 (実行したコマンドと結果、または読んだファイル)、対応したPull Requestを書く
 - 残っている作業を一覧にする。要求Issueに付いたフォローアップノートから、重複と、あとのPull Requestで済んだものを除く。Pull Requestの説明の `Follow-up` 以外の場所に書かれた、範囲の外の作業も拾う
-- Failがあっても、直さない。Issueを作らず、変更もしない。代わりに、Failごとに、どう直すかの提案をコメントに書く。足すとよいsub-issueの題と、やることを1〜2文で書く。どうするかはOwnerが決める
+- Failがあっても、直さない。Issueを作らず、変更もしない。代わりに、Failごとに、どう直すかの提案をコメントに書く。足すとよいsub-issueの題と、やることを1〜2文で書く。どうするかはMaintainerが決める
 
 実行の最後にcuminに返すもの:
 
@@ -76,16 +76,16 @@ GitHub上では `cumin-planner` として振る舞う。持っている権限は
 
 - コードを変更しない。ブランチやPull Requestを作らない (権限でも止める)
 - 要求Issueの本文を書き換えない。伝えたいことはコメントに書く
-- `cumin/status/*` のラベルを付けない。実装Issueに `cumin/status/ready` を付けるのはOwnerである
+- `cumin/status/*` のラベルを付けない。実装Issueに `cumin/status/ready` を付けるのはMaintainerである
 - 要求Issueに書かれていないことを、実装Issueに足さない。必要だと考えたことは、要求Issueへのコメントで提案する
 
 ## riskの基準
 
-riskは `risk/low`、`risk/medium`、`risk/high` の3段階である。段階の違いは、mergeを誰が判断するかに効く。`risk/low` はcuminがmergeし、`risk/medium` と `risk/high` はOwnerがmergeを判断する (I6、I7)。
+riskは `risk/low`、`risk/medium`、`risk/high` の3段階である。段階の違いは、mergeを誰が判断するかに効く。`risk/low` はcuminがmergeし、`risk/medium` と `risk/high` はMaintainerがmergeを判断する (I6、I7)。
 
 どの変更をどの段階にするかの基準は、PlannerとReviewerがそのまま受け取る英語の文章で、設定で決まる。初期値は [disciplines/software-engineering/risk-criteria.md](../../../../disciplines/software-engineering/risk-criteria.md) で、Hostかリポジトリに `risk-criteria.md` があれば、cuminはその内容を代わりに指示に入れる (置き場所と優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある)。Reviewerにも、同じ基準が渡る。
 
-迷ったら高いほうを付ける。riskを確定するのはOwnerである。
+迷ったら高いほうを付ける。riskを確定するのはMaintainerである。
 
 ## 完了の条件
 
@@ -101,7 +101,7 @@ cuminが `done` を受けて、GitHub上で確かめること:
 - 要求Issueにsub-issueが1つ以上ある
 - 全てのsub-issueに、`risk/*` のラベルがちょうど1つ付いている
 
-確かめた結果が合っていれば、cuminは要求Issueを `cumin/status/awaiting-plan-review` に替えて、Ownerに知らせる。
+確かめた結果が合っていれば、cuminは要求Issueを `cumin/status/awaiting-plan-review` に替えて、通知する。
 
 受け入れの確認では、cuminは、最後のsub-issueが閉じたあとに書かれた `## Acceptance check` のコメントが、要求Issueにあることを確かめる。表の結果は読まない。
 
