@@ -333,7 +333,7 @@ func statusAnswer(err error) string {
 func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, pr PullRequest, defaultBranch string) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
-	permit, ok := s.permitStart(log, "conflict resolution")
+	permit, ok := s.permitStart(ctx, log, "conflict resolution", config.RoleImplementer, target, sub.Number)
 	if !ok {
 		return nil
 	}
@@ -392,7 +392,7 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	if !ok || pr.Number != a.PullRequest {
 		return fmt.Errorf("I14: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
-	permit, ok := s.permitStart(log, "conflict resolution")
+	permit, ok := s.permitStart(ctx, log, "conflict resolution", config.RoleImplementer, target, a.Number)
 	if !ok {
 		return nil
 	}
@@ -531,7 +531,7 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 		log.Debug("I13: no new request for changes of an Owner on the head commit", "pull_request", pr.Number)
 		return false, nil
 	}
-	permit, ok := s.permitStart(log, "owner review fix")
+	permit, ok := s.permitStart(ctx, log, "owner review fix", config.RoleImplementer, target, a.Number)
 	if !ok {
 		return false, nil
 	}

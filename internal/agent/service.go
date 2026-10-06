@@ -3,7 +3,7 @@ package agent
 // This file puts the pieces of one agent start in order: create a fresh
 // token of the role limited to the repository, read the bot identity of the
 // role, then run the CLI in the work directory. It also reads the quota
-// usage, which the caller asks for before a new start (R1, I1) only.
+// usage, which the caller asks for before a start of an agent.
 // docs/ja/designs/agent-run.md (the topic on the steps of one request)
 // records the order and the reasons. The rest of cumin calls only Start.
 
@@ -123,10 +123,11 @@ type StartRequest struct {
 }
 
 // ReadQuota reads the quota usage with one minimal run of the CLI of the
-// role. The caller decides the limits (Q1) before a new start; Start itself
-// reads nothing, so that a request that is not a new start (I4, I5, the
-// Reviewer) goes on over a limit (designs/quota.md, the topic on the check
-// before a start). An error is a *QuotaNotRead.
+// role. The caller decides the limits ("stop agent starts") before every
+// start of an agent, in its one check before a start; Start itself reads
+// nothing, so that a start costs no minimal run while the caller holds a
+// usage that is new enough (designs/quota.md, the topic on the check before
+// a start). An error is a *QuotaNotRead.
 func (s *Service) ReadQuota(ctx context.Context, role config.Role) (QuotaUsage, error) {
 	settings, ok := s.Roles[role]
 	if !ok {

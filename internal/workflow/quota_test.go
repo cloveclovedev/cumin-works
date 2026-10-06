@@ -56,7 +56,7 @@ func TestCore06_AFiveHourLimitStopsTheStartAndNotifiesOnce(t *testing.T) {
 		t.Errorf("Q1 notifications = %q, want one about the 5h window", q1)
 	}
 	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"Q1: no start; the quota limit is reached"`) {
+	if !strings.Contains(logs, `"msg":"stop agent starts: the quota limit is reached"`) {
 		t.Errorf("the log has no Q1 line:\n%s", logs)
 	}
 }
@@ -127,7 +127,7 @@ func TestCore17_UnreadableUsageStopsTheStartWithOneNotification(t *testing.T) {
 		t.Errorf("%d label changes of #10, want none", n)
 	}
 	q1 := sc.q1Messages()
-	if len(q1) != 1 || !strings.Contains(q1[0], "The quota usage was not read before a start") {
+	if len(q1) != 1 || !strings.Contains(q1[0], "The quota usage was not read before the start of an agent") {
 		t.Errorf("Q1 notifications = %q, want one about the unread usage", q1)
 	}
 
@@ -139,7 +139,7 @@ func TestCore17_UnreadableUsageStopsTheStartWithOneNotification(t *testing.T) {
 }
 
 // Q1 at the end of a run: the usage that the run reports tells the Owner
-// that new starts stop, once.
+// that agent starts stop, once.
 func TestQ1_TheEndOfARunAtALimitNotifiesOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
@@ -157,25 +157,8 @@ func TestQ1_TheEndOfARunAtALimitNotifiesOnce(t *testing.T) {
 	if len(q1) != 1 || !strings.Contains(q1[0], "weekly") {
 		t.Errorf("Q1 notifications = %q, want one about the weekly window", q1)
 	}
-	if !strings.Contains(sc.logs.String(), "Q1: the quota limit is reached at the end of a run") {
+	if !strings.Contains(sc.logs.String(), "stop agent starts: the quota limit is reached at the end of a run") {
 		t.Errorf("the log has no Q1 line for the end of the run")
-	}
-}
-
-// Q1 stops new starts only: a check fix (I4) goes on over a limit, and
-// makes no minimal run.
-func TestQ1_ACheckFixGoesOnOverALimitWithoutAMinimalRun(t *testing.T) {
-	sc := newScene(t)
-	sc.setQuota(t, 0.99, sceneNow.Add(time.Hour), 0.99, sceneNow.Add(time.Hour))
-	service := sc.service()
-	sc.failingCheck(t, service, 0)
-	sc.pollAndWait(t, service)
-
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want the check fix", n)
-	}
-	if n := sc.quotaRuns(t); n != 0 {
-		t.Errorf("%d minimal runs, want none", n)
 	}
 }
 
@@ -429,12 +412,15 @@ func TestQ1_AReadAtTheEndOfARunEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
 	sc.failQuota(t)
 	service := sc.service()
 	service.Settings.MaxIssuesInProgress = 2
-	// #10 waits for a check fix, which reads no usage; #11 is ready.
+	// #10 waits for a check fix, and #11 is ready: both wait for a read.
 	sc.failingCheck(t, service, 0)
 	sc.pollAndWait(t, service)
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want the check fix", n)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs without a usage, want 0", n)
 	}
+	// The end of a run keeps its usage. The usage is older than what is new
+	// enough, so the next start reads again.
+	storeUsage(service, 0.10, sceneNow.Add(-10*time.Minute))
 	sc.pollAndWait(t, service)
 
 	var unread int
@@ -444,7 +430,7 @@ func TestQ1_AReadAtTheEndOfARunEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
 		}
 	}
 	if unread != 2 {
-		t.Errorf("%d notifications about an unread usage, want 2 (before and after the run)", unread)
+		t.Errorf("%d notifications about an unread usage, want 2 (before and after the usage of a run)", unread)
 	}
 }
 
@@ -556,7 +542,7 @@ func TestQ2_ABrokenAllowanceFileWarnsOnce(t *testing.T) {
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want 0", n)
 	}
-	if n := strings.Count(sc.logs.String(), "Q2: the allowance file was not read"); n != 1 {
+	if n := strings.Count(sc.logs.String(), "the allowance file was not read"); n != 1 {
 		t.Errorf("%d warnings, want 1", n)
 	}
 }

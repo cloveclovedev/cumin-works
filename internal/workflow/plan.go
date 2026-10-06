@@ -33,14 +33,7 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 		return fmt.Errorf("R1: issue #%d is not in the snapshot", p.Number)
 	}
 	req := planRequest
-	if req.permit, ok = s.permitStart(s.logger().With("repository", target.Repository.String(), "issue", p.Number), "split"); !ok {
-		return nil
-	}
-	// Q1: the quota decides before the label changes.
-	if ok, err := s.quotaAllowsStart(ctx, RowR1, config.RolePlanner, target, p.Number); err != nil || !ok {
-		if err != nil {
-			return fmt.Errorf("R1: issue #%d: %w", p.Number, err)
-		}
+	if req.permit, ok = s.permitStart(ctx, s.logger().With("repository", target.Repository.String(), "issue", p.Number), "split", config.RolePlanner, target, p.Number); !ok {
 		return nil
 	}
 	// The poll read the Owner of the newest cumin/status/ready before the
@@ -116,7 +109,7 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 		return fmt.Errorf("R4: issue #%d is not in the snapshot", a.Number)
 	}
 	req := acceptanceRequest
-	if req.permit, ok = s.permitStart(s.logger().With("repository", repository, "issue", a.Number), "acceptance check"); !ok {
+	if req.permit, ok = s.permitStart(ctx, s.logger().With("repository", repository, "issue", a.Number), "acceptance check", config.RolePlanner, target, a.Number); !ok {
 		return nil
 	}
 	var err error
@@ -124,14 +117,6 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 		return fmt.Errorf("R4: read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
 	if a.Again {
-		// Q1: the quota decides before the request is counted, so a limit
-		// does not use up the one second request of the stay.
-		if ok, err := s.quotaAllowsStart(ctx, RowR4, config.RolePlanner, target, a.Number); err != nil || !ok {
-			if err != nil {
-				return fmt.Errorf("R4: issue #%d: %w", a.Number, err)
-			}
-			return nil
-		}
 		req.again, req.count = true, true
 		req.sessionID = s.State.Issue(repository, a.Number).SessionID
 		s.logger().Info("R4: the Planner left no acceptance check comment; the acceptance check is requested again",
@@ -346,7 +331,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 		case CheckAcceptance:
 			acceptance := acceptanceRequest
 			var ok bool
-			if acceptance.permit, ok = s.permitStart(log, "acceptance check"); !ok {
+			if acceptance.permit, ok = s.permitStart(ctx, log, "acceptance check", config.RolePlanner, target, number); !ok {
 				return
 			}
 			log.Info("R2: every sub-issue is closed; the acceptance check follows", "sub_issues", len(requirement.SubIssues))
@@ -359,16 +344,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			return
 		case Plan:
 			var ok bool
-			if permit, ok = s.permitStart(log, "split again"); !ok {
-				return
-			}
-			// Q1: the quota decides before the request is counted.
-			if ok, err := s.quotaAllowsStart(ctx, RowR2, config.RolePlanner, target, number); err != nil || !ok {
-				if err != nil {
-					log.Error("R2: the quota was not checked; the next poll decides again", "error", err.Error())
-				} else {
-					log.Info("R2: the quota is at a limit; a later poll requests the split again")
-				}
+			if permit, ok = s.permitStart(ctx, log, "split again", config.RolePlanner, target, number); !ok {
 				return
 			}
 			if err := s.countPlannerRequest(repository, number, RowR2, 1); err != nil {
@@ -453,14 +429,7 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 			return
 		case CheckAcceptance:
 			var ok bool
-			if permit, ok = s.permitStart(log, "acceptance check again"); !ok {
-				return
-			}
-			// Q1: the quota decides before the request is counted.
-			if ok, err := s.quotaAllowsStart(ctx, RowR4, config.RolePlanner, target, number); err != nil || !ok {
-				if err != nil {
-					log.Error("R4: the quota was not checked; the next poll decides again", "error", err.Error())
-				}
+			if permit, ok = s.permitStart(ctx, log, "acceptance check again", config.RolePlanner, target, number); !ok {
 				return
 			}
 			if err := s.countPlannerRequest(repository, number, RowR4, 1); err != nil {

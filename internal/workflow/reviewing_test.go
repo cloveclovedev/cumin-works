@@ -398,10 +398,9 @@ func TestReviewing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T
 // poll sends the one second request of the stay.
 func TestReviewing_AQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"NONE", "APPROVE"}})
-	reset := sceneNow.Add(2 * time.Hour)
-	// The first review request has no quota check, so the Reviewer runs
-	// once over the limit and leaves no review.
-	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	// The first review starts below the limit. The usage that its run
+	// reports reaches the limit, and the Reviewer leaves no review.
+	reset := sc.limitReachedByARun(t)
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
 
@@ -612,8 +611,9 @@ func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
 // limit, one poll sends the request.
 func TestReviewing_AQuotaLimitDoesNotUseUpTheRequestOfTheCause(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}, comments: []string{"NONE", "DECISION"}})
-	reset := sceneNow.Add(2 * time.Hour)
-	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	// The review starts below the limit. The usage that its run reports
+	// reaches the limit.
+	reset := sc.limitReachedByARun(t)
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
 	sc.atTheLimit(t)

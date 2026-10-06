@@ -884,10 +884,13 @@ type StartPermit struct{ granted bool }
 // decides the same step again.
 //
 // stopsAfterRuns says that cumin stops after the current runs: then no
-// agent starts. The steps that start no agent need no permit, and go on
-// (designs/cumin-core.md, the topic on the stop).
-func PermitStart(stopsAfterRuns bool) (StartPermit, bool) {
-	if stopsAfterRuns {
+// agent starts (designs/cumin-core.md, the topic on the stop). quotaAllows
+// says what the quota usage decides: at a limit, or when the usage was not
+// read, agent starts are stopped (issue-states.md, "stop agent starts").
+// The steps that start no agent need no permit, and go on. A run that is
+// going on is never stopped.
+func PermitStart(stopsAfterRuns, quotaAllows bool) (StartPermit, bool) {
+	if stopsAfterRuns || !quotaAllows {
 		return StartPermit{}, false
 	}
 	return StartPermit{granted: true}, true

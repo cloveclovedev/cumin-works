@@ -1,9 +1,10 @@
 package workflow
 
-// This file applies Q1 to Q3 of issue-states.md: before a new start (R1,
-// I1), and at the end of each agent run, the quota usage decides whether
-// cumin starts new work; while it stops, the stored usage decides when to
-// try again. A stored usage that is new enough decides a start without a
+// This file applies "stop agent starts" and "resume agent starts" of
+// issue-states.md: before every start of an agent, and at the end of each
+// agent run, the quota usage decides whether cumin goes on starting agents;
+// while agent starts are stopped, the stored usage decides when to try
+// again. A stored usage that is new enough decides a start without a
 // minimal run. The limits are the pure rules of internal/quota.
 // docs/ja/designs/quota.md records the design; the minimal run that reads
 // the usage is in internal/agent.
@@ -24,16 +25,16 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/quota"
 )
 
-// RowQ1 is the row that stops new starts at a quota limit.
+// RowQ1 is the row "stop agent starts" at a quota limit.
 const RowQ1 = "Q1"
 
-// quotaNotices keeps the Owner from getting the same Q1 notification twice.
+// quotaNotices keeps the Owner from getting the same notification of "stop agent starts" twice.
 // It lives in memory: a restart may send one more, and the state file
 // holds nothing for it (designs/quota.md, the topic on duplicate
 // notifications).
 type quotaNotices struct {
-	// told holds the windows that the Owner heard about since starts last
-	// went on.
+	// told holds the windows that the Owner heard about since agent starts last
+	// resumed.
 	told map[quota.Name]bool
 	// unreadTold says that the Owner heard that the usage was not read,
 	// since the last read that succeeded.
@@ -59,34 +60,35 @@ func (s *Service) location() *time.Location {
 	return time.Local
 }
 
-// quotaAllowsStart applies Q1 before a new start: the usage decides
-// against the limits. A stored usage that is new enough (quota.Fresh)
-// decides without a minimal run; an older or missing one costs one minimal
-// run that reads the usage again. It runs before the label changes, so that
-// a stopped start leaves every label as it was and the next poll decides
-// again.
+// quotaAllowsStart is the quota part of the one check before every start
+// of an agent (permitStart, its only caller): the usage decides against
+// the limits. A stored usage that is new enough (quota.Fresh) decides
+// without a minimal run; an older or missing one costs one minimal run
+// that reads the usage again. It runs before the label change and before
+// the count of the request, so that a stopped start leaves the issue as it
+// was and a later poll decides again.
 //
-// It reports false when the start must not go on: the usage was not read,
+// It reports false when the agent must not start: the usage was not read,
 // or a window is at or above its limit. The Owner hears once for each
-// cause, until starts go on again.
-func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.Role, target Target, number int) (bool, error) {
+// cause, until agent starts resume.
+func (s *Service) quotaAllowsStart(ctx context.Context, log *slog.Logger, request string, role config.Role, target Target, number int) bool {
 	if s.Agents == nil {
-		return false, errors.New("no agent service is configured")
+		log.Error("stop agent starts: no agent service is configured; the quota usage was not read", "request", request)
+		return false
 	}
-	log := s.logger().With("repository", target.Repository.String(), "issue", number)
 	// A stored usage that is new enough decides, with no minimal run.
 	if usage, fresh := s.freshUsage(); fresh {
 		// Each poll decides again while the usage is new enough, so a stop
 		// is a debug line here. The Owner still hears once.
-		log.Debug("Q1: the stored quota usage is new enough; no minimal run", "row", row)
-		return s.usageAllowsStart(ctx, log, slog.LevelDebug, row, target, number, usage), nil
+		log.Debug("the stored quota usage is new enough; no minimal run", "request", request)
+		return s.usageAllowsStart(ctx, log, slog.LevelDebug, request, target, number, usage)
 	}
-	// Q3: while the stored usage stops the starts, no minimal run happens
+	// While the stored usage stops the agent starts, no minimal run happens
 	// before the next try time. Usage only rises until a reset, so no
 	// earlier read could pass.
 	if next, waiting := s.nextTry(); waiting {
-		log.Debug("Q3: waits for the next try time", "row", row, "next_try", next)
-		return false, nil
+		log.Debug("agent starts stopped: the request waits for the next try time", "request", request, "next_try", next)
+		return false
 	}
 	read, err := s.Agents.ReadQuota(ctx, role)
 	if err != nil {
@@ -95,33 +97,33 @@ func (s *Service) quotaAllowsStart(ctx context.Context, row string, role config.
 		if errors.As(err, &notRead) {
 			reason = notRead.Reason
 		}
-		log.Info("Q1: no start; the quota usage was not read", "row", row, "reason", reason)
+		log.Info("stop agent starts: the quota usage was not read", "request", request, "reason", reason)
 		s.quotaMu.Lock()
 		tell := !s.quota.unreadTold
 		s.quota.unreadTold = true
 		s.quotaMu.Unlock()
 		if tell && !s.notifyQuota(ctx, log, target, number,
-			"The quota usage was not read before a start ("+reason+"). cumin starts no new work until a read succeeds.") {
+			"The quota usage was not read before the start of an agent ("+reason+"). cumin starts no agent until a read succeeds.") {
 			// The channel failed: the next poll tries again.
 			s.quotaMu.Lock()
 			s.quota.unreadTold = false
 			s.quotaMu.Unlock()
 		}
-		return false, nil
+		return false
 	}
-	return s.usageAllowsStart(ctx, log, slog.LevelInfo, row, target, number, s.keepUsage(log, read)), nil
+	return s.usageAllowsStart(ctx, log, slog.LevelInfo, request, target, number, s.keepUsage(log, read))
 }
 
 // usageAllowsStart decides one start from a usage, stored or just read. At
 // a limit, the Owner hears once for each window, and the stop is logged at
 // level.
-func (s *Service) usageAllowsStart(ctx context.Context, log *slog.Logger, level slog.Level, row string, target Target, number int, usage quota.Usage) bool {
+func (s *Service) usageAllowsStart(ctx context.Context, log *slog.Logger, level slog.Level, request string, target Target, number int, usage quota.Usage) bool {
 	decision := s.decideQuota(log, usage)
 	if decision.Allows() {
 		return true
 	}
 	next, _ := quota.NextTry(usage, s.quotaSettings(), s.allowance(log), s.now(), s.location())
-	log.Log(ctx, level, "Q1: no start; the quota limit is reached", "row", row, "windows", decision.Stopped, "next_try", next)
+	log.Log(ctx, level, "stop agent starts: the quota limit is reached", "request", request, "windows", decision.Stopped, "next_try", next)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 	return false
 }
@@ -136,9 +138,9 @@ func (s *Service) freshUsage() (quota.Usage, bool) {
 	return storedUsage(stored), true
 }
 
-// quotaAfterRun applies Q1 at the end of an agent run: the usage that the
-// run reported decides whether new starts stop now, before the next start
-// decides. The run itself is done; nothing else changes.
+// quotaAfterRun applies "stop agent starts" at the end of an agent run: the
+// usage that the run reported decides whether agent starts stop now, before
+// the next start decides. The run itself is done; nothing else changes.
 func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Target, number int, run *agent.Run) {
 	if run == nil || !run.QuotaRead {
 		return
@@ -147,7 +149,7 @@ func (s *Service) quotaAfterRun(ctx context.Context, log *slog.Logger, target Ta
 	if decision.Allows() {
 		return
 	}
-	log.Info("Q1: the quota limit is reached at the end of a run; no new start until it resumes", "windows", decision.Stopped)
+	log.Info("stop agent starts: the quota limit is reached at the end of a run", "windows", decision.Stopped)
 	s.tellQuotaLimit(ctx, log, target, number, decision)
 }
 
@@ -184,13 +186,13 @@ func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) quota.Usage
 		ReadAt:   readAt,
 	})
 	if err != nil {
-		log.Error("Q3: the quota usage was not kept", "error", err.Error())
+		log.Error("the quota usage was not kept", "error", err.Error())
 	}
 	return usage
 }
 
 // nextTry reports the next try time while the stored usage stops the
-// starts, and false when a start may read the usage now.
+// agent starts, and false when a start may read the usage now.
 func (s *Service) nextTry() (time.Time, bool) {
 	stored, ok := s.State.Quota()
 	if !ok {
@@ -204,7 +206,8 @@ func (s *Service) nextTry() (time.Time, bool) {
 	return next, true
 }
 
-// allowance reads the allowance file that `cumin quota allow` writes (Q2).
+// allowance reads the allowance file that `cumin quota allow` writes ("resume
+// agent starts").
 // cumin reads it at every check, so that a new allowance counts at the next
 // poll. A file that cannot be read is no allowance, with one warning that
 // names the path, until the reason changes.
@@ -222,7 +225,7 @@ func (s *Service) allowance(log *slog.Logger) quota.Allowance {
 	}
 	s.quotaMu.Unlock()
 	if warn {
-		log.Warn("Q2: the allowance file was not read; cumin goes on without an allowance", "path", s.AllowancePath, "error", err.Error())
+		log.Warn("the allowance file was not read; cumin goes on without an allowance", "path", s.AllowancePath, "error", err.Error())
 	}
 	return quota.Allowance{FiveHourUntil: read.FiveHourUntil}
 }
@@ -239,7 +242,7 @@ func (s *Service) quotaSettings() config.QuotaSettings {
 func (s *Service) decideQuota(log *slog.Logger, usage quota.Usage) quota.Decision {
 	decision := quota.Decide(usage, s.quotaSettings(), s.allowance(log), s.now(), s.location())
 	s.forgetResumedWindows(decision)
-	log.Debug("Q1: quota usage",
+	log.Debug("quota usage",
 		"five_hour_utilization", usage.FiveHour.Utilization, "five_hour_limit", decision.FiveHourLimit,
 		"weekly_utilization", usage.Weekly.Utilization, "weekly_limit", decision.WeeklyLimit)
 	return decision
@@ -259,7 +262,7 @@ func (s *Service) forgetResumedWindows(decision quota.Decision) {
 }
 
 // tellQuotaLimit notifies the Owner once for each window that stops the
-// starts, until starts go on again. The mark is set before the send, so
+// agent starts, until agent starts resume. The mark is set before the send, so
 // that a poll and the end of a run never send the same notification twice,
 // and taken back when the channel fails, so that a later check tries again.
 func (s *Service) tellQuotaLimit(ctx context.Context, log *slog.Logger, target Target, number int, decision quota.Decision) {
@@ -281,12 +284,12 @@ func (s *Service) tellQuotaLimit(ctx context.Context, log *slog.Logger, target T
 
 func limitReason(window quota.Name) string {
 	if window == quota.Weekly {
-		return "The weekly quota window reached its pace limit. cumin starts no new work until the pace limit rises above the usage or the window resets. Running issues go on."
+		return "The weekly quota window reached its pace limit. cumin starts no agent until the pace limit rises above the usage or the window resets. The agent runs that are going on end as usual."
 	}
-	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no new work until the window resets, a time band with a higher limit starts, or the Owner runs cumin quota allow. Running issues go on.", window)
+	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no agent until the window resets, a time band with a higher limit starts, or the Owner runs cumin quota allow. The agent runs that are going on end as usual.", window)
 }
 
-// notifyQuota sends one Q1 notification. The quota belongs to the account
+// notifyQuota sends one notification of "stop agent starts". The quota belongs to the account
 // of the Host, and the marks against a second notification are shared by
 // every repository, so the Host setting decides, as for a poll that keeps
 // failing. A repository that turns its notifications off would otherwise

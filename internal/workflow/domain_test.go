@@ -884,16 +884,19 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 }
 
 // The one check before a start of an agent: while cumin stops after the
-// current runs, no start gets a permit; at any other time every start gets
-// one. The zero value of the permit permits nothing.
-func TestPermitStart_GivesNoPermitWhileCuminStopsAfterTheCurrentRuns(t *testing.T) {
+// current runs, or while the quota usage stops agent starts, no start gets
+// a permit; at any other time every start gets one. The zero value of the
+// permit permits nothing.
+func TestPermitStart_GivesNoPermitWhileCuminStopsAfterTheCurrentRunsOrAgentStartsAreStopped(t *testing.T) {
 	t.Parallel()
-	if permit, ok := PermitStart(true); ok || permit != (StartPermit{}) {
-		t.Errorf("PermitStart(true) = %#v, %v, want no permit", permit, ok)
+	for _, c := range []struct{ stopsAfterRuns, quotaAllows bool }{{true, true}, {false, false}, {true, false}} {
+		if permit, ok := PermitStart(c.stopsAfterRuns, c.quotaAllows); ok || permit != (StartPermit{}) {
+			t.Errorf("PermitStart(%v, %v) = %#v, %v, want no permit", c.stopsAfterRuns, c.quotaAllows, permit, ok)
+		}
 	}
-	permit, ok := PermitStart(false)
+	permit, ok := PermitStart(false, true)
 	if !ok || permit == (StartPermit{}) {
-		t.Errorf("PermitStart(false) = %#v, %v, want a permit that holds", permit, ok)
+		t.Errorf("PermitStart(false, true) = %#v, %v, want a permit that holds", permit, ok)
 	}
 }
 
