@@ -44,6 +44,32 @@ type quotaNotices struct {
 	allowanceWarning string
 }
 
+// noteQuotaUnread records that the read of the usage failed in this poll.
+// The later requests of the poll wait without a new minimal run, which
+// would fail the same way, until the next poll reads again
+// (forgetQuotaUnread).
+func (s *Service) noteQuotaUnread() {
+	s.quotaMu.Lock()
+	defer s.quotaMu.Unlock()
+	s.quotaUnread = true
+}
+
+// forgetQuotaUnread takes back the mark at the start of a poll, once for
+// all repositories.
+func (s *Service) forgetQuotaUnread() {
+	s.quotaMu.Lock()
+	defer s.quotaMu.Unlock()
+	s.quotaUnread = false
+}
+
+// quotaUnreadInPoll says whether the read of the usage failed in this
+// poll.
+func (s *Service) quotaUnreadInPoll() bool {
+	s.quotaMu.Lock()
+	defer s.quotaMu.Unlock()
+	return s.quotaUnread
+}
+
 // now is the time of the quota decisions. Tests set Service.Now.
 func (s *Service) now() time.Time {
 	if s.Now != nil {
@@ -64,7 +90,9 @@ func (s *Service) location() *time.Location {
 // of an agent (permitStart, its only caller): the usage decides against
 // the limits. A stored usage that is new enough (quota.Fresh) decides
 // without a minimal run; an older or missing one costs one minimal run
-// that reads the usage again. It runs before the label change and before
+// that reads the usage again. A read that fails is kept for the rest of
+// the poll, so the later requests of that poll wait with no minimal run.
+// It runs before the label change and before
 // the count of the request, so that a stopped start leaves the issue as it
 // was and a later poll decides again.
 //
@@ -90,8 +118,15 @@ func (s *Service) quotaAllowsStart(ctx context.Context, log *slog.Logger, reques
 		log.Debug("agent starts stopped: the request waits for the next try time", "request", request, "next_try", next)
 		return false
 	}
+	// One failed read is enough for one poll: a new minimal run would fail
+	// the same way. The first failure already told the Owner.
+	if s.quotaUnreadInPoll() {
+		log.Debug("agent starts stopped: the quota usage was not read in this poll; no minimal run", "request", request)
+		return false
+	}
 	read, err := s.Agents.ReadQuota(ctx, role)
 	if err != nil {
+		s.noteQuotaUnread()
 		var notRead *agent.QuotaNotRead
 		reason := err.Error()
 		if errors.As(err, &notRead) {

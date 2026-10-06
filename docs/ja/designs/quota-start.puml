@@ -15,9 +15,14 @@ if (stopped, the next try time is still ahead\n(from the stored usage), and no n
   stop
 else (no)
 endif
+if (the read of the usage failed\nearlier in this poll?) then (yes)
+  :the agent does not start, no minimal run;\nno label change, no count;
+  stop
+else (no)
+endif
 :minimal run of Claude Code\n(read the usage);
 if (usage read?) then (no)
-  :stop agent starts (Q1): no label change, no count;\nnotify once until a read succeeds;
+  :stop agent starts (Q1): no label change, no count;\nnotify once until a read succeeds;\nkeep the failed read for the rest of this poll;
   stop
 else (yes)
 endif
