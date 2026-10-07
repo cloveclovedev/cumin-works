@@ -319,7 +319,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `ask for the plan review: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
    | `the Owner was notified` (`action` が `ask for the plan review`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
 
-9. `ask for the plan review: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`R2: ...` の行で止めると、通知が取り消されることがある。
+9. `ask for the plan review: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`ask for the plan review: ...` の行で止めると、通知が取り消されることがある。
 
 ### 確かめること
 
