@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	ownerLoginLine   = "\n- Issue Owner login: " + theOwner + "\n"
-	noOwnerLoginLine = "\n- Issue Owner login: there is no Issue Owner login\n"
+	issueOwnerLoginLine   = "\n- Issue Owner login: " + theMaintainer + "\n"
+	noIssueOwnerLoginLine = "\n- Issue Owner login: there is no Issue Owner login\n"
 )
 
 // readyBy is one event that added cumin/status/ready, by a person.
@@ -33,15 +33,15 @@ func removedBefore(event githubtest.LabelEvent) githubtest.LabelEvent {
 func TestOwnerLogin_TheImplementerReceivesTheActorOfTheNewestReady(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), removedBefore(readyBy(theOwner, 5)), readyBy(theOwner, 5)}
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), removedBefore(readyBy(theMaintainer, 5)), readyBy(theMaintainer, 5)}
 	sc.fake.SetPermission("an-earlier-owner", "admin", "User")
-	sc.fake.SetPermission(theOwner, "write", "User")
+	sc.fake.SetPermission(theMaintainer, "write", "User")
 
 	sc.pollAndWait(t, sc.service())
 
 	text := promptOf(t, sc.record(t, "agent.args"))
-	if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+ownerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theOwner, text)
+	if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+issueOwnerLoginLine) {
+		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theMaintainer, text)
 	}
 	if strings.Contains(text, "an-earlier-owner") {
 		t.Errorf("the prompt names the actor of an older event:\n%s", text)
@@ -52,16 +52,16 @@ func TestOwnerLogin_TheImplementerReceivesTheActorOfTheNewestReady(t *testing.T)
 // event of the requirement issue wins over a newer event of a sub-issue.
 func TestOwnerLogin_ThePlannerReceivesTheOwnerOfTheRequirementIssue(t *testing.T) {
 	sc := newPlanScene(t)
-	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
+	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("another-owner", 1)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 	sc.fake.SetPermission("another-owner", "admin", "User")
 
 	sc.pollAndWait(t, sc.service())
 
 	text := promptOf(t, sc.record(t, "agent.args"))
-	if !strings.Contains(text, "- Issue of the run: #6 (requirement issue)"+ownerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theOwner, text)
+	if !strings.Contains(text, "- Issue of the run: #6 (requirement issue)"+issueOwnerLoginLine) {
+		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theMaintainer, text)
 	}
 }
 
@@ -70,14 +70,14 @@ func TestOwnerLogin_TheReviewerReceivesTheOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 
 	sc.pollAndWait(t, service)
 
 	text := promptOf(t, sc.record(t, "agent.args"))
-	if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+ownerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theOwner, text)
+	if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+issueOwnerLoginLine) {
+		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theMaintainer, text)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestOwnerLogin_WithoutAnOwnerThePromptSaysThatThereIsNoOwnerLogin(t *testin
 			sc.pollAndWait(t, service)
 
 			text := promptOf(t, sc.record(t, "agent.args"))
-			if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+noOwnerLoginLine) {
+			if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+noIssueOwnerLoginLine) {
 				t.Errorf("the prompt does not say that there is no Owner login:\n%s", text)
 			}
 			for _, login := range []string{"a-triager", "some-app"} {

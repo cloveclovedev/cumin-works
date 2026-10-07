@@ -42,11 +42,11 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	}
 	// The poll read the Owner of the newest cumin/status/ready before the
 	// decision (readReadyOwners); R1 holds only with that Owner.
-	req.ownerLogin = requirement.ReadyOwner
+	req.issueOwnerLogin = requirement.ReadyOwner
 	repository := target.Repository.String()
 	if p.Again {
 		var err error
-		if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, p.Number); err != nil {
+		if req.issueOwnerLogin, err = s.readIssueOwnerLogin(ctx, token, target, p.Number); err != nil {
 			return fmt.Errorf(string(ActionRequestTheSplitAgain)+": read the Issue Owner login of issue #%d: %w", p.Number, err)
 		}
 		req.again, req.count = true, true
@@ -121,7 +121,7 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 		return nil
 	}
 	var err error
-	if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, a.Number); err != nil {
+	if req.issueOwnerLogin, err = s.readIssueOwnerLogin(ctx, token, target, a.Number); err != nil {
 		return fmt.Errorf("%s: read the Issue Owner login of issue #%d: %w", action, a.Number, err)
 	}
 	if a.Again {
@@ -160,9 +160,9 @@ type plannerRequest struct {
 	// kind is the request kind of planner.md, for the log.
 	kind string
 	text func(repository string, number int, workDir string) string
-	// ownerLogin is the login of the Owner for the facts of the request,
+	// issueOwnerLogin is the login of the Owner for the facts of the request,
 	// read before the request. Empty says that there is none.
-	ownerLogin string
+	issueOwnerLogin string
 	// sessionID is the session that an acceptance check that is requested
 	// again resumes. Empty starts a new session.
 	sessionID string
@@ -291,7 +291,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 		Repo:         target.Repository.Name,
 		Role:         config.RolePlanner,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement, OwnerLogin: req.ownerLogin, ProtectedPaths: settings.ProtectedPaths},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement, IssueOwnerLogin: req.issueOwnerLogin, ProtectedPaths: settings.ProtectedPaths},
 		Text:         req.text(target.Repository.String(), number, workDir),
 		WorkDir:      workDir,
 		Settings:     &role,
@@ -388,7 +388,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 				log.Error("the requirement issue was not moved; the next poll decides again", "error", err.Error())
 				return
 			}
-			acceptance.ownerLogin = req.ownerLogin
+			acceptance.issueOwnerLogin = req.issueOwnerLogin
 			s.runPlanner(ctx, target, settings, number, acceptance)
 			return
 		case Plan:
@@ -532,7 +532,7 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	if !a.Question {
 		log.Info(string(ActionStopTheAcceptanceCheck)+": the Planner left no acceptance check comment after two requests; the issue waits for a Maintainer", "labels", labels)
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action:    ActionStopTheAcceptanceCheck,
 			issue:     a.Number,
 			labelDone: true,
@@ -543,7 +543,7 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 	}
 	log = log.With("action", ActionStopTheAcceptanceCheck)
 	log.Info(string(ActionStopTheAcceptanceCheck)+": the Planner asked a question during the acceptance check; the issue waits for a Maintainer", "labels", labels)
-	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionStopTheAcceptanceCheck),
 		Reason:     "The Planner asked a question during the acceptance check.",
 		Repository: target.Repository.String(),
@@ -574,7 +574,7 @@ func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger,
 		log = log.With("action", action)
 		log.Error(string(action)+": the issue was not read after blocked; the issue keeps its label, and the blocked_reason was not written on the issue; the whole text is here",
 			"error", err.Error(), "comment", comment)
-		s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		s.notify(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 			Action:     string(action),
 			Reason:     PlannerQuestionNotWrittenReason,
 			Repository: target.Repository.String(),
@@ -583,7 +583,7 @@ func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger,
 		})
 		return err
 	}
-	s.stopForOwner(ctx, log, target, settings, stop{
+	s.stopForMaintainer(ctx, log, target, settings, stop{
 		action:  action,
 		issue:   number,
 		labels:  labelsOf(requirement, err),
@@ -607,7 +607,7 @@ func (s *Service) reviewPlan(ctx context.Context, token string, target Target, s
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "action", ActionAskForThePlanReview)
 	log.Info(string(ActionAskForThePlanReview)+": the split waits for a Maintainer", "sub_issues", len(requirement.SubIssues), "labels", labels)
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
-	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionAskForThePlanReview),
 		Reason:     "The split of the requirement issue needs a review.",
 		Repository: target.Repository.String(),
@@ -635,7 +635,7 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	if !a.Question {
 		log.Warn(string(ActionStopTheSplit)+": the split failed the check after two requests; the issue waits for a Maintainer", "reason", a.Reason, "labels", labels)
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action:    ActionStopTheSplit,
 			issue:     a.Number,
 			labelDone: true,
@@ -646,7 +646,7 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 	}
 	log = log.With("action", ActionStopTheSplit)
 	log.Info(string(ActionStopTheSplit)+": the Planner asked a question during the split; the issue waits for a Maintainer", "labels", labels)
-	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionStopTheSplit),
 		Reason:     "The Planner asked a question during the split.",
 		Repository: target.Repository.String(),
@@ -670,7 +670,7 @@ func (s *Service) accept(ctx context.Context, token string, target Target, snaps
 	log.Info(string(ActionAskForTheAcceptance)+": the requirement issue waits for the acceptance of a Maintainer", "labels", labels)
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionAskForTheAcceptance),
 		Reason:     "The acceptance check is done; the requirement issue can be accepted.",
 		Repository: target.Repository.String(),

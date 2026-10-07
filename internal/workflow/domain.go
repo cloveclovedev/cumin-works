@@ -158,9 +158,9 @@ func PollIsDue(inWork bool, sinceLastPoll, pollInterval, idlePollInterval time.D
 	return inWork || sinceLastPoll >= idlePollInterval-pollInterval/2
 }
 
-// HasOwnerApprovalCandidate reports whether a sub-issue is a candidate of
+// HasMaintainerApprovalCandidate reports whether a sub-issue is a candidate of
 // I12, so that the poll reads the required checks for it.
-func (s Snapshot) HasOwnerApprovalCandidate() bool { return len(ownerApprovals(s)) > 0 }
+func (s Snapshot) HasMaintainerApprovalCandidate() bool { return len(maintainerApprovals(s)) > 0 }
 
 // RequirementIssue is an open issue with cumin/type/requirement.
 type RequirementIssue struct {
@@ -203,7 +203,7 @@ type RequirementIssue struct {
 	// (ReadyActorReads).
 	ReadyRead bool
 	// ReadyOwner is the login of the account that added the newest
-	// cumin/status/ready, when that account is the Owner (IsOwner). It is
+	// cumin/status/ready, when that account is the Owner (IsMaintainer). It is
 	// empty when another account added it, and when it was not read.
 	ReadyOwner string
 	// StatusRead says that StatusCounts was read. The poll reads it only
@@ -251,7 +251,7 @@ type SubIssue struct {
 	// (ReadyActorReads).
 	ReadyRead bool
 	// ReadyOwner is the login of the account that added the newest
-	// cumin/status/ready, when that account is the Owner (IsOwner). It is
+	// cumin/status/ready, when that account is the Owner (IsMaintainer). It is
 	// empty when another account added it, and when it was not read.
 	ReadyOwner string
 	// Implementing are the facts that decide the way out of
@@ -282,9 +282,9 @@ type MergingFacts struct {
 	Merged int
 	// Reviewer is the login "<slug>[bot]" of the Reviewer App.
 	Reviewer string
-	// Owners says, for each person whose review decides, whether that
-	// person is an Owner (IsOwner).
-	Owners map[string]bool
+	// Maintainers says, for each person whose review decides, whether that
+	// person is an Owner (IsMaintainer).
+	Maintainers map[string]bool
 	// Required are the checks that the rules of the default branch
 	// require.
 	Required []RequiredCheck
@@ -623,10 +623,10 @@ type RequestReviewFix struct {
 	Review      Review
 }
 
-// AskOwnerToMerge is the action "ask the Owner to decide the merge" (I7):
+// AskMaintainerToMerge is the action "ask the Owner to decide the merge" (I7):
 // the Reviewer approved the head commit, the required checks pass, and the
 // risk is risk/medium or risk/high.
-type AskOwnerToMerge struct {
+type AskMaintainerToMerge struct {
 	Number      int
 	PullRequest int
 }
@@ -764,26 +764,26 @@ type Accept struct {
 	Number int
 }
 
-// MergeOwnerApproval is the candidate of I12: an implementation issue in
+// MergeMaintainerApproval is the candidate of I12: an implementation issue in
 // cumin/status/awaiting-merge-decision whose pull request has an APPROVED
 // review of a person on its head commit. Reviewers are the people whose
 // reviews decide (APPROVED or CHANGES_REQUESTED); the caller reads their
 // permission, and only then knows which of them is an Owner
-// (OwnerApproved).
-type MergeOwnerApproval struct {
+// (MaintainerApproved).
+type MergeMaintainerApproval struct {
 	Number      int
 	PullRequest int
 	Reviewers   []string
 }
 
-// FixOwnerReview is the candidate of I13: an implementation issue in
+// FixMaintainerReview is the candidate of I13: an implementation issue in
 // cumin/status/awaiting-merge-decision whose pull request has a
 // CHANGES_REQUESTED review of a person on its head commit, submitted after
 // that label was last added. Reviewers are the people whose reviews decide,
-// as for MergeOwnerApproval; the caller reads their permission, and only
+// as for MergeMaintainerApproval; the caller reads their permission, and only
 // then knows whether the latest review of an Owner requests changes
-// (OwnerRequestedChanges).
-type FixOwnerReview struct {
+// (MaintainerRequestedChanges).
+type FixMaintainerReview struct {
 	Number      int
 	PullRequest int
 	Reviewers   []string
@@ -808,13 +808,13 @@ func (ReviewRemaining) isAction()            {}
 func (CheckAcceptance) isAction()            {}
 func (Accept) isAction()                     {}
 func (StopAcceptance) isAction()             {}
-func (MergeOwnerApproval) isAction()         {}
-func (FixOwnerReview) isAction()             {}
+func (MergeMaintainerApproval) isAction()    {}
+func (FixMaintainerReview) isAction()        {}
 func (WaitForChecks) isAction()              {}
 func (RequestImplementationAgain) isAction() {}
 func (StopImplementation) isAction()         {}
 func (RequestReviewFix) isAction()           {}
-func (AskOwnerToMerge) isAction()            {}
+func (AskMaintainerToMerge) isAction()       {}
 func (StartMerge) isAction()                 {}
 func (CloseMergedIssue) isAction()           {}
 func (SendMerge) isAction()                  {}
@@ -875,9 +875,9 @@ func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, prio
 	for _, s := range starts[:max(0, min(room, len(starts)))] {
 		actions = append(actions, s.action)
 	}
-	actions = append(actions, ownerApprovals(snapshot)...)
-	actions = append(actions, ownerChangeRequests(snapshot)...)
-	actions = append(actions, conflictingOwnerReviews(snapshot)...)
+	actions = append(actions, maintainerApprovals(snapshot)...)
+	actions = append(actions, maintainerChangeRequests(snapshot)...)
+	actions = append(actions, conflictingMaintainerReviews(snapshot)...)
 	return append(actions, labelCopies(snapshot)...)
 }
 
@@ -1261,8 +1261,8 @@ func ReviewEnd(sub SubIssue, running bool) Action {
 		switch decision := DecideMerge(sub.Labels, facts.Required, pr.Checks); decision {
 		case MergeNow:
 			return StartMerge{Number: sub.Number, PullRequest: pr.Number}
-		case MergeAskOwner:
-			return AskOwnerToMerge{Number: sub.Number, PullRequest: pr.Number}
+		case MergeAskMaintainer:
+			return AskMaintainerToMerge{Number: sub.Number, PullRequest: pr.Number}
 		case MergeChecksNotPassed:
 			return BackToChecks{Number: sub.Number}
 		default:
@@ -1295,7 +1295,7 @@ func ReviewEndIssue(action Action) int {
 	switch a := action.(type) {
 	case RequestReviewFix:
 		return a.Number
-	case AskOwnerToMerge:
+	case AskMaintainerToMerge:
 		return a.Number
 	case StartMerge:
 		return a.Number
@@ -1378,7 +1378,7 @@ func MergeEnd(sub SubIssue, running bool) Action {
 	switch {
 	case !ok && facts.Merged > 0:
 		return CloseMergedIssue{Number: sub.Number, PullRequest: facts.Merged}
-	case ok && MergeConditionsHold(sub.Labels, facts.Required, pr, facts.Reviewer, facts.Owners):
+	case ok && MergeConditionsHold(sub.Labels, facts.Required, pr, facts.Reviewer, facts.Maintainers):
 		if pr.Mergeable == Conflicting {
 			return ResolveMergeConflict{Number: sub.Number, PullRequest: pr.Number}
 		}
@@ -1399,17 +1399,17 @@ func MergeNeedsFacts(sub SubIssue, running bool) bool {
 // exactly one risk/* label, every required check passes on the head commit,
 // and the latest review of the Reviewer is APPROVE on the head commit. With
 // risk/medium or risk/high, the latest review of an Owner that decides is
-// APPROVE on the head commit too (OwnerApproved). cumin checks them before
+// APPROVE on the head commit too (MaintainerApproved). cumin checks them before
 // every merge that it sends.
-func MergeConditionsHold(labels []string, required []RequiredCheck, pr PullRequest, reviewer string, owners map[string]bool) bool {
+func MergeConditionsHold(labels []string, required []RequiredCheck, pr PullRequest, reviewer string, maintainers map[string]bool) bool {
 	if CheckReview(pr, reviewer) != ReviewApprovedOnHead {
 		return false
 	}
 	switch DecideMerge(labels, required, pr.Checks) {
 	case MergeNow:
 		return true
-	case MergeAskOwner:
-		return OwnerApproved(pr.Reviews, pr.HeadCommit, owners)
+	case MergeAskMaintainer:
+		return MaintainerApproved(pr.Reviews, pr.HeadCommit, maintainers)
 	}
 	return false
 }
@@ -1583,7 +1583,7 @@ type StatusActor struct {
 
 // StatusLabelCounts reports whether cumin treats a status label as a state
 // (issue-states.md, the account that added a status label): the account of
-// its newest label event is an Owner (IsOwner) or, for every label but
+// its newest label event is an Owner (IsMaintainer) or, for every label but
 // cumin/status/ready, the cumin-core App. core is the login of the bot of
 // cumin-core; GraphQL names a bot without "[bot]", so both forms match.
 // Every rule that acts from a state calls it before it acts.
@@ -1592,7 +1592,7 @@ func StatusLabelCounts(label string, actor StatusActor, core string) bool {
 		return false
 	}
 	if actor.Type == "User" {
-		return IsOwner(actor.Permission, actor.UserType)
+		return IsMaintainer(actor.Permission, actor.UserType)
 	}
 	core = strings.TrimSuffix(core, "[bot]")
 	return label != LabelReady && actor.Type == "Bot" && core != "" &&
@@ -1641,10 +1641,10 @@ func subStatusOfAnother(sub SubIssue) bool {
 		sub.Merging != nil && !sub.Merging.StatusCounts
 }
 
-// readyOfOwner reports whether the newest cumin/status/ready was read and
+// readyOfMaintainer reports whether the newest cumin/status/ready was read and
 // is the Owner's. R1 and I1 hold only then (issue-states.md, the ready of
 // the Owner).
-func readyOfOwner(read bool, owner string) bool { return read && owner != "" }
+func readyOfMaintainer(read bool, owner string) bool { return read && owner != "" }
 
 // readyOfAnother reports whether the newest cumin/status/ready was read and
 // is not the Owner's. Such an issue waits for the Owner.
@@ -1717,7 +1717,7 @@ func readyRequirementIssues(snapshot Snapshot) []Plan {
 	var plans []Plan
 	for _, plan := range requirementCandidates(snapshot) {
 		requirement, _ := snapshot.RequirementIssue(plan.Number)
-		if readyOfOwner(requirement.ReadyRead, requirement.ReadyOwner) {
+		if readyOfMaintainer(requirement.ReadyRead, requirement.ReadyOwner) {
 			plans = append(plans, plan)
 		}
 	}
@@ -1789,14 +1789,14 @@ func conflictingSubIssues(snapshot Snapshot) []Action {
 	return actions
 }
 
-// conflictingOwnerReviews returns the actions of I14 for the issues that
+// conflictingMaintainerReviews returns the actions of I14 for the issues that
 // wait for the Owner: open sub-issues in cumin/status/awaiting-merge-decision,
 // not running now, whose open pull request GitHub reports as CONFLICTING,
 // lowest issue number first. The Owner then approves only a head that can
 // merge. An issue that also has cumin/status/ready is left to I1, as for
 // I13. A merge step of I12 that runs keeps the label, so a running issue
 // gives no action.
-func conflictingOwnerReviews(snapshot Snapshot) []Action {
+func conflictingMaintainerReviews(snapshot Snapshot) []Action {
 	var actions []Action
 	for _, action := range conflictsUnder(snapshot, LabelAwaitingMergeDecision) {
 		sub, _ := snapshot.SubIssue(action.(ResolveConflict).Number)
@@ -2015,7 +2015,7 @@ func readySubIssues(snapshot Snapshot) []Claim {
 	var claims []Claim
 	for _, claim := range subIssueCandidates(snapshot) {
 		sub, _ := snapshot.SubIssue(claim.Number)
-		if readyOfOwner(sub.ReadyRead, sub.ReadyOwner) {
+		if readyOfMaintainer(sub.ReadyRead, sub.ReadyOwner) {
 			claims = append(claims, claim)
 		}
 	}
@@ -2048,7 +2048,7 @@ func subIssueCandidates(snapshot Snapshot) []Claim {
 	return claims
 }
 
-// MovesWithoutOwner reports whether an issue exists that cumin moves on
+// MovesWithoutMaintainer reports whether an issue exists that cumin moves on
 // without the Owner, so that cumin is not waiting (issue-states.md, the
 // table under Q4): an open sub-issue that waits for the required checks,
 // an issue in planning, implementing, reviewing, accepting, or merging,
@@ -2058,7 +2058,7 @@ func subIssueCandidates(snapshot Snapshot) []Claim {
 // than cumin-core or an Owner added, and an issue that waits for the Owner
 // do not count. A ready that was not read counts: the poll reads it when a
 // slot is free.
-func (s Snapshot) MovesWithoutOwner() bool {
+func (s Snapshot) MovesWithoutMaintainer() bool {
 	if s.HasIssueChecking() {
 		return true
 	}
@@ -2652,8 +2652,8 @@ type MergeDecision int
 const (
 	// MergeNow: risk/low; cumin merges (I6).
 	MergeNow MergeDecision = iota
-	// MergeAskOwner: risk/medium or risk/high; the Owner decides (I7).
-	MergeAskOwner
+	// MergeAskMaintainer: risk/medium or risk/high; the Owner decides (I7).
+	MergeAskMaintainer
 	// MergeNoRiskLabel: the issue has no risk/* label; cumin stops it.
 	MergeNoRiskLabel
 	// MergeTwoRiskLabels: the issue has more than one risk/* label; cumin
@@ -2669,7 +2669,7 @@ func (d MergeDecision) String() string {
 	switch d {
 	case MergeNow:
 		return "merge"
-	case MergeAskOwner:
+	case MergeAskMaintainer:
 		return "ask a Maintainer"
 	case MergeNoRiskLabel:
 		return "no risk label"
@@ -2703,7 +2703,7 @@ func DecideMerge(labels []string, required []RequiredCheck, checks []CheckResult
 	case risks[0] == "risk/low":
 		return MergeNow
 	}
-	return MergeAskOwner
+	return MergeAskMaintainer
 }
 
 // isBot reports whether a login is the bot of a GitHub App: the client
@@ -2717,28 +2717,28 @@ func decides(state ReviewState) bool {
 	return state == ReviewApproved || state == ReviewChangesRequested
 }
 
-// ownerApprovals returns the candidates of I12, lowest issue number first:
+// maintainerApprovals returns the candidates of I12, lowest issue number first:
 // open sub-issues in cumin/status/awaiting-merge-decision, not running now,
 // whose open pull request has an APPROVED review of a person on its head
 // commit. The candidate names every person whose review decides, because
 // the latest review of any Owner among them counts.
-func ownerApprovals(snapshot Snapshot) []Action {
+func maintainerApprovals(snapshot Snapshot) []Action {
 	var actions []Action
-	for _, c := range ownerReviewCandidates(snapshot, ReviewApproved) {
-		actions = append(actions, MergeOwnerApproval(c))
+	for _, c := range maintainerReviewCandidates(snapshot, ReviewApproved) {
+		actions = append(actions, MergeMaintainerApproval(c))
 	}
 	return actions
 }
 
-// ownerChangeRequests returns the candidates of I13, lowest issue number
-// first: as ownerApprovals, with a CHANGES_REQUESTED review of a person on
+// maintainerChangeRequests returns the candidates of I13, lowest issue number
+// first: as maintainerApprovals, with a CHANGES_REQUESTED review of a person on
 // the head commit. An issue that also has cumin/status/ready is not a
 // candidate: the Owner asked for a new start, and I1 takes it. The review
 // is newer than the last cumin/status/awaiting-merge-decision of the issue
 // (newChangeRequest), so that one review sends the pull request back once.
-func ownerChangeRequests(snapshot Snapshot) []Action {
+func maintainerChangeRequests(snapshot Snapshot) []Action {
 	var actions []Action
-	for _, c := range ownerReviewCandidates(snapshot, ReviewChangesRequested) {
+	for _, c := range maintainerReviewCandidates(snapshot, ReviewChangesRequested) {
 		sub, _ := snapshot.SubIssue(c.Number)
 		if slices.Contains(sub.Labels, LabelReady) || !newChangeRequest(snapshot, sub) {
 			continue
@@ -2782,12 +2782,12 @@ func DecidingReviewers(reviews []Review) []string {
 	return reviewers
 }
 
-// ownerReviewCandidates returns, lowest issue number first, the open
+// maintainerReviewCandidates returns, lowest issue number first, the open
 // sub-issues in cumin/status/awaiting-merge-decision, not running now, whose
 // open pull request has a review of a person with the state on its head
 // commit. Each one names every person whose review decides.
-func ownerReviewCandidates(snapshot Snapshot, state ReviewState) []FixOwnerReview {
-	var candidates []FixOwnerReview
+func maintainerReviewCandidates(snapshot Snapshot, state ReviewState) []FixMaintainerReview {
+	var candidates []FixMaintainerReview
 	for _, requirement := range snapshot.RequirementIssues {
 		for _, sub := range requirement.SubIssues {
 			if sub.Closed || !slices.Contains(sub.Labels, LabelAwaitingMergeDecision) || snapshot.Running[sub.Number] {
@@ -2802,51 +2802,51 @@ func ownerReviewCandidates(snapshot Snapshot, state ReviewState) []FixOwnerRevie
 			})
 			if candidate {
 				reviewers := DecidingReviewers(pr.Reviews)
-				candidates = append(candidates, FixOwnerReview{Number: sub.Number, PullRequest: pr.Number, Reviewers: reviewers})
+				candidates = append(candidates, FixMaintainerReview{Number: sub.Number, PullRequest: pr.Number, Reviewers: reviewers})
 			}
 		}
 	}
-	slices.SortFunc(candidates, func(a, b FixOwnerReview) int { return a.Number - b.Number })
+	slices.SortFunc(candidates, func(a, b FixMaintainerReview) int { return a.Number - b.Number })
 	return candidates
 }
 
-// OwnerApproved applies the check of I12: of the reviews of the Owners
-// (owners holds their logins), the latest one that decides is APPROVED on
+// MaintainerApproved applies the check of I12: of the reviews of the Maintainers
+// (maintainers holds their logins), the latest one that decides is APPROVED on
 // the head commit. An approval on an older commit does not count, and a
 // later CHANGES_REQUESTED of an Owner takes the approval back. A review of
-// a bot never counts, whatever owners says.
-func OwnerApproved(reviews []Review, head string, owners map[string]bool) bool {
-	latest, found := latestOwnerReview(reviews, owners)
+// a bot never counts, whatever maintainers says.
+func MaintainerApproved(reviews []Review, head string, maintainers map[string]bool) bool {
+	latest, found := latestMaintainerReview(reviews, maintainers)
 	return found && latest.State == ReviewApproved && head != "" && latest.Commit == head
 }
 
-// OwnerRequestedChanges applies the check of I13: of the reviews of the
-// Owners (owners holds their logins), the latest one that decides is
-// CHANGES_REQUESTED on the head commit, submitted after awaitingOwnerAt:
+// MaintainerRequestedChanges applies the check of I13: of the reviews of the
+// Maintainers (maintainers holds their logins), the latest one that decides is
+// CHANGES_REQUESTED on the head commit, submitted after awaitingMaintainerAt:
 // the time that cumin/status/awaiting-merge-decision was last added to the
 // issue. It returns that review, whose address the request names. A request
 // for changes on an older commit does not count, and a later APPROVED of an
 // Owner takes it back. A comment-only review decides nothing, and a review
 // of a bot never counts. A review that is not newer than the label sent the
 // pull request back already, or came before the Owner was asked, so one
-// review sends the pull request back once. A zero awaitingOwnerAt means
+// review sends the pull request back once. A zero awaitingMaintainerAt means
 // that the time of the label is not known, and no review counts.
-func OwnerRequestedChanges(reviews []Review, head string, owners map[string]bool, awaitingOwnerAt time.Time) (Review, bool) {
-	latest, found := latestOwnerReview(reviews, owners)
+func MaintainerRequestedChanges(reviews []Review, head string, maintainers map[string]bool, awaitingMaintainerAt time.Time) (Review, bool) {
+	latest, found := latestMaintainerReview(reviews, maintainers)
 	if !found || latest.State != ReviewChangesRequested || head == "" || latest.Commit != head ||
-		awaitingOwnerAt.IsZero() || !latest.SubmittedAt.After(awaitingOwnerAt) {
+		awaitingMaintainerAt.IsZero() || !latest.SubmittedAt.After(awaitingMaintainerAt) {
 		return Review{}, false
 	}
 	return latest, true
 }
 
-// latestOwnerReview returns the latest review that decides among the
-// reviews of the Owners. A bot is never an Owner, whatever owners says.
-func latestOwnerReview(reviews []Review, owners map[string]bool) (Review, bool) {
+// latestMaintainerReview returns the latest review that decides among the
+// reviews of the Maintainers. A bot is never an Owner, whatever maintainers says.
+func latestMaintainerReview(reviews []Review, maintainers map[string]bool) (Review, bool) {
 	var latest Review
 	found := false
 	for _, review := range reviews {
-		if !owners[review.Author] || isBot(review.Author) || !decides(review.State) {
+		if !maintainers[review.Author] || isBot(review.Author) || !decides(review.State) {
 			continue
 		}
 		if !found || !review.SubmittedAt.Before(latest.SubmittedAt) {
@@ -2856,9 +2856,9 @@ func latestOwnerReview(reviews []Review, owners map[string]bool) (Review, bool) 
 	return latest, found
 }
 
-// IsOwner applies the definition of the Owner (cumin-core.md): a person,
+// IsMaintainer applies the definition of the Owner (cumin-core.md): a person,
 // not a bot, with write or admin permission on the repository. GitHub
 // reports maintain as write ("Get repository permissions for a user").
-func IsOwner(permission, userType string) bool {
+func IsMaintainer(permission, userType string) bool {
 	return userType == "User" && (permission == "admin" || permission == "write")
 }

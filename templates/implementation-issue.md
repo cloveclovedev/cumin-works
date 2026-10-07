@@ -74,7 +74,7 @@ Out of scope:
 
 ## Pointers
 - Change: `internal/workflow/{domain,request,service}.go`, `docs/ja/designs/poll.md`, `docs/ja/getting-started.md`
-- Follow the pattern in: `ImplementRequestText`, `startImplementer`, `stopForOwner` with `ActionStopTheImplementation`
+- Follow the pattern in: `ImplementRequestText`, `startImplementer`, `stopForMaintainer` with `ActionStopTheImplementation`
 
 ## Acceptance criteria
 - [ ] A failed required check sends exactly one request across polls (the label changes first, principle 3).

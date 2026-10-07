@@ -54,8 +54,8 @@ func TestOwnerReady_AReadyOfTheOwnerStartsTheImplementerOnce(t *testing.T) {
 		t.Run(permission, func(t *testing.T) {
 			sc := newScene(t)
 			sc.addUnlinkedPullRequest(21, sc.remoteHead)
-			sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
-			sc.fake.SetPermission(theOwner, permission, "User")
+			sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
+			sc.fake.SetPermission(theMaintainer, permission, "User")
 			service := sc.service()
 
 			for range 3 {
@@ -78,8 +78,8 @@ func TestOwnerReady_AReadyOfTheOwnerStartsTheImplementerOnce(t *testing.T) {
 // issue.
 func TestOwnerReady_AReadyOfTheOwnerStartsThePlannerOnce(t *testing.T) {
 	sc := newPlanScene(t)
-	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 60), removedBefore(readyBy(theOwner, 5)), readyBy(theOwner, 5)}
-	sc.fake.SetPermission(theOwner, "write", "User")
+	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 60), removedBefore(readyBy(theMaintainer, 5)), readyBy(theMaintainer, 5)}
+	sc.fake.SetPermission(theMaintainer, "write", "User")
 	service := sc.service()
 
 	for range 3 {
@@ -95,11 +95,11 @@ func TestOwnerReady_AReadyOfTheOwnerStartsThePlannerOnce(t *testing.T) {
 	}
 }
 
-// notOwners are the accounts whose cumin/status/ready starts nothing: a
+// notMaintainers are the accounts whose cumin/status/ready starts nothing: a
 // person with triage permission (GitHub reports triage as read), a GitHub
 // App, a bot account with write permission, a person without write
 // permission, and an account that no longer exists.
-var notOwners = []struct {
+var notMaintainers = []struct {
 	name  string
 	event githubtest.LabelEvent
 }{
@@ -112,8 +112,8 @@ var notOwners = []struct {
 		Label: "cumin/status/ready", At: sceneNow.Add(-5 * time.Minute)}},
 }
 
-func setNotOwnerPermissions(sc *scene) {
-	sc.fake.SetPermission(theOwner, "admin", "User")
+func setNotMaintainerPermissions(sc *scene) {
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 	sc.fake.SetPermission("a-triager", "read", "User")
 	sc.fake.SetPermission("writer-bot", "write", "Bot")
 	sc.fake.SetPermission("a-visitor", "none", "User")
@@ -135,11 +135,11 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 		{name: "a requirement issue", number: 6, row: "request the split", scene: newPlanScene},
 	}
 	for _, s := range scenes {
-		for _, tt := range notOwners {
+		for _, tt := range notMaintainers {
 			t.Run(s.name+"/"+tt.name, func(t *testing.T) {
 				sc := s.scene(t)
-				sc.repo.Issues[s.number].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 60), removedBefore(tt.event), tt.event}
-				setNotOwnerPermissions(sc)
+				sc.repo.Issues[s.number].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 60), removedBefore(tt.event), tt.event}
+				setNotMaintainerPermissions(sc)
 				service := sc.service()
 
 				for i := range 3 {
@@ -191,10 +191,10 @@ func TestOwnerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheOwner(t *testin
 		t.Run(s.name, func(t *testing.T) {
 			sc := s.scene(t)
 			sc.repo.Issues[s.number].LabelEvents = []githubtest.LabelEvent{
-				readyBy(theOwner, 5),
+				readyBy(theMaintainer, 5),
 				{Label: "cumin/status/ready", At: sceneNow.Add(-4 * time.Minute), Actor: plannerLogin, ActorType: "Bot"},
 			}
-			setNotOwnerPermissions(sc)
+			setNotMaintainerPermissions(sc)
 			service := sc.service()
 
 			for range 3 {
@@ -220,7 +220,7 @@ func TestOwnerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheOwner(t *testin
 func TestOwnerReady_ANewReadyOfAnotherAccountIsLoggedAgain(t *testing.T) {
 	sc := newScene(t)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 5)}
-	setNotOwnerPermissions(sc)
+	setNotMaintainerPermissions(sc)
 	service := sc.service()
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
@@ -241,8 +241,8 @@ func TestOwnerReady_AReadyOfAnotherAccountTakesNoSlot(t *testing.T) {
 	sc := newScene(t)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 5)}
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Another issue", Labels: []string{"cumin/status/ready", "risk/low"},
-		LabelEvents: []githubtest.LabelEvent{readyBy(theOwner, 5)}})
-	setNotOwnerPermissions(sc)
+		LabelEvents: []githubtest.LabelEvent{readyBy(theMaintainer, 5)}})
+	setNotMaintainerPermissions(sc)
 	service := sc.service()
 
 	// The run for #11 leaves no pull request, so its implementation is
@@ -282,8 +282,8 @@ func TestOwnerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sc := newScene(t)
-			sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
-			sc.fake.SetPermission(theOwner, "admin", "User")
+			sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
+			sc.fake.SetPermission(theMaintainer, "admin", "User")
 			tt.setup(sc)
 
 			sc.pollAndWait(t, sc.service())
@@ -306,8 +306,8 @@ func TestOwnerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
 func TestOwnerReady_AStartReadsTheActorAndThePermissionOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 
 	sc.pollAndWait(t, sc.service())
 
@@ -319,8 +319,8 @@ func TestOwnerReady_AStartReadsTheActorAndThePermissionOnce(t *testing.T) {
 	if n := sc.permissionReads(); n != 1 {
 		t.Errorf("%d reads of a permission, want 1", n)
 	}
-	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, ownerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s:\n%s", theOwner, text)
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, issueOwnerLoginLine) {
+		t.Errorf("the prompt does not name the Owner %s:\n%s", theMaintainer, text)
 	}
 }
 
@@ -329,9 +329,9 @@ func TestOwnerReady_AStartReadsTheActorAndThePermissionOnce(t *testing.T) {
 func TestOwnerReady_AFailedReadWaitsForTheNextPoll(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
-	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 0, everyTry, http.StatusBadGateway)
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
+	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theMaintainer+"/permission", 0, everyTry, http.StatusBadGateway)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
@@ -388,15 +388,15 @@ func TestReadyActorReads_NamesTheStartCandidatesOnlyWithAFreeSlot(t *testing.T) 
 	// account waits for the Owner (the table under Q4). #12 leaves its
 	// working label, which would count by itself.
 	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{workflow.LabelAwaitingDecision}
-	if !snapshot.MovesWithoutOwner() {
-		t.Error("MovesWithoutOwner = false, want true while a ready was not read")
+	if !snapshot.MovesWithoutMaintainer() {
+		t.Error("MovesWithoutMaintainer = false, want true while a ready was not read")
 	}
 	snapshot.RequirementIssues[1].ReadyRead = true
 	snapshot.RequirementIssues[0].SubIssues[1].ReadyRead = true
-	if snapshot.MovesWithoutOwner() {
-		t.Error("MovesWithoutOwner = true, want false when every ready is of another account")
+	if snapshot.MovesWithoutMaintainer() {
+		t.Error("MovesWithoutMaintainer = true, want false when every ready is of another account")
 	}
-	snapshot.RequirementIssues[0].SubIssues[1].ReadyOwner = theOwner
+	snapshot.RequirementIssues[0].SubIssues[1].ReadyOwner = theMaintainer
 	actions := workflow.Decide(snapshot, 3, nil, nil, sceneNow, time.Hour)
 	if len(actions) != 1 || actions[0] != (workflow.Claim{Number: 11, RequirementIssue: 1}) {
 		t.Errorf("Decide = %v, want only the claim of #11, whose ready is of the Owner", actions)
@@ -413,8 +413,8 @@ func TestOwnerReady_AReadyOutsideTheEventsReadDoesNotTakeTheOwnerOfASubIssue(t *
 		events = append(events, githubtest.LabelEvent{Label: "risk/low", At: sceneNow.Add(-time.Duration(400-i) * time.Minute), Actor: "a-triager", ActorType: "User"})
 	}
 	sc.repo.Issues[6].LabelEvents = events
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 5)}
-	setNotOwnerPermissions(sc)
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
+	setNotMaintainerPermissions(sc)
 	service := sc.service()
 
 	for i := range 3 {

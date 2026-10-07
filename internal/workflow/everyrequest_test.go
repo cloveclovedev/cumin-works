@@ -36,11 +36,11 @@ type everyRequest struct {
 	// afterRun says that the request follows the end of an agent run. The
 	// row then reaches it through the real end of that run in the fake CLI.
 	afterRun bool
-	// needsReadyOfOwner says that the decision gives the request only for
+	// needsReadyOfMaintainer says that the decision gives the request only for
 	// a cumin/status/ready of the Owner. While cumin stops after the
 	// current runs, the poll does not read who added that label, so the
 	// request waits before the check before the start, with no log line.
-	needsReadyOfOwner bool
+	needsReadyOfMaintainer bool
 	// scene builds the state from which cumin decides the request. holds
 	// makes the agent run wait until the test releases it.
 	scene func(t *testing.T, holds bool) *scene
@@ -59,7 +59,7 @@ func session(t *testing.T, _ *scene, service *workflow.Service) {
 // everyRequestRows are the requests of the table of requests of quota.md.
 var everyRequestRows = []everyRequest{
 	{
-		request: "split", logged: "split", needsReadyOfOwner: true,
+		request: "split", logged: "split", needsReadyOfMaintainer: true,
 		call:  "plan.go: plan: split",
 		scene: func(t *testing.T, _ bool) *scene { return newPlanScene(t) },
 	},
@@ -103,7 +103,7 @@ var everyRequestRows = []everyRequest{
 		},
 	},
 	{
-		request: "claim", logged: "claim", needsReadyOfOwner: true,
+		request: "claim", logged: "claim", needsReadyOfMaintainer: true,
 		call:  "service.go: claim: claim",
 		scene: func(t *testing.T, _ bool) *scene { return newScene(t) },
 	},
@@ -148,8 +148,8 @@ var everyRequestRows = []everyRequest{
 		call: "merge.go: resolveConflictAtPoll: conflict resolution",
 		scene: func(t *testing.T, _ bool) *scene {
 			sc := conflictingBeforeChecks(t, cliOptions{}, "CONFLICTING")
-			sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
-			sc.fake.SetPermission(theOwner, "admin", "User")
+			sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
+			sc.fake.SetPermission(theMaintainer, "admin", "User")
 			return sc
 		},
 		prepare: session,
@@ -158,22 +158,22 @@ var everyRequestRows = []everyRequest{
 		request: "conflict resolution from cumin/status/awaiting-merge-decision", logged: "conflict resolution",
 		call: "merge.go: resolveConflictAtPoll: conflict resolution",
 		scene: func(t *testing.T, _ bool) *scene {
-			sc := awaitingOwner(t)
+			sc := awaitingMaintainer(t)
 			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 			sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
-			sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+			sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 			return sc
 		},
 		prepare: session,
 	},
 	{
 		request: "fix of the review of the Owner", logged: "owner review fix",
-		call: "merge.go: fixOwnerReview: owner review fix",
+		call: "merge.go: fixMaintainerReview: owner review fix",
 		scene: func(t *testing.T, _ bool) *scene {
-			sc := awaitingOwner(t)
+			sc := awaitingMaintainer(t)
 			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-			sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
-			sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+			sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+			sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 			return sc
 		},
 		prepare: session,
@@ -331,7 +331,7 @@ func TestEveryRequestStartsNoAgentWhileCuminStopsOrAtAQuotaLimit(t *testing.T) {
 				runWithAStopRequestOfTheStart(t, service)
 			}
 
-			if row.needsReadyOfOwner {
+			if row.needsReadyOfMaintainer {
 				assertNoStartOfTheRequest(t, sc, service, row, before)
 				return
 			}

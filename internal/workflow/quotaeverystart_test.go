@@ -165,7 +165,7 @@ func TestStopAgentStarts_ACheckFixWaitsAtALimitAndTwoWaitingIssuesNotifyOnce(t *
 // conflict resolution exactly once.
 func TestStopAgentStarts_AConflictResolutionWaitsAtALimit(t *testing.T) {
 	sc := mergingScene(t, "risk/low")
-	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theOwner, 30))
+	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theMaintainer, 30))
 	// The poll still reads MERGEABLE, so the conflict shows only at the
 	// merge.
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
@@ -213,7 +213,7 @@ func TestStopAgentStarts_AKnownConflictAtALimitSendsNoMerge(t *testing.T) {
 // merges. The steps that start no agent go on, and no usage is read.
 func TestCore33_AnApprovedPullRequestMergesAtALimit(t *testing.T) {
 	sc := mergingScene(t, "risk/low")
-	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theOwner, 30))
+	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theMaintainer, 30))
 	sc.atAQuotaLimit(t)
 	service := sc.service()
 	withState(t, service)
@@ -235,10 +235,10 @@ func TestCore33_AnApprovedPullRequestMergesAtALimit(t *testing.T) {
 // the issue keeps cumin/status/awaiting-merge-decision. After cumin quota
 // allow, one poll requests the fix exactly once.
 func TestStopAgentStarts_TheResponseToTheReviewOfTheOwnerWaitsAtALimit(t *testing.T) {
-	sc := awaitingOwner(t, cliOptions{})
+	sc := awaitingMaintainer(t, cliOptions{})
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
-	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 	reset := sc.atAQuotaLimit(t)
 	service := sc.serviceWithSession(t)
 	sc.pollTimes(t, service, 3)
@@ -301,11 +301,11 @@ func TestStopAgentStarts_TheFirstAcceptanceCheckWaitsAtALimit(t *testing.T) {
 // The conflict resolution would move the head commit away from the review
 // of the Owner. The next poll requests the fix of that review.
 func TestStopAgentStarts_AWaitingReviewOfTheOwnerKeepsTheConflictResolutionBack(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
-	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 	sc.failQuotaOnce(t)
 	service := sc.serviceWithSession(t)
 	sc.pollAndWait(t, service)

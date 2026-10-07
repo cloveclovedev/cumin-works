@@ -32,11 +32,11 @@ type reviewerRequest struct {
 	readyAt time.Time
 	// sessionID resumes that session. Empty starts a new session.
 	sessionID string
-	// ownerLogin is the login of the Owner for the facts of the request,
+	// issueOwnerLogin is the login of the Owner for the facts of the request,
 	// read before the label changed. Empty says that there is none. The
 	// requests that follow in the same run (the review fix of I5, the
 	// explanation of the cause of I8) carry the same login.
-	ownerLogin string
+	issueOwnerLogin string
 	// again says that the request is the second one of its kind during this
 	// stay in cumin/status/reviewing: "request the review again", or the
 	// second request of the cause.
@@ -126,7 +126,7 @@ func (s *Service) reviewRequestOf(ctx context.Context, token string, target Targ
 	s.logger().Debug(string(ActionRequestTheReview)+": read the label times", "repository", repository, "issue", number,
 		"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	readyAt := times[number][LabelReady]
-	ownerLogin, err := s.readOwnerLogin(ctx, token, target, number)
+	issueOwnerLogin, err := s.readIssueOwnerLogin(ctx, token, target, number)
 	if err != nil {
 		return reviewerRequest{}, fmt.Errorf(string(ActionRequestTheReview)+": read the Issue Owner login of issue #%d: %w", number, err)
 	}
@@ -147,9 +147,9 @@ func (s *Service) reviewRequestOf(ctx context.Context, token string, target Targ
 			Approved:     approved,
 			LastReviewed: LastReviewedCommit(pr.Reviews, reviewer, readyAt),
 		},
-		reviewer:   reviewer,
-		readyAt:    readyAt,
-		ownerLogin: ownerLogin,
+		reviewer:        reviewer,
+		readyAt:         readyAt,
+		issueOwnerLogin: issueOwnerLogin,
 	}
 	if round > 1 {
 		req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
@@ -227,7 +227,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		Repo:         target.Repository.Name,
 		Role:         config.RoleReviewer,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin, ProtectedPaths: settings.ProtectedPaths},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, IssueOwnerLogin: req.issueOwnerLogin, ProtectedPaths: settings.ProtectedPaths},
 		Text:         ReviewRequestText(req.review),
 		WorkDir:      workDir,
 		Settings:     &role,
@@ -359,9 +359,9 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 		stop.Reason = AfterAbnormalEndReason(stop.Reason, "Reviewer", abnormal.Kind)
 		action = stop
 	}
-	ownerLogin := func(context.Context, string) (string, error) { return req.ownerLogin, nil }
+	issueOwnerLogin := func(context.Context, string) (string, error) { return req.issueOwnerLogin, nil }
 	// Only a run that returned done left its session for the next request.
-	rest, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, defaultBranch, ownerLogin, abnormal == nil, action)
+	rest, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, defaultBranch, issueOwnerLogin, abnormal == nil, action)
 	if err != nil {
 		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 		return
@@ -521,12 +521,12 @@ func (s *Service) countReviewRequest(repository string, number int, cause bool) 
 // An error says that nothing more happened: the issue keeps
 // cumin/status/reviewing, and the next poll decides again from the same
 // facts. No request, comment, or notification goes out before the label
-// changed, so none goes out twice. ownerLogin gives the login of the Owner
+// changed, so none goes out twice. issueOwnerLogin gives the login of the Owner
 // for a review fix and for the review request of I7. afterRun says that a
 // Reviewer run of this stay just returned done and left its session; a poll
 // passes false, because a restart of cumin can have cut the run before its
 // session was kept, and so does the end of a run that ended abnormally.
-func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, ownerLogin func(ctx context.Context, token string) (string, error), afterRun bool, action Action) (func(context.Context), error) {
+func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, issueOwnerLogin func(ctx context.Context, token string) (string, error), afterRun bool, action Action) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	number := sub.Number
@@ -546,14 +546,14 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		}
 		if !a.Question {
 			log.Warn(string(a.Action)+": the review stops for a Maintainer", "reason", a.Reason, "retried", a.Retried, "labels", labels)
-			s.stopForOwner(ctx, log, target, settings, stop{
+			s.stopForMaintainer(ctx, log, target, settings, stop{
 				action: a.Action, issue: number, labelDone: true, reason: a.Reason,
 				comment: StopNote(a.Action, a.Reason, a.PullRequest, a.Retried),
 			})
 			return nil, nil
 		}
 		log.Info(string(ActionStopTheReview)+": the Reviewer asked a question; the issue waits for a Maintainer", "labels", labels)
-		s.notifyOwner(ctx, log.With("action", ActionStopTheReview), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		s.notify(ctx, log.With("action", ActionStopTheReview), settings.Settings.Notify.DiscordEnabled, notify.Notification{
 			Action:     string(ActionStopTheReview),
 			Reason:     "The Reviewer asked a question during the review.",
 			Repository: repository,
@@ -571,16 +571,16 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		} else {
 			log.Info(string(ActionGoBackToTheChecks)+": a required check does not pass on the approved commit; the issue waits for the checks again", "labels", labels)
 		}
-	case AskOwnerToMerge:
+	case AskMaintainerToMerge:
 		log.Info(string(ActionAskForTheMergeDecision) + ": the Reviewer approved the head commit")
-		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, ownerLogin)
+		return nil, s.askMaintainerToMerge(ctx, log, target, settings, token, sub, pr, issueOwnerLogin)
 	case StopAtRoundLimit:
 		labels, err := move(ActionStopAtTheRoundLimit, LabelAwaitingDecision)
 		if err != nil {
 			return nil, err
 		}
 		log.Info(string(ActionStopAtTheRoundLimit)+": the issue waits for a Maintainer", "labels", labels, "comment", a.Explanation.URL)
-		s.notifyOwner(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		s.notify(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.Settings.Notify.DiscordEnabled, notify.Notification{
 			Action:     string(ActionStopAtTheRoundLimit),
 			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstBodyLine(a.Explanation.Body)),
 			Repository: repository,
@@ -592,7 +592,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if !ok {
 			return nil, nil
 		}
-		login, err := ownerLogin(ctx, token)
+		login, err := issueOwnerLogin(ctx, token)
 		if err != nil {
 			return nil, fmt.Errorf(string(ActionRequestAReviewFix)+": read the Issue Owner login of issue #%d: %w", number, err)
 		}
@@ -609,8 +609,8 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		return func(ctx context.Context) {
 			s.runImplementer(ctx, target, settings, number, implementerRequest{
 				action: ActionRequestAReviewFix, kind: "review fix", branch: branch, pullRequest: pr.Number,
-				sessionID:  s.State.Issue(repository, number).SessionID,
-				ownerLogin: login, permit: permit,
+				sessionID:       s.State.Issue(repository, number).SessionID,
+				issueOwnerLogin: login, permit: permit,
 				text: func(workDir string) string {
 					return ReviewFixRequestText(repository, number, pr.Number, branch, workDir, a.Review.URL)
 				},
@@ -675,10 +675,10 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token string, target Target, snapshot Snapshot, settings *RepositorySettings, action Action) error {
 	number := ReviewEndIssue(action)
 	sub, _ := snapshot.SubIssue(number)
-	ownerLogin := func(ctx context.Context, token string) (string, error) {
-		return s.readOwnerLogin(ctx, token, target, number)
+	issueOwnerLogin := func(ctx context.Context, token string) (string, error) {
+		return s.readIssueOwnerLogin(ctx, token, target, number)
 	}
-	rest, err := s.applyReviewEnd(ctx, log.With("issue", number), token, target, settings, sub, snapshot.DefaultBranch, ownerLogin, false, action)
+	rest, err := s.applyReviewEnd(ctx, log.With("issue", number), token, target, settings, sub, snapshot.DefaultBranch, issueOwnerLogin, false, action)
 	if err != nil || rest == nil {
 		return err
 	}

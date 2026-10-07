@@ -136,7 +136,7 @@ var agentLabels = map[bool][]string{
 // after the current runs.
 const agentsAtWorkNote = "(an issue here can wait with no agent, only while agent starts are stopped or a stop after the current runs is requested)"
 
-var ownerLabels = []string{workflow.LabelAwaitingPlanReview, workflow.LabelAwaitingMergeDecision, workflow.LabelAwaitingAcceptance, workflow.LabelAwaitingDecision}
+var maintainerLabels = []string{workflow.LabelAwaitingPlanReview, workflow.LabelAwaitingMergeDecision, workflow.LabelAwaitingAcceptance, workflow.LabelAwaitingDecision}
 
 // writeStatus writes the whole report. A repository that cannot be read
 // is named with the reason, and the report goes on; the error then says
@@ -159,7 +159,7 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 				switch {
 				case slices.Contains(agentLabels[requirement], label):
 					working = append(working, line)
-				case slices.Contains(ownerLabels, label):
+				case slices.Contains(maintainerLabels, label):
 					waiting = append(waiting, line)
 				}
 			}

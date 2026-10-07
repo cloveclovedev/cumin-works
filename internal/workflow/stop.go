@@ -49,7 +49,7 @@ type stop struct {
 // comment was not written on the issue.
 const notWrittenNote = " cumin did not write the comment on the issue; the log of the Host holds the whole text."
 
-// stopForOwner posts the comment, replaces the status label, and notifies
+// stopForMaintainer posts the comment, replaces the status label, and notifies
 // the Owner, in that order; with labelFirst, the label comes before the
 // comment. Every step is logged with the action.
 //
@@ -58,7 +58,7 @@ const notWrittenNote = " cumin did not write the comment on the issue; the log o
 // undone. What cumin wrote on GitHub is the fact of the matter, and the
 // notification only asks the Owner to look. A comment that was not written
 // goes to the log as a whole, and the notification says so.
-func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, st stop) {
+func (s *Service) stopForMaintainer(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, st stop) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	log = log.With("action", st.action)
 	// The comment holds the whole reason, so the notification links to it.
@@ -101,7 +101,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 		}
 	}
 
-	s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(st.action),
 		Reason:     reason,
 		Repository: target.Repository.String(),
@@ -110,7 +110,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 	})
 }
 
-// notifyOwner sends one notification, when the repository wants one. The
+// notify sends one notification, when the repository wants one. The
 // caller reads the setting notify.discord.enabled of that repository. A
 // failure is logged at error level and undoes nothing.
 //
@@ -118,7 +118,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 // that a caller that sends a notification once (Q1) can try again later.
 // A notification that is off, or that has no channel, reports true: trying
 // again changes nothing.
-func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled bool, n notify.Notification) bool {
+func (s *Service) notify(ctx context.Context, log *slog.Logger, enabled bool, n notify.Notification) bool {
 	if !enabled {
 		log.Info("the notification is off for this repository")
 		return true

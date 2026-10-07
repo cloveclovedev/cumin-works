@@ -131,10 +131,10 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T
 				sc := s.scene(t)
 				// An older event of the Owner does not count: the label was
 				// removed, and the other account put it on the issue again.
-				older := statusBy(s.label, theOwner)
+				older := statusBy(s.label, theMaintainer)
 				older.At = older.At.Add(-time.Hour)
 				sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{older, removedBefore(tt.event(s.label)), tt.event(s.label)}
-				setNotOwnerPermissions(sc)
+				setNotMaintainerPermissions(sc)
 				service := sc.service()
 
 				for i := range 3 {
@@ -178,14 +178,14 @@ func TestStatusLabel_ALabelOfCuminCoreOrOfAnOwnerDecidesAsBefore(t *testing.T) {
 		{name: "the cumin-core App", event: func(label string) githubtest.LabelEvent {
 			return githubtest.LabelEvent{Label: label, At: sceneNow.Add(-time.Hour), Actor: cuminSlug, ActorType: "Bot"}
 		}},
-		{name: "an Owner", event: func(label string) githubtest.LabelEvent { return statusBy(label, theOwner) }},
+		{name: "an Owner", event: func(label string) githubtest.LabelEvent { return statusBy(label, theMaintainer) }},
 	}
 	for _, s := range statusScenes {
 		for _, tt := range counted {
 			t.Run(s.label+"/"+tt.name, func(t *testing.T) {
 				sc := s.scene(t)
 				sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{tt.event(s.label)}
-				setNotOwnerPermissions(sc)
+				setNotMaintainerPermissions(sc)
 				service := sc.service()
 
 				sc.pollAndWait(t, service)
@@ -210,10 +210,10 @@ func TestStatusLabel_ARepeatedEventOfAnotherGitHubAppDoesNotHideTheAccount(t *te
 		t.Run(s.label, func(t *testing.T) {
 			sc := s.scene(t)
 			sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{
-				statusBy(s.label, theOwner),
+				statusBy(s.label, theMaintainer),
 				{Label: s.label, At: sceneNow.Add(-30 * time.Minute), Actor: implementerSlug, ActorType: "Bot"},
 			}
-			setNotOwnerPermissions(sc)
+			setNotMaintainerPermissions(sc)
 			service := sc.service()
 
 			sc.pollAndWait(t, service)
@@ -282,13 +282,13 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNotMoveOnWithoutTheOwner(t *testi
 			requirement.StatusRead, requirement.StatusCounts = read, counts
 			return workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{requirement}}
 		}
-		if snapshot(true, false).MovesWithoutOwner() {
+		if snapshot(true, false).MovesWithoutMaintainer() {
 			t.Errorf("%s of another account moves on without the Owner, want not", label)
 		}
-		if !snapshot(true, true).MovesWithoutOwner() {
+		if !snapshot(true, true).MovesWithoutMaintainer() {
 			t.Errorf("%s of cumin-core or an Owner does not move on without the Owner", label)
 		}
-		if !snapshot(false, false).MovesWithoutOwner() {
+		if !snapshot(false, false).MovesWithoutMaintainer() {
 			t.Errorf("%s whose account was not read does not move on without the Owner", label)
 		}
 	}

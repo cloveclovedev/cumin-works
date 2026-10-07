@@ -30,7 +30,7 @@ func mergingScene(t *testing.T, risk string) *scene {
 		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelMerging, At: sceneNow.Add(-10 * time.Minute), Actor: cuminSlug, ActorType: "Bot"}},
 	})
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 	return sc
 }
 
@@ -210,8 +210,8 @@ func TestMerging_AMergeThatFailsWith502IsSentAgainAtTheNextPoll(t *testing.T) {
 // "go back to the checks", and cumin sends no merge.
 func TestMerging_AChangeRequestOfTheOwnerGoesBackToTheChecksWithoutAMerge(t *testing.T) {
 	sc := mergingScene(t, "risk/medium")
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 1)
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 1)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
@@ -297,7 +297,7 @@ func TestMerging_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T) 
 // work: with a limit of one, a ready issue does not start.
 func TestMerging_AnIssueInMergingCountsTowardTheLimit(t *testing.T) {
 	merging := workflow.SubIssue{Number: 10, Labels: []string{"risk/low", workflow.LabelMerging}}
-	ready := workflow.SubIssue{Number: 11, Labels: []string{workflow.LabelReady}, ReadyRead: true, ReadyOwner: theOwner}
+	ready := workflow.SubIssue{Number: 11, Labels: []string{workflow.LabelReady}, ReadyRead: true, ReadyOwner: theMaintainer}
 	snapshot := workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{{
 		Number: 6, Labels: []string{workflow.LabelImplementing}, SubIssues: []workflow.SubIssue{merging, ready},
 	}}}
@@ -324,7 +324,7 @@ func TestMerging_AnIssueInMergingCountsTowardTheLimit(t *testing.T) {
 // of cumin, one poll requests the conflict resolution.
 func TestMerging_AConflictWhileCuminStopsAfterTheRunsWaitsForTheNextStart(t *testing.T) {
 	sc := mergingScene(t, "risk/low")
-	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theOwner, 30))
+	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theMaintainer, 30))
 	// The poll still reads MERGEABLE, so the conflict shows only at the
 	// merge.
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
@@ -434,11 +434,11 @@ func knownConflictScene(t *testing.T, opts ...cliOptions) *scene {
 		Labels: []string{"risk/low", workflow.LabelMerging},
 		LabelEvents: []githubtest.LabelEvent{
 			{Label: workflow.LabelMerging, At: sceneNow.Add(-10 * time.Minute), Actor: cuminSlug, ActorType: "Bot"},
-			readyBy(theOwner, 30),
+			readyBy(theMaintainer, 30),
 		},
 	})
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
 	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
 	return sc

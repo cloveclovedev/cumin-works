@@ -18,17 +18,17 @@ func (sc *scene) reviewRequests() int {
 	return sc.fake.CountRequests(http.MethodPost, reviewRequestPath)
 }
 
-// readyByTheOwner makes the Owner the account that added the newest
+// readyByTheMaintainer makes the Owner the account that added the newest
 // cumin/status/ready to #10, so that cumin has an Owner login.
-func (sc *scene) readyByTheOwner() {
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
+func (sc *scene) readyByTheMaintainer() {
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 }
 
-// assertWaitsForOwnerWithOneNotification checks what I7 leaves without the
+// assertWaitsForMaintainerWithOneNotification checks what I7 leaves without the
 // review request: the label, one notification that links the pull request,
 // and no merge.
-func assertWaitsForOwnerWithOneNotification(t *testing.T, sc *scene) {
+func assertWaitsForMaintainerWithOneNotification(t *testing.T, sc *scene) {
 	t.Helper()
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
@@ -48,16 +48,16 @@ func assertWaitsForOwnerWithOneNotification(t *testing.T, sc *scene) {
 // that follow send no second one.
 func TestI7_TheReviewOfTheOwnerIsRequestedOnce(t *testing.T) {
 	sc := approved(t, "risk/medium")
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), removedBefore(readyBy(theOwner, 5)), readyBy(theOwner, 5)}
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), removedBefore(readyBy(theMaintainer, 5)), readyBy(theMaintainer, 5)}
 	sc.fake.SetPermission("an-earlier-owner", "admin", "User")
-	sc.fake.SetPermission(theOwner, "write", "User")
+	sc.fake.SetPermission(theMaintainer, "write", "User")
 	service := sc.service()
 
 	sc.pollTimes(t, service, 3)
 
-	assertWaitsForOwnerWithOneNotification(t, sc)
-	if got := sc.fake.RequestedReviewers(sc.repo, 21); !slices.Equal(got, []string{theOwner}) {
-		t.Errorf("requested reviewers of #21 = %v, want only %s", got, theOwner)
+	assertWaitsForMaintainerWithOneNotification(t, sc)
+	if got := sc.fake.RequestedReviewers(sc.repo, 21); !slices.Equal(got, []string{theMaintainer}) {
+		t.Errorf("requested reviewers of #21 = %v, want only %s", got, theMaintainer)
 	}
 	if n := sc.reviewRequests(); n != 1 {
 		t.Fatalf("%d requests of a review, want 1", n)
@@ -69,8 +69,8 @@ func TestI7_TheReviewOfTheOwnerIsRequestedOnce(t *testing.T) {
 			label = i
 		case r.Method == http.MethodPost && r.Path == reviewRequestPath:
 			request = i
-			if !strings.Contains(string(r.Body), `"reviewers":["`+theOwner+`"]`) {
-				t.Errorf("the request does not name only %s: %s", theOwner, r.Body)
+			if !strings.Contains(string(r.Body), `"reviewers":["`+theMaintainer+`"]`) {
+				t.Errorf("the request does not name only %s: %s", theMaintainer, r.Body)
 			}
 		}
 	}
@@ -115,13 +115,13 @@ func TestI7_WithoutTheReviewRequestTheLabelAndTheNotificationAreAsBefore(t *test
 			log: `"msg":"ask for the merge decision: there is no Issue Owner login; the review of the Issue Owner is not requested"`},
 		{name: "the request answers 422", requests: 1,
 			prepare: func(sc *scene) {
-				sc.readyByTheOwner()
+				sc.readyByTheMaintainer()
 				sc.fake.FailNext(http.MethodPost, reviewRequestPath, http.StatusUnprocessableEntity)
 			},
 			log: `"level":"ERROR","msg":"ask for the merge decision: the review of the Issue Owner was not requested; the notification still goes out"`},
 		{name: "the request answers 500", requests: 1,
 			prepare: func(sc *scene) {
-				sc.readyByTheOwner()
+				sc.readyByTheMaintainer()
 				sc.fake.FailNext(http.MethodPost, reviewRequestPath, http.StatusInternalServerError)
 			},
 			log: `"level":"ERROR","msg":"ask for the merge decision: the review of the Issue Owner was not requested; the notification still goes out"`},
@@ -134,7 +134,7 @@ func TestI7_WithoutTheReviewRequestTheLabelAndTheNotificationAreAsBefore(t *test
 
 			sc.pollTimes(t, service, 3)
 
-			assertWaitsForOwnerWithOneNotification(t, sc)
+			assertWaitsForMaintainerWithOneNotification(t, sc)
 			if n := sc.reviewRequests(); n != tt.requests {
 				t.Errorf("%d requests of a review, want %d: nothing is tried again", n, tt.requests)
 			}
@@ -152,18 +152,18 @@ func TestI7_WithoutTheReviewRequestTheLabelAndTheNotificationAreAsBefore(t *test
 // After the Owner approves the head commit, I12 merges.
 func TestI12_TheReviewRequestAloneIsNotMergedAndTheApprovalOfTheOwnerIs(t *testing.T) {
 	sc := approved(t, "risk/medium")
-	sc.readyByTheOwner()
+	sc.readyByTheMaintainer()
 	service := sc.service()
 
 	sc.pollTimes(t, service, 3)
 
-	if got := sc.fake.RequestedReviewers(sc.repo, 21); !slices.Equal(got, []string{theOwner}) {
-		t.Fatalf("requested reviewers of #21 = %v, want %s", got, theOwner)
+	if got := sc.fake.RequestedReviewers(sc.repo, 21); !slices.Equal(got, []string{theMaintainer}) {
+		t.Fatalf("requested reviewers of #21 = %v, want %s", got, theMaintainer)
 	}
-	assertWaitsForOwnerWithOneNotification(t, sc)
+	assertWaitsForMaintainerWithOneNotification(t, sc)
 
 	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
-		Author: theOwner, State: "APPROVED", Commit: sc.remoteHead, SubmittedAt: sceneNow.Add(time.Hour)})
+		Author: theMaintainer, State: "APPROVED", Commit: sc.remoteHead, SubmittedAt: sceneNow.Add(time.Hour)})
 	sc.pollTimes(t, service, 2)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
@@ -186,7 +186,7 @@ func TestI13_AfterTheFixAndANewApprovalTheReviewIsRequestedAgain(t *testing.T) {
 		Number: 10, Parent: 6, Title: subIssueTitle,
 		Labels: []string{"cumin/status/checking", "risk/medium"},
 	})
-	sc.readyByTheOwner()
+	sc.readyByTheMaintainer()
 	service := sc.serviceWithSession(t)
 
 	sc.pollAndWait(t, service)
@@ -196,7 +196,7 @@ func TestI13_AfterTheFixAndANewApprovalTheReviewIsRequestedAgain(t *testing.T) {
 	}
 	oldHead := sc.repo.PullRequests[21].HeadCommit
 	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
-		Author: theOwner, State: "CHANGES_REQUESTED", Commit: oldHead, SubmittedAt: sceneNow.Add(time.Hour)})
+		Author: theMaintainer, State: "CHANGES_REQUESTED", Commit: oldHead, SubmittedAt: sceneNow.Add(time.Hour)})
 	sc.pollTimes(t, service, 4)
 
 	if n := sc.agentRuns(t); n != 3 {
@@ -211,7 +211,7 @@ func TestI13_AfterTheFixAndANewApprovalTheReviewIsRequestedAgain(t *testing.T) {
 	if n := sc.reviewRequests(); n != 2 {
 		t.Errorf("%d requests of a review, want 2: one for each time that I7 holds", n)
 	}
-	if got := sc.fake.RequestedReviewers(sc.repo, 21); !slices.Equal(got, []string{theOwner}) {
-		t.Errorf("requested reviewers of #21 = %v, want %s once", got, theOwner)
+	if got := sc.fake.RequestedReviewers(sc.repo, 21); !slices.Equal(got, []string{theMaintainer}) {
+		t.Errorf("requested reviewers of #21 = %v, want %s once", got, theMaintainer)
 	}
 }

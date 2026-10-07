@@ -40,7 +40,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 		},
 		{
 			name: "an implementation issue",
-			facts: runFacts{Facts: Facts{IssueNumber: 12, IssueKind: IssueKindImplementation, OwnerLogin: "example-owner"},
+			facts: runFacts{Facts: Facts{IssueNumber: 12, IssueKind: IssueKindImplementation, IssueOwnerLogin: "example-owner"},
 				TimeLimit: 50 * time.Minute, End: time.Date(2026, 10, 3, 1, 50, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Issue of the run: #12 (implementation issue)\n" +

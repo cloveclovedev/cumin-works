@@ -22,7 +22,7 @@ type pollResult struct {
 	// still a decided Plan or Claim. Both mean that cumin is not waiting.
 	decided bool
 	// movesOn says that an issue exists that cumin moves on without the
-	// Owner (Snapshot.MovesWithoutOwner). cumin did nothing in this poll,
+	// Owner (Snapshot.MovesWithoutMaintainer). cumin did nothing in this poll,
 	// and still it is not waiting for the Owner.
 	movesOn bool
 	// waitsForQuota says that a start of an agent waits only for the quota
@@ -105,7 +105,7 @@ func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete 
 	}
 	log := s.logger()
 	log.Info(string(ActionTellThatCuminWaits) + ": no issue can go on and no agent runs; the notification goes out once")
-	sent := s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
+	sent := s.notify(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action: string(ActionTellThatCuminWaits),
 		Reason: "No issue can go on and no agent runs. cumin waits for a new ready issue or a decision.",
 	})

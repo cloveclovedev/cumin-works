@@ -301,17 +301,17 @@ func TestDecide_I4(t *testing.T) {
 // the issue back, and the candidates of I12 and of I13 come before it.
 func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 	const head = "1111"
-	awaitingOwner := func(number int, mergeable MergeableState, reviews ...Review) SubIssue {
+	awaitingMaintainer := func(number int, mergeable MergeableState, reviews ...Review) SubIssue {
 		return SubIssue{Number: number, Labels: []string{LabelAwaitingMergeDecision, "risk/medium"},
 			AwaitingMergeDecisionAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 			PullRequests:            []PullRequest{{Number: number + 10, HeadCommit: head, Mergeable: mergeable, Reviews: reviews}}}
 	}
-	owner := func(state ReviewState) Review {
+	maintainer := func(state ReviewState) Review {
 		return Review{Author: "the-owner", State: state, Commit: head, SubmittedAt: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)}
 	}
-	withReady := awaitingOwner(10, Conflicting)
+	withReady := awaitingMaintainer(10, Conflicting)
 	withReady.Labels = append(withReady.Labels, LabelReady)
-	closed := awaitingOwner(10, Conflicting)
+	closed := awaitingMaintainer(10, Conflicting)
 	closed.Closed = true
 
 	tests := []struct {
@@ -322,36 +322,36 @@ func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 	}{
 		{
 			name: "a conflicting pull request gives one conflict resolution",
-			subs: []SubIssue{awaitingOwner(10, Conflicting)},
+			subs: []SubIssue{awaitingMaintainer(10, Conflicting)},
 			want: []Action{ResolveConflict{Number: 10, PullRequest: 20}},
 		},
 		{
 			name: "unknown gives nothing: GitHub is still calculating",
-			subs: []SubIssue{awaitingOwner(10, MergeableUnknown)},
+			subs: []SubIssue{awaitingMaintainer(10, MergeableUnknown)},
 		},
 		{
 			name: "mergeable leaves the issue waiting for the Owner",
-			subs: []SubIssue{awaitingOwner(10, Mergeable)},
+			subs: []SubIssue{awaitingMaintainer(10, Mergeable)},
 		},
 		{
 			name: "an approval on the conflicting head is a candidate of I12 first",
-			subs: []SubIssue{awaitingOwner(10, Conflicting, owner(ReviewApproved))},
+			subs: []SubIssue{awaitingMaintainer(10, Conflicting, maintainer(ReviewApproved))},
 			want: []Action{
-				MergeOwnerApproval{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
+				MergeMaintainerApproval{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
 				ResolveConflict{Number: 10, PullRequest: 20},
 			},
 		},
 		{
 			name: "a request for changes on the conflicting head is a candidate of I13 first",
-			subs: []SubIssue{awaitingOwner(10, Conflicting, owner(ReviewChangesRequested))},
+			subs: []SubIssue{awaitingMaintainer(10, Conflicting, maintainer(ReviewChangesRequested))},
 			want: []Action{
-				FixOwnerReview{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
+				FixMaintainerReview{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
 				ResolveConflict{Number: 10, PullRequest: 20},
 			},
 		},
 		{
 			name:    "an issue whose merge step runs gives nothing",
-			subs:    []SubIssue{awaitingOwner(10, Conflicting)},
+			subs:    []SubIssue{awaitingMaintainer(10, Conflicting)},
 			running: map[int]bool{10: true},
 		},
 		{
@@ -364,7 +364,7 @@ func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 		},
 		{
 			name: "lowest issue number first",
-			subs: []SubIssue{awaitingOwner(12, Conflicting), awaitingOwner(10, Conflicting)},
+			subs: []SubIssue{awaitingMaintainer(12, Conflicting), awaitingMaintainer(10, Conflicting)},
 			want: []Action{
 				ResolveConflict{Number: 10, PullRequest: 20},
 				ResolveConflict{Number: 12, PullRequest: 22},
@@ -378,7 +378,7 @@ func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 			var got []Action
 			for _, action := range Decide(snapshot, 1, nil, nil, time.Time{}, 0) {
 				switch action.(type) {
-				case ResolveConflict, MergeOwnerApproval, FixOwnerReview:
+				case ResolveConflict, MergeMaintainerApproval, FixMaintainerReview:
 					got = append(got, action)
 				}
 			}

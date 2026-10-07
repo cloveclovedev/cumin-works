@@ -599,7 +599,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// I4) or has an approval of a person to check (I12). Its budget is not
 	// the one of the snapshot query.
 	var required []RequiredCheck
-	if snapshot.HasIssueChecking() || snapshot.HasOwnerApprovalCandidate() {
+	if snapshot.HasIssueChecking() || snapshot.HasMaintainerApprovalCandidate() {
 		read, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
 		if err != nil {
 			return err
@@ -632,7 +632,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	notStarted := map[int]bool{}
 	// An issue that cumin moves on without the Owner keeps Q4 silent, even
 	// when this poll decides nothing for it.
-	result.movesOn = snapshot.MovesWithoutOwner()
+	result.movesOn = snapshot.MovesWithoutMaintainer()
 	result.issueInWork = snapshot.HasIssueInWork()
 	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames(),
 		s.now(), settings.Settings.ChecksWaitTime)
@@ -641,18 +641,18 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// first. A check of I12 or of I13 that failed keeps the issue too, so
 	// that the next poll decides it again. So does a request for changes of
 	// the Owner that waits for the permit of its start.
-	ownerDecided := map[int]bool{}
+	maintainerDecided := map[int]bool{}
 	// The merges that this poll sent, for the wait between two of them.
 	merges := 0
 	for _, action := range actions {
-		if a, ok := action.(ResolveConflict); ok && ownerDecided[a.Number] {
+		if a, ok := action.(ResolveConflict); ok && maintainerDecided[a.Number] {
 			log.Info(string(ActionRequestAConflictResolution)+": waits for the review of a Maintainer on the conflicting head", "issue", a.Number)
 			continue
 		}
 		// A candidate of I12 or of I13 is only a check; it counts as
 		// progress for Q4 when it merges, stops, or sends back the issue.
 		switch action.(type) {
-		case MergeOwnerApproval, FixOwnerReview:
+		case MergeMaintainerApproval, FixMaintainerReview:
 		default:
 			result.note(action)
 		}
@@ -709,7 +709,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err := s.mergeEndAtPoll(ctx, log, token, target, snapshot, settings, a, &merges); err != nil {
 				errs = append(errs, err)
 			}
-		case RequestReviewFix, AskOwnerToMerge, StartMerge, RequestCause, StopAtRoundLimit, BackToChecks, RequestReviewAgain, StopReview:
+		case RequestReviewFix, AskMaintainerToMerge, StartMerge, RequestCause, StopAtRoundLimit, BackToChecks, RequestReviewAgain, StopReview:
 			if err := s.reviewEndAtPoll(ctx, log, token, target, snapshot, settings, a); err != nil {
 				errs = append(errs, err)
 			}
@@ -741,21 +741,21 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			if err := s.copyLabels(ctx, token, target, a); err != nil {
 				errs = append(errs, err)
 			}
-		case MergeOwnerApproval:
-			acted, err := s.mergeOwnerApproval(ctx, token, target, snapshot, settings, required, a)
+		case MergeMaintainerApproval:
+			acted, err := s.mergeMaintainerApproval(ctx, token, target, snapshot, settings, required, a)
 			if err != nil {
 				errs = append(errs, err)
 			}
-			ownerDecided[a.Number] = acted || err != nil
+			maintainerDecided[a.Number] = acted || err != nil
 			if acted {
 				result.note(action)
 			}
-		case FixOwnerReview:
-			acted, waits, err := s.fixOwnerReview(ctx, token, target, snapshot, settings, a)
+		case FixMaintainerReview:
+			acted, waits, err := s.fixMaintainerReview(ctx, token, target, snapshot, settings, a)
 			if err != nil {
 				errs = append(errs, err)
 			}
-			ownerDecided[a.Number] = ownerDecided[a.Number] || acted || waits || err != nil
+			maintainerDecided[a.Number] = maintainerDecided[a.Number] || acted || waits || err != nil
 			if acted {
 				result.note(action)
 			}
@@ -832,9 +832,9 @@ type implementerRequest struct {
 	pullRequest int
 	// sessionID resumes that session. Empty starts a new session.
 	sessionID string
-	// ownerLogin is the login of the Owner for the facts of the request,
+	// issueOwnerLogin is the login of the Owner for the facts of the request,
 	// read before the label changed. Empty says that there is none.
-	ownerLogin string
+	issueOwnerLogin string
 	// text builds the request text once the work directory is known.
 	text func(workDir string) string
 	// again says that the implementation was already requested again
@@ -879,7 +879,7 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 	}
 	log.Info(string(ActionStopForMissingChecks)+": the issue waits for a Maintainer", "labels", labels)
 	reason := UnreportedChecksReason(a)
-	s.stopForOwner(ctx, log, target, settings, stop{
+	s.stopForMaintainer(ctx, log, target, settings, stop{
 		action:    ActionStopForMissingChecks,
 		issue:     a.Number,
 		labels:    labels,
@@ -932,7 +932,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 			return fmt.Errorf(string(ActionStopForFailedChecks)+": stop issue #%d for a Maintainer: %w", a.Number, err)
 		}
 		log.Info(string(ActionStopForFailedChecks)+": the issue waits for a Maintainer", "labels", labels)
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action:    ActionStopForFailedChecks,
 			issue:     a.Number,
 			labels:    labels,
@@ -948,7 +948,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	if !ok {
 		return nil
 	}
-	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	issueOwnerLogin, err := s.readIssueOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return fmt.Errorf(string(ActionRequestACheckFix)+": read the Issue Owner login of issue #%d: %w", a.Number, err)
 	}
@@ -986,7 +986,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	}
 	return s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		action: ActionRequestACheckFix, kind: "check fix", branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
-		ownerLogin: ownerLogin, permit: permit,
+		issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {
 			return CheckFixRequestText(repository, a.Number, pr.Number, branch, workDir, texts)
 		},
@@ -998,11 +998,11 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 // already closes the issue; the work then goes on on the branch of that
 // pull request (ClaimBranch). The session is new in both cases
 // (issue-states.md, the section on the sessions of an agent).
-func (s *Service) startImplementer(ctx context.Context, permit StartPermit, target Target, settings *RepositorySettings, sub SubIssue, ownerLogin string) error {
+func (s *Service) startImplementer(ctx context.Context, permit StartPermit, target Target, settings *RepositorySettings, sub SubIssue, issueOwnerLogin string) error {
 	branch, pullRequest := ClaimBranch(sub)
 	repository := target.Repository.String()
 	req := implementerRequest{
-		action: ActionRequestTheImplementation, kind: "implement", branch: branch, ownerLogin: ownerLogin, permit: permit,
+		action: ActionRequestTheImplementation, kind: "implement", branch: branch, issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, sub.Number, branch, workDir)
 		},
@@ -1097,24 +1097,24 @@ func (s *Service) countImplementationRequest(repository string, number, delta in
 	return s.State.Set(repository, number, stored)
 }
 
-// readOwnerLogin reads the login of the Owner for the facts of a start
+// readIssueOwnerLogin reads the login of the Owner for the facts of a start
 // request (docs/ja/requirements/agents/common.md, the facts of the start
 // request): the account that added the newest cumin/status/ready to the
 // issue of the run, or to a sub-issue when a requirement issue has no such
-// event. The login is passed only when that account is the Owner (IsOwner).
+// event. The login is passed only when that account is the Owner (IsMaintainer).
 // The empty login says that there is no Owner login. A failed read is an
 // error: the caller reads before it changes the label, changes nothing, and
 // sends no request, so the next poll tries again.
-func (s *Service) readOwnerLogin(ctx context.Context, token string, target Target, number int) (string, error) {
-	actor, isOwner, err := s.readReadyActor(ctx, token, target, number, true)
-	if err != nil || !isOwner {
+func (s *Service) readIssueOwnerLogin(ctx context.Context, token string, target Target, number int) (string, error) {
+	actor, isMaintainer, err := s.readReadyActor(ctx, token, target, number, true)
+	if err != nil || !isMaintainer {
 		return "", err
 	}
 	return actor.Login, nil
 }
 
 // readReadyActor reads the account that added the newest cumin/status/ready
-// to the issue, and whether that account is the Owner (IsOwner). subIssues
+// to the issue, and whether that account is the Owner (IsMaintainer). subIssues
 // lets an event of a sub-issue answer for a requirement issue with no such
 // event; the check of R1 and of I1 passes false, so that only an event of
 // the issue itself can start work.
@@ -1223,7 +1223,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 		Repo:         target.Repository.Name,
 		Role:         config.RoleImplementer,
 		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, OwnerLogin: req.ownerLogin, ProtectedPaths: settings.ProtectedPaths},
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, IssueOwnerLogin: req.issueOwnerLogin, ProtectedPaths: settings.ProtectedPaths},
 		Text:         req.text(workDir),
 		WorkDir:      workDir,
 		Settings:     &role,
@@ -1353,7 +1353,7 @@ func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target
 func (s *Service) stopBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, action ActionName, role string, number int, reason string, labels []string) {
 	question := firstLine(reason)
 	log.Warn(string(action)+": the agent returned blocked", "reason", question)
-	s.stopForOwner(ctx, log, target, settings, stop{
+	s.stopForMaintainer(ctx, log, target, settings, stop{
 		action:     action,
 		issue:      number,
 		labels:     labels,
@@ -1492,7 +1492,7 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, a WaitForChecks) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	stopI2 := func(reason string) {
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action:  ActionStopTheImplementation,
 			issue:   a.Number,
 			labels:  sub.Labels,
@@ -1548,7 +1548,7 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 	}
 	if !a.Question {
 		log.Warn(string(ActionStopTheImplementation)+": the implementation stops for a Maintainer", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action:    ActionStopTheImplementation,
 			issue:     a.Number,
 			labelDone: true,
@@ -1559,7 +1559,7 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 	}
 	log = log.With("action", ActionStopTheImplementation)
 	log.Info(string(ActionStopTheImplementation)+": the Implementer asked a question; the issue waits for a Maintainer", "labels", labels)
-	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionStopTheImplementation),
 		Reason:     "The Implementer asked a question during the implementation.",
 		Repository: target.Repository.String(),
@@ -1583,14 +1583,14 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 	if !ok {
 		return nil
 	}
-	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	issueOwnerLogin, err := s.readIssueOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return fmt.Errorf(string(ActionRequestTheImplementationAgain)+": read the Issue Owner login of issue #%d: %w", a.Number, err)
 	}
 	repository := target.Repository.String()
 	branch := sub.Implementing.Branch
 	req := implementerRequest{
-		action: ActionRequestTheImplementationAgain, kind: "implement", branch: branch, ownerLogin: ownerLogin, again: true, count: true, permit: permit,
+		action: ActionRequestTheImplementationAgain, kind: "implement", branch: branch, issueOwnerLogin: issueOwnerLogin, again: true, count: true, permit: permit,
 		sessionID: s.State.Issue(repository, a.Number).SessionID,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, a.Number, branch, workDir)
