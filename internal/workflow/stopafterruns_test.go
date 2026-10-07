@@ -123,7 +123,7 @@ func TestStopAfterRuns_LetsTheRunEndAppliesItsNextStateAndStartsNothingNew(t *te
 		tookStopRequestLog,
 		`"in_progress":["example-org/example-repo#10"]`,
 		heldBackLog,
-		`"msg":"I2: verified the pull request"`,
+		`"msg":"wait for the checks: verified the pull request"`,
 		`"msg":"stopped","reason":"the agent runs have ended after a stop request","in_progress":[]`,
 	} {
 		if !strings.Contains(logs, want) {

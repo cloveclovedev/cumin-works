@@ -198,9 +198,9 @@ func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, targ
 func (s *Service) startRequirement(ctx context.Context, token string, target Target, snapshot Snapshot, a StartRequirement) error {
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelImplementing)
 	if err != nil {
-		return fmt.Errorf("R3: %w", err)
+		return fmt.Errorf(string(ActionMarkTheRequirementAsInWork)+": %w", err)
 	}
-	s.logger().Info("R3: the sub-issues of the requirement issue are in progress",
+	s.logger().Info(string(ActionMarkTheRequirementAsInWork)+": the sub-issues of the requirement issue are in progress",
 		"repository", target.Repository.String(), "issue", a.Number, "labels", labels)
 	return nil
 }
@@ -213,10 +213,10 @@ func (s *Service) startRequirement(ctx context.Context, token string, target Tar
 func (s *Service) reviewRemaining(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ReviewRemaining) error {
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingPlanReview)
 	if err != nil {
-		return fmt.Errorf("R6: %w", err)
+		return fmt.Errorf(string(ActionAskAboutTheRemainingSubIssues)+": %w", err)
 	}
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "action", ActionAskAboutTheRemainingSubIssues)
-	log.Info("R6: the remaining sub-issues wait for the Owner", "labels", labels)
+	log.Info(string(ActionAskAboutTheRemainingSubIssues)+": the remaining sub-issues wait for the Owner", "labels", labels)
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        string(ActionAskAboutTheRemainingSubIssues),
