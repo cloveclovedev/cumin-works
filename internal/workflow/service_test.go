@@ -95,7 +95,7 @@ type scene struct {
 	notifier *notify.Notifier
 	// notifications is the Host setting notify.discord.enabled.
 	notifications bool
-	// clock is the time of the quota decisions (Q1) and of the fake GitHub.
+	// clock is the time of the quota decisions ("stop agent starts") and of the fake GitHub.
 	clock *testClock
 	// quota are the Host settings of the quota limits: the defaults of the
 	// settings table.
@@ -226,9 +226,10 @@ func (f *fakeWebhook) messagesSent() []string {
 	return slices.Clone(f.messages)
 }
 
-// messagesExceptQ4 returns the messages other than Q4 (waiting). A test of
-// another row that ends with nothing to do also gets one Q4 notification.
-func (sc *scene) messagesExceptQ4() []string {
+// messagesExceptWaiting returns the messages other than "tell that cumin
+// waits" (waiting). A test of
+// another row that ends with nothing to do also gets one "tell that cumin waits" notification.
+func (sc *scene) messagesExceptWaiting() []string {
 	var messages []string
 	for _, m := range sc.webhook.messagesSent() {
 		if !strings.HasPrefix(m, "cumin: tell that cumin waits: ") {
@@ -327,7 +328,7 @@ type cliOptions struct {
 	movesHeadOnRun int
 	// comments are what each agent run writes on the pull request #21, one
 	// entry for each run in order: DECISION writes a decision request, NONE
-	// writes nothing, as the Reviewer does for I8.
+	// writes nothing, as the Reviewer does for "request the cause".
 	comments []string
 	// holds makes the agent run wait until the test releases it
 	// (scene.release), and then end as the fixture says: a run that is
@@ -349,7 +350,7 @@ func (sc *scene) service() *workflow.Service {
 			config.RoleReviewer:    {TimeLimit: time.Minute, CLI: config.CLIClaudeCode, CLIPath: sc.cliPath},
 		},
 		// The fake knows one App, so the Planner and the Reviewer run with
-		// the same credentials as the Implementer. R1 does not read the
+		// the same credentials as the Implementer. "request the split" does not read the
 		// identity; the Reviewer is "<slug>[bot]" of that App.
 		Apps: map[string]map[config.Role]github.AppCredentials{
 			"example-org": {
@@ -634,13 +635,14 @@ func git(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// Core-1 (cumin-core.md): one ready implementation issue, two or more polls,
+// The test of a top-level requirement in cumin-core.md: one ready
+// implementation issue, two or more polls,
 // one request to the Implementer.
-func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
+func TestReadyIssueIsRequestedOnce(t *testing.T) {
 	sc := newScene(t)
 	// The pull request that the Implementer opens, so that the run ends on
-	// the success path of I2 and the issue is not stopped for the Owner.
-	// GitHub made no closing link, so I2 adds it.
+	// the success path of the verification and the issue is not stopped for the Maintainer.
+	// GitHub made no closing link, so cumin adds it.
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	service := sc.service()
 	ctx := context.Background()
@@ -658,11 +660,12 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
-	// Two label changes: the claim (I1) and the end of the run (I2).
+	// Two label changes: the claim ("request the implementation") and the end of
+	// the run ("wait for the checks").
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2", n)
 	}
-	// Three polls of two queries each, the read of the login of the Owner
+	// Three polls of two queries each, the read of the login of the Issue Owner
 	// before the start, three reads at the end of the run (the issue, the
 	// actor of its label, and its comments), the closing link, and one
 	// read after it.
@@ -706,9 +709,10 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	}
 }
 
-// Core-8 (cumin-core.md): stop cumin and start it again; the same issue is
+// The test of a top-level requirement in cumin-core.md: stop cumin and start
+// it again; the same issue is
 // not requested twice.
-func TestCore08_RestartDoesNotRequestTwice(t *testing.T) {
+func TestRestartDoesNotRequestTwice(t *testing.T) {
 	sc := newScene(t)
 	ctx := context.Background()
 
@@ -766,10 +770,10 @@ func (sc *scene) pollAndWait(t *testing.T, service *workflow.Service) {
 	service.Wait()
 }
 
-// I2 (issue-states.md): after done, an open pull request closes the issue,
+// "wait for the checks": after done, an open pull request closes the issue,
 // its author is the Implementer App, and the head commit of the worktree is
 // pushed. Then the label becomes cumin/status/checking.
-func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testing.T) {
+func TestDoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testing.T) {
 	sc := newScene(t)
 	// The agent makes no commit, so the head of the worktree is the head of
 	// main of the remote. The pull request is at the same commit.
@@ -782,14 +786,14 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
-		t.Errorf("%d label changes, want 2 (the claim and I2)", n)
+		t.Errorf("%d label changes, want 2 (the claim and the wait for the checks)", n)
 	}
 	// The end of the run reads the issue again, so that a pull request
 	// that the agent opened just before it ended is seen.
-	// The read of the login of the Owner before the start is one more
+	// The read of the login of the Issue Owner before the start is one more
 	// GraphQL request.
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
-		t.Errorf("%d GraphQL requests, want 6 (the two queries of the poll, the login of the Owner, and the three reads after the run)", n)
+		t.Errorf("%d GraphQL requests, want 6 (the two queries of the poll, the login of the Issue Owner, and the three reads after the run)", n)
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"wait for the checks: verified the pull request"`, `"pull_request":21`, `"issue":10`} {
@@ -801,7 +805,7 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 
 // Of two open pull requests that close the issue, the one with the highest
 // number is checked (poll.md, the topic on the end of a run).
-func TestI2_DoneChecksThePullRequestWithTheHighestNumber(t *testing.T) {
+func TestDoneChecksThePullRequestWithTheHighestNumber(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, "0000000000000000000000000000000000000000", implementerSlug, true)
 	sc.addPullRequest(22, sc.remoteHead, implementerSlug, true)
@@ -817,7 +821,7 @@ func TestI2_DoneChecksThePullRequestWithTheHighestNumber(t *testing.T) {
 	}
 }
 
-func TestI2_DoneWithoutAPullRequestStopsTheIssue(t *testing.T) {
+func TestDoneWithoutAPullRequestStopsTheIssue(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 
@@ -826,7 +830,7 @@ func TestI2_DoneWithoutAPullRequestStopsTheIssue(t *testing.T) {
 	assertVerificationFailed(t, sc, "no open pull request is on the branch of the issue", workflow.FailureNoOpenPullRequest, 0)
 }
 
-func TestI2_DoneWithAPullRequestOfAnotherAuthorStopsTheIssue(t *testing.T) {
+func TestDoneWithAPullRequestOfAnotherAuthorStopsTheIssue(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, "another-person", false)
 	service := sc.service()
@@ -841,7 +845,7 @@ func TestI2_DoneWithAPullRequestOfAnotherAuthorStopsTheIssue(t *testing.T) {
 
 // The agent commits in the worktree and does not push. The head of the pull
 // request is then behind the head of the worktree.
-func TestI2_DoneWithACommitThatIsNotPushedStopsTheIssue(t *testing.T) {
+func TestDoneWithACommitThatIsNotPushedStopsTheIssue(t *testing.T) {
 	sc := newScene(t, cliOptions{commit: true})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
@@ -851,10 +855,10 @@ func TestI2_DoneWithACommitThatIsNotPushedStopsTheIssue(t *testing.T) {
 	assertVerificationFailed(t, sc, "the head commit of the worktree is not pushed", workflow.FailureHeadNotPushed, 21)
 }
 
-// I2 (issue-states.md): GitHub made no closing link from "Closes #10". The
+// "wait for the checks": GitHub made no closing link from "Closes #10". The
 // pull request is found on the branch that cumin chose, cumin-core adds
 // exactly one link, reads it back, and the issue moves on.
-func TestI2_APullRequestWithoutALinkGetsExactlyOneLink(t *testing.T) {
+func TestAPullRequestWithoutALinkGetsExactlyOneLink(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	service := sc.service()
@@ -882,7 +886,7 @@ func TestI2_APullRequestWithoutALinkGetsExactlyOneLink(t *testing.T) {
 }
 
 // When GitHub already linked the pull request, cumin adds nothing.
-func TestI2_ALinkedPullRequestGetsNoLink(t *testing.T) {
+func TestALinkedPullRequestGetsNoLink(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
@@ -899,7 +903,7 @@ func TestI2_ALinkedPullRequestGetsNoLink(t *testing.T) {
 
 // A pull request of the Implementer App on another branch is not the pull
 // request of the issue, even when it is linked: the issue stops as today.
-func TestI2_APullRequestOnAnotherBranchIsNotTaken(t *testing.T) {
+func TestAPullRequestOnAnotherBranchIsNotTaken(t *testing.T) {
 	sc := newScene(t)
 	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
 		Number: 21, HeadCommit: sc.remoteHead, Author: implementerSlug, AuthorIsBot: true, HeadBranch: "cumin/10-another-branch",
@@ -916,7 +920,7 @@ func TestI2_APullRequestOnAnotherBranchIsNotTaken(t *testing.T) {
 
 // A closing link that GitHub refuses stops the issue once, and the comment
 // and the notification name the answer of GitHub.
-func TestI2_AFailedLinkStopsTheIssueOnce(t *testing.T) {
+func TestAFailedLinkStopsTheIssueOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	sc.fake.SetLinkErrors("Resource not accessible by integration")
@@ -927,7 +931,7 @@ func TestI2_AFailedLinkStopsTheIssueOnce(t *testing.T) {
 	if n := closingLinkRequests(sc); n != 1 {
 		t.Errorf("%d closing link requests, want 1", n)
 	}
-	assertStoppedAtI2(t, sc, workflow.LinkFailedReason(21, "Resource not accessible by integration"), 21)
+	assertImplementationStopped(t, sc, workflow.LinkFailedReason(21, "Resource not accessible by integration"), 21)
 	if !strings.Contains(sc.fake.Comments(sc.repo, 10)[0].Body, "GitHub answered: Resource not accessible by integration.") {
 		t.Errorf("the comment does not name the answer of GitHub:\n%s", sc.fake.Comments(sc.repo, 10)[0].Body)
 	}
@@ -935,7 +939,7 @@ func TestI2_AFailedLinkStopsTheIssueOnce(t *testing.T) {
 
 // A link that GitHub accepted and the issue does not show stops the issue
 // once.
-func TestI2_ALinkThatIsMissingAfterwardsStopsTheIssueOnce(t *testing.T) {
+func TestALinkThatIsMissingAfterwardsStopsTheIssueOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	sc.fake.IgnoreLinks()
@@ -943,13 +947,13 @@ func TestI2_ALinkThatIsMissingAfterwardsStopsTheIssueOnce(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	assertStoppedAtI2(t, sc, workflow.LinkMissingReason(21), 21)
+	assertImplementationStopped(t, sc, workflow.LinkMissingReason(21), 21)
 }
 
 // An issue that GitHub already links to as many open pull requests as the
 // poll reads gets no more links: one more would make every later poll of
 // the repository fail. The issue stops once instead.
-func TestI2_ALinkOverTheLimitOfThePollIsNotAdded(t *testing.T) {
+func TestALinkOverTheLimitOfThePollIsNotAdded(t *testing.T) {
 	sc := newScene(t)
 	// Two pull requests without an author already close #10; #19 is on the
 	// branch of the issue, so the claim continues on that branch. The
@@ -981,12 +985,12 @@ func closingLinkRequests(sc *scene) int {
 }
 
 // A blocked result is logged with the question of blocked_reason. The label
-// stays; #81 posts the comment and asks the Owner.
-// I2 with a blocked result (issue-states.md): cumin posts the
+// stays; #81 posts the comment and asks the Maintainer.
+// "stop the implementation" with a blocked result: cumin posts the
 // blocked_reason on the issue, replaces the label with
-// cumin/status/awaiting-decision, and notifies the Owner once. It
+// cumin/status/awaiting-decision, and notifies the Maintainer once. It
 // does not retry.
-func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
+func TestBlockedStopsTheIssueForTheMaintainer(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
@@ -1027,7 +1031,7 @@ func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 
 // A webhook that fails changes nothing on GitHub: the comment and the
 // label stay, and the failure is logged at error level.
-func TestI2_BlockedWithAFailedWebhookKeepsTheCommentAndTheLabel(t *testing.T) {
+func TestBlockedWithAFailedWebhookKeepsTheCommentAndTheLabel(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
 	sc.webhook.fails(http.StatusInternalServerError)
 	service := sc.service()
@@ -1055,7 +1059,7 @@ func TestI2_BlockedWithAFailedWebhookKeepsTheCommentAndTheLabel(t *testing.T) {
 
 // A repository that turns the notifications off still gets the comment and
 // the label; nothing is sent.
-func TestI2_BlockedWithNotificationsOffWritesOnlyOnGitHub(t *testing.T) {
+func TestBlockedWithNotificationsOffWritesOnlyOnGitHub(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
 	sc.notifications = false
 	service := sc.service()
@@ -1078,7 +1082,7 @@ func TestI2_BlockedWithNotificationsOffWritesOnlyOnGitHub(t *testing.T) {
 
 // Without a channel (no webhook URL on the Host), the stop still happens on
 // GitHub and the missing channel is logged at error level.
-func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
+func TestBlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
 	sc.notifier = notify.New(nil)
 	service := sc.service()
@@ -1096,11 +1100,12 @@ func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 // assertVerificationFailed checks that the label of #10 stayed at
 // cumin/status/implementing and that the log names the failure.
 
-// Core-5 (cumin-core.md): a result that does not match the schema leaves
+// The test of a top-level requirement in cumin-core.md: a result that does
+// not match the schema leaves
 // no pull request, so the implementation is requested again exactly once.
-// After the second run the issue goes to the Owner, with one comment that
+// After the second run the issue goes to the Maintainer, with one comment that
 // names what is missing on GitHub, the label, and exactly one notification.
-func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) {
+func TestAnInvalidResultIsRetriedOnceAndThenGoesToTheMaintainer(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "invalid-result.jsonl"})
 	service := sc.service()
 
@@ -1139,7 +1144,7 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 
 // The retry is the same request in the same work directory, and it starts
 // a new session: no session of the first run is resumed.
-func TestI2_TheRetryIsTheSameRequestInANewSession(t *testing.T) {
+func TestTheRetryIsTheSameRequestInANewSession(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "no-result.jsonl"})
 	service := sc.service()
 
@@ -1169,8 +1174,8 @@ func TestI2_TheRetryIsTheSameRequestInANewSession(t *testing.T) {
 // An abnormal end is decided from the facts on GitHub, as every other end:
 // the pull request of the run is verified, so the issue moves to
 // cumin/status/checking with no second request, and nothing is said to the
-// Owner.
-func TestI2_AnAbnormalEndWithAVerifiedPullRequestWaitsForTheChecks(t *testing.T) {
+// Maintainer.
+func TestAnAbnormalEndWithAVerifiedPullRequestWaitsForTheChecks(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "is-error.jsonl", secondFixture: "done.jsonl"})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
@@ -1191,7 +1196,7 @@ func TestI2_AnAbnormalEndWithAVerifiedPullRequestWaitsForTheChecks(t *testing.T)
 	}
 }
 
-// assertVerificationFailed checks the whole failed path of I2: the log
+// assertVerificationFailed checks the whole failed path of the verification: the log
 // names the check that failed, the issue holds one comment in the form of
 // templates/stop-note.md with the sentence of that check, the label is
 // cumin/status/awaiting-decision, and exactly one notification went
@@ -1216,16 +1221,17 @@ func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind work
 	assertStopped(t, sc, workflow.VerificationReason(kind), pullRequest, "once")
 }
 
-// assertStoppedAtI2 checks the stop step of I2 for #10: one comment in the
+// assertImplementationStopped checks the stop step of "stop the
+// implementation" for #10: one comment in the
 // form of templates/stop-note.md with the reason, the label
 // cumin/status/awaiting-decision, and exactly one notification with
 // the same reason.
-func assertStoppedAtI2(t *testing.T, sc *scene, reason string, pullRequest int) {
+func assertImplementationStopped(t *testing.T, sc *scene, reason string, pullRequest int) {
 	t.Helper()
 	assertStopped(t, sc, reason, pullRequest, "no")
 }
 
-// assertStopped is assertStoppedAtI2 with what the comment says about the
+// assertStopped is assertImplementationStopped with what the comment says about the
 // second request: "no", or "once" after the implementation was requested
 // again.
 func assertStopped(t *testing.T, sc *scene, reason string, pullRequest int, retried string) {
@@ -1452,7 +1458,7 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 
 	// The first poll sends the failed read on every try. The second poll
 	// sends two queries. The GraphQL request after them is the read of the
-	// login of the Owner in the second poll, before the claim. The one
+	// login of the Issue Owner in the second poll, before the claim. The one
 	// after it comes after the claim.
 	sc.fake.WaitForRequests(http.MethodPost, "/graphql", everyTry+4, hangGuard)
 	cancel()
@@ -1826,9 +1832,9 @@ func waitForAgentRun(t *testing.T, sc *scene) {
 // The stop of cumin: SIGINT or SIGTERM ends the context, the request that
 // is going on is cancelled, Run waits only for the grace, logs the issues
 // that were in progress, and returns nil so that the command exits with 0.
-// The labels stay as they are; the Owner restarts an issue with
+// The labels stay as they are; the Maintainer restarts an issue with
 // cumin/status/ready.
-func TestCore_StopCancelsTheRunningRequestAndLogsTheIssue(t *testing.T) {
+func TestStopCancelsTheRunningRequestAndLogsTheIssue(t *testing.T) {
 	// A CLI that ignores SIGTERM: the adapter sends SIGKILL after its
 	// grace, which is 200 ms in the scene.
 	sc := newScene(t, cliOptions{sleeps: true, ignoresTerm: true})
@@ -1900,7 +1906,7 @@ func TestRun_StopReturnsAsSoonAsTheRequestEnds(t *testing.T) {
 	}
 	// The issue was in progress when the signal came, so the line names it
 	// even though its run ended at once. The issue keeps
-	// cumin/status/implementing, and the Owner has to restart it.
+	// cumin/status/implementing, and the Maintainer has to restart it.
 	if !strings.Contains(logs, `"in_progress":["example-org/example-repo#10"]`) {
 		t.Errorf("the stop log does not name the issue that was in progress:\n%s", logs)
 	}
@@ -1965,7 +1971,7 @@ func TestStopGrace_IsLongerThanTheGraceOfTheAdapter(t *testing.T) {
 // joins it to the role file, the discipline file, and the writing rules
 // (docs/ja/requirements/agents/common.md, the section on the composition
 // of the instruction).
-func TestI1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
+func TestTheInstructionOfTheImplementerEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 	const criteria = "# Risk criteria of this repository\n\nEvery change is risk/high.\n"
 	sc := newScene(t)
 	sc.fake.SetFile(sc.repo, ".cumin/risk-criteria.md", githubtest.File{Content: criteria})
@@ -1987,12 +1993,13 @@ func TestI1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 	}
 }
 
-// TestI1_TheSessionOfARunIsKeptAndAClaimForgetsTheOldOne covers what the
-// state file of the Host is for: a request in the same session (I4, a check
-// failed) needs the session of the last run, and a claim (I1) after the
-// Owner added cumin/status/ready must forget the old session and the count
+// TestTheSessionOfARunIsKeptAndAClaimForgetsTheOldOne covers what the
+// state file of the Host is for: a request in the same session ("request a check fix", a check
+// failed) needs the session of the last run, and a claim ("request the
+// implementation") after the
+// Maintainer added cumin/status/ready must forget the old session and the count
 // of check fixes.
-func TestI1_TheSessionOfARunIsKeptAndAClaimForgetsTheOldOne(t *testing.T) {
+func TestTheSessionOfARunIsKeptAndAClaimForgetsTheOldOne(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	path := filepath.Join(t.TempDir(), "state.json")
@@ -2021,12 +2028,12 @@ func TestI1_TheSessionOfARunIsKeptAndAClaimForgetsTheOldOne(t *testing.T) {
 	}
 }
 
-// TestI1_AStateThatCannotBeClearedStopsTheClaim: the state of an issue must
+// TestAStateThatCannotBeClearedStopsTheClaim: the state of an issue must
 // be cleared before the label changes. A stale entry would make a request in
-// the same session (I4) resume the session from before the Owner added
+// the same session ("request a check fix") resume the session from before the Maintainer added
 // cumin/status/ready. The issue keeps its label, so the next poll tries
 // again.
-func TestI1_AStateThatCannotBeClearedStopsTheClaim(t *testing.T) {
+func TestAStateThatCannotBeClearedStopsTheClaim(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	// A directory that cumin cannot write in.
@@ -2056,9 +2063,9 @@ func TestI1_AStateThatCannotBeClearedStopsTheClaim(t *testing.T) {
 	}
 }
 
-// TestI1_AClaimWithoutAStateFileWorks: a Host without the file keeps
+// TestAClaimWithoutAStateFileWorks: a Host without the file keeps
 // nothing, as a Host that just lost it does.
-func TestI1_AClaimWithoutAStateFileWorks(t *testing.T) {
+func TestAClaimWithoutAStateFileWorks(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
@@ -2093,10 +2100,10 @@ func (sc *scene) awaitingChecks(t *testing.T, required []string, checks []github
 
 const branchRulesPath = "/repos/example-org/example-repo/rules/branches/main"
 
-// TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview is the success
-// path of I3: the poll reads the required checks, they all passed on the
+// TestEveryRequiredCheckPassedMovesTheIssueToTheReview is the success
+// path of "request the review": the poll reads the required checks, they all passed on the
 // head commit, and the issue waits for the Reviewer.
-func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
+func TestEveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	sc.awaitingChecks(t, []string{"ci", "cumin-protected-paths"}, []githubtest.Check{
 		{Name: "ci", Conclusion: "SUCCESS"},
@@ -2118,18 +2125,18 @@ func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 			t.Errorf("the log does not say %q: %s", want, sc.logs)
 		}
 	}
-	// The approval reads the required checks once more, for I6.
+	// The approval reads the required checks once more, for "start the merge".
 	if n := sc.fake.CountRequests(http.MethodGet, branchRulesPath); n != 2 {
-		t.Errorf("%d reads of the required checks, want 2 (I3 and I6)", n)
+		t.Errorf("%d reads of the required checks, want 2 (the request of the review and the start of the merge)", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2 (to the review, and to the merge)", n)
 	}
 }
 
-// TestI3_AnEmptyListOfRequiredChecksPassesAtOnce: a repository without a
+// TestAnEmptyListOfRequiredChecksPassesAtOnce: a repository without a
 // ruleset moves to the review in the next poll (issue-states.md).
-func TestI3_AnEmptyListOfRequiredChecksPassesAtOnce(t *testing.T) {
+func TestAnEmptyListOfRequiredChecksPassesAtOnce(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	sc.awaitingChecks(t, nil, nil)
 	service := sc.service()
@@ -2141,9 +2148,9 @@ func TestI3_AnEmptyListOfRequiredChecksPassesAtOnce(t *testing.T) {
 	}
 }
 
-// TestI3_AFailedOrRunningCheckKeepsTheIssueWaiting: I4 answers a failure,
+// TestAFailedOrRunningCheckKeepsTheIssueWaiting: "request a check fix" answers a failure,
 // and a check that has not finished is not an answer at all.
-func TestI3_AFailedOrRunningCheckKeepsTheIssueWaiting(t *testing.T) {
+func TestAFailedOrRunningCheckKeepsTheIssueWaiting(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		check githubtest.Check
@@ -2166,9 +2173,9 @@ func TestI3_AFailedOrRunningCheckKeepsTheIssueWaiting(t *testing.T) {
 	}
 }
 
-// TestI3_TheRequiredChecksAreReadOnlyWhenAnIssueWaits keeps the extra REST
+// TestTheRequiredChecksAreReadOnlyWhenAnIssueWaits keeps the extra REST
 // call out of a poll that has nothing to decide.
-func TestI3_TheRequiredChecksAreReadOnlyWhenAnIssueWaits(t *testing.T) {
+func TestTheRequiredChecksAreReadOnlyWhenAnIssueWaits(t *testing.T) {
 	sc := newScene(t)
 	sc.repo.DefaultBranch = "main"
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
@@ -2181,15 +2188,18 @@ func TestI3_TheRequiredChecksAreReadOnlyWhenAnIssueWaits(t *testing.T) {
 	}
 }
 
-// Core-14 (cumin-core.md): cumin changes a label of the issue, the Owner
-// changes the risk of the issue, and the Owner changes a label of the pull
+// The test of a top-level requirement in cumin-core.md: cumin changes a label
+// of the issue, the Maintainer
+// changes the risk of the issue, and the Maintainer changes a label of the pull
 // request. After each, the next poll makes the cumin/status/* and risk/*
-// labels of the pull request equal to those of the issue (I11), and the
+// labels of the pull request equal to those of the issue ("copy the labels to
+// the pull request"), and the
 // labels of the pull request change no decision (principle 5).
-func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
+func TestTheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 	sc := newScene(t)
-	// A pull request of another author: the run ends, I2 stops the issue for
-	// the Owner, and no later rule moves it again.
+	// A pull request of another author: the run ends, "stop the implementation"
+	// stops the issue for
+	// the Maintainer, and no later rule moves it again.
 	sc.addPullRequest(21, sc.remoteHead, "someone", false)
 	service := sc.service()
 	prLabelsPath := "/repos/example-org/example-repo/issues/21/labels"
@@ -2202,7 +2212,8 @@ func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 		}
 	}
 
-	// cumin changes the label of the issue: I1, then I2 stops it.
+	// cumin changes the label of the issue: "request the implementation", then
+	// "stop the implementation" stops it.
 	sc.pollAndWait(t, service)
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
 		t.Fatalf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
@@ -2210,20 +2221,20 @@ func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 	sc.pollAndWait(t, service)
 	assertEqual("after cumin changed the issue")
 
-	// The Owner changes the risk of the issue.
+	// The Maintainer changes the risk of the issue.
 	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/high", workflow.LabelAwaitingDecision}); err != nil {
 		t.Fatal(err)
 	}
 	sc.pollAndWait(t, service)
-	assertEqual("after the Owner changed the risk of the issue")
+	assertEqual("after the Maintainer changed the risk of the issue")
 
-	// The Owner changes the labels of the pull request, and adds
+	// The Maintainer changes the labels of the pull request, and adds
 	// cumin/status/ready there. The issue is not claimed.
 	if err := sc.fake.SetLabels(sc.repo, 21, []string{"docs", workflow.LabelReady, "risk/low"}); err != nil {
 		t.Fatal(err)
 	}
 	sc.pollAndWait(t, service)
-	assertEqual("after the Owner changed the pull request")
+	assertEqual("after the Maintainer changed the pull request")
 	if got := sc.fake.PullRequestLabels(sc.repo, 21); !slices.Contains(got, "docs") {
 		t.Errorf("labels of the pull request = %v, want the label docs kept", got)
 	}
@@ -2238,7 +2249,7 @@ func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 		t.Errorf("%d writes to the pull request after a poll with equal labels, want %d", n, writes)
 	}
 	if !strings.Contains(sc.logs.String(), `"msg":"copy the labels to the pull request: copied the labels of the issue to the pull request"`) {
-		t.Error("the log has no line of I11")
+		t.Error("the log has no line of the label copy")
 	}
 }
 
@@ -2250,12 +2261,12 @@ func sameLabelsAnyOrder(a, b []string) bool {
 	return slices.Equal(a, b)
 }
 
-// I1 (issue-states.md, implementer.md): the Owner added cumin/status/ready
+// "request the implementation" (implementer.md): the Maintainer added cumin/status/ready
 // again to an issue whose pull request is open. The claim prepares the
 // worktree on the branch of that pull request, not on the branch of the
 // title, and asks to continue in the same pull request, in a new session.
 // A worktree that an earlier round left on another branch is replaced.
-func TestI1_AClaimWithAnOpenPullRequestContinuesOnItsBranch(t *testing.T) {
+func TestAClaimWithAnOpenPullRequestContinuesOnItsBranch(t *testing.T) {
 	sc := newScene(t)
 	const branch = "cumin/10-an-older-title"
 	head := sc.pushBranch(t, branch)
@@ -2292,10 +2303,10 @@ func TestI1_AClaimWithAnOpenPullRequestContinuesOnItsBranch(t *testing.T) {
 		}
 	}
 	if strings.Contains(args, "--resume") {
-		t.Error("a claim resumed a session; I1 always starts a new one")
+		t.Error("a claim resumed a session; a claim always starts a new one")
 	}
 	// The agent made no commit, so the head of the worktree is the head of
-	// the pull request, and I2 passes on it.
+	// the pull request, and the verification passes on it.
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
@@ -2323,10 +2334,11 @@ func (sc *scene) pushBranch(t *testing.T, branch string) string {
 	return git(t, work, "rev-parse", "HEAD")
 }
 
-// I1: a run that cumin stopped leaves its work in the worktree, and the
-// Owner restarts the issue with cumin/status/ready. The continuation keeps
+// "request the implementation": a run that cumin stopped leaves its work in
+// the worktree, and the
+// Maintainer restarts the issue with cumin/status/ready. The continuation keeps
 // that worktree, because its work is not on GitHub.
-func TestI1_AContinuationKeepsAWorktreeWithWorkThatIsNotPushed(t *testing.T) {
+func TestAContinuationKeepsAWorktreeWithWorkThatIsNotPushed(t *testing.T) {
 	sc := newScene(t)
 	const branch = "cumin/10-an-older-title"
 	head := sc.pushBranch(t, branch)
@@ -2378,11 +2390,11 @@ func (sc *scene) failingCheck(t *testing.T, service *workflow.Service, count int
 	return path
 }
 
-// I4 (issue-states.md): a failed required check moves the issue back to
+// "request a check fix": a failed required check moves the issue back to
 // cumin/status/implementing and sends one request of the kind "check fix",
 // in the session of the last run, with what the failed check says. The
 // label changes first, so the polls that follow send nothing more.
-func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
+func TestAFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	path := sc.failingCheck(t, service, 0)
@@ -2427,9 +2439,9 @@ func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
 	}
 }
 
-// I4, then I2 (issue-states.md): a fix that ends with done is verified
+// "request a check fix", then "wait for the checks": a fix that ends with done is verified
 // again, and a verified pull request returns to cumin/status/checking.
-func TestI4_ADoneFixIsVerifiedAgain(t *testing.T) {
+func TestADoneCheckFixIsVerifiedAgain(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	sc.failingCheck(t, service, 1)
@@ -2439,9 +2451,9 @@ func TestI4_ADoneFixIsVerifiedAgain(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
-	// The claim and I2: two label changes; the stop was not used.
+	// The claim and the wait for the checks: two label changes; the stop was not used.
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
-		t.Errorf("%d label changes, want 2 (I4 and I2)", n)
+		t.Errorf("%d label changes, want 2 (the check fix request and the wait for the checks)", n)
 	}
 	got := service.State.Issue("example-org/example-repo", 10)
 	if got.CheckFixRequests != 2 {
@@ -2452,11 +2464,12 @@ func TestI4_ADoneFixIsVerifiedAgain(t *testing.T) {
 	}
 }
 
-// I4 (issue-states.md): at max_check_fix_requests, cumin sends no request.
+// "stop for failed checks": at max_check_fix_requests, cumin sends no request.
 // The issue gets one comment, cumin/status/awaiting-decision, and one
-// notification, with the row I4. After the Owner adds cumin/status/ready,
+// notification, with the step "stop for failed checks". After the Maintainer
+// adds cumin/status/ready,
 // the next request starts a new session and the count starts at zero.
-func TestI4_TheLimitStopsTheIssueForTheOwner(t *testing.T) {
+func TestTheLimitOfCheckFixRequestsStopsTheIssueForTheMaintainer(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	sc.failingCheck(t, service, 3)
@@ -2483,7 +2496,7 @@ func TestI4_TheLimitStopsTheIssueForTheOwner(t *testing.T) {
 		t.Errorf("%d notifications, want 1", n)
 	}
 
-	// The Owner answers and adds cumin/status/ready.
+	// The Maintainer answers and adds cumin/status/ready.
 	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelReady, "risk/low"}); err != nil {
 		t.Fatal(err)
 	}
@@ -2499,9 +2512,9 @@ func TestI4_TheLimitStopsTheIssueForTheOwner(t *testing.T) {
 	}
 }
 
-// I4: a label that cannot change starts no request, and the count goes
+// "request a check fix": a label that cannot change starts no request, and the count goes
 // back, so that failed writes never use up the limit.
-func TestI4_AFailedLabelChangeKeepsTheCount(t *testing.T) {
+func TestAFailedLabelChangeKeepsTheCountOfCheckFixRequests(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	sc.failingCheck(t, service, 1)
@@ -2520,10 +2533,11 @@ func TestI4_AFailedLabelChangeKeepsTheCount(t *testing.T) {
 	}
 }
 
-// I4: at the limit, the label changes first. When it cannot change, cumin
+// "stop for failed checks": at the limit, the label changes first. When it
+// cannot change, cumin
 // posts no comment and sends no notification, so that the polls that
 // follow do not repeat them.
-func TestI4_AStopWhoseLabelFailsWritesNothingElse(t *testing.T) {
+func TestAStopForFailedChecksWhoseLabelFailsWritesNothingElse(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	sc.failingCheck(t, service, 3)
@@ -2567,12 +2581,12 @@ func (sc *scene) notReporting(t *testing.T) {
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, sceneNow.Add(-time.Minute))
 }
 
-// I15 (issue-states.md): required checks that do not report on the head
-// commit within the wait time stop the issue for the Owner exactly once:
+// "stop for missing checks": required checks that do not report on the head
+// commit within the wait time stop the issue for the Maintainer exactly once:
 // one label change, one comment, and one notification, with the head
 // commit, the checks that have not reported, and the time waited. Before
 // the wait time is over, the poll changes nothing. No agent starts.
-func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
+func TestRequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.notReporting(t)
 	service := sc.service()
@@ -2588,7 +2602,7 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments before the wait time is over, want none", n)
 	}
-	if n := len(sc.messagesExceptQ4()); n != 0 {
+	if n := len(sc.messagesExceptWaiting()); n != 0 {
 		t.Errorf("%d notifications before the wait time is over, want none", n)
 	}
 
@@ -2612,7 +2626,7 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
@@ -2626,12 +2640,12 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	}
 }
 
-// I15: an issue in cumin/status/checking whose pull request someone
-// closed stops for the Owner exactly once, after the wait time since the
+// "stop for missing checks": an issue in cumin/status/checking whose pull request someone
+// closed stops for the Maintainer exactly once, after the wait time since the
 // label. The comment and the notification say that no open pull request
 // closes the issue, and the time waited. Before the wait time is over, the
 // poll changes nothing.
-func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
+func TestNoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
 	sc := newScene(t)
 	sc.notReporting(t)
 	if err := sc.fake.ClosePullRequest(sc.repo, 21); err != nil {
@@ -2647,7 +2661,7 @@ func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments before the wait time is over, want none", n)
 	}
-	if n := len(sc.messagesExceptQ4()); n != 0 {
+	if n := len(sc.messagesExceptWaiting()); n != 0 {
 		t.Errorf("%d notifications before the wait time is over, want none", n)
 	}
 
@@ -2671,7 +2685,7 @@ func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
@@ -2685,9 +2699,10 @@ func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
 	}
 }
 
-// I15: a new head commit while the issue waits starts the wait time again,
+// "stop for missing checks": a new head commit while the issue waits starts
+// the wait time again,
 // from the commit time of that commit.
-func TestI15_ANewHeadCommitStartsTheWaitTimeAgain(t *testing.T) {
+func TestANewHeadCommitStartsTheWaitTimeAgain(t *testing.T) {
 	sc := newScene(t)
 	sc.notReporting(t)
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, sceneNow.Add(30*time.Minute))
@@ -2710,10 +2725,11 @@ func TestI15_ANewHeadCommitStartsTheWaitTimeAgain(t *testing.T) {
 	}
 }
 
-// I15: at the stop, the label changes first. When it cannot change, cumin
+// "stop for missing checks": at the stop, the label changes first. When it
+// cannot change, cumin
 // posts no comment and sends no notification, so that the polls that
 // follow do not repeat them.
-func TestI15_AStopWhoseLabelFailsWritesNothingElse(t *testing.T) {
+func TestAStopForMissingChecksWhoseLabelFailsWritesNothingElse(t *testing.T) {
 	sc := newScene(t)
 	sc.notReporting(t)
 	service := sc.service()
@@ -2726,7 +2742,7 @@ func TestI15_AStopWhoseLabelFailsWritesNothingElse(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments, want none", n)
 	}
-	if n := len(sc.messagesExceptQ4()); n != 0 {
+	if n := len(sc.messagesExceptWaiting()); n != 0 {
 		t.Errorf("%d notifications, want none", n)
 	}
 
@@ -2734,14 +2750,14 @@ func TestI15_AStopWhoseLabelFailsWritesNothingElse(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
 		t.Errorf("%d comments after the label changed, want 1", n)
 	}
-	if n := len(sc.messagesExceptQ4()); n != 1 {
+	if n := len(sc.messagesExceptWaiting()); n != 1 {
 		t.Errorf("%d notifications after the label changed, want 1", n)
 	}
 }
 
-// I15: checks that report after the wait time still go on to the review
-// (I3): a result decides before the wait time does.
-func TestI15_ChecksThatReportedGoOnToTheReview(t *testing.T) {
+// "stop for missing checks": checks that report after the wait time still go on to the review
+// ("request the review"): a result decides before the wait time does.
+func TestChecksThatReportedAfterTheWaitTimeGoOnToTheReview(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
@@ -2755,17 +2771,17 @@ func TestI15_ChecksThatReportedGoOnToTheReview(t *testing.T) {
 	sc.pollAndWait(t, service)
 
 	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, workflow.LabelAwaitingDecision) {
-		t.Errorf("labels of #10 = %v, want no stop for the Owner", got)
+		t.Errorf("labels of #10 = %v, want no stop for the Maintainer", got)
 	}
 	if !strings.Contains(sc.logs.String(), "request the review: the pull request is ready for review") {
-		t.Errorf("the log does not say that I3 applied: %s", sc.logs)
+		t.Errorf("the log does not say that cumin requested the review: %s", sc.logs)
 	}
 }
 
-// I4: a worktree of the issue on another branch than the pull request (a
+// "request a check fix": a worktree of the issue on another branch than the pull request (a
 // renamed branch, a newer pull request) is made again on the branch of the
 // pull request, because it holds nothing that GitHub lacks.
-func TestI4_AWorktreeOnAnotherBranchIsMadeAgainOnThePullRequest(t *testing.T) {
+func TestAWorktreeOnAnotherBranchIsMadeAgainOnThePullRequest(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	sc.failingCheck(t, service, 0)
@@ -2782,13 +2798,13 @@ func TestI4_AWorktreeOnAnotherBranchIsMadeAgainOnThePullRequest(t *testing.T) {
 		t.Errorf("branch of the worktree = %q, want the branch of the pull request %q", got, wantBranch)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
-		t.Errorf("labels of #10 = %v, want I2 to pass on the pull request", got)
+		t.Errorf("labels of #10 = %v, want the verification to pass on the pull request", got)
 	}
 }
 
-// I1 (issue-states.md): a ready sub-issue with cumin/type/owner-task is never
+// "request the implementation": a ready sub-issue with cumin/type/owner-task is never
 // claimed, across two polls, while a ready sub-issue without it is.
-func TestI1_AnOwnerTaskIsNeverClaimed(t *testing.T) {
+func TestAnOwnerTaskIsNeverClaimed(t *testing.T) {
 	sc := newScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 9, Parent: 6, Title: "Change a workflow", Labels: []string{"cumin/type/owner-task", "cumin/status/ready", "risk/high"}})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
@@ -2804,7 +2820,7 @@ func TestI1_AnOwnerTaskIsNeverClaimed(t *testing.T) {
 		t.Errorf("%d label changes of #9, want none", n)
 	}
 	// #10 was claimed and ran; #9 started nothing. The second poll also
-	// starts the Reviewer of #10 (I3), so the runs are counted by work
+	// starts the Reviewer of #10 ("request the review"), so the runs are counted by work
 	// directory: #9 has none.
 	for _, role := range []string{"implementer", "reviewer", "planner"} {
 		if _, err := os.Stat(filepath.Join(sc.workRoot, "example-org", "example-repo", "9-"+role)); err == nil {

@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-// I1 (issue-states.md): the branch of a request is cumin/<number>-<slug>,
+// "request the implementation": the branch of a request is cumin/<number>-<slug>,
 // with the slug rule of the design note.
-func TestBranchName_I1(t *testing.T) {
+func TestBranchName(t *testing.T) {
 	tests := []struct {
 		name, title, want string
 	}{
 		{"a plain title", "Add the login screen", "cumin/10-add-the-login-screen"},
 		{"a Conventional Commits prefix", "feat(github): read the title", "cumin/10-feat-github-read-the-title"},
-		{"upper case and punctuation", "Fix I2: verify the PR (again)!", "cumin/10-fix-i2-verify-the-pr-again"},
+		{"upper case and punctuation", "Fix v2: verify the PR (again)!", "cumin/10-fix-v2-verify-the-pr-again"},
 		{"characters outside a-z and 0-9 become one dash", "日本語 の 題 with émojis 🎉 and_underscores", "cumin/10-with-mojis-and-underscores"},
 		{"a long title is cut at a word", "read the title and the closing pull requests of each sub-issue in the poll snapshot", "cumin/10-read-the-title-and-the-closing-pull"},
 		{"a cut exactly at the limit keeps the word", "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj", "cumin/10-aaaa-bbbb-cccc-dddd-eeee-ffff-gggg-hhhh"},
@@ -30,10 +30,10 @@ func TestBranchName_I1(t *testing.T) {
 	}
 }
 
-// I1 (issue-states.md): the request text of the kind "implement" names
+// "request the implementation": the request text of the kind "implement" names
 // the repository, the issue, the branch, and the work directory, and
 // orders one pull request with Closes #N.
-func TestImplementRequestText_I1(t *testing.T) {
+func TestImplementRequestText(t *testing.T) {
 	text := ImplementRequestText("example-org/example-repo", 10, "cumin/10-add-the-login-screen", "/work/example-org/example-repo/10-implementer")
 	for _, want := range []string{
 		"Request: implement\n",
@@ -54,10 +54,10 @@ func TestImplementRequestText_I1(t *testing.T) {
 	}
 }
 
-// I1 (issue-states.md, implementer.md): a claim of an issue with an open
+// "request the implementation" (implementer.md): a claim of an issue with an open
 // pull request continues on the branch of that pull request, the one with
 // the highest number of two; without one, the branch comes from the title.
-func TestClaimBranch_I1(t *testing.T) {
+func TestClaimBranch(t *testing.T) {
 	sub := func(prs ...PullRequest) SubIssue {
 		return SubIssue{Number: 10, Title: "Add the login screen", PullRequests: prs}
 	}
@@ -82,10 +82,11 @@ func TestClaimBranch_I1(t *testing.T) {
 	}
 }
 
-// I1 (implementer.md, the request kind "continue"): the text names the pull
+// "request the implementation" (implementer.md, the request kind "continue"):
+// the text names the pull
 // request and its branch, and says that the work goes on in it instead of a
 // new pull request.
-func TestContinueRequestText_I1(t *testing.T) {
+func TestContinueRequestText(t *testing.T) {
 	text := ContinueRequestText("example-org/example-repo", 10, 21, "cumin/10-an-older-title", "/work/example-org/example-repo/10-implementer")
 	for _, want := range []string{
 		"Request: continue\n",
@@ -107,7 +108,7 @@ func TestContinueRequestText_I1(t *testing.T) {
 	}
 }
 
-func TestPlanRequestText_R1(t *testing.T) {
+func TestPlanRequestText(t *testing.T) {
 	text := PlanRequestText("example-org/example-repo", 6, "/work/example-org/example-repo/6-planner")
 	for _, want := range []string{
 		"Request: plan\n",
@@ -124,10 +125,10 @@ func TestPlanRequestText_R1(t *testing.T) {
 	}
 }
 
-// I4 (implementer.md, the request kind "check fix"): the text names the
+// "request a check fix" (implementer.md, the request kind "check fix"): the text names the
 // pull request and its branch, carries every failed check as data, and
 // keeps the work in the same pull request.
-func TestCheckFixRequestText_I4(t *testing.T) {
+func TestCheckFixRequestText(t *testing.T) {
 	text := CheckFixRequestText("example-org/example-repo", 10, 21, "cumin/10-add-the-login-screen",
 		"/work/example-org/example-repo/10-implementer", []string{"Check \"ci\" failed.\nFAIL\n", "Check \"lint\" failed."})
 	for _, want := range []string{
@@ -151,11 +152,12 @@ func TestCheckFixRequestText_I4(t *testing.T) {
 	}
 }
 
-// I13 (implementer.md, the request kind "owner review fix"): the text names
-// the pull request, its branch, and the address of the review of the Owner,
+// "send back for changes" (implementer.md, the request kind "owner review
+// fix"): the text names
+// the pull request, its branch, and the address of the review of the Maintainer,
 // asks for every comment of that review, and keeps the work in the same pull
 // request. It copies no comment: the Implementer reads them on GitHub.
-func TestOwnerReviewFixRequestText_I13(t *testing.T) {
+func TestMaintainerReviewFixRequestText(t *testing.T) {
 	const review = "https://github.com/example-org/example-repo/pull/21#pullrequestreview-7"
 	text := MaintainerReviewFixRequestText("example-org/example-repo", 10, 21, "cumin/10-add-the-login-screen",
 		"/work/example-org/example-repo/10-implementer", review)
@@ -181,7 +183,7 @@ func TestOwnerReviewFixRequestText_I13(t *testing.T) {
 			t.Errorf("the request text does not hold %q:\n%s", want, text)
 		}
 	}
-	// The Owner's comments carry no mark of blocking, so the text must not
+	// The Maintainer's comments carry no mark of blocking, so the text must not
 	// limit the work to blocking comments.
 	if strings.Contains(text, "blocking") {
 		t.Errorf("the request text limits the work to blocking comments:\n%s", text)
@@ -195,7 +197,7 @@ func TestOwnerReviewFixRequestText_I13(t *testing.T) {
 	}
 }
 
-func TestAcceptanceRequestText_R4(t *testing.T) {
+func TestAcceptanceRequestText(t *testing.T) {
 	text := AcceptanceRequestText("example-org/example-repo", 6, "/work/example-org/example-repo/6-planner")
 	for _, want := range []string{
 		"Request: acceptance check\n",

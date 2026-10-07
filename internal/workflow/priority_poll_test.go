@@ -9,11 +9,12 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
 
-// Core-20 (cumin-core.md): of two ready issues, the one with the higher
+// The test of a top-level requirement in cumin-core.md: of two ready issues,
+// the one with the higher
 // priority label starts first, although its number is higher. The settings
 // name no priority labels, so the labels are the default ones, and cumin
 // creates them.
-func TestCore20_TheHigherPriorityStartsFirst(t *testing.T) {
+func TestTheHigherPriorityStartsFirst(t *testing.T) {
 	sc := newScene(t, cliOptions{sleeps: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Add the logout screen",
 		Labels: []string{"cumin/status/ready", "risk/low", "cumin/priority/P1"}})
@@ -39,7 +40,7 @@ func TestCore20_TheHigherPriorityStartsFirst(t *testing.T) {
 // the organization orders the starts, the default name means nothing, and
 // cumin creates no priority label, neither the default ones nor the ones
 // that the setting names.
-func TestCore20_TheSettingOfTheRepositoryNamesThePriorityLabels(t *testing.T) {
+func TestTheSettingOfTheRepositoryNamesThePriorityLabels(t *testing.T) {
 	sc := newScene(t, cliOptions{sleeps: true})
 	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "priority_labels = [\"priority/P0\", \"priority/P1\"]\n"})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle,

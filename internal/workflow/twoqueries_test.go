@@ -138,10 +138,14 @@ func TestReadSnapshot_SendsTheSecondQueryOnlyForSelectedSubIssues(t *testing.T) 
 }
 
 // Each rule of the poll that reads a pull request decides its action on a
-// snapshot that the two queries built: the claim (I1), the review after the
-// checks (I3), the fix of a failed check (I4), the label copy (I11), the
-// approval and the change request of the Owner (I12, I13), the conflict
-// (I14), and the stop for checks that do not report (I15).
+// snapshot that the two queries built: the claim ("request the
+// implementation"), the review after the
+// checks ("request the review"), the fix of a failed check ("request a check
+// fix"), the label copy ("copy the labels to the pull request"), the
+// approval and the change request of the Maintainer ("start the merge", "send
+// back for changes"), the conflict
+// ("request a conflict resolution"), and the stop for checks that do not
+// report ("stop for missing checks").
 func TestDecide_EachRuleThatReadsAPullRequestDecidesOnTheSnapshotOfTheTwoQueries(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")

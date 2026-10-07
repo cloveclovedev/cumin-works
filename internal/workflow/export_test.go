@@ -17,9 +17,10 @@ func StopGraceOf(s *Service) time.Duration { return s.stopGrace() }
 // and returns the usage that the decision uses.
 func KeepUsage(s *Service, read agent.QuotaUsage) quota.Usage { return s.keepUsage(s.logger(), read) }
 
-// decideReadyOfMaintainer is Decide on a snapshot where the Owner added every
+// decideReadyOfMaintainer is Decide on a snapshot where the Maintainer added every
 // cumin/status/ready, as the poll stores it after its read
-// (readReadyOwners). A test of another condition of R1 or of I1 uses it.
+// (readReadyOwners). A test of another condition of "request the split" or of
+// "request the implementation" uses it.
 func decideReadyOfMaintainer(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string, now time.Time, checksWait time.Duration) []Action {
 	copied := Snapshot{RequirementIssues: slices.Clone(snapshot.RequirementIssues), Running: snapshot.Running}
 	for i := range copied.RequirementIssues {

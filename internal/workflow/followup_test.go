@@ -29,7 +29,7 @@ Add the login screen.
 - The error text of the login screen is not translated yet.
 `
 
-// followUpScene changes the scene of I9.
+// followUpScene changes the scene of "write the follow-up note".
 type followUpScene struct {
 	// notLinked leaves #21 without the link that closes #10.
 	notLinked bool
@@ -39,11 +39,12 @@ type followUpScene struct {
 	requirementClosed bool
 }
 
-// newFollowUpScene is the scene of I9: the sub-issue #10 of the open
+// newFollowUpScene is the scene of "write the follow-up note": the sub-issue #10 of the open
 // requirement issue #6 was closed an hour ago, and the merged pull request
-// #21 is linked to close it. The fake does not say who closed #10: I9
-// decides from the link and the merge alone. The fake CLI answers as a Planner that returned done, for the
-// acceptance check that R4 asks for.
+// #21 is linked to close it. The fake does not say who closed #10: "write the follow-up note"
+// decides from the link and the merge alone. The fake CLI answers as a
+// Planner that returned done, for the
+// acceptance check that "request the acceptance check" asks for.
 func newFollowUpScene(t *testing.T, body string, threads []githubtest.ReviewThread, opts ...followUpScene) *scene {
 	t.Helper()
 	var o followUpScene
@@ -91,7 +92,7 @@ func followUpNotes(sc *scene) []githubtest.Comment {
 	return notes
 }
 
-// closerReads counts the queries of I9 about pull requests: the linked
+// closerReads counts the queries of "write the follow-up note" about pull requests: the linked
 // pull requests of an issue, and one pull request.
 func closerReads(t *testing.T, sc *scene) int {
 	t.Helper()
@@ -115,10 +116,10 @@ func closerReads(t *testing.T, sc *scene) int {
 	return n
 }
 
-// Core-10 (cumin-core.md): a merged pull request with text under
+// The test of a top-level requirement in cumin-core.md: a merged pull request with text under
 // "Follow-up" and one open non-blocking comment gives one note in the form
 // of the template. A restart of cumin adds no second note.
-func TestCore10_ANoteInTheFixedFormOnceAcrossRestarts(t *testing.T) {
+func TestANoteInTheFixedFormOnceAcrossRestarts(t *testing.T) {
 	threads := []githubtest.ReviewThread{
 		{Path: "lib/login.dart", Line: 12, Comments: []githubtest.ReviewComment{
 			reviewComment("suggestion (non-blocking): Move the validation into its own function.\n\nWhy: shorter.", "https://example.test/c1"),
@@ -168,9 +169,10 @@ func TestCore10_ANoteInTheFixedFormOnceAcrossRestarts(t *testing.T) {
 	}
 }
 
-// Core-11 (cumin-core.md): "Follow-up" is None and every non-blocking
+// The test of a top-level requirement in cumin-core.md: "Follow-up" is None
+// and every non-blocking
 // comment is Fixed, so no note is written.
-func TestCore11_NothingLeftGivesNoNote(t *testing.T) {
+func TestNothingLeftGivesNoNote(t *testing.T) {
 	body := "## What\nAdd the login screen.\n\n## Follow-up\n<!-- Work outside the scope. Or \"None\". -->\nNone\n"
 	threads := []githubtest.ReviewThread{
 		{Path: "lib/login.dart", Line: 12, Comments: []githubtest.ReviewComment{
@@ -191,7 +193,7 @@ func TestCore11_NothingLeftGivesNoNote(t *testing.T) {
 
 // Principle 6 (issue-states.md): cumin does nothing on a closed
 // requirement issue. It writes no note and reads none of its sub-issues.
-func TestI9_AClosedRequirementIssueGetsNoNote(t *testing.T) {
+func TestAClosedRequirementIssueGetsNoNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil, followUpScene{requirementClosed: true})
 	sc.pollAndWait(t, sc.service())
 
@@ -207,7 +209,7 @@ func TestI9_AClosedRequirementIssueGetsNoNote(t *testing.T) {
 // was not merged, has no work to copy. A sub-issue closed by hand with a
 // merged linked pull request gets its note: that is every other test of
 // this file, because the fake does not say who closed an issue.
-func TestI9_ASubIssueWithoutAMergedLinkedPullRequestGetsNoNote(t *testing.T) {
+func TestASubIssueWithoutAMergedLinkedPullRequestGetsNoNote(t *testing.T) {
 	tests := []struct {
 		name  string
 		scene followUpScene
@@ -229,7 +231,7 @@ func TestI9_ASubIssueWithoutAMergedLinkedPullRequestGetsNoNote(t *testing.T) {
 
 // The repository may be public, so a marker in a comment of another
 // account does not count as the note of cumin.
-func TestI9_AMarkerOfAnotherAuthorDoesNotStopTheNote(t *testing.T) {
+func TestAMarkerOfAnotherAuthorDoesNotStopTheNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
 		Author: "octocat", At: sceneNow.Add(-time.Minute),
@@ -243,7 +245,7 @@ func TestI9_AMarkerOfAnotherAuthorDoesNotStopTheNote(t *testing.T) {
 }
 
 // A failed write leaves no note; the next poll writes it.
-func TestI9_AFailedWriteIsTriedAgainAtTheNextPoll(t *testing.T) {
+func TestAFailedWriteIsTriedAgainAtTheNextPoll(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.FailNext("POST", "/repos/example-org/example-repo/issues/6/comments", 500)
 	service := sc.service()
@@ -373,7 +375,7 @@ func TestFollowUpCandidates_ANoteBeforeTheLastCloseReadsAgain(t *testing.T) {
 
 // A thread on code that has moved since has no line now; the note names the
 // line that the comment was written on.
-func TestI9_AThreadOnMovedCodeNamesItsOriginalLine(t *testing.T) {
+func TestAThreadOnMovedCodeNamesItsOriginalLine(t *testing.T) {
 	threads := []githubtest.ReviewThread{
 		{Path: "lib/login.dart", OriginalLine: 7, Comments: []githubtest.ReviewComment{
 			reviewComment("todo (non-blocking): Add a test for the empty password.", "https://example.test/c1"),
@@ -390,7 +392,7 @@ func TestI9_AThreadOnMovedCodeNamesItsOriginalLine(t *testing.T) {
 
 // One pull request that closes two sub-issues gets one note, also in the
 // poll that writes it.
-func TestI9_OnePullRequestThatClosesTwoSubIssuesGetsOneNote(t *testing.T) {
+func TestOnePullRequestThatClosesTwoSubIssuesGetsOneNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 11, Parent: 6, Title: "Add the logout button", Closed: true, ClosedAt: sceneNow.Add(-time.Hour),
@@ -417,9 +419,9 @@ func indexOf(requests []githubtest.Request, from int, method, suffix string) int
 	return -1
 }
 
-// R4 (issue-states.md): when the last sub-issue closes, its follow-up note
+// "request the acceptance check": when the last sub-issue closes, its follow-up note
 // comes before the request for the acceptance check, in the same poll.
-func TestR4_TheNoteComesBeforeTheAcceptanceCheck(t *testing.T) {
+func TestTheNoteComesBeforeTheAcceptanceCheck(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.pollAndWait(t, sc.service())
 
@@ -441,7 +443,7 @@ func TestR4_TheNoteComesBeforeTheAcceptanceCheck(t *testing.T) {
 
 // A note that cannot be written holds the acceptance check back. The next
 // poll writes the note, then asks.
-func TestR4_AFailedNoteWaitsForTheNextPoll(t *testing.T) {
+func TestAFailedNoteKeepsTheAcceptanceCheckWaiting(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.FailNext("POST", "/repos/example-org/example-repo/issues/6/comments", 500)
 	service := sc.service()
@@ -450,7 +452,7 @@ func TestR4_AFailedNoteWaitsForTheNextPoll(t *testing.T) {
 		t.Fatalf("%d agent runs with the note missing, want none", n)
 	}
 	if !strings.Contains(sc.logs.String(), "request the acceptance check: waits for the follow-up notes") {
-		t.Error("the log does not say that R4 waits")
+		t.Error("the log does not say that the acceptance check waits")
 	}
 
 	sc.pollAndWait(t, service)
@@ -465,8 +467,8 @@ func TestR4_AFailedNoteWaitsForTheNextPoll(t *testing.T) {
 }
 
 // A pull request with nothing to list, and a sub-issue closed without a
-// merge, need no note, so R4 does not wait for them.
-func TestR4_NoNoteNeededDoesNotWait(t *testing.T) {
+// merge, need no note, so "request the acceptance check" does not wait for them.
+func TestNoNoteNeededDoesNotKeepTheAcceptanceCheckWaiting(t *testing.T) {
 	tests := []struct {
 		name  string
 		body  string
@@ -490,29 +492,31 @@ func TestR4_NoNoteNeededDoesNotWait(t *testing.T) {
 	}
 }
 
-// A failed read of the comments also holds R4 back, with the same log.
-func TestR4_AFailedReadOfTheCommentsWaits(t *testing.T) {
+// A failed read of the comments also holds "request the acceptance check"
+// back, with the same log.
+func TestAFailedReadOfTheCommentsKeepsTheAcceptanceCheckWaiting(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	service := sc.service()
 	// The poll queries GraphQL three times: the snapshot, the comments for
-	// R4 and R7, then the comments for I9. The third query fails.
+	// "request the acceptance check" and "ask for the acceptance", then the
+	// comments for "write the follow-up note". The third query fails.
 	sc.fake.FailTimes("POST", "/graphql", 2, everyTry, 502)
 	sc.pollAndWait(t, service)
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want none", n)
 	}
 	if !strings.Contains(sc.logs.String(), "write the follow-up note: the comments were not read") {
-		t.Fatal("the failed query was not the read of I9")
+		t.Fatal("the failed query was not the read of the follow-up note")
 	}
 	if !strings.Contains(sc.logs.String(), "request the acceptance check: waits for the follow-up notes") {
-		t.Error("the log does not say that R4 waits")
+		t.Error("the log does not say that the acceptance check waits")
 	}
 }
 
 // Two merged pull requests close the same sub-issue, and the second note
 // fails. The first marker names both, so the next poll reads the sub-issue
-// again and writes the second note; R4 waits until then.
-func TestI9_ANoteThatFailsHalfwayIsWrittenAtTheNextPoll(t *testing.T) {
+// again and writes the second note; "request the acceptance check" waits until then.
+func TestANoteThatFailsHalfwayIsWrittenAtTheNextPoll(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
 		Number: 22, Closed: true, Merged: true, Closes: []int{10}, Body: followUpBody,
@@ -564,7 +568,7 @@ func TestFollowUpCandidates_EveryNamedPullRequestNeedsItsNote(t *testing.T) {
 // A linked pull request that is still open when the first note is written
 // may be merged later. The marker names it, so the sub-issue is read again,
 // and its note follows the merge.
-func TestI9_ALinkedPullRequestMergedLaterGetsItsNote(t *testing.T) {
+func TestALinkedPullRequestMergedLaterGetsItsNote(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	later := &githubtest.PullRequest{Number: 22, Closes: []int{10}, Body: followUpBody}
 	sc.fake.AddPullRequest(sc.repo, later)

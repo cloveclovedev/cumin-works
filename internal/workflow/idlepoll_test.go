@@ -50,7 +50,7 @@ func pollAt(t *testing.T, sc *scene, service *workflow.Service, minutes int, nam
 	return queries(sc, name) - before
 }
 
-// waitsForMaintainer makes the sub-issue of the scene wait for the Owner, so
+// waitsForMaintainer makes the sub-issue of the scene wait for the Maintainer, so
 // that the repository has no issue in work.
 func waitsForMaintainer(t *testing.T, sc *scene) {
 	t.Helper()
@@ -59,7 +59,8 @@ func waitsForMaintainer(t *testing.T, sc *scene) {
 	}
 }
 
-// Core-26 (cumin-core.md): a repository with an issue in work is polled at
+// The test of a top-level requirement in cumin-core.md: a repository with an
+// issue in work is polled at
 // every poll interval.
 func TestIdlePoll_ARepositoryInWorkIsPolledAtEveryPollInterval(t *testing.T) {
 	sc := newScene(t)
@@ -77,7 +78,7 @@ func TestIdlePoll_ARepositoryInWorkIsPolledAtEveryPollInterval(t *testing.T) {
 	}
 }
 
-// Core-26: a repository with no issue in work is polled once in each idle
+// A repository with no issue in work is polled once in each idle
 // poll interval, and sends no GraphQL query between.
 func TestIdlePoll_ARepositoryWithNoIssueInWorkIsPolledOnceInEachIdlePollInterval(t *testing.T) {
 	sc := newScene(t)
@@ -94,7 +95,7 @@ func TestIdlePoll_ARepositoryWithNoIssueInWorkIsPolledOnceInEachIdlePollInterval
 	}
 }
 
-// Core-26: the Owner adds cumin/status/ready to an issue of an idle
+// The Maintainer adds cumin/status/ready to an issue of an idle
 // repository. cumin reads it at the poll of the idle poll interval, and
 // the next poll comes after the poll interval.
 func TestIdlePoll_AfterANewReadyTheNextPollComesAfterThePollInterval(t *testing.T) {
@@ -137,7 +138,7 @@ func TestIdlePoll_AfterANewReadyTheNextPollComesAfterThePollInterval(t *testing.
 	service.Wait()
 }
 
-// Core-26: an idle repository and a repository in work are targets at the
+// An idle repository and a repository in work are targets at the
 // same time. The idle one does not slow the polls of the other one.
 func TestIdlePoll_AnIdleRepositoryDoesNotSlowAnotherRepository(t *testing.T) {
 	sc := newScene(t)
@@ -168,9 +169,9 @@ func TestIdlePoll_AnIdleRepositoryDoesNotSlowAnotherRepository(t *testing.T) {
 
 // A poll that took an action keeps the repository in work for one poll
 // interval: the next poll reads what the agent run left. The issue then
-// waits for the Owner, and the repository is idle.
+// waits for the Maintainer, and the repository is idle.
 func TestIdlePoll_ThePollAfterAnActionReadsWhatTheRunLeft(t *testing.T) {
-	// The run returns blocked, so the issue waits for the Owner after it.
+	// The run returns blocked, so the issue waits for the Maintainer after it.
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
 	service := idlePollService(sc)
 	sc.clock.Set(sceneNow)

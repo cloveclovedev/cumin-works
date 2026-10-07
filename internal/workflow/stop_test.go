@@ -77,7 +77,7 @@ func TestStopNote_NamesThePullRequestAndTheRetry(t *testing.T) {
 	}
 }
 
-// Every failed check of I2 has its own sentence, and each one says what
+// Every failed check of the pull request has its own sentence, and each one says what
 // cumin checked and what it found.
 func TestVerificationReason_OneSentenceForEachCheck(t *testing.T) {
 	t.Parallel()
