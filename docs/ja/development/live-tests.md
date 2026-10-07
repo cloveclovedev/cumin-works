@@ -126,7 +126,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
    | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1)。読んだばかり (5分以内) の使用率が状態ファイルにあれば、この行は出ない |
    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
    | `clone created`、`worktree created` | 作業場所を用意した |
-   | `I1: requested the work` | ブランチの名前を決めて、Implementer を起動した |
+   | `request the implementation: requested the work` | ブランチの名前を決めて、Implementer を起動した |
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end` | Claude Code の実行の始まりと終わり |
    | `the agent run ended` | 結果 (`done` か `blocked`) とセッションの番号 |
@@ -139,7 +139,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | # | 確かめること | 見る場所 |
 |---|---|---|
 | 1 | 実装Issueのラベルが `cumin/status/ready` から `cumin/status/implementing` を経て `cumin/status/checking` に移った。状態ラベルは常に1つだけ | Issue のイベント |
-| 2 | Pull Request がちょうど1つ開いている。ブランチは `cumin/<Issue番号>-<短い説明>` で、`I1: requested the work` の `branch` と同じ | Pull Request |
+| 2 | Pull Request がちょうど1つ開いている。ブランチは `cumin/<Issue番号>-<短い説明>` で、`request the implementation: requested the work` の `branch` と同じ | Pull Request |
 | 3 | Pull Request の本文に `Closes #<Issue番号>` があり、`pull-request.md` の見出しに従っている | Pull Request |
 | 4 | Pull Request の作成者が Implementer の App の bot である。GraphQL の `author` の型が `Bot` である | GraphQL の `closedByPullRequestsReferences` |
 | 5 | Pull Request の先頭のコミットが、worktree の先頭のコミットと同じである | `git -C <work_dir>/<owner>/<repo>/<Issue番号>-implementer rev-parse HEAD` と `headRefOid` |
@@ -193,11 +193,11 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
    | ログの行 | 意味 |
    |---|---|
    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
-   | `I1: requested the work` | ブランチの名前を決めて、Implementer を起動した |
+   | `request the implementation: requested the work` | ブランチの名前を決めて、Implementer を起動した |
    | `the agent run ended` | 結果が `blocked` で返った |
    | `the agent returned blocked` | 理由の1行目 |
-   | `I2: wrote the reason on the issue` | `blocked_reason` をコメントとして投稿した |
-   | `I2: the issue waits for the Owner` | ラベルを `cumin/status/awaiting-decision` に替えた |
+   | `stop the implementation: wrote the reason on the issue` | `blocked_reason` をコメントとして投稿した |
+   | `stop the implementation: the issue waits for the Owner` | ラベルを `cumin/status/awaiting-decision` に替えた |
    | `the Owner was notified` | Discord に送った |
 
 10. `the Owner was notified` が出たら、SIGTERM で止める。
@@ -249,12 +249,12 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | ログの行 | 意味 |
    |---|---|
    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
-   | `I1: requested the work` | `kind` が `implement`。Implementer を新しいセッションで起動した |
+   | `request the implementation: requested the work` | `kind` が `implement`。Implementer を新しいセッションで起動した |
    | `the agent run ended` | 1回目の実行が `done` で終わった |
    | `I2: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
    | `poll` | `required_checks` が1以上。check が終わるまで、何も起きない定期確認が続く |
    | `I4: a required check failed; the issue goes back to the Implementer` | `failed` に `live-check-1-required-line`、`check_fix_requests` が1 |
-   | `I4: requested the work` | `kind` が `check fix`、`resumed` が `true` |
+   | `request a check fix: requested the work` | `kind` が `check fix`、`resumed` が `true` |
    | `the agent run ended` | 修正の実行が `done` で終わった |
    | `I2: verified the pull request` | ラベルが `cumin/status/checking` に戻った |
    | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた |
@@ -269,7 +269,7 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 | 1 | 実装Issueのラベルが `ready`、`implementing`、`checking`、`implementing`、`checking`、`reviewing` の順に移った。状態ラベルは常に1つだけ | Issue のイベント |
 | 2 | Pull Request がちょうど1つ開いている。2回の実行が同じブランチに積んだ | Pull Request とそのコミット |
 | 3 | 1回目の先頭のコミットで `live-check-1-required-line` が落ち、修正のあとの先頭のコミットで通った。ほかの必須のcheckは通ったか飛ばされた | Pull Request の check |
-| 4 | 修正の依頼がちょうど1回である。`I4: requested the work` が1行だけで、Claude Code の起動は、使用率の最小の実行を除いて2回である | cumin のログ |
+| 4 | 修正の依頼がちょうど1回である。`request a check fix: requested the work` が1行だけで、Claude Code の起動は、使用率の最小の実行を除いて2回である | cumin のログ |
 | 5 | 修正の依頼が、1回目の実行のセッションを再開した。2回の `the agent run ended` のセッションの番号が同じである。公式文書が新しい番号を与えると書くのは `--fork-session` と `/branch` だけなので、再開で番号が変わらないことはこの場面で確かめる | cumin のログ (番号は記録に書かない) |
 | 6 | 修正の依頼文に、落ちたcheckの名前と、annotation の文 (決まった1行を含む) が載っていた | Claude Code のセッションの記録で、`Request: check fix` で始まるユーザの入力 |
 | 7 | 修正のあとの `live/check-1.md` に、Pull Request の番号の入った決まった1行がある。最初のコミットにはない | Pull Request のコミットごとの差分 |
@@ -313,11 +313,11 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1)。読んだばかり (5分以内) の使用率が状態ファイルにあれば、この行は出ない |
    | `R1: moved the requirement issue to planning` | ラベルを `cumin/status/planning` に替えた |
    | `clone created`、`worktree created` | 既定のブランチを detached で開いた |
-   | `R1: requested the Planner` (`kind` が `plan`) | Planner を起動した |
+   | `request the split: requested the Planner` (`kind` が `plan`) | Planner を起動した |
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end`、`the agent run ended` | Claude Code の実行と、その結果 |
    | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
-   | `the Owner was notified` (`row` が `R2`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
+   | `the Owner was notified` (`action` が `ask for the plan review`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
 
 9. `R2: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`R2: ...` の行で止めると、通知が取り消されることがある。
 
@@ -367,10 +367,10 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    | `R4: read the comments` | sub-issue が全て閉じた要求Issueのコメントを読んだ。確認が終わるまで、定期確認のたびに出る |
    | `worktree removed`、`worktree created` | 前の依頼の worktree を消し、merge された main で開き直した。初めての要求Issueでは `worktree removed` は出ない |
    | `R4: moved the requirement issue to accepting` | ラベルを `cumin/status/accepting` に替えた |
-   | `R4: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した |
+   | `request the acceptance check: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した |
    | `agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ。使用率を読む `quota usage read` は出ない |
    | `R7: the requirement issue waits for the acceptance of the Owner` | 実行の終わり (または次の定期確認) で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
-   | `the Owner was notified` (`row` が `R7`) | 通知した |
+   | `the Owner was notified` (`action` が `ask for the acceptance`) | 通知した |
 
    Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`R7: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
 
@@ -418,7 +418,7 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
 
    | ログの行 | 意味 |
    |---|---|
-   | `I1: requested the work` | Implementer を新しいセッションで起動した |
+   | `request the implementation: requested the work` | Implementer を新しいセッションで起動した |
    | `I2: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
    | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた。`round` が1 |
    | `I3: requested the review` | `round` が1、`resumed` が `false` |
@@ -486,7 +486,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
    | `I3: requested the review` | `round` が1、`resumed` が `false` |
    | `I3: checked the review` | `result` が `changes requested` |
    | `I5: the Reviewer requested changes; the issue goes back to the Implementer` | `round` が1、`limit` が3。ラベルを `cumin/status/implementing` に替えた |
-   | `I5: requested the work` | `kind` が `review fix`、`resumed` が `true` |
+   | `request a review fix: requested the work` | `kind` が `review fix`、`resumed` が `true` |
    | `I2: verified the pull request` | 修正が push され、ラベルが `cumin/status/checking` に戻った |
    | `I3: requested the review` | `round` が2、`resumed` が `true` |
    | `I3: the Reviewer approved the head commit` | 2ラウンド目で承認された |
@@ -501,7 +501,7 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 | 2 | Reviewer の1つめのレビューが、手順7のコミットに対する `CHANGES_REQUESTED` である。80文字の完了条件を `(blocking)` の指摘にし、`Why` と `Fix` がある | `gh api repos/<owner>/<repo>/pulls/<番号>/reviews` と、そのレビューのコメント |
 | 3 | Implementer の修正が、手順7の行を直すコミットとして同じブランチに積まれた。新しい Pull Request はない | Pull Request のコミット |
 | 4 | Implementer が、修正を求める指摘のスレッドに `Fixed in <SHA>.` で始まる返答を書いた (`review-reply.md`)。スレッドは解決済みにしていない。返答はレビューの API で書くので、Implementer の App の `COMMENTED` のレビューとしても現れる。cumin は Reviewer の App のレビューだけを数えるので、ラウンドは変わらない | Pull Request のレビューのスレッド |
-| 5 | Implementer の2回の実行が同じセッションである (`I1: requested the work` の実行と、`I5: requested the work` の実行の `the agent run ended` のセッションの番号が同じ) | cumin のログ (番号は記録に書かない) |
+| 5 | Implementer の2回の実行が同じセッションである (`request the implementation: requested the work` の実行と、`request a review fix: requested the work` の実行の `the agent run ended` のセッションの番号が同じ) | cumin のログ (番号は記録に書かない) |
 | 6 | Reviewer の2回の実行が同じセッションで、Implementer のセッションとは違う | cumin のログ |
 | 7 | 2ラウンド目の依頼文に `Round: 2 of 3` と `Last reviewed commit:` (手順7のコミット) がある。2ラウンド目の Reviewer は、組み込みのレビューの skill を呼んでいない | Claude Code のセッションの記録で、`Request: review` で始まる2つめのユーザの入力と、そのあとの `Skill` の呼び出し |
 | 8 | Reviewer の2つめのレビューが、修正のあとの先頭のコミットに対する `APPROVED` で、`round 2 of 3` とある | レビュー |
@@ -547,7 +547,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
    | `I6: decided on the approved pull request` | `decision` が `ask the Owner` |
    | `I7: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
    | `I7: requested the review of the Owner` | `reviewer` が、実装Issueに最新の `cumin/status/ready` を付けたOwnerのログイン名。GitHubの「レビューの依頼」の一覧にPull Requestが載る |
-   | `the Owner was notified` | `row` が `I7`。Discord に1件届く |
+   | `the Owner was notified` | `action` が `ask for the merge decision`。Discord に1件届く |
 
 8. Owner が B の Pull Request を開き、GitHub のレビューで承認 (Approve) する。Reviewers に Owner を足す必要はない。
 9. その間に A が進み、ログがこの順に出る。
@@ -712,7 +712,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     |---|---|
     | `quota usage read` | 許可で次に試す時刻の待ちが終わり、読み直した (Q2)。手順17の `quota usage read` から5分以内なら、この行は出ない。残した使用率と許可で判定し、次の行に進む |
     | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
-    | `I1: requested the work`、`agent start`、`agent end`、`the agent run ended` | Implementer の実行 |
+    | `request the implementation: requested the work`、`agent start`、`agent end`、`the agent run ended` | Implementer の実行 |
 
 20. `the agent run ended` のあとの I2 の行が出たら、SIGTERM で止める。I2 の結果は、この場面では確かめない。GitHub が `Closes #<番号>` の紐づけを作らないと、I2 は「Issue を閉じる開いている Pull Request がない」で止まる (Review-1 の「GitHub が紐づけを作らないとき」)。利用枠とは関係がない。
 
