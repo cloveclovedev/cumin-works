@@ -1,5 +1,5 @@
 @startuml poll-merge
-' cumin works - the approved pull request (I6, I7) and the steps in cumin/status/merging.
+' cumin works - the approved pull request (start the merge, ask for the merge decision) and the steps in cumin/status/merging.
 ' Document: poll.md, section on the merge step.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -11,7 +11,7 @@ start
 and the required checks;
 if (Exactly one risk/* label
 on the issue? (DecideMerge)) then (no)
-  :Stop step of #81, row I6
+  :Stop step of #81, start the merge
   (no or two risk labels);
   stop
 elseif (Required checks pass
@@ -19,21 +19,21 @@ on the head commit?) then (no)
   :Back to cumin/status/checking;
   stop
 elseif (risk/low?) then (no)
-  :I7: cumin/status/awaiting-merge-decision,
-  then cumin-core requests the review of the Owner
+  :ask for the merge decision: cumin/status/awaiting-merge-decision,
+  then cumin-core requests the review of the Issue Owner
   (requested_reviewers; a failure is only logged),
   then one notification with the pull request;
   stop
 else (yes)
-  :I6: cumin/status/merging
-  (only the label changes; I12 does the same
-  after the approval of the Owner);
+  :start the merge: cumin/status/merging
+  (only the label changes; start the merge does the same
+  after the approval of a Maintainer);
 endif
 partition "At every poll, for an issue in cumin/status/merging" {
   :Read the issue again: the actor of the label,
   the pull request, the reviews, the checks,
   the permissions, and the required checks;
-  if (cumin-core or an Owner
+  if (cumin-core or a Maintainer
 added the label?) then (no)
     :Do nothing;
     stop
@@ -44,7 +44,7 @@ is merged?) then (yes)
       :Close the merged issue:
       cumin-core closes it as completed
       when GitHub left it open
-      (a lasting failure: stop the merge for the Owner);
+      (a lasting failure: stop the merge);
     else (no)
       :Go back to the checks:
       cumin/status/checking;
@@ -79,7 +79,7 @@ or 405 "Base branch was modified"?) then (yes)
     cumin/status/implementing, then the Implementer
     resolves it in the same session;
   else (no)
-    :Stop the merge for the Owner:
+    :Stop the merge:
     cumin/status/awaiting-decision, head moved (409),
     or the answer of GitHub;
   endif

@@ -1,12 +1,12 @@
 @startuml poll-start
-' cumin works - the claim (I1) and agent runs in parallel.
+' cumin works - the claim (request the implementation) and agent runs in parallel.
 ' Document: poll.md, section on agent runs in parallel.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
 
 participant "poll loop" as poll
-participant "claim (I1)" as claim
+participant "claim\n(request the implementation)" as claim
 participant "GitHub" as gh
 participant "Workspace\n(clone and worktree)" as ws
 participant "agent.Service" as agents
@@ -41,7 +41,7 @@ group another goroutine (one for each issue)
   agents -> agents: log the result
   note right of agents
     This is the end of the run.
-    The check is "end of a run" (I2).
+    The check is "end of a run" (wait for the checks).
   end note
 end
 

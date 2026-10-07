@@ -1,6 +1,6 @@
 @startuml poll-verify
 ' cumin works - the way out of cumin/status/implementing: the decision at the end of an Implementer run and at every poll.
-' Document: poll.md, sections on the end of a run and the way back to the Owner.
+' Document: poll.md, sections on the end of a run and the way back to a Maintainer.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
@@ -11,7 +11,7 @@ cumin/status/implementing with no Implementer running;
 if (The run returned blocked?) then (yes)
   :Post blocked_reason on the issue,
   change the label to cumin/status/awaiting-decision,
-  and notify the Owner;
+  and notify;
   stop
 else (no: done, abnormal end, or no run in this cumin)
 endif
@@ -21,7 +21,7 @@ endif
 the open pull requests of the branch (REST),
 the head commit of the worktree, and the state file;
 if (A read failed, or the label is not
-of cumin-core or of an Owner?) then (yes)
+of cumin-core or of a Maintainer?) then (yes)
   :Change nothing.
   The next poll decides from the same facts;
   stop
@@ -29,20 +29,20 @@ else (no)
 endif
 partition "Decision (pure function ImplementationEnd, no I/O)" {
   if (A decision request after the label?) then (yes)
-    :stop the implementation for the Owner
+    :stop the implementation
     (the question is the reason);
   elseif (The pull request passes the check?
   (on the branch, by the Implementer App, head pushed)) then (yes)
     if (The request was a conflict resolution, and
     the head commit is older than the label?) then (yes)
-      :stop the implementation for the Owner
+      :stop the implementation
       (the conflict is not resolved);
     else (no)
       :wait for the checks;
     endif
   elseif (Requested again during this stay?
   (count in the state file)) then (yes)
-    :stop the implementation for the Owner
+    :stop the implementation
     (the failed check, retried once);
   else (no)
     :request the implementation again;

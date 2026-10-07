@@ -26,7 +26,7 @@ pr "1" --> "last 1" commit : commits
 
 note bottom of pr
   Closed and merged pull requests are not read here.
-  I9 (follow-up note) reads merged pull requests separately.
+  write the follow-up note reads merged pull requests separately.
 end note
 note left of sub
   The time that cumin/status/checking

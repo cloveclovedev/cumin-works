@@ -18,7 +18,7 @@ if (the account is a person?) then (yes)
   :read the permission (1 REST call);
 else (no)
 endif
-if (cumin-core App or an Owner?\n(StatusLabelCounts)) then (yes)
+if (cumin-core App or a Maintainer?\n(StatusLabelCounts)) then (yes)
   :read the label times and the comments;
   :decide from the state\n(SplitEnd, AcceptanceEnd);
   stop
