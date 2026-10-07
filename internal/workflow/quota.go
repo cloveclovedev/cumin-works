@@ -318,7 +318,7 @@ func limitReason(window quota.Name) string {
 	if window == quota.Weekly {
 		return "The weekly quota window reached its pace limit. cumin starts no agent until the pace limit rises above the usage or the window resets. The agent runs that are going on end as usual."
 	}
-	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no agent until the window resets, a time band with a higher limit starts, or the Owner runs cumin quota allow. The agent runs that are going on end as usual.", window)
+	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no agent until the window resets, a time band with a higher limit starts, or the command cumin quota allow runs. The agent runs that are going on end as usual.", window)
 }
 
 // notifyQuota sends one notification of "stop agent starts". The quota belongs to the account
@@ -329,7 +329,7 @@ func limitReason(window quota.Name) string {
 // reports false when the channel failed.
 func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) bool {
 	return s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionStopAgentStarts),
+		Action:     string(ActionStopAgentStarts),
 		Reason:     reason,
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", number),

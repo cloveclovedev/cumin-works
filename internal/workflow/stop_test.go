@@ -10,7 +10,7 @@ import (
 
 // The note that cumin writes must follow templates/stop-note.md: the
 // heading and every field of the template block, in the same order. The
-// template is the contract between cumin and the Owner.
+// template is the contract between cumin and a Maintainer.
 func TestStopNote_FollowsTheTemplate(t *testing.T) {
 	t.Parallel()
 	template, err := templates.Read("stop-note.md")
@@ -19,7 +19,7 @@ func TestStopNote_FollowsTheTemplate(t *testing.T) {
 	}
 	note := workflow.StopNote(workflow.ActionStopTheImplementation, "The Implementer reported done, but no open pull request closes this issue.", 0, false)
 
-	fields := []string{"## Stopped for the Owner", "Row: ", "Reason: ", "Pull request: ", "Retried: ", "To continue: "}
+	fields := []string{"## Stopped for a Maintainer", "Step: ", "Reason: ", "Pull request: ", "Retried: ", "To continue: a Maintainer ", "Then a Maintainer adds the label `cumin/status/ready` to this issue."}
 	at := -1
 	for _, field := range fields {
 		if !strings.Contains(template, field) {
@@ -37,6 +37,18 @@ func TestStopNote_FollowsTheTemplate(t *testing.T) {
 	}
 	if strings.Contains(note, "**") {
 		t.Error("the note uses bold text")
+	}
+}
+
+// The line "Step:" of a stop note holds the name of the action as the list
+// of the actions writes it.
+func TestStopNote_NamesTheActionAsAStep(t *testing.T) {
+	t.Parallel()
+	for _, action := range workflow.ActionNames {
+		note := workflow.StopNote(action, "A reason.", 0, false)
+		if !strings.Contains(note, "\nStep: "+string(action)+"\n") {
+			t.Errorf("the note of %q has no line %q:\n%s", action, "Step: "+string(action), note)
+		}
 	}
 }
 

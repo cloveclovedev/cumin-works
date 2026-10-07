@@ -1558,7 +1558,7 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 	log = log.With("action", ActionStopTheImplementation)
 	log.Info("I2: the Implementer asked a question; the issue waits for the Owner", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionStopTheImplementation),
+		Action:     string(ActionStopTheImplementation),
 		Reason:     "The Implementer asked a question during the implementation.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),

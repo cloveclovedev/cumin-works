@@ -106,8 +106,8 @@ func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete 
 	log := s.logger()
 	log.Info("Q4: no issue can go on and no agent runs; the Owner is told once")
 	sent := s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:    string(ActionTellThatCuminWaits),
-		Reason: "No issue can go on and no agent runs. cumin waits for a new ready issue or a decision of the Owner.",
+		Action: string(ActionTellThatCuminWaits),
+		Reason: "No issue can go on and no agent runs. cumin waits for a new ready issue or a decision.",
 	})
 	if !sent {
 		// The channel failed: the next poll with nothing to do tries again.

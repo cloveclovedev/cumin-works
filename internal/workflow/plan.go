@@ -529,7 +529,7 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 	log = log.With("action", ActionStopTheAcceptanceCheck)
 	log.Info("R4: the Planner asked a question during the acceptance check; the issue waits for the Owner", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionStopTheAcceptanceCheck),
+		Action:     string(ActionStopTheAcceptanceCheck),
 		Reason:     "The Planner asked a question during the acceptance check.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),
@@ -560,7 +560,7 @@ func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger,
 		log.Error(string(action)+": the issue was not read after blocked; the issue keeps its label, and the blocked_reason was not written on the issue; the whole text is here",
 			"error", err.Error(), "comment", comment)
 		s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
-			Row:        string(action),
+			Action:     string(action),
 			Reason:     PlannerQuestionNotWrittenReason,
 			Repository: target.Repository.String(),
 			Subject:    fmt.Sprintf("issue #%d", number),
@@ -593,7 +593,7 @@ func (s *Service) reviewPlan(ctx context.Context, token string, target Target, s
 	log.Info("R2: the split waits for the Owner", "sub_issues", len(requirement.SubIssues), "labels", labels)
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionAskForThePlanReview),
+		Action:     string(ActionAskForThePlanReview),
 		Reason:     "The split of the requirement issue needs a review.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),
@@ -632,7 +632,7 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 	log = log.With("action", ActionStopTheSplit)
 	log.Info("R2: the Planner asked a question during the split; the issue waits for the Owner", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionStopTheSplit),
+		Action:     string(ActionStopTheSplit),
 		Reason:     "The Planner asked a question during the split.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),
@@ -656,7 +656,7 @@ func (s *Service) accept(ctx context.Context, token string, target Target, snaps
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionAskForTheAcceptance),
+		Action:     string(ActionAskForTheAcceptance),
 		Reason:     "The acceptance check is done; the requirement issue can be accepted.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),

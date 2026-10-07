@@ -470,7 +470,7 @@ func TestReviewing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheReview(t *testing
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: stop the review", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
+	for _, want := range []string{"## Stopped for a Maintainer", "Step: stop the review", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -594,7 +594,7 @@ func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"Row: stop at the round limit", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
+	for _, want := range []string{"Step: stop at the round limit", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}

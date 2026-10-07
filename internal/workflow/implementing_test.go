@@ -155,7 +155,7 @@ func TestImplementing_ARestartWithNoPullRequestSendsOneSecondRequestThenStops(t 
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Reason: " + reason, "Retried: once"} {
+	for _, want := range []string{"## Stopped for a Maintainer", "Reason: " + reason, "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -339,7 +339,7 @@ func TestImplementing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheIssue(t *testi
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Reason: " + reason, "Retried: once"} {
+	for _, want := range []string{"## Stopped for a Maintainer", "Reason: " + reason, "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}

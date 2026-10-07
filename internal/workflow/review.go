@@ -312,7 +312,7 @@ func (s *Service) stopForReviewerStart(ctx context.Context, log *slog.Logger, ta
 	if !ok || !ReviewNeedsFacts(sub, false) {
 		return
 	}
-	a := StopReview{Number: number, Row: stopOfReviewerRequest(req), Reason: ReviewerNotStartedReason(), PullRequest: req.review.PullRequest, Retried: true}
+	a := StopReview{Number: number, Action: stopOfReviewerRequest(req), Reason: ReviewerNotStartedReason(), PullRequest: req.review.PullRequest, Retried: true}
 	if _, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, "", nil, false, a); err != nil {
 		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 	}
@@ -534,21 +534,21 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 	}
 	switch a := action.(type) {
 	case StopReview:
-		labels, err := move(a.Row, LabelAwaitingDecision)
+		labels, err := move(a.Action, LabelAwaitingDecision)
 		if err != nil {
 			return nil, err
 		}
 		if !a.Question {
-			log.Warn(string(a.Row)+": the review stops for the Owner", "reason", a.Reason, "retried", a.Retried, "labels", labels)
+			log.Warn(string(a.Action)+": the review stops for the Owner", "reason", a.Reason, "retried", a.Retried, "labels", labels)
 			s.stopForOwner(ctx, log, target, settings, stop{
-				action: a.Row, issue: number, labelDone: true, reason: a.Reason,
-				comment: StopNote(a.Row, a.Reason, a.PullRequest, a.Retried),
+				action: a.Action, issue: number, labelDone: true, reason: a.Reason,
+				comment: StopNote(a.Action, a.Reason, a.PullRequest, a.Retried),
 			})
 			return nil, nil
 		}
 		log.Info("I10: the Reviewer asked a question; the issue waits for the Owner", "labels", labels)
 		s.notifyOwner(ctx, log.With("action", ActionStopTheReview), settings.Settings.Notify.DiscordEnabled, notify.Notification{
-			Row:        string(ActionStopTheReview),
+			Action:     string(ActionStopTheReview),
 			Reason:     "The Reviewer asked a question during the review.",
 			Repository: repository,
 			Subject:    fmt.Sprintf("issue #%d", number),
@@ -575,7 +575,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		}
 		log.Info("I8: the issue waits for the Owner", "labels", labels, "comment", a.Explanation.URL)
 		s.notifyOwner(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.Settings.Notify.DiscordEnabled, notify.Notification{
-			Row:        string(ActionStopAtTheRoundLimit),
+			Action:     string(ActionStopAtTheRoundLimit),
 			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstBodyLine(a.Explanation.Body)),
 			Repository: repository,
 			Subject:    fmt.Sprintf("issue #%d", number),

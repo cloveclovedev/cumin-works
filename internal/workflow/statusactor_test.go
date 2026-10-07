@@ -160,7 +160,7 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T
 					t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
 				}
 				messages := sc.messagesExceptQ4()
-				if len(messages) != 1 || !strings.Contains(messages[0], s.label) || !strings.Contains(messages[0], "is not cumin-core or an Owner") {
+				if len(messages) != 1 || !strings.Contains(messages[0], s.label) || !strings.Contains(messages[0], "is not cumin-core and not a person with write access") {
 					t.Errorf("messages = %q, want one about the %s that does not count", messages, s.label)
 				}
 			})

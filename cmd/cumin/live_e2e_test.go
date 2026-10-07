@@ -696,7 +696,7 @@ func TestLiveE2E(t *testing.T) {
 	notified := func(lines []logLine, action string, issue int) int {
 		count := 0
 		for _, line := range lines {
-			if line.Msg == "the Owner was notified" && line.Repository == e.repo && line.Action == action && line.Issue == issue {
+			if line.Msg == "the notification was sent" && line.Repository == e.repo && line.Action == action && line.Issue == issue {
 				count++
 			}
 		}
@@ -740,7 +740,7 @@ func TestLiveE2E(t *testing.T) {
 			t.Errorf("the log has %d notifications of %s for issue #%d, want 1", count, n.action, n.issue)
 		}
 	}
-	e.record("Notifications", "log: `the Owner was notified` once each for the split (R2), the merge decision (I7), and the acceptance (R7)")
+	e.record("Notifications", "log: `the notification was sent` once each for the split (R2), the merge decision (I7), and the acceptance (R7)")
 
 	secret := regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|/api/webhooks/|PRIVATE KEY|utilization|agent quota usage`)
 	for _, line := range lines {

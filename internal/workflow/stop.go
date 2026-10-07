@@ -102,7 +102,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 	}
 
 	s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(st.action),
+		Action:     string(st.action),
 		Reason:     reason,
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", st.issue),
@@ -127,7 +127,7 @@ func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled boo
 		log.Error("the Owner was not notified", "error", err.Error())
 		return errors.Is(err, notify.ErrNoSender)
 	}
-	log.Info("the Owner was notified")
+	log.Info("the notification was sent")
 	return true
 }
 
@@ -175,14 +175,14 @@ func StopNote(action ActionName, reason string, pullRequest int, retried bool) s
 	if retried {
 		tried = "once"
 	}
-	return fmt.Sprintf(`## Stopped for the Owner
+	return fmt.Sprintf(`## Stopped for a Maintainer
 
-Row: %s
+Step: %s
 Reason: %s
 Pull request: %s
 Retried: %s
 
-To continue: read the reason, fix what it names, and say in a comment how to go on. Then add the label `+"`cumin/status/ready`"+` to this issue.
+To continue: a Maintainer reads the reason, fixes what it names, and says in a comment how to go on. Then a Maintainer adds the label `+"`cumin/status/ready`"+` to this issue.
 `, action, reason, pr, tried)
 }
 

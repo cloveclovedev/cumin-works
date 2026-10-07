@@ -279,7 +279,7 @@ func (sc *scene) assertStoppedForAConflictThatStays(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: stop the implementation", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21", "Retried: no"} {
+	for _, want := range []string{"## Stopped for a Maintainer", "Step: stop the implementation", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21", "Retried: no"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -430,7 +430,7 @@ func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: stop the implementation", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for a Maintainer", "Step: stop the implementation", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -486,7 +486,7 @@ func (sc *scene) assertStoppedAt(t *testing.T, action workflow.ActionName, reaso
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: " + string(action), "Reason: " + reason, "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for a Maintainer", "Step: " + string(action), "Reason: " + reason, "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
