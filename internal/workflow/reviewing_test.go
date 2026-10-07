@@ -454,10 +454,12 @@ func TestReviewing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheReview(t *testing
 		t.Errorf("%d agent runs, want none", n)
 	}
 	logs := sc.logs.String()
-	tries := strings.Count(logs, `: the work directory was not prepared"`) +
-		strings.Count(logs, `: the worktree of an earlier round was not removed"`)
-	if tries != 2 {
-		t.Errorf("%d requests that did not start, want 2: no third request", tries)
+	for _, action := range []workflow.ActionName{workflow.ActionRequestTheReview, workflow.ActionRequestTheReviewAgain} {
+		tries := strings.Count(logs, `"msg":"`+string(action)+`: the work directory was not prepared"`) +
+			strings.Count(logs, `"msg":"`+string(action)+`: the worktree of an earlier round was not removed"`)
+		if tries != 1 {
+			t.Errorf("%d requests of %q that did not start, want 1: no third request", tries, action)
+		}
 	}
 	want := []string{"risk/low", workflow.LabelAwaitingDecision}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
