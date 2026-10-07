@@ -28,9 +28,13 @@ import (
 // cumin/status/planning, and a start that failed does not use it up.
 func (s *Service) plan(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, p Plan) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
+	action := ActionRequestTheSplit
+	if p.Again {
+		action = ActionRequestTheSplitAgain
+	}
 	requirement, ok := snapshot.RequirementIssue(p.Number)
 	if !ok {
-		return fmt.Errorf("R1: issue #%d is not in the snapshot", p.Number)
+		return fmt.Errorf("%s: issue #%d is not in the snapshot", action, p.Number)
 	}
 	req := planRequest
 	if req.permit, ok = s.permitStart(ctx, s.logger().With("repository", target.Repository.String(), "issue", p.Number), "split", config.RolePlanner, target, p.Number); !ok {
@@ -43,22 +47,22 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	if p.Again {
 		var err error
 		if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, p.Number); err != nil {
-			return fmt.Errorf("R2: read the login of the Owner of issue #%d: %w", p.Number, err)
+			return fmt.Errorf(string(ActionRequestTheSplitAgain)+": read the login of the Owner of issue #%d: %w", p.Number, err)
 		}
 		req.again, req.count = true, true
-		s.logger().Info("R2: the split does not pass the check; the split is requested again",
+		s.logger().Info(string(ActionRequestTheSplitAgain)+": the split does not pass the check; the split is requested again",
 			"repository", repository, "issue", p.Number)
 		return s.goPlanner(ctx, target, settings, p.Number, req)
 	}
 	// A new stay in cumin/status/planning starts with a count of zero.
 	if err := s.State.Clear(repository, p.Number); err != nil {
-		return fmt.Errorf("R1: clear the state of issue #%d: %w", p.Number, err)
+		return fmt.Errorf(string(ActionRequestTheSplit)+": clear the state of issue #%d: %w", p.Number, err)
 	}
 	labels := LabelsAfterPlan(requirement.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
-		return fmt.Errorf("R1: move issue #%d to planning: %w", p.Number, err)
+		return fmt.Errorf(string(ActionRequestTheSplit)+": move issue #%d to planning: %w", p.Number, err)
 	}
-	s.logger().Info("R1: moved the requirement issue to planning",
+	s.logger().Info(string(ActionRequestTheSplit)+": moved the requirement issue to planning",
 		"repository", target.Repository.String(), "issue", p.Number, "labels", labels)
 	return s.goPlanner(ctx, target, settings, p.Number, req)
 }
@@ -104,9 +108,13 @@ func (s *Service) notStarted(log *slog.Logger, repository string, number int, wo
 // one.
 func (s *Service) checkAcceptance(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a CheckAcceptance) error {
 	repository := target.Repository.String()
+	action := ActionRequestTheAcceptanceCheck
+	if a.Again {
+		action = ActionRequestTheAcceptanceCheckAgain
+	}
 	requirement, ok := snapshot.RequirementIssue(a.Number)
 	if !ok {
-		return fmt.Errorf("R4: issue #%d is not in the snapshot", a.Number)
+		return fmt.Errorf("%s: issue #%d is not in the snapshot", action, a.Number)
 	}
 	req := acceptanceRequest
 	if req.permit, ok = s.permitStart(ctx, s.logger().With("repository", repository, "issue", a.Number), "acceptance check", config.RolePlanner, target, a.Number); !ok {
@@ -114,12 +122,12 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 	}
 	var err error
 	if req.ownerLogin, err = s.readOwnerLogin(ctx, token, target, a.Number); err != nil {
-		return fmt.Errorf("R4: read the login of the Owner of issue #%d: %w", a.Number, err)
+		return fmt.Errorf("%s: read the login of the Owner of issue #%d: %w", action, a.Number, err)
 	}
 	if a.Again {
 		req.again, req.count = true, true
 		req.sessionID = s.State.Issue(repository, a.Number).SessionID
-		s.logger().Info("R4: the Planner left no acceptance check comment; the acceptance check is requested again",
+		s.logger().Info(string(ActionRequestTheAcceptanceCheckAgain)+": the Planner left no acceptance check comment; the acceptance check is requested again",
 			"repository", repository, "issue", a.Number)
 		return s.goPlanner(ctx, target, settings, a.Number, req)
 	}
@@ -135,13 +143,13 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 func (s *Service) moveToAccepting(ctx context.Context, token string, target Target, requirement RequirementIssue) error {
 	repository := target.Repository.String()
 	if err := s.State.Clear(repository, requirement.Number); err != nil {
-		return fmt.Errorf("R4: clear the state of issue #%d: %w", requirement.Number, err)
+		return fmt.Errorf(string(ActionRequestTheAcceptanceCheck)+": clear the state of issue #%d: %w", requirement.Number, err)
 	}
 	labels := ReplaceStatusLabel(requirement.Labels, LabelAccepting)
 	if err := s.GitHub.SetIssueLabels(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number, labels); err != nil {
-		return fmt.Errorf("R4: move issue #%d to accepting: %w", requirement.Number, err)
+		return fmt.Errorf(string(ActionRequestTheAcceptanceCheck)+": move issue #%d to accepting: %w", requirement.Number, err)
 	}
-	s.logger().Info("R4: moved the requirement issue to accepting", "repository", repository, "issue", requirement.Number, "labels", labels)
+	s.logger().Info(string(ActionRequestTheAcceptanceCheck)+": moved the requirement issue to accepting", "repository", repository, "issue", requirement.Number, "labels", labels)
 	return nil
 }
 
@@ -319,6 +327,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, req plannerRequest) {
 	repository := target.Repository.String()
 	again, counted, permit := req.again, req.count, req.permit
+	action := req.action()
 	for {
 		run, err := s.startAgent(ctx, permit, request)
 		var abnormal *agent.AbnormalEnd
@@ -339,7 +348,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			if run.Result.Result != agent.ResultDone {
 				log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
 				if err := s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.work.stop(), run.Result.BlockedReason, true); err != nil {
-					log.Warn("R2: the stop after blocked failed for a temporary reason; the next poll decides", "reason", err.Error())
+					log.Warn(string(req.work.stop())+": the stop after blocked failed for a temporary reason; the next poll decides", "reason", err.Error())
 				}
 				return
 			}
@@ -347,7 +356,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 
 		token, err := target.Token(ctx)
 		if err != nil {
-			log.Error("R2: no token; the next poll decides the end of the split", "error", err.Error())
+			log.Error(string(action)+": no token; the next poll decides the end of the split", "error", err.Error())
 			return
 		}
 		requirement, err := s.requirementIssueNow(ctx, log, target, number)
@@ -374,7 +383,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			if acceptance.permit, ok = s.permitStart(ctx, log, "acceptance check", config.RolePlanner, target, number); !ok {
 				return
 			}
-			log.Info("R2: every sub-issue is closed; the acceptance check follows", "sub_issues", len(requirement.SubIssues))
+			log.Info(string(ActionRequestTheAcceptanceCheck)+": every sub-issue is closed; the acceptance check follows", "sub_issues", len(requirement.SubIssues))
 			if err := s.moveToAccepting(ctx, token, target, requirement); err != nil {
 				log.Error("the requirement issue was not moved; the next poll decides again", "error", err.Error())
 				return
@@ -388,13 +397,14 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 				return
 			}
 			if err := s.countPlannerRequest(repository, number, workSplit, 1); err != nil {
-				log.Error("R2: the request was not counted; the next poll decides again", "error", err.Error())
+				log.Error(string(ActionRequestTheSplitAgain)+": the request was not counted; the next poll decides again", "error", err.Error())
 				return
 			}
 			again, counted = true, true
-			log.Info("R2: the split does not pass the check; the same request runs again in the same work directory")
+			action = ActionRequestTheSplitAgain
+			log.Info(string(ActionRequestTheSplitAgain) + ": the split does not pass the check; the same request runs again in the same work directory")
 		default:
-			log.Info("R2: the end of the split was not decided; the next poll decides", "labels", requirement.Labels)
+			log.Info(string(action)+": the end of the split was not decided; the next poll decides", "labels", requirement.Labels)
 			return
 		}
 	}
@@ -417,6 +427,10 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 // cumin/status/accepting, and the next poll decides.
 func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, request agent.StartRequest, permit StartPermit, again, counted bool) {
 	repository := target.Repository.String()
+	action := ActionRequestTheAcceptanceCheck
+	if again {
+		action = ActionRequestTheAcceptanceCheckAgain
+	}
 	for {
 		run, err := s.startAgent(ctx, permit, request)
 		var abnormal *agent.AbnormalEnd
@@ -446,7 +460,7 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 
 		token, err := target.Token(ctx)
 		if err != nil {
-			log.Error("R4: no token; the next poll decides the end of the acceptance check", "error", err.Error())
+			log.Error(string(action)+": no token; the next poll decides the end of the acceptance check", "error", err.Error())
 			return
 		}
 		requirement, err := s.requirementIssueNow(ctx, log, target, number)
@@ -473,14 +487,15 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 				return
 			}
 			if err := s.countPlannerRequest(repository, number, workAcceptanceCheck, 1); err != nil {
-				log.Error("R4: the request was not counted; the next poll decides again", "error", err.Error())
+				log.Error(string(ActionRequestTheAcceptanceCheckAgain)+": the request was not counted; the next poll decides again", "error", err.Error())
 				return
 			}
 			again, counted = true, true
+			action = ActionRequestTheAcceptanceCheckAgain
 			request.SessionID = s.State.Issue(repository, number).SessionID
-			log.Info("R4: the Planner left no acceptance check comment; the acceptance check is requested again")
+			log.Info(string(ActionRequestTheAcceptanceCheckAgain) + ": the Planner left no acceptance check comment; the acceptance check is requested again")
 		default:
-			log.Info("R4: the end of the acceptance check was not decided; the next poll decides", "labels", requirement.Labels)
+			log.Info(string(action)+": the end of the acceptance check was not decided; the next poll decides", "labels", requirement.Labels)
 			return
 		}
 	}
@@ -512,11 +527,11 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number)
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingDecision)
 	if err != nil {
-		return fmt.Errorf("R4: %w", err)
+		return fmt.Errorf(string(ActionStopTheAcceptanceCheck)+": %w", err)
 	}
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	if !a.Question {
-		log.Info("R4: the Planner left no acceptance check comment after two requests; the issue waits for the Owner", "labels", labels)
+		log.Info(string(ActionStopTheAcceptanceCheck)+": the Planner left no acceptance check comment after two requests; the issue waits for the Owner", "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
 			action:    ActionStopTheAcceptanceCheck,
 			issue:     a.Number,
@@ -527,7 +542,7 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 		return nil
 	}
 	log = log.With("action", ActionStopTheAcceptanceCheck)
-	log.Info("R4: the Planner asked a question during the acceptance check; the issue waits for the Owner", "labels", labels)
+	log.Info(string(ActionStopTheAcceptanceCheck)+": the Planner asked a question during the acceptance check; the issue waits for the Owner", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        string(ActionStopTheAcceptanceCheck),
 		Reason:     "The Planner asked a question during the acceptance check.",
@@ -586,11 +601,11 @@ func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger,
 func (s *Service) reviewPlan(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ReviewPlan) error {
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingPlanReview)
 	if err != nil {
-		return fmt.Errorf("R2: %w", err)
+		return fmt.Errorf(string(ActionAskForThePlanReview)+": %w", err)
 	}
 	requirement, _ := snapshot.RequirementIssue(a.Number)
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "action", ActionAskForThePlanReview)
-	log.Info("R2: the split waits for the Owner", "sub_issues", len(requirement.SubIssues), "labels", labels)
+	log.Info(string(ActionAskForThePlanReview)+": the split waits for the Owner", "sub_issues", len(requirement.SubIssues), "labels", labels)
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        string(ActionAskForThePlanReview),
@@ -615,11 +630,11 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number)
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingDecision)
 	if err != nil {
-		return fmt.Errorf("R2: %w", err)
+		return fmt.Errorf(string(ActionStopTheSplit)+": %w", err)
 	}
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	if !a.Question {
-		log.Warn("R2: the split failed the check after two requests; the issue waits for the Owner", "reason", a.Reason, "labels", labels)
+		log.Warn(string(ActionStopTheSplit)+": the split failed the check after two requests; the issue waits for the Owner", "reason", a.Reason, "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
 			action:    ActionStopTheSplit,
 			issue:     a.Number,
@@ -630,7 +645,7 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 		return nil
 	}
 	log = log.With("action", ActionStopTheSplit)
-	log.Info("R2: the Planner asked a question during the split; the issue waits for the Owner", "labels", labels)
+	log.Info(string(ActionStopTheSplit)+": the Planner asked a question during the split; the issue waits for the Owner", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        string(ActionStopTheSplit),
 		Reason:     "The Planner asked a question during the split.",
@@ -649,10 +664,10 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 func (s *Service) accept(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a Accept) error {
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingAcceptance)
 	if err != nil {
-		return fmt.Errorf("R7: %w", err)
+		return fmt.Errorf(string(ActionAskForTheAcceptance)+": %w", err)
 	}
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "action", ActionAskForTheAcceptance)
-	log.Info("R7: the requirement issue waits for the acceptance of the Owner", "labels", labels)
+	log.Info(string(ActionAskForTheAcceptance)+": the requirement issue waits for the acceptance of the Owner", "labels", labels)
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
@@ -688,7 +703,7 @@ func (s *Service) readAcceptanceComment(ctx context.Context, log *slog.Logger, t
 	}
 	planner, err := s.Agents.BotLogin(ctx, target.Repository.Owner, config.RolePlanner)
 	if err != nil {
-		log.Error("R4: the login of the Planner App was not read", "issue", requirement.Number, "error", err.Error())
+		log.Error(string(ActionRequestTheAcceptanceCheck)+": the login of the Planner App was not read", "issue", requirement.Number, "error", err.Error())
 		return
 	}
 	// In cumin/status/planning, only a question after that label counts. A
@@ -706,7 +721,7 @@ func (s *Service) readAcceptanceComment(ctx context.Context, log *slog.Logger, t
 		if target.Login != nil {
 			core, err := target.Login(ctx)
 			if err != nil {
-				log.Error("R2: the login of cumin-core was not read", "issue", requirement.Number, "error", err.Error())
+				log.Error(string(ActionStopTheSplit)+": the login of cumin-core was not read", "issue", requirement.Number, "error", err.Error())
 				return
 			}
 			askers = append(askers, core)
@@ -714,10 +729,10 @@ func (s *Service) readAcceptanceComment(ctx context.Context, log *slog.Logger, t
 	}
 	read, rate, err := s.GitHub.ReadIssueComments(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number, since)
 	if err != nil {
-		log.Error("R4: the comments were not read", "issue", requirement.Number, "error", err.Error())
+		log.Error(string(ActionRequestTheAcceptanceCheck)+": the comments were not read", "issue", requirement.Number, "error", err.Error())
 		return
 	}
-	log.Info("R4: read the comments", "issue", requirement.Number,
+	log.Info(string(ActionRequestTheAcceptanceCheck)+": read the comments", "issue", requirement.Number,
 		"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	comments := make([]Comment, 0, len(read))
 	for _, c := range read {

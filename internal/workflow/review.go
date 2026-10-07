@@ -68,11 +68,11 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	repository := target.Repository.String()
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
-		return fmt.Errorf("I3: issue #%d is not in the snapshot", a.Number)
+		return fmt.Errorf(string(ActionRequestTheReview)+": issue #%d is not in the snapshot", a.Number)
 	}
 	pr, ok := sub.LatestPullRequest()
 	if !ok || pr.Number != a.PullRequest {
-		return fmt.Errorf("I3: pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
+		return fmt.Errorf(string(ActionRequestTheReview)+": pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
 	permit, ok := s.permitStart(ctx, s.logger().With("repository", repository, "issue", a.Number), "review", config.RoleReviewer, target, a.Number)
 	if !ok {
@@ -90,13 +90,13 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	stored := s.State.Issue(repository, a.Number)
 	stored.ReviewRequests, stored.CauseRequests, stored.ReviewHead = 0, 0, pr.HeadCommit
 	if err := s.State.Set(repository, a.Number, stored); err != nil {
-		return fmt.Errorf("I3: keep the start of the review of issue #%d: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestTheReview)+": keep the start of the review of issue #%d: %w", a.Number, err)
 	}
 	labels := LabelsAfterReview(sub.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf("I3: move issue #%d to the review: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestTheReview)+": move issue #%d to the review: %w", a.Number, err)
 	}
-	s.logger().Info("I3: the pull request is ready for review",
+	s.logger().Info(string(ActionRequestTheReview)+": the pull request is ready for review",
 		"repository", repository, "issue", a.Number, "pull_request", a.PullRequest,
 		"round", req.review.Round, "labels", labels)
 	s.goReviewer(ctx, target, settings, a.Number, req)
@@ -111,24 +111,24 @@ func (s *Service) reviewRequestOf(ctx context.Context, token string, target Targ
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	if s.Agents == nil {
-		return reviewerRequest{}, errors.New("I3: no agent service is configured")
+		return reviewerRequest{}, errors.New(string(ActionRequestTheReview) + ": no agent service is configured")
 	}
 	reviewer, err := s.Agents.BotLogin(ctx, owner, config.RoleReviewer)
 	if err != nil {
-		return reviewerRequest{}, fmt.Errorf("I3: read the login of the Reviewer App: %w", err)
+		return reviewerRequest{}, fmt.Errorf(string(ActionRequestTheReview)+": read the login of the Reviewer App: %w", err)
 	}
 	// The query of the label times reads one issue when it gets the number
 	// of an implementation issue.
 	times, rate, err := s.GitHub.ReadLabelTimes(ctx, token, owner, repo, number)
 	if err != nil {
-		return reviewerRequest{}, fmt.Errorf("I3: read the label times of issue #%d: %w", number, err)
+		return reviewerRequest{}, fmt.Errorf(string(ActionRequestTheReview)+": read the label times of issue #%d: %w", number, err)
 	}
-	s.logger().Debug("I3: read the label times", "repository", repository, "issue", number,
+	s.logger().Debug(string(ActionRequestTheReview)+": read the label times", "repository", repository, "issue", number,
 		"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	readyAt := times[number][LabelReady]
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, number)
 	if err != nil {
-		return reviewerRequest{}, fmt.Errorf("I3: read the login of the Owner of issue #%d: %w", number, err)
+		return reviewerRequest{}, fmt.Errorf(string(ActionRequestTheReview)+": read the login of the Owner of issue #%d: %w", number, err)
 	}
 	round := ReviewRounds(pr.Reviews, reviewer, readyAt) + 1
 	// An approval of the head commit leaves no diff to name.
@@ -199,13 +199,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	log := s.logger().With("repository", repository, "issue", number,
 		"role", config.RoleReviewer, "pull_request", req.review.PullRequest)
 	role := settings.Settings.Roles[config.RoleReviewer]
-	action := ActionRequestTheReview
-	switch {
-	case req.cause != nil:
-		action = ActionRequestTheCause
-	case req.again:
-		action = ActionRequestTheReviewAgain
-	}
+	action := req.action()
 	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
 		Repo:   target.Repository.Name,
@@ -242,16 +236,16 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	switch {
 	case req.cause != nil:
 		request.Text = ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, req.review.Limit, workDir)
-		log.Info("I8: requested the explanation of the cause", "resumed", req.sessionID != "", "again", req.again)
+		log.Info(string(action)+": requested the explanation of the cause", "resumed", req.sessionID != "", "again", req.again)
 	case req.again:
 		// Only a session that got the whole request gets the short text.
 		if req.resumes {
 			request.Text = ReviewAgainRequestText(req.review)
 		}
-		log.Warn("I3: no review on the head commit; the Reviewer is asked once more", "round", req.review.Round,
+		log.Warn(string(action)+": no review on the head commit; the Reviewer is asked once more", "round", req.review.Round,
 			"resumed", req.sessionID != "", "whole_request", !req.resumes)
 	default:
-		log.Info("I3: requested the review", "round", req.review.Round, "limit", req.review.Limit,
+		log.Info(string(action)+": requested the review", "round", req.review.Round, "limit", req.review.Limit,
 			"head_commit", req.review.HeadCommit, "resumed", req.sessionID != "")
 	}
 
@@ -280,6 +274,18 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		}
 	}
 	s.endReview(ctx, log, target, settings, number, req, abnormal)
+}
+
+// action is the action of the request: the request of the cause, the
+// request of the review again, or the first request of the review.
+func (r reviewerRequest) action() ActionName {
+	switch {
+	case r.cause != nil:
+		return ActionRequestTheCause
+	case r.again:
+		return ActionRequestTheReviewAgain
+	}
+	return ActionRequestTheReview
 }
 
 // stopOfReviewerRequest is the action that stops the review after a request
@@ -329,7 +335,7 @@ func (s *Service) stopForReviewerStart(ctx context.Context, log *slog.Logger, ta
 func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest, abnormal *agent.AbnormalEnd) {
 	token, err := target.Token(ctx)
 	if err != nil {
-		log.Error("I3: no token; the next poll decides the end of the review", "error", err.Error())
+		log.Error(string(req.action())+": no token; the next poll decides the end of the review", "error", err.Error())
 		return
 	}
 	sub, defaultBranch, ok, err := s.reviewingNow(ctx, log, token, target, settings, number)
@@ -345,7 +351,7 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 	sub.Reviewing.RequestedHead = req.review.HeadCommit
 	action := ReviewEnd(sub, false)
 	if action == nil {
-		log.Info("I3: the end of the review was not decided; the next poll decides", "labels", sub.Labels)
+		log.Info(string(req.action())+": the end of the review was not decided; the next poll decides", "labels", sub.Labels)
 		return
 	}
 	// The Owner needs the kind of the end to know where to look.
@@ -454,7 +460,7 @@ func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token stri
 	facts.CauseRequestedAgain = stored.CauseRequests > 1
 	pr, ok := sub.LatestPullRequest()
 	if !ok {
-		log.Error("I3: the pull request of the review is no longer open")
+		log.Error(string(ActionRequestTheReview) + ": the pull request of the review is no longer open")
 		return sub, read.DefaultBranch, true, nil
 	}
 	if CheckReview(pr, facts.Reviewer) == ReviewApprovedOnHead {
@@ -546,7 +552,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			})
 			return nil, nil
 		}
-		log.Info("I10: the Reviewer asked a question; the issue waits for the Owner", "labels", labels)
+		log.Info(string(ActionStopTheReview)+": the Reviewer asked a question; the issue waits for the Owner", "labels", labels)
 		s.notifyOwner(ctx, log.With("action", ActionStopTheReview), settings.Settings.Notify.DiscordEnabled, notify.Notification{
 			Row:        string(ActionStopTheReview),
 			Reason:     "The Reviewer asked a question during the review.",
@@ -560,20 +566,20 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			return nil, err
 		}
 		if a.HeadMoved {
-			log.Info("I3: the head commit moved during the review; the issue waits for the checks again",
+			log.Info(string(ActionGoBackToTheChecks)+": the head commit moved during the review; the issue waits for the checks again",
 				"head_commit", pr.HeadCommit, "labels", labels)
 		} else {
-			log.Info("I6: a required check does not pass on the approved commit; the issue waits for the checks again", "labels", labels)
+			log.Info(string(ActionGoBackToTheChecks)+": a required check does not pass on the approved commit; the issue waits for the checks again", "labels", labels)
 		}
 	case AskOwnerToMerge:
-		log.Info("I3: the Reviewer approved the head commit")
+		log.Info(string(ActionAskForTheMergeDecision) + ": the Reviewer approved the head commit")
 		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, ownerLogin)
 	case StopAtRoundLimit:
 		labels, err := move(ActionStopAtTheRoundLimit, LabelAwaitingDecision)
 		if err != nil {
 			return nil, err
 		}
-		log.Info("I8: the issue waits for the Owner", "labels", labels, "comment", a.Explanation.URL)
+		log.Info(string(ActionStopAtTheRoundLimit)+": the issue waits for the Owner", "labels", labels, "comment", a.Explanation.URL)
 		s.notifyOwner(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.Settings.Notify.DiscordEnabled, notify.Notification{
 			Row:        string(ActionStopAtTheRoundLimit),
 			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstBodyLine(a.Explanation.Body)),
@@ -588,16 +594,16 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		}
 		login, err := ownerLogin(ctx, token)
 		if err != nil {
-			return nil, fmt.Errorf("I5: read the login of the Owner of issue #%d: %w", number, err)
+			return nil, fmt.Errorf(string(ActionRequestAReviewFix)+": read the login of the Owner of issue #%d: %w", number, err)
 		}
 		if err := s.startStay(repository, number, false); err != nil {
-			return nil, fmt.Errorf("I5: keep the start of the stay of issue #%d in implementing: %w", number, err)
+			return nil, fmt.Errorf(string(ActionRequestAReviewFix)+": keep the start of the stay of issue #%d in implementing: %w", number, err)
 		}
 		labels, err := move(ActionRequestAReviewFix, LabelImplementing)
 		if err != nil {
 			return nil, err
 		}
-		log.Info("I5: the Reviewer requested changes; the issue goes back to the Implementer",
+		log.Info(string(ActionRequestAReviewFix)+": the Reviewer requested changes; the issue goes back to the Implementer",
 			"round", a.Round, "limit", sub.Reviewing.Limit, "review", a.Review.URL, "labels", labels)
 		branch := pr.HeadBranch
 		return func(ctx context.Context) {
@@ -633,7 +639,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if isCause {
 			// The cause goes on in the session of the last Reviewer run,
 			// which holds the rounds.
-			log.Info("I8: blocking comments remain at the limit of rounds", "limit", req.review.Limit)
+			log.Info(string(name)+": blocking comments remain at the limit of rounds", "limit", req.review.Limit)
 			req.cause = &cause.Review
 			req.again = count > 1
 			req.sessionID = s.State.Issue(repository, number).ReviewerSessionID
@@ -656,7 +662,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if err != nil {
 			return nil, err
 		}
-		log.Info("I6: start the merge: the Reviewer approved the head commit", "pull_request", a.PullRequest, "head_commit", pr.HeadCommit, "labels", labels)
+		log.Info(string(ActionStartTheMerge)+": the Reviewer approved the head commit", "pull_request", a.PullRequest, "head_commit", pr.HeadCommit, "labels", labels)
 	default:
 		return nil, fmt.Errorf("unknown way out of the review %T", action)
 	}

@@ -124,15 +124,15 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
    | ログの行 | 意味 |
    |---|---|
    | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1)。読んだばかり (5分以内) の使用率が状態ファイルにあれば、この行は出ない |
-   | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+   | `request the implementation: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
    | `clone created`、`worktree created` | 作業場所を用意した |
    | `request the implementation: requested the work` | ブランチの名前を決めて、Implementer を起動した |
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end` | Claude Code の実行の始まりと終わり |
    | `the agent run ended` | 結果 (`done` か `blocked`) とセッションの番号 |
-   | `I2: verified the pull request` | 検証が通り、ラベルを `cumin/status/checking` に替えた |
+   | `wait for the checks: verified the pull request` | 検証が通り、ラベルを `cumin/status/checking` に替えた |
 
-9. `I2: verified the pull request` が出たら、SIGTERM で止める。
+9. `wait for the checks: verified the pull request` が出たら、SIGTERM で止める。
 
 ### 確かめること
 
@@ -192,7 +192,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
 
    | ログの行 | 意味 |
    |---|---|
-   | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+   | `request the implementation: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
    | `request the implementation: requested the work` | ブランチの名前を決めて、Implementer を起動した |
    | `the agent run ended` | 結果が `blocked` で返った |
    | `the agent returned blocked` | 理由の1行目 |
@@ -244,23 +244,23 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
 
 8. `./cumin run --config <設定ファイル>` を起動する。
 9. 実装Issueに `cumin/status/ready` を付ける。
-10. 次の定期確認から、ログがこの順に出る。I11 (`I11: copied the labels of the issue to the pull request`) は、ラベルが替わったあとの定期確認ごとに間に入る。
+10. 次の定期確認から、ログがこの順に出る。I11 (`copy the labels to the pull request: copied the labels of the issue to the pull request`) は、ラベルが替わったあとの定期確認ごとに間に入る。
 
    | ログの行 | 意味 |
    |---|---|
-   | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+   | `request the implementation: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
    | `request the implementation: requested the work` | `kind` が `implement`。Implementer を新しいセッションで起動した |
    | `the agent run ended` | 1回目の実行が `done` で終わった |
-   | `I2: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
+   | `wait for the checks: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
    | `poll` | `required_checks` が1以上。check が終わるまで、何も起きない定期確認が続く |
-   | `I4: a required check failed; the issue goes back to the Implementer` | `failed` に `live-check-1-required-line`、`check_fix_requests` が1 |
+   | `request a check fix: a required check failed; the issue goes back to the Implementer` | `failed` に `live-check-1-required-line`、`check_fix_requests` が1 |
    | `request a check fix: requested the work` | `kind` が `check fix`、`resumed` が `true` |
    | `the agent run ended` | 修正の実行が `done` で終わった |
-   | `I2: verified the pull request` | ラベルが `cumin/status/checking` に戻った |
-   | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた |
+   | `wait for the checks: verified the pull request` | ラベルが `cumin/status/checking` に戻った |
+   | `request the review: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた |
 
 11. 1回目の実行のあとの先頭のコミットで `live-check-1-required-line` が通ってしまったら (Implementer が Pull Request の番号を知ったあとで1行を足して push し直したとき)、I4 は起きずに I3 に進む。その回は数えずに、後片付けをしてからやり直す。Implementer は check を待たない約束なので、ふつうは起きない。
-12. `I3: the pull request is ready for review` のあと、もう1回定期確認が回って I11 が Pull Request のラベルを替えたら、SIGTERM で止める。
+12. `request the review: the pull request is ready for review` のあと、もう1回定期確認が回って I11 が Pull Request のラベルを替えたら、SIGTERM で止める。
 
 ### 確かめること
 
@@ -311,15 +311,15 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | ログの行 | 意味 |
    |---|---|
    | `quota usage read` | 使用率の最小の実行が終わった。ラベルを替える前に読む (Q1)。読んだばかり (5分以内) の使用率が状態ファイルにあれば、この行は出ない |
-   | `R1: moved the requirement issue to planning` | ラベルを `cumin/status/planning` に替えた |
+   | `request the split: moved the requirement issue to planning` | ラベルを `cumin/status/planning` に替えた |
    | `clone created`、`worktree created` | 既定のブランチを detached で開いた |
    | `request the split: requested the Planner` (`kind` が `plan`) | Planner を起動した |
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end`、`the agent run ended` | Claude Code の実行と、その結果 |
-   | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
+   | `ask for the plan review: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
    | `the Owner was notified` (`action` が `ask for the plan review`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
 
-9. `R2: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`R2: ...` の行で止めると、通知が取り消されることがある。
+9. `ask for the plan review: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`ask for the plan review: ...` の行で止めると、通知が取り消されることがある。
 
 ### 確かめること
 
@@ -364,17 +364,17 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
 
    | ログの行 | 意味 |
    |---|---|
-   | `R4: read the comments` | sub-issue が全て閉じた要求Issueのコメントを読んだ。確認が終わるまで、定期確認のたびに出る |
+   | `request the acceptance check: read the comments` | sub-issue が全て閉じた要求Issueのコメントを読んだ。確認が終わるまで、定期確認のたびに出る |
    | `worktree removed`、`worktree created` | 前の依頼の worktree を消し、merge された main で開き直した。初めての要求Issueでは `worktree removed` は出ない |
-   | `R4: moved the requirement issue to accepting` | ラベルを `cumin/status/accepting` に替えた |
+   | `request the acceptance check: moved the requirement issue to accepting` | ラベルを `cumin/status/accepting` に替えた |
    | `request the acceptance check: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した |
    | `agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ。使用率を読む `quota usage read` は出ない |
-   | `R7: the requirement issue waits for the acceptance of the Owner` | 実行の終わり (または次の定期確認) で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
+   | `ask for the acceptance: the requirement issue waits for the acceptance of the Owner` | 実行の終わり (または次の定期確認) で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
    | `the Owner was notified` (`action` が `ask for the acceptance`) | 通知した |
 
-   Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`R7: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
+   Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`ask for the acceptance: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
 
-6. `R7: ...` のあとの通知の行 (Plan-1 の手順9と同じ) が出たら、cumin のプロセスに SIGTERM を送る。`stopped` の行が出て、終了コード0で終わる。止めるときに途中だった定期確認は、`poll failed` (`context canceled`) を1行出すことがある。止めた結果で、問題ではない。
+6. `ask for the acceptance: ...` のあとの通知の行 (Plan-1 の手順9と同じ) が出たら、cumin のプロセスに SIGTERM を送る。`stopped` の行が出て、終了コード0で終わる。止めるときに途中だった定期確認は、`poll failed` (`context canceled`) を1行出すことがある。止めた結果で、問題ではない。
 
 ### 確かめること
 
@@ -419,14 +419,14 @@ Plan-1 と同じ Issue に、同じ決まりで残す。
    | ログの行 | 意味 |
    |---|---|
    | `request the implementation: requested the work` | Implementer を新しいセッションで起動した |
-   | `I2: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
-   | `I3: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた。`round` が1 |
-   | `I3: requested the review` | `round` が1、`resumed` が `false` |
+   | `wait for the checks: verified the pull request` | ラベルを `cumin/status/checking` に替えた |
+   | `request the review: the pull request is ready for review` | 必須のcheckが全て通り、ラベルを `cumin/status/reviewing` に替えた。`round` が1 |
+   | `request the review: requested the review` | `round` が1、`resumed` が `false` |
    | `the agent run ended` | Reviewer の実行が `done` で終わった |
    | `I3: checked the review` | `result` が `approved` |
-   | `I3: the Reviewer approved the head commit` | ラベルは `cumin/status/reviewing` のまま |
+   | `ask for the merge decision: the Reviewer approved the head commit` | ラベルは `cumin/status/reviewing` のまま |
 
-10. `I3: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
+10. `ask for the merge decision: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
 
 ### 確かめること
 
@@ -476,22 +476,22 @@ Reviewer が1ラウンド目に `REQUEST_CHANGES` を出し、cumin が Implemen
 ### 実行
 
 5. `./cumin run --config <設定ファイル>` を起動し、実装Issueに `cumin/status/ready` を付ける。
-6. `I2: verified the pull request` が出たら、すぐに SIGTERM で止める。必須のcheckが通る前に止めれば、I3 はまだ起きていない。ログの行を1秒ごとに見て SIGTERM を送る小さなループを使うと、確実に間に合う。GitHub が紐づけを作らないときは、その前に場面 Review-1 の「GitHub が紐づけを作らないとき」の手順が入る。止める前に `I3: the pull request is ready for review` が出てしまったら、その回は数えずに、後片付けをしてからやり直す。
+6. `wait for the checks: verified the pull request` が出たら、すぐに SIGTERM で止める。必須のcheckが通る前に止めれば、I3 はまだ起きていない。ログの行を1秒ごとに見て SIGTERM を送る小さなループを使うと、確実に間に合う。GitHub が紐づけを作らないときは、その前に場面 Review-1 の「GitHub が紐づけを作らないとき」の手順が入る。止める前に `request the review: the pull request is ready for review` が出てしまったら、その回は数えずに、後片付けをしてからやり直す。
 7. Pull Request のブランチの `live/review-2.md` の最後に、120文字を超える英語の1行を足すコミットを作って push する。`gh api -X PUT repos/<owner>/<repo>/contents/live/review-2.md` にブランチと元のファイルの `sha` を渡せば、手元にブランチを取らずにできる。コミットの作者は Owner のままでよい。先頭のコミットが変わるので、必須のcheckが走り直す。
 8. `./cumin run --config <設定ファイル>` を起動し直す。`cumin/status/checking` のIssueは、再起動のあとも I3 と I4 で続きから進む。
 9. 次の定期確認から、ログがこの順に出る。
 
    | ログの行 | 意味 |
    |---|---|
-   | `I3: requested the review` | `round` が1、`resumed` が `false` |
+   | `request the review: requested the review` | `round` が1、`resumed` が `false` |
    | `I3: checked the review` | `result` が `changes requested` |
-   | `I5: the Reviewer requested changes; the issue goes back to the Implementer` | `round` が1、`limit` が3。ラベルを `cumin/status/implementing` に替えた |
+   | `request a review fix: the Reviewer requested changes; the issue goes back to the Implementer` | `round` が1、`limit` が3。ラベルを `cumin/status/implementing` に替えた |
    | `request a review fix: requested the work` | `kind` が `review fix`、`resumed` が `true` |
-   | `I2: verified the pull request` | 修正が push され、ラベルが `cumin/status/checking` に戻った |
-   | `I3: requested the review` | `round` が2、`resumed` が `true` |
-   | `I3: the Reviewer approved the head commit` | 2ラウンド目で承認された |
+   | `wait for the checks: verified the pull request` | 修正が push され、ラベルが `cumin/status/checking` に戻った |
+   | `request the review: requested the review` | `round` が2、`resumed` が `true` |
+   | `ask for the merge decision: the Reviewer approved the head commit` | 2ラウンド目で承認された |
 
-10. `I3: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
+10. `ask for the merge decision: the Reviewer approved the head commit` のあと、もう1回定期確認が回ったら、SIGTERM で止める。
 
 ### 確かめること
 
@@ -543,10 +543,10 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 
    | ログの行 | 意味 |
    |---|---|
-   | `I3: the Reviewer approved the head commit` | Reviewer が先頭のコミットを承認した |
+   | `ask for the merge decision: the Reviewer approved the head commit` | Reviewer が先頭のコミットを承認した |
    | `I6: decided on the approved pull request` | `decision` が `ask the Owner` |
-   | `I7: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
-   | `I7: requested the review of the Owner` | `reviewer` が、実装Issueに最新の `cumin/status/ready` を付けたOwnerのログイン名。GitHubの「レビューの依頼」の一覧にPull Requestが載る |
+   | `ask for the merge decision: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
+   | `ask for the merge decision: requested the review of the Owner` | `reviewer` が、実装Issueに最新の `cumin/status/ready` を付けたOwnerのログイン名。GitHubの「レビューの依頼」の一覧にPull Requestが載る |
    | `the Owner was notified` | `action` が `ask for the merge decision`。Discord に1件届く |
 
 8. Owner が B の Pull Request を開き、GitHub のレビューで承認 (Approve) する。Reviewers に Owner を足す必要はない。
@@ -555,14 +555,14 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
    | ログの行 | 意味 |
    |---|---|
    | `I6: decided on the approved pull request` | `decision` が `merge` |
-   | `I6: start the merge: the Reviewer approved the head commit`、次の定期確認で `merged the pull request` | `merge_method` が `squash` |
+   | `start the merge: the Reviewer approved the head commit`、次の定期確認で `merged the pull request` | `merge_method` が `squash` |
    | GitHubが閉じなかったときは、次の定期確認で `close the merged issue: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
 
 10. Owner の承認のあとの定期確認で、B のログがこの順に出る。両方閉じると、手順5のループが cumin を止める。
 
    | ログの行 | 意味 |
    |---|---|
-   | `I12: start the merge: the Owner approved the head commit` | Owner の権限を読み、最新の判断のレビューが承認だった |
+   | `start the merge: the Owner approved the head commit` | Owner の権限を読み、最新の判断のレビューが承認だった |
    | 次の定期確認で `merged the pull request` | `merge_method` が `squash` |
    | GitHubが閉じなかったときは、次の定期確認で `close the merged issue: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
 
@@ -617,9 +617,9 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
 
 4. Owner が、Pull Request #C を squash で merge し、ブランチを消す。必須のレビューがないので、管理者として merge する。#B が閉じる。閉じなければ、Owner が #B を手で閉じる。I9 は、誰が閉じたかを見ない。
    - 手順3の出力に `GitHub made no closing link` があれば、merge の前に、Owner が #C を #B に手で結び付ける (Pull Request の画面の Development)。2026-09-30 から、GitHub は新しい Pull Request の `Closes #N` を結び付けていない。結び付けないと、merge しても #B は閉じず、ノートも付かない。
-5. `./cumin run --config <設定ファイル>` を起動する。最初の定期確認で、ログに `I9: wrote the follow-up note` (`requirement_issue` が #A、`issue` が #B、`pull_request` が #C) が1行出る。
+5. `./cumin run --config <設定ファイル>` を起動する。最初の定期確認で、ログに `write the follow-up note: wrote the follow-up note` (`requirement_issue` が #A、`issue` が #B、`pull_request` が #C) が1行出る。
 6. 次の定期確認のログ (`poll`) が出たら、SIGTERM で止める。`stopped` の行が出る。
-7. もう一度 `./cumin run --config <設定ファイル>` を起動し、定期確認のログが2回出たら、SIGTERM で止める。`I9: wrote the follow-up note` は出ない。
+7. もう一度 `./cumin run --config <設定ファイル>` を起動し、定期確認のログが2回出たら、SIGTERM で止める。`write the follow-up note: wrote the follow-up note` は出ない。
 
 ### 確かめること
 
@@ -711,7 +711,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     | ログの行 | 意味 |
     |---|---|
     | `quota usage read` | 許可で次に試す時刻の待ちが終わり、読み直した (Q2)。手順17の `quota usage read` から5分以内なら、この行は出ない。残した使用率と許可で判定し、次の行に進む |
-    | `I1: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
+    | `request the implementation: claimed the issue` | ラベルを `cumin/status/implementing` に替えた |
     | `request the implementation: requested the work`、`agent start`、`agent end`、`the agent run ended` | Implementer の実行 |
 
 20. `the agent run ended` のあとの I2 の行が出たら、SIGTERM で止める。I2 の結果は、この場面では確かめない。GitHub が `Closes #<番号>` の紐づけを作らないと、I2 は「Issue を閉じる開いている Pull Request がない」で止まる (Review-1 の「GitHub が紐づけを作らないとき」)。利用枠とは関係がない。

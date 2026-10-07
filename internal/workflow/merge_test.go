@@ -242,7 +242,7 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 		t.Error("the conflict closed or commented on #10")
 	}
 	for _, want := range []string{`"msg":"the merge conflicts; the issue goes back to the Implementer"`,
-		`"msg":"request a conflict resolution: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
+		`"msg":"request a conflict resolution: requested the work"`, `"kind":"conflict resolution"`, `"msg":"wait for the checks: verified the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -367,8 +367,8 @@ func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChec
 	logs := sc.logs.String()
 	at := -1
 	for _, want := range []string{
-		`"msg":"I14: the pull request conflicts with the default branch; the issue goes back to the Implementer"`,
-		`"msg":"request a conflict resolution: requested the work"`, `"msg":"I2: verified the pull request"`} {
+		`"msg":"request a conflict resolution: the pull request conflicts with the default branch; the issue goes back to the Implementer"`,
+		`"msg":"request a conflict resolution: requested the work"`, `"msg":"wait for the checks: verified the pull request"`} {
 		i := strings.Index(logs, want)
 		if i < 0 {
 			t.Fatalf("the log has no %s", want)

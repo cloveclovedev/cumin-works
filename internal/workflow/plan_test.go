@@ -91,7 +91,7 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 	}
 
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"R1: moved the requirement issue to planning"`, `"cumin/status/planning"`,
+	for _, want := range []string{`"msg":"request the split: moved the requirement issue to planning"`, `"cumin/status/planning"`,
 		`"msg":"request the split: requested the Planner"`, `"kind":"plan"`, `"role":"planner"`,
 		`"msg":"the agent run ended"`, `"result":"done"`} {
 		if !strings.Contains(logs, want) {
@@ -244,7 +244,7 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
 		t.Errorf("%d GraphQL requests, want 6", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split waits for the Owner"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"ask for the plan review: the split waits for the Owner"`) {
 		t.Error("the log does not say that the split waits for the Owner")
 	}
 }
@@ -313,7 +313,7 @@ func TestR2_ASecondAbnormalEndStopsForTheOwner(t *testing.T) {
 	assertStoppedForTheOwner(t, sc,
 		[]string{"Row: stop the split", "this requirement issue has no sub-issue", "Retried: once", "Pull request: None"},
 		[]string{"this requirement issue has no sub-issue"})
-	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split does not pass the check; the same request runs again in the same work directory"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"request the split again: the split does not pass the check; the same request runs again in the same work directory"`) {
 		t.Error("the log does not say that the request ran again")
 	}
 }
@@ -752,7 +752,7 @@ func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
 		t.Errorf("issues in work = %v, want none: cumin keeps no step", got)
 	}
 	for _, want := range []string{
-		`"msg":"R2: the stop after blocked failed for a temporary reason; the next poll decides"`,
+		`"msg":"stop the split: the stop after blocked failed for a temporary reason; the next poll decides"`,
 		`"comment":"## Decision needed: which sign-in method does the login screen use?\n\nOption A: a password. Option B: a passkey."`,
 	} {
 		if !strings.Contains(sc.logs.String(), want) {

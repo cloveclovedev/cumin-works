@@ -686,7 +686,7 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	if strings.Contains(logs, githubtest.Token) {
 		t.Error("the log holds the token")
 	}
-	for _, want := range []string{`"msg":"poll"`, `"rate_limit_cost"`, `"msg":"I1: claimed the issue"`,
+	for _, want := range []string{`"msg":"poll"`, `"rate_limit_cost"`, `"msg":"request the implementation: claimed the issue"`,
 		`"msg":"request the implementation: requested the work"`, `"branch":"` + wantBranch + `"`,
 		`"msg":"the agent run ended"`, `"result":"done"`} {
 		if !strings.Contains(logs, want) {
@@ -781,7 +781,7 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 		t.Errorf("%d GraphQL requests, want 6 (the two queries of the poll, the login of the Owner, and the three reads after the run)", n)
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"pull_request":21`, `"issue":10`} {
+	for _, want := range []string{`"msg":"wait for the checks: verified the pull request"`, `"pull_request":21`, `"issue":10`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
@@ -860,7 +860,7 @@ func TestI2_APullRequestWithoutALinkGetsExactlyOneLink(t *testing.T) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"I2: added the closing link"`, `"msg":"I2: verified the pull request"`, `"pull_request":21`} {
+	for _, want := range []string{`"msg":"wait for the checks: added the closing link"`, `"msg":"wait for the checks: verified the pull request"`, `"pull_request":21`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
@@ -1121,7 +1121,7 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 		}
 	}
 	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"I2: the pull request does not pass the check; the same request runs again in the same work directory"`) {
+	if !strings.Contains(logs, `"msg":"request the implementation again: the pull request does not pass the check; the same request runs again in the same work directory"`) {
 		t.Errorf("the log does not say that the request ran again:\n%s", logs)
 	}
 }
@@ -1192,8 +1192,8 @@ func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind work
 		t.Errorf("the failure is named %q, want %q", got, failure)
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"I2: the pull request does not pass the check; the same request runs again in the same work directory"`,
-		`"msg":"I2: the implementation stops for the Owner"`, `"retried":true`} {
+	for _, want := range []string{`"msg":"request the implementation again: the pull request does not pass the check; the same request runs again in the same work directory"`,
+		`"msg":"stop the implementation: the implementation stops for the Owner"`, `"retried":true`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
@@ -2102,7 +2102,7 @@ func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want one Reviewer run", n)
 	}
-	for _, want := range []string{"I3: the pull request is ready for review", "I6: start the merge: the Reviewer approved the head commit"} {
+	for _, want := range []string{"request the review: the pull request is ready for review", "start the merge: the Reviewer approved the head commit"} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log does not say %q: %s", want, sc.logs)
 		}
@@ -2226,7 +2226,7 @@ func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, prLabelsPath); n != writes {
 		t.Errorf("%d writes to the pull request after a poll with equal labels, want %d", n, writes)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I11: copied the labels of the issue to the pull request"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"copy the labels to the pull request: copied the labels of the issue to the pull request"`) {
 		t.Error("the log has no line of I11")
 	}
 }
@@ -2408,7 +2408,7 @@ func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
 		t.Errorf("check fix requests after a restart = %d, want 1", got)
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"I4: a required check failed; the issue goes back to the Implementer"`,
+	for _, want := range []string{`"msg":"request a check fix: a required check failed; the issue goes back to the Implementer"`,
 		`"msg":"request a check fix: requested the work"`, `"kind":"check fix"`, `"resumed":true`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s", want)
@@ -2746,7 +2746,7 @@ func TestI15_ChecksThatReportedGoOnToTheReview(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, workflow.LabelAwaitingDecision) {
 		t.Errorf("labels of #10 = %v, want no stop for the Owner", got)
 	}
-	if !strings.Contains(sc.logs.String(), "I3: the pull request is ready for review") {
+	if !strings.Contains(sc.logs.String(), "request the review: the pull request is ready for review") {
 		t.Errorf("the log does not say that I3 applied: %s", sc.logs)
 	}
 }

@@ -28,8 +28,9 @@ const reasonCut = "..."
 // Notification is one thing that cumin tells the Owner. The caller fills
 // the fields that it has; an empty field is left out of the message.
 type Notification struct {
-	// Row is the row number of the table in
-	// docs/ja/requirements/workflow/issue-states.md, such as "I2". It is
+	// Row is the name of the action in the tables of
+	// docs/ja/requirements/workflow/issue-states.md, such as "wait for
+	// the checks". It is
 	// empty when no row covers the notification, as for a poll of one
 	// repository that keeps failing.
 	Row string

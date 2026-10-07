@@ -91,8 +91,8 @@ func TestI3_Round1StartsANewSessionAtTheHeadCommit(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
 		t.Errorf("labels of #10 = %v, want cumin/status/merging after APPROVE with risk/low", got)
 	}
-	for _, want := range []string{`"msg":"I3: requested the review"`, `"round":1`, `"resumed":false`,
-		`"msg":"I6: start the merge: the Reviewer approved the head commit"`} {
+	for _, want := range []string{`"msg":"request the review: requested the review"`, `"round":1`, `"resumed":false`,
+		`"msg":"start the merge: the Reviewer approved the head commit"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -214,7 +214,7 @@ func TestI3_AReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none: the second run left its review", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I6: start the merge: the Reviewer approved the head commit"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"start the merge: the Reviewer approved the head commit"`) {
 		t.Errorf("the log does not say that the head commit was approved: %s", sc.logs)
 	}
 }
@@ -353,7 +353,7 @@ func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I3: the head commit moved during the review; the issue waits for the checks again"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"go back to the checks: the head commit moved during the review; the issue waits for the checks again"`) {
 		t.Errorf("the log does not say that the head moved: %s", sc.logs)
 	}
 }
@@ -406,8 +406,8 @@ func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
 	if got.SessionID != fixtureSession || got.ReviewerSessionID != fixtureSession {
 		t.Errorf("state = %+v, want both sessions of the two runs", got)
 	}
-	for _, want := range []string{`"msg":"I5: the Reviewer requested changes; the issue goes back to the Implementer"`,
-		`"round":1`, `"msg":"request a review fix: requested the work"`, `"kind":"review fix"`, `"msg":"I2: verified the pull request"`} {
+	for _, want := range []string{`"msg":"request a review fix: the Reviewer requested changes; the issue goes back to the Implementer"`,
+		`"round":1`, `"msg":"request a review fix: requested the work"`, `"kind":"review fix"`, `"msg":"wait for the checks: verified the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -462,8 +462,8 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 	if len(messages) != 1 || !strings.Contains(messages[0], "stop at the round limit") || !strings.Contains(messages[0], "issuecomment-") {
 		t.Errorf("notifications = %q, want one of I8 that links the comment", messages)
 	}
-	for _, want := range []string{`"msg":"I8: blocking comments remain at the limit of rounds"`,
-		`"msg":"I8: requested the explanation of the cause"`, `"msg":"I8: the issue waits for the Owner"`} {
+	for _, want := range []string{`"msg":"request the cause: blocking comments remain at the limit of rounds"`,
+		`"msg":"request the cause: requested the explanation of the cause"`, `"msg":"stop at the round limit: the issue waits for the Owner"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
