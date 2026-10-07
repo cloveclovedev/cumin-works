@@ -199,9 +199,12 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	log := s.logger().With("repository", repository, "issue", number,
 		"role", config.RoleReviewer, "pull_request", req.review.PullRequest)
 	role := settings.Settings.Roles[config.RoleReviewer]
-	row := RowI3
-	if req.cause != nil {
-		row = RowI8
+	action := ActionRequestTheReview
+	switch {
+	case req.cause != nil:
+		action = ActionRequestTheCause
+	case req.again:
+		action = ActionRequestTheReviewAgain
 	}
 	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
@@ -214,14 +217,14 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	// it is; so the worktree of an earlier round goes. The Reviewer writes
 	// nothing there, so nothing is lost (agent-run.md, the work directory).
 	if err := s.Workspace.Remove(ctx, checkout); err != nil {
-		log.Error(row+": the worktree of an earlier round was not removed", "error", err.Error())
-		s.stopForReviewerStart(ctx, log, target, settings, row, number, req)
+		log.Error(string(action)+": the worktree of an earlier round was not removed", "error", err.Error())
+		s.stopForReviewerStart(ctx, log, target, settings, number, req)
 		return
 	}
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
 	if err != nil {
-		log.Error(row+": the work directory was not prepared", "error", err.Error())
-		s.stopForReviewerStart(ctx, log, target, settings, row, number, req)
+		log.Error(string(action)+": the work directory was not prepared", "error", err.Error())
+		s.stopForReviewerStart(ctx, log, target, settings, number, req)
 		return
 	}
 	req.review.WorkDir = workDir
@@ -265,21 +268,29 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		}
 	case err != nil:
 		log.Error("the agent was not started", "error", err.Error())
-		s.stopForReviewerStart(ctx, log, target, settings, row, number, req)
+		s.stopForReviewerStart(ctx, log, target, settings, number, req)
 		return
 	default:
 		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 		s.quotaAfterRun(ctx, log, target, number, run)
 		s.keepSession(log, target, config.RoleReviewer, number, run.SessionID)
 		if run.Result.Result != agent.ResultDone {
-			if req.cause == nil {
-				row = RowI10
-			}
-			s.stopAfterBlocked(ctx, log, target, settings, row, "Reviewer", number, run.Result.BlockedReason)
+			s.stopAfterBlocked(ctx, log, target, settings, stopOfReviewerRequest(req), "Reviewer", number, run.Result.BlockedReason)
 			return
 		}
 	}
 	s.endReview(ctx, log, target, settings, number, req, abnormal)
+}
+
+// stopOfReviewerRequest is the action that stops the review after a request
+// to the Reviewer that failed: "stop at the round limit" for the request of
+// the cause, which only exists at the limit of rounds, and "stop the
+// review" for a review request.
+func stopOfReviewerRequest(req reviewerRequest) ActionName {
+	if req.cause != nil {
+		return ActionStopAtTheRoundLimit
+	}
+	return ActionStopTheReview
 }
 
 // stopForReviewerStart stops the review for the Owner when the second
@@ -288,20 +299,20 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 // After a first request that did not start, nothing changes here, and the
 // next poll requests again. While cumin is stopping, and when the issue
 // left cumin/status/reviewing, nothing changes either.
-func (s *Service) stopForReviewerStart(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row string, number int, req reviewerRequest) {
+func (s *Service) stopForReviewerStart(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
 	if !req.again || ctx.Err() != nil {
 		return
 	}
 	token, err := target.Token(ctx)
 	if err != nil {
-		log.Error(row+": no token; the next poll decides the end of the review", "error", err.Error())
+		log.Error(string(stopOfReviewerRequest(req))+": no token; the next poll decides the end of the review", "error", err.Error())
 		return
 	}
 	sub, ok := s.subIssueNow(ctx, log, target, number)
 	if !ok || !ReviewNeedsFacts(sub, false) {
 		return
 	}
-	a := StopReview{Number: number, Row: row, Reason: ReviewerNotStartedReason(), PullRequest: req.review.PullRequest, Retried: true}
+	a := StopReview{Number: number, Row: stopOfReviewerRequest(req), Reason: ReviewerNotStartedReason(), PullRequest: req.review.PullRequest, Retried: true}
 	if _, err := s.applyReviewEnd(ctx, log, token, target, settings, sub, "", nil, false, a); err != nil {
 		log.Error("the issue was not moved; the next poll decides again", "error", err.Error())
 	}
@@ -514,10 +525,10 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 	repository := target.Repository.String()
 	number := sub.Number
 	pr, _ := sub.LatestPullRequest()
-	move := func(row, label string) ([]string, error) {
+	move := func(name ActionName, label string) ([]string, error) {
 		labels := ReplaceStatusLabel(sub.Labels, label)
 		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
-			return nil, fmt.Errorf("%s: move issue #%d to %s: %w", row, number, label, err)
+			return nil, fmt.Errorf("%s: move issue #%d to %s: %w", name, number, label, err)
 		}
 		return labels, nil
 	}
@@ -528,23 +539,23 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			return nil, err
 		}
 		if !a.Question {
-			log.Warn(a.Row+": the review stops for the Owner", "reason", a.Reason, "retried", a.Retried, "labels", labels)
+			log.Warn(string(a.Row)+": the review stops for the Owner", "reason", a.Reason, "retried", a.Retried, "labels", labels)
 			s.stopForOwner(ctx, log, target, settings, stop{
-				row: a.Row, issue: number, labelDone: true, reason: a.Reason,
+				action: a.Row, issue: number, labelDone: true, reason: a.Reason,
 				comment: StopNote(a.Row, a.Reason, a.PullRequest, a.Retried),
 			})
 			return nil, nil
 		}
 		log.Info("I10: the Reviewer asked a question; the issue waits for the Owner", "labels", labels)
-		s.notifyOwner(ctx, log.With("row", RowI10), settings.Settings.Notify.DiscordEnabled, notify.Notification{
-			Row:        RowI10,
+		s.notifyOwner(ctx, log.With("action", ActionStopTheReview), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+			Row:        string(ActionStopTheReview),
 			Reason:     "The Reviewer asked a question during the review.",
 			Repository: repository,
 			Subject:    fmt.Sprintf("issue #%d", number),
 			Link:       github.IssueURL(owner, repo, number),
 		})
 	case BackToChecks:
-		labels, err := move(RowI3, LabelChecking)
+		labels, err := move(ActionGoBackToTheChecks, LabelChecking)
 		if err != nil {
 			return nil, err
 		}
@@ -558,13 +569,13 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		log.Info("I3: the Reviewer approved the head commit")
 		return nil, s.askOwnerToMerge(ctx, log, target, settings, token, sub, pr, ownerLogin)
 	case StopAtRoundLimit:
-		labels, err := move(RowI8, LabelAwaitingDecision)
+		labels, err := move(ActionStopAtTheRoundLimit, LabelAwaitingDecision)
 		if err != nil {
 			return nil, err
 		}
 		log.Info("I8: the issue waits for the Owner", "labels", labels, "comment", a.Explanation.URL)
-		s.notifyOwner(ctx, log.With("row", RowI8), settings.Settings.Notify.DiscordEnabled, notify.Notification{
-			Row:        RowI8,
+		s.notifyOwner(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+			Row:        string(ActionStopAtTheRoundLimit),
 			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstBodyLine(a.Explanation.Body)),
 			Repository: repository,
 			Subject:    fmt.Sprintf("issue #%d", number),
@@ -582,7 +593,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if err := s.startStay(repository, number, false); err != nil {
 			return nil, fmt.Errorf("I5: keep the start of the stay of issue #%d in implementing: %w", number, err)
 		}
-		labels, err := move(RowI5, LabelImplementing)
+		labels, err := move(ActionRequestAReviewFix, LabelImplementing)
 		if err != nil {
 			return nil, err
 		}
@@ -591,7 +602,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		branch := pr.HeadBranch
 		return func(ctx context.Context) {
 			s.runImplementer(ctx, target, settings, number, implementerRequest{
-				row: "I5", kind: "review fix", branch: branch, pullRequest: pr.Number,
+				action: ActionRequestAReviewFix, kind: "review fix", branch: branch, pullRequest: pr.Number,
 				sessionID:  s.State.Issue(repository, number).SessionID,
 				ownerLogin: login, permit: permit,
 				text: func(workDir string) string {
@@ -601,10 +612,10 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		}, nil
 	case RequestReviewAgain, RequestCause:
 		cause, isCause := a.(RequestCause)
-		row := RowI3
+		name := ActionRequestTheReviewAgain
 		request := "review again"
 		if isCause {
-			row, request = RowI8, "cause"
+			name, request = ActionRequestTheCause, "cause"
 		}
 		permit, ok := s.permitStart(ctx, log, request, config.RoleReviewer, target, number)
 		if !ok {
@@ -617,7 +628,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		req.permit = permit
 		count, err := s.countReviewRequest(repository, number, isCause)
 		if err != nil {
-			return nil, fmt.Errorf("%s: count the request to the Reviewer of issue #%d: %w", row, number, err)
+			return nil, fmt.Errorf("%s: count the request to the Reviewer of issue #%d: %w", name, number, err)
 		}
 		if isCause {
 			// The cause goes on in the session of the last Reviewer run,
@@ -641,7 +652,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		}
 		return func(ctx context.Context) { s.runReviewer(ctx, target, settings, number, req) }, nil
 	case StartMerge:
-		labels, err := move(RowI6, LabelMerging)
+		labels, err := move(ActionStartTheMerge, LabelMerging)
 		if err != nil {
 			return nil, err
 		}

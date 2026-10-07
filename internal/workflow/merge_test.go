@@ -135,7 +135,7 @@ func TestCore04_ARiskMediumPullRequestIsNotMerged(t *testing.T) {
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"I7", "the merge needs a decision", "issue #10", "/pull/21"} {
+	for _, want := range []string{"ask for the merge decision", "the merge needs a decision", "issue #10", "/pull/21"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q: %s", want, messages[0])
 		}
@@ -177,7 +177,7 @@ func TestI6_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 			if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 				t.Errorf("%d merge requests, want none", n)
 			}
-			sc.assertStoppedAt(t, workflow.RowI6, workflow.RiskLabelReason(tc.decision))
+			sc.assertStoppedAt(t, workflow.ActionStopTheReview, workflow.RiskLabelReason(tc.decision))
 		})
 	}
 }
@@ -242,7 +242,7 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 		t.Error("the conflict closed or commented on #10")
 	}
 	for _, want := range []string{`"msg":"the merge conflicts; the issue goes back to the Implementer"`,
-		`"msg":"merging: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
+		`"msg":"request a conflict resolution: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -279,7 +279,7 @@ func (sc *scene) assertStoppedForAConflictThatStays(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21", "Retried: no"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: stop the implementation", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21", "Retried: no"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -368,7 +368,7 @@ func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChec
 	at := -1
 	for _, want := range []string{
 		`"msg":"I14: the pull request conflicts with the default branch; the issue goes back to the Implementer"`,
-		`"msg":"I14: requested the work"`, `"msg":"I2: verified the pull request"`} {
+		`"msg":"request a conflict resolution: requested the work"`, `"msg":"I2: verified the pull request"`} {
 		i := strings.Index(logs, want)
 		if i < 0 {
 			t.Fatalf("the log has no %s", want)
@@ -430,7 +430,7 @@ func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: stop the implementation", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -474,19 +474,19 @@ func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 // the reason, cumin/status/awaiting-decision, and one notification.
 func (sc *scene) assertStoppedAtI6(t *testing.T, reason string) {
 	t.Helper()
-	sc.assertStoppedAt(t, workflow.RowMerging, reason)
+	sc.assertStoppedAt(t, workflow.ActionStopTheMerge, reason)
 }
 
 // assertStoppedAt checks a stop for the Owner of #10 with the row: one
 // comment with the reason, cumin/status/awaiting-decision, and one
 // notification.
-func (sc *scene) assertStoppedAt(t *testing.T, row, reason string) {
+func (sc *scene) assertStoppedAt(t *testing.T, action workflow.ActionName, reason string) {
 	t.Helper()
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: " + row, "Reason: " + reason, "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: " + string(action), "Reason: " + reason, "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -495,8 +495,8 @@ func (sc *scene) assertStoppedAt(t *testing.T, row, reason string) {
 		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	messages := sc.messagesExceptQ4()
-	if len(messages) != 1 || !strings.Contains(messages[0], row+": ") {
-		t.Errorf("notifications = %v, want one of %s", messages, row)
+	if len(messages) != 1 || !strings.Contains(messages[0], string(action)+": ") {
+		t.Errorf("notifications = %v, want one of %s", messages, action)
 	}
 }
 

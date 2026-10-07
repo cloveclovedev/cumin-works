@@ -718,7 +718,7 @@ type RequestReviewAgain struct {
 type StopReview struct {
 	Number      int
 	Question    bool
-	Row         string
+	Row         ActionName
 	Reason      string
 	PullRequest int
 	Retried     bool
@@ -1251,7 +1251,7 @@ func ReviewEnd(sub SubIssue, running bool) Action {
 		return nil
 	}
 	if !facts.QuestionAt.IsZero() && !facts.QuestionAt.Before(facts.ReviewingAt) {
-		return StopReview{Number: sub.Number, Question: true, Row: RowI10, PullRequest: pr.Number}
+		return StopReview{Number: sub.Number, Question: true, Row: ActionStopTheReview, PullRequest: pr.Number}
 	}
 	if facts.RequestedHead != "" && facts.RequestedHead != pr.HeadCommit {
 		return BackToChecks{Number: sub.Number, HeadMoved: true}
@@ -1266,7 +1266,7 @@ func ReviewEnd(sub SubIssue, running bool) Action {
 		case MergeChecksNotPassed:
 			return BackToChecks{Number: sub.Number}
 		default:
-			return StopReview{Number: sub.Number, Row: RowI6, Reason: RiskLabelReason(decision), PullRequest: pr.Number}
+			return StopReview{Number: sub.Number, Row: ActionStopTheReview, Reason: RiskLabelReason(decision), PullRequest: pr.Number}
 		}
 	case ReviewChangesRequestedOnHead:
 		latest, _ := LatestReview(pr.Reviews, facts.Reviewer)
@@ -1277,14 +1277,14 @@ func ReviewEnd(sub SubIssue, running bool) Action {
 		case facts.Explained:
 			return StopAtRoundLimit{Number: sub.Number, Explanation: facts.Explanation}
 		case facts.CauseRequestedAgain:
-			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingCauseReason, PullRequest: pr.Number, Retried: true}
+			return StopReview{Number: sub.Number, Row: ActionStopAtTheRoundLimit, Reason: MissingCauseReason, PullRequest: pr.Number, Retried: true}
 		case facts.CauseRequested:
-			return StopReview{Number: sub.Number, Row: RowI8, Reason: MissingExplanationReason, PullRequest: pr.Number}
+			return StopReview{Number: sub.Number, Row: ActionStopAtTheRoundLimit, Reason: MissingExplanationReason, PullRequest: pr.Number}
 		}
 		return RequestCause{Number: sub.Number, PullRequest: pr.Number, Review: latest}
 	}
 	if facts.RequestedAgain {
-		return StopReview{Number: sub.Number, Row: RowI5, Reason: MissingReviewReason, PullRequest: pr.Number, Retried: true}
+		return StopReview{Number: sub.Number, Row: ActionStopTheReview, Reason: MissingReviewReason, PullRequest: pr.Number, Retried: true}
 	}
 	return RequestReviewAgain{Number: sub.Number, PullRequest: pr.Number}
 }

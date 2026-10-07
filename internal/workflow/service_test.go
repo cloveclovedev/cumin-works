@@ -220,7 +220,7 @@ func (f *fakeWebhook) messagesSent() []string {
 func (sc *scene) messagesExceptQ4() []string {
 	var messages []string
 	for _, m := range sc.webhook.messagesSent() {
-		if !strings.HasPrefix(m, "cumin: Q4: ") {
+		if !strings.HasPrefix(m, "cumin: tell that cumin waits: ") {
 			messages = append(messages, m)
 		}
 	}
@@ -687,7 +687,7 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 		t.Error("the log holds the token")
 	}
 	for _, want := range []string{`"msg":"poll"`, `"rate_limit_cost"`, `"msg":"I1: claimed the issue"`,
-		`"msg":"I1: requested the work"`, `"branch":"` + wantBranch + `"`,
+		`"msg":"request the implementation: requested the work"`, `"branch":"` + wantBranch + `"`,
 		`"msg":"the agent run ended"`, `"result":"done"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s", want)
@@ -995,7 +995,7 @@ func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"I2", question, "example-org/example-repo", "issue #10", "issuecomment-"} {
+	for _, want := range []string{"stop the implementation", question, "example-org/example-repo", "issue #10", "issuecomment-"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
@@ -1006,8 +1006,8 @@ func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 		t.Errorf("%d agent runs, want 1", n)
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"I2: the agent returned blocked"`, `"msg":"I2: wrote the reason on the issue"`,
-		`"msg":"I2: the issue waits for the Owner"`, `"msg":"the Owner was notified"`, `"row":"I2"`} {
+	for _, want := range []string{`"msg":"stop the implementation: the agent returned blocked"`, `"msg":"stop the implementation: wrote the reason on the issue"`,
+		`"msg":"stop the implementation: the issue waits for the Owner"`, `"msg":"the Owner was notified"`, `"action":"stop the implementation"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
@@ -1103,7 +1103,7 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	for _, want := range []string{"## Stopped for the Owner", "Row: I2", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "Retried: once", "Pull request: None"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: stop the implementation", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "Retried: once", "Pull request: None"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, body)
 		}
@@ -1115,7 +1115,7 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"I2", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "example-org/example-repo", "issue #10"} {
+	for _, want := range []string{"stop the implementation", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "example-org/example-repo", "issue #10"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
@@ -1224,7 +1224,7 @@ func assertStopped(t *testing.T, sc *scene, reason string, pullRequest int, retr
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	want := []string{"## Stopped for the Owner", "Row: I2", "Reason: " + reason, "Retried: " + retried, "cumin/status/ready"}
+	want := []string{"## Stopped for the Owner", "Row: stop the implementation", "Reason: " + reason, "Retried: " + retried, "cumin/status/ready"}
 	if pullRequest > 0 {
 		want = append(want, fmt.Sprintf("Pull request: #%d", pullRequest))
 	} else {
@@ -1247,7 +1247,7 @@ func assertStopped(t *testing.T, sc *scene, reason string, pullRequest int, retr
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, line := range []string{"I2", reason, "example-org/example-repo", "issue #10"} {
+	for _, line := range []string{"stop the implementation", reason, "example-org/example-repo", "issue #10"} {
 		if !strings.Contains(messages[0], line) {
 			t.Errorf("the notification has no %q:\n%s", line, messages[0])
 		}
@@ -1339,7 +1339,7 @@ func TestPoll_AFailedWorkDirectoryIsLoggedAndTheLabelStays(t *testing.T) {
 		t.Errorf("labels of #10 = %v, want cumin/status/implementing", got)
 	}
 	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"I1: the work directory was not prepared"`) || !strings.Contains(logs, `"issue":10`) {
+	if !strings.Contains(logs, `"msg":"request the implementation: the work directory was not prepared"`) || !strings.Contains(logs, `"issue":10`) {
 		t.Errorf("the log does not name the failure and the issue:\n%s", logs)
 	}
 }
@@ -1483,7 +1483,7 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 		`"msg":"the agent run ended"`,
 		`"msg":"the agent run ended abnormally"`,
 		`"msg":"the agent was not started"`,
-		`"msg":"I1: the work directory was not prepared"`,
+		`"msg":"request the implementation: the work directory was not prepared"`,
 	} {
 		if i := strings.Index(logs, msg); i >= 0 && (end < 0 || i < end) {
 			end = i
@@ -2339,7 +2339,7 @@ func TestI1_AContinuationKeepsAWorktreeWithWorkThatIsNotPushed(t *testing.T) {
 	if _, err := os.Stat(unpushed); err != nil {
 		t.Errorf("the work that is not pushed is gone: %v", err)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I1: the worktree of an earlier round holds work that is not on GitHub; it is used as it is"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"request the implementation: the worktree of an earlier round holds work that is not on GitHub; it is used as it is"`) {
 		t.Error("the log does not say that the worktree was kept")
 	}
 	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: continue") {
@@ -2409,7 +2409,7 @@ func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"I4: a required check failed; the issue goes back to the Implementer"`,
-		`"msg":"I4: requested the work"`, `"kind":"check fix"`, `"resumed":true`} {
+		`"msg":"request a check fix: requested the work"`, `"kind":"check fix"`, `"resumed":true`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -2463,7 +2463,7 @@ func TestI4_TheLimitStopsTheIssueForTheOwner(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments, want 1", len(comments))
 	}
-	for _, want := range []string{"Row: I4", "(ci)", "after 3 check fix requests", "Pull request: #21"} {
+	for _, want := range []string{"Row: stop for failed checks", "(ci)", "after 3 check fix requests", "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -2591,12 +2591,12 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
 		t.Errorf("%d label changes, want 1", n)
 	}
-	facts := []string{"I15", "(ci, lint)", "head commit " + sc.remoteHead, "waited 1h1m0s"}
+	facts := []string{"stop for missing checks", "(ci, lint)", "head commit " + sc.remoteHead, "waited 1h1m0s"}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments, want 1", len(comments))
 	}
-	for _, want := range append([]string{"Row: I15", "Pull request: #21"}, facts...) {
+	for _, want := range append([]string{"Row: stop for missing checks", "Pull request: #21"}, facts...) {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -2650,12 +2650,12 @@ func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
 		t.Errorf("%d label changes, want 1", n)
 	}
-	facts := []string{"I15", "No open pull request closes this issue", "waited 1h1m0s"}
+	facts := []string{"stop for missing checks", "No open pull request closes this issue", "waited 1h1m0s"}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments, want 1", len(comments))
 	}
-	for _, want := range append([]string{"Row: I15", "Pull request: None"}, facts...) {
+	for _, want := range append([]string{"Row: stop for missing checks", "Pull request: None"}, facts...) {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}

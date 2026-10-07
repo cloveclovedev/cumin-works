@@ -17,7 +17,7 @@ func TestStopNote_FollowsTheTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	note := workflow.StopNote("I2", "The Implementer reported done, but no open pull request closes this issue.", 0, false)
+	note := workflow.StopNote(workflow.ActionStopTheImplementation, "The Implementer reported done, but no open pull request closes this issue.", 0, false)
 
 	fields := []string{"## Stopped for the Owner", "Row: ", "Reason: ", "Pull request: ", "Retried: ", "To continue: "}
 	at := -1
@@ -55,7 +55,7 @@ func TestStopNote_NamesThePullRequestAndTheRetry(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			note := workflow.StopNote("I2", "A reason.", test.pullRequest, test.retried)
+			note := workflow.StopNote(workflow.ActionStopTheImplementation, "A reason.", test.pullRequest, test.retried)
 			for _, want := range test.want {
 				if !strings.Contains(note, want) {
 					t.Errorf("the note has no %q:\n%s", want, note)

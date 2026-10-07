@@ -176,16 +176,16 @@ func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, targ
 	if s.toldLabelEvent(target, number, actor.At) {
 		return
 	}
-	row := RowR1
+	action := ActionRequestTheSplit
 	if _, isSub := snapshot.SubIssue(number); isSub {
-		row = "I1"
+		action = ActionRequestTheImplementation
 	}
-	log = log.With("row", row, "issue", number)
+	log = log.With("action", action, "issue", number)
 	log.Warn("the newest "+LabelReady+" is not of the Owner: nothing starts until the Owner adds the label again",
 		"actor", actor.Login, "actor_type", actor.Type)
 	by := labelActorName(actor)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        row,
+		Row:        string(action),
 		Reason:     fmt.Sprintf("%s was added by %s, who is not the Owner. cumin starts nothing until the Owner adds the label again.", LabelReady, by),
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", number),
@@ -215,11 +215,11 @@ func (s *Service) reviewRemaining(ctx context.Context, token string, target Targ
 	if err != nil {
 		return fmt.Errorf("R6: %w", err)
 	}
-	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "row", RowR6)
+	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "action", ActionAskAboutTheRemainingSubIssues)
 	log.Info("R6: the remaining sub-issues wait for the Owner", "labels", labels)
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        RowR6,
+		Row:        string(ActionAskAboutTheRemainingSubIssues),
 		Reason:     "The sub-issues that are left have no status label and need a review.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),

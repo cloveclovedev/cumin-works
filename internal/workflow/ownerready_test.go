@@ -131,8 +131,8 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 		row    string
 		scene  func(*testing.T) *scene
 	}{
-		{name: "an implementation issue", number: 10, row: "I1", scene: func(t *testing.T) *scene { return newScene(t) }},
-		{name: "a requirement issue", number: 6, row: "R1", scene: newPlanScene},
+		{name: "an implementation issue", number: 10, row: "request the implementation", scene: func(t *testing.T) *scene { return newScene(t) }},
+		{name: "a requirement issue", number: 6, row: "request the split", scene: newPlanScene},
 	}
 	for _, s := range scenes {
 		for _, tt := range notOwners {

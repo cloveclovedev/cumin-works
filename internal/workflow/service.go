@@ -818,11 +818,12 @@ func (s *Service) copyLabels(ctx context.Context, token string, target Target, a
 	return nil
 }
 
-// implementerRequest is one request to the Implementer: its row, its kind,
+// implementerRequest is one request to the Implementer: its action, its kind,
 // the branch of its worktree, the session that it resumes, and its text.
 type implementerRequest struct {
-	// row starts the log lines of the request: I1, I4, I13, or I14.
-	row string
+	// action starts the log lines of the request: the action of
+	// issue-states.md that requests the work.
+	action ActionName
 	// kind is the request kind of implementer.md, for the log.
 	kind   string
 	branch string
@@ -879,11 +880,11 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 	log.Info("I15: the issue waits for the Owner", "labels", labels)
 	reason := UnreportedChecksReason(a)
 	s.stopForOwner(ctx, log, target, settings, stop{
-		row:       RowI15,
+		action:    ActionStopForMissingChecks,
 		issue:     a.Number,
 		labels:    labels,
 		reason:    reason,
-		comment:   StopNote(RowI15, reason, a.PullRequest, false),
+		comment:   StopNote(ActionStopForMissingChecks, reason, a.PullRequest, false),
 		labelDone: true,
 	})
 	return nil
@@ -932,11 +933,11 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		}
 		log.Info("I4: the issue waits for the Owner", "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
-			row:       RowI4,
+			action:    ActionStopForFailedChecks,
 			issue:     a.Number,
 			labels:    labels,
 			reason:    reason,
-			comment:   StopNote(RowI4, reason, pr.Number, false),
+			comment:   StopNote(ActionStopForFailedChecks, reason, pr.Number, false),
 			labelDone: true,
 		})
 		return nil
@@ -984,7 +985,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		branch = BranchName(sub.Number, sub.Title)
 	}
 	return s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
-		row: "I4", kind: "check fix", branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
+		action: ActionRequestACheckFix, kind: "check fix", branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
 		ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {
 			return CheckFixRequestText(repository, a.Number, pr.Number, branch, workDir, texts)
@@ -1001,7 +1002,7 @@ func (s *Service) startImplementer(ctx context.Context, permit StartPermit, targ
 	branch, pullRequest := ClaimBranch(sub)
 	repository := target.Repository.String()
 	req := implementerRequest{
-		row: "I1", kind: "implement", branch: branch, ownerLogin: ownerLogin, permit: permit,
+		action: ActionRequestTheImplementation, kind: "implement", branch: branch, ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, sub.Number, branch, workDir)
 		},
@@ -1201,21 +1202,21 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	if req.pullRequest != 0 {
 		removed, err := s.Workspace.RemoveIfPushed(ctx, checkout)
 		if err != nil {
-			log.Error(req.row+": the worktree of an earlier round was not checked", "error", err.Error())
+			log.Error(string(req.action)+": the worktree of an earlier round was not checked", "error", err.Error())
 			s.stopForWorkDirectory(ctx, log, target, settings, number, req)
 			return
 		}
 		if !removed {
-			log.Warn(req.row+": the worktree of an earlier round holds work that is not on GitHub; it is used as it is", "branch", req.branch)
+			log.Warn(string(req.action)+": the worktree of an earlier round holds work that is not on GitHub; it is used as it is", "branch", req.branch)
 		}
 	}
 	workDir, err := s.Workspace.Prepare(ctx, target.RemoteURL, checkout)
 	if err != nil {
-		log.Error(req.row+": the work directory was not prepared", "error", err.Error())
+		log.Error(string(req.action)+": the work directory was not prepared", "error", err.Error())
 		s.stopForWorkDirectory(ctx, log, target, settings, number, req)
 		return
 	}
-	log.Info(req.row+": requested the work", "kind", req.kind, "branch", req.branch,
+	log.Info(string(req.action)+": requested the work", "kind", req.kind, "branch", req.branch,
 		"pull_request", req.pullRequest, "resumed", req.sessionID != "")
 	request := agent.StartRequest{
 		Owner:        target.Repository.Owner,
@@ -1255,7 +1256,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			s.quotaAfterRun(ctx, log, target, number, run)
 			s.keepSession(log, target, config.RoleImplementer, number, run.SessionID)
 			if run.Result.Result != agent.ResultDone {
-				s.stopAfterBlocked(ctx, log, target, settings, RowI2, "Implementer", number, run.Result.BlockedReason)
+				s.stopAfterBlocked(ctx, log, target, settings, ActionStopTheImplementation, "Implementer", number, run.Result.BlockedReason)
 				return
 			}
 		}
@@ -1330,7 +1331,7 @@ func (s *Service) stopForWorkDirectory(ctx context.Context, log *slog.Logger, ta
 	}
 }
 
-// stopAfterBlocked stops the issue for a blocked result, with the row of
+// stopAfterBlocked stops the issue for a blocked result, with the action of
 // the result (I2 for the Implementer, I10 for the Reviewer): the
 // blocked_reason of the agent becomes the comment, because the agent
 // already wrote it in the form of templates/decision-request.md, and its
@@ -1341,17 +1342,17 @@ func (s *Service) stopForWorkDirectory(ctx context.Context, log *slog.Logger, ta
 // The label changes first, then the comment is written. A comment that
 // GitHub refuses then leaves the issue in cumin/status/awaiting-decision,
 // so no poll requests the same work again; its whole text goes to the log.
-func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, reason string) {
-	s.stopBlocked(ctx, log, target, settings, row, role, number, reason, labelsNow(s.subIssueNow(ctx, log, target, number)))
+func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, action ActionName, role string, number int, reason string) {
+	s.stopBlocked(ctx, log, target, settings, action, role, number, reason, labelsNow(s.subIssueNow(ctx, log, target, number)))
 }
 
 // stopBlocked is stopAfterBlocked with the labels of the issue that the
 // caller read.
-func (s *Service) stopBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, row, role string, number int, reason string, labels []string) {
+func (s *Service) stopBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, action ActionName, role string, number int, reason string, labels []string) {
 	question := firstLine(reason)
-	log.Warn(row+": the agent returned blocked", "reason", question)
+	log.Warn(string(action)+": the agent returned blocked", "reason", question)
 	s.stopForOwner(ctx, log, target, settings, stop{
-		row:        row,
+		action:     action,
 		issue:      number,
 		labels:     labels,
 		labelFirst: true,
@@ -1490,11 +1491,11 @@ func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token str
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	stopI2 := func(reason string) {
 		s.stopForOwner(ctx, log, target, settings, stop{
-			row:     RowI2,
+			action:  ActionStopTheImplementation,
 			issue:   a.Number,
 			labels:  sub.Labels,
 			reason:  reason,
-			comment: StopNote(RowI2, reason, a.PullRequest, false),
+			comment: StopNote(ActionStopTheImplementation, reason, a.PullRequest, false),
 		})
 	}
 	if a.AddLink {
@@ -1546,18 +1547,18 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 	if !a.Question {
 		log.Warn("I2: the implementation stops for the Owner", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
-			row:       RowI2,
+			action:    ActionStopTheImplementation,
 			issue:     a.Number,
 			labelDone: true,
 			reason:    a.Reason,
-			comment:   StopNote(RowI2, a.Reason, a.PullRequest, a.Retried),
+			comment:   StopNote(ActionStopTheImplementation, a.Reason, a.PullRequest, a.Retried),
 		})
 		return nil
 	}
-	log = log.With("row", RowI2)
+	log = log.With("action", ActionStopTheImplementation)
 	log.Info("I2: the Implementer asked a question; the issue waits for the Owner", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        RowI2,
+		Row:        string(ActionStopTheImplementation),
 		Reason:     "The Implementer asked a question during the implementation.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),
@@ -1587,7 +1588,7 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 	repository := target.Repository.String()
 	branch := sub.Implementing.Branch
 	req := implementerRequest{
-		row: RowI2, kind: "implement", branch: branch, ownerLogin: ownerLogin, again: true, count: true, permit: permit,
+		action: ActionRequestTheImplementationAgain, kind: "implement", branch: branch, ownerLogin: ownerLogin, again: true, count: true, permit: permit,
 		sessionID: s.State.Issue(repository, a.Number).SessionID,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, a.Number, branch, workDir)
