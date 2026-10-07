@@ -13,7 +13,7 @@ rectangle "texts that cumin writes" {
   rectangle "log field ""action""" as field
   rectangle "start of a log message\nthat the code builds" as message
   rectangle "first line of a notification" as notification
-  rectangle "line ""Row:"" of the stop note" as note
+  rectangle "line ""Step:"" of the stop note" as note
 }
 
 source --> list : the same words,\nlower case

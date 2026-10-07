@@ -198,9 +198,9 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
    | `the agent returned blocked` | 理由の1行目 |
    | `stop the implementation: wrote the reason on the issue` | `blocked_reason` をコメントとして投稿した |
    | `stop the implementation: the issue waits for the Owner` | ラベルを `cumin/status/awaiting-decision` に替えた |
-   | `the Owner was notified` | Discord に送った |
+   | `the notification was sent` | Discord に送った |
 
-10. `the Owner was notified` が出たら、SIGTERM で止める。
+10. `the notification was sent` が出たら、SIGTERM で止める。
 
 ### 確かめること
 
@@ -317,9 +317,9 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end`、`the agent run ended` | Claude Code の実行と、その結果 |
    | `R2: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
-   | `the Owner was notified` (`action` が `ask for the plan review`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
+   | `the notification was sent` (`action` が `ask for the plan review`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
 
-9. `R2: the split waits for the Owner` のあとの通知の行 (`the Owner was notified`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`R2: ...` の行で止めると、通知が取り消されることがある。
+9. `R2: the split waits for the Owner` のあとの通知の行 (`the notification was sent`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`R2: ...` の行で止めると、通知が取り消されることがある。
 
 ### 確かめること
 
@@ -370,7 +370,7 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    | `request the acceptance check: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した |
    | `agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ。使用率を読む `quota usage read` は出ない |
    | `R7: the requirement issue waits for the acceptance of the Owner` | 実行の終わり (または次の定期確認) で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
-   | `the Owner was notified` (`action` が `ask for the acceptance`) | 通知した |
+   | `the notification was sent` (`action` が `ask for the acceptance`) | 通知した |
 
    Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`R7: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
 
@@ -547,7 +547,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
    | `I6: decided on the approved pull request` | `decision` が `ask the Owner` |
    | `I7: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
    | `I7: requested the review of the Owner` | `reviewer` が、実装Issueに最新の `cumin/status/ready` を付けたOwnerのログイン名。GitHubの「レビューの依頼」の一覧にPull Requestが載る |
-   | `the Owner was notified` | `action` が `ask for the merge decision`。Discord に1件届く |
+   | `the notification was sent` | `action` が `ask for the merge decision`。Discord に1件届く |
 
 8. Owner が B の Pull Request を開き、GitHub のレビューで承認 (Approve) する。Reviewers に Owner を足す必要はない。
 9. その間に A が進み、ログがこの順に出る。
@@ -686,9 +686,9 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     |---|---|
     | `quota usage read` | 着手の前の最小の実行 |
     | `stop agent starts: the quota limit is reached` (`windows` が `weekly`、`next_try` がweekly枠のリセット時刻) | 着手を止めた。ラベルは替えない |
-    | `the Owner was notified` | Q1の通知 |
+    | `the notification was sent` | Q1の通知 |
 
-11. 定期確認を3回以上待つ。`quota usage read` は増えない。読んでから5分以内は、残した使用率で判定する。そのあとは、次に試す時刻まで読まない (Q3)。`the Owner was notified` も増えない。
+11. 定期確認を3回以上待つ。`quota usage read` は増えない。読んでから5分以内は、残した使用率で判定する。そのあとは、次に試す時刻まで読まない (Q3)。`the notification was sent` も増えない。
 12. `./cumin status --config <前半の設定ファイル>` を実行する。`agent starts: stopped by the weekly window` が出る。
 13. `./cumin quota allow` を実行し、定期確認を2回待つ。着手は起きない (Core-16: 許可はweekly枠のペースの上限を上げない)。
 14. SIGTERM で止める。
@@ -703,7 +703,7 @@ Owner が merge した Pull Request の残りの作業が、フォローアッ�
     |---|---|
     | `quota usage read` | 着手の前の最小の実行 |
     | `stop agent starts: the quota limit is reached` (`windows` が `5h`、`next_try` が5h枠のリセット時刻) | 着手を止めた |
-    | `the Owner was notified` | Q1の通知。本文に `cumin quota allow` がある |
+    | `the notification was sent` | Q1の通知。本文に `cumin quota allow` がある |
 
 18. `./cumin quota allow` を実行する。5h枠のリセット時刻と、weekly枠の上限は変わらないことが表示される。
 19. 次の定期確認から、ログがこの順に出る。
@@ -805,7 +805,7 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run Te
 | 8a | 分割の全体像、レビューの本文、受け入れの確認が、テンプレートの `###` の見出しを持っている | コメント、レビュー |
 | 9 | `## Acceptance check` で始まる Planner の App のコメントが1つあり、最後の実装Issueが閉じたあとに書かれている。要求Issueが `awaiting-acceptance` に移ったのは、そのあとである | 要求Issueのコメント、イベント |
 | 10 | cumin のログに、Issue ごとの動作の行がこの順にある | `~/.local/state/cumin/cumin.log` の、テストの開始よりあとの行 |
-| 11 | 通知の行 (`the Owner was notified`) が、分割結果の確認 (R2)、merge の判断 (I7)、受け入れ (R7) で1行ずつある | 同じログ |
+| 11 | 通知の行 (`the notification was sent`) が、分割結果の確認 (R2)、merge の判断 (I7)、受け入れ (R7) で1行ずつある | 同じログ |
 | 12 | ログに token、秘密鍵、webhook のアドレス、使用率の数値がない | 同じログ |
 | 13 | launchd の job のプロセスが、最初から最後まで同じである | `launchctl print` |
 
