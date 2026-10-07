@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	ownerLoginLine   = "\n- Login of the Owner: " + theOwner + "\n"
-	noOwnerLoginLine = "\n- Login of the Owner: there is no Owner login\n"
+	ownerLoginLine   = "\n- Issue Owner login: " + theOwner + "\n"
+	noOwnerLoginLine = "\n- Issue Owner login: there is no Issue Owner login\n"
 )
 
 // readyBy is one event that added cumin/status/ready, by a person.

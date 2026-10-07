@@ -197,7 +197,7 @@ Implementer が `blocked` を返したときに、cumin が理由をIssueに書�
    | `the agent run ended` | 結果が `blocked` で返った |
    | `the agent returned blocked` | 理由の1行目 |
    | `stop the implementation: wrote the reason on the issue` | `blocked_reason` をコメントとして投稿した |
-   | `stop the implementation: the issue waits for the Owner` | ラベルを `cumin/status/awaiting-decision` に替えた |
+   | `stop the implementation: the issue waits for a Maintainer` | ラベルを `cumin/status/awaiting-decision` に替えた |
    | `the notification was sent` | Discord に送った |
 
 10. `the notification was sent` が出たら、SIGTERM で止める。
@@ -316,10 +316,10 @@ Implementer の Pull Request で必須のcheckが1つ落ち、cumin が同じセ
    | `request the split: requested the Planner` (`kind` が `plan`) | Planner を起動した |
    | `agent token created`、`agent identity read` | roleのtokenとbotの身元 |
    | `agent start`、`agent end`、`the agent run ended` | Claude Code の実行と、その結果 |
-   | `ask for the plan review: the split waits for the Owner` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
+   | `ask for the plan review: the split waits for a Maintainer` (`sub_issues` が sub-issue の数) | 検証が通り、ラベルを `cumin/status/awaiting-plan-review` に替えた |
    | `the notification was sent` (`action` が `ask for the plan review`) | 通知した。Keychain に webhook のアドレスがなければ、代わりに通知がないことの警告が出る |
 
-9. `ask for the plan review: the split waits for the Owner` のあとの通知の行 (`the notification was sent`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`ask for the plan review: ...` の行で止めると、通知が取り消されることがある。
+9. `ask for the plan review: the split waits for a Maintainer` のあとの通知の行 (`the notification was sent`、または通知できなかったことのログ) が出たら、Accept-1 に進むか、SIGTERM で止める。通知はラベルを替えたあとに出すので、`ask for the plan review: ...` の行で止めると、通知が取り消されることがある。
 
 ### 確かめること
 
@@ -369,7 +369,7 @@ sub-issue が全て閉じた要求Issueに、Planner が受け入れの確認の
    | `request the acceptance check: moved the requirement issue to accepting` | ラベルを `cumin/status/accepting` に替えた |
    | `request the acceptance check: requested the Planner` (`kind` が `acceptance check`) | Planner を起動した |
    | `agent token created`、`agent start`、`agent end`、`the agent run ended` | Plan-1 と同じ。使用率を読む `quota usage read` は出ない |
-   | `ask for the acceptance: the requirement issue waits for the acceptance of the Owner` | 実行の終わり (または次の定期確認) で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
+   | `ask for the acceptance: the requirement issue waits for the acceptance of a Maintainer` | 実行の終わり (または次の定期確認) で確認のコメントを見つけ、ラベルを `cumin/status/awaiting-acceptance` に替えた |
    | `the notification was sent` (`action` が `ask for the acceptance`) | 通知した |
 
    Planner が確認のコメントを書いてからプロセスが終わるまでの間に定期確認が入ると、`ask for the acceptance: ...` と通知の行が、`agent end` と `the agent run ended` より先に出る。どちらの順でもよい。境目は、ログの順ではなく、確認のコメントが書かれた時刻である。
@@ -544,9 +544,9 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
    | ログの行 | 意味 |
    |---|---|
    | `ask for the merge decision: the Reviewer approved the head commit` | Reviewer が先頭のコミットを承認した |
-   | `I6: decided on the approved pull request` | `decision` が `ask the Owner` |
-   | `ask for the merge decision: the merge waits for the Owner` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
-   | `ask for the merge decision: requested the review of the Owner` | `reviewer` が、実装Issueに最新の `cumin/status/ready` を付けたOwnerのログイン名。GitHubの「レビューの依頼」の一覧にPull Requestが載る |
+   | `I6: decided on the approved pull request` | `decision` が `ask a Maintainer` |
+   | `ask for the merge decision: the merge waits for a Maintainer` | ラベルを `cumin/status/awaiting-merge-decision` に替えた |
+   | `ask for the merge decision: requested the review of the Issue Owner` | `reviewer` が、実装Issueに最新の `cumin/status/ready` を付けたOwnerのログイン名。GitHubの「レビューの依頼」の一覧にPull Requestが載る |
    | `the notification was sent` | `action` が `ask for the merge decision`。Discord に1件届く |
 
 8. Owner が B の Pull Request を開き、GitHub のレビューで承認 (Approve) する。Reviewers に Owner を足す必要はない。
@@ -562,7 +562,7 @@ Reviewer が承認した `risk/low` の Pull Request を cumin-core が merge �
 
    | ログの行 | 意味 |
    |---|---|
-   | `start the merge: the Owner approved the head commit` | Owner の権限を読み、最新の判断のレビューが承認だった |
+   | `start the merge: a Maintainer approved the head commit` | Owner の権限を読み、最新の判断のレビューが承認だった |
    | 次の定期確認で `merged the pull request` | `merge_method` が `squash` |
    | GitHubが閉じなかったときは、次の定期確認で `close the merged issue: closed the issue that GitHub left open after the merge` | 実装Issueが閉じた。どちらだったかを記録する |
 

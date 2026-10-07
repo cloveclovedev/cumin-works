@@ -90,7 +90,7 @@ Pull request: #%[5]d
 Branch: %[3]s
 Work directory: %[4]s
 
-The pull request #%[5]d already closes the issue #%[2]d, and the work continues in it. Read the issue #%[2]d of %[1]s, its parent requirement issue, the documents that they link to, the pull request #%[5]d with its reviews, and the comments of the Owner. The work directory is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request; invoke the skill cumin-pull-request before you update the description of #%[5]d, and keep "Closes #%[2]d" in it. Then return the result.
+The pull request #%[5]d already closes the issue #%[2]d, and the work continues in it. Read the issue #%[2]d of %[1]s, its parent requirement issue, the documents that they link to, the pull request #%[5]d with its reviews, and the comments of the Issue Owner. The work directory is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request; invoke the skill cumin-pull-request before you update the description of #%[5]d, and keep "Closes #%[2]d" in it. Then return the result.
 `, repository, number, branch, workDir, pullRequest)
 }
 
@@ -270,7 +270,7 @@ Branch: %[3]s
 Work directory: %[4]s
 Review: %[6]s
 
-The Owner requested changes on the pull request #%[5]d. Read that review and its comments on GitHub. Address every comment of that review in the work directory, which is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request. Reply to every comment of that review with the skill cumin-review-reply. Address the body of that review too. A review body has no comment thread, so answer the body in one comment on the pull request #%[5]d, with the same skill. When the fix changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
+A Maintainer requested changes on the pull request #%[5]d. Read that review and its comments on GitHub. Address every comment of that review in the work directory, which is a git worktree already on the branch %[3]s of that pull request. Commit on that branch and push it. Do not open a new pull request. Reply to every comment of that review with the skill cumin-review-reply. Address the body of that review too. A review body has no comment thread, so answer the body in one comment on the pull request #%[5]d, with the same skill. When the fix changes what the description of #%[5]d says, invoke the skill cumin-pull-request and update the description. Then return the result.
 `, repository, number, branch, workDir, pullRequest, review)
 }
 
@@ -286,6 +286,6 @@ Pull request: #%[3]d
 Round: %[4]d of %[4]d
 Work directory: %[5]s
 
-Blocking comments remain on the pull request #%[3]d after %[4]d review rounds. Invoke the skill cumin-decision-request, and write one comment for the Owner on the pull request #%[3]d: what is not decided, so that the comments do not end, with the position of the Reviewer and of the Implementer on each open blocking comment. Submit no review. Then return the result.
+Blocking comments remain on the pull request #%[3]d after %[4]d review rounds. Invoke the skill cumin-decision-request, and write one comment for a Maintainer on the pull request #%[3]d: what is not decided, so that the comments do not end, with the position of the Reviewer and of the Implementer on each open blocking comment. Submit no review. Then return the result.
 `, repository, number, pullRequest, limit, workDir)
 }

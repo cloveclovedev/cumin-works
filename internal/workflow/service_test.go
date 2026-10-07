@@ -1018,7 +1018,7 @@ func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"stop the implementation: the agent returned blocked"`, `"msg":"stop the implementation: wrote the reason on the issue"`,
-		`"msg":"stop the implementation: the issue waits for the Owner"`, `"msg":"the notification was sent"`, `"action":"stop the implementation"`} {
+		`"msg":"stop the implementation: the issue waits for a Maintainer"`, `"msg":"the notification was sent"`, `"action":"stop the implementation"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
@@ -1041,7 +1041,7 @@ func TestI2_BlockedWithAFailedWebhookKeepsTheCommentAndTheLabel(t *testing.T) {
 		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	logs := sc.logs.String()
-	if !strings.Contains(logs, `"level":"ERROR","msg":"the Owner was not notified"`) {
+	if !strings.Contains(logs, `"level":"ERROR","msg":"the notification was not sent"`) {
 		t.Errorf("the log does not report the failed notification at error level:\n%s", logs)
 	}
 	if !strings.Contains(logs, "500") {
@@ -1088,7 +1088,7 @@ func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-decision") {
 		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
-	if !strings.Contains(sc.logs.String(), `"level":"ERROR","msg":"the Owner was not notified"`) {
+	if !strings.Contains(sc.logs.String(), `"level":"ERROR","msg":"the notification was not sent"`) {
 		t.Errorf("the log does not report the missing channel at error level:\n%s", sc.logs.String())
 	}
 }
@@ -1204,7 +1204,7 @@ func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind work
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"request the implementation again: the pull request does not pass the check; the same request runs again in the same work directory"`,
-		`"msg":"stop the implementation: the implementation stops for the Owner"`, `"retried":true`} {
+		`"msg":"stop the implementation: the implementation stops for a Maintainer"`, `"retried":true`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}

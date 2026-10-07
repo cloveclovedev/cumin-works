@@ -236,10 +236,10 @@ func TestInstruction_EveryRoleUsesTheFactsOfTheStartRequest(t *testing.T) {
 		}
 		for _, want := range []string{
 			// The three facts.
-			"the issue of the run, the login of the Owner, and the protected paths with their rules of matching",
+			"the issue of the run, the Issue Owner login, and the protected paths with their rules of matching",
 			"Do not derive them",
-			"The Owner is the account that the fact \"Login of the Owner\" names",
-			"there is no Owner login, no comment is an answer of the Owner",
+			"The Owner is the account that the fact \"Issue Owner login\" names",
+			"there is no Issue Owner login, no comment is an answer of the Owner",
 			"The fact \"Protected paths\"",
 			"the rules of matching that follow the list",
 		} {
@@ -336,7 +336,7 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		// Only these three write a source; anyone may comment otherwise.
 		"is not a source",
 		// The Planner must be able to tell who the Owner is.
-		"The Owner is the account that the fact \"Login of the Owner\" names",
+		"The Owner is the account that the fact \"Issue Owner login\" names",
 		// The Planner must know which files the Implementer cannot change.
 		"the fact \"Protected paths\" holds the list",
 		"`.github/workflows/`",

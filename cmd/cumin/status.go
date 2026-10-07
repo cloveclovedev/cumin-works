@@ -174,7 +174,7 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 		}
 	}
 	writeList(w, "Agents at work (from the labels on GitHub):\n"+agentsAtWorkNote, working)
-	writeList(w, "Waiting for the Owner:", waiting)
+	writeList(w, "Waiting for a Maintainer:", waiting)
 	if len(failed) > 0 {
 		writeList(w, "Repositories not read:", failed)
 		return fmt.Errorf("%d of %d repositories were not read", len(failed), len(settings.Repositories))

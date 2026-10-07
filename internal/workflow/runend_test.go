@@ -83,8 +83,8 @@ func TestR2_TheEndOfAPlannerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 
 	sc.pollAndWait(t, sc.service())
 
-	if !strings.Contains(sc.logs.String(), `"msg":"ask for the plan review: the split waits for the Owner"`) {
-		t.Fatal("the log does not say that the split waits for the Owner")
+	if !strings.Contains(sc.logs.String(), `"msg":"ask for the plan review: the split waits for a Maintainer"`) {
+		t.Fatal("the log does not say that the split waits for a Maintainer")
 	}
 	if n := sc.pollQueries(); n != 1 {
 		t.Errorf("%d poll queries, want 1 (the poll; none after the run)", n)

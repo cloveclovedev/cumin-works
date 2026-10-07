@@ -196,7 +196,7 @@ func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPol
 	sc.fake.FailTimes(http.MethodGet, permissionPath, 0, everyTry, http.StatusBadGateway)
 	_ = pollAtMinute(sc, restarted, 1)
 
-	if !strings.Contains(sc.logs.String(), "ask for the merge decision: read the login of the Owner of issue #10") {
+	if !strings.Contains(sc.logs.String(), "ask for the merge decision: read the Issue Owner login of issue #10") {
 		t.Errorf("the log does not name the failed read of the login of the Owner:\n%s", sc.logs.String())
 	}
 	assertStillReviewing(t, sc, restarted, "risk/medium")
@@ -388,7 +388,7 @@ func TestReviewing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
 	}
-	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of an Owner"); n != 1 {
+	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of a Maintainer"); n != 1 {
 		t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
 	}
 }

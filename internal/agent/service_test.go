@@ -633,7 +633,7 @@ func TestStart_AResumedSessionReceivesANewEndTime(t *testing.T) {
 		t.Fatalf("the second run does not resume the session: %q", args)
 	}
 	want := "Facts of this run (data from cumin):\n- Issue of the run: #12 (implementation issue)\n" +
-		"- Login of the Owner: example-owner\n" +
+		"- Issue Owner login: example-owner\n" +
 		"- Time limit of the run: 1m\n- End time of the run: 2026-10-03T02:31:00Z\n\n" + request.Text
 	if got := promptOfRun(t, dir); got != want {
 		t.Errorf("resumed prompt = %q, want %q", got, want)

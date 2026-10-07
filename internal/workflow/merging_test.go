@@ -288,7 +288,7 @@ func TestMerging_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T) 
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
 	}
-	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of an Owner"); n != 1 {
+	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of a Maintainer"); n != 1 {
 		t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
 	}
 }

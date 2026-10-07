@@ -2670,7 +2670,7 @@ func (d MergeDecision) String() string {
 	case MergeNow:
 		return "merge"
 	case MergeAskOwner:
-		return "ask the Owner"
+		return "ask a Maintainer"
 	case MergeNoRiskLabel:
 		return "no risk label"
 	case MergeTwoRiskLabels:

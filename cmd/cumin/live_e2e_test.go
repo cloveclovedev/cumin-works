@@ -707,16 +707,16 @@ func TestLiveE2E(t *testing.T) {
 	})
 	lines := e.logLines(t)
 	e.record("Log of the requirement issue", checkLogOrder(t, lines, e.repo, requirement,
-		"request the split: moved the requirement issue to planning", "request the split: requested the Planner", "ask for the plan review: the split waits for the Owner",
+		"request the split: moved the requirement issue to planning", "request the split: requested the Planner", "ask for the plan review: the split waits for a Maintainer",
 		"mark the requirement as in work: the sub-issues of the requirement issue are in progress", "write the follow-up note: wrote the follow-up note", "write the follow-up note: wrote the follow-up note",
-		"request the acceptance check: moved the requirement issue to accepting", "request the acceptance check: requested the Planner", "ask for the acceptance: the requirement issue waits for the acceptance of the Owner"))
+		"request the acceptance check: moved the requirement issue to accepting", "request the acceptance check: requested the Planner", "ask for the acceptance: the requirement issue waits for the acceptance of a Maintainer"))
 	e.record("Log of the risk/low sub-issue", checkLogOrder(t, lines, e.repo, low,
 		"request the implementation: claimed the issue", "wait for the checks: verified the pull request", "request the review: the pull request is ready for review",
 		"start the merge: the Reviewer approved the head commit", "merged the pull request"))
 	e.record("Log of the risk/medium sub-issue", checkLogOrder(t, lines, e.repo, medium,
 		"request the implementation: claimed the issue", "wait for the checks: verified the pull request", "request the review: the pull request is ready for review",
-		"ask for the merge decision: the Reviewer approved the head commit", "ask for the merge decision: the merge waits for the Owner",
-		"start the merge: the Owner approved the head commit", "merged the pull request"))
+		"ask for the merge decision: the Reviewer approved the head commit", "ask for the merge decision: the merge waits for a Maintainer",
+		"start the merge: a Maintainer approved the head commit", "merged the pull request"))
 	// One parent does not tell a squash from a rebase; the log names the
 	// method that cumin asked for.
 	merges := 0

@@ -158,7 +158,7 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 				if got := sc.fake.Issue(sc.repo, s.number).Labels; !slices.Contains(got, "cumin/status/ready") {
 					t.Errorf("labels of #%d = %v, want cumin/status/ready", s.number, got)
 				}
-				if n := strings.Count(sc.logs.String(), "is not of the Owner"); n != 1 {
+				if n := strings.Count(sc.logs.String(), "is not of a Maintainer"); n != 1 {
 					t.Errorf("%d log lines for one ready event across three polls, want 1:\n%s", n, sc.logs.String())
 				}
 				messages := sc.messagesExceptQ4()
@@ -208,7 +208,7 @@ func TestOwnerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheOwner(t *testin
 			if got := sc.fake.Issue(sc.repo, s.number).Labels; slices.Contains(got, "cumin/status/ready") {
 				t.Errorf("labels of #%d = %v, want no cumin/status/ready after the start", s.number, got)
 			}
-			if strings.Contains(sc.logs.String(), "is not of the Owner") {
+			if strings.Contains(sc.logs.String(), "is not of a Maintainer") {
 				t.Errorf("the ready of the Owner was logged as one of another account:\n%s", sc.logs.String())
 			}
 		})
@@ -229,7 +229,7 @@ func TestOwnerReady_ANewReadyOfAnotherAccountIsLoggedAgain(t *testing.T) {
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
-	if n := strings.Count(sc.logs.String(), "is not of the Owner"); n != 2 {
+	if n := strings.Count(sc.logs.String(), "is not of a Maintainer"); n != 2 {
 		t.Errorf("%d log lines for two ready events, want 2:\n%s", n, sc.logs.String())
 	}
 }
@@ -345,7 +345,7 @@ func TestOwnerReady_AFailedReadWaitsForTheNextPoll(t *testing.T) {
 	if !strings.Contains(sc.logs.String(), "the actor of the newest cumin/status/ready was not read") {
 		t.Errorf("the log does not name the failed read:\n%s", sc.logs.String())
 	}
-	if strings.Contains(sc.logs.String(), "is not of the Owner") {
+	if strings.Contains(sc.logs.String(), "is not of a Maintainer") {
 		t.Errorf("a failed read is logged as a ready that is not of the Owner:\n%s", sc.logs.String())
 	}
 
@@ -430,7 +430,7 @@ func TestOwnerReady_AReadyOutsideTheEventsReadDoesNotTakeTheOwnerOfASubIssue(t *
 	if n := sc.labelChanges(); n != 0 {
 		t.Errorf("%d label changes, want none", n)
 	}
-	if n := strings.Count(sc.logs.String(), "is not of the Owner"); n != 1 {
+	if n := strings.Count(sc.logs.String(), "is not of a Maintainer"); n != 1 {
 		t.Errorf("%d log lines across three polls, want 1:\n%s", n, sc.logs.String())
 	}
 	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "could not find") {

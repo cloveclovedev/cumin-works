@@ -234,7 +234,7 @@ func TestImplementing_APollChangesNothingWhileTheImplementerRuns(t *testing.T) {
 
 // A cumin/status/implementing that an account with only triage permission
 // added is not a state (issue-states.md, the account that added a status
-// label): no agent starts, no label changes, and the Owner is told once.
+// label): no agent starts, no label changes, and the notification goes out once.
 func TestImplementing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T) {
 	sc := implementingWithoutAnAgent(t, statusBy(workflow.LabelImplementing, "a-triager"))
 	sc.fake.SetPermission("a-triager", "triage", "User")
@@ -253,7 +253,7 @@ func TestImplementing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testin
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
 	}
-	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of an Owner"); n != 1 {
+	if n := strings.Count(sc.logs.String(), "is not of cumin-core or of a Maintainer"); n != 1 {
 		t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
 	}
 }
