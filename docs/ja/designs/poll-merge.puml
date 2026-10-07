@@ -11,7 +11,7 @@ start
 and the required checks;
 if (Exactly one risk/* label
 on the issue? (DecideMerge)) then (no)
-  :Stop step of #81, start the merge
+  :Stop step of #81, stop the review
   (no or two risk labels);
   stop
 elseif (Required checks pass
