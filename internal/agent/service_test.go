@@ -124,7 +124,7 @@ func TestStart_TokenThenIdentityThenRunWithoutAQuotaRun(t *testing.T) {
 	if run.Result.Result != ResultDone || run.SessionID != fixtureSessionID {
 		t.Errorf("run = %+v", run)
 	}
-	// The login of the bot goes with the result, for the check of I2.
+	// The login of the bot goes with the result, for the check of "wait for the checks".
 	if run.BotLogin != serviceSlug+"[bot]" {
 		t.Errorf("run.BotLogin = %q, want %s[bot]", run.BotLogin, serviceSlug)
 	}
@@ -327,7 +327,7 @@ func TestStart_UnknownRoleIsRefused(t *testing.T) {
 
 // The App of a role belongs to one owner. A repository of another owner
 // needs its own App, and its identity is cached apart.
-func TestStart_AppsAreKeyedByOwner(t *testing.T) {
+func TestStart_AppsAreKeyedByMaintainer(t *testing.T) {
 	fake, client := newFakeGitHub(t)
 	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
 	s := newService(t, path, client, nil)
@@ -351,7 +351,7 @@ func TestStart_AppsAreKeyedByOwner(t *testing.T) {
 // GitHub account names are case-insensitive: the settings key matches the
 // owner of the request without regard to case, and two keys that differ
 // only by case are refused.
-func TestStart_OwnerMatchesTheSettingsWithoutRegardToCase(t *testing.T) {
+func TestStart_MaintainerMatchesTheSettingsWithoutRegardToCase(t *testing.T) {
 	fake, client := newFakeGitHub(t)
 	path, _ := serviceCLI(t, "quota-run.jsonl", "done.jsonl")
 	s := newService(t, path, client, nil)

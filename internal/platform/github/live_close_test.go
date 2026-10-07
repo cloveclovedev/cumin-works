@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// TestLiveCloseReferences measures what I2 and the merge of #222 rely on,
+// TestLiveCloseReferences measures what "wait for the checks" and the merge of #222 rely on,
 // without the automatic link of "Closes #N": the cumin-core App adds a
 // closing link with the GraphQL mutation addCloseIssueReferences, reads it
 // back, and closes an issue once and twice. Whether a merge closes an issue

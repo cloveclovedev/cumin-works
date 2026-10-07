@@ -118,7 +118,7 @@ func TestRunRejectsAnExtraArgument(t *testing.T) {
 	}
 }
 
-func TestAppClientIDsRejectsTwoTablesOfOneOwner(t *testing.T) {
+func TestAppClientIDsRejectsTwoTablesOfOneMaintainer(t *testing.T) {
 	settings := &config.Settings{
 		Repositories: []config.Repository{{Owner: "example-org", Name: "one"}},
 		GitHubApps: map[string]map[string]string{
@@ -132,7 +132,7 @@ func TestAppClientIDsRejectsTwoTablesOfOneOwner(t *testing.T) {
 	}
 }
 
-func TestAppClientIDsReadsEveryAppAndIgnoresTheCaseOfTheOwner(t *testing.T) {
+func TestAppClientIDsReadsEveryAppAndIgnoresTheCaseOfTheMaintainer(t *testing.T) {
 	apps := map[string]string{config.AppCuminCore: "client-id-core"}
 	for _, role := range config.AllRoles() {
 		apps[string(role)] = "client-id-" + string(role)

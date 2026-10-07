@@ -12,7 +12,7 @@ import (
 )
 
 var testLabels = []github.Label{
-	{Name: "cumin/status/ready", Color: "0E8A16", Description: "The Owner says: go"},
+	{Name: "cumin/status/ready", Color: "0E8A16", Description: "The Maintainer says: go"},
 	{Name: "cumin/status/implementing", Color: "1D76DB", Description: "The Implementer works"},
 	{Name: "risk/low", Color: "C2E0C6", Description: "A few lines with an obvious effect"},
 }

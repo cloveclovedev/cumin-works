@@ -18,7 +18,7 @@ const pull21Path = "/repos/example-org/example-repo/pulls/21"
 
 // mergingScene puts issue #10 in cumin/status/merging, as cumin-core left
 // it: the risk label, the pull request #21 with one passed required check,
-// and the approval of the Reviewer on the head commit. The Owner is an
+// and the approval of the Reviewer on the head commit. The Maintainer is an
 // admin of the repository.
 func mergingScene(t *testing.T, risk string) *scene {
 	t.Helper()
@@ -69,7 +69,7 @@ func assertMergedAndClosedOnce(t *testing.T, sc *scene, service *workflow.Servic
 		t.Errorf("%d comments on #10, want none: %+v", len(comments), comments)
 	}
 	// The close of the last sub-issue starts the acceptance check of #6. The
-	// fake agent leaves no comment, so that check may stop for the Owner in
+	// fake agent leaves no comment, so that check may stop for the Maintainer in
 	// the same poll. That notification is not one of the merge.
 	messages := slices.DeleteFunc(sc.messagesExceptWaiting(), func(message string) bool {
 		return strings.Contains(message, workflow.NoAcceptanceCheckReason)
@@ -205,10 +205,10 @@ func TestMerging_AMergeThatFailsWith502IsSentAgainAtTheNextPoll(t *testing.T) {
 	assertMergedAndClosedOnce(t, sc, service, 2)
 }
 
-// The Owner approved a risk/medium pull request, and then requests changes
+// The Maintainer approved a risk/medium pull request, and then requests changes
 // while the issue is in cumin/status/merging. The approval no longer holds:
 // "go back to the checks", and cumin sends no merge.
-func TestMerging_AChangeRequestOfTheOwnerGoesBackToTheChecksWithoutAMerge(t *testing.T) {
+func TestMerging_AChangeRequestOfTheMaintainerGoesBackToTheChecksWithoutAMerge(t *testing.T) {
 	sc := mergingScene(t, "risk/medium")
 	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
 	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 1)
@@ -220,7 +220,7 @@ func TestMerging_AChangeRequestOfTheOwnerGoesBackToTheChecksWithoutAMerge(t *tes
 		t.Errorf("%d merge requests, want none", n)
 	}
 	if sc.repo.PullRequests[21].Merged {
-		t.Error("pull request #21 is merged after the Owner requested changes")
+		t.Error("pull request #21 is merged after the Maintainer requested changes")
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelChecking}) {
 		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/checking", got)
@@ -231,12 +231,12 @@ func TestMerging_AChangeRequestOfTheOwnerGoesBackToTheChecksWithoutAMerge(t *tes
 }
 
 // The label cumin/status/merging never stands in for the conditions of the
-// merge: a risk/medium issue without an approval of an Owner, a failed
+// merge: a risk/medium issue without an approval of a Maintainer, a failed
 // required check, and a head commit that moved after the approval all go
 // back to the checks without a merge.
 func TestMerging_TheLabelDoesNotStandInForTheConditionsOfTheMerge(t *testing.T) {
 	cases := map[string]func(sc *scene){
-		"risk/medium without an approval of an Owner": func(sc *scene) {
+		"risk/medium without an approval of a Maintainer": func(sc *scene) {
 			_ = sc.fake.SetLabels(sc.repo, 10, []string{"risk/medium", workflow.LabelMerging})
 		},
 		"a required check that failed": func(sc *scene) {
@@ -266,7 +266,7 @@ func TestMerging_TheLabelDoesNotStandInForTheConditionsOfTheMerge(t *testing.T) 
 
 // A cumin/status/merging that an account with only triage permission added
 // is not a state (issue-states.md, the account that added a status label):
-// no agent starts, nothing is merged, no label changes, and the Owner is
+// no agent starts, nothing is merged, no label changes, and the Maintainer is
 // told once.
 func TestMerging_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T) {
 	sc := mergingScene(t, "risk/low")
@@ -377,21 +377,21 @@ func TestMerging_AConflictWhileCuminStopsAfterTheRunsWaitsForTheNextStart(t *tes
 }
 
 // A head that moved (409) is a lasting refusal: "stop the merge for the
-// Owner" with one comment, and no later poll sends the merge again.
-func TestMerging_AHeadThatMovedStopsTheMergeForTheOwnerOnce(t *testing.T) {
+// Maintainer" with one comment, and no later poll sends the merge again.
+func TestMerging_AHeadThatMovedStopsTheMergeForTheMaintainerOnce(t *testing.T) {
 	sc := mergingScene(t, "risk/low")
 	sc.fake.FailNext(http.MethodPut, mergePath, http.StatusConflict)
 	service := sc.service()
 
 	sc.pollTimes(t, service, 3)
 
-	sc.assertStoppedAtI6(t, workflow.MergeHeadMovedReason(21))
+	sc.assertTheMergeStopped(t, workflow.MergeHeadMovedReason(21))
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
 	}
 }
 
-// The Owner reopened an issue whose first pull request #20 is merged. The
+// The Maintainer reopened an issue whose first pull request #20 is merged. The
 // new pull request #21 reached cumin/status/merging, and was closed without
 // a merge. Only the newest linked pull request is the one of this merge, so
 // cumin does not close the issue: it goes back to the checks.

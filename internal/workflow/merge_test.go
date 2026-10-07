@@ -20,7 +20,7 @@ const (
 
 // approved puts issue #10 in cumin/status/checking with the risk
 // labels, one passed required check, and the Reviewer that approves the
-// head commit. One poll then runs I3, the review, and I6 or I7.
+// head commit. One poll then runs "request the review", the review, and "start the merge" or "ask for the merge decision".
 func approved(t *testing.T, risks ...string) *scene {
 	t.Helper()
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
@@ -46,11 +46,11 @@ func (sc *scene) mergeMethod(t *testing.T) string {
 	return ""
 }
 
-// Core-3 (cumin-core.md): a risk/low pull request that the Reviewer
+// A risk/low pull request that the Reviewer
 // approved, with the required checks passed, is merged by cumin, and the
 // implementation issue closes. GitHub leaves the issue open here, so cumin
 // closes it once, as completed.
-func TestCore03_ARiskLowPullRequestIsMergedAndTheIssueCloses(t *testing.T) {
+func TestARiskLowPullRequestIsMergedAndTheIssueCloses(t *testing.T) {
 	sc := approved(t, "risk/low")
 	service := sc.service()
 
@@ -85,7 +85,7 @@ func TestCore03_ARiskLowPullRequestIsMergedAndTheIssueCloses(t *testing.T) {
 }
 
 // An issue that GitHub closed through the link is left as it is.
-func TestI6_AnIssueThatGitHubClosedIsLeftAsItIs(t *testing.T) {
+func TestAnIssueThatGitHubClosedIsLeftAsItIs(t *testing.T) {
 	sc := approved(t, "risk/low")
 	sc.fake.CloseIssuesOnMerge()
 	service := sc.service()
@@ -104,7 +104,7 @@ func TestI6_AnIssueThatGitHubClosedIsLeftAsItIs(t *testing.T) {
 }
 
 // The merge uses merge_method of the repository settings.
-func TestI6_TheMergeMethodOfTheRepositorySettingsIsUsed(t *testing.T) {
+func TestTheMergeMethodOfTheRepositorySettingsIsUsed(t *testing.T) {
 	sc := approved(t, "risk/low")
 	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "merge_method = \"rebase\"\n"})
 	service := sc.service()
@@ -116,10 +116,10 @@ func TestI6_TheMergeMethodOfTheRepositorySettingsIsUsed(t *testing.T) {
 	}
 }
 
-// Core-4 (cumin-core.md): a risk/medium pull request is not merged; the
-// issue waits for the Owner, with one notification that links the pull
-// request (I7).
-func TestCore04_ARiskMediumPullRequestIsNotMerged(t *testing.T) {
+// A risk/medium pull request is not merged; the
+// issue waits for the Maintainer, with one notification that links the pull
+// request ("ask for the merge decision").
+func TestARiskMediumPullRequestIsNotMerged(t *testing.T) {
 	sc := approved(t, "risk/medium")
 	service := sc.service()
 
@@ -142,8 +142,8 @@ func TestCore04_ARiskMediumPullRequestIsNotMerged(t *testing.T) {
 	}
 }
 
-// A risk/high pull request waits for the Owner too.
-func TestI7_ARiskHighPullRequestWaitsForTheOwner(t *testing.T) {
+// A risk/high pull request waits for the Maintainer too.
+func TestARiskHighPullRequestWaitsForTheMaintainer(t *testing.T) {
 	sc := approved(t, "risk/high")
 	service := sc.service()
 
@@ -159,7 +159,7 @@ func TestI7_ARiskHighPullRequestWaitsForTheOwner(t *testing.T) {
 
 // An issue without exactly one risk/* label is not merged, and stops once
 // (principle 5: the risk is read from the issue only).
-func TestI6_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
+func TestAnApprovedIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		risks    []string
@@ -184,14 +184,14 @@ func TestI6_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 
 // A merge that GitHub refuses stops the issue once, with the answer of
 // GitHub. A ruleset refusal is 405 too, but the pull request is mergeable.
-func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
+func TestAFailedMergeStopsTheIssueOnce(t *testing.T) {
 	sc := approved(t, "risk/low")
 	sc.fake.FailNext(http.MethodPut, mergePath, http.StatusMethodNotAllowed)
 	service := sc.service()
 
 	sc.pollTimes(t, service, 3)
 
-	sc.assertStoppedAtI6(t, workflow.MergeFailedReason(21, "status 405: Failure requested by the test"))
+	sc.assertTheMergeStopped(t, workflow.MergeFailedReason(21, "status 405: Failure requested by the test"))
 	if sc.fake.Issue(sc.repo, 10).Closed {
 		t.Error("issue #10 is closed after a failed merge")
 	}
@@ -200,9 +200,9 @@ func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
 // A conflict (405, and mergeable false) goes back to the Implementer: the
 // label becomes cumin/status/implementing, and exactly one resolution
 // request resumes the Implementer session on the branch of the pull
-// request. The run pushes a new head, so after done I2 runs again
-// (failure column of I6).
-func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
+// request. The run pushes a new head, so after done "wait for the checks" runs again
+// (the failed merge of "start the merge").
+func TestAConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 2})
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
 	sc.fake.SetPermission(theMaintainer, "admin", "User")
@@ -213,10 +213,10 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one resolution", n)
 	}
-	// The login of the Owner is read for the review, and again for the
+	// The login of the Issue Owner is read for the review, and again for the
 	// resolution request, which a later poll sends.
 	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theMaintainer+"/permission"); n != 2 {
-		t.Errorf("%d reads of the permission of the Owner, want 2", n)
+		t.Errorf("%d reads of the permission of the Maintainer, want 2", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -227,7 +227,7 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	}
 	text := promptOf(t, args)
 	if !strings.Contains(text, issueOwnerLoginLine) {
-		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theMaintainer, text)
+		t.Errorf("the conflict resolution request does not name the Issue Owner %s:\n%s", theMaintainer, text)
 	}
 	for _, want := range []string{"Request: conflict resolution", "Pull request: #21", "Branch: cumin/10-add-the-login-screen",
 		"Default branch: main", "git merge origin/main", "do not force-push"} {
@@ -252,7 +252,7 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 // A resolution that ends with done and leaves the head at the commit that
 // conflicted stops the issue, so that the same conflict does not go round
 // the review again.
-func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
+func TestAResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
 	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}})
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	service := sc.serviceWithSession(t)
@@ -269,9 +269,9 @@ func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
 // is older than every label of a scene.
 var headBeforeTheLabel = time.Unix(1000, 0)
 
-// assertStoppedForAConflictThatStays checks that #10 stopped for the Owner
+// assertStoppedForAConflictThatStays checks that #10 stopped for the Maintainer
 // because a conflict resolution left the head commit: one stop note of
-// "stop the implementation for the Owner" (I2), and
+// "stop the implementation", and
 // cumin/status/awaiting-decision.
 func (sc *scene) assertStoppedForAConflictThatStays(t *testing.T) {
 	t.Helper()
@@ -292,8 +292,8 @@ func (sc *scene) assertStoppedForAConflictThatStays(t *testing.T) {
 // conflicting is approved with risk/low, and the pull request #21
 // conflicts with the default branch. The poll still reads MERGEABLE, as
 // GitHub answers right after a merge into the default branch, so the
-// conflict shows only at the merge (I6), not while the issue waits for
-// the checks (I14).
+// conflict shows only at the merge ("start the merge"), not while the issue waits for
+// the checks ("request a conflict resolution").
 func conflicting(t *testing.T, opts cliOptions) *scene {
 	t.Helper()
 	sc := newScene(t, opts)
@@ -314,13 +314,13 @@ func conflictingBeforeChecks(t *testing.T, opts cliOptions, mergeable string) *s
 	return sc
 }
 
-// I14 (issue-states.md): a pull request that conflicts while its issue
+// "request a conflict resolution" (issue-states.md): a pull request that conflicts while its issue
 // waits for the checks goes back to the Implementer. The label becomes
 // cumin/status/implementing before the request, exactly one conflict
 // resolution request resumes the Implementer session, and it does not
 // count as a check fix request. The run pushes a new head, so after done
-// I2 runs and the issue returns to cumin/status/checking.
-func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChecks(t *testing.T) {
+// "wait for the checks" runs and the issue returns to cumin/status/checking.
+func TestAConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChecks(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{movesHeadOnRun: 1}, "CONFLICTING")
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
 	sc.fake.SetPermission(theMaintainer, "admin", "User")
@@ -363,7 +363,7 @@ func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChec
 	if got := service.State.Issue("example-org/example-repo", 10).CheckFixRequests; got != 0 {
 		t.Errorf("check fix requests = %d, want 0: a conflict does not count", got)
 	}
-	// The label changes before the request, then I2 verifies the new head.
+	// The label changes before the request, then "wait for the checks" verifies the new head.
 	logs := sc.logs.String()
 	at := -1
 	for _, want := range []string{
@@ -383,10 +383,10 @@ func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChec
 	}
 }
 
-// I14: UNKNOWN says that GitHub is still calculating, so that poll sends
+// "request a conflict resolution": UNKNOWN says that GitHub is still calculating, so that poll sends
 // nothing and changes no label. A later poll that reads CONFLICTING sends
 // the request.
-func TestI14_UnknownWaitsForALaterPoll(t *testing.T) {
+func TestAnUnknownMergeStateWaitsForALaterPoll(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{}, "UNKNOWN")
 	service := sc.serviceWithSession(t)
 
@@ -410,11 +410,11 @@ func TestI14_UnknownWaitsForALaterPoll(t *testing.T) {
 	}
 }
 
-// I14: a resolution that ends with done and leaves the head at the commit
+// "request a conflict resolution": a resolution that ends with done and leaves the head at the commit
 // that conflicted stops the issue once for the Owner: the head commit is
 // older than cumin/status/implementing. The polls that follow send nothing
 // more.
-func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
+func TestAResolutionWhileCheckingThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{}, "CONFLICTING")
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	service := sc.serviceWithSession(t)
@@ -455,9 +455,9 @@ func (sc *scene) serviceWithSession(t *testing.T) *workflow.Service {
 	return service
 }
 
-// A close after the merge that fails stops the issue once; the Owner
+// A close after the merge that fails stops the issue once; the Maintainer
 // closes it.
-func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
+func TestAFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 	sc := approved(t, "risk/low")
 	sc.fake.FailNext(http.MethodPatch, issue10Path, http.StatusForbidden)
 	service := sc.service()
@@ -467,17 +467,17 @@ func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
 	}
-	sc.assertStoppedAtI6(t, workflow.CloseFailedReason(21, "status 403: Failure requested by the test"))
+	sc.assertTheMergeStopped(t, workflow.CloseFailedReason(21, "status 403: Failure requested by the test"))
 }
 
-// assertStoppedAtI6 checks "stop the merge for the Owner" for #10: one comment with
+// assertTheMergeStopped checks "stop the merge" for #10: one comment with
 // the reason, cumin/status/awaiting-decision, and one notification.
-func (sc *scene) assertStoppedAtI6(t *testing.T, reason string) {
+func (sc *scene) assertTheMergeStopped(t *testing.T, reason string) {
 	t.Helper()
 	sc.assertStoppedAt(t, workflow.ActionStopTheMerge, reason)
 }
 
-// assertStoppedAt checks a stop for the Owner of #10 with the row: one
+// assertStoppedAt checks a stop of #10 for the Maintainer with the name of the action: one
 // comment with the reason, cumin/status/awaiting-decision, and one
 // notification.
 func (sc *scene) assertStoppedAt(t *testing.T, action workflow.ActionName, reason string) {
@@ -502,7 +502,7 @@ func (sc *scene) assertStoppedAt(t *testing.T, action workflow.ActionName, reaso
 
 // DecideMerge reads the risk from the labels of the issue, and the checks
 // of the head commit.
-func TestDecideMerge_I6_I7(t *testing.T) {
+func TestDecideMerge_StartTheMergeOrAskForTheMergeDecision(t *testing.T) {
 	required := []workflow.RequiredCheck{{Name: "ci"}}
 	passed := []workflow.CheckResult{{Name: "ci", Conclusion: workflow.CheckPassed}}
 	failed := []workflow.CheckResult{{Name: "ci", Conclusion: workflow.CheckFailed}}
@@ -513,8 +513,8 @@ func TestDecideMerge_I6_I7(t *testing.T) {
 		want   workflow.MergeDecision
 	}{
 		{"risk/low merges", []string{"cumin/status/reviewing", "risk/low"}, passed, workflow.MergeNow},
-		{"risk/medium asks the Owner", []string{"risk/medium"}, passed, workflow.MergeAskMaintainer},
-		{"risk/high asks the Owner", []string{"risk/high"}, passed, workflow.MergeAskMaintainer},
+		{"risk/medium asks the Maintainer", []string{"risk/medium"}, passed, workflow.MergeAskMaintainer},
+		{"risk/high asks the Maintainer", []string{"risk/high"}, passed, workflow.MergeAskMaintainer},
 		{"no risk label", []string{"cumin/status/reviewing"}, passed, workflow.MergeNoRiskLabel},
 		{"two risk labels", []string{"risk/low", "risk/medium"}, passed, workflow.MergeTwoRiskLabels},
 		{"a wrong risk label stops before the checks", nil, failed, workflow.MergeNoRiskLabel},

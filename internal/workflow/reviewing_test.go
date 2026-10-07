@@ -17,7 +17,7 @@ import (
 
 // reviewerScene puts issue #10 in cumin/status/checking with the risk
 // label, one passed required check, and a Reviewer run that holds and then
-// submits the review. The next poll applies I3.
+// submits the review. The next poll applies "request the review".
 func reviewerScene(t *testing.T, opts cliOptions, risk string) (*scene, *workflow.Service) {
 	t.Helper()
 	opts.holds = true
@@ -135,14 +135,14 @@ func TestReviewing_ARestartAfterAChangeRequestSendsExactlyOneFixRequest(t *testi
 // A restart of cumin in cumin/status/reviewing after an approval with
 // risk/medium: the poll of the new cumin moves the issue to
 // cumin/status/awaiting-merge-decision with one request of the review of
-// the Owner and one notification. The polls that follow send nothing more.
-func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *testing.T) {
+// the Maintainer and one notification. The polls that follow send nothing more.
+func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheMaintainerOnce(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
 	sc.readyByTheMaintainer()
 	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/medium")
 	if n := sc.reviewRequests(); n != 0 {
-		t.Fatalf("%d requests of the review of the Owner before the label changed, want none", n)
+		t.Fatalf("%d requests of the review of the Issue Owner before the label changed, want none", n)
 	}
 
 	restarted := sc.restartedWith(stopped)
@@ -162,19 +162,19 @@ func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *test
 		t.Errorf("%d merge requests, want none", n)
 	}
 	if n := sc.reviewRequests(); n != 1 {
-		t.Errorf("%d requests of the review of the Owner, want 1", n)
+		t.Errorf("%d requests of the review of the Issue Owner, want 1", n)
 	}
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
 	}
 }
 
-// A failed read of the login of the Owner in the poll that decides I7 after
+// A failed read of the login of the Issue Owner in the poll that decides "ask for the merge decision" after
 // a restart changes nothing: the read comes before the label change, so the
 // issue keeps cumin/status/reviewing with no review request and no
 // notification. The next poll reads the login, and sends one label change,
 // one review request, and one notification.
-func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPollAsksTheOwner(t *testing.T) {
+func TestReviewing_AFailedReadOfTheIssueOwnerLoginBeforeTheMergeDecisionChangesNothingAndTheNextPollAsksTheIssueOwner(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
 	sc.readyByTheMaintainer()
 	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
@@ -191,20 +191,20 @@ func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPol
 
 	restarted := sc.restartedWith(stopped)
 	// The read of the permission of the actor of cumin/status/ready is the
-	// last step of the read of the login of the Owner.
+	// last step of the read of the login of the Issue Owner.
 	permissionPath := "/repos/example-org/example-repo/collaborators/" + theMaintainer + "/permission"
 	sc.fake.FailTimes(http.MethodGet, permissionPath, 0, everyTry, http.StatusBadGateway)
 	_ = pollAtMinute(sc, restarted, 1)
 
 	if !strings.Contains(sc.logs.String(), "ask for the merge decision: read the Issue Owner login of issue #10") {
-		t.Errorf("the log does not name the failed read of the login of the Owner:\n%s", sc.logs.String())
+		t.Errorf("the log does not name the failed read of the login of the Issue Owner:\n%s", sc.logs.String())
 	}
 	assertStillReviewing(t, sc, restarted, "risk/medium")
 	if n := awaitingLabel(); n != 0 {
 		t.Errorf("%d label changes to cumin/status/awaiting-merge-decision after the failed read, want none", n)
 	}
 	if n := sc.reviewRequests(); n != 0 {
-		t.Errorf("%d requests of the review of the Owner after the failed read, want none", n)
+		t.Errorf("%d requests of the review of the Issue Owner after the failed read, want none", n)
 	}
 
 	for minute := 2; minute <= 3; minute++ {
@@ -220,7 +220,7 @@ func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPol
 		t.Errorf("%d label changes to cumin/status/awaiting-merge-decision, want 1", n)
 	}
 	if n := sc.reviewRequests(); n != 1 {
-		t.Errorf("%d requests of the review of the Owner, want 1", n)
+		t.Errorf("%d requests of the review of the Issue Owner, want 1", n)
 	}
 	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
 		t.Errorf("notifications = %v, want one that asks for the merge decision", messages)
@@ -363,7 +363,7 @@ func TestReviewing_APollChangesNothingWhileTheReviewerRuns(t *testing.T) {
 // A cumin/status/reviewing that an account with only triage permission
 // added is not a state (issue-states.md, the account that added a status
 // label): no agent starts, nothing is merged, no label changes, and the
-// Owner is told once.
+// Maintainer is told once.
 func TestReviewing_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
@@ -439,7 +439,7 @@ func TestReviewing_AQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
 
 // A Reviewer work directory that cannot be prepared sends no request, and
 // the request counts. The next poll requests the review again, and the
-// second failure stops the review for the Owner with the reason. The polls
+// second failure stops the review for the Maintainer with the reason. The polls
 // that follow send nothing more.
 func TestReviewing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheReview(t *testing.T) {
 	sc := newScene(t)
@@ -566,8 +566,8 @@ func TestReviewing_AStopAfterTheRunsStartsNoReviewFixAndTheNextStartSendsOne(t *
 }
 
 // A cause run that ends abnormally gets one second request of the cause. A
-// second end with no decision request stops the review for the Owner with
-// the row I8, and the note names the kind of the abnormal end. The polls
+// second end with no decision request stops the review for the Maintainer with
+// the action "stop at the round limit", and the note names the kind of the abnormal end. The polls
 // that follow start nothing: one stay requests the cause two times at most.
 func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
 	// The review of round 3 returns done; every run after it ends abnormally.

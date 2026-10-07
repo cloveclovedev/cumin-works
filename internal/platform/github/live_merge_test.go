@@ -10,8 +10,8 @@ import (
 
 // TestLiveMergeFacts measures what the merge of #222 relies on: how the
 // token of cumin-core reads the permission of the account of a review
-// (I12), and how GitHub answers a merge that conflicts, a merge whose head
-// moved, and a clean merge (I6).
+// ("start the merge" after the approval of a Maintainer), and how GitHub answers a merge that conflicts, a merge whose head
+// moved, and a clean merge ("start the merge" for risk/low).
 //
 // Official, REST: "Get repository permissions for a user" (permission is
 // admin, write, read, or none; maintain maps to write; Permissions required
@@ -34,13 +34,13 @@ func TestLiveMergeFacts(t *testing.T) {
 
 	// Fact M1: the permission of three accounts, with the token of
 	// cumin-core.
-	// Only the Owner is a user with admin or write; the bot and the account
-	// that is not a collaborator must never read as an Owner.
+	// Only the Maintainer is a user with admin or write; the bot and the account
+	// that is not a collaborator must never read as a Maintainer.
 	for i, account := range []struct {
 		login, what, userType string
 		isMaintainer          bool
 	}{
-		{maintainer, "the Owner", "User", true},
+		{maintainer, "the Maintainer", "User", true},
 		{botLogin, "the bot of the Implementer App", "Bot", false},
 		{"octocat", "an account that is not a collaborator", "User", false},
 	} {
@@ -60,7 +60,7 @@ func TestLiveMergeFacts(t *testing.T) {
 		if body.User != nil {
 			userType = body.User.Type
 		}
-		l.record(fmt.Sprintf("M1.%d", i+1), "`collaborators/{username}/permission` with the token of cumin-core, for "+account.what, "Readable; the Owner is admin or write",
+		l.record(fmt.Sprintf("M1.%d", i+1), "`collaborators/{username}/permission` with the token of cumin-core, for "+account.what, "Readable; the Maintainer is admin or write",
 			fmt.Sprintf("Status %d: %s. `permission` `%s`, `role_name` `%s`, `user.type` `%s`", resp.status, resp.message(), body.Permission, body.RoleName, userType))
 		writes := body.Permission == "admin" || body.Permission == "write"
 		if resp.status != http.StatusOK || userType != account.userType || writes != account.isMaintainer {

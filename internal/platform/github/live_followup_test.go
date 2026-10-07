@@ -24,11 +24,11 @@ Closes #%d
 // cumin/type/requirement, its sub-issue, and a pull request of the
 // Implementer App that closes the sub-issue. The Reviewer App leaves two
 // non-blocking comments; the Implementer App answers one with "Fixed". The
-// Owner merges the pull request by hand, then runs cumin. Nothing is closed
+// Maintainer merges the pull request by hand, then runs cumin. Nothing is closed
 // at the end of the test: the procedure says how to clean up.
 //
 // No Claude Code runs, so it uses no quota. The requirement issue carries
-// no status label, so cumin starts no agent for it (R1, R3, R4).
+// no status label, so cumin starts no agent for it ("request the split", "mark the requirement as in work", "request the acceptance check").
 func TestLiveFollowUpFixture(t *testing.T) {
 	l := newLive(t)
 	planner := l.token(t, "planner")
@@ -53,7 +53,7 @@ func TestLiveFollowUpFixture(t *testing.T) {
 	resp.mustJSON(t, http.StatusCreated, &pull)
 	// Since 2026-09-30, GitHub has created no closing link for a new pull
 	// request, in every repository that we checked. Without the link, the
-	// merge leaves the sub-issue open. The Owner then links the pull request
+	// merge leaves the sub-issue open. The Maintainer then links the pull request
 	// to the sub-issue by hand before the merge (the procedure, step 4).
 	linked := l.waitForClosingLink(t, implementer, pull.Number, sub.Number)
 	if !linked {
@@ -88,7 +88,7 @@ func TestLiveFollowUpFixture(t *testing.T) {
 	}
 	// Official: REST "Create a reply for a review comment".
 	reply := l.api(t, implementer, http.MethodPost, fmt.Sprintf("/repos/{repo}/pulls/%d/comments/%d/replies", pull.Number, answered),
-		map[string]any{"body": "Fixed: the Owner may ignore this; Follow-1 answers it only to test the rule."})
+		map[string]any{"body": "Fixed: the Maintainer may ignore this; Follow-1 answers it only to test the rule."})
 	if reply.status != http.StatusCreated {
 		t.Fatalf("reply to the review comment: status %d: %s", reply.status, reply.message())
 	}
@@ -142,7 +142,7 @@ func (l *live) waitForClosingLink(t *testing.T, token string, pull, issue int) b
 // createFixtureIssue creates an issue that stays after the test.
 func (l *live) createFixtureIssue(t *testing.T, token, title string, labels []string, parentID int64) issue {
 	t.Helper()
-	body := map[string]any{"title": title, "body": "The live scenario Follow-1 of cumin-works. The Owner closes it after the scenario."}
+	body := map[string]any{"title": title, "body": "The live scenario Follow-1 of cumin-works. The Maintainer closes it after the scenario."}
 	if len(labels) > 0 {
 		body["labels"] = labels
 	}

@@ -86,7 +86,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 	l.record("1", "The cumin-core App (no Checks and no Commit statuses permission) reads the check runs and the commit statuses of a commit in a public repository (row 54)", "Not known",
 		fmt.Sprintf("`GET .../check-runs`: status %d. `GET .../status`: status %d, with the commit statuses `%s`", checkRuns.status, combined.status, strings.Join(found, "`, `")))
 	if checkRuns.status != http.StatusOK || combined.status != http.StatusOK || fixtureStatus != "success" {
-		t.Errorf("fact 1: check runs %d, status %d, the status %s of the fixture is %q (want success). If a call is refused, a permission is missing: stop and ask the Owner", checkRuns.status, combined.status, liveStatusContext, fixtureStatus)
+		t.Errorf("fact 1: check runs %d, status %d, the status %s of the fixture is %q (want success). If a call is refused, a permission is missing: stop and ask the Maintainer", checkRuns.status, combined.status, liveStatusContext, fixtureStatus)
 	}
 
 	// Fact 8: the rules of the default branch.
@@ -104,7 +104,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 	}
 	added := l.api(t, core, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/labels", pullA.Number), map[string]any{"labels": []string{label}})
 	removed := l.api(t, core, http.MethodDelete, fmt.Sprintf("/repos/{repo}/issues/%d/labels/%s", pullA.Number, strings.ReplaceAll(label, "/", "%2F")), nil)
-	l.record("11", "The cumin-core App adds a label to a pull request of the Implementer App, and removes it (I11)", "Success with the permissions of today",
+	l.record("11", "The cumin-core App adds a label to a pull request of the Implementer App, and removes it ('copy the labels to the pull request')", "Success with the permissions of today",
 		fmt.Sprintf("Add: status %d. Remove: status %d", added.status, removed.status))
 	if added.status != http.StatusOK || removed.status != http.StatusOK {
 		t.Errorf("fact 11: add %d (%s), remove %d (%s)", added.status, added.message(), removed.status, removed.message())
@@ -142,14 +142,14 @@ func TestLiveGitHubFacts(t *testing.T) {
 		t.Errorf("fact 5: states %v, same commit %v", states, sameCommit)
 	}
 
-	// Fact 10: a mention by an App. The Owner looks at the notifications.
+	// Fact 10: a mention by an App. The Maintainer looks at the notifications.
 	if login := os.Getenv("CUMIN_LIVE_MENTION"); login != "" {
 		resp := l.api(t, core, http.MethodPost, fmt.Sprintf("/repos/{repo}/issues/%d/comments", pullA.Number), map[string]any{"body": "@" + login + " a live check of cumin-works: does this mention send a notification?"})
 		if resp.status != http.StatusCreated {
 			// With no comment there is no notification to confirm.
 			t.Errorf("fact 10: the comment was not created: status %d: %s", resp.status, resp.message())
 		}
-		l.record("10", "A comment of the cumin-core App that mentions a person (row 19)", "The person gets a notification", fmt.Sprintf("Comment posted: status %d. The Owner confirms the notification by hand", resp.status))
+		l.record("10", "A comment of the cumin-core App that mentions a person (row 19)", "The person gets a notification", fmt.Sprintf("Comment posted: status %d. The Maintainer confirms the notification by hand", resp.status))
 	} else {
 		l.record("10", "A comment of the cumin-core App that mentions a person (row 19)", "The person gets a notification", "Not run: `CUMIN_LIVE_MENTION` is not set")
 	}
@@ -310,7 +310,7 @@ func (l *live) recordSnapshotFact(t *testing.T, token string, issueNumber, pullN
 	for _, check := range required {
 		requiredNames = append(requiredNames, fmt.Sprintf("%s (app %d)", check.Name, check.Integration))
 	}
-	l.record("12", "The two queries of a poll of cumin, with the head branch, the labels, and the checks of a pull request (I3, I4, I11)", "Every field is readable, and the cost stays small enough for one poll a minute",
+	l.record("12", "The two queries of a poll of cumin, with the head branch, the labels, and the checks of a pull request ('request the review', 'request a check fix', 'copy the labels to the pull request')", "Every field is readable, and the cost stays small enough for one poll a minute",
 		fmt.Sprintf("`rateLimit.cost`: %d, `remaining`: %d, requirement issues: %d. Required checks: `%s`. Pull request #%d: branch `%s`, labels `%s`, checks `%s`",
 			snapshot.RateLimit.Cost, snapshot.RateLimit.Remaining, len(snapshot.RequirementIssues),
 			strings.Join(requiredNames, "`, `"), pull.Number, pull.HeadBranch, strings.Join(pull.Labels, "`, `"), strings.Join(checks, "`, `")))

@@ -36,7 +36,7 @@ func fixedNow(t *testing.T, at time.Time) {
 	t.Cleanup(func() { now = saved })
 }
 
-// Q2: cumin quota allow writes the reset time of the current 5h window,
+// "resume agent starts": cumin quota allow writes the reset time of the current 5h window,
 // and says that the weekly limit still applies.
 func TestQuotaAllowWritesTheResetOfTheCurrentFiveHourWindow(t *testing.T) {
 	at := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
@@ -55,7 +55,7 @@ func TestQuotaAllowWritesTheResetOfTheCurrentFiveHourWindow(t *testing.T) {
 	if !strings.Contains(stdout.String(), "weekly pace limit still applies") {
 		t.Errorf("stdout = %q", stdout.String())
 	}
-	// The usage is the Owner's to see in cumin status, not here.
+	// The usage is the Maintainer's to see in cumin status, not here.
 	if strings.Contains(stdout.String(), "0.9") || strings.Contains(stdout.String(), "90") {
 		t.Errorf("stdout holds the usage: %q", stdout.String())
 	}

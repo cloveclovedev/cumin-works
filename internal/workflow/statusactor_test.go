@@ -12,7 +12,7 @@ import (
 )
 
 // The account that added a status label (issue-states.md): a status label
-// counts when an Owner added it or, for every label but
+// counts when a Maintainer added it or, for every label but
 // cumin/status/ready, the cumin-core App.
 func TestStatusLabelCounts(t *testing.T) {
 	const core = "example-cumin-core[bot]"
@@ -26,11 +26,11 @@ func TestStatusLabelCounts(t *testing.T) {
 			actor: workflow.StatusActor{Login: "example-cumin-core", Type: "Bot"}, want: true},
 		{name: "the cumin-core App in the REST form", label: workflow.LabelAccepting,
 			actor: workflow.StatusActor{Login: "example-cumin-core[bot]", Type: "Bot"}, want: true},
-		{name: "an Owner with admin permission", label: workflow.LabelPlanning,
+		{name: "a Maintainer with admin permission", label: workflow.LabelPlanning,
 			actor: workflow.StatusActor{Login: "the-owner", Type: "User", Permission: "admin", UserType: "User"}, want: true},
-		{name: "an Owner with write permission", label: workflow.LabelAccepting,
+		{name: "a Maintainer with write permission", label: workflow.LabelAccepting,
 			actor: workflow.StatusActor{Login: "the-owner", Type: "User", Permission: "write", UserType: "User"}, want: true},
-		{name: "an Owner adds cumin/status/ready", label: workflow.LabelReady,
+		{name: "a Maintainer adds cumin/status/ready", label: workflow.LabelReady,
 			actor: workflow.StatusActor{Login: "the-owner", Type: "User", Permission: "admin", UserType: "User"}, want: true},
 		{name: "a triage account", label: workflow.LabelPlanning,
 			actor: workflow.StatusActor{Login: "a-triager", Type: "User", Permission: "read", UserType: "User"}},
@@ -108,9 +108,9 @@ var statusScenes = []struct {
 	}},
 }
 
-// A status label of an account that is not cumin-core or an Owner
+// A status label of an account that is not cumin-core or a Maintainer
 // (cumin-core.md, test 30): no agent starts and no label changes. Across
-// three polls, cumin logs it once and tells the Owner once.
+// three polls, cumin logs it once and tells the Maintainer once.
 func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T) {
 	others := []struct {
 		name  string
@@ -129,7 +129,7 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T
 		for _, tt := range others {
 			t.Run(s.label+"/"+tt.name, func(t *testing.T) {
 				sc := s.scene(t)
-				// An older event of the Owner does not count: the label was
+				// An older event of the Maintainer does not count: the label was
 				// removed, and the other account put it on the issue again.
 				older := statusBy(s.label, theMaintainer)
 				older.At = older.At.Add(-time.Hour)
@@ -168,9 +168,9 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T
 	}
 }
 
-// A status label that cumin-core or an Owner added decides as before: the
+// A status label that cumin-core or a Maintainer added decides as before: the
 // poll requests the Planner again for the issue that no Planner works on.
-func TestStatusLabel_ALabelOfCuminCoreOrOfAnOwnerDecidesAsBefore(t *testing.T) {
+func TestStatusLabel_ALabelOfCuminCoreOrOfAMaintainerDecidesAsBefore(t *testing.T) {
 	counted := []struct {
 		name  string
 		event func(label string) githubtest.LabelEvent
@@ -178,7 +178,7 @@ func TestStatusLabel_ALabelOfCuminCoreOrOfAnOwnerDecidesAsBefore(t *testing.T) {
 		{name: "the cumin-core App", event: func(label string) githubtest.LabelEvent {
 			return githubtest.LabelEvent{Label: label, At: sceneNow.Add(-time.Hour), Actor: cuminSlug, ActorType: "Bot"}
 		}},
-		{name: "an Owner", event: func(label string) githubtest.LabelEvent { return statusBy(label, theMaintainer) }},
+		{name: "a Maintainer", event: func(label string) githubtest.LabelEvent { return statusBy(label, theMaintainer) }},
 	}
 	for _, s := range statusScenes {
 		for _, tt := range counted {
@@ -273,9 +273,9 @@ func TestStatusLabel_APollWithNothingToDecideReadsNoAccount(t *testing.T) {
 }
 
 // The waiting notification (issue-states.md): an issue whose status label
-// another account added waits for the Owner, so it is not an issue that
-// cumin moves on without the Owner. A label that was not read counts.
-func TestStatusLabel_ALabelOfAnotherAccountDoesNotMoveOnWithoutTheOwner(t *testing.T) {
+// another account added waits for the Maintainer, so it is not an issue that
+// cumin moves on without the Maintainer. A label that was not read counts.
+func TestStatusLabel_ALabelOfAnotherAccountDoesNotMoveOnWithoutTheMaintainer(t *testing.T) {
 	for _, label := range []string{workflow.LabelPlanning, workflow.LabelAccepting} {
 		requirement := workflow.RequirementIssue{Number: 6, Labels: []string{"cumin/type/requirement", label}}
 		snapshot := func(read, counts bool) workflow.Snapshot {
@@ -283,13 +283,13 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNotMoveOnWithoutTheOwner(t *testi
 			return workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{requirement}}
 		}
 		if snapshot(true, false).MovesWithoutMaintainer() {
-			t.Errorf("%s of another account moves on without the Owner, want not", label)
+			t.Errorf("%s of another account moves on without the Maintainer, want not", label)
 		}
 		if !snapshot(true, true).MovesWithoutMaintainer() {
-			t.Errorf("%s of cumin-core or an Owner does not move on without the Owner", label)
+			t.Errorf("%s of cumin-core or a Maintainer does not move on without the Maintainer", label)
 		}
 		if !snapshot(false, false).MovesWithoutMaintainer() {
-			t.Errorf("%s whose account was not read does not move on without the Owner", label)
+			t.Errorf("%s whose account was not read does not move on without the Maintainer", label)
 		}
 	}
 }

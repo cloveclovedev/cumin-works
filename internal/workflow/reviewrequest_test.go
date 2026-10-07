@@ -18,14 +18,14 @@ func (sc *scene) reviewRequests() int {
 	return sc.fake.CountRequests(http.MethodPost, reviewRequestPath)
 }
 
-// readyByTheMaintainer makes the Owner the account that added the newest
-// cumin/status/ready to #10, so that cumin has an Owner login.
+// readyByTheMaintainer makes the Maintainer the account that added the newest
+// cumin/status/ready to #10, so that cumin has an Issue Owner login.
 func (sc *scene) readyByTheMaintainer() {
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
 	sc.fake.SetPermission(theMaintainer, "admin", "User")
 }
 
-// assertWaitsForMaintainerWithOneNotification checks what I7 leaves without the
+// assertWaitsForMaintainerWithOneNotification checks what "ask for the merge decision" leaves without the
 // review request: the label, one notification that links the pull request,
 // and no merge.
 func assertWaitsForMaintainerWithOneNotification(t *testing.T, sc *scene) {
@@ -42,11 +42,11 @@ func assertWaitsForMaintainerWithOneNotification(t *testing.T, sc *scene) {
 	}
 }
 
-// I7 (issue-states.md): an approved risk/medium pull request gets exactly
+// "ask for the merge decision" (issue-states.md): an approved risk/medium pull request gets exactly
 // one request of a review, for the account that added the newest
 // cumin/status/ready. The request follows the label change, and the polls
 // that follow send no second one.
-func TestI7_TheReviewOfTheOwnerIsRequestedOnce(t *testing.T) {
+func TestTheReviewOfTheIssueOwnerIsRequestedOnce(t *testing.T) {
 	sc := approved(t, "risk/medium")
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), removedBefore(readyBy(theMaintainer, 5)), readyBy(theMaintainer, 5)}
 	sc.fake.SetPermission("an-earlier-owner", "admin", "User")
@@ -83,7 +83,7 @@ func TestI7_TheReviewOfTheOwnerIsRequestedOnce(t *testing.T) {
 }
 
 // An approved risk/low pull request gets no request: cumin merges it.
-func TestI6_ARiskLowPullRequestGetsNoReviewRequest(t *testing.T) {
+func TestARiskLowPullRequestGetsNoReviewRequest(t *testing.T) {
 	sc := approved(t, "risk/low")
 	service := sc.service()
 
@@ -97,16 +97,16 @@ func TestI6_ARiskLowPullRequestGetsNoReviewRequest(t *testing.T) {
 	}
 }
 
-// Without an Owner login cumin sends no request, and a request that fails
+// Without an Issue Owner login cumin sends no request, and a request that fails
 // is only logged. The label and the one notification are as before.
-func TestI7_WithoutTheReviewRequestTheLabelAndTheNotificationAreAsBefore(t *testing.T) {
+func TestWithoutTheReviewRequestTheLabelAndTheNotificationAreAsBefore(t *testing.T) {
 	tests := []struct {
 		name     string
 		prepare  func(sc *scene)
 		requests int
 		log      string
 	}{
-		{name: "no Owner login", requests: 0,
+		{name: "no Issue Owner login", requests: 0,
 			prepare: func(sc *scene) {
 				sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 5)}
 				// GitHub reports triage as read.
@@ -148,9 +148,9 @@ func TestI7_WithoutTheReviewRequestTheLabelAndTheNotificationAreAsBefore(t *test
 	}
 }
 
-// The request is no review: after the request alone, I12 sends no merge.
-// After the Owner approves the head commit, I12 merges.
-func TestI12_TheReviewRequestAloneIsNotMergedAndTheApprovalOfTheOwnerIs(t *testing.T) {
+// The request is no review: after the request alone, "start the merge" sends no merge.
+// After the Maintainer approves the head commit, "start the merge" merges.
+func TestTheReviewRequestAloneIsNotMergedAndTheApprovalOfTheMaintainerIs(t *testing.T) {
 	sc := approved(t, "risk/medium")
 	sc.readyByTheMaintainer()
 	service := sc.service()
@@ -167,17 +167,17 @@ func TestI12_TheReviewRequestAloneIsNotMergedAndTheApprovalOfTheOwnerIs(t *testi
 	sc.pollTimes(t, service, 2)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
-		t.Errorf("%d merge requests after the approval of the Owner, want 1", n)
+		t.Errorf("%d merge requests after the approval of the Maintainer, want 1", n)
 	}
 	if n := sc.reviewRequests(); n != 1 {
 		t.Errorf("%d requests of a review, want 1", n)
 	}
 }
 
-// After a request for changes of the Owner (I13), the fix, and a new
-// approval of the Reviewer, I7 holds again and cumin sends a second
+// After a request for changes of the Maintainer ("send back for changes"), the fix, and a new
+// approval of the Reviewer, "ask for the merge decision" holds again and cumin sends a second
 // request.
-func TestI13_AfterTheFixAndANewApprovalTheReviewIsRequestedAgain(t *testing.T) {
+func TestAfterTheFixAndANewApprovalTheReviewIsRequestedAgain(t *testing.T) {
 	// Run 1 is the review, run 2 is the fix, which pushes a new head, and
 	// run 3 is the review of the new head.
 	sc := newScene(t, cliOptions{movesHeadOnRun: 2, reviews: []string{"APPROVE", "NONE", "APPROVE"}})
@@ -209,7 +209,7 @@ func TestI13_AfterTheFixAndANewApprovalTheReviewIsRequestedAgain(t *testing.T) {
 		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
 	if n := sc.reviewRequests(); n != 2 {
-		t.Errorf("%d requests of a review, want 2: one for each time that I7 holds", n)
+		t.Errorf("%d requests of a review, want 2: one for each time that 'ask for the merge decision' holds", n)
 	}
 	if got := sc.fake.RequestedReviewers(sc.repo, 21); !slices.Equal(got, []string{theMaintainer}) {
 		t.Errorf("requested reviewers of #21 = %v, want %s once", got, theMaintainer)
