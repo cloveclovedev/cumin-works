@@ -42,7 +42,7 @@ func TestReadSnapshot_ReadsNoPullRequest(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
-	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/awaiting-checks"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{"cumin/status/checking"}})
 	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 21, Closes: []int{10}})
 	client := github.NewAppClient(server.URL, server.Client())
 
@@ -92,7 +92,7 @@ func TestReadPullRequests_ReadsThePullRequestsOfTheNamedIssues(t *testing.T) {
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
 	for n := 10; n <= 12; n++ {
-		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 6, Labels: []string{"cumin/status/awaiting-checks"}})
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 6, Labels: []string{"cumin/status/checking"}})
 		fake.AddPullRequest(repo, &githubtest.PullRequest{Number: n + 10, Author: "example-implementer", AuthorIsBot: true, Closes: []int{n}})
 	}
 	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 30, Closed: true, Closes: []int{10}})

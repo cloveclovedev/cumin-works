@@ -426,8 +426,10 @@ func TestR4_TheNoteComesBeforeTheAcceptanceCheck(t *testing.T) {
 	if n := len(followUpNotes(sc)); n != 1 {
 		t.Fatalf("%d follow-up notes, want 1", n)
 	}
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want 1", n)
+	// The fake Planner leaves no comment, so the acceptance check runs a
+	// second time.
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2", n)
 	}
 	requests := sc.fake.Requests()
 	note := indexOf(requests, 0, "POST", "/issues/6/comments")
@@ -455,8 +457,10 @@ func TestR4_AFailedNoteWaitsForTheNextPoll(t *testing.T) {
 	if n := len(followUpNotes(sc)); n != 1 {
 		t.Errorf("%d follow-up notes, want 1", n)
 	}
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1", n)
+	// The fake Planner leaves no comment, so the acceptance check runs a
+	// second time.
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2", n)
 	}
 }
 
@@ -477,8 +481,10 @@ func TestR4_NoNoteNeededDoesNotWait(t *testing.T) {
 			sc := newFollowUpScene(t, tt.body, nil, tt.scene)
 			sc.pollAndWait(t, sc.service())
 
-			if n := sc.agentRuns(t); n != 1 {
-				t.Errorf("%d agent runs, want 1", n)
+			// The fake Planner leaves no comment, so the acceptance
+			// check runs a second time.
+			if n := sc.agentRuns(t); n != 2 {
+				t.Errorf("%d agent runs, want 2", n)
 			}
 		})
 	}

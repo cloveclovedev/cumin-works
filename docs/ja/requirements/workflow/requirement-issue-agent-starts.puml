@@ -1,0 +1,47 @@
+@startuml requirement-issue-agent-starts
+' cumin works - states of a requirement issue: which transitions start an agent,
+' they all read the quota usage first, and none is taken while cumin stops after the current runs.
+' The states and the transitions are the ones of requirement-issue-states.puml; only the names are shown.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "Draft (no status label)" as Draft
+state "ready" as Ready
+state "planning" as Planning
+state "awaiting-plan-review" as PlanReview
+state "implementing" as Implementing
+state "accepting" as Accepting
+state "awaiting-acceptance" as Acceptance
+state "awaiting-decision" as Decision
+
+[*] --> Draft
+Draft -[#888888,dashed]-> Ready : a Maintainer adds ready
+Draft -[#888888]-> Implementing : mark the requirement as in work
+Ready -[#D32F2F,bold]-> Planning : <color:#D32F2F>request the split</color>
+Planning -[#888888]-> PlanReview : ask for the plan review
+Planning -[#D32F2F,bold]-> Accepting : <color:#D32F2F>request the acceptance check</color>
+Planning -[#D32F2F,bold]-> Planning : <color:#D32F2F>request the split again</color>
+Planning -[#888888]-> Decision : stop the split
+PlanReview -[#888888]-> Implementing : mark the requirement as in work
+Implementing -[#D32F2F,bold]-> Accepting : <color:#D32F2F>request the acceptance check</color>
+Implementing -[#888888]-> PlanReview : ask about the remaining sub-issues
+Accepting -[#888888]-> Acceptance : ask for the acceptance
+Accepting -[#D32F2F,bold]-> Accepting : <color:#D32F2F>request the acceptance check again</color>
+Accepting -[#888888]-> Decision : stop the acceptance check
+Acceptance -[#888888]-> Implementing : mark the requirement as in work
+Acceptance -[#888888,dashed]-> [*] : a Maintainer closes the issue
+Decision -[#888888,dashed]-> Ready : a Maintainer adds ready
+
+legend right
+  <color:#D32F2F>**Red**</color>: cumin starts an agent. Before every start, cumin decides from the quota usage.
+  At a limit, cumin starts nothing, changes no label for that start, and counts nothing;
+  the issue keeps its state, and a later poll decides again.
+  Gray: cumin starts no agent (a label, a comment, a notification). Dashed: a Maintainer acts.
+
+  While cumin stops after the current runs (cumin stop --after-current-runs):
+  cumin takes no red transition; the issue keeps its state until the next start.
+  cumin still takes the gray transitions.
+endlegend
+
+@enduml

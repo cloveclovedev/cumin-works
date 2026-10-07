@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
+	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
 
 // q4Messages returns the notifications of Q4.
@@ -87,8 +88,8 @@ func TestQ4_AResumeWithNoWorkLeftNotifies(t *testing.T) {
 	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
 	sc.pollAndWait(t, service) // the claim and the run; I2 hands the issue back
 	sc.pollAndWait(t, service) // nothing to do
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 	if got := len(sc.q4Messages()); got != 1 {
 		t.Errorf("%d Q4 notifications, want 1", got)
@@ -207,17 +208,47 @@ func TestQ4_AReadyIssueWaitingForRoomIsNotWaiting(t *testing.T) {
 	}
 }
 
+// Q4: an issue in cumin/status/merging or cumin/status/accepting with no
+// agent is an issue that cumin moves on at a later poll. The merge is
+// refused at every poll, and the quota stops the second request of the
+// acceptance check, so both issues keep their label; the Owner hears no
+// waiting notification.
+func TestQ4_AnIssueInMergingOrAcceptingWithNoAgentIsNotWaiting(t *testing.T) {
+	t.Run("merging", func(t *testing.T) {
+		sc := mergingScene(t, "risk/low")
+		sc.fake.RefuseMergesForBaseBranch(3)
+		sc.pollTimes(t, sc.service(), 3)
+		if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
+			t.Fatalf("labels of #10 = %v, want cumin/status/merging: the test would pass for a wrong reason", got)
+		}
+		if got := sc.q4Messages(); len(got) != 0 {
+			t.Errorf("Q4 notifications = %q, want none while an issue is in merging", got)
+		}
+	})
+	t.Run("accepting", func(t *testing.T) {
+		sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+		sc.setQuota(t, 0.90, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+		sc.pollTimes(t, sc.service(), 3)
+		if got := requirementLabels(t, sc); !slices.Contains(got, workflow.LabelAccepting) {
+			t.Fatalf("labels of #6 = %v, want cumin/status/accepting: the test would pass for a wrong reason", got)
+		}
+		if got := sc.q4Messages(); len(got) != 0 {
+			t.Errorf("Q4 notifications = %q, want none while an issue is in accepting", got)
+		}
+	})
+}
+
 // Q4: when every issue waits for the Owner, the Owner hears once across
-// polls. A ready issue behind an open blocked-by issue and an issue whose
-// agent no longer runs both wait for the Owner.
+// polls. A ready issue behind an open blocked-by issue and an issue that
+// is stopped for a decision both wait for the Owner.
 func TestQ4_OnlyWaitsForTheOwnerNotifyOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle,
 		Labels: []string{"cumin/status/ready", "risk/low"}, BlockedBy: []int{11}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Add the logout screen",
-		Labels: []string{"cumin/status/implementing", "risk/low"}})
+		Labels: []string{"cumin/status/awaiting-plan-review", "risk/low"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 12, Parent: 6, Title: "Add the profile screen",
-		Labels: []string{"cumin/status/awaiting-owner-decision", "risk/low"}})
+		Labels: []string{"cumin/status/awaiting-decision", "risk/low"}})
 	service := sc.service()
 	for range 3 {
 		sc.pollAndWait(t, service)
@@ -258,5 +289,76 @@ func TestQ4_AnIssueInOneRepositoryStopsTheNotificationForAll(t *testing.T) {
 	if got := len(sc.q4Messages()); got != 1 {
 		t.Errorf("%d Q4 notifications, want 1 after the issue went on to the Owner; labels of #10 = %v",
 			got, sc.fake.Issue(sc.repo, 10).Labels)
+	}
+}
+
+// Core-34 (cumin-core.md): at a limit, with no running agent, an issue
+// that waits for a start of an agent gives no waiting notification, in
+// whatever state it waits. The quota notification names the cause once.
+func TestCore34_AnIssueThatWaitsOnlyForTheQuotaIsNotWaiting(t *testing.T) {
+	scenes := map[string]func(t *testing.T) (*scene, *workflow.Service){
+		"the review under checking": func(t *testing.T) (*scene, *workflow.Service) {
+			sc := approved(t, "risk/low")
+			sc.atAQuotaLimit(t)
+			return sc, sc.service()
+		},
+		"a change request of the Owner under awaiting-merge-decision": func(t *testing.T) (*scene, *workflow.Service) {
+			sc := awaitingOwner(t, cliOptions{})
+			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
+			sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+			sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+			sc.atAQuotaLimit(t)
+			return sc, sc.serviceWithSession(t)
+		},
+		"a ready issue": func(t *testing.T) (*scene, *workflow.Service) {
+			sc := newScene(t)
+			sc.atAQuotaLimit(t)
+			return sc, sc.service()
+		},
+	}
+	for name, build := range scenes {
+		t.Run(name, func(t *testing.T) {
+			sc, service := build(t)
+			labels := slices.Clone(sc.fake.Issue(sc.repo, 10).Labels)
+			sc.pollTimes(t, service, 3)
+			if n := sc.agentRuns(t); n != 0 {
+				t.Fatalf("%d agent runs at the limit, want 0: the test would pass for a wrong reason", n)
+			}
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, labels) {
+				t.Fatalf("labels of #10 at the limit = %v, want %v", got, labels)
+			}
+			if got := sc.q4Messages(); len(got) != 0 {
+				t.Errorf("Q4 notifications = %q, want none while an issue waits only for the quota", got)
+			}
+			if got := sc.q1Messages(); len(got) != 1 {
+				t.Errorf("notifications of the stop = %q, want one over three polls", got)
+			}
+		})
+	}
+}
+
+// Q4: a start that waited only for the quota is forgotten when the wait
+// ends. The Owner takes the request for changes back while cumin is at the
+// limit; then only the Owner can move the issue on, and the Owner hears
+// once.
+func TestQ4_AQuotaWaitThatEndedNotifiesOnce(t *testing.T) {
+	sc := awaitingOwner(t, cliOptions{})
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
+	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.atAQuotaLimit(t)
+	service := sc.serviceWithSession(t)
+	sc.pollTimes(t, service, 2)
+	if got := sc.q4Messages(); len(got) != 0 {
+		t.Fatalf("Q4 notifications = %q, want none while the request waits for the quota", got)
+	}
+
+	sc.repo.PullRequests[21].Reviews = sc.repo.PullRequests[21].Reviews[:1]
+	sc.pollTimes(t, service, 3)
+	if got := len(sc.q4Messages()); got != 1 {
+		t.Errorf("%d Q4 notifications, want 1 after the wait for the quota ended", got)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want 0", n)
 	}
 }

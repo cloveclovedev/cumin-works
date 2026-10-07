@@ -32,7 +32,7 @@ func TestDecide_I1(t *testing.T) {
 	}{
 		{
 			name:          "no ready sub-issue gives no action",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingOwnerReview))}},
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingMergeDecision))}},
 			maxInProgress: 1,
 		},
 		{
@@ -80,8 +80,8 @@ func TestDecide_I1(t *testing.T) {
 			maxInProgress: 1,
 		},
 		{
-			name:          "an awaiting-checks sub-issue fills limit 1",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingChecks), ready(11))}},
+			name:          "an checking sub-issue fills limit 1",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelChecking), ready(11))}},
 			maxInProgress: 1,
 		},
 		{
@@ -91,7 +91,7 @@ func TestDecide_I1(t *testing.T) {
 		},
 		{
 			name:          "a sub-issue that waits for the Owner does not fill the limit",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingOwnerDecision), ready(11))}},
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, implementing, withStatus(10, LabelAwaitingDecision), ready(11))}},
 			maxInProgress: 1,
 			want:          []Action{Claim{Number: 11, RequirementIssue: 6}},
 		},
@@ -106,6 +106,14 @@ func TestDecide_I1(t *testing.T) {
 			snapshot: Snapshot{RequirementIssues: []RequirementIssue{
 				requirement(6, implementing, ready(10)),
 				requirement(7, []string{LabelPlanning}),
+			}},
+			maxInProgress: 1,
+		},
+		{
+			name: "a requirement issue in accepting fills limit 1",
+			snapshot: Snapshot{RequirementIssues: []RequirementIssue{
+				requirement(6, implementing, ready(10)),
+				requirement(7, []string{LabelAccepting}),
 			}},
 			maxInProgress: 1,
 		},
@@ -213,8 +221,8 @@ func TestDecide_R1(t *testing.T) {
 			want:          []Action{Claim{Number: 10, RequirementIssue: 7}, Plan{Number: 12}},
 		},
 		{
-			name:          "awaiting-owner-decision without ready gives no plan",
-			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelAwaitingOwnerDecision, nil)}},
+			name:          "awaiting-decision without ready gives no plan",
+			snapshot:      Snapshot{RequirementIssues: []RequirementIssue{requirement(6, LabelAwaitingDecision, nil)}},
 			maxInProgress: 1,
 		},
 	}
@@ -283,10 +291,13 @@ func TestDecide_R3AndR6(t *testing.T) {
 		requirement RequirementIssue
 		want        []Action
 	}{
-		{"R3: ready added after the review label", requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(time.Minute))), []Action{StartRequirement{Number: 6}}},
-		{"R3: ready from before the review label waits", requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(-time.Minute))), nil},
+		{"R3: ready added after the review label", requirement(LabelAwaitingPlanReview, readyAt(10, t0.Add(time.Minute))), []Action{StartRequirement{Number: 6}}},
+		{"R3: ready from before the review label waits", requirement(LabelAwaitingPlanReview, readyAt(10, t0.Add(-time.Minute))), nil},
+		{"R3: ready added after the acceptance label", requirement(LabelAwaitingAcceptance, closed, readyAt(10, t0.Add(time.Minute))), []Action{StartRequirement{Number: 6}}},
+		{"R3: ready from before the acceptance label waits", requirement(LabelAwaitingAcceptance, closed, readyAt(10, t0.Add(-time.Minute))), nil},
+		{"R3: the label of an implementation issue does not move a requirement issue", requirement(LabelAwaitingMergeDecision, readyAt(10, t0.Add(time.Minute))), nil},
 		{"R3: without the label times nothing moves", func() RequirementIssue {
-			r := requirement(LabelAwaitingOwnerReview, readyAt(10, t0.Add(time.Minute)))
+			r := requirement(LabelAwaitingPlanReview, readyAt(10, t0.Add(time.Minute)))
 			r.LabelTimesRead = false
 			return r
 		}(), nil},
@@ -295,9 +306,9 @@ func TestDecide_R3AndR6(t *testing.T) {
 		{"R3: a closed sub-issue with ready does not count", requirement("", SubIssue{Number: 10, Closed: true, Labels: []string{LabelReady}}), nil},
 		{"R6: only sub-issues without a status label are open", requirement(LabelImplementing, closed, sub(10, "risk/low")), []Action{ReviewRemaining{Number: 6}}},
 		{"R6: an owner task left alone", requirement(LabelImplementing, closed, sub(10, LabelOwnerTask, "risk/high")), []Action{ReviewRemaining{Number: 6}}},
-		{"R6: an open sub-issue with a status label", requirement(LabelImplementing, sub(10, "risk/low"), sub(11, LabelAwaitingChecks, "risk/low")), nil},
+		{"R6: an open sub-issue with a status label", requirement(LabelImplementing, sub(10, "risk/low"), sub(11, LabelChecking, "risk/low")), nil},
 		{"R6: every sub-issue closed", requirement(LabelImplementing, closed), nil},
-		{"R6: not in awaiting-owner-review", requirement(LabelAwaitingOwnerReview, sub(10, "risk/low")), nil},
+		{"R6: not in awaiting-plan-review", requirement(LabelAwaitingPlanReview, sub(10, "risk/low")), nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -312,7 +323,7 @@ func TestDecide_R3AndR6(t *testing.T) {
 // Without the label times, R3 cannot be judged, and a claim would take
 // away the cumin/status/ready that it needs: the sub-issues wait.
 func TestDecide_ClaimsWaitForTheLabelTimes(t *testing.T) {
-	requirement := RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelAwaitingOwnerReview},
+	requirement := RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelAwaitingPlanReview},
 		SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelReady, "risk/low"}}}}
 	if got := decideReadyOfOwner(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
 		t.Errorf("Decide without the label times = %+v, want no action", got)
@@ -335,6 +346,14 @@ func TestDecide_R4AndR7(t *testing.T) {
 	}
 	closed := SubIssue{Number: 10, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}}
 	later := SubIssue{Number: 11, Closed: true, ClosedAt: closedAt.Add(2 * time.Hour), Labels: []string{"risk/low"}}
+	// accepting is the requirement issue after cumin moved it to
+	// cumin/status/accepting: R7 is decided only there.
+	accepting := func(checkAt time.Time, subs ...SubIssue) RequirementIssue {
+		r := requirement(checkAt, subs...)
+		r.Labels = []string{LabelRequirement, LabelAccepting}
+		r.StatusRead, r.StatusCounts = true, true
+		return r
+	}
 
 	tests := []struct {
 		name     string
@@ -359,12 +378,13 @@ func TestDecide_R4AndR7(t *testing.T) {
 			return r
 		}()}}, 1, nil},
 		{"R7: a missing follow-up note does not stop it", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
-			r := requirement(closedAt.Add(3*time.Hour), closed, later)
+			r := accepting(closedAt.Add(3*time.Hour), closed, later)
 			r.FollowUpsDone = false
 			return r
 		}()}}, 0, []Action{Accept{Number: 6}}},
-		{"R7: a comment at the same second as the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(2*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
-		{"R7: a comment after the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(3*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+		{"R7: a comment at the same second as the last close", Snapshot{RequirementIssues: []RequirementIssue{accepting(closedAt.Add(2*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+		{"R7: a comment after the last close", Snapshot{RequirementIssues: []RequirementIssue{accepting(closedAt.Add(3*time.Hour), closed, later)}}, 0, []Action{Accept{Number: 6}}},
+		{"in implementing, a comment after the last close does nothing: no rule requests a check there", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(3*time.Hour), closed, later)}}, 1, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -376,18 +396,65 @@ func TestDecide_R4AndR7(t *testing.T) {
 	}
 }
 
-// A running acceptance check fills the limit, although the label of the
-// requirement issue does not show it.
-func TestDecide_ARunningAcceptanceCheckFillsTheLimit(t *testing.T) {
+// The limit counts only the working labels. Issues with cumin/status/ready
+// beyond the limit do not lower the free slots, also when the running set
+// still names one of them: with a limit of 2 and one issue in
+// cumin/status/implementing, exactly one ready issue starts.
+func TestDecide_ReadyIssuesBeyondTheLimitDoNotLowerTheFreeSlots(t *testing.T) {
+	ready := func(number int) SubIssue { return SubIssue{Number: number, Labels: []string{LabelReady, "risk/low"}} }
 	snapshot := Snapshot{
 		RequirementIssues: []RequirementIssue{
-			{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true}}, CommentsRead: true},
-			{Number: 7, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{{Number: 11, Labels: []string{LabelReady, "risk/low"}}}},
+			{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{
+				{Number: 10, Labels: []string{LabelImplementing, "risk/low"}}, ready(11), ready(12), ready(13),
+			}},
+			{Number: 7, Labels: []string{LabelRequirement, LabelReady}},
 		},
-		Running: map[int]bool{6: true},
+		Running: map[int]bool{7: true, 10: true, 13: true},
+	}
+	starts := 0
+	for _, action := range decideReadyOfOwner(snapshot, 2, nil, nil, time.Time{}, 0) {
+		switch action.(type) {
+		case Claim, Plan:
+			starts++
+		}
+	}
+	if starts != 1 {
+		t.Errorf("%d starts, want 1: one slot of 2 is free, whatever the number of ready issues", starts)
 	}
 	if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
-		t.Errorf("Decide = %+v, want no action while the acceptance check runs", got)
+		t.Errorf("Decide with a limit of 1 = %+v, want no action: the test would pass for a wrong reason", got)
+	}
+}
+
+// A running agent is never touched: with a running agent in each working
+// state, the poll decides no action for that issue, so it sends no request
+// and changes no label.
+func TestDecide_ARunningAgentInEachWorkingStateGetsNoAction(t *testing.T) {
+	requirement := func(status string, subs ...SubIssue) RequirementIssue {
+		return RequirementIssue{Number: 6, Labels: []string{LabelRequirement, status}, SubIssues: subs,
+			CommentsRead: true, StatusRead: true, StatusCounts: true}
+	}
+	sub := func(status string) SubIssue {
+		return SubIssue{Number: 10, Labels: []string{status, "risk/low"}}
+	}
+	tests := []struct {
+		name        string
+		requirement RequirementIssue
+		running     int
+	}{
+		{LabelPlanning, requirement(LabelPlanning), 6},
+		{LabelAccepting, requirement(LabelAccepting, SubIssue{Number: 10, Closed: true}), 6},
+		{LabelImplementing, requirement(LabelImplementing, sub(LabelImplementing)), 10},
+		{LabelReviewing, requirement(LabelImplementing, sub(LabelReviewing)), 10},
+		{LabelMerging, requirement(LabelImplementing, sub(LabelMerging)), 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{tt.running: true}}
+			if got := Decide(snapshot, 5, nil, nil, time.Time{}, 0); len(got) != 0 {
+				t.Errorf("Decide = %+v, want no action while the agent runs", got)
+			}
+		})
 	}
 }
 
@@ -421,9 +488,9 @@ func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
 
 	// An issue that became an owner task while an agent works on it still
 	// counts by its status label: an agent may run or start for it (I4).
-	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelAwaitingChecks, "risk/high"}
+	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelChecking, "risk/high"}
 	if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
-		t.Errorf("Decide with an owner task in awaiting-checks = %+v, want no claim", got)
+		t.Errorf("Decide with an owner task in checking = %+v, want no claim", got)
 	}
 }
 
@@ -434,16 +501,18 @@ func TestNeedsLabelTimes(t *testing.T) {
 		r    RequirementIssue
 		want bool
 	}{
-		{"review with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{ready}}, true},
-		{"review without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingOwnerReview}, SubIssues: []SubIssue{{Number: 10}}}, false},
+		{"review with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingPlanReview}, SubIssues: []SubIssue{ready}}, true},
+		{"review without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingPlanReview}, SubIssues: []SubIssue{{Number: 10}}}, false},
+		{"acceptance with a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingAcceptance}, SubIssues: []SubIssue{ready}}, true},
+		{"acceptance without a ready sub-issue", RequirementIssue{Labels: []string{LabelAwaitingAcceptance}, SubIssues: []SubIssue{{Number: 10}}}, false},
 		{"implementing with a ready sub-issue", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{ready}}, false},
-		{"a sub-issue waits for its checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}}}}, true},
-		{"a closed sub-issue in awaiting-checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}}}}, false},
-		{"a sub-issue that waits for the Owner has a request for changes of a person on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+		{"a sub-issue waits for its checks", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelChecking}}}}, true},
+		{"a closed sub-issue in checking", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}}}}, false},
+		{"a sub-issue that waits for the Owner has a request for changes of a person on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingMergeDecision},
 			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewChangesRequested, Commit: "c2"}}}}}}}, true},
-		{"a sub-issue that waits for the Owner has a request for changes on an older commit", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+		{"a sub-issue that waits for the Owner has a request for changes on an older commit", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingMergeDecision},
 			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewChangesRequested, Commit: "c1"}}}}}}}, false},
-		{"a sub-issue that waits for the Owner has an approval on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingOwnerReview},
+		{"a sub-issue that waits for the Owner has an approval on the head", RequirementIssue{Labels: []string{LabelImplementing}, SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingMergeDecision},
 			PullRequests: []PullRequest{{Number: 21, HeadCommit: "c2", Reviews: []Review{{Author: "owner", State: ReviewApproved, Commit: "c2"}}}}}}}, false},
 	}
 	for _, tt := range tests {
@@ -454,21 +523,143 @@ func TestNeedsLabelTimes(t *testing.T) {
 }
 
 // R2 (issue-states.md): after a pass, an open sub-issue sends the split to
-// the Owner; every sub-issue closed sends the requirement issue back to
-// implementing, where R4 asks for the acceptance check again.
+// the Owner; every sub-issue closed sends the requirement issue to the
+// acceptance check.
 func TestSplitStatus_R2(t *testing.T) {
 	tests := []struct {
 		name string
 		subs []SubIssue
 		want string
 	}{
-		{"one open sub-issue", []SubIssue{{Number: 10, Closed: true}, {Number: 11}}, LabelAwaitingOwnerReview},
-		{"every sub-issue closed", []SubIssue{{Number: 10, Closed: true}, {Number: 11, Closed: true}}, LabelImplementing},
+		{"one open sub-issue", []SubIssue{{Number: 10, Closed: true}, {Number: 11}}, LabelAwaitingPlanReview},
+		{"every sub-issue closed", []SubIssue{{Number: 10, Closed: true}, {Number: 11, Closed: true}}, LabelAccepting},
 	}
 	for _, tt := range tests {
 		if got := SplitStatus(RequirementIssue{Number: 6, SubIssues: tt.subs}); got != tt.want {
 			t.Errorf("%s: SplitStatus = %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+// The way out of cumin/status/planning (issue-states.md, the transitions
+// of a requirement issue): the same facts always give the same action, at a
+// poll and at the end of a Planner run.
+func TestSplitEnd(t *testing.T) {
+	labeledAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	planning := func(change func(*RequirementIssue)) RequirementIssue {
+		requirement := RequirementIssue{
+			Number: 6, Labels: []string{LabelRequirement, LabelPlanning},
+			SubIssues:    []SubIssue{{Number: 10, Labels: []string{"risk/low"}}},
+			CommentsRead: true, LabelTimesRead: true, ReviewAt: labeledAt,
+		}
+		if change != nil {
+			change(&requirement)
+		}
+		return requirement
+	}
+	noSubIssue := func(r *RequirementIssue) { r.SubIssues = nil }
+	tests := []struct {
+		name        string
+		requirement RequirementIssue
+		running     bool
+		want        Action
+	}{
+		{
+			name:        "a verified split with an open sub-issue asks the Owner to review the plan",
+			requirement: planning(nil),
+			want:        ReviewPlan{Number: 6},
+		},
+		{
+			name:        "a verified split with every sub-issue closed requests the acceptance check",
+			requirement: planning(func(r *RequirementIssue) { r.SubIssues[0].Closed = true }),
+			want:        CheckAcceptance{Number: 6},
+		},
+		{
+			name:        "no sub-issue requests the split again",
+			requirement: planning(noSubIssue),
+			want:        Plan{Number: 6, Again: true},
+		},
+		{
+			name: "no sub-issue after the second request stops for the Owner",
+			requirement: planning(func(r *RequirementIssue) {
+				noSubIssue(r)
+				r.SplitRequestedAgain = true
+			}),
+			want: StopSplit{Number: 6, Reason: SplitReason(SplitVerification{Failure: SplitNoSubIssue})},
+		},
+		{
+			name: "a sub-issue without a risk label after the second request stops for the Owner",
+			requirement: planning(func(r *RequirementIssue) {
+				r.SubIssues[0].Labels = nil
+				r.SplitRequestedAgain = true
+			}),
+			want: StopSplit{Number: 6, Reason: SplitReason(SplitVerification{Failure: SplitNoRiskLabel, SubIssue: 10})},
+		},
+		{
+			name: "a question after the label stops for the Owner at once",
+			requirement: planning(func(r *RequirementIssue) {
+				noSubIssue(r)
+				r.QuestionAt = labeledAt.Add(time.Minute)
+			}),
+			want: StopSplit{Number: 6, Question: true},
+		},
+		{
+			name:        "a question after the label decides before a verified split",
+			requirement: planning(func(r *RequirementIssue) { r.QuestionAt = labeledAt.Add(time.Minute) }),
+			want:        StopSplit{Number: 6, Question: true},
+		},
+		{
+			name: "a question from before the label belongs to an earlier stay",
+			requirement: planning(func(r *RequirementIssue) {
+				noSubIssue(r)
+				r.QuestionAt = labeledAt.Add(-time.Minute)
+			}),
+			want: Plan{Number: 6, Again: true},
+		},
+		{
+			name:        "a running Planner gives no action",
+			requirement: planning(nil),
+			running:     true,
+		},
+		{
+			name:        "comments that were not read give no action",
+			requirement: planning(func(r *RequirementIssue) { r.CommentsRead = false }),
+		},
+		{
+			name:        "label times that were not read give no action",
+			requirement: planning(func(r *RequirementIssue) { r.LabelTimesRead = false }),
+		},
+		{
+			name:        "another state gives no action",
+			requirement: planning(func(r *RequirementIssue) { r.Labels = []string{LabelRequirement, LabelAwaitingPlanReview} }),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// cumin-core or an Owner added the status label.
+			tt.requirement.StatusRead, tt.requirement.StatusCounts = true, true
+			if got := SplitEnd(tt.requirement, tt.running); got != tt.want {
+				t.Errorf("SplitEnd = %#v, want %#v", got, tt.want)
+			}
+			// A label of another account, and one whose account was not
+			// read, decide nothing.
+			for _, counts := range []struct{ read, counts bool }{{true, false}, {false, false}} {
+				other := tt.requirement
+				other.StatusRead, other.StatusCounts = counts.read, counts.counts
+				if got := SplitEnd(other, tt.running); got != nil {
+					t.Errorf("SplitEnd with StatusRead %v = %#v, want nil for a label that does not count", counts.read, got)
+				}
+			}
+			// Decide gives the same action at a poll.
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{6: tt.running}}
+			var want []Action
+			if tt.want != nil {
+				want = []Action{tt.want}
+			}
+			if got := Decide(snapshot, 1, nil, nil, labeledAt, time.Hour); !slices.Equal(got, want) {
+				t.Errorf("Decide = %#v, want %#v", got, want)
+			}
+		})
 	}
 }
 
@@ -489,7 +680,7 @@ func shuffle(snapshot Snapshot) Snapshot {
 
 func TestIsStatusLabel(t *testing.T) {
 	for name, want := range map[string]bool{
-		LabelReady: true, LabelImplementing: true, LabelAwaitingOwnerDecision: true,
+		LabelReady: true, LabelImplementing: true, LabelAwaitingDecision: true,
 		LabelRequirement: false, "risk/low": false, "status": false,
 	} {
 		if got := IsStatusLabel(name); got != want {
@@ -499,7 +690,7 @@ func TestIsStatusLabel(t *testing.T) {
 }
 
 func TestLabelsAfterClaim(t *testing.T) {
-	got := LabelsAfterClaim([]string{"cumin/status/awaiting-owner-decision", "risk/low", "cumin/status/ready", "question"})
+	got := LabelsAfterClaim([]string{"cumin/status/awaiting-decision", "risk/low", "cumin/status/ready", "question"})
 	if want := []string{"risk/low", "question", LabelImplementing}; !slices.Equal(got, want) {
 		t.Errorf("LabelsAfterClaim = %v, want %v", got, want)
 	}
@@ -509,8 +700,8 @@ func TestLabelsAfterClaim(t *testing.T) {
 }
 
 func TestReplaceStatusLabel(t *testing.T) {
-	got := ReplaceStatusLabel([]string{"cumin/status/implementing", "risk/low", "question"}, LabelAwaitingChecks)
-	if want := []string{"risk/low", "question", LabelAwaitingChecks}; !slices.Equal(got, want) {
+	got := ReplaceStatusLabel([]string{"cumin/status/implementing", "risk/low", "question"}, LabelChecking)
+	if want := []string{"risk/low", "question", LabelChecking}; !slices.Equal(got, want) {
 		t.Errorf("ReplaceStatusLabel = %v, want %v", got, want)
 	}
 }
@@ -578,7 +769,7 @@ func TestDecide_I11(t *testing.T) {
 			SubIssues: []SubIssue{{Number: 10, Labels: issue, PullRequests: prs}},
 		}}}
 	}
-	checks := []string{LabelAwaitingChecks, "risk/medium"}
+	checks := []string{LabelChecking, "risk/medium"}
 
 	tests := []struct {
 		name     string
@@ -588,26 +779,26 @@ func TestDecide_I11(t *testing.T) {
 		{
 			name:     "a pull request without labels gets the status and the risk",
 			snapshot: snapshotOf(checks, PullRequest{Number: 21}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name:     "equal labels in another order give no action",
-			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"risk/medium", "docs", LabelAwaitingChecks}}),
+			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"risk/medium", "docs", LabelChecking}}),
 		},
 		{
 			name:     "an old status and an old risk are replaced, and other labels stay",
 			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{"docs", LabelImplementing, "risk/low"}}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{"docs", LabelAwaitingChecks, "risk/medium"}}},
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{"docs", LabelChecking, "risk/medium"}}},
 		},
 		{
 			name:     "a status that the Owner added to the pull request is removed",
-			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, LabelReady, "risk/medium"}}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			snapshot: snapshotOf(checks, PullRequest{Number: 21, Labels: []string{LabelChecking, LabelReady, "risk/medium"}}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name:     "an issue without a risk label removes the risk of the pull request",
-			snapshot: snapshotOf([]string{LabelAwaitingChecks}, PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, "risk/low"}}),
-			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks}}},
+			snapshot: snapshotOf([]string{LabelChecking}, PullRequest{Number: 21, Labels: []string{LabelChecking, "risk/low"}}),
+			want:     []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking}}},
 		},
 		{
 			name:     "labels of the issue that are not copied stay off the pull request",
@@ -616,9 +807,9 @@ func TestDecide_I11(t *testing.T) {
 		{
 			name: "each open pull request that closes the issue is made equal",
 			snapshot: snapshotOf(checks,
-				PullRequest{Number: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
+				PullRequest{Number: 21, Labels: []string{LabelChecking, "risk/medium"}},
 				PullRequest{Number: 22}),
-			want: []Action{CopyLabels{Issue: 10, PullRequest: 22, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			want: []Action{CopyLabels{Issue: 10, PullRequest: 22, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name: "a pull request that closes two issues follows the lower number, in any order",
@@ -629,7 +820,7 @@ func TestDecide_I11(t *testing.T) {
 					{Number: 10, Labels: checks, PullRequests: []PullRequest{{Number: 21}}},
 				},
 			}}},
-			want: []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelAwaitingChecks, "risk/medium"}}},
+			want: []Action{CopyLabels{Issue: 10, PullRequest: 21, Labels: []string{LabelChecking, "risk/medium"}}},
 		},
 		{
 			name: "the actions are in the order of the pull request numbers",
@@ -641,8 +832,8 @@ func TestDecide_I11(t *testing.T) {
 				},
 			}}},
 			want: []Action{
-				CopyLabels{Issue: 11, PullRequest: 22, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
-				CopyLabels{Issue: 10, PullRequest: 23, Labels: []string{LabelAwaitingChecks, "risk/medium"}},
+				CopyLabels{Issue: 11, PullRequest: 22, Labels: []string{LabelChecking, "risk/medium"}},
+				CopyLabels{Issue: 10, PullRequest: 23, Labels: []string{LabelChecking, "risk/medium"}},
 			},
 		},
 	}
@@ -684,46 +875,28 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 		}
 		return n
 	}
-	if n := claims(decideReadyOfOwner(sub([]string{LabelAwaitingOwnerReview, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil, nil, time.Time{}, 0)); n != 0 {
+	if n := claims(decideReadyOfOwner(sub([]string{LabelAwaitingMergeDecision, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil, nil, time.Time{}, 0)); n != 0 {
 		t.Errorf("%d claims for a ready pull request of an issue in review, want 0", n)
 	}
-	if n := claims(decideReadyOfOwner(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingOwnerDecision}), 1, nil, nil, time.Time{}, 0)); n != 1 {
+	if n := claims(decideReadyOfOwner(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingDecision}), 1, nil, nil, time.Time{}, 0)); n != 1 {
 		t.Errorf("%d claims for a ready issue, want 1", n)
 	}
 }
 
-// While cumin stops after its runs, the actions that ask an agent for new work are held
-// back, and the ones that need no agent stay, in their order.
-func TestWithoutNewWork_KeepsOnlyTheActionsThatNeedNoAgent(t *testing.T) {
+// The one check before a start of an agent: while cumin stops after the
+// current runs, or while the quota usage stops agent starts, no start gets
+// a permit; at any other time every start gets one. The zero value of the
+// permit permits nothing.
+func TestPermitStart_GivesNoPermitWhileCuminStopsAfterTheCurrentRunsOrAgentStartsAreStopped(t *testing.T) {
 	t.Parallel()
-	all := []Action{
-		StartRequirement{Number: 1},
-		ReviewRemaining{Number: 2},
-		Accept{Number: 3},
-		StartReview{Number: 10, PullRequest: 20},
-		FixChecks{Number: 11, PullRequest: 21},
-		ResolveConflict{Number: 15, PullRequest: 25},
-		StopForUnreportedChecks{Number: 16, PullRequest: 26},
-		Plan{Number: 4},
-		CheckAcceptance{Number: 5},
-		Claim{Number: 12, RequirementIssue: 1},
-		MergeOwnerApproval{Number: 13, PullRequest: 23},
-		FixOwnerReview{Number: 14, PullRequest: 24},
-		CopyLabels{Issue: 10, PullRequest: 20},
+	for _, c := range []struct{ stopsAfterRuns, quotaAllows bool }{{true, true}, {false, false}, {true, false}} {
+		if permit, ok := PermitStart(c.stopsAfterRuns, c.quotaAllows); ok || permit != (StartPermit{}) {
+			t.Errorf("PermitStart(%v, %v) = %#v, %v, want no permit", c.stopsAfterRuns, c.quotaAllows, permit, ok)
+		}
 	}
-	want := []Action{
-		StartRequirement{Number: 1},
-		ReviewRemaining{Number: 2},
-		Accept{Number: 3},
-		StopForUnreportedChecks{Number: 16, PullRequest: 26},
-		MergeOwnerApproval{Number: 13, PullRequest: 23},
-		CopyLabels{Issue: 10, PullRequest: 20},
-	}
-	if got := WithoutNewWork(all); !reflect.DeepEqual(got, want) {
-		t.Errorf("WithoutNewWork = %#v, want %#v", got, want)
-	}
-	if got := WithoutNewWork(nil); len(got) != 0 {
-		t.Errorf("WithoutNewWork(nil) = %#v, want none", got)
+	permit, ok := PermitStart(false, true)
+	if !ok || permit == (StartPermit{}) {
+		t.Errorf("PermitStart(false, true) = %#v, %v, want a permit that holds", permit, ok)
 	}
 }
 
@@ -749,9 +922,9 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 		want     bool
 	}{
 		{"no issue", Snapshot{}, false},
-		{"awaiting-checks counts", requirement(LabelImplementing, sub(10, LabelAwaitingChecks)), true},
-		{"a closed issue in awaiting-checks does not count", requirement(LabelImplementing,
-			SubIssue{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}}), false},
+		{"checking counts", requirement(LabelImplementing, sub(10, LabelChecking)), true},
+		{"a closed issue in checking does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Closed: true, Labels: []string{LabelChecking}}), false},
 		{"a ready sub-issue that waits for room under the limit counts", requirement(LabelImplementing,
 			sub(10, LabelImplementing), sub(11, LabelReady)), true},
 		{"a ready sub-issue whose blocked-by issues are closed counts", requirement(LabelImplementing, blocked(closed)), true},
@@ -759,11 +932,21 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 		{"a ready sub-issue with an open blocked-by issue does not count", requirement(LabelImplementing, blocked(open)), false},
 		{"a ready requirement issue with an open blocked-by issue does not count", Snapshot{RequirementIssues: []RequirementIssue{
 			{Number: 6, Labels: []string{LabelRequirement, LabelReady}, BlockedBy: open}}}, false},
-		{"planning without an agent does not count", requirement(LabelPlanning), false},
-		{"implementing without an agent does not count", requirement(LabelImplementing, sub(10, LabelImplementing)), false},
-		{"reviewing without an agent does not count", requirement(LabelImplementing, sub(10, LabelReviewing)), false},
-		{"awaiting-owner-review does not count", requirement(LabelAwaitingOwnerReview, sub(10, LabelAwaitingOwnerReview)), false},
-		{"awaiting-owner-decision does not count", requirement(LabelImplementing, sub(10, LabelAwaitingOwnerDecision)), false},
+		{"planning without an agent counts: the next poll decides its way out", requirement(LabelPlanning), true},
+		{"accepting without an agent counts", requirement(LabelAccepting), true},
+		{"implementing without an agent counts", requirement(LabelImplementing, sub(10, LabelImplementing)), true},
+		{"reviewing without an agent counts", requirement(LabelImplementing, sub(10, LabelReviewing)), true},
+		{"merging without an agent counts", requirement(LabelImplementing, sub(10, LabelMerging)), true},
+		{"a closed issue in merging does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Closed: true, Labels: []string{LabelMerging}}), false},
+		{"implementing of another account does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Labels: []string{LabelImplementing}, Implementing: &ImplementingFacts{}}), false},
+		{"reviewing of another account does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Labels: []string{LabelReviewing}, Reviewing: &ReviewingFacts{}}), false},
+		{"merging of another account does not count", requirement(LabelImplementing,
+			SubIssue{Number: 10, Labels: []string{LabelMerging}, Merging: &MergingFacts{}}), false},
+		{"awaiting-plan-review does not count", requirement(LabelAwaitingPlanReview, sub(10, LabelAwaitingMergeDecision)), false},
+		{"awaiting-decision does not count", requirement(LabelImplementing, sub(10, LabelAwaitingDecision)), false},
 		{"a ready owner task does not count", requirement(LabelImplementing, sub(10, LabelOwnerTask, LabelReady)), false},
 		{"an issue with no status label does not count", requirement("", sub(10, "risk/low")), false},
 	}
@@ -778,9 +961,9 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 
 // The send-back after a request for changes of the Owner (I13) is decided
 // from the snapshot alone: an open sub-issue in
-// cumin/status/awaiting-owner-review, not running, with a CHANGES_REQUESTED
+// cumin/status/awaiting-merge-decision, not running, with a CHANGES_REQUESTED
 // review of a person on the head commit, submitted after
-// cumin/status/awaiting-owner-review was last added to the issue. Who of the
+// cumin/status/awaiting-merge-decision was last added to the issue. Who of the
 // reviewers is an Owner is decided later (OwnerRequestedChanges).
 func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t *testing.T) {
 	t.Parallel()
@@ -802,34 +985,34 @@ func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t 
 		reviews      []Review
 		want         []Action
 	}{
-		{name: "a request for changes of a person on the head", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes of a person on the head", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("owner", ReviewChangesRequested, head), review("other", ReviewApproved, old)},
 			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"other", "owner"}}}},
-		{name: "a request for changes from before the issue last waited for the Owner", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes from before the issue last waited for the Owner", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{answered}},
-		{name: "a new request for changes after an answered one", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a new request for changes after an answered one", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{answered, review("owner", ReviewChangesRequested, head)},
 			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"owner"}}}},
-		{name: "the label times are not read", labels: []string{LabelAwaitingOwnerReview}, timesNotRead: true,
+		{name: "the label times are not read", labels: []string{LabelAwaitingMergeDecision}, timesNotRead: true,
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
-		{name: "a request for changes on an older commit", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes on an older commit", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("owner", ReviewChangesRequested, old)}},
-		{name: "a request for changes of a bot", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a request for changes of a bot", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("app[bot]", ReviewChangesRequested, head)}},
-		{name: "a comment-only review", labels: []string{LabelAwaitingOwnerReview},
+		{name: "a comment-only review", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("owner", ReviewCommented, head)}},
 		{name: "a pull request in another state", labels: []string{LabelReviewing},
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
-		{name: "a closed issue", labels: []string{LabelAwaitingOwnerReview}, closed: true,
+		{name: "a closed issue", labels: []string{LabelAwaitingMergeDecision}, closed: true,
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
-		{name: "an issue that runs now", labels: []string{LabelAwaitingOwnerReview}, running: true,
+		{name: "an issue that runs now", labels: []string{LabelAwaitingMergeDecision}, running: true,
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			snapshot := Snapshot{
 				RequirementIssues: []RequirementIssue{{
 					Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, LabelTimesRead: !tc.timesNotRead,
-					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels, AwaitingOwnerReviewAt: awaitingOwnerAt,
+					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels, AwaitingMergeDecisionAt: awaitingOwnerAt,
 						PullRequests: []PullRequest{{Number: 21, HeadCommit: head, Labels: tc.labels, Reviews: tc.reviews}}}},
 				}},
 				Running: map[int]bool{10: tc.running},
@@ -856,13 +1039,13 @@ func TestHasIssueInWork(t *testing.T) {
 		{"ready requirement issue", requirement([]string{LabelReady}), true},
 		{"planning requirement issue", requirement([]string{LabelPlanning}), true},
 		{"implementing requirement issue with no sub-issue in work", requirement([]string{LabelImplementing},
-			SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerReview}}), false},
-		{"requirement issue that waits for the Owner", requirement([]string{LabelAwaitingOwnerReview}), false},
+			SubIssue{Number: 10, Labels: []string{LabelAwaitingMergeDecision}}), false},
+		{"requirement issue that waits for the Owner", requirement([]string{LabelAwaitingPlanReview}), false},
 		{"ready sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReady}}), true},
 		{"implementing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelImplementing}}), true},
-		{"sub-issue that waits for the checks", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingChecks}}), true},
+		{"sub-issue that waits for the checks", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelChecking}}), true},
 		{"reviewing sub-issue", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelReviewing}}), true},
-		{"sub-issue that waits for the Owner", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingOwnerDecision}}), false},
+		{"sub-issue that waits for the Owner", requirement(nil, SubIssue{Number: 10, Labels: []string{LabelAwaitingDecision}}), false},
 		{"closed sub-issue", requirement(nil, SubIssue{Number: 10, Closed: true, Labels: []string{LabelImplementing}}), false},
 	}
 	for _, tt := range tests {
@@ -917,5 +1100,345 @@ func TestPollIsDue(t *testing.T) {
 	}
 	if !PollIsDue(false, time.Minute, time.Minute, time.Minute) {
 		t.Error("equal intervals: PollIsDue = false, want a poll at every tick")
+	}
+}
+
+// The way out of cumin/status/accepting is a pure function of the facts of
+// the requirement issue and of whether its Planner runs.
+func TestAcceptanceEnd(t *testing.T) {
+	closedAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	labeledAt := closedAt.Add(time.Minute)
+	accepting := func(change func(*RequirementIssue)) RequirementIssue {
+		requirement := RequirementIssue{
+			Number: 6, Labels: []string{LabelRequirement, LabelAccepting},
+			SubIssues:    []SubIssue{{Number: 10, Closed: true, ClosedAt: closedAt}},
+			CommentsRead: true, LabelTimesRead: true, ReviewAt: labeledAt,
+		}
+		if change != nil {
+			change(&requirement)
+		}
+		return requirement
+	}
+	tests := []struct {
+		name        string
+		requirement RequirementIssue
+		running     bool
+		want        Action
+	}{
+		{
+			name:        "no comment requests the acceptance check again",
+			requirement: accepting(nil),
+			want:        CheckAcceptance{Number: 6, Again: true},
+		},
+		{
+			name:        "no comment after the second request stops for the Owner",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceRequestedAgain = true }),
+			want:        StopAcceptance{Number: 6},
+		},
+		{
+			name:        "the comment after the last close asks the Owner to accept",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceCheckAt = closedAt.Add(time.Hour) }),
+			want:        Accept{Number: 6},
+		},
+		{
+			name:        "a comment from before the last close belongs to an earlier round",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceCheckAt = closedAt.Add(-time.Hour) }),
+			want:        CheckAcceptance{Number: 6, Again: true},
+		},
+		{
+			name:        "a question after the label stops for the Owner at once",
+			requirement: accepting(func(r *RequirementIssue) { r.QuestionAt = labeledAt.Add(time.Minute) }),
+			want:        StopAcceptance{Number: 6, Question: true},
+		},
+		{
+			name:        "a question from before the label belongs to an earlier stay",
+			requirement: accepting(func(r *RequirementIssue) { r.QuestionAt = labeledAt.Add(-time.Second) }),
+			want:        CheckAcceptance{Number: 6, Again: true},
+		},
+		{
+			name:        "a running Planner changes nothing",
+			requirement: accepting(func(r *RequirementIssue) { r.AcceptanceCheckAt = closedAt.Add(time.Hour) }),
+			running:     true,
+		},
+		{
+			name:        "comments that were not read change nothing",
+			requirement: accepting(func(r *RequirementIssue) { r.CommentsRead = false }),
+		},
+		{
+			name:        "label times that were not read request nothing",
+			requirement: accepting(func(r *RequirementIssue) { r.LabelTimesRead = false }),
+		},
+		{
+			name:        "another state is not decided here",
+			requirement: accepting(func(r *RequirementIssue) { r.Labels = []string{LabelRequirement, LabelImplementing} }),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// cumin-core or an Owner added the status label.
+			tt.requirement.StatusRead, tt.requirement.StatusCounts = true, true
+			if got := AcceptanceEnd(tt.requirement, tt.running); got != tt.want {
+				t.Errorf("AcceptanceEnd = %#v, want %#v", got, tt.want)
+			}
+			// A label of another account, and one whose account was not
+			// read, decide nothing.
+			for _, counts := range []struct{ read, counts bool }{{true, false}, {false, false}} {
+				other := tt.requirement
+				other.StatusRead, other.StatusCounts = counts.read, counts.counts
+				if got := AcceptanceEnd(other, tt.running); got != nil {
+					t.Errorf("AcceptanceEnd with StatusRead %v = %#v, want nil for a label that does not count", counts.read, got)
+				}
+			}
+			// The poll decides the same from the snapshot and the running set.
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}, Running: map[int]bool{6: tt.running}}
+			var want []Action
+			if tt.want != nil {
+				want = []Action{tt.want}
+			}
+			if got := Decide(snapshot, 1, nil, nil, closedAt, time.Hour); !reflect.DeepEqual(got, want) {
+				t.Errorf("Decide = %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+// ImplementationEnd decides the way out of cumin/status/implementing from
+// the facts on GitHub, and decides nothing while the Implementer runs,
+// without the facts, and from a label that does not count.
+func TestImplementationEnd(t *testing.T) {
+	labeledAt := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	const branch, implementer, head = "cumin/10-add-the-login-screen", "example-implementer[bot]", "abc"
+	verified := PullRequest{Number: 21, NodeID: "PR_21", HeadCommit: head, HeadBranch: branch, Author: implementer}
+	implementing := func(change func(*SubIssue)) SubIssue {
+		sub := SubIssue{
+			Number: 10, Labels: []string{"risk/low", LabelImplementing},
+			PullRequests: []PullRequest{{Number: 21, HeadCommit: head, HeadBranch: branch, Author: implementer, HeadCommittedAt: labeledAt.Add(time.Minute)}},
+			Implementing: &ImplementingFacts{
+				StatusCounts: true, ImplementingAt: labeledAt, Branch: branch, OnBranch: []PullRequest{verified},
+				Implementer: implementer, LocalHead: head, MaxLinks: 2,
+			},
+		}
+		if change != nil {
+			change(&sub)
+		}
+		return sub
+	}
+	noPullRequest := func(s *SubIssue) { s.PullRequests, s.Implementing.OnBranch = nil, nil }
+	tests := []struct {
+		name    string
+		sub     SubIssue
+		running bool
+		want    Action
+	}{
+		{
+			name: "a verified pull request waits for the checks",
+			sub:  implementing(nil),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{
+			name: "a verified pull request without a closing link gets the link",
+			sub:  implementing(func(s *SubIssue) { s.PullRequests = nil }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21", AddLink: true},
+		},
+		{
+			name: "no pull request requests the implementation again",
+			sub:  implementing(noPullRequest),
+			want: RequestImplementationAgain{Number: 10},
+		},
+		{
+			name: "no pull request after the second request stops the implementation with the reason",
+			sub: implementing(func(s *SubIssue) {
+				noPullRequest(s)
+				s.Implementing.RequestedAgain = true
+			}),
+			want: StopImplementation{Number: 10, Reason: VerificationReason(FailureNoOpenPullRequest), Retried: true},
+		},
+		{
+			name: "a question after the label stops the implementation before every other check",
+			sub:  implementing(func(s *SubIssue) { s.Implementing.QuestionAt = labeledAt.Add(time.Minute) }),
+			want: StopImplementation{Number: 10, Question: true},
+		},
+		{
+			name: "a question before the label does not count",
+			sub:  implementing(func(s *SubIssue) { s.Implementing.QuestionAt = labeledAt.Add(-time.Minute) }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{
+			name: "a head commit older than the label after a conflict request stops the implementation",
+			sub: implementing(func(s *SubIssue) {
+				s.Implementing.ConflictRequested = true
+				s.PullRequests[0].HeadCommittedAt = labeledAt.Add(-time.Minute)
+			}),
+			want: StopImplementation{Number: 10, Reason: ConflictNotResolvedReason(21), PullRequest: 21},
+		},
+		{
+			name: "a head commit newer than the label after a conflict request waits for the checks",
+			sub:  implementing(func(s *SubIssue) { s.Implementing.ConflictRequested = true }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{
+			name: "a head commit older than the label after another request waits for the checks",
+			sub:  implementing(func(s *SubIssue) { s.PullRequests[0].HeadCommittedAt = labeledAt.Add(-time.Minute) }),
+			want: WaitForChecks{Number: 10, PullRequest: 21, PullRequestNodeID: "PR_21"},
+		},
+		{name: "a running Implementer decides nothing", sub: implementing(nil), running: true},
+		{name: "facts that were not read decide nothing", sub: implementing(func(s *SubIssue) { s.Implementing = nil })},
+		{name: "a label of another account decides nothing", sub: implementing(func(s *SubIssue) { s.Implementing.StatusCounts = false })},
+		{name: "another state decides nothing", sub: implementing(func(s *SubIssue) { s.Labels = []string{"risk/low", LabelChecking} })},
+		{name: "a closed issue decides nothing", sub: implementing(func(s *SubIssue) { s.Closed = true })},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ImplementationEnd(tt.sub, tt.running); got != tt.want {
+				t.Errorf("ImplementationEnd = %#v, want %#v", got, tt.want)
+			}
+			// Decide returns the same action for the issue in a snapshot.
+			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{tt.sub}}},
+				Running: map[int]bool{10: tt.running}}
+			found := false
+			for _, action := range Decide(snapshot, 1, nil, nil, labeledAt, time.Hour) {
+				found = found || tt.want != nil && action == tt.want
+			}
+			if tt.want != nil && !found {
+				t.Errorf("Decide does not return %#v", tt.want)
+			}
+		})
+	}
+}
+
+// reviewingSub is an implementation issue in cumin/status/reviewing with
+// the pull request #21 at the head commit "new", no Reviewer, and the
+// given reviews of the Reviewer.
+func reviewingSub(facts ReviewingFacts, reviews ...Review) SubIssue {
+	at := time.Date(2026, 1, 2, 3, 0, 0, 0, time.UTC)
+	facts.StatusCounts, facts.ReviewingAt, facts.Reviewer, facts.Limit = true, at, "reviewer[bot]", 2
+	for i := range reviews {
+		reviews[i].Author = "reviewer[bot]"
+		reviews[i].SubmittedAt = at.Add(time.Duration(i+1) * time.Minute)
+	}
+	return SubIssue{
+		Number:       10,
+		Labels:       []string{"risk/medium", LabelReviewing},
+		PullRequests: []PullRequest{{Number: 21, HeadCommit: "new", Reviews: reviews}},
+		Reviewing:    &facts,
+	}
+}
+
+func TestReviewEnd_DecidesFromTheFacts(t *testing.T) {
+	changes := Review{State: ReviewChangesRequested, Commit: "new"}
+	explanation := Comment{Author: "reviewer[bot]", Body: DecisionRequestHeading}
+	tests := []struct {
+		name string
+		sub  SubIssue
+		want Action
+	}{
+		{"changes requested below the limit", reviewingSub(ReviewingFacts{RequestedHead: "new"}, changes),
+			RequestReviewFix{Number: 10, PullRequest: 21, Round: 1}},
+		{"changes requested at the limit", reviewingSub(ReviewingFacts{}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			RequestCause{Number: 10, PullRequest: 21}},
+		{"the cause is explained", reviewingSub(ReviewingFacts{Explained: true, Explanation: explanation}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			StopAtRoundLimit{Number: 10, Explanation: explanation}},
+		{"the request of the cause left no explanation", reviewingSub(ReviewingFacts{CauseRequested: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			StopReview{Number: 10, Row: RowI8, Reason: MissingExplanationReason, PullRequest: 21}},
+		{"the second request of the cause left no explanation", reviewingSub(ReviewingFacts{CauseRequestedAgain: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			StopReview{Number: 10, Row: RowI8, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
+		{"the second request of the cause returned done and left no explanation", reviewingSub(ReviewingFacts{CauseRequested: true, CauseRequestedAgain: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
+			StopReview{Number: 10, Row: RowI8, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
+		{"approved with risk/medium", reviewingSub(ReviewingFacts{}, Review{State: ReviewApproved, Commit: "new"}),
+			AskOwnerToMerge{Number: 10, PullRequest: 21}},
+		{"approved, a required check does not pass", reviewingSub(ReviewingFacts{Required: []RequiredCheck{{Name: "ci"}}}, Review{State: ReviewApproved, Commit: "new"}),
+			BackToChecks{Number: 10}},
+		{"the head commit moved", reviewingSub(ReviewingFacts{RequestedHead: "old"}, Review{State: ReviewChangesRequested, Commit: "old"}),
+			BackToChecks{Number: 10, HeadMoved: true}},
+		{"no review on the head commit", reviewingSub(ReviewingFacts{}),
+			RequestReviewAgain{Number: 10, PullRequest: 21}},
+		{"no review after the second request", reviewingSub(ReviewingFacts{RequestedAgain: true}),
+			StopReview{Number: 10, Row: RowI5, Reason: MissingReviewReason, PullRequest: 21, Retried: true}},
+		{"a question after the label", reviewingSub(ReviewingFacts{QuestionAt: time.Date(2026, 1, 2, 4, 0, 0, 0, time.UTC)}, changes),
+			StopReview{Number: 10, Question: true, Row: RowI10, PullRequest: 21}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ReviewEnd(tt.sub, false)
+			// The review of the action is the latest one of the scene.
+			switch a := got.(type) {
+			case RequestReviewFix:
+				a.Review = Review{}
+				got = a
+			case RequestCause:
+				a.Review = Review{}
+				got = a
+			}
+			if got != tt.want {
+				t.Errorf("ReviewEnd = %#v, want %#v", got, tt.want)
+			}
+			if running := ReviewEnd(tt.sub, true); running != nil {
+				t.Errorf("ReviewEnd while the Reviewer runs = %#v, want nil", running)
+			}
+		})
+	}
+}
+
+// A review of the old head commit stays on GitHub after the head commit
+// moved, and counts as a round.
+func TestReviewEnd_AReviewOfTheOldHeadStillCountsAsARound(t *testing.T) {
+	sub := reviewingSub(ReviewingFacts{RequestedHead: "old"}, Review{State: ReviewChangesRequested, Commit: "old"})
+	if got, want := ReviewEnd(sub, false), (BackToChecks{Number: 10, HeadMoved: true}); got != want {
+		t.Fatalf("ReviewEnd = %#v, want %#v", got, want)
+	}
+	if rounds := ReviewRounds(sub.PullRequests[0].Reviews, "reviewer[bot]", time.Time{}); rounds != 1 {
+		t.Errorf("%d rounds, want 1: the review of the old head commit counts", rounds)
+	}
+}
+
+// The steps in cumin/status/merging (issue-states.md, what cumin does inside
+// merging): the same facts always give the same step. A pull request that
+// GitHub reports as conflicting gets a conflict resolution request and no
+// merge; MERGEABLE and UNKNOWN still send the merge.
+func TestMergeEnd(t *testing.T) {
+	const reviewer = "cumin-reviewer[bot]"
+	facts := func() *MergingFacts {
+		return &MergingFacts{StatusCounts: true, Reviewer: reviewer, Required: []RequiredCheck{{Name: "ci"}}}
+	}
+	pull := func(mergeable MergeableState, conclusion CheckConclusion) PullRequest {
+		return PullRequest{
+			Number: 21, HeadCommit: "head", Mergeable: mergeable,
+			Checks:  []CheckResult{{Name: "ci", Conclusion: conclusion}},
+			Reviews: []Review{{Author: reviewer, State: ReviewApproved, Commit: "head", SubmittedAt: time.Unix(1, 0)}},
+		}
+	}
+	merging := func(facts *MergingFacts, prs ...PullRequest) SubIssue {
+		return SubIssue{Number: 10, Labels: []string{"risk/low", LabelMerging}, PullRequests: prs, Merging: facts}
+	}
+	send := SendMerge{Number: 10, PullRequest: 21, HeadCommit: "head"}
+	tests := []struct {
+		name    string
+		sub     SubIssue
+		running bool
+		want    Action
+	}{
+		{name: "MERGEABLE sends the merge", sub: merging(facts(), pull(Mergeable, CheckPassed)), want: send},
+		{name: "UNKNOWN sends the merge", sub: merging(facts(), pull(MergeableUnknown, CheckPassed)), want: send},
+		{name: "CONFLICTING requests a conflict resolution, with no merge",
+			sub: merging(facts(), pull(Conflicting, CheckPassed)), want: ResolveMergeConflict{Number: 10, PullRequest: 21}},
+		{name: "CONFLICTING with conditions that do not hold goes back to the checks",
+			sub: merging(facts(), pull(Conflicting, CheckFailed)), want: LeaveMerge{Number: 10}},
+		{name: "conditions that do not hold go back to the checks",
+			sub: merging(facts(), pull(Mergeable, CheckFailed)), want: LeaveMerge{Number: 10}},
+		{name: "a merged pull request closes the issue",
+			sub: merging(&MergingFacts{StatusCounts: true, Merged: 21}), want: CloseMergedIssue{Number: 10, PullRequest: 21}},
+		{name: "no pull request goes back to the checks", sub: merging(facts()), want: LeaveMerge{Number: 10}},
+		{name: "CONFLICTING while a step of the issue runs decides nothing",
+			sub: merging(facts(), pull(Conflicting, CheckPassed)), running: true},
+		{name: "CONFLICTING without the facts decides nothing", sub: merging(nil, pull(Conflicting, CheckPassed))},
+		{name: "CONFLICTING under a label that does not count decides nothing",
+			sub: merging(&MergingFacts{Reviewer: reviewer, Required: []RequiredCheck{{Name: "ci"}}}, pull(Conflicting, CheckPassed))},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MergeEnd(tt.sub, tt.running); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("MergeEnd = %#v, want %#v", got, tt.want)
+			}
+		})
 	}
 }

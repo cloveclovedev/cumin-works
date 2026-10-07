@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
@@ -17,7 +18,7 @@ const (
 	issue10Path = "/repos/example-org/example-repo/issues/10"
 )
 
-// approved puts issue #10 in cumin/status/awaiting-checks with the risk
+// approved puts issue #10 in cumin/status/checking with the risk
 // labels, one passed required check, and the Reviewer that approves the
 // head commit. One poll then runs I3, the review, and I6 or I7.
 func approved(t *testing.T, risks ...string) *scene {
@@ -26,7 +27,7 @@ func approved(t *testing.T, risks ...string) *scene {
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: append([]string{"cumin/status/awaiting-checks"}, risks...),
+		Labels: append([]string{"cumin/status/checking"}, risks...),
 	})
 	return sc
 }
@@ -53,7 +54,7 @@ func TestCore03_ARiskLowPullRequestIsMergedAndTheIssueCloses(t *testing.T) {
 	sc := approved(t, "risk/low")
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if got := sc.mergeMethod(t); got != "squash" {
 		t.Errorf("merge method = %q, want squash (the default merge_method)", got)
@@ -73,7 +74,7 @@ func TestCore03_ARiskLowPullRequestIsMergedAndTheIssueCloses(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPatch, issue10Path); n != 1 {
 		t.Errorf("%d closes of #10, want 1", n)
 	}
-	for _, want := range []string{`"msg":"I6: merged the pull request"`, `"msg":"I6: closed the issue that GitHub left open after the merge"`} {
+	for _, want := range []string{`"msg":"merged the pull request"`, `"msg":"close the merged issue: closed the issue that GitHub left open after the merge"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -89,7 +90,7 @@ func TestI6_AnIssueThatGitHubClosedIsLeftAsItIs(t *testing.T) {
 	sc.fake.CloseIssuesOnMerge()
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if !sc.fake.Issue(sc.repo, 10).Closed {
 		t.Error("issue #10 is open")
@@ -97,8 +98,8 @@ func TestI6_AnIssueThatGitHubClosedIsLeftAsItIs(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPatch, issue10Path); n != 0 {
 		t.Errorf("%d closes of #10, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I6: GitHub closed the issue"`) {
-		t.Error("the log does not say that GitHub closed the issue")
+	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
+		t.Errorf("%d merge requests, want 1", n)
 	}
 }
 
@@ -108,7 +109,7 @@ func TestI6_TheMergeMethodOfTheRepositorySettingsIsUsed(t *testing.T) {
 	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "merge_method = \"rebase\"\n"})
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if got := sc.mergeMethod(t); got != "rebase" {
 		t.Errorf("merge method = %q, want rebase", got)
@@ -127,8 +128,8 @@ func TestCore04_ARiskMediumPullRequestIsNotMerged(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
 	messages := sc.messagesExceptQ4()
 	if len(messages) != 1 {
@@ -151,8 +152,8 @@ func TestI7_ARiskHighPullRequestWaitsForTheOwner(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerReview) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingMergeDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-merge-decision", got)
 	}
 }
 
@@ -176,7 +177,7 @@ func TestI6_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 			if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 				t.Errorf("%d merge requests, want none", n)
 			}
-			sc.assertStoppedAtI6(t, workflow.RiskLabelReason(tc.decision))
+			sc.assertStoppedAt(t, workflow.RowI6, workflow.RiskLabelReason(tc.decision))
 		})
 	}
 }
@@ -188,7 +189,7 @@ func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
 	sc.fake.FailNext(http.MethodPut, mergePath, http.StatusMethodNotAllowed)
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	sc.assertStoppedAtI6(t, workflow.MergeFailedReason(21, "status 405: Failure requested by the test"))
 	if sc.fake.Issue(sc.repo, 10).Closed {
@@ -207,16 +208,15 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	sc.fake.SetPermission(theOwner, "admin", "User")
 	service := sc.serviceWithSession(t)
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 2)
 
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one resolution", n)
 	}
-	// The resolution request carries the login of the Owner that the
-	// Reviewer run holds: one read of the actor and one of the permission,
-	// both before the review.
-	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission"); n != 1 {
-		t.Errorf("%d reads of the permission of the Owner, want 1", n)
+	// The login of the Owner is read for the review, and again for the
+	// resolution request, which a later poll sends.
+	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission"); n != 2 {
+		t.Errorf("%d reads of the permission of the Owner, want 2", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -235,14 +235,14 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
 		}
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if sc.fake.Issue(sc.repo, 10).Closed || len(sc.fake.Comments(sc.repo, 10)) != 0 {
 		t.Error("the conflict closed or commented on #10")
 	}
-	for _, want := range []string{`"msg":"I6: the merge conflicts; the issue goes back to the Implementer"`,
-		`"msg":"I6: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
+	for _, want := range []string{`"msg":"the merge conflicts; the issue goes back to the Implementer"`,
+		`"msg":"merging: requested the work"`, `"kind":"conflict resolution"`, `"msg":"I2: verified the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -254,14 +254,39 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 // the review again.
 func TestI6_AResolutionThatLeavesTheHeadStopsTheIssue(t *testing.T) {
 	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}})
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	service := sc.serviceWithSession(t)
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 2)
 
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one resolution", n)
 	}
-	sc.assertStoppedAtI6(t, workflow.ConflictNotResolvedReason(21))
+	sc.assertStoppedForAConflictThatStays(t)
+}
+
+// headBeforeTheLabel is a commit time of the head of a pull request that
+// is older than every label of a scene.
+var headBeforeTheLabel = time.Unix(1000, 0)
+
+// assertStoppedForAConflictThatStays checks that #10 stopped for the Owner
+// because a conflict resolution left the head commit: one stop note of
+// "stop the implementation for the Owner" (I2), and
+// cumin/status/awaiting-decision.
+func (sc *scene) assertStoppedForAConflictThatStays(t *testing.T) {
+	t.Helper()
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21", "Retried: no"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
+	}
 }
 
 // conflicting is approved with risk/low, and the pull request #21
@@ -278,7 +303,7 @@ func conflicting(t *testing.T, opts cliOptions) *scene {
 	return sc
 }
 
-// conflictingBeforeChecks puts issue #10 in cumin/status/awaiting-checks
+// conflictingBeforeChecks puts issue #10 in cumin/status/checking
 // with a pull request whose required check has not reported, and whose
 // mergeable value on GitHub is the given one.
 func conflictingBeforeChecks(t *testing.T, opts cliOptions, mergeable string) *scene {
@@ -294,7 +319,7 @@ func conflictingBeforeChecks(t *testing.T, opts cliOptions, mergeable string) *s
 // cumin/status/implementing before the request, exactly one conflict
 // resolution request resumes the Implementer session, and it does not
 // count as a check fix request. The run pushes a new head, so after done
-// I2 runs and the issue returns to cumin/status/awaiting-checks.
+// I2 runs and the issue returns to cumin/status/checking.
 func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChecks(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{movesHeadOnRun: 1}, "CONFLICTING")
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
@@ -329,8 +354,8 @@ func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChec
 	if strings.Contains(text, "could not merge") {
 		t.Errorf("the request text says that a merge failed:\n%s", text)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
@@ -386,10 +411,12 @@ func TestI14_UnknownWaitsForALaterPoll(t *testing.T) {
 }
 
 // I14: a resolution that ends with done and leaves the head at the commit
-// that conflicted stops the issue once for the Owner, with the row I14.
-// The polls that follow send nothing more.
+// that conflicted stops the issue once for the Owner: the head commit is
+// older than cumin/status/implementing. The polls that follow send nothing
+// more.
 func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{}, "CONFLICTING")
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	service := sc.serviceWithSession(t)
 
 	for range 3 {
@@ -403,13 +430,13 @@ func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: I14", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "Reason: " + workflow.ConflictNotResolvedReason(21), "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
 		t.Errorf("%d notifications, want 1: %v", len(messages), messages)
@@ -435,7 +462,7 @@ func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 	sc.fake.FailNext(http.MethodPatch, issue10Path, http.StatusForbidden)
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -443,25 +470,33 @@ func TestI6_AFailedCloseAfterTheMergeStopsTheIssueOnce(t *testing.T) {
 	sc.assertStoppedAtI6(t, workflow.CloseFailedReason(21, "status 403: Failure requested by the test"))
 }
 
-// assertStoppedAtI6 checks the stop step of I6 for #10: one comment with
-// the reason, cumin/status/awaiting-owner-decision, and one notification.
+// assertStoppedAtI6 checks "stop the merge for the Owner" for #10: one comment with
+// the reason, cumin/status/awaiting-decision, and one notification.
 func (sc *scene) assertStoppedAtI6(t *testing.T, reason string) {
+	t.Helper()
+	sc.assertStoppedAt(t, workflow.RowMerging, reason)
+}
+
+// assertStoppedAt checks a stop for the Owner of #10 with the row: one
+// comment with the reason, cumin/status/awaiting-decision, and one
+// notification.
+func (sc *scene) assertStoppedAt(t *testing.T, row, reason string) {
 	t.Helper()
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: I6", "Reason: " + reason, "Pull request: #21"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: " + row, "Reason: " + reason, "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	messages := sc.messagesExceptQ4()
-	if len(messages) != 1 || !strings.Contains(messages[0], "I6") {
-		t.Errorf("notifications = %v, want one of I6", messages)
+	if len(messages) != 1 || !strings.Contains(messages[0], row+": ") {
+		t.Errorf("notifications = %v, want one of %s", messages, row)
 	}
 }
 

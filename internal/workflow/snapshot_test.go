@@ -48,23 +48,25 @@ func TestToSnapshot_CopiesTitleBlockedByAndPullRequests(t *testing.T) {
 }
 
 // A sub-issue that waits for its checks carries the time that
-// cumin/status/awaiting-checks was last added. The label times query runs
+// cumin/status/checking was last added. The label times query runs
 // only for a requirement issue that has such a sub-issue.
 func TestReadLabelTimes_ASubIssueThatWaitsForItsChecksCarriesTheTimeOfTheLabel(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	t0 := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement", LabelImplementing}})
-	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{LabelAwaitingChecks, "risk/low"}, LabelEvents: []githubtest.LabelEvent{
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Labels: []string{LabelChecking, "risk/low"}, LabelEvents: []githubtest.LabelEvent{
 		// The issue waited for its checks before; the newest event counts.
-		{Label: LabelAwaitingChecks, At: t0},
+		{Label: LabelChecking, At: t0},
+		{Label: LabelChecking, At: t0.Add(time.Minute), Removed: true},
 		{Label: LabelImplementing, At: t0.Add(time.Minute)},
-		{Label: LabelAwaitingChecks, At: t0.Add(2 * time.Minute)},
+		{Label: LabelImplementing, At: t0.Add(2 * time.Minute), Removed: true},
+		{Label: LabelChecking, At: t0.Add(2 * time.Minute)},
 	}})
 	// No sub-issue of #7 waits for its checks, so its label times are not read.
 	fake.AddIssue(repo, &githubtest.Issue{Number: 7, Labels: []string{"cumin/type/requirement", LabelImplementing}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Parent: 7, Labels: []string{LabelReviewing, "risk/low"}})
-	fake.AddIssue(repo, &githubtest.Issue{Number: 12, Parent: 7, Closed: true, Labels: []string{LabelAwaitingChecks, "risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 12, Parent: 7, Closed: true, Labels: []string{LabelChecking, "risk/low"}})
 	service := &Service{GitHub: github.NewAppClient(server.URL, server.Client())}
 	target := Target{Repository: config.Repository{Owner: "example-org", Name: "example-repo"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -80,8 +82,8 @@ func TestReadLabelTimes_ASubIssueThatWaitsForItsChecksCarriesTheTimeOfTheLabel(t
 	if !ok {
 		t.Fatal("issue #10 is not in the snapshot")
 	}
-	if want := t0.Add(2 * time.Minute); !sub.AwaitingChecksAt.Equal(want) {
-		t.Errorf("AwaitingChecksAt of #10 = %v, want %v", sub.AwaitingChecksAt, want)
+	if want := t0.Add(2 * time.Minute); !sub.CheckingAt.Equal(want) {
+		t.Errorf("CheckingAt of #10 = %v, want %v", sub.CheckingAt, want)
 	}
 	if waiting, _ := snapshot.RequirementIssue(6); !waiting.LabelTimesRead {
 		t.Error("the label times of #6 were not read")

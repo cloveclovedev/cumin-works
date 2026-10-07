@@ -17,7 +17,7 @@ const (
 	olderCommit = "0000000000000000000000000000000000000000"
 )
 
-// awaitingOwner puts issue #10 in cumin/status/awaiting-owner-review after
+// awaitingOwner puts issue #10 in cumin/status/awaiting-merge-decision after
 // I7, with risk/medium, the pull request #21 with one passed required
 // check, and the Owner as an admin of the repository.
 func awaitingOwner(t *testing.T, opts ...cliOptions) *scene {
@@ -26,9 +26,9 @@ func awaitingOwner(t *testing.T, opts ...cliOptions) *scene {
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: []string{"risk/medium", workflow.LabelAwaitingOwnerReview},
+		Labels: []string{"risk/medium", workflow.LabelAwaitingMergeDecision},
 		// The reviews of the Owner in the tests are newer than this label.
-		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingOwnerReview, At: sceneNow.Add(-10 * time.Minute)}},
+		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingMergeDecision, At: sceneNow.Add(-10 * time.Minute)}},
 	})
 	sc.fake.SetPermission(theOwner, "admin", "User")
 	return sc
@@ -59,7 +59,7 @@ func TestI12_AnApprovalOfTheOwnerOnTheHeadIsMergedOnce(t *testing.T) {
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	service := sc.service()
 
-	for range 2 {
+	for range 4 {
 		sc.pollAndWait(t, service)
 	}
 
@@ -72,11 +72,13 @@ func TestI12_AnApprovalOfTheOwnerOnTheHeadIsMergedOnce(t *testing.T) {
 	if issue := sc.fake.Issue(sc.repo, 10); !issue.Closed || issue.StateReason != "completed" {
 		t.Errorf("issue #10: closed %v, reason %q; want closed as completed", issue.Closed, issue.StateReason)
 	}
-	// Only the person is read: the bot of the Reviewer App is never an Owner.
-	if n := permissionReads(sc); n != 1 {
-		t.Errorf("%d permission reads, want 1 (the Owner)", n)
+	// Only the person is read: the bot of the Reviewer App is never an
+	// Owner. I12 reads the Owner once, and the merge reads the Owner again
+	// for its conditions.
+	if n := permissionReads(sc); n != 2 {
+		t.Errorf("%d permission reads, want 2 (the Owner, for I12 and for the merge)", n)
 	}
-	for _, want := range []string{`"msg":"I12: the Owner approved the head commit"`, `"msg":"I12: merged the pull request"`} {
+	for _, want := range []string{`"msg":"I12: start the merge: the Owner approved the head commit"`, `"msg":"merged the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -113,8 +115,8 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 			if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 				t.Errorf("%d merge requests, want none", n)
 			}
-			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerReview) {
-				t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-review to stay", got)
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingMergeDecision) {
+				t.Errorf("labels of #10 = %v, want cumin/status/awaiting-merge-decision to stay", got)
 			}
 		})
 	}
@@ -124,11 +126,12 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 // of the Owner after the approval, still count: comments decide nothing.
 func TestI12_ACommentOfTheOwnerKeepsTheApproval(t *testing.T) {
 	sc := awaitingOwner(t)
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 10)
 	sc.review(theOwner, false, "COMMENTED", sc.remoteHead, 5)
 	service := sc.service()
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -179,7 +182,7 @@ func TestI12_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 	sc := awaitingOwner(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: []string{"risk/medium", "risk/high", workflow.LabelAwaitingOwnerReview},
+		Labels: []string{"risk/medium", "risk/high", workflow.LabelAwaitingMergeDecision},
 	})
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	service := sc.service()
@@ -252,15 +255,17 @@ func TestI12_ACandidateThatDoesNothingLeavesQ4ToNotify(t *testing.T) {
 }
 
 // A conflict of the merge of I12 goes to the Implementer as for I6. A
-// resolution that leaves the head stops the issue with the row I12.
-func TestI12_AConflictThatStaysStopsTheIssueWithTheRowI12(t *testing.T) {
+// resolution that leaves the head stops the implementation for the Owner.
+func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 	sc := awaitingOwner(t)
+	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
 	service := sc.serviceWithSession(t)
 
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 3)
 
 	if n := sc.agentRuns(t); n != 1 {
 		t.Fatalf("%d agent runs, want one resolution", n)
@@ -273,32 +278,36 @@ func TestI12_AConflictThatStaysStopsTheIssueWithTheRowI12(t *testing.T) {
 		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I12") ||
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I2") ||
 		!strings.Contains(comments[0].Body, workflow.ConflictNotResolvedReason(21)) {
-		t.Errorf("comments of #10 = %+v, want one stop note of I12", comments)
+		t.Errorf("comments of #10 = %+v, want one stop note of the conflict that stays", comments)
 	}
 }
 
-// A failed read of the login of the Owner at a conflict of the merge of I12
-// sends no request and changes no label, so I12 applies again at the next
-// poll.
+// A failed read of the login of the Owner at a conflict of the merge sends
+// no request and keeps cumin/status/merging, so the next poll sends the
+// merge again and requests the resolution.
 func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *testing.T) {
 	sc := awaitingOwner(t)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
+	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
 	service := sc.serviceWithSession(t)
-	// The first read of the permission is the one of the reviewer for I12;
-	// the second one is the read of the login of the Owner.
-	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 1, everyTry, http.StatusBadGateway)
+	// The first read of the permission is the one of the reviewer for I12,
+	// the second one is the same read for the conditions of the merge, and
+	// the third one is the read of the login of the Owner.
+	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 2, everyTry, http.StatusBadGateway)
 
 	sc.pollAndWait(t, service)
+	_ = service.Poll(t.Context())
+	service.Wait()
 
 	if n := sc.agentRuns(t); n != 0 {
 		t.Fatalf("%d agent runs, want none after a failed read", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerReview) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-review: a failed read changes nothing", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
+		t.Errorf("labels of #10 = %v, want cumin/status/merging: a failed read changes nothing", got)
 	}
 
 	sc.pollAndWait(t, service)
@@ -404,8 +413,8 @@ func TestI13_RequestsForChangesThatDoNotCountSendNoRequest(t *testing.T) {
 			if n := sc.agentRuns(t); n != 0 {
 				t.Errorf("%d agent runs, want none", n)
 			}
-			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-				t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+				t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 			}
 		})
 	}
@@ -461,8 +470,8 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 	if newHead == oldHead {
 		t.Fatal("the fix did not move the head of the pull request")
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
 	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"msg":"I3: the Reviewer approved the head commit"`,
 		`"msg":"I7: the merge waits for the Owner"`} {
@@ -485,7 +494,7 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 
 	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
 		Author: theOwner, State: "APPROVED", Commit: newHead, SubmittedAt: sceneNow.Add(time.Hour)})
-	sc.pollAndWait(t, service)
+	sc.pollTimes(t, service, 2)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
 		t.Errorf("%d merge requests, want 1", n)
@@ -524,8 +533,8 @@ func TestI13_AnAnswerWithoutACommitSendsNoSecondRequestForTheSameReview(t *testi
 	if n := sc.agentRuns(t); n != 2 {
 		t.Errorf("%d agent runs, want the answer and one review", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingOwnerReview}) {
-		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-owner-review", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
+		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
 
 	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
@@ -546,7 +555,7 @@ func TestI13_AReadyOfTheOwnerStillStartsTheImplementer(t *testing.T) {
 	sc := awaitingOwner(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels:      []string{"risk/medium", workflow.LabelAwaitingOwnerReview, workflow.LabelReady},
+		Labels:      []string{"risk/medium", workflow.LabelAwaitingMergeDecision, workflow.LabelReady},
 		LabelEvents: []githubtest.LabelEvent{readyBy(theOwner, 1)},
 	})
 	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
@@ -570,7 +579,7 @@ func TestOwnerRequestedChanges_I13(t *testing.T) {
 	const head = "2222222222222222222222222222222222222222"
 	at := func(minutes int) time.Time { return time.Date(2026, 10, 1, 10, minutes, 0, 0, time.UTC) }
 	owners := map[string]bool{"owner": true, "owner-two": true, "app[bot]": true}
-	// The issue last got cumin/status/awaiting-owner-review at minute 0,
+	// The issue last got cumin/status/awaiting-merge-decision at minute 0,
 	// before the reviews of the table.
 	for _, tc := range []struct {
 		name    string
@@ -689,8 +698,8 @@ func TestI14_UnknownAndMergeableLeaveTheIssueWaitingForTheOwner(t *testing.T) {
 			if n := sc.fake.CountRequests(http.MethodPut, issue10Path+"/labels"); n != 0 {
 				t.Errorf("%d label changes, want none", n)
 			}
-			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerReview) {
-				t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-review", got)
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingMergeDecision) {
+				t.Errorf("labels of #10 = %v, want cumin/status/awaiting-merge-decision", got)
 			}
 		})
 	}

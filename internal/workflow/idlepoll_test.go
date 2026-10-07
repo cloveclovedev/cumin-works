@@ -54,7 +54,7 @@ func pollAt(t *testing.T, sc *scene, service *workflow.Service, minutes int, nam
 // that the repository has no issue in work.
 func waitsForOwner(t *testing.T, sc *scene) {
 	t.Helper()
-	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelAwaitingOwnerDecision, "risk/low"}); err != nil {
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelAwaitingDecision, "risk/low"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -65,7 +65,7 @@ func TestIdlePoll_ARepositoryInWorkIsPolledAtEveryPollInterval(t *testing.T) {
 	sc := newScene(t)
 	// The issue waits for its required checks: cumin moves it on, and no
 	// agent runs.
-	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelAwaitingChecks, "risk/low"}); err != nil {
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelChecking, "risk/low"}); err != nil {
 		t.Fatal(err)
 	}
 	service := idlePollService(sc)
@@ -141,7 +141,7 @@ func TestIdlePoll_AfterANewReadyTheNextPollComesAfterThePollInterval(t *testing.
 // same time. The idle one does not slow the polls of the other one.
 func TestIdlePoll_AnIdleRepositoryDoesNotSlowAnotherRepository(t *testing.T) {
 	sc := newScene(t)
-	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelAwaitingChecks, "risk/low"}); err != nil {
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelChecking, "risk/low"}); err != nil {
 		t.Fatal(err)
 	}
 	other := sc.fake.AddRepository("example-org", "other-repo")
@@ -175,8 +175,8 @@ func TestIdlePoll_ThePollAfterAnActionReadsWhatTheRunLeft(t *testing.T) {
 	service := idlePollService(sc)
 	sc.clock.Set(sceneNow)
 	sc.pollAndWait(t, service)
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Fatalf("labels of #10 = %v, want cumin/status/awaiting-owner-decision after the blocked run", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Fatalf("labels of #10 = %v, want cumin/status/awaiting-decision after the blocked run", got)
 	}
 
 	if n := pollAt(t, sc, service, 1, "example-repo"); n == 0 {
@@ -212,7 +212,7 @@ func TestIdlePoll_TheEndOfAnAgentRunIsReadAtTheNextPoll(t *testing.T) {
 	}
 	sc.release(t)
 	service.Wait()
-	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerDecision}
+	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingDecision}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
 		t.Fatalf("labels of #6 = %v, want %v after the blocked run", got, want)
 	}

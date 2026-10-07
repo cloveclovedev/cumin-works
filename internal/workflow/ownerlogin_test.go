@@ -20,6 +20,12 @@ func readyBy(login string, minutesAgo int) githubtest.LabelEvent {
 	return githubtest.LabelEvent{Label: "cumin/status/ready", At: sceneNow.Add(-time.Duration(minutesAgo) * time.Minute), Actor: login, ActorType: "User"}
 }
 
+// removedBefore is the event that removed the label of the event, one
+// second before the event added it again.
+func removedBefore(event githubtest.LabelEvent) githubtest.LabelEvent {
+	return githubtest.LabelEvent{Label: event.Label, At: event.At.Add(-time.Second), Removed: true}
+}
+
 // The facts of the start request (agents/common.md): the prompt of the
 // Implementer names the account that added the newest cumin/status/ready
 // to the issue of the run, when that account is the Owner. An older event
@@ -27,7 +33,7 @@ func readyBy(login string, minutesAgo int) githubtest.LabelEvent {
 func TestOwnerLogin_TheImplementerReceivesTheActorOfTheNewestReady(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), readyBy(theOwner, 5)}
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), removedBefore(readyBy(theOwner, 5)), readyBy(theOwner, 5)}
 	sc.fake.SetPermission("an-earlier-owner", "admin", "User")
 	sc.fake.SetPermission(theOwner, "write", "User")
 

@@ -58,21 +58,21 @@ func TestI2_TheEndOfAnImplementerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 }
 
 // After a Reviewer run and after the approval of the Reviewer, cumin reads
-// only the issue of the run: once to check the review, and once to decide
-// the merge (I6).
+// only the issue of the run, once: the same read decides the way out of
+// cumin/status/reviewing and the merge (I6).
 func TestI6_TheApprovalOfTheReviewerReadsOnlyTheIssueOfTheRun(t *testing.T) {
 	sc := approved(t, "risk/low")
 
 	sc.pollAndWait(t, sc.service())
 
-	if !strings.Contains(sc.logs.String(), `"msg":"I6: merged the pull request"`) {
-		t.Fatal("the log does not say that I6 merged the pull request")
+	if !strings.Contains(sc.logs.String(), `"msg":"I6: start the merge: the Reviewer approved the head commit"`) {
+		t.Fatal("the log does not say that I6 started the merge")
 	}
 	if n := sc.pollQueries(); n != 1 {
 		t.Errorf("%d poll queries, want 1 (the poll; none after the run)", n)
 	}
-	if n := sc.issueReads(10); n != 2 {
-		t.Errorf("%d reads of issue #10, want 2 (the review, and the decision of the merge)", n)
+	if n := sc.issueReads(10); n != 1 {
+		t.Errorf("%d reads of issue #10, want 1 (the decision of the end of the review)", n)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestI6_ARequirementIssueClosedDuringTheReviewerRunIsNotMerged(t *testing.T)
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: []string{"cumin/status/awaiting-checks", "risk/low"},
+		Labels: []string{"cumin/status/checking", "risk/low"},
 	})
 	service := sc.service()
 	if err := service.Poll(t.Context()); err != nil {

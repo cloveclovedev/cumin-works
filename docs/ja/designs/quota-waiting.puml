@@ -22,7 +22,12 @@ if (the poll of every repository succeeded?) then (no)
   stop
 else (yes)
 endif
-if (an issue that cumin moves on without the Owner\nexists in any repository?\n(awaiting-checks, or ready and waiting\nonly for room under the limit)) then (yes)
+if (a start of an agent waits only for the quota\nin any repository, in any state of the issue?) then (yes)
+  :no notification:\nthe quota notification (Q1) already named the cause;\nthe mark stays as it is;
+  stop
+else (no)
+endif
+if (an issue that cumin moves on without the Owner\nexists in any repository?\n(checking, a working label,\nor ready and waiting\nonly for room under the limit)) then (yes)
   :no notification;\nthe mark stays as it is;
   stop
 else (no)

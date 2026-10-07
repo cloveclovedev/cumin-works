@@ -1,5 +1,5 @@
 @startuml poll-review
-' cumin works - the Reviewer request (I3), the check of its review after the run, the kept step after a temporary failure, I5, I8, and I10.
+' cumin works - the Reviewer request (I3), and the way out of cumin/status/reviewing that every poll and the end of a Reviewer run decide (I5, I6, I7, I8, I10).
 ' Document: poll.md, section on the Reviewer request.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -11,6 +11,8 @@ start
 and the last cumin/status/ready of the issue;
 :Count the round from the reviews on GitHub
 (pure function);
+:Write the head commit and zero counts
+of requests to the state file;
 :Change the label to cumin/status/reviewing;
 :Remove the Reviewer worktree,
 open the head commit detached;
@@ -25,59 +27,83 @@ if (The Reviewer approved an earlier commit?) then (yes)
   (round 1: review only the diff from it);
 else (no)
 endif
-repeat
-  :Run the Reviewer ("review");
-  if (Result?) then (blocked)
-    repeat
-      :I10: read the issue of the run again;
-      backward :Keep the step (in memory).
-      The issue stays in work, with its label.
-      A poll 5 minutes later runs it again;
-    repeat while (The read failed with
-    a temporary failure?) is (yes) not (no)
-    :Hand back to the Owner
-    (blocked_reason, no retry);
+:Run the Reviewer ("review");
+note right
+  blocked: change the label, write the comment,
+  notify the Owner (row I10).
+  Done and abnormal end: the way out below decides.
+  Not started: the count stays; the second time,
+  hand back to the Owner (row I3 or I8).
+  cumin stops after its runs: the end of the run
+  starts no request, and changes no label.
+end note
+partition "The way out of cumin/status/reviewing: every poll, and the end of a Reviewer run" {
+  if (A Reviewer runs for the issue?) then (yes)
+    :Change nothing, read nothing;
     stop
-  elseif (abnormal end) then
-    :Retry once in a new session,
-    then hand back to the Owner (row I3);
-    stop
-  else (done)
-    repeat
-      :Read the issue of the run again;
-      backward :Keep the step (in memory).
-      The issue stays in work, with its label.
-      A poll 5 minutes later runs it again;
-    repeat while (A call to GitHub of this step failed
-    with a temporary failure? (this read, or below:
-    the required checks, a label change)) is (yes) not (no)
-  endif
-  backward:Ask once more in the same session;
-repeat while (Latest review of the Reviewer is on the head
-commit with APPROVE or REQUEST_CHANGES?) is (no, first time)
-->yes, or no for the second time;
-if (Review?) then (APPROVE)
-  :Log it; the label stays
-  (the merge is a later requirement);
-elseif (REQUEST_CHANGES) then
-  if (Round below max_review_rounds?) then (yes)
-    :I5: change the label to cumin/status/implementing;
-    :Ask the Implementer to fix the comments
-    (its own session, the branch of the pull request);
-    :I2, the checks, and I3 again;
   else (no)
-    :I8: ask the Reviewer to explain the cause
-    (the same session);
-    if (A decision request of the Reviewer
+  endif
+  :Read the issue again, with the facts:
+  who added the label and when, the question comments,
+  the last cumin/status/ready, the state file;
+  if (The label is of cumin-core or of an Owner?) then (no)
+    :Do nothing; tell the Owner once;
+    stop
+  else (yes)
+  endif
+  :Decide with the pure function ReviewEnd;
+  if (A question comment after the label?) then (yes)
+    :I10: change the label to cumin/status/awaiting-decision;
+    :Notify the Owner;
+  elseif (The head commit moved?) then (yes)
+    :Change the label to cumin/status/checking
+    (the old review still counts as a round);
+  elseif (Review on the head commit?) then (APPROVE)
+    if (DecideMerge?) then (risk/low)
+      :I6: the merge procedure;
+    elseif (risk/medium or risk/high) then
+      :I7: change the label to
+      cumin/status/awaiting-merge-decision;
+      :Notify the Owner once;
+    elseif (a required check does not pass) then
+      :Change the label to cumin/status/checking;
+    else (not exactly one risk label)
+      :Hand back to the Owner (row I6);
+    endif
+  elseif (REQUEST_CHANGES) then
+    if (Round below max_review_rounds?) then (yes)
+      :I5: change the label to cumin/status/implementing;
+      :Ask the Implementer to fix the comments
+      (its own session, the branch of the pull request);
+    elseif (A decision request of the Reviewer
     after its last review?) then (yes)
-      :Change the label to cumin/status/awaiting-owner-decision;
+      :I8: change the label to cumin/status/awaiting-decision;
       :Notify the Owner (link: that comment);
-    else (no, or blocked, or abnormal twice)
+    elseif (The cause was just requested with done,
+    or requested twice in this stay?) then (yes)
       :Hand back to the Owner (row I8);
+    elseif (Quota at a limit?) then (yes)
+      :Request nothing, count nothing;
+    else (no)
+      :Count the request in the state file;
+      :I8: ask the Reviewer to explain the cause
+      (the same session);
+    endif
+  else (none)
+    if (Requested again in this stay?
+    (count in the state file)) then (yes)
+      :Hand back to the Owner (row I5,
+      after an abnormal end: with its kind);
+    elseif (Quota at a limit?) then (yes)
+      :Request nothing, count nothing;
+    else (no)
+      :Count the request in the state file;
+      :Ask the Reviewer once more
+      (after a done run: the short text in its session,
+      at a poll or after an abnormal end:
+      the whole review request);
     endif
   endif
-else (none, twice)
-  :Hand back to the Owner (row I5);
-endif
+}
 stop
 @enduml

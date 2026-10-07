@@ -13,17 +13,26 @@ repeat
   :poll: read the request;
   :apply the actions that need no agent
   (requirement issue labels, labels of the pull request,
-  merge after an approval of an Owner,
-  follow-up notes, cleanup);
+  merge after an approval of an Owner, close after a merge,
+  stops for the Owner, follow-up notes, cleanup);
   note right
-    Held back until the next start:
-    plan, acceptance check, claim,
-    review, check fix.
+    Every start of an agent passes one check.
+    While cumin stops, the check gives no permit:
+    no agent starts, no label changes for the start,
+    and nothing is counted. This holds for every
+    request to an agent, at a poll and at the end
+    of a run:
+    split, acceptance check, claim, review,
+    check fix, conflict resolution, review fix,
+    fix of the review of the Owner, cause,
+    and the second request of the split,
+    of the acceptance check, of the implementation,
+    of the review, and of the cause.
     ----
     The agent runs that are going on end
     by themselves. What follows the end
-    of a run still runs: verify done, merge,
-    and the fix that a review asked for.
+    of a run and needs no agent still runs:
+    verify done, labels, merge, stops for the Owner.
   end note
 repeat while (a run in progress before or after the poll,\nor one that the poll started?) is (yes: wait for the end\nof a run or the interval)
 ->no;

@@ -74,6 +74,9 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 93 | `POST /repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by` の応答は、依存する側 (パスの `{n}`) のIssueであり、依存先のIssueではない | #9 のsub-issueに blocked by を張ったときに観測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
 | 99 | `GET /repos/{owner}/{repo}/contents/{path}` を installation token で呼ぶには、Contents の read が要る | 公式: Permissions required for GitHub Apps | 公式文書 | 2026-09-22 |
 | 122 | cumin-coreのinstallation tokenで、`GET /repos/{owner}/{repo}/collaborators/{username}/permission` を呼べ、どのアカウントの権限も読める。人のアカウントは `User`、botは `Bot` と分かる。公開リポジトリでは、協力者でない人も `read` と答える | 公式: Get repository permissions for a user (Metadata の読み取り)。#293 の M1 | 公式文書 + 実測 | 2026-10-01 |
+| 138 | cumin-coreのinstallation token (Pull requests の書き込み) で、`POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers` を呼べる。Implementer の App が作ったPull Requestで、admin か write の権限を持つ人の login を `reviewers` に渡すと201を返し、`GET .../pulls/{n}/requested_reviewers` の `users` にその login が1つ現れる。公式文書は、このendpointが通知を起こすとしている | 公式: Request reviewers for a pull request、Permissions required for GitHub Apps ("Pull requests" の書き込み、installation access token を受け付ける)。sandboxで実測 (#510 の V1) | 公式文書 + 実測 | 2026-10-04 |
+| 139 | すでにレビューを依頼してある login に、同じ依頼 (`POST .../pulls/{n}/requested_reviewers`) をもう一度送っても、201を返して失敗しない。`requested_reviewers` の `users` には、その login が1つのまま残る | sandboxで実測 (#510 の V2) | 実測 | 2026-10-04 |
+| 140 | 協力者でないアカウントを `reviewers` に渡した `POST .../pulls/{n}/requested_reviewers` は、422を返す。メッセージは「Reviews may only be requested from collaborators. One or more of the users or teams you specified is not a collaborator of the ... repository.」である。そのアカウントは `requested_reviewers` に現れない | 公式: Request reviewers for a pull request (422)。sandboxで実測 (#510 の V3) | 公式文書 + 実測 | 2026-10-04 |
 
 ## GraphQLとそのポイント
 
@@ -87,6 +90,7 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 128 | `PullRequest.mergeable` はスカラーで、`MergeableState` の値は `MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つである。`Commit.committedDate` は null にならず、`Commit.pushedDate` は「no longer supported」である。`PullRequest.headRef` は、開いているPull Requestでも `null` を返すことがあった | GraphQLのスキーマのintrospectionと、cumin-worksでの実測 (2026-10-03) | 実測 | 2026-10-03 |
 | 129 | 1つの問い合わせのポイントは、接続ごとに「その接続を読むのに要る要求の数」を足し、100で割って四捨五入した値である。要求の数は、親の `first` か `last` が上限まで返ると仮定して数える。その接続自身の `first` と `last` (接続の中のページの大きさ) と、スカラーの項目は、ポイントを変えない。最小は1ポイントである。インストールの枠は1時間あたり5,000ポイントで、リポジトリが20を超えると1つにつき50ポイント、Organizationの利用者が20人を超えると1人につき50ポイント増え、12,500ポイントが上限である (GitHub Enterprise Cloud でないとき)。二次の制限では、GraphQLのendpointは1分あたり2,000ポイントまでで、mutationのない問い合わせは1ポイント、mutationのある問い合わせは5ポイントと数える。この数え方は、一次の枠のポイントとは別である | 公式: Rate limits and query limits for the GraphQL API ("Primary rate limit"、"Predicting the point value of a query"、"Secondary rate limits")。接続の中のページの大きさとスカラーがポイントを変えないことは、sandboxとcumin-worksで実測 (2026-09-25、2026-10-03、`rateLimit.cost`) | 公式文書 + 実測 | 2026-09-25、2026-10-03 |
 | 137 | `nodes(ids:)` は、1回に100件までのidを受け付ける。101件では「You may not provide more than 100 node ids」のエラーで、データを返さない。存在しないidは、その位置が null になり、`errors` に「Could not resolve to a node with the global id」が入る | cumin-worksで実測 (#426、2026-10-03) | 実測 | 2026-10-03 |
+| 142 | `Issue.timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: 100)` は、ラベルを付けたイベントと外したイベントを、タイムラインの順 (古いほうから) に返す。`UnlabeledEvent` には `createdAt` と `label { name }` がある。`__typename` で2つを見分けられる。1回の `PUT .../issues/{n}/labels` でラベルを替えると、外したイベントと付けたイベントが同じ秒の `createdAt` を持ち、外したイベントが先に並ぶ | cumin-worksでinstallation tokenで実測 (#551) | 実測 | 2026-10-05 |
 
 ## rulesetとcheck
 
@@ -163,6 +167,7 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 82 | Organizationの ruleset の名前が一意かどうか。Organizationの ruleset が、リポジトリの ruleset と同じ名前を持てるかどうか | 公式文書に記載がない。試していない。Organizationの ruleset を作れるプランは、「rulesetとcheck」の表の82を参照 | 未確認 | 2026-09-21 |
 | 120 | 2026-09-30には、手で張ったリンク (画面の Development の欄、または `addCloseIssueReferences`) のPull Requestを既定のブランチにmergeしても、Issueは閉じなかった。cumin-coreのmergeで、1分待っても開いたままだった | sandboxの `TestLiveCloseReferences` で観測 (#278、C5、2026-09-30)。cumin-works #271 と #229 でも同じ | 未確認 (2026-09-30から2026-10-01に観測した。それからは測り直していない) | 2026-09-30、2026-10-01 |
 | 121 | 2026-09-30の途中から、本文に `Closes #N` と書いたPull Requestに、作った直後は閉じるリンクが付かないことがある。数時間あとに付くこともある (cumin-works #268〜#270、sandbox #185 は作ってから3分はリンクがなく、2026-10-01には付いていた)。キーワードのリンクと手で張ったリンクは、`closingIssuesReferences(userLinkedOnly: true)` で見分けられる。GitHub Status に障害の表示はなく、community の discussions 209162 と 209148 に報告がある | cumin-works、sandbox、ほかの公開リポジトリで観測 (2026-09-30、2026-10-01) | 未確認 (2026-09-30から2026-10-01に観測した。それからは測り直していない) | 2026-09-30、2026-10-01 |
+| 141 | GitHubは、`labeled` のイベントを遅れて、ラベルを付けていないアカウントで記録することがある。送ったもの: Planner Appが `POST /repos/{owner}/{repo}/issues` でラベルを1つ付けてIssueを作り、そのあとラベルを書かなかった。作ってから31秒後に、Ownerが `cumin/status/ready` を付けた。GitHubが記録したもの: 作ってから100秒後に、Planner Appをactorとする `labeled` のイベントが2つ付いた。1つは作ったときのラベル、1つは `cumin/status/ready` である。Ownerのイベントとこのイベントの間に、`unlabeled` のイベントはない。同じ実行の別のIssueでは、Ownerだけが付けたラベルに、遅れたイベントが付いた。それより前の3回の実行の6つのIssueでは、作ったときのラベルのイベントは、作ってから1〜2秒後だった | sandboxで、シナリオ E2E-1 のlive実行で観測 (#551) | 未確認 (2026-10-05に観測した。それからは測り直していない) | 2026-10-05 |
 
 ## 引退した番号 (Retired numbers)
 

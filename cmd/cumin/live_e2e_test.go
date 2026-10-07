@@ -53,7 +53,7 @@ No earlier live scenario crossed every hand-over in one run. This requirement is
 
 ## Requirements
 - [ ] The file ` + "`live/e2e-%[1]s/short.md`" + ` exists. It holds a heading and this one sentence: "The live scenario E2E-1 follows one requirement issue from ready to acceptance."
-- [ ] The file ` + "`live/e2e-%[1]s/labels.md`" + ` exists. It holds a heading and a Markdown table with one row for each of these labels, and the meaning of each label in one English sentence: ` + "`cumin/status/ready`, `cumin/status/planning`, `cumin/status/implementing`, `cumin/status/awaiting-checks`, `cumin/status/reviewing`, `cumin/status/awaiting-owner-review`, `cumin/status/awaiting-owner-decision`" + `.
+- [ ] The file ` + "`live/e2e-%[1]s/labels.md`" + ` exists. It holds a heading and a Markdown table with one row for each of these labels, and the meaning of each label in one English sentence: ` + "`cumin/status/ready`, `cumin/status/planning`, `cumin/status/implementing`, `cumin/status/checking`, `cumin/status/reviewing`, `cumin/status/awaiting-plan-review`, `cumin/status/awaiting-merge-decision`, `cumin/status/awaiting-acceptance`, `cumin/status/awaiting-decision`" + `.
 - [ ] The description of each pull request holds one line under "Follow-up": "Link <the file of this pull request> from README.md."
 
 ## Out of scope
@@ -453,7 +453,7 @@ func newE2E(t *testing.T) *e2e {
 	e.api(t, "issues?state=open&per_page=100", &open)
 	for _, issue := range open {
 		switch status := issue.status(); status {
-		case "", e2eStatusPrefix + "awaiting-owner-review", e2eStatusPrefix + "awaiting-owner-decision":
+		case "", e2eStatusPrefix + "awaiting-plan-review", e2eStatusPrefix + "awaiting-merge-decision", e2eStatusPrefix + "awaiting-acceptance", e2eStatusPrefix + "awaiting-decision":
 		default:
 			t.Fatalf("the sandbox holds issue #%d with %s. Close it or remove the label first", issue.Number, status)
 		}
@@ -462,7 +462,7 @@ func newE2E(t *testing.T) *e2e {
 }
 
 // waitFor polls until done reports true. An issue that cumin hands back to
-// the Owner with awaiting-owner-decision ends the test: cumin could not go
+// the Owner with awaiting-decision ends the test: cumin could not go
 // on, which is a defect to record.
 func (e *e2e) waitFor(t *testing.T, what string, limit time.Duration, issues []int, done func() bool) {
 	t.Helper()
@@ -472,8 +472,8 @@ func (e *e2e) waitFor(t *testing.T, what string, limit time.Duration, issues []i
 			return
 		}
 		for _, number := range issues {
-			if issue := e.issue(t, number); strings.Contains(issue.status(), "awaiting-owner-decision") {
-				t.Fatalf("%s: cumin stopped issue #%d for the Owner (awaiting-owner-decision)", what, number)
+			if issue := e.issue(t, number); strings.Contains(issue.status(), "awaiting-decision") {
+				t.Fatalf("%s: cumin stopped issue #%d for the Owner (awaiting-decision)", what, number)
 			}
 		}
 		if time.Now().After(deadline) {
@@ -500,9 +500,9 @@ func TestLiveE2E(t *testing.T) {
 
 	// The split: start (R1) and verification (R2).
 	e.waitFor(t, "the split", e2eSplitLimit, []int{requirement}, func() bool {
-		return e.issue(t, requirement).status() == e2eStatusPrefix+"awaiting-owner-review"
+		return e.issue(t, requirement).status() == e2eStatusPrefix+"awaiting-plan-review"
 	})
-	path := e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-owner-review"}, "awaiting-owner-review")
+	path := e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-plan-review"}, "awaiting-plan-review")
 	var subs []e2eIssue
 	e.api(t, fmt.Sprintf("issues/%d/sub_issues?per_page=100", requirement), &subs)
 	if len(subs) != 2 {
@@ -553,7 +553,7 @@ func TestLiveE2E(t *testing.T) {
 	var approvedAt time.Time
 	all := []int{requirement, low, medium}
 	e.waitFor(t, "the merge of both pull requests", e2eWorkLimit, all, func() bool {
-		if approvedAt.IsZero() && e.issue(t, medium).status() == e2eStatusPrefix+"awaiting-owner-review" {
+		if approvedAt.IsZero() && e.issue(t, medium).status() == e2eStatusPrefix+"awaiting-merge-decision" {
 			pulls := e.linkedPulls(t, medium)
 			if len(pulls) != 1 {
 				t.Fatalf("issue #%d has the pull requests %v, want exactly one", medium, pulls)
@@ -565,7 +565,7 @@ func TestLiveE2E(t *testing.T) {
 			}
 			e.gh(t, "pr", "review", strconv.Itoa(pull.Number), "--repo", e.repo, "--approve")
 			approvedAt = time.Now()
-			e.record("The Owner's approval of the risk/medium pull request", fmt.Sprintf("pull request #%d, not merged while #%d waited in `awaiting-owner-review`", pull.Number, medium))
+			e.record("The Owner's approval of the risk/medium pull request", fmt.Sprintf("pull request #%d, not merged while #%d waited in `awaiting-merge-decision`", pull.Number, medium))
 		}
 		return e.issue(t, low).State == "closed" && e.issue(t, medium).State == "closed"
 	})
@@ -573,11 +573,9 @@ func TestLiveE2E(t *testing.T) {
 	pulls := map[int]e2ePull{}
 	var lastClose time.Time
 	for _, number := range []int{low, medium} {
-		last := "reviewing"
-		if number == medium {
-			last = "awaiting-owner-review"
-		}
-		path := e.checkStatusPath(t, number, []string{"ready", "implementing", "awaiting-checks", "reviewing"}, last)
+		// Both issues end in merging: I6 starts the merge for risk/low, and
+		// I12 starts it after the approval of the Owner.
+		path := e.checkStatusPath(t, number, []string{"ready", "implementing", "checking", "reviewing"}, "merging")
 		linked := e.linkedPulls(t, number)
 		if len(linked) != 1 {
 			t.Fatalf("issue #%d has the pull requests %v, want exactly one", number, linked)
@@ -640,7 +638,7 @@ func TestLiveE2E(t *testing.T) {
 
 	// The acceptance check (R4) and the wait for the Owner (R7).
 	e.waitFor(t, "the acceptance check", e2eAcceptLimit, []int{requirement}, func() bool {
-		return e.issue(t, requirement).status() == e2eStatusPrefix+"awaiting-owner-review" &&
+		return e.issue(t, requirement).status() == e2eStatusPrefix+"awaiting-acceptance" &&
 			len(commentsOf(e.comments(t, requirement), "planner", "## Acceptance check")) > 0
 	})
 	comments := e.comments(t, requirement)
@@ -685,12 +683,12 @@ func TestLiveE2E(t *testing.T) {
 	e.record("Follow-up notes (I9)", "one note of cumin-core for each pull request, with the one line of \"Follow-up\" and no signature, before the acceptance check: "+strings.Join(notes, ", "))
 
 	checkHeadings(t, "the acceptance check", checks[0].Body, "### Constraints", "### Left after this requirement", "### To accept")
-	path = e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-owner-review", "implementing", "awaiting-owner-review"}, "awaiting-owner-review")
+	path = e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-plan-review", "implementing", "accepting", "awaiting-acceptance"}, "awaiting-acceptance")
 	events := e.statusEvents(t, requirement)
 	if last := events[len(events)-1]; last.CreatedAt < checks[0].CreatedAt {
-		t.Errorf("the requirement issue went to awaiting-owner-review at %s, before the acceptance check at %s", last.CreatedAt, checks[0].CreatedAt)
+		t.Errorf("the requirement issue went to awaiting-acceptance at %s, before the acceptance check at %s", last.CreatedAt, checks[0].CreatedAt)
 	}
-	e.record("Requirement to implementing, acceptance check, wait for the acceptance (R3, R4, R7)",
+	e.record("Requirement to implementing, to accepting for the acceptance check, wait for the acceptance (R3, R4, R7)",
 		fmt.Sprintf("states of #%d: %s; acceptance check of the Planner App %s", requirement, path, checks[0].HTMLURL))
 
 	// The log of cumin: the steps in order, the notifications, and nothing
@@ -711,19 +709,19 @@ func TestLiveE2E(t *testing.T) {
 	e.record("Log of the requirement issue", checkLogOrder(t, lines, e.repo, requirement,
 		"R1: moved the requirement issue to planning", "R1: requested the Planner", "R2: the split waits for the Owner",
 		"R3: the sub-issues of the requirement issue are in progress", "I9: wrote the follow-up note", "I9: wrote the follow-up note",
-		"R4: requested the Planner", "R7: the requirement issue waits for the acceptance of the Owner"))
+		"R4: moved the requirement issue to accepting", "R4: requested the Planner", "R7: the requirement issue waits for the acceptance of the Owner"))
 	e.record("Log of the risk/low sub-issue", checkLogOrder(t, lines, e.repo, low,
 		"I1: claimed the issue", "I2: verified the pull request", "I3: the pull request is ready for review",
-		"I3: the Reviewer approved the head commit", "I6: merged the pull request"))
+		"I6: start the merge: the Reviewer approved the head commit", "merged the pull request"))
 	e.record("Log of the risk/medium sub-issue", checkLogOrder(t, lines, e.repo, medium,
 		"I1: claimed the issue", "I2: verified the pull request", "I3: the pull request is ready for review",
 		"I3: the Reviewer approved the head commit", "I7: the merge waits for the Owner",
-		"I12: the Owner approved the head commit", "I12: merged the pull request"))
+		"I12: start the merge: the Owner approved the head commit", "merged the pull request"))
 	// One parent does not tell a squash from a rebase; the log names the
 	// method that cumin asked for.
 	merges := 0
 	for _, line := range lines {
-		if line.Repository == e.repo && (line.Issue == low || line.Issue == medium) && strings.HasSuffix(line.Msg, ": merged the pull request") {
+		if line.Repository == e.repo && (line.Issue == low || line.Issue == medium) && line.Msg == "merged the pull request" {
 			merges++
 			if line.MergeMethod != "squash" {
 				t.Errorf("issue #%d: merged with the method %q, want squash", line.Issue, line.MergeMethod)

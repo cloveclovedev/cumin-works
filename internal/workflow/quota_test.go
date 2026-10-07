@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -56,7 +57,7 @@ func TestCore06_AFiveHourLimitStopsTheStartAndNotifiesOnce(t *testing.T) {
 		t.Errorf("Q1 notifications = %q, want one about the 5h window", q1)
 	}
 	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"Q1: no start; the quota limit is reached"`) {
+	if !strings.Contains(logs, `"msg":"stop agent starts: the quota limit is reached"`) {
 		t.Errorf("the log has no Q1 line:\n%s", logs)
 	}
 }
@@ -105,7 +106,7 @@ func TestCore15_TheWeeklyPaceStopsEarlyAndResumesLater(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("later in the week: %d agent runs, want 1", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-checks") {
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/checking") {
 		t.Errorf("labels of #10 = %v, want the issue claimed and verified", got)
 	}
 }
@@ -127,7 +128,7 @@ func TestCore17_UnreadableUsageStopsTheStartWithOneNotification(t *testing.T) {
 		t.Errorf("%d label changes of #10, want none", n)
 	}
 	q1 := sc.q1Messages()
-	if len(q1) != 1 || !strings.Contains(q1[0], "The quota usage was not read before a start") {
+	if len(q1) != 1 || !strings.Contains(q1[0], "The quota usage was not read before the start of an agent") {
 		t.Errorf("Q1 notifications = %q, want one about the unread usage", q1)
 	}
 
@@ -139,7 +140,7 @@ func TestCore17_UnreadableUsageStopsTheStartWithOneNotification(t *testing.T) {
 }
 
 // Q1 at the end of a run: the usage that the run reports tells the Owner
-// that new starts stop, once.
+// that agent starts stop, once.
 func TestQ1_TheEndOfARunAtALimitNotifiesOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
@@ -157,25 +158,8 @@ func TestQ1_TheEndOfARunAtALimitNotifiesOnce(t *testing.T) {
 	if len(q1) != 1 || !strings.Contains(q1[0], "weekly") {
 		t.Errorf("Q1 notifications = %q, want one about the weekly window", q1)
 	}
-	if !strings.Contains(sc.logs.String(), "Q1: the quota limit is reached at the end of a run") {
+	if !strings.Contains(sc.logs.String(), "stop agent starts: the quota limit is reached at the end of a run") {
 		t.Errorf("the log has no Q1 line for the end of the run")
-	}
-}
-
-// Q1 stops new starts only: a check fix (I4) goes on over a limit, and
-// makes no minimal run.
-func TestQ1_ACheckFixGoesOnOverALimitWithoutAMinimalRun(t *testing.T) {
-	sc := newScene(t, cliOptions{commit: true})
-	sc.setQuota(t, 0.99, sceneNow.Add(time.Hour), 0.99, sceneNow.Add(time.Hour))
-	service := sc.service()
-	sc.failingCheck(t, service, 0)
-	sc.pollAndWait(t, service)
-
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want the check fix", n)
-	}
-	if n := sc.quotaRuns(t); n != 0 {
-		t.Errorf("%d minimal runs, want none", n)
 	}
 }
 
@@ -410,6 +394,11 @@ func TestQ3_ARestartWhileStoppedMakesNoMinimalRun(t *testing.T) {
 	path := withState(t, first)
 	sc.pollAndWait(t, first)
 
+	// The restart is later than the 5 minutes of a new enough usage, so the
+	// next try time keeps the stop, with no second notification. A restart
+	// within the 5 minutes decides from the stored usage, and the marks of
+	// the notifications are in memory, so it can notify once more.
+	sc.clock.Set(sceneNow.Add(5*time.Minute + time.Second))
 	again := sc.service()
 	again.State = state.Open(path, nil)
 	sc.pollAndWait(t, again)
@@ -421,20 +410,23 @@ func TestQ3_ARestartWhileStoppedMakesNoMinimalRun(t *testing.T) {
 	}
 }
 
-// Q1: the usage of a run that ends is a read that succeeded, so a later
-// unread usage is a new failure and notifies again.
-func TestQ1_AReadAtTheEndOfARunEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
+// Q1: a usage that cumin keeps, as at the end of a run, is a read that
+// succeeded, so a later unread usage is a new failure and notifies again.
+func TestQ1_AKeptUsageEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
 	sc := newScene(t, cliOptions{commit: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "second", Labels: []string{"cumin/status/ready", "risk/low"}})
 	sc.failQuota(t)
 	service := sc.service()
 	service.Settings.MaxIssuesInProgress = 2
-	// #10 waits for a check fix, which reads no usage; #11 is ready.
+	// #10 waits for a check fix, and #11 is ready: both wait for a read.
 	sc.failingCheck(t, service, 0)
 	sc.pollAndWait(t, service)
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want the check fix", n)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs without a usage, want 0", n)
 	}
+	// The end of a run keeps its usage. The usage is older than what is new
+	// enough, so the next start reads again.
+	storeUsage(service, 0.10, sceneNow.Add(-10*time.Minute))
 	sc.pollAndWait(t, service)
 
 	var unread int
@@ -444,7 +436,7 @@ func TestQ1_AReadAtTheEndOfARunEndsTheSilenceAfterAnUnreadUsage(t *testing.T) {
 		}
 	}
 	if unread != 2 {
-		t.Errorf("%d notifications about an unread usage, want 2 (before and after the run)", unread)
+		t.Errorf("%d notifications about an unread usage, want 2 (before and after the usage of a run)", unread)
 	}
 }
 
@@ -556,7 +548,7 @@ func TestQ2_ABrokenAllowanceFileWarnsOnce(t *testing.T) {
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want 0", n)
 	}
-	if n := strings.Count(sc.logs.String(), "Q2: the allowance file was not read"); n != 1 {
+	if n := strings.Count(sc.logs.String(), "the allowance file was not read"); n != 1 {
 		t.Errorf("%d warnings, want 1", n)
 	}
 }
@@ -580,5 +572,239 @@ func TestQ3_ALateReadingKeepsTheLaterReadTime(t *testing.T) {
 	workflow.KeepUsage(service, older)
 	if stored, _ := service.State.Quota(); !stored.ReadAt.Equal(sceneNow) {
 		t.Errorf("read_at = %v, want the later %v", stored.ReadAt, sceneNow)
+	}
+}
+
+// storeUsage keeps a usage that cumin read at readAt, as the end of an
+// agent run does.
+func storeUsage(service *workflow.Service, fiveHour float64, readAt time.Time) {
+	workflow.KeepUsage(service, agent.QuotaUsage{
+		FiveHour: agent.QuotaWindow{Utilization: fiveHour, ResetsAt: sceneNow.Add(2 * time.Hour)},
+		Weekly:   agent.QuotaWindow{Utilization: 0.10, ResetsAt: sceneNow.Add(time.Hour)},
+		ReadAt:   readAt,
+	})
+}
+
+// A start within 5 minutes after a read makes no minimal run: the stored
+// usage decides it. A minimal run would read a usage at the limit here, and
+// would stop the start.
+func TestQ1_AStoredUsageThatIsNewEnoughDecidesTheStartWithoutAMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.setQuota(t, 0.90, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	storeUsage(service, 0.10, sceneNow.Add(-5*time.Minute))
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 0 {
+		t.Errorf("%d minimal runs, want 0", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A start more than 5 minutes after the read makes exactly one minimal
+// run, and the usage of that run decides.
+func TestQ1_AStoredUsageThatIsOlderCostsOneMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	storeUsage(service, 0.10, sceneNow.Add(-5*time.Minute-time.Second))
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A stored usage at a limit that is new enough stops the start with no
+// minimal run, and the Owner hears once over several polls.
+func TestQ1_AStoredUsageAtALimitThatIsNewEnoughStopsTheStartAndNotifiesOnce(t *testing.T) {
+	sc := newScene(t)
+	// A minimal run would read a usage below the limit, and would start.
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	storeUsage(service, 0.90, sceneNow.Add(-time.Minute))
+	for range 3 {
+		sc.pollAndWait(t, service)
+	}
+
+	if n := sc.quotaRuns(t); n != 0 {
+		t.Errorf("%d minimal runs, want 0", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want 0", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of #10 = %v, want cumin/status/ready kept", got)
+	}
+	q1 := sc.q1Messages()
+	if len(q1) != 1 || !strings.Contains(q1[0], "The 5h quota window reached its limit") {
+		t.Errorf("Q1 notifications = %q, want one about the 5h window", q1)
+	}
+}
+
+// A start with no stored usage makes one minimal run.
+func TestQ1_AStartWithNoStoredUsageCostsOneMinimalRun(t *testing.T) {
+	sc := newScene(t)
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs, want 1", n)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+}
+
+// A read of the usage that fails is kept for the rest of the poll: two
+// waiting requests of one poll cost one minimal run, and neither changes a
+// label, counts a request, or starts an agent. The next poll reads again,
+// and both requests start when that read succeeds.
+func TestQ1_AFailedReadOfTheUsageIsKeptForTheRestOfThePoll(t *testing.T) {
+	sc := newScene(t, cliOptions{})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "second", Labels: []string{"cumin/status/ready", "risk/low"}})
+	sc.failQuota(t)
+	service := sc.service()
+	service.Settings.MaxIssuesInProgress = 2
+	sc.failingCheck(t, service, 0)
+	sc.pollAndWait(t, service)
+
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs in the poll, want 1 for two waiting requests", n)
+	}
+	sc.assertNoStartAtTheLimit(t, []string{"cumin/status/checking", "risk/low"})
+	if n := service.State.Issue("example-org/example-repo", 10).CheckFixRequests; n != 0 {
+		t.Errorf("the state file counts %d check fix requests, want none", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 11).Labels; !slices.Equal(got, []string{"cumin/status/ready", "risk/low"}) {
+		t.Errorf("labels of #11 = %v, want the ready issue as it was", got)
+	}
+	q1 := sc.q1Messages()
+	if len(q1) != 1 || !strings.Contains(q1[0], "The quota usage was not read before the start of an agent") {
+		t.Errorf("Q1 notifications = %q, want one about the unread usage", q1)
+	}
+
+	// The next poll reads again: the mark does not outlive the poll.
+	sc.pollAndWait(t, service)
+	if n := sc.quotaRuns(t); n != 2 {
+		t.Errorf("%d minimal runs after two polls, want 2: one for each poll", n)
+	}
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs while the usage is not read, want 0", n)
+	}
+
+	// A read that succeeds sets no mark: both requests start in the same
+	// poll. The run of #11 ends with no pull request, so cumin requests its
+	// implementation again: the runs are counted for each issue.
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	sc.pollAndWait(t, service)
+	if id := service.State.Issue("example-org/example-repo", 11).SessionID; id == "" {
+		t.Error("the state file holds no session of #11 after the read, want its implementation started")
+	}
+	if n := service.State.Issue("example-org/example-repo", 10).CheckFixRequests; n != 1 {
+		t.Errorf("the state file counts %d check fix requests after the read, want 1", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 11).Labels; slices.Contains(got, "cumin/status/ready") {
+		t.Errorf("labels of #11 after the read = %v, want the issue out of cumin/status/ready", got)
+	}
+}
+
+// runEnd is the time at which the Implementer run of implementerRunEnded
+// ends: more than 5 minutes after the minimal run before it. The usage of
+// that minimal run is then too old for the next start, so that only the
+// usage of the run end can save a minimal run.
+var runEnd = sceneNow.Add(10 * time.Minute)
+
+// implementerRunEnded polls once on a ready issue: one minimal run reads a
+// usage below every limit at sceneNow, and the Implementer run ends through
+// the fake CLI at runEnd, where its done.jsonl reports a usage below every
+// limit too. cumin stores that usage by itself (quotaAfterRun); the test
+// writes no usage. Every agent run of the scene holds until a release.
+func implementerRunEnded(t *testing.T) (*scene, *workflow.Service) {
+	t.Helper()
+	sc := newScene(t, cliOptions{reviews: []string{"NONE", "APPROVE"}, holds: true})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.setQuota(t, 0.10, sceneNow.Add(2*time.Hour), 0.10, sceneNow.Add(time.Hour))
+	service := sc.service()
+	withState(t, service)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Fatalf("%d minimal runs before the Implementer, want 1", n)
+	}
+	sc.clock.Set(runEnd)
+	sc.release(t)
+	service.Wait()
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after the first poll, want 1: the Implementer", n)
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/checking") {
+		t.Fatalf("labels of #10 after the Implementer = %v, want cumin/status/checking", got)
+	}
+	// The state holds the usage that done.jsonl reports, read at the end
+	// of the run.
+	stored, ok := service.State.Quota()
+	if !ok || !stored.ReadAt.Equal(runEnd) || stored.Weekly.Utilization != 0.51 {
+		t.Fatalf("stored usage = %+v, %v, want the weekly 0.51 of the run, read at %v", stored, ok, runEnd)
+	}
+	return sc, service
+}
+
+// reviewerStartsAt polls at the time, and checks that the poll starts the
+// Reviewer as the second agent run. It lets that run end.
+func (sc *scene) reviewerStartsAt(t *testing.T, service *workflow.Service, at time.Time) {
+	t.Helper()
+	sc.clock.Set(at)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2: the Implementer and the Reviewer", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: review") {
+		t.Errorf("the second request is not a review:\n%s", text)
+	}
+}
+
+// The usage that the end of an Implementer run reports reaches the next
+// start: the checks pass, the Reviewer starts 5 minutes after the end of
+// the run, and no minimal run happens before it. The minimal run before
+// the Implementer is 15 minutes old then, so the usage of the run end alone
+// saves the minimal run. The two starts cost one minimal run.
+func TestQ1_TheUsageOfARunEndLetsTheNextStartSkipTheMinimalRun(t *testing.T) {
+	sc, service := implementerRunEnded(t)
+	sc.reviewerStartsAt(t, service, runEnd.Add(5*time.Minute))
+
+	if n := sc.quotaRuns(t); n != 1 {
+		t.Errorf("%d minimal runs, want 1: none before the Reviewer", n)
+	}
+}
+
+// The usage of a run end is new enough for 5 minutes only: a Reviewer that
+// starts later than that costs exactly one more minimal run.
+func TestQ1_TheUsageOfARunEndThatIsOlderCostsOneMinimalRun(t *testing.T) {
+	sc, service := implementerRunEnded(t)
+	sc.reviewerStartsAt(t, service, runEnd.Add(5*time.Minute+time.Second))
+
+	if n := sc.quotaRuns(t); n != 2 {
+		t.Errorf("%d minimal runs, want 2: exactly one before the Reviewer", n)
 	}
 }

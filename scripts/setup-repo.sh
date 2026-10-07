@@ -1,7 +1,7 @@
 #!/bin/sh
 # Prepare a target repository for cumin with the administrator's own gh login:
-# the protected-path workflow, a starter .cumin/config.toml, the rulesets, and
-# the priority labels that .cumin/config.toml names.
+# the protected-path workflow, a starter .cumin/config.toml, the rulesets, the
+# priority labels that .cumin/config.toml names, and the labels of cumin.
 # cumin itself never uses administrator permissions, so a person runs this.
 #
 # Usage:
@@ -9,8 +9,8 @@
 #       [--implementer-app <slug>] [--required-check <name>]... [--dry-run]
 #
 # The script asks before it creates a priority label, and creates none without
-# the answer "y". Running the script again with the same arguments changes
-# nothing.
+# the answer "y". It creates the missing labels of cumin.
+# Running the script again with the same arguments changes nothing.
 # It needs only gh (logged in, with the "workflow" scope) and standard tools.
 set -eu
 
@@ -285,6 +285,62 @@ if [ -s "$work/priority-labels" ]; then
     fi
   fi
 fi
+
+# --- The labels of cumin --------------------------------------------------------
+
+# repository_labels
+# Prints the labels that cumin creates, one for each line, as
+# "name|color|description": the same list as RepositoryLabels() of
+# internal/workflow/labels.go. A test compares the two.
+repository_labels() {
+  cat <<'LABELS'
+cumin/type/requirement|5319E7|This is a requirement issue
+cumin/type/owner-task|5319E7|The Owner does this work by hand; cumin does not start it
+cumin/status/ready|0E8A16|The Owner says: this issue can start
+cumin/status/planning|1D76DB|The Planner splits the requirement
+cumin/status/implementing|1D76DB|The Implementer works on the issue, or the sub-issues are in progress
+cumin/status/reviewing|1D76DB|The Reviewer works on the pull request
+cumin/status/checking|BFD4F2|GitHub runs the required checks
+cumin/status/accepting|1D76DB|The Planner checks the merged work against the requirement
+cumin/status/merging|1D76DB|cumin merges the pull request and closes the issue
+cumin/status/awaiting-plan-review|FBCA04|Waiting for the Owner to review the plan and the sub-issues
+cumin/status/awaiting-merge-decision|FBCA04|Waiting for the Owner to review the pull request and decide the merge
+cumin/status/awaiting-acceptance|FBCA04|Waiting for the Owner to accept the requirement or send work back
+cumin/status/awaiting-decision|D93F0B|cumin cannot go on; waiting for an answer of the Owner
+risk/low|C2E0C6|A few lines with an obvious effect; cumin merges
+risk/medium|FEF2C0|Everything else; the Owner merges
+risk/high|F9D0C4|Cannot be undone by a revert; the Owner merges
+LABELS
+}
+
+# create_repository_labels
+# Creates each label of repository_labels that the repository does not have.
+# cumin creates the same labels when it starts, so the script does not ask.
+create_repository_labels() {
+  gh api --paginate "repos/$repo/labels" --jq '.[].name' >"$work/labels" || die "cannot list the labels of $repo"
+  # GitHub label names ignore case.
+  tr '[:upper:]' '[:lower:]' <"$work/labels" >"$work/labels-lower"
+  repository_labels >"$work/cumin-labels"
+  missing=0
+  while IFS='|' read -r label color description; do
+    if printf '%s\n' "$label" | tr '[:upper:]' '[:lower:]' | grep -Fxq -f - "$work/labels-lower"; then
+      continue
+    fi
+    missing=1
+    if [ "$dry_run" -eq 1 ]; then
+      echo "would create the label $label"
+      continue
+    fi
+    gh api -X POST "repos/$repo/labels" -f name="$label" -f color="$color" \
+      -f description="$description" >/dev/null </dev/null || die "cannot create the label $label"
+    echo "created    label $label"
+  done <"$work/cumin-labels"
+  if [ "$missing" -eq 0 ]; then
+    echo "unchanged  the labels of cumin exist"
+  fi
+}
+
+create_repository_labels
 
 # --- The rulesets ---------------------------------------------------------------
 

@@ -155,23 +155,23 @@ func TestDecide_I3(t *testing.T) {
 		{
 			name:     "a green pull request moves to the review",
 			required: required,
-			subs:     []SubIssue{sub(10, []string{LabelAwaitingChecks, "risk/low"}, passed)},
+			subs:     []SubIssue{sub(10, []string{LabelChecking, "risk/low"}, passed)},
 			want:     []Action{StartReview{Number: 10, PullRequest: 20}},
 		},
 		{
 			name: "no required check moves it at once",
-			subs: []SubIssue{sub(10, []string{LabelAwaitingChecks}, nil)},
+			subs: []SubIssue{sub(10, []string{LabelChecking}, nil)},
 			want: []Action{StartReview{Number: 10, PullRequest: 20}},
 		},
 		{
 			name:     "a check that has not finished waits",
 			required: required,
-			subs:     []SubIssue{sub(10, []string{LabelAwaitingChecks}, pending)},
+			subs:     []SubIssue{sub(10, []string{LabelChecking}, pending)},
 		},
 		{
 			name:     "a failed check waits for I4, not for I3",
 			required: required,
-			subs:     []SubIssue{sub(10, []string{LabelAwaitingChecks}, failed)},
+			subs:     []SubIssue{sub(10, []string{LabelChecking}, failed)},
 		},
 		{
 			name:     "another status label is not I3",
@@ -181,12 +181,12 @@ func TestDecide_I3(t *testing.T) {
 		{
 			name:     "a closed issue is not I3",
 			required: required,
-			subs:     []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}, PullRequests: []PullRequest{{Number: 20, Checks: passed}}}},
+			subs:     []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}, PullRequests: []PullRequest{{Number: 20, Checks: passed}}}},
 		},
 		{
 			name:     "no open pull request waits",
 			required: required,
-			subs:     []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}}},
+			subs:     []SubIssue{{Number: 10, Labels: []string{LabelChecking}}},
 		},
 	}
 	for _, tt := range tests {
@@ -208,20 +208,20 @@ func TestDecide_I3(t *testing.T) {
 	}
 }
 
-// TestSnapshot_HasIssueAwaitingChecks: the poll reads the required checks
+// TestSnapshot_HasIssueChecking: the poll reads the required checks
 // only when an issue waits for them.
-func TestSnapshot_HasIssueAwaitingChecks(t *testing.T) {
+func TestSnapshot_HasIssueChecking(t *testing.T) {
 	waiting := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: []SubIssue{
 		{Number: 10, Labels: []string{LabelImplementing}},
-		{Number: 11, Labels: []string{LabelAwaitingChecks}},
+		{Number: 11, Labels: []string{LabelChecking}},
 	}}}}
-	if !waiting.HasIssueAwaitingChecks() {
-		t.Error("an issue in cumin/status/awaiting-checks was not found")
+	if !waiting.HasIssueChecking() {
+		t.Error("an issue in cumin/status/checking was not found")
 	}
 	closed := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: []SubIssue{
-		{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}},
+		{Number: 10, Closed: true, Labels: []string{LabelChecking}},
 	}}}}
-	if closed.HasIssueAwaitingChecks() {
+	if closed.HasIssueChecking() {
 		t.Error("a closed issue must not ask for the required checks")
 	}
 }
@@ -231,7 +231,7 @@ func TestSnapshot_HasIssueAwaitingChecks(t *testing.T) {
 func TestDecide_I4(t *testing.T) {
 	required := []RequiredCheck{{Name: "ci"}, {Name: "lint", Integration: 15368}}
 	waiting := func(number int, checks ...CheckResult) SubIssue {
-		return SubIssue{Number: number, Labels: []string{LabelAwaitingChecks, "risk/low"},
+		return SubIssue{Number: number, Labels: []string{LabelChecking, "risk/low"},
 			PullRequests: []PullRequest{{Number: number + 10, Checks: checks}}}
 	}
 	ci := func(c CheckConclusion) CheckResult { return CheckResult{Name: "ci", Conclusion: c} }
@@ -297,14 +297,14 @@ func TestDecide_I4(t *testing.T) {
 }
 
 // TestDecide_I14_WhileTheOwnerDecides covers I14 for an issue in
-// cumin/status/awaiting-owner-review: only a CONFLICTING pull request sends
+// cumin/status/awaiting-merge-decision: only a CONFLICTING pull request sends
 // the issue back, and the candidates of I12 and of I13 come before it.
 func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 	const head = "1111"
 	awaitingOwner := func(number int, mergeable MergeableState, reviews ...Review) SubIssue {
-		return SubIssue{Number: number, Labels: []string{LabelAwaitingOwnerReview, "risk/medium"},
-			AwaitingOwnerReviewAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
-			PullRequests:          []PullRequest{{Number: number + 10, HeadCommit: head, Mergeable: mergeable, Reviews: reviews}}}
+		return SubIssue{Number: number, Labels: []string{LabelAwaitingMergeDecision, "risk/medium"},
+			AwaitingMergeDecisionAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+			PullRequests:            []PullRequest{{Number: number + 10, HeadCommit: head, Mergeable: mergeable, Reviews: reviews}}}
 	}
 	owner := func(state ReviewState) Review {
 		return Review{Author: "the-owner", State: state, Commit: head, SubmittedAt: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC)}
@@ -396,7 +396,7 @@ func TestDecide_I14(t *testing.T) {
 	required := []RequiredCheck{{Name: "ci"}}
 	ci := func(c CheckConclusion) []CheckResult { return []CheckResult{{Name: "ci", Conclusion: c}} }
 	waiting := func(number int, mergeable MergeableState, checks []CheckResult) SubIssue {
-		return SubIssue{Number: number, Labels: []string{LabelAwaitingChecks, "risk/low"},
+		return SubIssue{Number: number, Labels: []string{LabelChecking, "risk/low"},
 			PullRequests: []PullRequest{{Number: number + 10, Mergeable: mergeable, Checks: checks}}}
 	}
 
@@ -442,7 +442,7 @@ func TestDecide_I14(t *testing.T) {
 		},
 		{
 			name: "a closed issue is not I14",
-			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}, PullRequests: []PullRequest{{Number: 20, Mergeable: Conflicting}}}},
+			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}, PullRequests: []PullRequest{{Number: 20, Mergeable: Conflicting}}}},
 		},
 		{
 			name: "lowest issue number first",
@@ -484,7 +484,7 @@ func TestDecide_I15(t *testing.T) {
 		return []CheckResult{{Name: "ci", Conclusion: ci}, {Name: "lint", Conclusion: lint}, {Name: "unit", Conclusion: CheckPassed}}
 	}
 	waiting := func(number int, mergeable MergeableState, checks []CheckResult) SubIssue {
-		return SubIssue{Number: number, Labels: []string{LabelAwaitingChecks, "risk/low"}, AwaitingChecksAt: labeled,
+		return SubIssue{Number: number, Labels: []string{LabelChecking, "risk/low"}, CheckingAt: labeled,
 			PullRequests: []PullRequest{{Number: number + 10, HeadCommit: "abc", HeadCommittedAt: labeled.Add(-time.Minute), Mergeable: mergeable, Checks: checks}}}
 	}
 	pushed := func(sub SubIssue, at time.Time) SubIssue {
@@ -561,23 +561,23 @@ func TestDecide_I15(t *testing.T) {
 		},
 		{
 			name: "no open pull request, before the wait time is over, nothing",
-			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}, AwaitingChecksAt: labeled}},
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelChecking}, CheckingAt: labeled}},
 			now:  labeled.Add(wait - time.Second),
 		},
 		{
 			name: "no open pull request, at the wait time, stops the issue",
-			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}, AwaitingChecksAt: labeled}},
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelChecking}, CheckingAt: labeled}},
 			now:  labeled.Add(wait),
 			want: []Action{StopForUnreportedChecks{Number: 10, Waited: wait}},
 		},
 		{
 			name: "no open pull request and a label time that was not read gives nothing",
-			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks}}},
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelChecking}}},
 			now:  labeled.Add(2 * wait),
 		},
 		{
 			name: "a label time that was not read gives nothing",
-			subs: []SubIssue{{Number: 10, Labels: []string{LabelAwaitingChecks},
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelChecking},
 				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
 			now: labeled.Add(2 * wait),
 		},
@@ -588,13 +588,13 @@ func TestDecide_I15(t *testing.T) {
 		},
 		{
 			name: "another status label is not I15",
-			subs: []SubIssue{{Number: 10, Labels: []string{LabelReviewing}, AwaitingChecksAt: labeled,
+			subs: []SubIssue{{Number: 10, Labels: []string{LabelReviewing}, CheckingAt: labeled,
 				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
 			now: labeled.Add(2 * wait),
 		},
 		{
 			name: "a closed issue is not I15",
-			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelAwaitingChecks}, AwaitingChecksAt: labeled,
+			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}, CheckingAt: labeled,
 				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
 			now: labeled.Add(2 * wait),
 		},

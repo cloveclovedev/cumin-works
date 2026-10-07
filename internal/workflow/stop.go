@@ -3,7 +3,7 @@ package workflow
 // This file holds the one place that stops an issue for the Owner. Every
 // row of issue-states.md that hands work back uses it with its own row
 // number: post one comment on the issue, replace the status label with
-// cumin/status/awaiting-owner-decision, then notify the Owner. I2, I4, and
+// cumin/status/awaiting-decision, then notify the Owner. I2, I4, and
 // R2, I3, I5, I8, I10, and I15 use it today.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
@@ -31,7 +31,7 @@ const (
 	RowR2 = "R2"
 	// RowR4 is the end of a Planner run that checked the acceptance.
 	RowR4 = "R4"
-	// RowI3 is the end of a Reviewer run that ended abnormally twice.
+	// RowI3 is a request of the review that did not start, twice.
 	RowI3 = "I3"
 	// RowI5 is the end of a Reviewer run whose review cumin did not find
 	// on the head commit, twice (the failure column of I5).
@@ -50,6 +50,10 @@ const (
 	// RowI12 is the merge after the approval of the Owner: a risk label
 	// that is not exactly one, a merge that failed, or a close that failed.
 	RowI12 = "I12"
+	// RowMerging names the steps in cumin/status/merging, which have no
+	// row code: a merge that GitHub refused for a lasting reason, or a
+	// close after the merge that failed.
+	RowMerging = "merging"
 	// RowI14 is a pull request that conflicts with the default branch
 	// while its issue waits for the checks: a conflict resolution that
 	// left the head where it was.
@@ -86,6 +90,10 @@ type stop struct {
 	reason string
 	// comment is the text to post on the issue.
 	comment string
+	// labelFirst replaces the status label before the comment is written:
+	// the stop after a blocked result. A comment that GitHub refuses then
+	// leaves the issue with the Owner, and no poll requests the work again.
+	labelFirst bool
 	// labelDone says that the caller already replaced the status label.
 	// A stop that a poll decides (I4, I15) changes the label first: a label that
 	// cumin cannot change would otherwise repeat the comment and the
@@ -93,48 +101,65 @@ type stop struct {
 	labelDone bool
 }
 
+// notWrittenNote is what the notification adds to the reason when the
+// comment was not written on the issue.
+const notWrittenNote = " cumin did not write the comment on the issue; the log of the Host holds the whole text."
+
 // stopForOwner posts the comment, replaces the status label, and notifies
-// the Owner, in that order. Every step is logged with the row.
+// the Owner, in that order; with labelFirst, the label comes before the
+// comment. Every step is logged with the row.
 //
 // A step that fails is logged and does not stop the next one: the Owner
 // must learn about a stopped issue even when one call failed. Nothing is
 // undone. What cumin wrote on GitHub is the fact of the matter, and the
-// notification only asks the Owner to look.
+// notification only asks the Owner to look. A comment that was not written
+// goes to the log as a whole, and the notification says so.
 func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, st stop) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	log = log.With("row", st.row)
 	// The comment holds the whole reason, so the notification links to it.
 	// Until it is written, the issue itself is the link.
 	link := github.IssueURL(owner, repo, st.issue)
+	reason := st.reason
 
 	token, err := target.Token(ctx)
 	if err != nil {
-		log.Error(st.row+": no token; the issue keeps its label", "error", err.Error())
+		log.Error(st.row+": no token; the issue keeps its label, and the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
+		reason += notWrittenNote
 	} else {
+		move := func() {
+			switch {
+			case st.labelDone:
+				// The caller changed the label and logged it.
+			case len(st.labels) == 0:
+				log.Error(st.row + ": the labels of the issue were not read; the label was not changed")
+			default:
+				labels := ReplaceStatusLabel(st.labels, LabelAwaitingDecision)
+				if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
+					log.Error(st.row+": the label was not changed", "error", err.Error())
+				} else {
+					log.Info(st.row+": the issue waits for the Owner", "labels", labels)
+				}
+			}
+		}
+		if st.labelFirst {
+			move()
+		}
 		if comment, err := s.GitHub.CreateIssueComment(ctx, token, owner, repo, st.issue, st.comment); err != nil {
-			log.Error(st.row+": the reason was not written on the issue", "error", err.Error())
+			log.Error(st.row+": the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
+			reason += notWrittenNote
 		} else {
 			link = comment.URL
 			log.Info(st.row+": wrote the reason on the issue", "comment", comment.ID)
 		}
-		switch {
-		case st.labelDone:
-			// The caller changed the label and logged it.
-		case len(st.labels) == 0:
-			log.Error(st.row + ": the labels of the issue were not read; the label was not changed")
-		default:
-			labels := ReplaceStatusLabel(st.labels, LabelAwaitingOwnerDecision)
-			if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
-				log.Error(st.row+": the label was not changed", "error", err.Error())
-			} else {
-				log.Info(st.row+": the issue waits for the Owner", "labels", labels)
-			}
+		if !st.labelFirst {
+			move()
 		}
 	}
 
 	s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Row:        st.row,
-		Reason:     st.reason,
+		Reason:     reason,
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", st.issue),
 		Link:       link,
@@ -174,8 +199,7 @@ func (s *Service) subIssueNow(ctx context.Context, log *slog.Logger, target Targ
 	return sub, err == nil
 }
 
-// readSubIssueNow is subIssueNow with the error of the read, for a step
-// that is kept after a temporary failure (keptstep.go).
+// readSubIssueNow is subIssueNow with the error of the read.
 func (s *Service) readSubIssueNow(ctx context.Context, log *slog.Logger, target Target, number int) (SubIssue, error) {
 	token, err := target.Token(ctx)
 	if err != nil {
@@ -298,23 +322,41 @@ func CloseFailedReason(pullRequest int, answer string) string {
 	return fmt.Sprintf("cumin-core merged the pull request #%d, but could not close this issue; GitHub answered: %s. Close this issue by hand.", pullRequest, strings.TrimSuffix(answer, "."))
 }
 
-// SplitReason is the sentence of one failed check of R2, for the comment
-// and the notification alike.
+// SplitReason is the sentence of "stop the split for the Owner" when the
+// split fails a check of R2 after two requests, for the comment and the
+// notification alike.
 func SplitReason(v SplitVerification) string {
+	failed := "the verification of the split failed"
 	switch v.Failure {
 	case SplitNoSubIssue:
-		return "The Planner reported done, but this requirement issue has no sub-issue."
+		failed = "this requirement issue has no sub-issue"
 	case SplitNoRiskLabel:
-		return fmt.Sprintf("The Planner reported done, but the sub-issue #%d has no risk label.", v.SubIssue)
+		failed = fmt.Sprintf("the sub-issue #%d has no risk label", v.SubIssue)
 	case SplitTwoRiskLabels:
-		return fmt.Sprintf("The Planner reported done, but the sub-issue #%d has more than one risk label.", v.SubIssue)
+		failed = fmt.Sprintf("the sub-issue #%d has more than one risk label", v.SubIssue)
 	}
-	return "The verification of the split failed."
+	return "After the Planner run, " + failed + ". cumin requested the split again, and the check of the split failed again."
 }
 
-// abnormalReason is the sentence of a second abnormal end of the same
-// request. The two runs can end in different ways, and the Owner needs the
-// kind of each one to know where to look.
-func abnormalReason(role string, first, second fmt.Stringer) string {
-	return fmt.Sprintf("The %s run ended abnormally (%s). cumin ran the same request again, and it ended abnormally too (%s).", role, first, second)
+// WorkDirectoryReason is the sentence of a work directory that cumin did
+// not prepare for the first request and for the second request of one stay
+// in cumin/status/implementing. The error stays in the log of the Host,
+// because it can hold a path of the Host.
+func WorkDirectoryReason() string {
+	return "cumin did not prepare the work directory of this issue, so the Implementer did not start. cumin requested the implementation again, and the work directory was not prepared again. The log of the Host holds the error."
+}
+
+// ReviewerNotStartedReason is the sentence of a second request to the
+// Reviewer of one stay in cumin/status/reviewing that did not start. The
+// error stays in the log of the Host, because it can hold a path of the
+// Host.
+func ReviewerNotStartedReason() string {
+	return "cumin sent two requests to the Reviewer during this review, and the Reviewer did not start for the last one: cumin did not prepare the work directory, or did not start the agent. The log of the Host holds the error."
+}
+
+// AfterAbnormalEndReason adds, to the reason of a stop, the kind of the
+// abnormal end of the run of the role that the stop follows: the Owner
+// needs the kind to know where to look.
+func AfterAbnormalEndReason(reason, role string, kind fmt.Stringer) string {
+	return fmt.Sprintf("%s The last %s run ended abnormally (%s).", reason, role, kind)
 }
