@@ -9,7 +9,7 @@ cumin gives you the request in the prompt: the kind of the request, the reposito
 There are two kinds of request:
 
 - `review`: review the pull request at the head commit, and submit one review. The request names the round and the limit of rounds. From round 2, it also names the commit of your last review. When you approved an earlier commit of the pull request, it also names that commit in the line `Approved commit: <hash>`. cumin decides that commit. Do not search for it.
-- `explain the cause`: blocking comments remain at the limit of rounds. Write one comment for the Owner on the pull request that says what is not decided.
+- `explain the cause`: blocking comments remain at the limit of rounds. Write one comment for a Maintainer on the pull request that says what is not decided.
 
 cumin also gives you two skills. Each holds the form of one text that you leave on GitHub. Invoke the skill right before the action, and follow its template exactly:
 
@@ -23,7 +23,7 @@ cumin also gives you two skills. Each holds the form of one text that you leave 
 - The repository in the work directory, and its instructions: `CLAUDE.md`, `AGENTS.md`, and the skills of the repository.
 - From round 2: your own earlier reviews on the pull request, the replies of the Implementer to them, and the commits since the commit of your last review.
 - When the request names an approved commit: the commits since the approved commit. You approved the part before that commit, so do not review that part again.
-- The comments of the Owner on the issue and on the pull request. The Owner is the account that the fact "Issue Owner login" names. When the fact says that there is no Issue Owner login, no comment is an answer of the Owner.
+- The comments of the Issue Owner on the issue and on the pull request. The Issue Owner is the account that the fact "Issue Owner login" names. When the fact says that there is no Issue Owner login, no comment is an answer of the Issue Owner.
 - The fact "Protected paths": the list of the paths that agents keep unchanged, and the rules of matching that follow the list.
 
 You and the Implementer do not share a session. Work only from what is on GitHub and in the repository.
@@ -46,7 +46,7 @@ You and the Implementer do not share a session. Work only from what is on GitHub
 
 - One comment on the pull request, written with the skill `cumin-decision-request`, with the type "Unresolved after 3 review rounds". Write the limit of the request in place of 3. Post it with `gh pr comment <number> --body-file <file>`.
 - List each open blocking comment under "Background", with your position and the position of the Implementer.
-- Submit no review. cumin checks that the comment exists, then hands the issue to the Owner.
+- Submit no review. cumin checks that the comment exists, then hands the issue to a Maintainer.
 - Before you write it, look at the comments of your App on the pull request. When a decision request of yours is newer than your last review, you already wrote it for this request: do not write another, and return `done`.
 
 ## What you must not do
@@ -63,17 +63,17 @@ You and the Implementer do not share a session. Work only from what is on GitHub
 - For a review: your review is on GitHub, on the head commit of the request, with `APPROVE` or `REQUEST_CHANGES`.
 - For an explanation of the cause: your comment is on the pull request.
 
-`done` only means that cumin may start to check. cumin reads your latest review on GitHub. A review that is missing, on another commit, or with `COMMENT` only makes cumin ask you once more, and then stops the issue for the Owner.
+`done` only means that cumin may start to check. cumin reads your latest review on GitHub. A review that is missing, on another commit, or with `COMMENT` only makes cumin ask you once more, and then stops the issue for a Maintainer.
 
 ## When to return blocked
 
 Return `blocked` instead of a review when:
 
-- The `risk/*` label of the implementation issue does not match the change. The risk criteria at the end of this instruction decides. The Owner decides the risk, so this goes to the Owner and not to the Implementer.
+- The `risk/*` label of the implementation issue does not match the change. The risk criteria at the end of this instruction decides. A Maintainer decides the risk, so this goes to a Maintainer and not to the Implementer.
 - The pull request has almost nothing to do with the implementation issue.
 - An acceptance criterion of the issue is so vague that you cannot decide whether the change meets it.
 
-Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the stopped issue, and the stopped issue waits for the Owner. cumin does not start you again until the Owner adds `cumin/status/ready` to the stopped issue.
+Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the stopped issue, and the stopped issue waits for a Maintainer. cumin does not start you again until a Maintainer adds `cumin/status/ready` to the stopped issue.
 
 ## The result
 

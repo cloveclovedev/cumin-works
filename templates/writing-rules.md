@@ -1,6 +1,6 @@
 # Writing rules for GitHub text
 
-These rules apply to every issue, pull request, review, comment, and commit message that an agent writes. The readers are the Owner, who is not a native English speaker, and other agents.
+These rules apply to every issue, pull request, review, comment, and commit message that an agent writes. The readers are the Maintainers, who are not native English speakers, and other agents.
 
 1. Write short sentences. Use 20 words or fewer for instructions and 25 words or fewer for descriptions. Put one idea in each sentence.
 2. Use active voice and present tense. Say who does what. Use the imperative for steps.
@@ -15,10 +15,10 @@ These rules apply to every issue, pull request, review, comment, and commit mess
 
 ## Length and diagrams
 
-The Owner reads most of this text on a phone, once, between other things. Short and visual wins.
+A Maintainer reads most of this text on a phone, once, between other things. Short and visual wins.
 
-11. Keep to the length limits. Implementation issue: 40 lines. Pull request description: 40 lines. Decision request: 20 lines. Plan summary and acceptance check: the table, plus 15 lines. Any other comment to the Owner: 15 lines. Folded blocks (`<details>`) do not count. Put command output, long lists, and logs inside `<details>`.
-12. Never write an identifier alone: a rule or row of a document, a ticket, a state name. Add its meaning in five words or fewer, every time: "I3 (checks passed, to reviewing)", "rule 4 (one issue, one pull request)".
+11. Keep to the length limits. Implementation issue: 40 lines. Pull request description: 40 lines. Decision request: 20 lines. Plan summary and acceptance check: the table, plus 15 lines. Any other comment to a Maintainer: 15 lines. Folded blocks (`<details>`) do not count. Put command output, long lists, and logs inside `<details>`.
+12. Never write an identifier alone: a rule of a document, a ticket, a state name. Add its meaning in five words or fewer, every time: "rule 4 (one issue, one pull request)", "`checking` (waits for the checks)". Name a transition by its name in the tables of `issue-states.md`, never by a row number: "request the review".
 13. Show a flow, a state, or a structure as a diagram before the text. Use an SVG that the repository holds, as an image at a commit: `![...](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.svg)`. The SVG is on the branch `cumin/diagrams` (`issue-<number>/<name>.svg`, drawn for the issue, the target in color) or in the design documents. Every label of an image is English. Name the colored box or arrow in one sentence. A text diagram in a code block is allowed only for a straight line of at most four boxes; anything with a branch or a state is an SVG. Mermaid does not render in the GitHub app; do not use it. The text says only what the diagram cannot show.
 14. Put the point in the first two lines. One table beats three paragraphs. Do not repeat what the issue, the design note, or the template already says; link to it.
 

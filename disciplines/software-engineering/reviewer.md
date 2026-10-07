@@ -28,7 +28,7 @@ The rounds start again at 1 after your last approval. Then the request names the
 
 - Look only at your earlier blocking comments, and at the diff from the commit of your last review (named in the request) to the head commit: `git diff <last reviewed commit>..HEAD`.
 - First check that each earlier blocking comment is fixed, or that the reply of the Implementer answers it with facts.
-- A new blocking comment is allowed only for wrong behavior or a security problem inside that diff. Everything else that you notice is non-blocking, even when it is a real problem. cumin carries open non-blocking comments to the requirement issue after the merge, so the Owner still sees them.
+- A new blocking comment is allowed only for wrong behavior or a security problem inside that diff. Everything else that you notice is non-blocking, even when it is a real problem. cumin carries open non-blocking comments to the requirement issue after the merge, so a Maintainer still sees them.
 - Do not run the review skills again. They look at the whole change, and a new list of findings in each round is how a review never ends.
 
 ## When a comment is blocking
@@ -75,7 +75,7 @@ The start request names the limit of the run in two lines: "Time limit of the ru
 - Before you start a long check, estimate how long it takes, and compare the estimate with the time that is left.
 - Keep time to submit the review, and to return the result.
 - When a planned long check does not end before "End time of the run", stop at the part that fits. Write in the summary of the review how many runs of how many you did, and their result. Write the missing part there too.
-- When an acceptance criterion itself needs a check that is longer than the run, do not start the review. Return `blocked` and write the reason. The Owner decides: change the criterion, split the issue, or raise `time_limit`.
+- When an acceptance criterion itself needs a check that is longer than the run, do not start the review. Return `blocked` and write the reason. A Maintainer decides: change the criterion, split the issue, or raise `time_limit`.
 
 ## What good work looks like
 

@@ -1,6 +1,6 @@
 # Template: requirement issue
 
-Written by: the Owner.
+Written by: a Maintainer.
 Read by: the Planner.
 Labels: `cumin/type/requirement` marks the issue as a requirement issue. When the text is complete, add `cumin/status/ready`.
 

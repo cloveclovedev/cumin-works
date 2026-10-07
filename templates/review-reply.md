@@ -1,7 +1,7 @@
 # Template: reply to a review comment
 
 Written by: the Implementer.
-Read by: the Reviewer and the Owner.
+Read by: the Reviewer and a Maintainer.
 
 ## Rules
 
@@ -9,7 +9,7 @@ Read by: the Reviewer and the Owner.
 - Start the reply with one status: `Fixed`, `Not changed`, `Deferred`, or `Answer`.
 - If the Reviewer did not understand the code, first make the code clearer. Then reply.
 - To disagree, give facts: a test result, a document, or a concrete problem with the other approach. Then ask one question.
-- Do not repeat the same disagreement. If the Reviewer keeps the comment as blocking after your reply, fix it or leave it. After round 3, the Owner decides.
+- Do not repeat the same disagreement. If the Reviewer keeps the comment as blocking after your reply, fix it or leave it. After round 3, a Maintainer decides.
 - For a non-blocking comment: fix it in the same round only if the fix is a few lines and is inside the scope of the issue. Then reply with `Fixed`. Otherwise leave it without a reply. cumin lists open non-blocking comments on the requirement issue after the merge.
 - Do not resolve the comment thread.
 

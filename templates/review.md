@@ -1,7 +1,7 @@
 # Template: review
 
 Written by: the Reviewer, with the GitHub pull request review feature.
-Read by: the Implementer and the Owner.
+Read by: the Implementer and a Maintainer.
 
 ## Rules
 

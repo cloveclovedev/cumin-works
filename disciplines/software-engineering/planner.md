@@ -16,10 +16,10 @@ Ask these questions of every implementation issue. Split it or rewrite it when t
 6. The size fits. Aim for 100 to 200 changed lines. Do not go over 400 lines or 10 files. A whole file that is deleted, generated code, and a mechanical rename do not count.
 7. The work fits in a day. One engineer who does not know the history finishes it in a few hours to a day.
 8. A change that the risk criteria makes `risk/high` stands alone. Read the criteria at the end of this instruction: it decides, and the criteria of a repository may name changes that the built-in one does not. A change that a revert cannot undo is of that kind, such as a database migration, a deployment or CI setting, authentication, payments, an effect on an external service, the contract of a public API, or the rules of cumin itself. Put such a change in its own smallest issue, so that the other issues stay at a lower risk.
-9. The Implementer can change every file that the work needs. A protected path and a file under `.github/workflows/` are not such files. The fact "Protected paths" of the start request holds the list and the rules of matching. When the work needs one of these files, the change becomes a sub-issue for the Owner, as the role file describes.
+9. The Implementer can change every file that the work needs. A protected path and a file under `.github/workflows/` are not such files. The fact "Protected paths" of the start request holds the list and the rules of matching. When the work needs one of these files, the change becomes a sub-issue for a Maintainer, as the role file describes.
 10. It fits in one run. The Implementer finishes the implementation and its checks, with the tests and the checks of the pull request, within "Time limit of the Implementer". The Reviewer finishes the review within "Time limit of the Reviewer". The start request names both limits in the lines with these labels. Split the issue when it does not fit.
 
-Some work does not fit after every split, such as a long test that must run as a whole. Do not write an implementation issue for that work. Name the work under "Please check" of the plan summary. The Owner decides: raise `roles.<role>.time_limit`, change the criterion, or drop the work.
+Some work does not fit after every split, such as a long test that must run as a whole. Do not write an implementation issue for that work. Name the work under "Please check" of the plan summary. A Maintainer decides: raise `roles.<role>.time_limit`, change the criterion, or drop the work.
 
 ### Questions that stop a split
 
@@ -35,20 +35,20 @@ The number grows when one behavior needs more than one area. That is expected; t
 
 ## How to draw the diagram of an issue
 
-The diagram lets the Owner point at the place that the issue changes, on a phone, without reading the text first.
+The diagram lets a Maintainer point at the place that the issue changes, on a phone, without reading the text first.
 
-- Start from the diagram of the design documents that shows the part: copy its source, and keep its layout and names, so that the Owner recognizes it.
+- Start from the diagram of the design documents that shows the part: copy its source, and keep its layout and names, so that a Maintainer recognizes it.
 - Show the target in one color, red (`#D62728`), with a bold line: the arrow, the state, or the box that the issue builds. Two targets are fine when the issue builds both. Everything else keeps its color.
 - Add a note next to the target when one sentence helps: what this issue adds there.
 - Cut what the issue does not touch, when the diagram would be hard to read on a phone. Keep enough around the target to show where it is.
-- Write every label and note in English: identifiers (`cumin/status/ready`, I3) and short phrases.
+- Write every label and note in English: identifiers (`cumin/status/ready`, `request the review`) and short phrases.
 - When no diagram of the design documents shows the part, draw the smallest new one, and add "the design document gains a diagram of this part" to the acceptance criteria.
 
 ## The risk criteria
 
 The risk criteria of the repository stands at the end of this instruction. Read it before you label an issue. It decides which change is `risk/low`, `risk/medium`, or `risk/high`. cumin does not read it.
 
-When a change sits between two levels, take the higher one. The Owner decides the risk in the end, and a level that is too high costs one reading, while a level that is too low costs a merge that nobody checked.
+When a change sits between two levels, take the higher one. A Maintainer decides the risk in the end, and a level that is too high costs one reading, while a level that is too low costs a merge that nobody checked.
 
 ## Long checks
 
@@ -58,16 +58,16 @@ The start request names the limit of the run in two lines: "Time limit of the ru
 - Before you start a long check, estimate how long it takes, and compare the estimate with the time that is left.
 - Keep time to write the comment, and to return the result.
 - When a planned long check does not end before "End time of the run", stop at the part that fits. Write in the comment how many runs of how many you did, and their result. Write the missing part there too.
-- When a requirement itself needs a check that is longer than the run, do not start the work. Return `blocked` and write the reason. The Owner decides: change the requirement, split the issue, or raise `time_limit`.
+- When a requirement itself needs a check that is longer than the run, do not start the work. Return `blocked` and write the reason. A Maintainer decides: change the requirement, split the issue, or raise `time_limit`.
 
 ## What good work looks like
 
-- The Owner can approve the plan from the plan summary alone, without opening each issue.
+- A Maintainer can approve the plan from the plan summary alone, without opening each issue.
 - Every rule of the requirement issue appears in the coverage list, against at least one issue.
 - The order is a straight line where the work allows it. A dependency exists only where the later issue truly needs the earlier one.
 - Each issue names the files to change and the existing code to follow, so that the Implementer does not search.
 - What the requirement issue does not say, and you decided, stands under "Assumptions" of the plan summary. Nothing that you decided is hidden in an issue body.
-- For an acceptance check: each row carries evidence that the Owner can repeat, and a failing rule carries a proposal, not a fix.
+- For an acceptance check: each row carries evidence that a Maintainer can repeat, and a failing rule carries a proposal, not a fix.
 
 ## When to return blocked
 
