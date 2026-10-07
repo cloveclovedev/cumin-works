@@ -1,13 +1,15 @@
 package workflow
 
-// This file applies Q4 of issue-states.md: when nothing moves on without
-// the Owner, the Owner hears it once. That means that no R1 (split) and no
-// I1 (implement) holds in any target repository, that no agent runs, and
+// This file applies "tell that cumin waits" of issue-states.md: when nothing
+// moves on without a Maintainer, cumin notifies once. That means that no
+// "request the split" and no "request the implementation" holds in any
+// target repository, that no agent runs, and
 // that no issue exists that cumin itself moves on later (an issue that
 // waits for the required checks, or a ready issue that waits for room
-// under the limit). A start that only the quota stops (Q1) is work left:
-// Q1 already named that cause (the Owner's decision on #234). That holds
-// for every start of an agent, in whatever state the issue waits.
+// under the limit). A start that only the quota stops ("stop agent starts")
+// is work left: "stop agent starts" already named that cause (the decision
+// of a Maintainer on #234). That holds for every start of an agent, in
+// whatever state the issue waits.
 
 import (
 	"context"
@@ -15,15 +17,16 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/notify"
 )
 
-// pollResult is what one poll of a repository tells Q4.
+// pollResult is what one poll of a repository tells "tell that cumin waits".
 type pollResult struct {
 	// decided says that the poll decided an action. Either cumin did
-	// something, or R1 or I1 holds: a start that only the quota stops is
+	// something, or "request the split" or "request the implementation"
+	// holds: a start that only the quota stops is
 	// still a decided Plan or Claim. Both mean that cumin is not waiting.
 	decided bool
-	// movesOn says that an issue exists that cumin moves on without the
-	// Owner (Snapshot.MovesWithoutMaintainer). cumin did nothing in this poll,
-	// and still it is not waiting for the Owner.
+	// movesOn says that an issue exists that cumin moves on without a
+	// Maintainer (Snapshot.MovesWithoutMaintainer). cumin did nothing in this
+	// poll, and still it is not waiting for a Maintainer.
 	movesOn bool
 	// waitsForQuota says that a start of an agent waits only for the quota
 	// in any repository. The one check before a start notes it
@@ -31,8 +34,8 @@ type pollResult struct {
 	// add does not join it.
 	waitsForQuota bool
 	// issueInWork says that an issue of the repository is in work
-	// (Snapshot.HasIssueInWork). The waiting notification to the Owner (Q4)
-	// does not read it: the poll loop does, to pick the interval of the
+	// (Snapshot.HasIssueInWork). The waiting notification ("tell that cumin
+	// waits") does not read it: the poll loop does, to pick the interval of the
 	// next poll of the repository.
 	issueInWork bool
 }
@@ -76,11 +79,12 @@ func (s *Service) startWaitsForQuota() bool {
 	return len(s.quotaWaits) > 0
 }
 
-// waitingCheck applies Q4 after a poll. A decided action or a running agent
+// waitingCheck applies "tell that cumin waits" after a poll. A decided
+// action or a running agent
 // ends the silence whatever else happened in the poll. The notification
 // goes out only after a poll that read every repository (complete), since
 // a repository that was not read may hold work. A start that waits only
-// for the quota, and an issue that cumin moves on without the Owner, keep
+// for the quota, and an issue that cumin moves on without a Maintainer, keep
 // the notification back and leave the mark as it is: cumin did nothing.
 // The mark lives in memory: a restart may send the notification once more.
 func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete bool) {

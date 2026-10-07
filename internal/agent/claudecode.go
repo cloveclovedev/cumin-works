@@ -456,19 +456,19 @@ func (c ClaudeCode) readLine(log *slog.Logger, s *stream, line []byte, secrets [
 // marketplace, claude.ai, or skills directory gives a plugin this source
 // (official: Marketplace reference, "Reserved names"). A built-in plugin is
 // part of the CLI, as its built-in tools are, so every one passes, and a
-// new one does not stop the runs after an update of Claude Code (the Owner,
-// on #156).
+// new one does not stop the runs after an update of Claude Code (a
+// Maintainer, on #156).
 const builtinSuffix = "@builtin"
 
 // userContext reports why the init event shows context from outside the
 // work directory, or "" when it shows none. Checked: plugins that are not
 // built in (builtinSuffix) and MCP servers (empty with --setting-sources project,
-// row 27), and
-// memory_paths (absent when auto memory is off, row 86; the live record
-// of #67). plugins and mcp_servers must be present: a record without
-// them cannot confirm that nothing was loaded. The init event lists no
-// instruction files, so instructions cannot be checked here. The reason
-// names the field, not the paths.
+// measured-constraints.md row 27), and
+// memory_paths (absent when auto memory is off, measured-constraints.md
+// row 86; the live record of #67). plugins and mcp_servers must be present: a
+// record without them cannot confirm that nothing was loaded. The init event
+// lists no instruction files, so instructions cannot be checked here. The
+// reason names the field, not the paths.
 func userContext(e event, workDir string, wantSkills []string) string {
 	// A missing field cannot confirm that nothing was loaded. Safe side.
 	if e.Plugins == nil {
@@ -500,7 +500,7 @@ func userContext(e event, workDir string, wantSkills []string) string {
 
 // otherPlugins reports why the plugins of the init event hold one that is
 // not built in, or "" when they hold none. The reason names the source of
-// that plugin, so that the Owner sees what loaded; a source is an id such
+// that plugin, so that the Operator sees what loaded; a source is an id such
 // as "context7@claude-plugins-official", never a path. A list that cumin
 // cannot read, or an entry without source, confirms nothing and stops the
 // run, as a missing field does.

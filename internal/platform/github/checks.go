@@ -1,10 +1,10 @@
 package github
 
-// This file reads the checks that the rules of a branch require. The rows
-// I3 and I4 of docs/ja/requirements/workflow/issue-states.md compare that
-// list with the results of the checks on the head commit of a pull request,
-// which come with the poll snapshot (snapshot.go), so that one poll stays
-// one query.
+// This file reads the checks that the rules of a branch require. The
+// decision on the checks ("request the review", "request a check fix";
+// docs/ja/requirements/workflow/issue-states.md) compares that list with the
+// results of the checks on the head commit of a pull request, which come
+// with the poll snapshot (snapshot.go), so that one poll stays one query.
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 // RequiredCheck is one check that the rules of a branch require. Integration
 // is the database id of the GitHub App that must report it, or 0 when the
 // rule names no App. GitHub counts a check of another App as missing, so the
-// rows I3 and I4 must match the App as well (the ruleset of the sandbox pins
-// cumin-protected-paths to GitHub Actions).
+// decision on the checks must match the App as well (the ruleset of the
+// sandbox pins cumin-protected-paths to GitHub Actions).
 type RequiredCheck struct {
 	Name        string
 	Integration int64
@@ -28,19 +28,20 @@ type RequiredCheck struct {
 // rulePage is the page size of "Get rules for a branch" (1 to 100). The
 // answer is paginated: with per_page=1 the sandbox returned a Link header
 // with four pages on 2026-09-25. A rule that a later page holds must not be
-// missed, because a missed required_status_checks rule would let I3 treat a
-// missing check as passed.
+// missed, because a missed required_status_checks rule would let
+// "request the review" treat a missing check as passed.
 const rulePage = 100
 
 // RequiredChecks returns the checks that the rules of a branch require,
 // sorted by name and without a repeat. Every page of the rules is read. A
 // branch with no ruleset, or one whose rules require no check, gives an
-// empty list; the rows I3 and I4 then treat the checks as passed at once
-// (issue-states.md, the text on required checks).
+// empty list; the decision on the checks then treats the checks as passed
+// at once (issue-states.md, the text on required checks).
 //
 // Official: REST "Get rules for a branch"
 // (GET /repos/{owner}/{repo}/rules/branches/{branch}, 200). An installation
-// token may call it with Metadata: read-only (row 53).
+// token may call it with Metadata: read-only (measured-constraints.md row
+// 53).
 func (c *AppClient) RequiredChecks(ctx context.Context, token, owner, repo, branch string) ([]RequiredCheck, error) {
 	base := fmt.Sprintf("/repos/%s/%s/rules/branches/%s",
 		url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(branch))

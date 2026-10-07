@@ -1,7 +1,8 @@
 package main
 
-// This file is `cumin quota allow` (Q2 of issue-states.md): the Owner lets
-// cumin use the rest of the current 5h window. The command reads the
+// This file is `cumin quota allow` ("resume agent starts" of
+// issue-states.md): the Operator lets cumin use the rest of the current 5h
+// window. The command reads the
 // latest usage that cumin run kept and writes the reset time of that 5h
 // window to the allowance file. It writes nothing else, so each file of the
 // Host keeps one writer (docs/ja/designs/quota.md, the topic on the

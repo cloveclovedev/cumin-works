@@ -1,9 +1,10 @@
 package workflow
 
-// This file is the stop after the current runs: the Owner asked cumin to finish the agent runs
-// that are going on, to start no new work, and then to exit (`cumin stop
-// --after-current-runs`). The request is a file in the state directory of
-// the Host. docs/ja/designs/cumin-core.md, the topic on the stop.
+// This file is the stop after the current runs: the Operator asked cumin to
+// finish the agent runs that are going on, to start no new work, and then to
+// exit (`cumin stop --after-current-runs`). The request is a file in the
+// state directory of the Host. docs/ja/designs/cumin-core.md, the topic on
+// the stop.
 
 import (
 	"time"
@@ -12,7 +13,7 @@ import (
 )
 
 // dropStopRequest removes a stop request that was written before this
-// start of cumin run. A request is for the process that ran when the Owner
+// start of cumin run. A request is for the process that ran when the Operator
 // asked; it never reaches the next start.
 //
 // It also keeps the time of the start. A request that could not be removed
@@ -25,7 +26,7 @@ func (s *Service) dropStopRequest() {
 		return
 	}
 	// A request that is not older than this start is for this process: the
-	// Owner asked while cumin run was starting. It stays. A file that
+	// Operator asked while cumin run was starting. It stays. A file that
 	// cannot be read is no request, and goes.
 	if request, found, err := state.ReadStopRequest(s.StopRequestPath); err == nil && (!found || !request.RequestedAt.Before(s.startedAt)) {
 		return

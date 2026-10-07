@@ -1,8 +1,9 @@
 package workflow
 
 // This file applies the rows of a requirement issue that start and end a
-// Planner run: R1 (start the split), the way out of cumin/status/planning
-// (R2), and the acceptance check. docs/ja/designs/poll.md, the topics on
+// Planner run: "request the split", the way out of cumin/status/planning
+// (the check of the split), and the acceptance check.
+// docs/ja/designs/poll.md, the topics on
 // the request to the Planner and on the end of a run.
 
 import (
@@ -17,9 +18,10 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 )
 
-// plan applies R1: replace the status label of the requirement issue with
-// cumin/status/planning, and only then request the split. When the label
-// change fails, nothing is requested; the next poll decides again.
+// plan applies "request the split": replace the status label of the
+// requirement issue with cumin/status/planning, and only then request the
+// split. When the label change fails, nothing is requested; the next poll
+// decides again.
 //
 // With Again, it applies "request the split again": the issue is already in
 // cumin/status/planning, and the Planner left no split that passes the
@@ -40,8 +42,9 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	if req.permit, ok = s.permitStart(ctx, s.logger().With("repository", target.Repository.String(), "issue", p.Number), "split", config.RolePlanner, target, p.Number); !ok {
 		return nil
 	}
-	// The poll read the Owner of the newest cumin/status/ready before the
-	// decision (readReadyOwners); R1 holds only with that Owner.
+	// The poll read the Issue Owner of the newest cumin/status/ready before
+	// the decision (readReadyOwners); "request the split" holds only with
+	// that Issue Owner.
 	req.issueOwnerLogin = requirement.ReadyOwner
 	repository := target.Repository.String()
 	if p.Again {
@@ -93,11 +96,12 @@ func (s *Service) notStarted(log *slog.Logger, repository string, number int, wo
 	}
 }
 
-// checkAcceptance applies "request the acceptance check" (R4, and R2 with
-// every sub-issue closed): replace the status label of the requirement
-// issue with cumin/status/accepting, and only then request the acceptance
-// check. When the label change fails, nothing is requested; the next poll
-// decides again. No ready of the Owner is needed.
+// checkAcceptance applies "request the acceptance check" (from
+// cumin/status/implementing, and from cumin/status/planning with every
+// sub-issue closed): replace the status label of the requirement issue
+// with cumin/status/accepting, and only then request the acceptance check.
+// When the label change fails, nothing is requested; the next poll decides
+// again. No ready of a Maintainer is needed.
 //
 // With Again, it applies "request the acceptance check again": the issue is
 // already in cumin/status/accepting, and the Planner left no result. The
@@ -160,8 +164,8 @@ type plannerRequest struct {
 	// kind is the request kind of planner.md, for the log.
 	kind string
 	text func(repository string, number int, workDir string) string
-	// issueOwnerLogin is the login of the Owner for the facts of the request,
-	// read before the request. Empty says that there is none.
+	// issueOwnerLogin is the login of the Issue Owner for the facts of the
+	// request, read before the request. Empty says that there is none.
 	issueOwnerLogin string
 	// sessionID is the session that an acceptance check that is requested
 	// again resumes. Empty starts a new session.
@@ -206,7 +210,7 @@ func (w plannerWork) requestAgain() ActionName {
 	return ActionRequestTheSplitAgain
 }
 
-// stop is the action that stops the work for the Owner.
+// stop is the action that stops the work for a Maintainer.
 func (w plannerWork) stop() ActionName {
 	if w == workAcceptanceCheck {
 		return ActionStopTheAcceptanceCheck
@@ -310,11 +314,11 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 // GitHub. So every end is the same case: a done result, an abnormal end,
 // and a run that a restart of cumin cut off, which the next poll finds.
 // Only a blocked result is not read from GitHub: cumin posts the
-// blocked_reason and stops the issue for the Owner at once. When the read
+// blocked_reason and stops the issue for a Maintainer at once. When the read
 // before that stop fails for a temporary reason, cumin writes nothing on
-// GitHub: the log holds the whole blocked_reason, the Owner gets one
-// notification, the issue keeps cumin/status/planning, and the next poll
-// decides from the facts.
+// GitHub: the log holds the whole blocked_reason, one notification goes
+// out, the issue keeps cumin/status/planning, and the next poll decides
+// from the facts.
 //
 // req.again says that the split was already requested again during this
 // stay in cumin/status/planning. When the facts ask for the second request,
@@ -415,7 +419,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 // from the facts on GitHub. So every end is the same case: a done result, an
 // abnormal end, and a run that a restart of cumin cut off, which the next
 // poll finds. Only a blocked result is not read from GitHub: cumin posts the
-// blocked_reason and stops the issue for the Owner at once.
+// blocked_reason and stops the issue for a Maintainer at once.
 //
 // again says that the acceptance check was already requested again during
 // this stay in cumin/status/accepting, and counted that the state file got
@@ -510,13 +514,13 @@ func (s *Service) clearRequirementState(log *slog.Logger, repository string, num
 	}
 }
 
-// NoAcceptanceCheckReason is the sentence of "stop the acceptance check for
-// the Owner" when the Planner left no comment after two requests.
+// NoAcceptanceCheckReason is the sentence of "stop the acceptance check"
+// when the Planner left no comment after two requests.
 const NoAcceptanceCheckReason = "The Planner left no acceptance check comment. cumin requested the acceptance check again, and the Planner left no comment again."
 
-// stopAcceptance applies "stop the acceptance check for the Owner": the
+// stopAcceptance applies "stop the acceptance check": the
 // requirement issue moves from cumin/status/accepting to
-// cumin/status/awaiting-decision, and the Owner is notified. After a
+// cumin/status/awaiting-decision, and a notification goes out. After a
 // question of the Planner, its comment holds the reason, and cumin writes
 // none. Otherwise cumin writes the reason on the issue.
 //
@@ -558,7 +562,7 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 // write, because the read of the issue failed for a temporary reason.
 const PlannerQuestionNotWrittenReason = "The Planner asked a question." + notWrittenNote
 
-// stopAfterPlannerBlocked stops the requirement issue for the Owner after a
+// stopAfterPlannerBlocked stops the requirement issue for a Maintainer after a
 // blocked result, on a new read of the requirement issue. comment is the
 // blocked_reason of the Planner.
 //
@@ -566,7 +570,7 @@ const PlannerQuestionNotWrittenReason = "The Planner asked a question." + notWri
 // written on GitHub: the read comes before every write of the stop, so the
 // issue keeps its label for the next poll. cumin keeps nothing for that
 // poll, so the question of the Planner would be lost: the whole
-// blocked_reason goes to the log, and the Owner gets one notification that
+// blocked_reason goes to the log, and one notification goes out that
 // says so. Every other failed read stops the issue without a label change.
 func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, action ActionName, comment string, leave bool) error {
 	requirement, err := s.requirementIssueNow(ctx, log, target, number)
@@ -593,11 +597,11 @@ func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger,
 	return nil
 }
 
-// reviewPlan applies "ask the Owner to review the plan" (R2): the split
+// reviewPlan applies "ask for the plan review": the split
 // passes the check and a sub-issue is open, so the requirement issue moves
-// from cumin/status/planning to cumin/status/awaiting-plan-review and the
-// Owner is notified. The next poll no longer sees cumin/status/planning, so
-// one split sends one notification.
+// from cumin/status/planning to cumin/status/awaiting-plan-review and a
+// notification goes out. The next poll no longer sees
+// cumin/status/planning, so one split sends one notification.
 func (s *Service) reviewPlan(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ReviewPlan) error {
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingPlanReview)
 	if err != nil {
@@ -617,9 +621,9 @@ func (s *Service) reviewPlan(ctx context.Context, token string, target Target, s
 	return nil
 }
 
-// stopSplit applies "stop the split for the Owner": the requirement issue
+// stopSplit applies "stop the split": the requirement issue
 // moves from cumin/status/planning to cumin/status/awaiting-decision, and
-// the Owner is notified. After a question of the Planner, its comment holds
+// a notification goes out. After a question of the Planner, its comment holds
 // the reason, and cumin writes none. Otherwise cumin writes the reason on
 // the issue.
 //
@@ -656,11 +660,11 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 	return nil
 }
 
-// accept applies R7: the acceptance check comment exists, so the
-// requirement issue moves to cumin/status/awaiting-acceptance and the
-// Owner is notified, whatever the table of the comment says. The next poll
-// no longer sees cumin/status/accepting, so one comment sends one
-// notification.
+// accept applies "ask for the acceptance": the acceptance check comment
+// exists, so the requirement issue moves to
+// cumin/status/awaiting-acceptance and a notification goes out, whatever
+// the table of the comment says. The next poll no longer sees
+// cumin/status/accepting, so one comment sends one notification.
 func (s *Service) accept(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a Accept) error {
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelAwaitingAcceptance)
 	if err != nil {
@@ -681,8 +685,9 @@ func (s *Service) accept(ctx context.Context, token string, target Target, snaps
 }
 
 // readAcceptanceComments adds the facts of the acceptance check to each
-// requirement issue of the snapshot that R4, R7, or the end of the
-// acceptance check needs them for (NeedsComments), and that the way out of
+// requirement issue of the snapshot that "request the acceptance check",
+// "ask for the acceptance", or the end of the acceptance check needs them
+// for (NeedsComments), and that the way out of
 // cumin/status/planning needs them for (SplitNeedsFacts).
 func (s *Service) readAcceptanceComments(ctx context.Context, log *slog.Logger, token string, target Target, snapshot *Snapshot) {
 	for i := range snapshot.RequirementIssues {

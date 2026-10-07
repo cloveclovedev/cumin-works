@@ -1,8 +1,10 @@
 package github
 
 // cumin writes the reason of a stop as a comment on the implementation
-// issue: the blocked_reason of an agent (I2, I10), and its own note when a
-// check fails (I2, I4, I8). This file holds that one write.
+// issue: the blocked_reason of an agent ("stop the implementation",
+// "stop the review"), and its own note when a check fails
+// ("stop the implementation", "stop for failed checks",
+// "stop at the round limit"). This file holds that one write.
 
 import (
 	"context"
@@ -21,7 +23,7 @@ type IssueComment struct {
 }
 
 // CreateIssueComment writes one comment on an issue and returns it. The
-// body is Markdown, as the Owner reads it on GitHub.
+// body is Markdown, as a Maintainer reads it on GitHub.
 //
 // Official: REST "Create an issue comment"
 // (POST /repos/{owner}/{repo}/issues/{issue_number}/comments, 201). The

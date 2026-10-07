@@ -1,10 +1,11 @@
 package workflow
 
-// This file applies I9: when a sub-issue of an open requirement issue is
-// closed and a pull request linked to close it is merged, cumin copies the
-// work left into one follow-up note on the requirement issue. It reads apart from the snapshot, and only
-// for closed sub-issues without a note. docs/ja/designs/poll.md, the topic
-// on the follow-up notes.
+// This file applies "write the follow-up note": when a sub-issue of an open
+// requirement issue is closed and a pull request linked to close it is
+// merged, cumin copies the work left into one follow-up note on the
+// requirement issue. It reads apart from the snapshot, and only for closed
+// sub-issues without a note. docs/ja/designs/poll.md, the topic on the
+// follow-up notes.
 
 import (
 	"context"
@@ -17,8 +18,9 @@ import (
 
 // writeFollowUpNotes writes the missing follow-up notes of the snapshot,
 // and marks each requirement issue whose closed sub-issues need no more
-// note in this poll (FollowUpsDone). R4 waits for that mark, so that the
-// notes come before the request for the acceptance check.
+// note in this poll (FollowUpsDone). "request the acceptance check" waits
+// for that mark, so that the notes come before the request for the
+// acceptance check.
 //
 // The snapshot holds open requirement issues only, so a closed requirement
 // issue gets nothing (principle 6). Whether a note exists is read from
@@ -38,8 +40,9 @@ func (s *Service) writeFollowUpNotes(ctx context.Context, log *slog.Logger, toke
 	}
 }
 
-// followUpLogins are the logins that I9 needs: cumin-core knows its own
-// notes, and the Reviewer App writes the review comments.
+// followUpLogins are the logins that "write the follow-up note" needs:
+// cumin-core knows its own notes, and the Reviewer App writes the review
+// comments.
 type followUpLogins struct {
 	cumin, reviewer string
 }
@@ -87,8 +90,8 @@ func (s *Service) writeNotesOf(ctx context.Context, log *slog.Logger, token stri
 
 // writeFollowUpNote writes the notes of one closed sub-issue: one for each
 // merged pull request that is linked to close it, has no note yet, and
-// leaves work. Who closed the sub-issue does not matter (the Note of the
-// Owner-role session on #239). It reads every pull request before it
+// leaves work. Who closed the sub-issue does not matter (the Note on #239).
+// It reads every pull request before it
 // writes, and each marker names all the pull requests that need a note, so
 // that a write that fails halfway leaves the sub-issue to read again
 // (FollowUpCandidates). It returns the markers of the notes that it wrote.

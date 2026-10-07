@@ -3,7 +3,7 @@ package workflow
 // This file applies the settings that a target repository keeps in .cumin/
 // on its default branch. The order of strength is the defaults, the Host
 // settings file, then the repository file (cumin-core.md, the topic on
-// settings). A repository whose file is wrong is skipped until the Owner
+// settings). A repository whose file is wrong is skipped until a Maintainer
 // merges a fix; the other repositories go on.
 
 import (

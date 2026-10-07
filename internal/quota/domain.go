@@ -1,4 +1,5 @@
-// Package quota holds the pure rules of the quota limits (Q1 to Q3 of
+// Package quota holds the pure rules of the quota limits ("stop agent
+// starts" and the two "resume agent starts" of
 // docs/ja/requirements/workflow/issue-states.md): the pace limit of the
 // weekly window, the limit of the 5h window by time band, whether a
 // window stops the start of an agent, and whether a stored usage is new enough to
@@ -42,9 +43,10 @@ const (
 	Weekly   Name = "weekly"
 )
 
-// Allowance is the Owner's allowance to use the rest of one 5h window (Q2):
-// the 5h limit is 100% before FiveHourUntil, the reset of that window. It
-// never raises the weekly limit. The zero value is no allowance.
+// Allowance is the Operator's allowance to use the rest of one 5h window
+// ("resume agent starts"): the 5h limit is 100% before FiveHourUntil, the
+// reset of that window. It never raises the weekly limit. The zero value is
+// no allowance.
 type Allowance struct {
 	FiveHourUntil time.Time
 }
@@ -128,7 +130,8 @@ func reached(w Window, limit float64, now time.Time) bool {
 const retryMargin = time.Minute
 
 // NextTry is the earliest time at which the stored usage could pass the
-// limits that stop it now (Q3 of issue-states.md). Usage only rises until
+// limits that stop it now ("resume agent starts" at the next try time,
+// issue-states.md). Usage only rises until
 // a reset, so no earlier try can pass. For each window that stops:
 //
 //   - 5h: its reset, or the start of the first time band whose threshold

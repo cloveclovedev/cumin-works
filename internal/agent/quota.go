@@ -1,7 +1,8 @@
 package agent
 
-// This file reads the quota usage before a start (R1, I1). Claude Code
-// reports the usage only in a run that calls the model
+// This file reads the quota usage before a start ("request the split",
+// "request the implementation"). Claude Code reports the usage only in a
+// run that calls the model
 // (measured-constraints.md rows 29, 30), so cumin runs the smallest
 // possible request and reads its rate_limit_event. docs/ja/designs/
 // cumin-core.md (the topic on the quota check before a start) records
@@ -29,7 +30,8 @@ const (
 	quotaSystemPrompt = "Reply with one word."
 	quotaPrompt       = "Reply with the one word OK."
 	// defaultQuotaTimeLimit bounds the run. It ends in one or two
-	// seconds (row 30); a much longer run means that something is wrong.
+	// seconds (measured-constraints.md row 30); a much longer run means
+	// that something is wrong.
 	defaultQuotaTimeLimit = 60 * time.Second
 )
 
@@ -42,7 +44,8 @@ func (c ClaudeCode) quotaArgs() []string {
 		"--model", quotaModel,
 		// No tool at all (CLI reference: --tools "").
 		"--tools", "",
-		// No user-level settings, as in every run (row 6e).
+		// No user-level settings, as in every run
+		// (measured-constraints.md row 6e).
 		"--setting-sources", "project",
 		// No session record on the Host for this throwaway run (CLI
 		// reference: --no-session-persistence).

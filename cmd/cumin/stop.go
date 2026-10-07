@@ -1,6 +1,6 @@
 package main
 
-// This file is `cumin stop --after-current-runs`: the Owner asks the
+// This file is `cumin stop --after-current-runs`: the Operator asks the
 // running cumin to start no new work, to let the agent runs that are going
 // on end, and then to exit. The command writes the stop request file and
 // returns; cumin run reads the file at its next poll and removes it when it

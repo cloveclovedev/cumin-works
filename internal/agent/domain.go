@@ -135,7 +135,8 @@ type QuotaUsage struct {
 
 // QuotaNotRead is the error of ReadQuota: the minimal run did not report
 // the usage. Reason says why, without a number and without output of the
-// CLI. cumin does not start an agent without the usage (Q1).
+// CLI. cumin does not start an agent without the usage ("stop agent
+// starts").
 type QuotaNotRead struct {
 	Reason string
 	Err    error
@@ -157,8 +158,9 @@ type Run struct {
 	Result    Result
 	// BotLogin is the login of the bot user of the App of the role,
 	// "<slug>[bot]". Service.Start sets it from the identity that it read;
-	// the CLI adapter leaves it empty, because it knows no App. I2
-	// compares it with the author of the pull request.
+	// the CLI adapter leaves it empty, because it knows no App. The check
+	// of the pull request after the Implementer ends compares it with the
+	// author of the pull request.
 	BotLogin string
 	// Quota is the quota usage that the run reported. QuotaRead is false
 	// when the run reported none; then Quota is empty.

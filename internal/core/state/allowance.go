@@ -1,9 +1,9 @@
 package state
 
 // This file is the allowance file of the Host: `cumin quota allow` writes
-// it, and `cumin run` reads it at every poll (Q2 of issue-states.md). Each
-// file has one writer, so the two processes need no lock
-// (designs/cumin-core.md, the topic on the files of the Host).
+// it, and `cumin run` reads it at every poll ("resume agent starts" of
+// issue-states.md). Each file has one writer, so the two processes need no
+// lock (designs/cumin-core.md, the topic on the files of the Host).
 
 import (
 	"encoding/json"
@@ -22,8 +22,8 @@ const AllowanceFileName = "quota-allowance.json"
 // Allowance lets cumin use the rest of one 5h window: the 5h limit is 100%
 // until that window resets. It never raises the weekly limit.
 type Allowance struct {
-	// FiveHourUntil is the reset time of the 5h window that the Owner
-	// allowed.
+	// FiveHourUntil is the reset time of the 5h window that the
+	// Operator allowed.
 	FiveHourUntil time.Time `json:"five_hour_until"`
 }
 

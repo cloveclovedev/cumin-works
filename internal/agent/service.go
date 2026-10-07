@@ -189,9 +189,10 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	}
 
 	// 3. The run. The login of the bot goes with the result, so that the
-	// caller can compare it with the author of a pull request (I2). The
-	// clock is read right before the run, so that the end time that the
-	// agent receives is not later than the time at which the run is cut.
+	// caller can compare it with the author of a pull request ("wait for
+	// the checks"). The clock is read right before the run, so that the
+	// end time that the agent receives is not later than the time at which
+	// the run is cut.
 	facts := runFacts{
 		Facts:                req.Facts,
 		TimeLimit:            settings.TimeLimit,

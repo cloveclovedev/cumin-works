@@ -3,7 +3,7 @@ package setup
 // This file writes the LaunchAgent that keeps `cumin run` running on the
 // Host: it starts at login, launchd starts it again when it ends with an
 // error, and its logs go to a file under the state directory. The plist
-// belongs to the Host, so the repository holds no path of the Owner; the
+// belongs to the Host, so the repository holds no path of the Operator; the
 // command takes every value from the process that runs it.
 //
 // The keys come from `man launchd.plist`, and the reason for each is in
@@ -152,7 +152,7 @@ func (a LaunchAgent) Plist() (string, error) {
 // It reports what happened: "written", "unchanged" when the file already
 // holds the same contents, or "kept" when a different file is there and
 // force is false. In the last case the difference is in the error, so that
-// the Owner sees what would change.
+// the Operator sees what would change.
 func InstallLaunchAgent(a LaunchAgent, force bool) (string, error) {
 	plist, err := a.Plist()
 	if err != nil {
@@ -302,7 +302,7 @@ func (a LaunchAgent) ServiceTarget(uid int) string {
 
 // LaunchctlCommands returns the commands that start, stop, restart, and
 // remove the job, in the order of the setup guide. uid is the user id of
-// the Owner (`man launchctl`: a LaunchAgent of a logged-in user lives in
+// the Operator (`man launchctl`: a LaunchAgent of a logged-in user lives in
 // the gui domain).
 func (a LaunchAgent) LaunchctlCommands(uid int) []string {
 	target := a.ServiceTarget(uid)

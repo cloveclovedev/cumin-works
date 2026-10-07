@@ -22,7 +22,7 @@ const StopRequestFileName = "stop-request.json"
 // StopRequest asks the running cumin to start no new work, to let the agent runs
 // that are going on end, and then to exit.
 type StopRequest struct {
-	// RequestedAt is when the Owner asked, for cumin status.
+	// RequestedAt is when the Operator asked, for cumin status.
 	RequestedAt time.Time `json:"requested_at"`
 }
 

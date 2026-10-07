@@ -1,4 +1,4 @@
-// Package workflow holds the rules of cumin (the rows R*, I*, and Q* of
+// Package workflow holds the rules of cumin (the transitions of
 // docs/ja/requirements/workflow/issue-states.md) and the polling loop that
 // applies them.
 //
@@ -19,8 +19,8 @@ import (
 // Label names from the table in issue-states.md.
 const (
 	LabelRequirement = "cumin/type/requirement"
-	// LabelOwnerTask marks a sub-issue whose work the Owner does by hand.
-	// cumin never claims it (I1).
+	// LabelOwnerTask marks a sub-issue whose work a Maintainer does by hand.
+	// cumin never claims it ("request the implementation").
 	LabelOwnerTask = "cumin/type/owner-task"
 
 	LabelReady                 = "cumin/status/ready"
@@ -105,7 +105,7 @@ func (s Snapshot) WithPullRequests(pullRequests map[int][]PullRequest) Snapshot 
 // cumin/status/planning, or cumin/status/accepting, or an open sub-issue with cumin/status/ready,
 // cumin/status/implementing, cumin/status/checking,
 // cumin/status/reviewing, or cumin/status/merging. An issue that waits for
-// the Owner is not in work.
+// a Maintainer is not in work.
 func (s Snapshot) HasIssueInWork() bool {
 	for _, requirement := range s.RequirementIssues {
 		if slices.Contains(requirement.Labels, LabelReady) || slices.Contains(requirement.Labels, LabelPlanning) ||
@@ -142,7 +142,7 @@ type LastPoll struct {
 // RepositoryInWork decides whether a repository is in work, so that cumin
 // polls it at every poll interval. agentRun says that an agent run of the
 // repository is in progress, or that one ended since the last poll. A
-// repository that is not in work has only issues that wait for the Owner,
+// repository that is not in work has only issues that wait for a Maintainer,
 // and cumin polls it at the idle poll interval.
 func RepositoryInWork(last LastPoll, agentRun bool) bool {
 	return agentRun || !last.Ran || last.Failed || last.Acted || last.IssueInWork
@@ -159,7 +159,8 @@ func PollIsDue(inWork bool, sinceLastPoll, pollInterval, idlePollInterval time.D
 }
 
 // HasMaintainerApprovalCandidate reports whether a sub-issue is a candidate of
-// I12, so that the poll reads the required checks for it.
+// "start the merge" after the approval of a Maintainer, so that the poll
+// reads the required checks for it.
 func (s Snapshot) HasMaintainerApprovalCandidate() bool { return len(maintainerApprovals(s)) > 0 }
 
 // RequirementIssue is an open issue with cumin/type/requirement.
@@ -167,20 +168,23 @@ type RequirementIssue struct {
 	Number    int
 	Labels    []string
 	SubIssues []SubIssue
-	// BlockedBy are the issues that block the requirement issue. The Owner
-	// links requirement issues to each other, and R1 waits for them.
+	// BlockedBy are the issues that block the requirement issue. A Maintainer
+	// links requirement issues to each other, and "request the split" waits
+	// for them.
 	BlockedBy []BlockedBy
 	// LabelTimesRead says that ReviewAt and the ReadyAt, CheckingAt,
 	// and AwaitingMergeDecisionAt of the sub-issues were read. The poll reads them
 	// only when a rule needs them (NeedsLabelTimes).
 	LabelTimesRead bool
-	// ReviewAt is when the status label of the issue was last added. R3
+	// ReviewAt is when the status label of the issue was last added. "mark
+	// the requirement as in work"
 	// reads it in cumin/status/awaiting-plan-review and in
 	// cumin/status/awaiting-acceptance, and the end of the acceptance check
 	// reads it in cumin/status/accepting.
 	ReviewAt time.Time
 	// CommentsRead says that AcceptanceCheckAt was read. The poll reads
-	// the comments only when R4 or R7 needs them (NeedsComments).
+	// the comments only when "request the acceptance check" or "ask for the
+	// acceptance" needs them (NeedsComments).
 	CommentsRead bool
 	// AcceptanceCheckAt is when the newest acceptance check comment of the
 	// Planner App was written; zero when there is none.
@@ -203,36 +207,37 @@ type RequirementIssue struct {
 	// (ReadyActorReads).
 	ReadyRead bool
 	// ReadyOwner is the login of the account that added the newest
-	// cumin/status/ready, when that account is the Owner (IsMaintainer). It is
+	// cumin/status/ready, when that account is a Maintainer (IsMaintainer). It is
 	// empty when another account added it, and when it was not read.
 	ReadyOwner string
 	// StatusRead says that StatusCounts was read. The poll reads it only
 	// when cumin is about to act from the status label (StatusActorReads).
 	StatusRead bool
 	// StatusCounts says that the account that added the newest status label
-	// of the issue is the cumin-core App or an Owner (StatusLabelCounts).
+	// of the issue is the cumin-core App or a Maintainer (StatusLabelCounts).
 	// It is false when another account added it, and when it was not read.
 	StatusCounts bool
 	// FollowUpsDone says that no closed sub-issue needs a follow-up note
-	// (I9) any more: each one has its note, was closed without a merge, or
-	// left nothing to copy. The poll sets it after I9, and R4 waits for it.
+	// any more: each one has its note, was closed without a merge, or
+	// left nothing to copy. The poll sets it after "write the follow-up
+	// note", and "request the acceptance check" waits for it.
 	FollowUpsDone bool
 }
 
 // SubIssue is an implementation issue: a sub-issue of a requirement issue.
 type SubIssue struct {
 	Number int
-	// NodeID is the GraphQL ID of the issue. I2 adds the closing link
-	// with it.
+	// NodeID is the GraphQL ID of the issue. "wait for the checks" adds the
+	// closing link with it.
 	NodeID    string
 	Title     string
 	Closed    bool
 	Labels    []string
 	BlockedBy []BlockedBy
 	// PullRequests are the open pull requests that close the issue (the
-	// closing link). Every row reads the pull request of the issue here.
-	// Only I2 finds it by the branch, and then adds the link when it is
-	// missing.
+	// closing link). Every rule reads the pull request of the issue here.
+	// Only the check of the pull request after the Implementer ends finds
+	// it by the branch, and then adds the link when it is missing.
 	PullRequests []PullRequest
 	// ReadyAt is when cumin/status/ready was last added. It is read only
 	// when RequirementIssue.LabelTimesRead is true.
@@ -251,7 +256,7 @@ type SubIssue struct {
 	// (ReadyActorReads).
 	ReadyRead bool
 	// ReadyOwner is the login of the account that added the newest
-	// cumin/status/ready, when that account is the Owner (IsMaintainer). It is
+	// cumin/status/ready, when that account is a Maintainer (IsMaintainer). It is
 	// empty when another account added it, and when it was not read.
 	ReadyOwner string
 	// Implementing are the facts that decide the way out of
@@ -272,7 +277,7 @@ type SubIssue struct {
 // MergingFacts is what cumin reads at every poll to decide the step of one
 // implementation issue in cumin/status/merging.
 type MergingFacts struct {
-	// StatusCounts says that the cumin-core App or an Owner added the
+	// StatusCounts says that the cumin-core App or a Maintainer added the
 	// newest cumin/status/merging (StatusLabelCounts).
 	StatusCounts bool
 	// Merged is the number of the newest pull request that is linked to
@@ -283,7 +288,7 @@ type MergingFacts struct {
 	// Reviewer is the login "<slug>[bot]" of the Reviewer App.
 	Reviewer string
 	// Maintainers says, for each person whose review decides, whether that
-	// person is an Owner (IsMaintainer).
+	// person is a Maintainer (IsMaintainer).
 	Maintainers map[string]bool
 	// Required are the checks that the rules of the default branch
 	// require.
@@ -294,7 +299,7 @@ type MergingFacts struct {
 // cumin/status/reviewing for one implementation issue whose Reviewer does
 // not run. The poll and the end of a Reviewer run read the same facts.
 type ReviewingFacts struct {
-	// StatusCounts says that the cumin-core App or an Owner added the
+	// StatusCounts says that the cumin-core App or a Maintainer added the
 	// newest cumin/status/reviewing (StatusLabelCounts).
 	StatusCounts bool
 	// ReviewingAt is when cumin/status/reviewing was last added.
@@ -338,7 +343,7 @@ type ReviewingFacts struct {
 // does not run. The poll and the end of an Implementer run read the same
 // facts.
 type ImplementingFacts struct {
-	// StatusCounts says that the cumin-core App or an Owner added the
+	// StatusCounts says that the cumin-core App or a Maintainer added the
 	// newest cumin/status/implementing (StatusLabelCounts).
 	StatusCounts bool
 	// ImplementingAt is when cumin/status/implementing was last added.
@@ -370,24 +375,28 @@ type ImplementingFacts struct {
 type PullRequest struct {
 	Number int
 	// NodeID is the GraphQL ID of the pull request. Only the pull requests
-	// of ImplementingFacts.OnBranch hold it; I2 adds the closing link with
-	// it.
+	// of ImplementingFacts.OnBranch hold it; "wait for the checks" adds the
+	// closing link with it.
 	NodeID string
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
 	// HeadBranch is the branch of the pull request. A request that
-	// continues its work runs on it (I1, I4).
+	// continues its work runs on it ("request the implementation",
+	// "request a check fix").
 	HeadBranch string
 	// Author is the login of the author; a GitHub App is "<slug>[bot]".
 	Author string
-	// Labels are the labels of the pull request now. I11 makes them equal
+	// Labels are the labels of the pull request now. "copy the labels to
+	// the pull request" makes them equal
 	// to the labels of the issue; no rule decides on them (principle 5).
 	Labels []string
-	// Checks are the checks on the head commit. I3 and I4 read them with
+	// Checks are the checks on the head commit. "request the review" and
+	// "request a check fix" read them with
 	// the required checks of the default branch.
 	Checks []CheckResult
 	// Reviews are the reviews of the pull request. The round of the review
-	// and the check after a Reviewer run read them (I3, I5, I8).
+	// and the check after a Reviewer run read them ("request the review",
+	// "request a review fix", "request the cause").
 	Reviews []Review
 	// Mergeable is what GitHub says about a merge into the base branch.
 	Mergeable MergeableState
@@ -483,35 +492,36 @@ type BlockedBy struct {
 	Closed bool
 }
 
-// Claim is the action of I1: replace the status label of the sub-issue with
-// cumin/status/implementing, and only then request the work.
+// Claim is the action "request the implementation": replace the status label
+// of the sub-issue with cumin/status/implementing, and only then request the
+// work.
 type Claim struct {
 	Number           int
 	RequirementIssue int
 }
 
-// StartReview is the action of I3: every required check passed on the head
-// commit of the pull request, so the status label becomes
+// StartReview is the action "request the review": every required check
+// passed on the head commit of the pull request, so the status label becomes
 // cumin/status/reviewing. Starting the Reviewer is a later requirement.
 type StartReview struct {
 	Number      int
 	PullRequest int
 }
 
-// FixChecks is the action of I4: a required check failed on the head
-// commit of the pull request, so the issue goes back to the Implementer
-// with the failed checks, in the same session. Whether the limit of check
-// fix requests allows it is decided when it is applied, from the count
-// that the Host keeps (CheckFixAllowed).
+// FixChecks is the action "request a check fix": a required check failed on
+// the head commit of the pull request, so the issue goes back to the
+// Implementer with the failed checks, in the same session. Whether the limit
+// of check fix requests allows it is decided when it is applied, from the
+// count that the Host keeps (CheckFixAllowed).
 type FixChecks struct {
 	Number      int
 	PullRequest int
 	Failed      []RequiredCheck
 }
 
-// ResolveConflict is the action of I14: the pull request of an issue that
-// waits for the checks, or for the Owner's review, conflicts with the
-// default branch, so the issue
+// ResolveConflict is the action "request a conflict resolution": the pull
+// request of an issue that waits for the checks, or for the review of a
+// Maintainer, conflicts with the default branch, so the issue
 // goes back to the Implementer for a conflict resolution, in the same
 // session. GitHub runs no pull_request workflow on a pull request that
 // conflicts, so its required checks would never report.
@@ -520,10 +530,11 @@ type ResolveConflict struct {
 	PullRequest int
 }
 
-// StopForUnreportedChecks is the action of I15: a required check has not
+// StopForUnreportedChecks is the action "stop for missing checks": a
+// required check has not
 // reported on the head commit of the pull request, and the wait time of the
-// repository is over, so the issue stops for the Owner. It carries the facts
-// that cumin sees; it names no cause. The row also holds when no open pull
+// repository is over, so the issue stops for a Maintainer. It carries the facts
+// that cumin sees; it names no cause. The rule also holds when no open pull
 // request closes the issue, for example after someone closed it: the wait
 // then counts from the label alone.
 type StopForUnreportedChecks struct {
@@ -541,7 +552,8 @@ type StopForUnreportedChecks struct {
 	Waited time.Duration
 }
 
-// CopyLabels is the action of I11: the pull request gets Labels, so that its
+// CopyLabels is the action "copy the labels to the pull request": the pull
+// request gets Labels, so that its
 // cumin/status/* and risk/* labels are those of the issue that it closes.
 type CopyLabels struct {
 	Issue       int
@@ -549,25 +561,25 @@ type CopyLabels struct {
 	Labels      []string
 }
 
-// Plan is the action of R1: replace the status label of the requirement
-// issue with cumin/status/planning, and only then request the split from
-// the Planner. With Again, it is the action "request the split again": the
-// issue is already in cumin/status/planning, and the Planner left no split
-// that passes the check there.
+// Plan is the action "request the split": replace the status label of the
+// requirement issue with cumin/status/planning, and only then request the
+// split from the Planner. With Again, it is the action "request the split
+// again": the issue is already in cumin/status/planning, and the Planner left
+// no split that passes the check there.
 type Plan struct {
 	Number int
 	Again  bool
 }
 
-// ReviewPlan is the action "ask the Owner to review the plan" (R2): the
+// ReviewPlan is the action "ask for the plan review": the
 // split passes the check and a sub-issue is open, so the requirement issue
 // moves from cumin/status/planning to cumin/status/awaiting-plan-review and
-// the Owner is told that the split needs a review.
+// cumin notifies that the split needs a review.
 type ReviewPlan struct {
 	Number int
 }
 
-// StopSplit is the action "stop the split for the Owner": the requirement
+// StopSplit is the action "stop the split": the requirement
 // issue moves from cumin/status/planning to cumin/status/awaiting-decision.
 // With Question, the Planner wrote a decision request, and cumin writes no
 // reason of its own. Otherwise Reason is the sentence of the check that the
@@ -578,7 +590,7 @@ type StopSplit struct {
 	Reason   string
 }
 
-// WaitForChecks is the action "wait for the checks" (I2): the pull request
+// WaitForChecks is the action "wait for the checks": the pull request
 // of the implementation issue passes the check, so the issue moves from
 // cumin/status/implementing to cumin/status/checking. With AddLink,
 // cumin-core first adds the closing link to the pull request.
@@ -597,11 +609,11 @@ type RequestImplementationAgain struct {
 	Number int
 }
 
-// StopImplementation is the action "stop the implementation for the Owner":
+// StopImplementation is the action "stop the implementation":
 // the implementation issue moves from cumin/status/implementing to
 // cumin/status/awaiting-decision. With Question, the Implementer wrote a
 // decision request, and cumin writes no reason of its own. Otherwise Reason
-// is the sentence for the Owner, PullRequest the pull request that it is
+// is the sentence for a Maintainer, PullRequest the pull request that it is
 // about (0 for none), and Retried says that the implementation was
 // requested again before.
 type StopImplementation struct {
@@ -612,7 +624,7 @@ type StopImplementation struct {
 	Retried     bool
 }
 
-// RequestReviewFix is the action "request a review fix" (I5): the Reviewer
+// RequestReviewFix is the action "request a review fix": the Reviewer
 // requested changes on the head commit below the round limit, so the issue
 // moves from cumin/status/reviewing to cumin/status/implementing, and the
 // Implementer fixes the comments of Review.
@@ -623,7 +635,7 @@ type RequestReviewFix struct {
 	Review      Review
 }
 
-// AskMaintainerToMerge is the action "ask the Owner to decide the merge" (I7):
+// AskMaintainerToMerge is the action "ask for the merge decision":
 // the Reviewer approved the head commit, the required checks pass, and the
 // risk is risk/medium or risk/high.
 type AskMaintainerToMerge struct {
@@ -631,9 +643,9 @@ type AskMaintainerToMerge struct {
 	PullRequest int
 }
 
-// StartMerge is the action "start the merge" after an approval with
-// risk/low (I6): only the label changes to cumin/status/merging. The merge
-// is sent inside that state (MergeEnd).
+// StartMerge is the action "start the merge" after an approval of the
+// Reviewer with risk/low: only the label changes to cumin/status/merging.
+// The merge is sent inside that state (MergeEnd).
 type StartMerge struct {
 	Number      int
 	PullRequest int
@@ -674,7 +686,7 @@ type LeaveMerge struct {
 	Number int
 }
 
-// RequestCause is the action "request the cause from the Reviewer" (I8):
+// RequestCause is the action "request the cause" from the Reviewer:
 // blocking comments remain at the round limit, and the Reviewer wrote no
 // decision request after Review yet.
 type RequestCause struct {
@@ -683,7 +695,7 @@ type RequestCause struct {
 	Review      Review
 }
 
-// StopAtRoundLimit is the action "stop at the round limit" (I8): the
+// StopAtRoundLimit is the action "stop at the round limit": the
 // Reviewer wrote Explanation on the pull request, so the issue moves to
 // cumin/status/awaiting-decision with one notification.
 type StopAtRoundLimit struct {
@@ -709,7 +721,7 @@ type RequestReviewAgain struct {
 	PullRequest int
 }
 
-// StopReview is the action "stop the review for the Owner" (I10): the
+// StopReview is the action "stop the review": the
 // implementation issue moves from cumin/status/reviewing to
 // cumin/status/awaiting-decision. With Question, the Reviewer wrote a
 // decision request, and cumin writes no reason of its own. Otherwise Action
@@ -724,21 +736,22 @@ type StopReview struct {
 	Retried     bool
 }
 
-// StartRequirement is the action of R3: the Owner let a sub-issue start, so
-// the requirement issue moves to cumin/status/implementing.
+// StartRequirement is the action "mark the requirement as in work": a
+// Maintainer let a sub-issue start, so the requirement issue moves to
+// cumin/status/implementing.
 type StartRequirement struct {
 	Number int
 }
 
-// ReviewRemaining is the action of R6: every open sub-issue has no status
-// label, so the requirement issue moves to
-// cumin/status/awaiting-plan-review and the Owner is told that the
+// ReviewRemaining is the action "ask about the remaining sub-issues": every
+// open sub-issue has no status label, so the requirement issue moves to
+// cumin/status/awaiting-plan-review and cumin notifies that the
 // remaining sub-issues need a look.
 type ReviewRemaining struct {
 	Number int
 }
 
-// CheckAcceptance is the action "request the acceptance check" (R4): move
+// CheckAcceptance is the action "request the acceptance check": move
 // the requirement issue to cumin/status/accepting, and then request the
 // acceptance check from the Planner. With Again, it is the action "request
 // the acceptance check again": the issue is already in
@@ -748,7 +761,7 @@ type CheckAcceptance struct {
 	Again  bool
 }
 
-// StopAcceptance is the action "stop the acceptance check for the Owner":
+// StopAcceptance is the action "stop the acceptance check":
 // the requirement issue moves from cumin/status/accepting to
 // cumin/status/awaiting-decision. With Question, the Planner wrote a
 // decision request, and cumin writes no reason of its own.
@@ -757,18 +770,20 @@ type StopAcceptance struct {
 	Question bool
 }
 
-// Accept is the action of R7: the acceptance check comment exists, so the
-// requirement issue moves to cumin/status/awaiting-acceptance and the
-// Owner is told that it can be accepted.
+// Accept is the action "ask for the acceptance": the acceptance check
+// comment exists, so the
+// requirement issue moves to cumin/status/awaiting-acceptance and cumin
+// notifies that it can be accepted.
 type Accept struct {
 	Number int
 }
 
-// MergeMaintainerApproval is the candidate of I12: an implementation issue in
+// MergeMaintainerApproval is the candidate of "start the merge" after the
+// approval of a Maintainer: an implementation issue in
 // cumin/status/awaiting-merge-decision whose pull request has an APPROVED
 // review of a person on its head commit. Reviewers are the people whose
 // reviews decide (APPROVED or CHANGES_REQUESTED); the caller reads their
-// permission, and only then knows which of them is an Owner
+// permission, and only then knows which of them is a Maintainer
 // (MaintainerApproved).
 type MergeMaintainerApproval struct {
 	Number      int
@@ -776,12 +791,13 @@ type MergeMaintainerApproval struct {
 	Reviewers   []string
 }
 
-// FixMaintainerReview is the candidate of I13: an implementation issue in
+// FixMaintainerReview is the candidate of "send back for changes": an
+// implementation issue in
 // cumin/status/awaiting-merge-decision whose pull request has a
 // CHANGES_REQUESTED review of a person on its head commit, submitted after
 // that label was last added. Reviewers are the people whose reviews decide,
 // as for MergeMaintainerApproval; the caller reads their permission, and only
-// then knows whether the latest review of an Owner requests changes
+// then knows whether the latest review of a Maintainer requests changes
 // (MaintainerRequestedChanges).
 type FixMaintainerReview struct {
 	Number      int
@@ -833,23 +849,29 @@ func (StopReview) isAction()                 {}
 // settings table). required are the checks that the rules of the default
 // branch require; the caller reads them only when an issue of the
 // repository waits for the checks. now is the time of the poll, and
-// checksWait is the setting "checks_wait_time"; I15 reads both.
+// checksWait is the setting "checks_wait_time"; "stop for missing checks"
+// reads both.
 //
-// I14, I3, I4, and I15 come before the starts of R1 and I1: an issue that
+// "request a conflict resolution", "request the review", "request a check
+// fix", and "stop for missing checks" come before the starts of "request the
+// split" and "request the implementation": an issue that
 // leaves cumin/status/checking keeps its place in the limit, so
-// deciding it first never takes room from a start. I14 (the pull request
-// conflicts) comes before I3 and I4 for its issue, and I15 (the required
-// checks did not report in time) comes after them: only the first row that
-// holds moves the issue at one poll.
+// deciding it first never takes room from a start. "request a conflict
+// resolution" (the pull request conflicts) comes before "request the review"
+// and "request a check fix" for its issue, and "stop for missing checks" (the
+// required checks did not report in time) comes after them: only the first
+// rule that holds moves the issue at one poll.
 //
-// R1 and I1 both start an agent, so they share the room under the limit.
+// "request the split" and "request the implementation" both start an agent,
+// so they share the room under the limit.
 // The starts are taken highest priority first and then lowest issue number
-// first, whichever row they belong to. priority are the priority labels of
+// first, whichever rule they belong to. priority are the priority labels of
 // the repository, highest first (PriorityRank). The priority only orders
 // the starts that can begin: an open blocked-by issue and the limit decide
 // before it, and the quota decides when a start is applied.
 //
-// R3 and R6 move a requirement issue and start no agent, so they come
+// "mark the requirement as in work" and "ask about the remaining
+// sub-issues" move a requirement issue and start no agent, so they come
 // first and take no room.
 //
 // The way out of cumin/status/implementing (ImplementationEnd) starts no
@@ -857,10 +879,12 @@ func (StopReview) isAction()                 {}
 // holds for the way out of cumin/status/reviewing (ReviewEnd), and for the
 // steps in cumin/status/merging (MergeEnd).
 //
-// I14 also holds for an issue in cumin/status/awaiting-merge-decision. Those
-// actions come after the candidates of I12 and of I13: a review of an Owner
+// "request a conflict resolution" also holds for an issue in
+// cumin/status/awaiting-merge-decision. Those actions come after the
+// candidates of "start the merge" after the approval of a Maintainer and of
+// "send back for changes": a review of a Maintainer
 // on the conflicting head decides first, and the caller drops the conflict
-// resolution of an issue that I12 or I13 moved at this poll.
+// resolution of an issue that one of those two moved at this poll.
 func Decide(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string, now time.Time, checksWait time.Duration) []Action {
 	actions := requirementMoves(snapshot)
 	actions = append(actions, implementationEnds(snapshot)...)
@@ -888,7 +912,7 @@ type StartPermit struct{ granted bool }
 
 // PermitStart is the one check before every start of an agent: the split,
 // the acceptance check, the claim, the review, the check fix, the conflict
-// resolution, the fix of a review, the fix of the Owner's review, the
+// resolution, the fix of a review, the fix of a Maintainer's review, the
 // explanation of the cause, and the second request of each of them. A
 // request gets the permit before its label change and before its count, so
 // a start without a permit leaves the issue as it was, and a later poll
@@ -926,7 +950,8 @@ func PriorityRank(labels, parent, priority []string) int {
 	return len(priority)
 }
 
-// requirementMoves returns the actions of R3 and R6, and the way out of
+// requirementMoves returns the actions "mark the requirement as in work"
+// and "ask about the remaining sub-issues", and the way out of
 // cumin/status/accepting (AcceptanceEnd) and of cumin/status/planning
 // (SplitEnd), lowest requirement issue number first.
 func requirementMoves(snapshot Snapshot) []Action {
@@ -951,13 +976,14 @@ func requirementMoves(snapshot Snapshot) []Action {
 	return actions
 }
 
-// startsImplementing is R3. Without a status label, an open sub-issue with
-// cumin/status/ready is enough: the Owner wrote the sub-issues without the
+// startsImplementing is the condition of "mark the requirement as in work".
+// Without a status label, an open sub-issue with
+// cumin/status/ready is enough: a Maintainer wrote the sub-issues without the
 // Planner. In cumin/status/awaiting-plan-review and in
 // cumin/status/awaiting-acceptance, cumin/status/ready must have been added
 // after that label. A sub-issue that kept its
 // cumin/status/ready from an earlier split must not move the requirement
-// issue before the Owner looked at the new sub-issues (issue-states.md, the
+// issue before a Maintainer looked at the new sub-issues (issue-states.md, the
 // text below the table).
 func startsImplementing(requirement RequirementIssue) bool {
 	switch statusLabel(requirement.Labels) {
@@ -974,7 +1000,8 @@ func startsImplementing(requirement RequirementIssue) bool {
 	return false
 }
 
-// remainingNeedReview is R6: the requirement issue is in
+// remainingNeedReview is the condition of "ask about the remaining
+// sub-issues": the requirement issue is in
 // cumin/status/implementing, one or more sub-issues are open, and none of
 // the open ones has a status label.
 func remainingNeedReview(requirement RequirementIssue) bool {
@@ -994,9 +1021,10 @@ func remainingNeedReview(requirement RequirementIssue) bool {
 	return open > 0
 }
 
-// NeedsComments reports whether R4 or R7 needs the comments of the
-// requirement issue: it is in cumin/status/accepting, or it is in
-// cumin/status/implementing and has one or more sub-issues, all closed.
+// NeedsComments reports whether "request the acceptance check" or "ask for
+// the acceptance" needs the comments of the requirement issue: it is in
+// cumin/status/accepting, or it is in cumin/status/implementing and has one
+// or more sub-issues, all closed.
 func NeedsComments(requirement RequirementIssue) bool {
 	if statusLabel(requirement.Labels) == LabelAccepting {
 		return !statusOfAnother(requirement)
@@ -1030,8 +1058,8 @@ func lastClose(requirement RequirementIssue) time.Time {
 }
 
 // checked reports whether an acceptance check comment was written after the
-// last sub-issue closed. An older comment belongs to an earlier round: the
-// Owner added sub-issues after it (issue-states.md, the text below the
+// last sub-issue closed. An older comment belongs to an earlier round: a
+// Maintainer added sub-issues after it (issue-states.md, the text below the
 // table).
 //
 // A comment at the same second as the last close counts: the times of
@@ -1047,13 +1075,13 @@ func checked(requirement RequirementIssue) bool {
 // poll and the end of a Planner run both decide with it, so a restart of
 // cumin during the check loses nothing.
 //
-//   - An acceptance check comment after the last close: ask the Owner to
-//     accept (Accept).
+//   - An acceptance check comment after the last close: ask for the
+//     acceptance (Accept).
 //   - A decision request of the Planner, written after the issue got
-//     cumin/status/accepting: stop the acceptance check for the Owner.
+//     cumin/status/accepting: stop the acceptance check.
 //   - Neither comment: request the acceptance check again, once for each
 //     stay in cumin/status/accepting. The second time, stop the acceptance
-//     check for the Owner.
+//     check.
 //
 // It returns nil while the Planner runs, in every other state, while the
 // comments or the label times were not read, and while the status label
@@ -1081,18 +1109,17 @@ func AcceptanceEnd(requirement RequirementIssue, running bool) Action {
 // during the split, or a failed read after it, loses nothing.
 //
 //   - A decision request of the Planner, written after the issue got
-//     cumin/status/planning: stop the split for the Owner. cumin-core
+//     cumin/status/planning: stop the split. cumin-core
 //     posts the blocked_reason of the Planner, so its decision request
 //     counts too (QuestionAt). The question
 //     decides before the check of the split: an issue that is planned again
 //     can hold sub-issues of an earlier split that pass the check.
 //   - The split passes the check (VerifySplit) and a sub-issue is open: ask
-//     the Owner to review the plan.
+//     for the plan review.
 //   - The split passes the check and every sub-issue is closed: request the
 //     acceptance check.
 //   - The split fails the check: request the split again, once for each
-//     stay in cumin/status/planning. The second time, stop the split for
-//     the Owner.
+//     stay in cumin/status/planning. The second time, stop the split.
 //
 // It returns nil while the Planner runs, in every other state, while the
 // comments or the label times were not read, and while the status label
@@ -1119,7 +1146,7 @@ func SplitEnd(requirement RequirementIssue, running bool) Action {
 // needs the comments and the label times of the requirement issue: it is in
 // cumin/status/planning, and its Planner does not run. While the Planner
 // runs, nothing is decided, so the poll reads nothing more. The same holds
-// for a label that another account than cumin-core or an Owner added.
+// for a label that another account than cumin-core or a Maintainer added.
 func SplitNeedsFacts(requirement RequirementIssue, running bool) bool {
 	return statusLabel(requirement.Labels) == LabelPlanning && !running && !statusOfAnother(requirement)
 }
@@ -1131,17 +1158,17 @@ func SplitNeedsFacts(requirement RequirementIssue, running bool) bool {
 // nothing.
 //
 //   - A decision request of the Implementer, written after the issue got
-//     cumin/status/implementing: stop the implementation for the Owner.
+//     cumin/status/implementing: stop the implementation for a Maintainer.
 //     cumin-core posts the blocked_reason of the Implementer, so its
 //     decision request counts too (QuestionAt).
 //   - The pull request passes the check (VerifyDone), but the request was
 //     a conflict resolution and the head commit is older than the label:
 //     the conflict resolution left the head commit, so stop the
-//     implementation for the Owner.
+//     implementation for a Maintainer.
 //   - The pull request passes the check: wait for the checks.
 //   - The pull request fails the check: request the implementation again,
 //     once for each stay in cumin/status/implementing. The second time,
-//     stop the implementation for the Owner.
+//     stop the implementation for a Maintainer.
 //
 // It returns nil while the Implementer runs, in every other state, for a
 // closed issue, while the facts were not read, and while the status label
@@ -1220,22 +1247,22 @@ func implementationEnds(snapshot Snapshot) []Action {
 // that holds decides:
 //
 //   - A decision request of the Reviewer, written after the issue got
-//     cumin/status/reviewing: stop the review for the Owner. cumin-core
+//     cumin/status/reviewing: stop the review for a Maintainer. cumin-core
 //     posts the blocked_reason of the Reviewer, so its decision request
 //     counts too.
 //   - The head commit is not the one of the request: go back to the checks.
 //   - APPROVE on the head commit: by DecideMerge, the merge of risk/low, ask
-//     the Owner to decide the merge, go back to the checks, or stop the
-//     review for the Owner (not exactly one risk label).
+//     for the merge decision, go back to the checks, or stop the review for
+//     a Maintainer (not exactly one risk label).
 //   - REQUEST_CHANGES on the head commit: below the round limit, request a
 //     review fix. At the limit, stop at the round limit when the Reviewer
 //     explained the cause, and request the cause from the Reviewer
 //     otherwise; a request of the cause that returned done and left no
-//     explanation stops the review for the Owner, and so does a second
+//     explanation stops the review for a Maintainer, and so does a second
 //     request of the cause of this stay that left none.
 //   - No review on the head commit: request the review again, once for each
 //     stay in cumin/status/reviewing. The second time, stop the review for
-//     the Owner.
+//     a Maintainer.
 //
 // It returns nil while the Reviewer runs, in every other state, for a
 // closed issue, for an issue with no open pull request, while the facts
@@ -1398,7 +1425,7 @@ func MergeNeedsFacts(sub SubIssue, running bool) bool {
 // conditions of the transitions into cumin/status/merging: the issue has
 // exactly one risk/* label, every required check passes on the head commit,
 // and the latest review of the Reviewer is APPROVE on the head commit. With
-// risk/medium or risk/high, the latest review of an Owner that decides is
+// risk/medium or risk/high, the latest review of a Maintainer that decides is
 // APPROVE on the head commit too (MaintainerApproved). cumin checks them before
 // every merge that it sends.
 func MergeConditionsHold(labels []string, required []RequiredCheck, pr PullRequest, reviewer string, maintainers map[string]bool) bool {
@@ -1431,10 +1458,11 @@ func mergeEnds(snapshot Snapshot) []Action {
 	return actions
 }
 
-// acceptanceChecks returns the starts of R4 before the limit: every
-// sub-issue closed, the comments read, no acceptance check after the last
-// close, the follow-up notes of the closed sub-issues written (I9), and no
-// agent of the requirement issue running.
+// acceptanceChecks returns the starts of "request the acceptance check"
+// before the limit: every sub-issue closed, the comments read, no
+// acceptance check after the last close, the follow-up notes of the closed
+// sub-issues written ("write the follow-up note"), and no agent of the
+// requirement issue running.
 func acceptanceChecks(snapshot Snapshot) []CheckAcceptance {
 	var checks []CheckAcceptance
 	for _, requirement := range snapshot.RequirementIssues {
@@ -1490,13 +1518,15 @@ func QuestionAt(comments []Comment, authors ...string) time.Time {
 // acceptanceCheckHeading is the first heading of templates/acceptance-check.md.
 const acceptanceCheckHeading = "## Acceptance check"
 
-// Comment is one comment of a requirement issue, as R4 and R7 read it.
+// Comment is one comment of a requirement issue, as "request the acceptance
+// check" and "ask for the acceptance" read it.
 type Comment struct {
 	// Author is the login, "<slug>[bot]" for a GitHub App.
 	Author    string
 	CreatedAt time.Time
 	Body      string
-	// URL is the address of the comment; the notification of I8 links it.
+	// URL is the address of the comment; the notification of "stop at the
+	// round limit" links it.
 	URL string
 }
 
@@ -1522,9 +1552,10 @@ type start struct {
 	action Action
 }
 
-// orderedStarts returns the starts of the plans (R1), of the acceptance
-// checks (R4) when withChecks is set, and of the claims (I1), in the order
-// of the starts: by priority label, then by issue number.
+// orderedStarts returns the starts of the plans ("request the split"), of
+// the acceptance checks ("request the acceptance check") when withChecks is
+// set, and of the claims ("request the implementation"), in the order of
+// the starts: by priority label, then by issue number.
 func orderedStarts(snapshot Snapshot, priority []string, plans []Plan, claims []Claim, withChecks bool) []start {
 	// A start on a requirement issue has the priority of that issue.
 	requirementRank := func(number int) int {
@@ -1552,11 +1583,12 @@ func orderedStarts(snapshot Snapshot, priority []string, plans []Plan, claims []
 }
 
 // ReadyActorReads names the issues whose newest cumin/status/ready the poll
-// must read the actor of, and the free slots: the candidates of R1 and of
-// I1, in the order of the starts. With no free slot it names none, so that
-// a poll that can start nothing makes no read. The poll reads in this order
-// and stops when it has as many candidates of the Owner as free slots: a
-// later candidate cannot start at this poll.
+// must read the actor of, and the free slots: the candidates of "request
+// the split" and of "request the implementation", in the order of the
+// starts. With no free slot it names none, so that a poll that can start
+// nothing makes no read. The poll reads in this order and stops when it has
+// as many candidates of a Maintainer as free slots: a later candidate
+// cannot start at this poll.
 func ReadyActorReads(snapshot Snapshot, maxInProgress int, priority []string) (numbers []int, room int) {
 	room = maxInProgress - inProgress(snapshot)
 	if room <= 0 {
@@ -1583,7 +1615,7 @@ type StatusActor struct {
 
 // StatusLabelCounts reports whether cumin treats a status label as a state
 // (issue-states.md, the account that added a status label): the account of
-// its newest label event is an Owner (IsMaintainer) or, for every label but
+// its newest label event is a Maintainer (IsMaintainer) or, for every label but
 // cumin/status/ready, the cumin-core App. core is the login of the bot of
 // cumin-core; GraphQL names a bot without "[bot]", so both forms match.
 // Every rule that acts from a state calls it before it acts.
@@ -1618,22 +1650,22 @@ func StatusActorReads(snapshot Snapshot) []int {
 }
 
 // statusCounts reports whether the actor of the status label was read and
-// is the cumin-core App or an Owner. A rule that acts from the state holds
+// is the cumin-core App or a Maintainer. A rule that acts from the state holds
 // only then.
 func statusCounts(requirement RequirementIssue) bool {
 	return requirement.StatusRead && requirement.StatusCounts
 }
 
 // statusOfAnother reports whether the actor of the status label was read
-// and is neither the cumin-core App nor an Owner. Such an issue waits for
-// the Owner.
+// and is neither the cumin-core App nor a Maintainer. Such an issue waits
+// for a Maintainer.
 func statusOfAnother(requirement RequirementIssue) bool {
 	return requirement.StatusRead && !requirement.StatusCounts
 }
 
 // subStatusOfAnother reports whether the facts of the working label of a
-// sub-issue were read, and say that another account than cumin-core or an
-// Owner added that label. No rule moves such an issue. Facts that were not
+// sub-issue were read, and say that another account than cumin-core or a
+// Maintainer added that label. No rule moves such an issue. Facts that were not
 // read do not say it.
 func subStatusOfAnother(sub SubIssue) bool {
 	return sub.Implementing != nil && !sub.Implementing.StatusCounts ||
@@ -1642,23 +1674,25 @@ func subStatusOfAnother(sub SubIssue) bool {
 }
 
 // readyOfMaintainer reports whether the newest cumin/status/ready was read and
-// is the Owner's. R1 and I1 hold only then (issue-states.md, the ready of
-// the Owner).
+// is a Maintainer's. "request the split" and "request the implementation"
+// hold only then (issue-states.md, the ready of a Maintainer).
 func readyOfMaintainer(read bool, owner string) bool { return read && owner != "" }
 
 // readyOfAnother reports whether the newest cumin/status/ready was read and
-// is not the Owner's. Such an issue waits for the Owner.
+// is not a Maintainer's. Such an issue waits for a Maintainer.
 func readyOfAnother(read bool, owner string) bool { return read && owner == "" }
 
 // NeedsLabelTimes reports whether a rule needs the label times of the
-// requirement issue: R3 needs them (startNeedsLabelTimes), the requirement
-// issue is in cumin/status/accepting, whose end compares a decision request
-// of the Planner with the time of that label, an open
+// requirement issue: "mark the requirement as in work" needs them
+// (startNeedsLabelTimes), the requirement issue is in
+// cumin/status/accepting, whose end compares a decision request of the
+// Planner with the time of that label, an open
 // sub-issue waits in cumin/status/checking, whose wait is counted
 // from the time of that label, or an open sub-issue in
 // cumin/status/awaiting-merge-decision has a request for changes of a person
-// on its head commit, which I13 compares with the time of that label. Only
-// then does the poll read the times, so that the poll query keeps its cost.
+// on its head commit, which "send back for changes" compares with the time
+// of that label. Only then does the poll read the times, so that the poll
+// query keeps its cost.
 func NeedsLabelTimes(requirement RequirementIssue) bool {
 	return startNeedsLabelTimes(requirement) ||
 		statusLabel(requirement.Labels) == LabelAccepting && !statusOfAnother(requirement) ||
@@ -1666,8 +1700,9 @@ func NeedsLabelTimes(requirement RequirementIssue) bool {
 		slices.ContainsFunc(requirement.SubIssues, openWithChangeRequest)
 }
 
-// startNeedsLabelTimes reports whether R3 needs the label times of the
-// requirement issue: it waits in cumin/status/awaiting-plan-review or in
+// startNeedsLabelTimes reports whether "mark the requirement as in work"
+// needs the label times of the requirement issue: it waits in
+// cumin/status/awaiting-plan-review or in
 // cumin/status/awaiting-acceptance, and an open sub-issue carries
 // cumin/status/ready.
 func startNeedsLabelTimes(requirement RequirementIssue) bool {
@@ -1709,10 +1744,10 @@ func statusLabel(labels []string) string {
 	return ""
 }
 
-// readyRequirementIssues returns the plans of R1 before the limit: the
-// candidates (requirementCandidates) whose newest cumin/status/ready the
-// Owner added. A candidate whose ready is of another account, or was not
-// read, is skipped.
+// readyRequirementIssues returns the plans of "request the split" before
+// the limit: the candidates (requirementCandidates) whose newest
+// cumin/status/ready a Maintainer added. A candidate whose ready is of
+// another account, or was not read, is skipped.
 func readyRequirementIssues(snapshot Snapshot) []Plan {
 	var plans []Plan
 	for _, plan := range requirementCandidates(snapshot) {
@@ -1724,10 +1759,11 @@ func readyRequirementIssues(snapshot Snapshot) []Plan {
 	return plans
 }
 
-// requirementCandidates returns the candidates of R1 before the check of
-// the Owner: open requirement issues with cumin/status/ready whose
-// blocked-by issues are all closed. Whether the requirement issue has
-// sub-issues does not matter (issue-states.md, R1).
+// requirementCandidates returns the candidates of "request the split"
+// before the check of the Maintainer: open requirement issues with
+// cumin/status/ready whose blocked-by issues are all closed. Whether the
+// requirement issue has sub-issues does not matter (issue-states.md,
+// "request the split").
 func requirementCandidates(snapshot Snapshot) []Plan {
 	var plans []Plan
 	for _, requirement := range snapshot.RequirementIssues {
@@ -1738,8 +1774,9 @@ func requirementCandidates(snapshot Snapshot) []Plan {
 	return plans
 }
 
-// labelCopies returns the actions of I11: one for each open pull request
-// that closes a sub-issue and whose copied labels differ from the issue.
+// labelCopies returns the actions of "copy the labels to the pull
+// request": one for each open pull request that closes a sub-issue and
+// whose copied labels differ from the issue.
 // The copy is of the labels in the snapshot, so a label that this poll
 // changes reaches the pull request at the next poll. No other rule reads
 // the labels of a pull request (principle 5). A pull request that closes two
@@ -1774,8 +1811,9 @@ func labelCopies(snapshot Snapshot) []Action {
 	return actions
 }
 
-// conflictingSubIssues returns the actions of I14 for the issues that wait
-// for the checks: open sub-issues in cumin/status/checking whose
+// conflictingSubIssues returns the actions of "request a conflict
+// resolution" for the issues that wait for the checks: open sub-issues in
+// cumin/status/checking whose
 // open pull request GitHub reports as CONFLICTING, lowest issue number
 // first. UNKNOWN says that GitHub is still calculating, so it gives no
 // action: a later poll decides. A running issue gives no action.
@@ -1789,12 +1827,14 @@ func conflictingSubIssues(snapshot Snapshot) []Action {
 	return actions
 }
 
-// conflictingMaintainerReviews returns the actions of I14 for the issues that
-// wait for the Owner: open sub-issues in cumin/status/awaiting-merge-decision,
-// not running now, whose open pull request GitHub reports as CONFLICTING,
-// lowest issue number first. The Owner then approves only a head that can
-// merge. An issue that also has cumin/status/ready is left to I1, as for
-// I13. A merge step of I12 that runs keeps the label, so a running issue
+// conflictingMaintainerReviews returns the actions of "request a conflict
+// resolution" for the issues that wait for a Maintainer: open sub-issues in
+// cumin/status/awaiting-merge-decision, not running now, whose open pull
+// request GitHub reports as CONFLICTING, lowest issue number first. A
+// Maintainer then approves only a head that can merge. An issue that also
+// has cumin/status/ready is left to "request the implementation", as for
+// "send back for changes". A merge step of "start the merge" after the
+// approval of a Maintainer that runs keeps the label, so a running issue
 // gives no action.
 func conflictingMaintainerReviews(snapshot Snapshot) []Action {
 	var actions []Action
@@ -1831,11 +1871,11 @@ func conflictsUnder(snapshot Snapshot, status string) []Action {
 	return actions
 }
 
-// reviewableSubIssues returns the actions of I3: open sub-issues in
-// cumin/status/checking whose open pull request has every required
-// check passed on its head commit. A pull request that conflicts belongs
-// to I14. A running issue gives no action: its agent runs, and one issue
-// has one agent.
+// reviewableSubIssues returns the actions of "request the review": open
+// sub-issues in cumin/status/checking whose open pull request has every
+// required check passed on its head commit. A pull request that conflicts
+// belongs to "request a conflict resolution". A running issue gives no
+// action: its agent runs, and one issue has one agent.
 func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
@@ -1859,10 +1899,11 @@ func reviewableSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	return actions
 }
 
-// failedSubIssues returns the actions of I4: open sub-issues in
-// cumin/status/checking whose open pull request has a failed
+// failedSubIssues returns the actions of "request a check fix": open
+// sub-issues in cumin/status/checking whose open pull request has a failed
 // required check on its head commit, lowest issue number first. A pull
-// request that conflicts belongs to I14. A running issue gives no action.
+// request that conflicts belongs to "request a conflict resolution". A
+// running issue gives no action.
 func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	var actions []Action
 	for _, requirement := range snapshot.RequirementIssues {
@@ -1883,11 +1924,12 @@ func failedSubIssues(snapshot Snapshot, required []RequiredCheck) []Action {
 	return actions
 }
 
-// unreportedSubIssues returns the actions of I15: open sub-issues in
-// cumin/status/checking whose open pull request has a required check
-// that has not reported on its head commit after the wait time, lowest
-// issue number first. A pull request that conflicts belongs to I14, and a
-// failed required check belongs to I4. A sub-issue whose label time or
+// unreportedSubIssues returns the actions of "stop for missing checks":
+// open sub-issues in cumin/status/checking whose open pull request has a
+// required check that has not reported on its head commit after the wait
+// time, lowest issue number first. A pull request that conflicts belongs
+// to "request a conflict resolution", and a failed required check belongs
+// to "request a check fix". A sub-issue whose label time or
 // whose head commit time was not read gives no action: a later poll decides.
 // A commit time that was not read can hide a new head commit. A sub-issue
 // with no open pull request stops too, after the wait time since the label.
@@ -1928,10 +1970,10 @@ func unreportedSubIssues(snapshot Snapshot, required []RequiredCheck, now time.T
 	return actions
 }
 
-// ChecksWaitStart returns the start of the wait time of I15: the later one
-// of the time that the issue entered cumin/status/checking and the
-// commit time of the head commit. A push while the issue waits gives a
-// newer head commit, so the wait starts again.
+// ChecksWaitStart returns the start of the wait time of "stop for missing
+// checks": the later one of the time that the issue entered
+// cumin/status/checking and the commit time of the head commit. A push
+// while the issue waits gives a newer head commit, so the wait starts again.
 func ChecksWaitStart(awaitingChecksAt, headCommittedAt time.Time) time.Time {
 	if headCommittedAt.After(awaitingChecksAt) {
 		return headCommittedAt
@@ -1939,21 +1981,22 @@ func ChecksWaitStart(awaitingChecksAt, headCommittedAt time.Time) time.Time {
 	return awaitingChecksAt
 }
 
-// CheckFixAllowed reports whether I4 may send one more check fix request:
-// count requests were sent since the Owner last added cumin/status/ready,
-// and limit is max_check_fix_requests of the repository. At the limit, I4
-// stops the issue for the Owner instead.
+// CheckFixAllowed reports whether "request a check fix" may send one more
+// check fix request: count requests were sent since a Maintainer last added
+// cumin/status/ready, and limit is max_check_fix_requests of the
+// repository. At the limit, "stop for failed checks" stops the issue for a
+// Maintainer instead.
 func CheckFixAllowed(count, limit int) bool { return count < limit }
 
-// LabelsAfterCheckFix returns the labels of a sub-issue after I4:
-// cumin/status/implementing in place of cumin/status/checking.
+// LabelsAfterCheckFix returns the labels of a sub-issue after "request a
+// check fix": cumin/status/implementing in place of cumin/status/checking.
 func LabelsAfterCheckFix(labels []string) []string {
 	return ReplaceStatusLabel(labels, LabelImplementing)
 }
 
-// PullRequestLabels returns the labels that a pull request has after I11:
-// its own labels that are neither cumin/status/* nor risk/*, then those two
-// kinds from the issue.
+// PullRequestLabels returns the labels that a pull request has after "copy
+// the labels to the pull request": its own labels that are neither
+// cumin/status/* nor risk/*, then those two kinds from the issue.
 func PullRequestLabels(issue, pullRequest []string) []string {
 	after := []string{}
 	for _, label := range pullRequest {
@@ -1969,7 +2012,8 @@ func PullRequestLabels(issue, pullRequest []string) []string {
 	return after
 }
 
-// isCopiedLabel reports whether I11 copies the label from the issue.
+// isCopiedLabel reports whether "copy the labels to the pull request"
+// copies the label from the issue.
 func isCopiedLabel(name string) bool {
 	return IsStatusLabel(name) || strings.HasPrefix(name, riskLabelPrefix)
 }
@@ -1985,8 +2029,9 @@ func sameLabels(a, b []string) bool {
 // inProgress counts the issues that fill the limit, by their working label
 // only: open sub-issues in implementing, checking, reviewing, or merging,
 // and requirement issues in planning or accepting. A requirement issue in
-// implementing (R3) has no agent of its own, so it does not count. An issue
-// with cumin/status/ready never counts, also when the running set names it.
+// implementing ("mark the requirement as in work") has no agent of its own,
+// so it does not count. An issue with cumin/status/ready never counts, also
+// when the running set names it.
 func inProgress(snapshot Snapshot) int {
 	n := 0
 	for _, requirement := range snapshot.RequirementIssues {
@@ -2008,9 +2053,10 @@ func inProgress(snapshot Snapshot) int {
 	return n
 }
 
-// readySubIssues returns the claims of I1 before the limit: the candidates
-// (subIssueCandidates) whose newest cumin/status/ready the Owner added. A
-// candidate whose ready is of another account, or was not read, is skipped.
+// readySubIssues returns the claims of "request the implementation" before
+// the limit: the candidates (subIssueCandidates) whose newest
+// cumin/status/ready a Maintainer added. A candidate whose ready is of
+// another account, or was not read, is skipped.
 func readySubIssues(snapshot Snapshot) []Claim {
 	var claims []Claim
 	for _, claim := range subIssueCandidates(snapshot) {
@@ -2022,21 +2068,23 @@ func readySubIssues(snapshot Snapshot) []Claim {
 	return claims
 }
 
-// subIssueCandidates returns the candidates of I1 before the check of the
-// Owner: open sub-issues with cumin/status/ready whose blocked-by issues
-// are all closed, lowest issue number first across all requirement issues.
+// subIssueCandidates returns the candidates of "request the implementation"
+// before the check of the Maintainer: open sub-issues with
+// cumin/status/ready whose blocked-by issues are all closed, lowest issue
+// number first across all requirement issues.
 func subIssueCandidates(snapshot Snapshot) []Claim {
 	var claims []Claim
 	for _, requirement := range snapshot.RequirementIssues {
-		// R3 could not be judged without the label times. A claim would
-		// take away the cumin/status/ready that R3 must still see, so the
-		// sub-issues wait for the next poll.
+		// "mark the requirement as in work" could not be judged without the
+		// label times. A claim would take away the cumin/status/ready that
+		// it must still see, so the sub-issues wait for the next poll.
 		if startNeedsLabelTimes(requirement) && !requirement.LabelTimesRead {
 			continue
 		}
 		for _, sub := range requirement.SubIssues {
-			// The Owner does an owner task by hand, so no agent ever
-			// starts for it, even with cumin/status/ready (I1).
+			// A Maintainer does an owner task by hand, so no agent ever
+			// starts for it, even with cumin/status/ready ("request the
+			// implementation").
 			if sub.Closed || !slices.Contains(sub.Labels, LabelReady) || anyOpen(sub.BlockedBy) ||
 				slices.Contains(sub.Labels, LabelOwnerTask) {
 				continue
@@ -2049,15 +2097,16 @@ func subIssueCandidates(snapshot Snapshot) []Claim {
 }
 
 // MovesWithoutMaintainer reports whether an issue exists that cumin moves on
-// without the Owner, so that cumin is not waiting (issue-states.md, the
-// table under Q4): an open sub-issue that waits for the required checks,
+// without a Maintainer, so that cumin is not waiting (issue-states.md, the
+// table under "tell that cumin waits"): an open sub-issue that waits for
+// the required checks,
 // an issue in planning, implementing, reviewing, accepting, or merging,
 // or a ready issue that can start and waits only for room under the limit.
 // A ready issue with an open blocked-by issue, a ready issue whose ready
-// another account than the Owner added, a status label that another account
-// than cumin-core or an Owner added, and an issue that waits for the Owner
-// do not count. A ready that was not read counts: the poll reads it when a
-// slot is free.
+// another account than a Maintainer added, a status label that another
+// account than cumin-core or a Maintainer added, and an issue that waits
+// for a Maintainer do not count. A ready that was not read counts: the poll
+// reads it when a slot is free.
 func (s Snapshot) MovesWithoutMaintainer() bool {
 	if s.HasIssueChecking() {
 		return true
@@ -2107,15 +2156,15 @@ func ReplaceStatusLabel(labels []string, status string) []string {
 	return append(after, status)
 }
 
-// LabelsAfterPlan returns the labels of a requirement issue after R1:
-// cumin/status/planning in place of cumin/status/ready. cumin/type/requirement
-// stays.
+// LabelsAfterPlan returns the labels of a requirement issue after "request
+// the split": cumin/status/planning in place of cumin/status/ready.
+// cumin/type/requirement stays.
 func LabelsAfterPlan(labels []string) []string {
 	return ReplaceStatusLabel(labels, LabelPlanning)
 }
 
-// LabelsAfterClaim returns the labels of a sub-issue after I1:
-// cumin/status/implementing in place of the old status label.
+// LabelsAfterClaim returns the labels of a sub-issue after "request the
+// implementation": cumin/status/implementing in place of the old status label.
 // issue-states.md says that cumin removes the old status label when it
 // starts the work.
 func LabelsAfterClaim(labels []string) []string {
@@ -2127,11 +2176,13 @@ type ChecksState int
 
 const (
 	// ChecksWaiting: a required check has not reported yet, or has not
-	// finished. cumin waits (I3 and I4 both need an answer first).
+	// finished. cumin waits ("request the review" and "request a check
+	// fix" both need an answer first).
 	ChecksWaiting ChecksState = iota
-	// ChecksPassed: every required check passed. I3 applies.
+	// ChecksPassed: every required check passed. "request the review"
+	// applies.
 	ChecksPassed
-	// ChecksFailed: a required check failed. I4 applies.
+	// ChecksFailed: a required check failed. "request a check fix" applies.
 	ChecksFailed
 )
 
@@ -2158,7 +2209,7 @@ func (s ChecksState) String() string {
 //     success, skipped, or neutral (row 51 of
 //     measured-constraints.md); the caller receives them folded already.
 //   - A failed result decides the whole answer, even when another required
-//     check has not reported yet: the fix of I4 comes before the wait.
+//     check has not reported yet: the check fix comes before the wait.
 //   - A required check without a result, or with one that has not
 //     finished, makes the answer "waiting". The list of required checks is
 //     known before a push, so a check that is missing is a check that is
@@ -2179,7 +2230,8 @@ func ChecksOf(required []RequiredCheck, results []CheckResult) ChecksState {
 }
 
 // FailedChecks returns the required checks that failed, in the order of the
-// required checks. I4 reads what each one says and names it in its request.
+// required checks. "request a check fix" reads what each one says and names
+// it in its request.
 // A check keeps its App, because two rules can require the same name from
 // two Apps.
 func FailedChecks(required []RequiredCheck, results []CheckResult) []RequiredCheck {
@@ -2194,7 +2246,8 @@ func FailedChecks(required []RequiredCheck, results []CheckResult) []RequiredChe
 
 // UnreportedChecks returns the required checks that have not reported on
 // the commit: no result, or a result that has not finished. The order is
-// that of the required checks. I15 names them for the Owner.
+// that of the required checks. "stop for missing checks" names them for a
+// Maintainer.
 func UnreportedChecks(required []RequiredCheck, results []CheckResult) []RequiredCheck {
 	var unreported []RequiredCheck
 	for _, check := range required {
@@ -2231,13 +2284,14 @@ func checkState(check RequiredCheck, results []CheckResult) ChecksState {
 	return state
 }
 
-// LabelsAfterReview returns the labels of a sub-issue after I3:
-// cumin/status/reviewing in place of cumin/status/checking.
+// LabelsAfterReview returns the labels of a sub-issue after "request the
+// review": cumin/status/reviewing in place of cumin/status/checking.
 func LabelsAfterReview(labels []string) []string {
 	return ReplaceStatusLabel(labels, LabelReviewing)
 }
 
-// VerificationFailure says which check of I2 failed.
+// VerificationFailure says which check of the pull request failed after the
+// Implementer ended.
 type VerificationFailure int
 
 const (
@@ -2274,8 +2328,9 @@ func (f VerificationFailure) String() string {
 	return fmt.Sprintf("VerificationFailure(%d)", int(f))
 }
 
-// Verification is the result of I2 after done. Passed is true when every
-// check held; otherwise Failure names the first check that failed.
+// Verification is the result of the check of the pull request after the
+// Implementer ends. Passed is true when every check held; otherwise Failure
+// names the first check that failed.
 // PullRequest is the pull request that was checked, or 0 when there is
 // none. AddLink is true when the verification passed and the issue has no
 // closing link to that pull request, so cumin-core adds it.
@@ -2286,8 +2341,9 @@ type Verification struct {
 	AddLink     bool
 }
 
-// VerifyDone applies the checks of I2 (issue-states.md) to a sub-issue
-// after the Implementer returned done. onBranch holds the open pull
+// VerifyDone applies the checks of "wait for the checks" (issue-states.md)
+// to a sub-issue after the Implementer returned done. onBranch holds the
+// open pull
 // requests whose head is branch, the branch that cumin chose for the
 // request; one of them is by implementer (the login "<slug>[bot]" of the
 // Implementer App), the one with the highest number of two or more; its
@@ -2345,7 +2401,7 @@ func linksPullRequest(sub SubIssue, number int) bool {
 	return false
 }
 
-// SplitFailure says which check of R2 failed.
+// SplitFailure says which check of the split failed.
 type SplitFailure int
 
 const (
@@ -2359,7 +2415,8 @@ const (
 	SplitTwoRiskLabels
 )
 
-// SplitVerification is the result of R2 after done. Passed is true when
+// SplitVerification is the result of the check of the split after done.
+// Passed is true when
 // every check held; otherwise Failure names the first check that failed,
 // and SubIssue the sub-issue that failed it (0 when there is none).
 type SplitVerification struct {
@@ -2368,12 +2425,12 @@ type SplitVerification struct {
 	SubIssue int
 }
 
-// VerifySplit applies the checks of R2 (issue-states.md) to a requirement
-// issue after the Planner returned done: it has one or more sub-issues, and
-// every sub-issue carries exactly one risk/* label. The sub-issues are
-// checked lowest number first, so the same issue always names the same
-// failure. cumin judges nothing of the content of the split; the Owner
-// reviews it.
+// VerifySplit applies the check of the split (issue-states.md) to a
+// requirement issue after the Planner returned done: it has one or more
+// sub-issues, and every sub-issue carries exactly one risk/* label. The
+// sub-issues are checked lowest number first, so the same issue always
+// names the same failure. cumin judges nothing of the content of the split;
+// a Maintainer reviews it.
 func VerifySplit(requirement RequirementIssue) SplitVerification {
 	if len(requirement.SubIssues) == 0 {
 		return SplitVerification{Failure: SplitNoSubIssue}
@@ -2397,12 +2454,13 @@ func VerifySplit(requirement RequirementIssue) SplitVerification {
 	return SplitVerification{Passed: true}
 }
 
-// SplitStatus returns the status label of a requirement issue after R2
-// passed. With one or more open sub-issues, the Owner reviews the split:
-// cumin/status/awaiting-plan-review. With every sub-issue closed, the
-// Planner created none, as when the Owner resumes a requirement issue after
-// a blocked acceptance check: cumin/status/accepting, and the Planner
-// checks the acceptance again (issue-states.md, R2).
+// SplitStatus returns the status label of a requirement issue after the
+// check of the split passed. With one or more open sub-issues, a Maintainer
+// reviews the split: cumin/status/awaiting-plan-review ("ask for the plan
+// review"). With every sub-issue closed, the Planner created none, as when
+// a Maintainer resumes a requirement issue after a blocked acceptance
+// check: cumin/status/accepting, and the Planner checks the acceptance
+// again (issue-states.md, "request the acceptance check").
 func SplitStatus(requirement RequirementIssue) string {
 	for _, sub := range requirement.SubIssues {
 		if !sub.Closed {
@@ -2476,12 +2534,13 @@ func anyOpen(blockedBy []BlockedBy) bool {
 // ruleset dismisses approvals, so a dismissed review is most often a former
 // APPROVE; counting it as a round would bring back the rounds before that
 // approval and reach the limit too early. A person who dismisses a request
-// for changes steps in as the Owner does, and the count may start again.
+// for changes steps in as a Maintainer does, and the count may start again.
 
 // roundStart is the later of the last cumin/status/ready of the issue and
 // the last APPROVE of the Reviewer, or its last dismissed review. The
 // APPROVE is a start too, because a merge conflict fixed after it changes
-// the head commit, and the review starts again (I6).
+// the head commit, and the review starts again (the merge of "start the
+// merge" after the review of the Reviewer).
 func roundStart(reviews []Review, reviewer string, readyAt time.Time) time.Time {
 	start := readyAt
 	for _, review := range reviews {
@@ -2512,9 +2571,10 @@ func roundReviews(reviews []Review, reviewer string, readyAt time.Time) []Review
 
 // ReviewRounds is the number of rounds of the Reviewer since the last
 // cumin/status/ready of the issue (readyAt) or its last APPROVE. After a
-// review that asked for changes, it is the round of that review: I5 asks for
-// a fix below max_review_rounds, and I8 stops at it. Before a review, the
-// next round is ReviewRounds + 1 (I3).
+// review that asked for changes, it is the round of that review: "request a
+// review fix" asks for a fix below max_review_rounds, and "stop at the
+// round limit" stops at it. Before a review, the next round is
+// ReviewRounds + 1 ("request the review").
 func ReviewRounds(reviews []Review, reviewer string, readyAt time.Time) int {
 	return len(roundReviews(reviews, reviewer, readyAt))
 }
@@ -2576,10 +2636,12 @@ const (
 	// ReviewMissing: the latest review of the Reviewer is not on the head
 	// commit, is not APPROVE or REQUEST_CHANGES, or does not exist.
 	ReviewMissing ReviewResult = iota
-	// ReviewApprovedOnHead is APPROVE on the head commit (I6, I7).
+	// ReviewApprovedOnHead is APPROVE on the head commit ("start the
+	// merge", "ask for the merge decision").
 	ReviewApprovedOnHead
 	// ReviewChangesRequestedOnHead is REQUEST_CHANGES on the head commit
-	// (I5, I8).
+	// ("request a review fix", "request the cause", "stop at the round
+	// limit").
 	ReviewChangesRequestedOnHead
 )
 
@@ -2612,17 +2674,19 @@ func CheckReview(pr PullRequest, reviewer string) ReviewResult {
 	return ReviewMissing
 }
 
-// ReviewFixAllowed is the check of I5: the round of the review that asked
-// for changes is below max_review_rounds. At the limit, I8 applies instead.
+// ReviewFixAllowed is the check of "request a review fix": the round of the
+// review that asked for changes is below max_review_rounds. At the limit,
+// "request the cause" or "stop at the round limit" applies instead.
 func ReviewFixAllowed(round, limit int) bool { return round < limit }
 
 // DecisionRequestHeading starts every decision request
-// (templates/decision-request.md). I8 looks for a comment of the Reviewer
-// that starts with it.
+// (templates/decision-request.md). At the round limit, cumin looks for a
+// comment of the Reviewer that starts with it.
 const DecisionRequestHeading = "## Decision needed"
 
 // ExplanationOf returns the decision request that the Reviewer wrote on the
-// pull request after its last review (I8): the newest comment of the
+// pull request after its last review (the cause comment of "stop at the
+// round limit"): the newest comment of the
 // Reviewer whose first line starts with DecisionRequestHeading, created at
 // or after since. The comments are the ones that cumin read after since.
 func ExplanationOf(comments []Comment, reviewer string, since time.Time) (Comment, bool) {
@@ -2645,14 +2709,16 @@ func firstBodyLine(body string) string {
 }
 
 // MergeDecision is what cumin does after the Reviewer approved the head
-// commit of the pull request (I6, I7). I12 uses the same decision after the
-// approval of the Owner.
+// commit of the pull request ("start the merge", "ask for the merge
+// decision"). "start the merge" after the approval of a Maintainer uses the
+// same decision.
 type MergeDecision int
 
 const (
-	// MergeNow: risk/low; cumin merges (I6).
+	// MergeNow: risk/low; cumin merges ("start the merge").
 	MergeNow MergeDecision = iota
-	// MergeAskMaintainer: risk/medium or risk/high; the Owner decides (I7).
+	// MergeAskMaintainer: risk/medium or risk/high; a Maintainer decides
+	// ("ask for the merge decision").
 	MergeAskMaintainer
 	// MergeNoRiskLabel: the issue has no risk/* label; cumin stops it.
 	MergeNoRiskLabel
@@ -2717,11 +2783,12 @@ func decides(state ReviewState) bool {
 	return state == ReviewApproved || state == ReviewChangesRequested
 }
 
-// maintainerApprovals returns the candidates of I12, lowest issue number first:
-// open sub-issues in cumin/status/awaiting-merge-decision, not running now,
+// maintainerApprovals returns the candidates of "start the merge" after the
+// approval of a Maintainer, lowest issue number first: open sub-issues in
+// cumin/status/awaiting-merge-decision, not running now,
 // whose open pull request has an APPROVED review of a person on its head
 // commit. The candidate names every person whose review decides, because
-// the latest review of any Owner among them counts.
+// the latest review of any Maintainer among them counts.
 func maintainerApprovals(snapshot Snapshot) []Action {
 	var actions []Action
 	for _, c := range maintainerReviewCandidates(snapshot, ReviewApproved) {
@@ -2730,10 +2797,11 @@ func maintainerApprovals(snapshot Snapshot) []Action {
 	return actions
 }
 
-// maintainerChangeRequests returns the candidates of I13, lowest issue number
-// first: as maintainerApprovals, with a CHANGES_REQUESTED review of a person on
-// the head commit. An issue that also has cumin/status/ready is not a
-// candidate: the Owner asked for a new start, and I1 takes it. The review
+// maintainerChangeRequests returns the candidates of "send back for
+// changes", lowest issue number first: as maintainerApprovals, with a
+// CHANGES_REQUESTED review of a person on the head commit. An issue that
+// also has cumin/status/ready is not a candidate: a Maintainer asked for a
+// new start, and "request the implementation" takes it. The review
 // is newer than the last cumin/status/awaiting-merge-decision of the issue
 // (newChangeRequest), so that one review sends the pull request back once.
 func maintainerChangeRequests(snapshot Snapshot) []Action {
@@ -2752,7 +2820,8 @@ func maintainerChangeRequests(snapshot Snapshot) []Action {
 // CHANGES_REQUESTED review of a person on its head commit that was
 // submitted after cumin/status/awaiting-merge-decision was last added to the
 // issue. While the label times are not read, or hold no time of that label,
-// the answer is no: I13 sends nothing back without the time.
+// the answer is no: "send back for changes" sends nothing back without the
+// time.
 func newChangeRequest(snapshot Snapshot, sub SubIssue) bool {
 	read := slices.ContainsFunc(snapshot.RequirementIssues, func(requirement RequirementIssue) bool {
 		return requirement.LabelTimesRead &&
@@ -2810,25 +2879,27 @@ func maintainerReviewCandidates(snapshot Snapshot, state ReviewState) []FixMaint
 	return candidates
 }
 
-// MaintainerApproved applies the check of I12: of the reviews of the Maintainers
-// (maintainers holds their logins), the latest one that decides is APPROVED on
-// the head commit. An approval on an older commit does not count, and a
-// later CHANGES_REQUESTED of an Owner takes the approval back. A review of
+// MaintainerApproved applies the check of "start the merge" after the
+// approval of a Maintainer: of the reviews of the Maintainers (maintainers
+// holds their logins), the latest one that decides is APPROVED on the head
+// commit. An approval on an older commit does not count, and a later
+// CHANGES_REQUESTED of a Maintainer takes the approval back. A review of
 // a bot never counts, whatever maintainers says.
 func MaintainerApproved(reviews []Review, head string, maintainers map[string]bool) bool {
 	latest, found := latestMaintainerReview(reviews, maintainers)
 	return found && latest.State == ReviewApproved && head != "" && latest.Commit == head
 }
 
-// MaintainerRequestedChanges applies the check of I13: of the reviews of the
-// Maintainers (maintainers holds their logins), the latest one that decides is
-// CHANGES_REQUESTED on the head commit, submitted after awaitingMaintainerAt:
+// MaintainerRequestedChanges applies the check of "send back for changes":
+// of the reviews of the Maintainers (maintainers holds their logins), the
+// latest one that decides is CHANGES_REQUESTED on the head commit,
+// submitted after awaitingMaintainerAt:
 // the time that cumin/status/awaiting-merge-decision was last added to the
 // issue. It returns that review, whose address the request names. A request
-// for changes on an older commit does not count, and a later APPROVED of an
-// Owner takes it back. A comment-only review decides nothing, and a review
+// for changes on an older commit does not count, and a later APPROVED of a
+// Maintainer takes it back. A comment-only review decides nothing, and a review
 // of a bot never counts. A review that is not newer than the label sent the
-// pull request back already, or came before the Owner was asked, so one
+// pull request back already, or came before the Issue Owner was asked, so one
 // review sends the pull request back once. A zero awaitingMaintainerAt means
 // that the time of the label is not known, and no review counts.
 func MaintainerRequestedChanges(reviews []Review, head string, maintainers map[string]bool, awaitingMaintainerAt time.Time) (Review, bool) {
@@ -2841,7 +2912,8 @@ func MaintainerRequestedChanges(reviews []Review, head string, maintainers map[s
 }
 
 // latestMaintainerReview returns the latest review that decides among the
-// reviews of the Maintainers. A bot is never an Owner, whatever maintainers says.
+// reviews of the Maintainers. A bot is never a Maintainer, whatever
+// maintainers says.
 func latestMaintainerReview(reviews []Review, maintainers map[string]bool) (Review, bool) {
 	var latest Review
 	found := false
@@ -2856,9 +2928,9 @@ func latestMaintainerReview(reviews []Review, maintainers map[string]bool) (Revi
 	return latest, found
 }
 
-// IsMaintainer applies the definition of the Owner (cumin-core.md): a person,
-// not a bot, with write or admin permission on the repository. GitHub
-// reports maintain as write ("Get repository permissions for a user").
+// IsMaintainer applies the definition of the Maintainer (cumin-core.md): a
+// person, not a bot, with write or admin permission on the repository.
+// GitHub reports maintain as write ("Get repository permissions for a user").
 func IsMaintainer(permission, userType string) bool {
 	return userType == "User" && (permission == "admin" || permission == "write")
 }

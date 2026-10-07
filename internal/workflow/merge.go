@@ -1,11 +1,13 @@
 package workflow
 
-// This file handles an approved pull request: I7 (risk/medium or risk/high,
-// the Owner decides), and the steps in cumin/status/merging, which I6
-// (risk/low) and I12 (the approval of the Owner) start. Each step is
-// decided at a poll from the pull request on GitHub. It also handles the review of the Owner on
-// a pull request that waits for the merge decision: I12 (an approval,
-// cumin-core merges) and I13 (a request for changes, the Implementer fixes).
+// This file handles an approved pull request: "ask for the merge decision"
+// (risk/medium or risk/high, a Maintainer decides), and the steps in
+// cumin/status/merging, which "start the merge" starts (after the review of
+// the Reviewer with risk/low, or after the approval of a Maintainer). Each
+// step is decided at a poll from the pull request on GitHub. It also
+// handles the review of a Maintainer on a pull request that waits for the
+// merge decision: "start the merge" (an approval, cumin-core merges) and
+// "send back for changes" (a request for changes, the Implementer fixes).
 // docs/ja/designs/poll.md, the topic on the merge step.
 
 import (
@@ -37,16 +39,16 @@ func (s *Service) mergeWait() time.Duration {
 	return DefaultMergeWait
 }
 
-// askMaintainerToMerge applies "ask the Owner to decide the merge" (I7): the
-// label cumin/status/awaiting-merge-decision, then the request of the
-// review of the Owner, then one notification that links the pull request.
-// issueOwnerLogin gives the login of the Owner; it is read before the label
-// changes, and a failed read is returned with nothing changed. A label
-// change that fails is returned, without the review request and the
+// askMaintainerToMerge applies "ask for the merge decision": the
+// label cumin/status/awaiting-merge-decision, then the request of the review
+// of the Issue Owner, then one notification that links the pull request.
+// issueOwnerLogin gives the login of the Issue Owner; it is read before the
+// label changes, and a failed read is returned with nothing changed. A
+// label change that fails is returned, without the review request and the
 // notification: the issue keeps cumin/status/reviewing, and the next poll
 // decides the same and notifies then. The review request changes no
-// decision: without an Owner login none is sent, and one that fails is only
-// logged. The notification goes out in both cases.
+// decision: without an Issue Owner login none is sent, and one that fails is
+// only logged. The notification goes out in both cases.
 func (s *Service) askMaintainerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest, issueOwnerLogin func(ctx context.Context, token string) (string, error)) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	login, err := issueOwnerLogin(ctx, token)
@@ -103,7 +105,7 @@ func (s *Service) readMergingFacts(ctx context.Context, log *slog.Logger, token 
 // The error is the one of a read that failed. The bool is false when the
 // issue is not an open issue in cumin/status/merging any more. Nothing is
 // decided in both cases. A label that does not count ends the read, and
-// the Owner is told once.
+// one notification goes out.
 func (s *Service) mergingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int) (SubIssue, bool, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	failed := func(what string, err error) (SubIssue, bool, error) {
@@ -216,7 +218,7 @@ func (s *Service) mergeEndAtPoll(ctx context.Context, log *slog.Logger, token st
 //   - A conflict: "request a conflict resolution" (resolveConflict). While
 //     cumin stops after its runs, nothing changes instead: the issue keeps
 //     cumin/status/merging, and the next start of cumin decides again.
-//   - Any other lasting reason: "stop the merge for the Owner".
+//   - Any other lasting reason: "stop the merge".
 //
 // Before the second and each later merge of one poll, cumin waits
 // (mergeWait), so that GitHub updates the default branch in between.
@@ -275,19 +277,18 @@ func (s *Service) sendMerge(ctx context.Context, log *slog.Logger, token string,
 
 // closeMergedIssue applies "close the merged issue": it reads the issue,
 // and closes it as completed when it is open. cumin closes an issue only
-// here, inside cumin/status/merging, so an issue that the Owner reopens
+// here, inside cumin/status/merging, so an issue that a Maintainer reopens
 // later stays open.
 //
 // The merge cannot be undone, so the read and the close still run while
 // cumin stops, with their own time limit. A temporary failure, and a call
 // that the time limit ended, are errors of the poll: the next poll reads
-// the merged pull request again. Any other failure is "stop the merge for
-// the Owner".
+// the merged pull request again. Any other failure is "stop the merge".
 func (s *Service) closeMergedIssue(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, pullRequest int) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeTimeLimit)
 	defer cancel()
-	// failed leaves the issue for the next poll, or stops it for the Owner.
+	// failed leaves the issue for the next poll, or stops it for a Maintainer.
 	failed := func(err error) error {
 		if github.IsTemporary(err) || errors.Is(closeCtx.Err(), context.DeadlineExceeded) {
 			return err
@@ -335,7 +336,7 @@ func statusAnswer(err error) string {
 // is the end of any Implementer run: the checks and the review follow, and
 // the new head needs a new approval.
 //
-// A login of the Owner that cannot be read and a label that does not
+// A login of the Issue Owner that cannot be read and a label that does not
 // change are errors of the poll: nothing is requested, the issue keeps
 // cumin/status/merging, and the next poll decides again. The same holds
 // while the start waits for its permit (permitStart).
@@ -373,20 +374,22 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 	return nil
 }
 
-// resolveConflictAtPoll applies I14: the pull request of an issue in
+// resolveConflictAtPoll applies "request a conflict resolution": the pull
+// request of an issue in
 // cumin/status/checking or in cumin/status/awaiting-merge-decision
 // conflicts with the default branch. The
 // label becomes cumin/status/implementing first (principle 3), then the
 // Implementer resolves the conflict in the session of its last run, on the
 // branch of the pull request: the same request as after a merge that
 // conflicts (resolveConflict). The end of that run is the end of any
-// Implementer run: I2 verifies it, and a head that did not change stops
-// the issue for the Owner with the row I14.
+// Implementer run: the check of the pull request after the Implementer ends
+// verifies it, and a head that did not change stops the issue for a
+// Maintainer with the action "request a conflict resolution".
 //
 // The request does not count toward the limit of check fix requests: a
 // conflict comes from the merge of another pull request, not from a
 // mistake of the Implementer (issue-states.md, the rows while an issue
-// waits for the checks). A login of the Owner that cannot be read and a
+// waits for the checks). A login of the Issue Owner that cannot be read and a
 // label that does not change are errors of the poll: nothing is requested,
 // the issue keeps its label, and the next poll tries again.
 func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ResolveConflict) error {
@@ -436,20 +439,22 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	return nil
 }
 
-// mergeMaintainerApproval applies "start the merge" (I12) to a candidate: it
-// reads the permission of each person whose review decides, keeps the
-// Maintainers (IsMaintainer), and checks that the latest review of an Owner is
-// APPROVED on the head commit (MaintainerApproved). Then the risk label and the
-// required checks decide as for I6 (DecideMerge); the risk does not choose
-// between the Owner and cumin here, because the Owner already decided. Only
+// mergeMaintainerApproval applies "start the merge" after the approval of a
+// Maintainer to a candidate: it reads the permission of each person whose
+// review decides, keeps the Maintainers (IsMaintainer), and checks that the
+// latest review of a Maintainer is APPROVED on the head commit
+// (MaintainerApproved). Then the risk label and the
+// required checks decide as for "start the merge" after the review of the
+// Reviewer (DecideMerge); the risk does not choose between a Maintainer and
+// cumin here, because a Maintainer already decided. Only
 // the label changes, to cumin/status/merging: the merge is sent inside that
 // state (MergeEnd).
 //
-// The first value says whether I12 acted (the label change or a stop), for
-// Q4. A
+// The first value says whether "start the merge" acted (the label change or
+// a stop), for "tell that cumin waits". A
 // permission that cannot be read is an error of the poll; the next poll
-// tries again. Checks that do not pass leave the issue as it is: I12
-// applies again when they pass.
+// tries again. Checks that do not pass leave the issue as it is: "start the
+// merge" applies again when they pass.
 func (s *Service) mergeMaintainerApproval(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, required []RequiredCheck, a MergeMaintainerApproval) (bool, error) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number)
 	sub, ok := snapshot.SubIssue(a.Number)
@@ -490,7 +495,7 @@ func (s *Service) mergeMaintainerApproval(ctx context.Context, token string, tar
 }
 
 // readMaintainers reads the permission of each person whose review decides, and
-// returns who of them is an Owner (IsMaintainer).
+// returns who of them is a Maintainer (IsMaintainer).
 func (s *Service) readMaintainers(ctx context.Context, token string, target Target, reviewers []string) (map[string]bool, error) {
 	maintainers := map[string]bool{}
 	for _, login := range reviewers {
@@ -503,24 +508,27 @@ func (s *Service) readMaintainers(ctx context.Context, token string, target Targ
 	return maintainers, nil
 }
 
-// fixMaintainerReview applies I13 to a candidate: it reads the permission of each
-// person whose review decides, keeps the Maintainers (IsMaintainer), and checks that
-// the latest review of an Owner is CHANGES_REQUESTED on the head commit,
+// fixMaintainerReview applies "send back for changes" to a candidate: it
+// reads the permission of each person whose review decides, keeps the
+// Maintainers (IsMaintainer), and checks that
+// the latest review of a Maintainer is CHANGES_REQUESTED on the head commit,
 // newer than the last cumin/status/awaiting-merge-decision of the issue
 // (MaintainerRequestedChanges). Then the label becomes cumin/status/implementing
 // first (principle 3), and the Implementer addresses that review in the
 // session of its last run, on the branch of the pull request. The end of
-// that run is the end of any Implementer run: I2 verifies it, then the
-// checks and the review follow, and I7 asks the Owner again. The review
-// counts its rounds again from the last APPROVE of the Reviewer
+// that run is the end of any Implementer run: the check of the pull request
+// after the Implementer ends verifies it, then the checks and the review
+// follow, and "ask for the merge decision" asks a Maintainer again. The
+// review counts its rounds again from the last APPROVE of the Reviewer
 // (issue-states.md, the rounds).
 //
-// The first value says whether I13 acted (the send-back), for Q4. The
-// second value says that an Owner requested changes, and that the request
+// The first value says whether "send back for changes" acted, for "tell
+// that cumin waits". The
+// second value says that a Maintainer requested changes, and that the request
 // waits for the permit of its start (permitStart): the poll then keeps the
 // issue, so that no conflict resolution moves the head commit away from the
-// review of the Owner. A
-// permission or a login of the Owner that cannot be read, and a label that
+// review of the Maintainer. A permission or a login of the Issue Owner that
+// cannot be read, and a label that
 // does not change, are errors of the poll: nothing is requested, the issue
 // keeps cumin/status/awaiting-merge-decision, and the next poll tries again.
 func (s *Service) fixMaintainerReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixMaintainerReview) (acted, waits bool, err error) {

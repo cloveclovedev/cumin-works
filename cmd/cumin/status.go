@@ -1,8 +1,8 @@
 package main
 
 // This file is `cumin status` and `cumin --version`. `cumin status` shows
-// the Owner what cumin does now: the issues with an agent at work and the
-// issues that wait for the Owner, read from the labels on GitHub, and the
+// the Operator what cumin does now: the issues with an agent at work and the
+// issues that wait for a Maintainer, read from the labels on GitHub, and the
 // latest quota usage with the limits of now, and whether cumin stops after its runs. It
 // makes no minimal run and writes no file (docs/ja/designs/quota.md, the
 // topic on cumin status).
@@ -124,7 +124,8 @@ type readRepository func(ctx context.Context, repo config.Repository) (github.Re
 // agentLabels are the status labels of an issue whose agent works: the
 // Planner on a requirement issue (planning and accepting), the Implementer
 // and the Reviewer on an implementation issue. A requirement issue with
-// cumin/status/implementing has no agent of its own (R3).
+// cumin/status/implementing has no agent of its own ("mark the requirement
+// as in work").
 var agentLabels = map[bool][]string{
 	true:  {workflow.LabelPlanning, workflow.LabelAccepting},
 	false: {workflow.LabelImplementing, workflow.LabelReviewing},
@@ -182,10 +183,10 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 	return nil
 }
 
-// writeStopRequest says that cumin stops after its runs, when the Owner asked for it with
-// `cumin stop --after-current-runs`. cumin run removes the request when it
-// exits, so the lines are there only while that stop is asked for or going
-// on. The runs that it waits for are the agents at work below.
+// writeStopRequest says that cumin stops after its runs, when the Operator
+// asked for it with `cumin stop --after-current-runs`. cumin run removes the
+// request when it exits, so the lines are there only while that stop is asked
+// for or going on. The runs that it waits for are the agents at work below.
 func writeStopRequest(w io.Writer, stateDir string, loc *time.Location) {
 	request, found, err := state.ReadStopRequest(filepath.Join(stateDir, state.StopRequestFileName))
 	switch {
