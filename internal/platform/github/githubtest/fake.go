@@ -56,20 +56,25 @@ type Issue struct {
 	BlockedBy []int
 	// StateReason is the reason of the last close through the REST API.
 	StateReason string
-	// LabelEvents are the times at which labels were added, oldest first,
-	// as GitHub records them in the timeline. A test adds the events of the
-	// past; the fake adds one for each label that "Set labels" adds.
+	// LabelEvents are the times at which labels were added and removed,
+	// oldest first, as GitHub records them in the timeline. A test adds the
+	// events of the past; the fake adds one for each label that "Set
+	// labels" adds or removes.
 	LabelEvents []LabelEvent
 }
 
-// LabelEvent is one LabeledEvent of the timeline of an issue. Actor is the
-// login of the account that added the label and ActorType its type in
-// GraphQL ("User", "Bot"); an empty Actor answers a null actor.
+// LabelEvent is one LabeledEvent of the timeline of an issue, or one
+// UnlabeledEvent when Removed is true. Actor is the login of the account
+// that added the label and ActorType its type in GraphQL ("User", "Bot");
+// an empty Actor answers a null actor. GitHub can record a LabeledEvent
+// for a label that is already on the issue (measured on 2026-10-05), so a
+// test may repeat a label with no Removed event in between.
 type LabelEvent struct {
 	Label     string
 	At        time.Time
 	Actor     string
 	ActorType string
+	Removed   bool
 }
 
 // PullRequest is one pull request of the fake repository.
@@ -111,6 +116,9 @@ type PullRequest struct {
 	HeadCommittedAt time.Time
 	// MergeMethod is the method of the merge that merged it.
 	MergeMethod string
+	// RequestedReviewers are the logins whose review is requested, each
+	// once, in the order of the first request.
+	RequestedReviewers []string
 }
 
 // ReviewThread is one thread of review comments on a line of a pull
@@ -282,12 +290,17 @@ type Fake struct {
 	mu           sync.Mutex
 	repositories map[string]*Repository
 	app          *App
-	users        map[string]int64
-	requests     []Request
+	// labelWriter is the actor of the label events of a label change, as
+	// SetLabelWriter set it.
+	labelWriter string
+	users       map[string]int64
+	requests    []Request
 	// received is closed, and replaced, each time a request arrives, so
 	// that WaitForRequests wakes.
 	received chan struct{}
 	failNext *failure
+	// beforeAnswer is what BeforeNextAnswer set.
+	beforeAnswer *answerHook
 	// lastCommentID is the id of the comment that was created last.
 	lastCommentID int64
 	// commentAuthor is the author of the comments that the REST API
@@ -300,6 +313,9 @@ type Fake struct {
 	// closeOnMerge makes a merge close the issues that the pull request
 	// closes, as CloseIssuesOnMerge set it.
 	closeOnMerge bool
+	// baseModified is how many merges the fake still refuses with 405
+	// "Base branch was modified", as RefuseMergesForBaseBranch set it.
+	baseModified int
 	// permissions are the answers of the permission endpoint, by login, as
 	// SetPermission set them.
 	permissions map[string]Permission
@@ -344,6 +360,15 @@ func (f *Fake) CloseIssuesOnMerge() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.closeOnMerge = true
+}
+
+// RefuseMergesForBaseBranch makes the next merges answer 405 "Base branch
+// was modified. Review and try the merge again.", as GitHub does right
+// after another merge moved the base branch. Nothing is merged.
+func (f *Fake) RefuseMergesForBaseBranch(times int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.baseModified = times
 }
 
 // SetLinkErrors makes the closing link (addCloseIssueReferences) answer
@@ -414,7 +439,7 @@ func New(t *testing.T) (*Fake, *httptest.Server) {
 	t.Helper()
 	f := &Fake{t: t, repositories: map[string]*Repository{}, users: map[string]int64{}, received: make(chan struct{}),
 		now: func() time.Time { return DefaultNow }}
-	server := httptest.NewServer(http.HandlerFunc(f.serve))
+	server := httptest.NewServer(http.HandlerFunc(f.serveWithHook))
 	t.Cleanup(server.Close)
 	return f, server
 }
@@ -436,6 +461,15 @@ func (f *Fake) AddApp(app App) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.app = &app
+}
+
+// SetLabelWriter names the GitHub App that the label events of a label
+// change carry as their actor: the slug, without "[bot]", as GraphQL gives
+// it. Without it, such an event has no actor.
+func (f *Fake) SetLabelWriter(slug string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.labelWriter = slug
 }
 
 // AddUser registers a user for GET /users/{login}.
@@ -514,6 +548,17 @@ func (f *Fake) Reviews(r *Repository, number int) []Review {
 	defer f.mu.Unlock()
 	if pr, ok := r.PullRequests[number]; ok {
 		return slices.Clone(pr.Reviews)
+	}
+	return nil
+}
+
+// RequestedReviewers returns a copy of the logins whose review is requested
+// on one pull request.
+func (f *Fake) RequestedReviewers(r *Repository, number int) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if pr, ok := r.PullRequests[number]; ok {
+		return slices.Clone(pr.RequestedReviewers)
 	}
 	return nil
 }
@@ -741,6 +786,48 @@ func (f *Fake) HangTimes(method, path string, times int) {
 	f.failNext = &failure{method: method, path: path, hang: true, times: times}
 }
 
+// answerHook is a function that runs between the answer of one request and
+// its way to the client.
+type answerHook struct {
+	method, path string
+	run          func()
+}
+
+// BeforeNextAnswer makes the fake call run once: after it built the answer
+// of the next request with the method and the path, and before it sends
+// that answer. The client then gets facts that are already old, as when
+// something changes on GitHub while an answer is on its way.
+func (f *Fake) BeforeNextAnswer(method, path string, run func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.beforeAnswer = &answerHook{method: method, path: path, run: run}
+}
+
+// serveWithHook answers a request, and runs the hook of BeforeNextAnswer
+// between the answer and its way to the client.
+func (f *Fake) serveWithHook(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	hook := f.beforeAnswer
+	if hook != nil && hook.method == r.Method && hook.path == r.URL.Path {
+		f.beforeAnswer = nil
+	} else {
+		hook = nil
+	}
+	f.mu.Unlock()
+	if hook == nil {
+		f.serve(w, r)
+		return
+	}
+	answer := httptest.NewRecorder()
+	f.serve(answer, r)
+	hook.run()
+	for name, values := range answer.Header() {
+		w.Header()[name] = values
+	}
+	w.WriteHeader(answer.Code)
+	_, _ = w.Write(answer.Body.Bytes())
+}
+
 // Requests returns the requests that the fake received, in order.
 func (f *Fake) Requests() []Request {
 	f.mu.Lock()
@@ -877,6 +964,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	annotations := annotationsPath.FindStringSubmatch(r.URL.Path)
 	jobLog := jobLogPath.FindStringSubmatch(r.URL.Path)
 	reviews := reviewsPath.FindStringSubmatch(r.URL.Path)
+	reviewRequest := reviewRequestPath.FindStringSubmatch(r.URL.Path)
 	moveHead := moveHeadPath.FindStringSubmatch(r.URL.Path)
 	pulls := pullsPath.FindStringSubmatch(r.URL.Path)
 	pull := pullPath.FindStringSubmatch(r.URL.Path)
@@ -934,6 +1022,9 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && reviews != nil:
 		number, _ := strconv.Atoi(reviews[3])
 		f.serveCreateReview(w, body, reviews[1], reviews[2], number)
+	case r.Method == http.MethodPost && reviewRequest != nil:
+		number, _ := strconv.Atoi(reviewRequest[3])
+		f.serveRequestReviewers(w, body, reviewRequest[1], reviewRequest[2], number)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 	}
@@ -951,6 +1042,7 @@ var (
 	annotationsPath   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/check-runs/(\d+)/annotations$`)
 	jobLogPath        = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/jobs/(\d+)/logs$`)
 	reviewsPath       = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/reviews$`)
+	reviewRequestPath = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/requested_reviewers$`)
 	pullsPath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls$`)
 	pullPath          = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)$`)
 	mergePath         = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/pulls/(\d+)/merge$`)
@@ -1262,9 +1354,18 @@ func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, na
 	}
 	if isIssue {
 		now := f.now()
+		for _, label := range issue.Labels {
+			if !slices.Contains(*request.Labels, label) {
+				issue.LabelEvents = append(issue.LabelEvents, LabelEvent{Label: label, At: now, Removed: true})
+			}
+		}
 		for _, label := range *request.Labels {
 			if !slices.Contains(issue.Labels, label) {
-				issue.LabelEvents = append(issue.LabelEvents, LabelEvent{Label: label, At: now})
+				event := LabelEvent{Label: label, At: now}
+				if f.labelWriter != "" {
+					event.Actor, event.ActorType = f.labelWriter, "Bot"
+				}
+				issue.LabelEvents = append(issue.LabelEvents, event)
 			}
 		}
 	}
@@ -1389,6 +1490,51 @@ func (f *Fake) serveCreateReview(w http.ResponseWriter, body []byte, owner, name
 	writeJSON(w, http.StatusOK, map[string]any{"id": f.lastCommentID, "state": state, "commit_id": commit, "html_url": review.URL})
 }
 
+// serveRequestReviewers answers POST
+// /repos/{owner}/{repo}/pulls/{number}/requested_reviewers (official:
+// "Request reviewers for a pull request") with 201. A login that is
+// requested already stays listed once (measured in #510, V2). A login that
+// is not a collaborator answers 422 and requests nobody (V3): in the fake,
+// a collaborator is SeedActor or a login that SetPermission gave a
+// permission other than none.
+func (f *Fake) serveRequestReviewers(w http.ResponseWriter, body []byte, owner, name string, number int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	repo, ok := f.repository(w, owner, name)
+	if !ok {
+		return
+	}
+	pr, ok := repo.PullRequests[number]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
+		return
+	}
+	var request struct {
+		Reviewers []string `json:"reviewers"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || len(request.Reviewers) == 0 {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Validation Failed"})
+		return
+	}
+	for _, login := range request.Reviewers {
+		if p, set := f.permissions[login]; login != SeedActor && (!set || p.Permission == "none") {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"message": "Reviews may only be requested from collaborators. " +
+				"One or more of the users or teams you specified is not a collaborator of the " + owner + "/" + name + " repository."})
+			return
+		}
+	}
+	for _, login := range request.Reviewers {
+		if !slices.Contains(pr.RequestedReviewers, login) {
+			pr.RequestedReviewers = append(pr.RequestedReviewers, login)
+		}
+	}
+	requested := make([]map[string]any, 0, len(pr.RequestedReviewers))
+	for _, login := range pr.RequestedReviewers {
+		requested = append(requested, map[string]any{"login": login})
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"number": number, "requested_reviewers": requested})
+}
+
 // serveListPulls answers GET .../pulls. Official: "List pull requests",
 // with state and head as "owner:branch". The fake reads state=open and a
 // head of the repository owner only, as cumin asks.
@@ -1454,6 +1600,9 @@ func (f *Fake) serveMerge(w http.ResponseWriter, body []byte, owner, name string
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Pull Request is not mergeable"})
 	case request.SHA != "" && request.SHA != pr.HeadCommit:
 		writeJSON(w, http.StatusConflict, map[string]any{"message": "Head branch was modified. Review and try the merge again."})
+	case f.baseModified > 0:
+		f.baseModified--
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Base branch was modified. Review and try the merge again."})
 	case pr.Conflict:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"message": "Pull Request has merge conflicts"})
 	default:
@@ -1909,8 +2058,8 @@ func withSeededLabelEvents(issue *Issue) []LabelEvent {
 
 // serveLabelTimes answers the query of the label times and the query of
 // the actor of a label: the newest label events of the issue and of each of
-// its sub-issues, each with its actor. Official: the LabeledEvent of the
-// timeline of an Issue.
+// its sub-issues, each with its actor. Official: the LabeledEvent and the
+// UnlabeledEvent of the timeline of an Issue.
 func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, subIssues, events int) {
 	issue, ok := repo.Issues[number]
 	if !ok {
@@ -1931,7 +2080,11 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 			if event.Actor != "" {
 				actor = map[string]any{"__typename": event.ActorType, "login": event.Actor}
 			}
-			nodes = append(nodes, map[string]any{"createdAt": event.At.UTC().Format(time.RFC3339Nano), "label": map[string]any{"name": event.Label}, "actor": actor})
+			node := map[string]any{"__typename": "LabeledEvent", "createdAt": event.At.UTC().Format(time.RFC3339Nano), "label": map[string]any{"name": event.Label}, "actor": actor}
+			if event.Removed {
+				node = map[string]any{"__typename": "UnlabeledEvent", "createdAt": node["createdAt"], "label": node["label"]}
+			}
+			nodes = append(nodes, node)
 		}
 		return map[string]any{"nodes": nodes}
 	}

@@ -122,15 +122,21 @@ func coreClientID(settings *config.Settings, owner string) (string, error) {
 type readRepository func(ctx context.Context, repo config.Repository) (github.RepositorySnapshot, error)
 
 // agentLabels are the status labels of an issue whose agent works: the
-// Planner on a requirement issue (planning), the Implementer and the
-// Reviewer on an implementation issue. A requirement issue with
+// Planner on a requirement issue (planning and accepting), the Implementer
+// and the Reviewer on an implementation issue. A requirement issue with
 // cumin/status/implementing has no agent of its own (R3).
 var agentLabels = map[bool][]string{
-	true:  {workflow.LabelPlanning},
+	true:  {workflow.LabelPlanning, workflow.LabelAccepting},
 	false: {workflow.LabelImplementing, workflow.LabelReviewing},
 }
 
-var ownerLabels = []string{workflow.LabelAwaitingOwnerReview, workflow.LabelAwaitingOwnerDecision}
+// agentsAtWorkNote is the line under the heading of the agents at work. The
+// labels do not say whether the agent of an issue runs: an issue keeps its
+// label and waits for the next start at a quota limit, and while cumin stops
+// after the current runs.
+const agentsAtWorkNote = "(an issue here can wait with no agent, only while agent starts are stopped or a stop after the current runs is requested)"
+
+var ownerLabels = []string{workflow.LabelAwaitingPlanReview, workflow.LabelAwaitingMergeDecision, workflow.LabelAwaitingAcceptance, workflow.LabelAwaitingDecision}
 
 // writeStatus writes the whole report. A repository that cannot be read
 // is named with the reason, and the report goes on; the error then says
@@ -167,7 +173,7 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 			}
 		}
 	}
-	writeList(w, "Agents at work (from the labels on GitHub):", working)
+	writeList(w, "Agents at work (from the labels on GitHub):\n"+agentsAtWorkNote, working)
 	writeList(w, "Waiting for the Owner:", waiting)
 	if len(failed) > 0 {
 		writeList(w, "Repositories not read:", failed)
@@ -233,14 +239,14 @@ func writeQuota(w io.Writer, settings *config.Settings, stateDir string, at time
 		fmt.Fprintf(w, "  allowance: the 5h limit is 100%% until %s\n", stamp(allowance.FiveHourUntil, loc))
 	}
 	if decision.Allows() {
-		fmt.Fprintln(w, "  new starts: go on")
+		fmt.Fprintln(w, "  agent starts: go on")
 		return
 	}
 	names := make([]string, len(decision.Stopped))
 	for i, name := range decision.Stopped {
 		names[i] = string(name)
 	}
-	line := "  new starts: stopped by the " + strings.Join(names, " and the ") + " window"
+	line := "  agent starts: stopped by the " + strings.Join(names, " and the ") + " window"
 	if next, ok := quota.NextTry(usage, settings.Quota, allowance, at, loc); ok {
 		line += ", next try at " + stamp(next, loc)
 	}

@@ -1,0 +1,29 @@
+@startuml quota-status
+' cumin works - the output of cumin status, from top to bottom.
+' Document: quota.md, section on the output of cumin status.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:Quota:;
+if (the state file holds a usage?) then (yes)
+  :read at <time>\n5h window and weekly window: used, limit, reset time\nallowance, only while it holds;
+  :agent starts: go on\nor\nagent starts: stopped by the <window> window, next try at <time>;
+else (no)
+  :not read yet\n(no line of a window, no line "agent starts");
+endif
+if (a stop after the current runs is requested?) then (yes)
+  :Stop:\nstopping after the current runs, requested at <time>;
+else (no)
+endif
+:Agents at work (from the labels on GitHub):;
+:note line, always printed, also for an empty list:\nan issue here can wait with no agent,\nonly while agent starts are stopped\nor a stop after the current runs is requested;
+:<repository> #<issue> <status label>, one line for each issue\nor\nnone;
+:Waiting for the Owner:\n<repository> #<issue> <status label>, one line for each issue\nor\nnone;
+if (a repository was not read?) then (yes)
+  :Repositories not read:\n<repository>: not read: <reason>\n(the exit code is not 0);
+else (no)
+endif
+stop
+@enduml

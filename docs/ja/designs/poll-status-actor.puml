@@ -1,0 +1,30 @@
+@startuml poll-status-actor
+' cumin works - the check of the account that added a status label.
+' Document: poll.md, section on the account of a status label.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:read the snapshot;
+if (requirement issue in planning or accepting,\nand no Planner runs? (StatusActorReads)) then (no)
+  :no read of the account;
+  :decide as before;
+  stop
+else (yes)
+endif
+:read the event that put the status label\non the issue (1 GraphQL point);
+if (the account is a person?) then (yes)
+  :read the permission (1 REST call);
+else (no)
+endif
+if (cumin-core App or an Owner?\n(StatusLabelCounts)) then (yes)
+  :read the label times and the comments;
+  :decide from the state\n(SplitEnd, AcceptanceEnd);
+  stop
+else (no)
+  :no agent, no merge, no label change;
+  :one log line and one notification\nfor one label event;
+  stop
+endif
+@enduml

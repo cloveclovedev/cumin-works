@@ -34,19 +34,20 @@ func requirementLabels(t *testing.T, sc *scene) []string {
 func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing.T) {
 	review := sceneNow.Add(-time.Hour)
 	sc := newRequirementScene(t)
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"},
-		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/awaiting-owner-review", At: review}}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"},
+		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/awaiting-plan-review", At: review}}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"cumin/status/ready", "risk/low"},
 		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/ready", At: review.Add(-time.Hour)}}})
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
-	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/awaiting-owner-review") {
-		t.Fatalf("labels of #6 = %v, want awaiting-owner-review kept", got)
+	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/awaiting-plan-review") {
+		t.Fatalf("labels of #6 = %v, want awaiting-plan-review kept", got)
 	}
-	// The two queries of the poll, and the query of the label times.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
-		t.Errorf("%d GraphQL requests, want 3", n)
+	// The two queries of the poll, the query of the label times, and the
+	// reads for #19, which is in cumin/status/reviewing with no Reviewer.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 7 {
+		t.Errorf("%d GraphQL requests, want 7", n)
 	}
 
 	// The Owner reviews the new sub-issue and lets it start.
@@ -66,6 +67,30 @@ func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing
 	}
 }
 
+// R3 after the acceptance check: the requirement issue waits in
+// cumin/status/awaiting-acceptance, and the Owner sends work back with a new
+// sub-issue. cumin compares its cumin/status/ready with the time of
+// cumin/status/awaiting-acceptance, and marks the requirement as in work.
+func TestR3_AReadyAddedAfterTheAcceptanceMovesTheRequirementIssue(t *testing.T) {
+	accepted := sceneNow.Add(-time.Hour)
+	sc := newRequirementScene(t)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"},
+		LabelEvents: []githubtest.LabelEvent{
+			{Label: "cumin/status/awaiting-plan-review", At: accepted.Add(2 * time.Hour)},
+			{Label: "cumin/status/awaiting-acceptance", At: accepted},
+		}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, Labels: []string{"risk/low"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "New", Labels: []string{"cumin/status/ready", "risk/low"},
+		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/ready", At: accepted.Add(time.Minute)}}})
+
+	sc.pollAndWait(t, sc.service())
+
+	want := []string{githubtest.RequirementLabel, "cumin/status/implementing"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+}
+
 // R3 without a status label on the requirement issue: the Owner wrote the
 // sub-issues by hand, and one ready sub-issue is enough. No label times are
 // read.
@@ -78,9 +103,10 @@ func TestR3_ARequirementIssueWithoutAStatusLabelFollowsAReadySubIssue(t *testing
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	// The two queries of the poll: #10 is open and has a status label.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
-		t.Errorf("%d GraphQL requests, want 2", n)
+	// The two queries of the poll: #10 is open and has a status label. The
+	// reads for #19 follow: it is in cumin/status/reviewing with no Reviewer.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
+		t.Errorf("%d GraphQL requests, want 6", n)
 	}
 }
 
@@ -101,7 +127,7 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Fatalf("labels of #6 = %v, want %v", got, want)
 	}
@@ -177,7 +203,7 @@ func TestPoll_NoSubIssueWithAStatusLabelSendsNoSecondQuery(t *testing.T) {
 	sc := newScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Done", Closed: true, Labels: []string{"cumin/status/awaiting-checks", "risk/low"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Done", Closed: true, Labels: []string{"cumin/status/checking", "risk/low"}})
 	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{Number: 20, Closes: []int{10}})
 	sc.pollAndWait(t, sc.service())
 

@@ -15,11 +15,11 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 | 依頼の種類 | きっかけ | セッション |
 |---|---|---|
 | 実装 | I1: `cumin/status/ready` の付いた実装Issueに着手する。Pull Requestはまだない | 新しいセッション |
-| 続き | I1: Ownerが差し戻したか回答したあとに、`cumin/status/ready` が付け直された。Pull Requestは既にある | 新しいセッション |
+| 続き | I1: Maintainerが差し戻したか回答したあとに、`cumin/status/ready` が付け直された。Pull Requestは既にある | 新しいセッション |
 | checkの修正 | I4: 必須のcheckが失敗した | 直前と同じセッション |
 | 指摘の修正 | I5: Reviewerが `REQUEST_CHANGES` を出した | 直前と同じセッション |
 | 衝突の解消 | I6、I12: mergeしようとしたら衝突した。I14: checkを待つ間に衝突した | 直前と同じセッション |
-| Ownerのレビューへの対応 | I13: OwnerがPull Requestに `REQUEST_CHANGES` を出した | 直前と同じセッション。OwnerのレビューとそのコメントをGitHubから読み、Reviewerの指摘と同じく、返答のテンプレートで各コメントに答える |
+| Maintainerのレビューへの対応 | I13: MaintainerがPull Requestに `REQUEST_CHANGES` を出した | 直前と同じセッション。MaintainerのレビューとそのコメントをGitHubから読み、Reviewerの指摘と同じく、返答のテンプレートで各コメントに答える |
 
 ## 入力
 
@@ -36,7 +36,7 @@ Implementerが自分で読むもの:
 
 - 実装Issueと、その上の要求Issue。Issueからリンクされた文書
 - リポジトリの中身。リポジトリにある指示 (`CLAUDE.md`、`AGENTS.md`、skillなど) を含む
-- 続きの依頼では、Pull Request、レビュー、Ownerのコメント (Ownerは、起動の依頼の「Ownerのログイン名」のアカウント)
+- 続きの依頼では、Pull Request、レビュー、Issue Ownerのコメント (起動の依頼の「Issue Ownerのログイン名」のアカウント)
 
 ## 出力
 
@@ -90,7 +90,7 @@ cuminは、Implementerの `done` という申告ではなく、この事実で�
 
 - 対象のリポジトリに、GitHub Actionsのworkflowを置く。workflowは、Pull Requestの変更ファイルの一覧を、保護されたパスの一覧と突き合わせ、1つでも当たれば失敗する。
 - このcheckを、mainのrulesetで必須のcheckに登録する。
-- checkのjobには、「Pull Requestの作成者がBot (GitHub Appなど) のときだけ実行する」という条件を付ける。作成者が人のときはjobが飛ばされる。GitHubは、条件で飛ばされたjobを成功として扱うので、OwnerのPull Requestはこのcheckで止まらない。
+- checkのjobには、「Pull Requestの作成者がBot (GitHub Appなど) のときだけ実行する」という条件を付ける。作成者が人のときはjobが飛ばされる。GitHubは、条件で飛ばされたjobを成功として扱うので、人のPull Requestはこのcheckで止まらない。
 - 条件に、GitHub Appの名前は使わない。名前で「checkを掛ける相手」を指定すると、名前を間違えたときに、jobが飛ばされて成功の扱いになり、保護が黙って無効になるためである。Botの全てに掛ければ、間違える名前がない。
 - 保護されたパスの一覧は、Pull Requestのブランチではなくmainにあるものを読む。一覧そのもの (`.cumin/`) も保護されたパスに含める。こうしないと、Implementerが同じPull Requestの中で一覧を書き換えて、checkをすり抜けられる。
 - Implementerは `.github/workflows` を変更する権限を持たないので、workflowそのものを書き換えることもできない。
@@ -99,7 +99,7 @@ checkが失敗したときは、他の必須のcheckと同じくI4に乗り、cu
 
 ## blocked を返すとき
 
-次のどれかに当たったら、推測で進めずに `blocked` を返す。cuminはやり直さずに、1回目から `cumin/status/awaiting-owner-decision` に替えてOwnerに知らせる。
+次のどれかに当たったら、推測で進めずに `blocked` を返す。cuminはやり直さずに、1回目から `cumin/status/awaiting-decision` に替えて通知する。
 
 - 実装に必要な要件が足りない、または要件どうしが食い違っている
 - 保護されたパスや `.github/workflows` の変更が必要である
@@ -116,5 +116,5 @@ checkが失敗したときは、他の必須のcheckと同じくI4に乗り、cu
 | 2 | 保護されたパスの変更が必要な実装Issueを渡す | 保護されたパスは変更されない。結果は `blocked` で、理由にそのパスが書いてある |
 | 3 | 要件の足りない実装Issueを渡す | 結果は `blocked` で、何が決まっていないかが理由に書いてある |
 | 4 | 必須のcheckを失敗させて、修正を依頼する | 同じPull Requestに修正が積まれ、checkが通る |
-| 5 | Ownerが差し戻したあとに、続きを依頼する | 新しいセッションで起動される。新しいPull Requestは作られず、同じPull Requestに修正が積まれる |
+| 5 | Maintainerが差し戻したあとに、続きを依頼する | 新しいセッションで起動される。新しいPull Requestは作られず、同じPull Requestに修正が積まれる |
 | 6 | mainへのpushと、Pull Requestのmergeを試みる | どちらもrulesetに拒否される |

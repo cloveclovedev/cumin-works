@@ -156,6 +156,19 @@ func (sc *scene) failQuota(t *testing.T) {
 	}
 }
 
+// failQuotaOnce makes the next minimal run print no rate_limit_event. The
+// minimal runs after it read the usage again.
+func (sc *scene) failQuotaOnce(t *testing.T) {
+	t.Helper()
+	data, err := os.ReadFile(fixturePath(t, "no-quota.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sc.cliDir, "quota-once.jsonl"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // quotaRuns returns the number of minimal runs of the fake CLI.
 func (sc *scene) quotaRuns(t *testing.T) int {
 	t.Helper()
@@ -238,6 +251,8 @@ func newScene(t *testing.T, opts ...cliOptions) *scene {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddApp(githubtest.App{Slug: implementerSlug, Owner: "example-org", BotID: 424242})
+	// cumin-core changes the labels, so its events carry its login.
+	fake.SetLabelWriter(cuminSlug)
 	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"cumin/status/ready", "risk/low"}})
 
@@ -337,6 +352,9 @@ func (sc *scene) service() *workflow.Service {
 		// The stop sends SIGTERM to the process group of the CLI and
 		// SIGKILL after this grace. The tests must not wait ten seconds.
 		Grace: 200 * time.Millisecond,
+		// The read time of a usage comes from the clock of the scene, as
+		// the workflow decides with that clock.
+		Now: sc.clock.Now,
 	}
 	return &workflow.Service{
 		GitHub:    sc.client,
@@ -356,7 +374,7 @@ func (sc *scene) service() *workflow.Service {
 		Location:    sceneZone,
 		// The merge step waits for GitHub to close the issue; the fake
 		// answers at once.
-		CloseWait: time.Millisecond,
+		MergeWait: time.Millisecond,
 	}
 }
 
@@ -541,6 +559,8 @@ func fakeCLI(t *testing.T, o cliOptions) (path, dir string) {
 		"n=agent; f=" + agentFixture + "\n" +
 		"for a in \"$@\"; do [ \"$a\" = --system-prompt ] && { n=quota; f=" + quota + "; }; done\n" +
 		"[ $n = quota ] && [ -f " + filepath.Join(dir, "quota-override.jsonl") + " ] && f=" + filepath.Join(dir, "quota-override.jsonl") + "\n" +
+		// quota-once.jsonl is the answer of the next minimal run only.
+		"[ $n = quota ] && [ -f " + filepath.Join(dir, "quota-once.jsonl") + " ] && { f=" + filepath.Join(dir, "quota-once-used.jsonl") + "; mv " + filepath.Join(dir, "quota-once.jsonl") + " $f; }\n" +
 		"echo $n >> " + filepath.Join(dir, "order") + "\n" +
 		second +
 		"for a in \"$@\"; do printf '%s\\0' \"$a\"; done > " + filepath.Join(dir, "$n.args") + "\n" +
@@ -624,18 +644,19 @@ func TestCore01_ReadyIssueIsRequestedOnce(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	// Two label changes: the claim (I1) and the end of the run (I2).
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2", n)
 	}
 	// Three polls of two queries each, the read of the login of the Owner
-	// before the start, one read again at the end of the run (I2), the
-	// closing link, and one read after it.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 10 {
-		t.Errorf("%d GraphQL requests, want 10", n)
+	// before the start, three reads at the end of the run (the issue, the
+	// actor of its label, and its comments), the closing link, and one
+	// read after it.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 12 {
+		t.Errorf("%d GraphQL requests, want 12", n)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none on the success path", n)
@@ -685,16 +706,17 @@ func TestCore08_RestartDoesNotRequestTwice(t *testing.T) {
 		t.Fatalf("first run: %v", err)
 	}
 	first.Wait()
+	runs := sc.agentRuns(t)
 	// A new Service holds nothing from the first one. The facts are on
-	// GitHub: the label of #10 is now cumin/status/implementing.
+	// GitHub: the first one decided the end of its run there.
 	second := sc.service()
 	if err := second.Poll(ctx); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
 	second.Wait()
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != runs {
+		t.Errorf("%d agent runs after the restart, want none", n-runs)
 	}
 }
 
@@ -735,7 +757,7 @@ func (sc *scene) pollAndWait(t *testing.T, service *workflow.Service) {
 
 // I2 (issue-states.md): after done, an open pull request closes the issue,
 // its author is the Implementer App, and the head commit of the worktree is
-// pushed. Then the label becomes cumin/status/awaiting-checks.
+// pushed. Then the label becomes cumin/status/checking.
 func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testing.T) {
 	sc := newScene(t)
 	// The agent makes no commit, so the head of the worktree is the head of
@@ -745,8 +767,8 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2 (the claim and I2)", n)
@@ -755,8 +777,8 @@ func TestI2_DoneWithTheVerifiedPullRequestMovesTheIssueToAwaitingChecks(t *testi
 	// that the agent opened just before it ended is seen.
 	// The read of the login of the Owner before the start is one more
 	// GraphQL request.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 4 {
-		t.Errorf("%d GraphQL requests, want 4 (the two queries of the poll, the login of the Owner, and the read after the run)", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
+		t.Errorf("%d GraphQL requests, want 6 (the two queries of the poll, the login of the Owner, and the three reads after the run)", n)
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"pull_request":21`, `"issue":10`} {
@@ -776,8 +798,8 @@ func TestI2_DoneChecksThePullRequestWithTheHighestNumber(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-checks") {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/checking") {
+		t.Errorf("labels of #10 = %v, want cumin/status/checking", got)
 	}
 	if !strings.Contains(sc.logs.String(), `"pull_request":22`) {
 		t.Errorf("the log does not name pull request 22:\n%s", sc.logs.String())
@@ -834,8 +856,8 @@ func TestI2_APullRequestWithoutALinkGetsExactlyOneLink(t *testing.T) {
 	if got := sc.fake.PullRequestCloses(sc.repo, 21); !slices.Equal(got, []int{10}) {
 		t.Errorf("pull request #21 closes %v, want [10]", got)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"I2: added the closing link"`, `"msg":"I2: verified the pull request"`, `"pull_request":21`} {
@@ -859,8 +881,8 @@ func TestI2_ALinkedPullRequestGetsNoLink(t *testing.T) {
 	if n := closingLinkRequests(sc); n != 0 {
 		t.Errorf("%d closing link requests, want none", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-checks") {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/checking") {
+		t.Errorf("labels of #10 = %v, want cumin/status/checking", got)
 	}
 }
 
@@ -951,7 +973,7 @@ func closingLinkRequests(sc *scene) int {
 // stays; #81 posts the comment and asks the Owner.
 // I2 with a blocked result (issue-states.md): cumin posts the
 // blocked_reason on the issue, replaces the label with
-// cumin/status/awaiting-owner-decision, and notifies the Owner once. It
+// cumin/status/awaiting-decision, and notifies the Owner once. It
 // does not retry.
 func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
@@ -965,8 +987,8 @@ func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 	if len(comments) != 1 || comments[0].Body != question {
 		t.Fatalf("the comments of #10 = %+v, want one with the blocked reason", comments)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-owner-decision"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-decision"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 
 	messages := sc.webhook.messagesSent()
@@ -1004,8 +1026,8 @@ func TestI2_BlockedWithAFailedWebhookKeepsTheCommentAndTheLabel(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
 		t.Errorf("%d comments on #10, want 1", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-decision") {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	logs := sc.logs.String()
 	if !strings.Contains(logs, `"level":"ERROR","msg":"the Owner was not notified"`) {
@@ -1032,8 +1054,8 @@ func TestI2_BlockedWithNotificationsOffWritesOnlyOnGitHub(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
 		t.Errorf("%d comments on #10, want 1", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-decision") {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
 		t.Errorf("%d notifications, want none: %v", len(messages), messages)
@@ -1052,8 +1074,8 @@ func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/awaiting-decision") {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	if !strings.Contains(sc.logs.String(), `"level":"ERROR","msg":"the Owner was not notified"`) {
 		t.Errorf("the log does not report the missing channel at error level:\n%s", sc.logs.String())
@@ -1063,9 +1085,10 @@ func TestI2_BlockedWithoutAChannelIsLoggedAtErrorLevel(t *testing.T) {
 // assertVerificationFailed checks that the label of #10 stayed at
 // cumin/status/implementing and that the log names the failure.
 
-// Core-5 (cumin-core.md): a result that does not match the schema gives
-// exactly one retry. After the second abnormal end the issue goes to the
-// Owner, with one comment, the label, and exactly one notification.
+// Core-5 (cumin-core.md): a result that does not match the schema leaves
+// no pull request, so the implementation is requested again exactly once.
+// After the second run the issue goes to the Owner, with one comment that
+// names what is missing on GitHub, the label, and exactly one notification.
 func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "invalid-result.jsonl"})
 	service := sc.service()
@@ -1080,25 +1103,25 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	for _, want := range []string{"## Stopped for the Owner", "Row: I2", "invalid result", "Retried: once", "Pull request: None"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: I2", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "Retried: once", "Pull request: None"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, body)
 		}
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-owner-decision"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-decision"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	messages := sc.webhook.messagesSent()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"I2", "invalid result", "example-org/example-repo", "issue #10"} {
+	for _, want := range []string{"I2", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "example-org/example-repo", "issue #10"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
 	}
 	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"I2: the same request runs again in the same work directory"`) {
+	if !strings.Contains(logs, `"msg":"I2: the pull request does not pass the check; the same request runs again in the same work directory"`) {
 		t.Errorf("the log does not say that the request ran again:\n%s", logs)
 	}
 }
@@ -1132,21 +1155,22 @@ func TestI2_TheRetryIsTheSameRequestInANewSession(t *testing.T) {
 	}
 }
 
-// A retry that ends normally goes on as usual: the verification runs, the
-// label moves to cumin/status/awaiting-checks, and nothing is said to the
+// An abnormal end is decided from the facts on GitHub, as every other end:
+// the pull request of the run is verified, so the issue moves to
+// cumin/status/checking with no second request, and nothing is said to the
 // Owner.
-func TestI2_ARetryThatEndsWellIsVerified(t *testing.T) {
+func TestI2_AnAbnormalEndWithAVerifiedPullRequestWaitsForTheChecks(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "is-error.jsonl", secondFixture: "done.jsonl"})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
 
-	if n := sc.agentRuns(t); n != 2 {
-		t.Fatalf("%d agent runs, want 2", n)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 0 {
 		t.Errorf("%d comments on #10, want none", n)
@@ -1156,76 +1180,51 @@ func TestI2_ARetryThatEndsWellIsVerified(t *testing.T) {
 	}
 }
 
-// The two runs can end in different ways. The comment names both kinds,
-// so that the Owner knows where to look.
-func TestI2_TheStopNoteNamesTheKindOfEachAbnormalEnd(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "no-result.jsonl", secondFixture: "invalid-result.jsonl"})
-	service := sc.service()
-
-	sc.pollAndWait(t, service)
-
-	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 {
-		t.Fatalf("%d comments on #10, want 1", len(comments))
-	}
-	for _, want := range []string{"no result", "invalid result", "Retried: once"} {
-		if !strings.Contains(comments[0].Body, want) {
-			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
-		}
-	}
-}
-
-// The stop note names the pull request that the agent left behind, so that
-// the Owner knows whether the work reached GitHub.
-func TestI2_TheStopNoteOfAnAbnormalEndNamesThePullRequest(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "no-init.jsonl"})
-	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
-	service := sc.service()
-
-	sc.pollAndWait(t, service)
-
-	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 {
-		t.Fatalf("%d comments on #10, want 1", len(comments))
-	}
-	for _, want := range []string{"Pull request: #21", "user-level context", "Retried: once"} {
-		if !strings.Contains(comments[0].Body, want) {
-			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
-		}
-	}
-}
-
 // assertVerificationFailed checks the whole failed path of I2: the log
 // names the check that failed, the issue holds one comment in the form of
 // templates/stop-note.md with the sentence of that check, the label is
-// cumin/status/awaiting-owner-decision, and exactly one notification went
+// cumin/status/awaiting-decision, and exactly one notification went
 // out with the same sentence. pullRequest is the number that the comment
 // must name, or 0 for "None".
 func assertVerificationFailed(t *testing.T, sc *scene, failure string, kind workflow.VerificationFailure, pullRequest int) {
 	t.Helper()
-	logs := sc.logs.String()
-	if !strings.Contains(logs, `"msg":"I2: the verification failed"`) {
-		t.Errorf("the log does not say that the verification failed:\n%s", logs)
+	if got := kind.String(); got != failure {
+		t.Errorf("the failure is named %q, want %q", got, failure)
 	}
-	if !strings.Contains(logs, `"failure":"`+failure+`"`) {
-		t.Errorf("the log does not name the failure %q:\n%s", failure, logs)
+	logs := sc.logs.String()
+	for _, want := range []string{`"msg":"I2: the pull request does not pass the check; the same request runs again in the same work directory"`,
+		`"msg":"I2: the implementation stops for the Owner"`, `"retried":true`} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("the log has no %s:\n%s", want, logs)
+		}
+	}
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 
-	assertStoppedAtI2(t, sc, workflow.VerificationReason(kind), pullRequest)
+	assertStopped(t, sc, workflow.VerificationReason(kind), pullRequest, "once")
 }
 
 // assertStoppedAtI2 checks the stop step of I2 for #10: one comment in the
 // form of templates/stop-note.md with the reason, the label
-// cumin/status/awaiting-owner-decision, and exactly one notification with
+// cumin/status/awaiting-decision, and exactly one notification with
 // the same reason.
 func assertStoppedAtI2(t *testing.T, sc *scene, reason string, pullRequest int) {
+	t.Helper()
+	assertStopped(t, sc, reason, pullRequest, "no")
+}
+
+// assertStopped is assertStoppedAtI2 with what the comment says about the
+// second request: "no", or "once" after the implementation was requested
+// again.
+func assertStopped(t *testing.T, sc *scene, reason string, pullRequest int, retried string) {
 	t.Helper()
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	want := []string{"## Stopped for the Owner", "Row: I2", "Reason: " + reason, "Retried: no", "cumin/status/ready"}
+	want := []string{"## Stopped for the Owner", "Row: I2", "Reason: " + reason, "Retried: " + retried, "cumin/status/ready"}
 	if pullRequest > 0 {
 		want = append(want, fmt.Sprintf("Pull request: #%d", pullRequest))
 	} else {
@@ -1237,8 +1236,8 @@ func assertStoppedAtI2(t *testing.T, sc *scene, reason string, pullRequest int) 
 		}
 	}
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-owner-decision"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-decision"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
 		t.Errorf("%d label changes, want 2 (the claim and the stop)", n)
@@ -1315,8 +1314,8 @@ func TestPoll_FailedLabelChangeStartsNoAgent(t *testing.T) {
 		t.Fatalf("second poll: %v", err)
 	}
 	service.Wait()
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 }
 
@@ -1361,8 +1360,8 @@ func TestPoll_OneFailedRepositoryDoesNotStopTheOthers(t *testing.T) {
 		t.Fatalf("err = %v, want the failure of missing-repo", err)
 	}
 	service.Wait()
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1 for the good repository", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 for the good repository (the request and the second request)", n)
 	}
 }
 
@@ -1405,8 +1404,8 @@ func TestPoll_StalledGitHubCallEndsAtTheTimeoutAndTheNextPollRuns(t *testing.T) 
 		t.Fatalf("the next Poll: %v", err)
 	}
 	service.Wait()
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs after the next poll, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs after the next poll, want 2 (the request and the second request)", n)
 	}
 }
 
@@ -1423,8 +1422,8 @@ func TestPoll_AReadThatFailsOnceIsSentAgainAndThePollGoesOn(t *testing.T) {
 	}
 	service.Wait()
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1: the poll goes on after the retry", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request): the poll goes on after the retry", n)
 	}
 }
 
@@ -1458,12 +1457,12 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n < 3 {
 		t.Errorf("%d snapshot reads, want 3 or more", n)
 	}
-	// The 12 labels of the start, and the 4 default priority labels of the
+	// The 16 labels of the start, and the 4 default priority labels of the
 	// first poll: the settings of the repository name no priority labels.
-	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 16 {
-		t.Errorf("%d labels created, want 16", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 20 {
+		t.Errorf("%d labels created, want 20", n)
 	}
-	if got := sc.fake.LabelNames(sc.repo); len(got) != 16 || !slices.Contains(got, "cumin/status/ready") || !slices.Contains(got, "cumin/priority/P0") {
+	if got := sc.fake.LabelNames(sc.repo); len(got) != 20 || !slices.Contains(got, "cumin/status/ready") || !slices.Contains(got, "cumin/priority/P0") {
 		t.Errorf("labels of the repository = %v", got)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/implementing") {
@@ -1502,8 +1501,8 @@ func TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval(t *testing.T) {
 	if err := second.Run(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 16 {
-		t.Errorf("%d labels created after the second start, want 16 still", n)
+	if n := sc.fake.CountRequests(http.MethodPost, "/repos/example-org/example-repo/labels"); n != 20 {
+		t.Errorf("%d labels created after the second start, want 20 still", n)
 	}
 }
 
@@ -1589,8 +1588,8 @@ func TestPoll_AppliesTheSettingsOfTheRepository(t *testing.T) {
 	}
 	service.Wait()
 
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want 1", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 	// The model of the repository reached the CLI of the agent. The
 	// arguments are separated by NUL.
@@ -1649,8 +1648,8 @@ func TestPoll_AWrongRepositoryFileSkipsOnlyThatRepository(t *testing.T) {
 	service.Wait()
 
 	// The good repository claimed its issue; the wrong one claimed nothing.
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1 for the repository whose file is right", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 for the repository whose file is right (the request and the second request)", n)
 	}
 	if got := sc.fake.Issue(other, 2).Labels; !slices.Contains(got, "cumin/status/ready") {
 		t.Errorf("labels of the sub-issue of the wrong repository = %v, want the ready label untouched", got)
@@ -2056,12 +2055,12 @@ func TestI1_AClaimWithoutAStateFileWorks(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingChecks) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelChecking) {
+		t.Errorf("labels of #10 = %v, want cumin/status/checking", got)
 	}
 }
 
-// awaitingChecks puts issue #10 in cumin/status/awaiting-checks with one
+// awaitingChecks puts issue #10 in cumin/status/checking with one
 // open pull request of the Implementer App, and gives the repository the
 // required checks. checks are the results on the head commit.
 func (sc *scene) awaitingChecks(t *testing.T, required []string, checks []githubtest.Check) {
@@ -2069,7 +2068,7 @@ func (sc *scene) awaitingChecks(t *testing.T, required []string, checks []github
 	// Issue returns a copy, so the label is set by replacing the issue.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels: []string{"cumin/status/awaiting-checks", "risk/low"},
+		Labels: []string{"cumin/status/checking", "risk/low"},
 	})
 	sc.repo.DefaultBranch = "main"
 	for _, name := range required {
@@ -2097,27 +2096,23 @@ func TestI3_EveryRequiredCheckPassedMovesTheIssueToTheReview(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelReviewing}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/reviewing", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelMerging}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/merging after the approval", got)
 	}
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want one Reviewer run", n)
 	}
-	for _, want := range []string{"I3: the pull request is ready for review", "I3: the Reviewer approved the head commit"} {
+	for _, want := range []string{"I3: the pull request is ready for review", "I6: start the merge: the Reviewer approved the head commit"} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log does not say %q: %s", want, sc.logs)
 		}
 	}
-	// The issue leaves awaiting-checks, so the next poll asks for nothing.
 	// The approval reads the required checks once more, for I6.
-	if err := service.Poll(context.Background()); err != nil {
-		t.Fatalf("second poll: %v", err)
-	}
 	if n := sc.fake.CountRequests(http.MethodGet, branchRulesPath); n != 2 {
 		t.Errorf("%d reads of the required checks, want 2 (I3 and I6)", n)
 	}
-	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
-		t.Errorf("%d label changes, want 1", n)
+	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
+		t.Errorf("%d label changes, want 2 (to the review, and to the merge)", n)
 	}
 }
 
@@ -2130,8 +2125,8 @@ func TestI3_AnEmptyListOfRequiredChecksPassesAtOnce(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelReviewing) {
-		t.Errorf("labels of #10 = %v, want cumin/status/reviewing", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelMerging) {
+		t.Errorf("labels of #10 = %v, want cumin/status/merging: the review ran and approved", got)
 	}
 }
 
@@ -2153,8 +2148,8 @@ func TestI3_AFailedOrRunningCheckKeepsTheIssueWaiting(t *testing.T) {
 
 			sc.pollAndWait(t, service)
 
-			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingChecks) {
-				t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks to stay", got)
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelChecking) {
+				t.Errorf("labels of #10 = %v, want cumin/status/checking to stay", got)
 			}
 		})
 	}
@@ -2198,14 +2193,14 @@ func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 
 	// cumin changes the label of the issue: I1, then I2 stops it.
 	sc.pollAndWait(t, service)
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Fatalf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Fatalf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	sc.pollAndWait(t, service)
 	assertEqual("after cumin changed the issue")
 
 	// The Owner changes the risk of the issue.
-	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/high", workflow.LabelAwaitingOwnerDecision}); err != nil {
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{"risk/high", workflow.LabelAwaitingDecision}); err != nil {
 		t.Fatal(err)
 	}
 	sc.pollAndWait(t, service)
@@ -2221,8 +2216,8 @@ func TestCore14_TheLabelsOfThePullRequestFollowTheIssue(t *testing.T) {
 	if got := sc.fake.PullRequestLabels(sc.repo, 21); !slices.Contains(got, "docs") {
 		t.Errorf("labels of the pull request = %v, want the label docs kept", got)
 	}
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1: the labels of a pull request decide nothing", n)
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2 (the request and the second request): the labels of a pull request decide nothing", n)
 	}
 
 	// Equal labels cause no write.
@@ -2290,8 +2285,8 @@ func TestI1_AClaimWithAnOpenPullRequestContinuesOnItsBranch(t *testing.T) {
 	}
 	// The agent made no commit, so the head of the worktree is the head of
 	// the pull request, and I2 passes on it.
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/awaiting-checks"}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", "cumin/status/checking"}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"kind":"continue"`, `"branch":"` + branch + `"`, `"pull_request":21`} {
@@ -2375,10 +2370,9 @@ func (sc *scene) failingCheck(t *testing.T, service *workflow.Service, count int
 // I4 (issue-states.md): a failed required check moves the issue back to
 // cumin/status/implementing and sends one request of the kind "check fix",
 // in the session of the last run, with what the failed check says. The
-// label changes first, so the polls that follow send nothing more. Here the
-// fix is not pushed, so I2 stops the issue after the run.
+// label changes first, so the polls that follow send nothing more.
 func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
-	sc := newScene(t, cliOptions{commit: true})
+	sc := newScene(t)
 	service := sc.service()
 	path := sc.failingCheck(t, service, 0)
 	ctx := context.Background()
@@ -2423,7 +2417,7 @@ func TestI4_AFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
 }
 
 // I4, then I2 (issue-states.md): a fix that ends with done is verified
-// again, and a verified pull request returns to cumin/status/awaiting-checks.
+// again, and a verified pull request returns to cumin/status/checking.
 func TestI4_ADoneFixIsVerifiedAgain(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
@@ -2431,8 +2425,8 @@ func TestI4_ADoneFixIsVerifiedAgain(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-checks", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
 	// The claim and I2: two label changes; the stop was not used.
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 2 {
@@ -2448,7 +2442,7 @@ func TestI4_ADoneFixIsVerifiedAgain(t *testing.T) {
 }
 
 // I4 (issue-states.md): at max_check_fix_requests, cumin sends no request.
-// The issue gets one comment, cumin/status/awaiting-owner-decision, and one
+// The issue gets one comment, cumin/status/awaiting-decision, and one
 // notification, with the row I4. After the Owner adds cumin/status/ready,
 // the next request starts a new session and the count starts at zero.
 func TestI4_TheLimitStopsTheIssueForTheOwner(t *testing.T) {
@@ -2462,8 +2456,8 @@ func TestI4_TheLimitStopsTheIssueForTheOwner(t *testing.T) {
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want none at the limit", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 {
@@ -2545,7 +2539,7 @@ func TestI4_AStopWhoseLabelFailsWritesNothingElse(t *testing.T) {
 	}
 }
 
-// notReporting puts issue #10 in cumin/status/awaiting-checks since the time
+// notReporting puts issue #10 in cumin/status/checking since the time
 // of the scene, with the required checks ci, lint, and unit. Only unit
 // reported: ci has no result, and lint has not finished.
 func (sc *scene) notReporting(t *testing.T) {
@@ -2556,8 +2550,8 @@ func (sc *scene) notReporting(t *testing.T) {
 	})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels:      []string{workflow.LabelAwaitingChecks, "risk/low"},
-		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingChecks, At: sceneNow}},
+		Labels:      []string{workflow.LabelChecking, "risk/low"},
+		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelChecking, At: sceneNow}},
 	})
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, sceneNow.Add(-time.Minute))
 }
@@ -2574,7 +2568,7 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 
 	sc.clock.Set(sceneNow.Add(59 * time.Minute))
 	sc.pollAndWait(t, service)
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{workflow.LabelAwaitingChecks, "risk/low"}) {
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{workflow.LabelChecking, "risk/low"}) {
 		t.Errorf("labels of #10 before the wait time is over = %v, want them unchanged", got)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 0 {
@@ -2591,8 +2585,8 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
 		t.Errorf("%d label changes, want 1", n)
@@ -2621,7 +2615,7 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	}
 }
 
-// I15: an issue in cumin/status/awaiting-checks whose pull request someone
+// I15: an issue in cumin/status/checking whose pull request someone
 // closed stops for the Owner exactly once, after the wait time since the
 // label. The comment and the notification say that no open pull request
 // closes the issue, and the time waited. Before the wait time is over, the
@@ -2650,8 +2644,8 @@ func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingOwnerDecision}) {
-		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
+		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, putLabelsPath); n != 1 {
 		t.Errorf("%d label changes, want 1", n)
@@ -2690,14 +2684,14 @@ func TestI15_ANewHeadCommitStartsTheWaitTimeAgain(t *testing.T) {
 
 	sc.clock.Set(sceneNow.Add(61 * time.Minute))
 	sc.pollAndWait(t, service)
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingChecks) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-checks to stay after the new head commit", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelChecking) {
+		t.Errorf("labels of #10 = %v, want cumin/status/checking to stay after the new head commit", got)
 	}
 
 	sc.clock.Set(sceneNow.Add(91 * time.Minute))
 	sc.pollAndWait(t, service)
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
-		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
+		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "waited 1h1m0s") {
@@ -2741,15 +2735,15 @@ func TestI15_ChecksThatReportedGoOnToTheReview(t *testing.T) {
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
-		Labels:      []string{workflow.LabelAwaitingChecks, "risk/low"},
-		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingChecks, At: sceneNow}},
+		Labels:      []string{workflow.LabelChecking, "risk/low"},
+		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelChecking, At: sceneNow}},
 	})
 	service := sc.service()
 	sc.clock.Set(sceneNow.Add(2 * time.Hour))
 
 	sc.pollAndWait(t, service)
 
-	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, workflow.LabelAwaitingOwnerDecision) {
+	if got := sc.fake.Issue(sc.repo, 10).Labels; slices.Contains(got, workflow.LabelAwaitingDecision) {
 		t.Errorf("labels of #10 = %v, want no stop for the Owner", got)
 	}
 	if !strings.Contains(sc.logs.String(), "I3: the pull request is ready for review") {
@@ -2776,7 +2770,7 @@ func TestI4_AWorktreeOnAnotherBranchIsMadeAgainOnThePullRequest(t *testing.T) {
 	if got := branchOf(t, earlier); got != wantBranch {
 		t.Errorf("branch of the worktree = %q, want the branch of the pull request %q", got, wantBranch)
 	}
-	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingChecks}) {
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
 		t.Errorf("labels of #10 = %v, want I2 to pass on the pull request", got)
 	}
 }

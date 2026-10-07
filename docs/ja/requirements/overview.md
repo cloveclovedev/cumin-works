@@ -19,18 +19,20 @@ AIリソースを持ってはいるが、稼働していない時間も多い。
 ## cumin-worksの指標
 
 - 稼働率: claude codeの5h, weekly利用枠およびcodexのweekly利用枠を8~9割利用する
-  - 残り1~2割はOwner作業で使うため残す
+  - 残り1~2割はOperatorの作業で使うため残す
 - 成果: 時間あたりにmergeされたissue数や受け入れられた要求数
 
 ## 登場人物
 
-- Owner: 成果物の責任を持つ。現状は人間が担当する
-- Human: 人間の作業者。Ownerも含む
+- Maintainer: 成果物の責任を持つ。要求を書き、進めてよいと合図し、mergeを判断する。現状は人間が担当する
+- Issue Owner: そのIssueを進めてよいと合図したMaintainer。Agentはこの人の指示を読む
+- Operator: Hostでcuminを動かす人。利用枠もこの人のものである
+- Human: 人間の作業者。MaintainerとOperatorも含む
 - Agent: AI Agent
 
 ## Agent Role (現時点)
 
-- Planner: Ownerの記載した要求を1実装タスク単位のIssueに分割する。Issueの依存関係を整理する。Issueのマージriskを仮付けする
+- Planner: Maintainerの記載した要求を1実装タスク単位のIssueに分割する。Issueの依存関係を整理する。Issueのマージriskを仮付けする
 - Implementer: Issueの内容を実装する
 - Reviewer: Issueに対する実装(Pull Request)をレビューする
 
@@ -43,7 +45,7 @@ AIリソースを持ってはいるが、稼働していない時間も多い。
 
 ## GitHub上の登場人物
 
-- Owner: OwnerのGitHubアカウント
+- Maintainer: MaintainerのGitHubアカウント
 - cumin-core: cumin基盤が使うGitHub App。mainへのマージができる。実装Issueのラベルを書き換える
 - cumin-planner: Plannerロールが使うGitHub App。Issue関連の読み書き
 - cumin-implementer: Implementerロールが使うGitHub App。ブランチをpushできる。Pull Requestが作れる
@@ -60,7 +62,7 @@ AIリソースを持ってはいるが、稼働していない時間も多い。
 ## 実装の進め方
 
 - シンプルファースト。常にシンプルに達成できる方法がないかを模索する。AIツールの進化は早い
-- 要件ファースト。要件はシンプルに整理されていて、Owner(私)が全て把握できている
+- 要件ファースト。要件はシンプルに整理されていて、Maintainer(私)が全て把握できている
 - ドキュメントファースト。実装できているところまで第三者に見せられるドキュメントが追従して作られている
 - テストファースト。要件に紐づいたテストが整理されて実装されている。大量のユニットテストより、上位要件が実現できているかのテストを重視する
 

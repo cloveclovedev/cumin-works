@@ -45,6 +45,17 @@ func TestMergePullRequest_TellsTheAnswersApart(t *testing.T) {
 			t.Fatalf("error = %v, want ErrConflict", err)
 		}
 	})
+	t.Run("a base branch that was modified", func(t *testing.T) {
+		fake, repo, client := mergeScene(t)
+		fake.RefuseMergesForBaseBranch(1)
+		err := client.MergePullRequest(ctx, githubtest.Token, "example-org", "example-repo", 21, head, "squash")
+		if !errors.Is(err, github.ErrBaseModified) || errors.Is(err, github.ErrConflict) || github.IsTemporary(err) {
+			t.Fatalf("error = %v, want ErrBaseModified, which is no conflict and no temporary failure", err)
+		}
+		if repo.PullRequests[21].Merged {
+			t.Error("the refused merge merged the pull request")
+		}
+	})
 	t.Run("a 405 of a mergeable pull request is not a conflict", func(t *testing.T) {
 		fake, _, client := mergeScene(t)
 		fake.FailNext(http.MethodPut, "/repos/example-org/example-repo/pulls/21/merge", http.StatusMethodNotAllowed)

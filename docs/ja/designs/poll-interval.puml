@@ -35,6 +35,6 @@ note right
   * an open requirement issue has
     cumin/status/ready or planning
   * an open sub-issue has cumin/status/ready,
-    implementing, awaiting-checks, or reviewing
+    implementing, checking, or reviewing
 end note
 @enduml

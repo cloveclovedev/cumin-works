@@ -1,6 +1,8 @@
 // Package state keeps the small amount of state that cumin holds on the
 // Host: for each implementation issue, the session of the last agent run and
-// the number of check fix requests (I4); and the latest quota usage (Q3). The requirement allows only what
+// the number of check fix requests (I4); for each requirement issue in
+// cumin/status/accepting, the session of the last Planner run and the number
+// of repeated acceptance check requests; and the latest quota usage (Q3). The requirement allows only what
 // cumin can lose without losing work (cumin-core.md, the section on what
 // cumin keeps): a lost file starts a new session and a count of zero.
 //
@@ -39,6 +41,33 @@ type Issue struct {
 	// CheckFixRequests is how many check fixes cumin has asked for since
 	// the Owner last added cumin/status/ready (I4).
 	CheckFixRequests int `json:"check_fix_requests,omitempty"`
+	// AcceptanceRequests is how many times cumin has requested the
+	// acceptance check again during this stay of a requirement issue in
+	// cumin/status/accepting. The entry of a requirement issue holds it,
+	// with the session of the last Planner run in SessionID.
+	AcceptanceRequests int `json:"acceptance_requests,omitempty"`
+	// SplitRequests is how many times cumin has requested the split again
+	// during this stay of a requirement issue in cumin/status/planning.
+	SplitRequests int `json:"split_requests,omitempty"`
+	// ImplementationRequests is how many times cumin has requested the
+	// implementation again during this stay of an implementation issue in
+	// cumin/status/implementing.
+	ImplementationRequests int `json:"implementation_requests,omitempty"`
+	// ConflictResolution says that the request of this stay in
+	// cumin/status/implementing is a conflict resolution. The way out of
+	// that state then stops the issue when the head commit is older than
+	// the label.
+	ConflictResolution bool `json:"conflict_resolution,omitempty"`
+	// ReviewRequests is how many times cumin has requested the review again
+	// during this stay of an implementation issue in cumin/status/reviewing.
+	ReviewRequests int `json:"review_requests,omitempty"`
+	// CauseRequests is how many times cumin has requested the cause from
+	// the Reviewer during this stay in cumin/status/reviewing.
+	CauseRequests int `json:"cause_requests,omitempty"`
+	// ReviewHead is the head commit that the review of this stay in
+	// cumin/status/reviewing was requested on. A pull request with another
+	// head commit goes back to the checks.
+	ReviewHead string `json:"review_head,omitempty"`
 }
 
 // empty reports whether the entry holds nothing, so that Set removes it.
@@ -52,7 +81,7 @@ type QuotaWindow struct {
 }
 
 // Quota is the latest quota usage that cumin read, and when it read it.
-// While new starts stop, cumin decides from it when to try again, so that
+// While agent starts are stopped, cumin decides from it when to try again, so that
 // a restart makes no minimal run before that time (Q3). The file keeps
 // only the numbers of the account; it holds no token.
 type Quota struct {

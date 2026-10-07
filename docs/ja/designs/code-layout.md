@@ -43,7 +43,7 @@
 | | `riskcriteria.go` | riskの基準の文章を、リポジトリ、Host、初期値の順で決める。初期値は `disciplines` から読む |
 | | `githubapps.go` | `github_apps` の表の読み書き (`cumin setup` が書く) |
 | | `quota.go` | 利用枠の設定 (5h枠のしきい値と時間帯、weekly枠の目標と前倒し) の読み込み |
-| `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、最新の使用率 (Q3)。書くのは `cumin run` だけ |
+| `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、受け入れの確認を依頼し直した回数、分割を依頼し直した回数、実装を依頼し直した回数と依頼が衝突の解消かどうか、レビューを依頼し直した回数と原因の整理を依頼した回数と依頼した先頭のコミット、最新の使用率 (Q3)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (Q2) |
 | | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
@@ -59,13 +59,14 @@
 | | `comments.go` | Issueへのコメントの投稿 |
 | | `issuecomments.go` | IssueかPull Requestの最新のコメントの読み取り (受け入れの確認のコメント、原因の説明のコメントを探す) |
 | | `labeltimes.go` | 要求Issueとsub-issueに、ラベルが付いた時刻の読み取り (R3: sub-issueに `cumin/status/ready` が付いたか) |
-| | `labelactor.go` | Issueに最新のラベルを付けたアカウントの読み取り。Issueにイベントがなければsub-issueから読む (R1とI1のOwnerのreadyの確認、起動の依頼の事実: Ownerのログイン名) |
+| | `labelactor.go` | Issueにラベルを付けたアカウントの読み取り。答えるイベントの決まりは `labeltimes.go` の `puttingLabelEvents` にある。Issueにイベントがなければsub-issueから読む (R1とI1のOwnerのreadyの確認、起動の依頼の事実: Ownerのログイン名) |
 | | `closer.go` | Issueに結び付いたPull Requestの一覧と、1つのPull Requestの説明とレビューのスレッドの読み取り (I9) |
 | | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む。実行終了のあとに1つのIssueだけを読む問い合わせも、同じ項目で持つ |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
 | | `closinglink.go` | ブランチの開いているPull Requestの一覧と、閉じるリンクの追加 (I2) |
 | | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (I12のOwnerの判定、起動の依頼のOwnerのログイン名) |
-| | `merge.go` | Pull Requestのmerge (衝突と先頭のコミットの移動の見分け)、mergeが済んだかの読み取り、Issueの開閉の読み取りと、完了として閉じること (I6、I12) |
+| | `merge.go` | Pull Requestのmerge (衝突、先頭のコミットの移動、既定のブランチの変更の見分け)、mergeが済んだかの読み取り、Issueの開閉の読み取りと、完了として閉じること (I6、I12) |
+| | `reviewrequest.go` | Pull RequestへのOwnerのレビューの依頼 (I7。`POST .../pulls/{n}/requested_reviewers`) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし、一次のレート制限の使い切り、書き込みを処理してから答えを落とす)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
@@ -73,25 +74,24 @@
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
 | `internal/notify` | `domain.go` | 純粋。通知の内容と、その文章 |
 | | `notify.go` | 通知を送る入口 `Notifier` と、手段を表す `Sender` |
-| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、着手の順番 (優先度のラベル、Issueの番号)、実行を待って止める間に落とす動作、必須のcheckの判定、実行終了の判定 (I2)、承認のあとの判定 (I6、I7)、Ownerの承認の判定 (I12)、Ownerの差し戻しの判定 (I13)、checkまたはOwnerの判断を待つ間の衝突の判定 (I14)、必須のcheckが結果を返さないときの判定 (I15)、cuminがOwnerなしで次に進めるIssueがあるかの判定 (Q4) |
+| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (I1、I3)、着手の順番 (優先度のラベル、Issueの番号)、Agentの起動の前の1つの確認 (`PermitStart`)、必須のcheckの判定、実行終了の判定 (I2)、承認のあとの判定 (I6、I7)、Ownerの承認の判定 (I12)、Ownerの差し戻しの判定 (I13)、checkまたはOwnerの判断を待つ間の衝突の判定 (I14)、必須のcheckが結果を返さないときの判定 (I15)、cuminがOwnerなしで次に進めるIssueがあるかの判定 (Q4) |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧。初期値の優先度のラベルは、設定が名前を決めていないリポジトリにだけ作る |
-| | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。必須のcheckが待ち時間を過ぎても結果を返さないIssueをOwnerに戻す (I15)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
+| | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。Agentの起動の許可を取る関数と、Agentを起動するただ1つの関数 (`startAgent`) を持つ。必須のcheckが待ち時間を過ぎても結果を返さないIssueをOwnerに戻す (I15)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
-| | `keptstep.go` | 一時的な失敗で終わった、Agentの実行のあとの手順を持っておく。時刻が来た手順を、定期確認の最初にやり直す (I2、I5〜I8、I10、R2、mergeの手順)。手順の残り (Agentの実行、merge) は、別のgoroutineで動かす |
-| | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、分割の確かめ (R2) と、一時的な失敗のあとにその手順を持っておくこと、受け入れの確認の依頼とその結果 (R4、R7) |
-| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り。R1とI1のための、Ownerのreadyの確認と、Ownerでないreadyのログと通知 |
-| | `review.go` | Reviewerの依頼と実行の終わり。レビューの開始 (I3)、レビューが出たかの確認、指摘の修正の依頼 (I5)、原因の説明の依頼 (I8)、`blocked` (I10) |
-| | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知) と、通知の送り出し |
-| | `merge.go` | 承認されたPull Requestの扱い (I6、I7)、Ownerの承認のあとのmerge (I12)、2つが使うmergeの手順、Ownerのレビューへの対応の依頼 (I13)、checkまたはOwnerの判断を待つ間の衝突の解消の依頼 (I14) |
+| | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (R1)、`cumin/status/planning` の出口 (R2、依頼し直し、Ownerに戻すこと) 、受け入れの確認の依頼 (R4) と、`cumin/status/accepting` の出口 (R7、依頼し直し、Ownerに戻すこと) |
+| | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (R3)、残りのsub-issueの確認を求める (R6)。R3と、checkを待つsub-issueと、Ownerのレビューへの対応 (I13) のための、ラベルの時刻の読み取り。R1とI1のための、Ownerのreadyの確認と、Ownerでないreadyのログと通知。状態から決める要求Issueのための、状態ラベルを付けたアカウントの確認と、数えないラベルのログと通知 |
+| | `review.go` | Reviewerの依頼と、`cumin/status/reviewing` の出口。レビューの開始 (I3)、出口の事実の読み取りと適用 (定期確認と実行の終わりが共に使う)、指摘の修正の依頼 (I5)、レビューの依頼し直し、原因の説明の依頼 (I8)、`blocked` (I10) |
+| | `stop.go` | Ownerに戻す1か所の手順 (コメント、ラベル、通知。`blocked` のあとは、ラベル、コメント、通知) と、通知の送り出し |
+| | `merge.go` | Ownerにmergeの判断を求めること (I7。ラベル、Ownerのレビューの依頼、通知)、Ownerの承認のあとのmergeの開始 (I12)、`cumin/status/merging` の中の手順 (mergeを送る、閉じる、checkに戻る、衝突の解消の依頼、Ownerに戻す)、Ownerのレビューへの対応の依頼 (I13)、checkまたはOwnerの判断を待つ間の衝突の解消の依頼 (I14) |
 | | `cleanup.go` | 閉じたsub-issueの片付け (worktree、ローカルのブランチ、状態ファイルの項目) |
 | | `followup.go` | 純粋。フォローアップノートを読むsub-issue、拾うもの、ノートの文章と目印 (I9) |
 | | `followupnote.go` | フォローアップノートの読み取りと書き込み (I9) |
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
-| | `waiting.go` | Ownerが動かなければ何も進まないときの1回だけの通知 (Q4)。動作も実行中のAgentもなく、cuminがOwnerなしで次に進めるIssueもないとき |
-| | `quota.go` | 着手 (R1、I1) の前の使用率の確認と、実行の終わりの確認 (Q1)。枠ごとに1回だけ知らせる。使用率を状態ファイルに残し、止めている間は次に試す時刻まで読まない (Q3) |
+| | `waiting.go` | Ownerが動かなければ何も進まないときの1回だけの通知 (Q4)。動作も実行中のAgentもなく、Agentの起動が利用枠だけで待っているIssueも、cuminがOwnerなしで次に進めるIssueもないとき。利用枠だけで待っている起動の記録 |
+| | `quota.go` | Agentの起動の前の使用率の確認と、実行の終わりの確認 (Q1、stop agent starts)。枠ごとに1回だけ知らせる。使用率を状態ファイルに残し、読んだばかりの使用率があれば最小の実行をせずに判定する。止めている間は次に試す時刻まで読まない (Q3) |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準と、保護されたパスの一覧を決める。blobのoidが変わるまで結果を持つ |
-| `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (Q3) |
+| `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (Q3)、残した使用率が読んだばかりかどうか |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
 | | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、Ownerのログイン名、保護されたパスと照合の決まり、実行時間の上限、実行が終わる時刻。Plannerには、ImplementerとReviewerの時間の上限も) |

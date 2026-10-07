@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -8,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
+	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
 
 // plannerLogin is the author of a comment of the Planner App. The fake knows
@@ -17,10 +20,10 @@ const plannerLogin = implementerSlug
 
 // newAcceptanceScene is the scene of R4 and R7: the requirement issue #6 is
 // in cumin/status/implementing and its only sub-issue #10 closed an hour
-// ago. The fake CLI answers as a Planner that returned done.
-func newAcceptanceScene(t *testing.T, fixture string) (*scene, time.Time) {
+// ago. The options say how the fake CLI answers as the Planner.
+func newAcceptanceScene(t *testing.T, options cliOptions) (*scene, time.Time) {
 	t.Helper()
-	sc := newScene(t, cliOptions{fixture: fixture})
+	sc := newScene(t, options)
 	closedAt := sceneNow.Add(-time.Hour)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}})
 	return sc, closedAt
@@ -34,20 +37,44 @@ func acceptanceComment(sc *scene, at time.Time, author string) {
 	})
 }
 
-// Core-7 (cumin-core.md): when every sub-issue closes, the Planner is asked
-// for the acceptance check once, across polls and a restart; the label stays
-// cumin/status/implementing until the comment exists. Then R7 moves it to
-// cumin/status/awaiting-owner-review with one notification, although the
-// table holds a Fail.
-func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.T) {
-	sc, closedAt := newAcceptanceScene(t, "planner-done.jsonl")
+// acceptingScene is the scene of a restart during the acceptance check: the
+// requirement issue #6 is in cumin/status/accepting, its only sub-issue #10
+// is closed, and no Planner runs.
+func acceptingScene(t *testing.T, options ...cliOptions) (*scene, time.Time) {
+	t.Helper()
+	sc := newScene(t, options...)
+	closedAt := sceneNow.Add(-time.Hour)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/accepting"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}})
+	return sc, closedAt
+}
 
-	sc.pollAndWait(t, sc.service())
-	if n := sc.agentRuns(t); n != 1 {
-		t.Fatalf("%d agent runs, want 1", n)
+// serviceWithState is a new Service that reads the state file at the path,
+// as cumin does after a restart.
+func (sc *scene) serviceWithState(path string) *workflow.Service {
+	service := sc.service()
+	service.State = state.Open(path, nil)
+	return service
+}
+
+// Core-7 (cumin-core.md): when every sub-issue closes, the requirement
+// issue gets cumin/status/accepting without a new ready of the Owner, and
+// the Planner is asked for the acceptance check once. While the Planner
+// runs, a poll changes nothing on the issue. The end of the run finds the
+// comment and moves the issue to cumin/status/awaiting-acceptance with one
+// notification, although the table holds a Fail. A restart asks nothing
+// again.
+func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.T) {
+	sc, closedAt := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	service := sc.service()
+
+	if err := service.Poll(t.Context()); err != nil {
+		t.Fatalf("Poll: %v", err)
 	}
-	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {
-		t.Errorf("labels of #6 = %v, want implementing while the check runs", got)
+	waitForAgentRun(t, sc)
+	accepting := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, accepting) {
+		t.Errorf("labels of #6 = %v, want %v while the check runs", got, accepting)
 	}
 	text := promptOf(t, sc.record(t, "agent.args"))
 	if !strings.Contains(text, "Request: acceptance check") || !strings.Contains(text, "#6") {
@@ -55,16 +82,35 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 	}
 	requireIssueOfTheRun(t, text, 6, "requirement issue")
 
-	// The Planner wrote the comment during its run. A restart polls again.
+	// A poll while the Planner runs changes nothing on the issue.
+	changes := sc.labelChanges()
+	if err := service.Poll(t.Context()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if got := requirementLabels(t, sc); !slices.Equal(got, accepting) {
+		t.Errorf("labels of #6 = %v, want %v after a poll during the run", got, accepting)
+	}
+	if n := sc.labelChanges(); n != changes {
+		t.Errorf("%d label changes after a poll during the run, want %d", n, changes)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 after a poll during the run, want none", n)
+	}
+
+	// The Planner writes the comment during its run, and the run ends.
 	acceptanceComment(sc, closedAt.Add(30*time.Minute), plannerLogin)
-	service := sc.service()
-	sc.pollAndWait(t, service)
-	sc.pollAndWait(t, service)
+	sc.release(t)
+	service.Wait()
+
+	// A restart polls again.
+	restarted := sc.service()
+	sc.pollAndWait(t, restarted)
+	sc.pollAndWait(t, restarted)
 
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want still 1", n)
 	}
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"}
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
@@ -79,8 +125,289 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 	}
 }
 
+// A restart during the acceptance check: the issue is in
+// cumin/status/accepting, no Planner runs, and no comment exists. The new
+// cumin requests the acceptance check once more, in the session that the
+// state file holds. With still no comment, the issue goes to
+// cumin/status/awaiting-decision with the reason, and a later restart
+// requests nothing.
+func TestAccepting_ARestartRequestsTheCheckOnceMoreAndThenStopsForTheOwner(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	path := filepath.Join(t.TempDir(), "state.json")
+	first := sc.serviceWithState(path)
+	if err := first.State.Set("example-org/example-repo", 6, state.Issue{SessionID: "planner-session"}); err != nil {
+		t.Fatal(err)
+	}
+
+	sc.pollAndWait(t, sc.serviceWithState(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1 (the second request)", n)
+	}
+	args := sc.record(t, "agent.args")
+	if got := argumentOf(t, args, "--resume"); got != "planner-session" {
+		t.Errorf("--resume = %q, want the session of the first request", got)
+	}
+	if text := promptOf(t, args); !strings.Contains(text, "Request: acceptance check") {
+		t.Errorf("the request text is not an acceptance check:\n%s", text)
+	}
+	assertAcceptanceStopped := func() {
+		t.Helper()
+		want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+		if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+			t.Errorf("labels of #6 = %v, want %v", got, want)
+		}
+		comments := sc.fake.Comments(sc.repo, 6)
+		if len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.NoAcceptanceCheckReason) {
+			t.Errorf("the comments of #6 = %+v, want one with the reason", comments)
+		}
+		messages := sc.messagesExceptQ4()
+		if len(messages) != 1 || !strings.Contains(messages[0], workflow.NoAcceptanceCheckReason) {
+			t.Errorf("notifications = %v, want one with the reason", messages)
+		}
+	}
+	assertAcceptanceStopped()
+
+	sc.pollAndWait(t, sc.serviceWithState(path))
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs after one more restart, want still 1", n)
+	}
+	assertAcceptanceStopped()
+}
+
+// The start of the second request fails: the work directory cannot be
+// prepared. No Planner ran, so the state file does not count the request,
+// and the issue is not stopped. A later poll, whose start works, sends the
+// one second request; only after it does the issue stop for the Owner.
+func TestAccepting_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	path := filepath.Join(t.TempDir(), "state.json")
+	broken := sc.serviceWithState(path)
+	broken.Targets[0].RemoteURL = filepath.Join(t.TempDir(), "no-such-repository.git")
+
+	sc.pollAndWait(t, broken)
+	sc.pollAndWait(t, broken)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs, want none: the start failed", n)
+	}
+	if got := broken.State.Issue("example-org/example-repo", 6).AcceptanceRequests; got != 0 {
+		t.Errorf("the count of the second request = %d, want 0 after a failed start", got)
+	}
+	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/accepting") {
+		t.Errorf("labels of #6 = %v, want accepting after a failed start", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 after a failed start, want none", n)
+	}
+
+	sc.pollAndWait(t, sc.serviceWithState(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 (the second request)", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 6); len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.NoAcceptanceCheckReason) {
+		t.Errorf("the comments of #6 = %+v, want one with the reason", comments)
+	}
+}
+
+// At a quota limit, "request the acceptance check again" starts no Planner
+// and counts nothing: the issue keeps cumin/status/accepting. After the
+// limit, one poll sends the one second request.
+func TestAccepting_AQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	reset := sceneNow.Add(2 * time.Hour)
+	sc.setQuota(t, 0.90, reset, 0.10, sceneNow.Add(time.Hour))
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+
+	sc.pollTimes(t, service, 3)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs at the limit, want none: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 6).AcceptanceRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 at the limit, want none", n)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs after the limit, want 1: one poll sends the second request", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: acceptance check") {
+		t.Errorf("the request text is not an acceptance check:\n%s", text)
+	}
+	// The Planner left no comment again, so the issue stops for the Owner:
+	// the request after the limit was the one second request.
+	stopped := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, stopped) {
+		t.Errorf("labels of #6 = %v, want %v", got, stopped)
+	}
+}
+
+// An acceptance check run that hit the quota limit does not use up the
+// second request: the end of the run checks the quota before the request is
+// counted, so the issue keeps cumin/status/accepting with a count of zero.
+func TestAccepting_ARunThatHitTheQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	// The first request has no quota check. The Planner run reports a
+	// weekly usage of 0.51 (planner-done.jsonl) against a target of 50, and
+	// leaves no comment.
+	sc.setQuota(t, 0.10, sceneNow.Add(time.Hour), 0.10, sceneNow.Add(time.Hour))
+	sc.quota.Weekly.Target = 50
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 6).AcceptanceRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none", n)
+	}
+}
+
+// A restart after the second request: the state file says that the
+// acceptance check was requested again, and no comment exists. The issue
+// goes to cumin/status/awaiting-decision with no request.
+func TestAccepting_ARestartAfterTheSecondRequestStopsWithNoRequest(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+	if err := service.State.Set("example-org/example-repo", 6, state.Issue{AcceptanceRequests: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if got := service.State.Issue("example-org/example-repo", 6); got != (state.Issue{}) {
+		t.Errorf("the state of #6 = %+v, want none after the stop", got)
+	}
+}
+
+// The label change of the stop fails once. The state file keeps the count
+// of the second request, and nothing is written: the next poll stops the
+// issue with one comment, one notification, and no new request.
+func TestAccepting_AFailedLabelChangeOfTheStopRequestsNothingAtTheNextPoll(t *testing.T) {
+	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+	if err := service.State.Set("example-org/example-repo", 6, state.Issue{AcceptanceRequests: 1}); err != nil {
+		t.Fatal(err)
+	}
+	sc.fake.FailNext(http.MethodPut, putRequirementLabelsPath, http.StatusForbidden)
+
+	if err := service.Poll(t.Context()); err == nil {
+		t.Error("the poll with the failed label change returned no error")
+	}
+	service.Wait()
+	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/accepting") {
+		t.Errorf("labels of #6 = %v, want accepting after the failed label change", got)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 after the failed label change, want none", n)
+	}
+	if got := service.State.Issue("example-org/example-repo", 6).AcceptanceRequests; got != 1 {
+		t.Errorf("the count of the second request = %d, want still 1", got)
+	}
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if comments := sc.fake.Comments(sc.repo, 6); len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.NoAcceptanceCheckReason) {
+		t.Errorf("the comments of #6 = %+v, want one with the reason", comments)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+		t.Errorf("notifications = %v, want one", messages)
+	}
+}
+
+// A restart after the Planner wrote the comment: the issue moves to
+// cumin/status/awaiting-acceptance with one notification and no request.
+func TestAccepting_ARestartAfterTheCommentAsksTheOwnerToAccept(t *testing.T) {
+	sc, closedAt := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	acceptanceComment(sc, closedAt.Add(30*time.Minute), plannerLogin)
+
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "R7") {
+		t.Errorf("notifications = %v, want one with R7", messages)
+	}
+}
+
+// A restart after the Planner wrote a question: the issue goes to
+// cumin/status/awaiting-decision with one notification. cumin requests
+// nothing and writes no comment of its own.
+func TestAccepting_AQuestionOfThePlannerStopsForTheOwnerWithNoRequest(t *testing.T) {
+	sc, closedAt := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
+		Body: workflow.DecisionRequestHeading + ": which sign-in method does the login screen use?", Author: plannerLogin, AuthorIsBot: true, At: closedAt.Add(30 * time.Minute),
+	})
+
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
+		t.Errorf("%d comments on #6, want only the question of the Planner", n)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question") {
+		t.Errorf("notifications = %v, want one about the question", messages)
+	}
+}
+
 // A comment from before the last close belongs to an earlier round, and a
-// comment of another author never counts: R4 asks, and R7 does not apply.
+// comment of another author never counts: R4 asks. Neither run leaves a
+// comment that counts, so cumin asks once more and then stops for the
+// Owner, in one run of cumin.
 func TestR4_AnOldCommentOrAnotherAuthorAsksAgain(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -92,15 +419,15 @@ func TestR4_AnOldCommentOrAnotherAuthorAsksAgain(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc, closedAt := newAcceptanceScene(t, "planner-done.jsonl")
+			sc, closedAt := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl"})
 			acceptanceComment(sc, closedAt.Add(tt.offset), tt.author)
 			sc.pollAndWait(t, sc.service())
 
-			if n := sc.agentRuns(t); n != 1 {
-				t.Errorf("%d agent runs, want 1", n)
+			if n := sc.agentRuns(t); n != 2 {
+				t.Errorf("%d agent runs, want 2 (the request and one more)", n)
 			}
-			if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {
-				t.Errorf("labels of #6 = %v, want implementing", got)
+			if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/awaiting-decision") {
+				t.Errorf("labels of #6 = %v, want awaiting-decision", got)
 			}
 		})
 	}
@@ -120,7 +447,7 @@ func TestR4_NoSubIssueNoCheck(t *testing.T) {
 // A blocked acceptance check stops the requirement issue for the Owner with
 // the row R4, and is not run again.
 func TestR4_BlockedStopsForTheOwner(t *testing.T) {
-	sc, _ := newAcceptanceScene(t, "planner-blocked.jsonl")
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-blocked.jsonl"})
 	sc.pollAndWait(t, sc.service())
 
 	const question = "## Decision needed: which sign-in method does the login screen use?"
@@ -128,7 +455,7 @@ func TestR4_BlockedStopsForTheOwner(t *testing.T) {
 	if len(comments) != 1 || comments[0].Body != question {
 		t.Fatalf("the comments of #6 = %+v, want one with the blocked reason", comments)
 	}
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-decision"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
@@ -143,7 +470,7 @@ func TestR4_BlockedStopsForTheOwner(t *testing.T) {
 // The acceptance check reads the merged work: the work directory of the
 // split, made before the merge, is made again at the head of main.
 func TestR4_TheCheckReadsTheMergedWork(t *testing.T) {
-	sc, _ := newAcceptanceScene(t, "planner-done.jsonl")
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl"})
 
 	// The split ran at the first commit of main.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})

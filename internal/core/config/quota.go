@@ -15,7 +15,7 @@ const (
 	weeklyWindow          = 7 * 24 * time.Hour
 )
 
-// QuotaSettings holds the settings of the limits that stop new starts. This
+// QuotaSettings holds the settings of the limits that stop agent starts. This
 // package only loads them. The quota rules (Q1 to Q3) use them.
 type QuotaSettings struct {
 	FiveHour FiveHourQuota

@@ -3,7 +3,7 @@ package agent
 // This file puts the pieces of one agent start in order: create a fresh
 // token of the role limited to the repository, read the bot identity of the
 // role, then run the CLI in the work directory. It also reads the quota
-// usage, which the caller asks for before a new start (R1, I1) only.
+// usage, which the caller asks for before a start of an agent.
 // docs/ja/designs/agent-run.md (the topic on the steps of one request)
 // records the order and the reasons. The rest of cumin calls only Start.
 
@@ -43,7 +43,8 @@ type Service struct {
 	Grace          time.Duration
 	QuotaTimeLimit time.Duration
 	// Now is the clock that gives the start of a run, for the end time
-	// that the agent receives. Nil means time.Now. Tests set it.
+	// that the agent receives, and the read time of a quota usage. Nil
+	// means time.Now. Tests set it.
 	Now func() time.Time
 
 	mu         sync.Mutex
@@ -123,17 +124,18 @@ type StartRequest struct {
 }
 
 // ReadQuota reads the quota usage with one minimal run of the CLI of the
-// role. The caller decides the limits (Q1) before a new start; Start itself
-// reads nothing, so that a request that is not a new start (I4, I5, the
-// Reviewer) goes on over a limit (designs/quota.md, the topic on the check
-// before a start). An error is a *QuotaNotRead.
+// role. The caller decides the limits ("stop agent starts") before every
+// start of an agent, in its one check before a start; Start itself reads
+// nothing, so that a start costs no minimal run while the caller holds a
+// usage that is new enough (designs/quota.md, the topic on the check before
+// a start). An error is a *QuotaNotRead.
 func (s *Service) ReadQuota(ctx context.Context, role config.Role) (QuotaUsage, error) {
 	settings, ok := s.Roles[role]
 	if !ok {
 		return QuotaUsage{}, &QuotaNotRead{Reason: "no settings for the role " + string(role)}
 	}
 	log := s.logger().With("role", role)
-	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit}
+	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit, Now: s.Now}
 	return cli.ReadQuota(ctx)
 }
 
@@ -170,7 +172,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	// nothing of its own to it, so that no line carries the role twice
 	// and every line of the adapter names it.
 	log := s.logger().With("role", req.Role, "repository", req.Owner+"/"+req.Repo)
-	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit}
+	cli := ClaudeCode{Path: settings.CLIPath, Logger: log, Grace: s.Grace, QuotaTimeLimit: s.QuotaTimeLimit, Now: s.Now}
 
 	// 1. A fresh token for this request. A run lasts up to 55 minutes and
 	// a token lives one hour, so no token is reused.

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
@@ -172,7 +173,7 @@ func TestR1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 
 // assertStoppedForTheOwner checks the stop step of R2 on the requirement
 // issue #6: one comment that holds each of body, the label
-// cumin/status/awaiting-owner-decision, and one notification that holds
+// cumin/status/awaiting-decision, and one notification that holds
 // each of message.
 func assertStoppedForTheOwner(t *testing.T, sc *scene, body, message []string) {
 	t.Helper()
@@ -198,7 +199,7 @@ func assertStoppedWithMessages(t *testing.T, sc *scene, messages, body, message 
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-decision"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
@@ -214,13 +215,13 @@ func assertStoppedWithMessages(t *testing.T, sc *scene, messages, body, message 
 
 // R2 (issue-states.md): after done, the requirement issue has one or more
 // sub-issues, each with exactly one risk label. Then it moves to
-// cumin/status/awaiting-owner-review, and the Owner is notified once.
+// cumin/status/awaiting-plan-review, and the Owner is notified once.
 func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Second", Labels: []string{"risk/high"}})
 	sc.pollAndWait(t, sc.service())
 
-	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-owner-review"}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
@@ -237,22 +238,30 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 		}
 	}
 	// One poll, the read of the login of the Owner before the start, and
-	// one read again after the run: R2 judges on the facts of that moment.
-	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
-		t.Errorf("%d GraphQL requests, want 3", n)
+	// after the run one read of the issue, of the account of its status
+	// label, of its label times, and of its comments: R2 judges on the
+	// facts of that moment.
+	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
+		t.Errorf("%d GraphQL requests, want 6", n)
 	}
 	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split waits for the Owner"`) {
 		t.Error("the log does not say that the split waits for the Owner")
 	}
 }
 
-func TestR2_NoSubIssueStopsForTheOwner(t *testing.T) {
+// A split that fails the check is requested once more, in the same work
+// directory. The second failure stops the requirement issue for the Owner
+// with the sentence of the failed check.
+func TestR2_NoSubIssueRequestsTheSplitAgainAndThenStopsForTheOwner(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
 	sc.pollAndWait(t, sc.service())
 
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs, want 2 (the request and the second request)", n)
+	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwner(t, sc, []string{"## Stopped for the Owner", "Row: R2", reason, "Retried: no"}, []string{reason})
+	assertStoppedForTheOwner(t, sc, []string{"## Stopped for the Owner", "Row: R2", reason, "Retried: once"}, []string{reason})
 }
 
 func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
@@ -289,20 +298,22 @@ func TestR2_BlockedStopsForTheOwnerWithoutARetry(t *testing.T) {
 	}
 }
 
-// An abnormal end runs the same request once more; after the second one the
-// requirement issue stops for the Owner with the kind of each end.
+// An abnormal end is decided from the facts on GitHub, as every other end:
+// with no sub-issue, the same request runs once more; after the second run
+// the requirement issue stops for the Owner with what the split lacks.
 func TestR2_ASecondAbnormalEndStopsForTheOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-invalid-result.jsonl"})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
 	sc.pollAndWait(t, sc.service())
 
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want 2 (the request and one retry)", n)
 	}
 	assertStoppedForTheOwner(t, sc,
-		[]string{"Row: R2", "The Planner run ended abnormally (invalid result)", "Retried: once", "Pull request: None"},
-		[]string{"invalid result"})
-	if !strings.Contains(sc.logs.String(), `"msg":"R2: the same request runs again in the same work directory"`) {
+		[]string{"Row: R2", "this requirement issue has no sub-issue", "Retried: once", "Pull request: None"},
+		[]string{"this requirement issue has no sub-issue"})
+	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split does not pass the check; the same request runs again in the same work directory"`) {
 		t.Error("the log does not say that the request ran again")
 	}
 }
@@ -318,8 +329,8 @@ func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
 	}
-	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Contains(got, "cumin/status/awaiting-owner-decision") {
-		t.Errorf("labels of #6 = %v, want cumin/status/awaiting-owner-decision", got)
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Contains(got, "cumin/status/awaiting-decision") {
+		t.Errorf("labels of #6 = %v, want cumin/status/awaiting-decision", got)
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications, want 1", n)
@@ -327,38 +338,299 @@ func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
 }
 
 // R2 with every sub-issue closed: the Owner resumed a requirement issue after
-// a blocked acceptance check, and the Planner created nothing. The
-// requirement issue goes back to implementing without a notification, and R4
-// asks for the acceptance check at the next poll.
-func TestR2_EverySubIssueClosedSendsTheIssueBackToTheAcceptanceCheck(t *testing.T) {
-	sc := newPlanScene(t)
+// a blocked acceptance check, and the Planner created nothing. At the end of
+// the split, the requirement issue goes to cumin/status/accepting without a
+// notification, and the Planner is asked for the acceptance check.
+func TestR2_EverySubIssueClosedGoesToTheAcceptanceCheckWithNoNotification(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: sceneNow.Add(-time.Hour), Labels: []string{"risk/low"}})
 	service := sc.service()
-
-	sc.pollAndWait(t, service)
-	want := []string{githubtest.RequirementLabel, "cumin/status/implementing"}
-	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
-		t.Fatalf("labels of #6 = %v, want %v", got, want)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
 	}
-	if n := len(sc.webhook.messagesSent()); n != 0 {
-		t.Errorf("%d notifications, want none", n)
-	}
+	waitForAgentRun(t, sc)
+	sc.release(t)
 
-	// The next poll asks for the acceptance check (R4).
-	sc.pollAndWait(t, service)
+	// The split ended, and the acceptance check runs.
+	waitForAgentRun(t, sc)
+	assertAcceptingWithNoNotification(t, sc)
+
+	// The Planner writes its comment, and the acceptance check ends.
+	acceptanceComment(sc, sceneNow, plannerLogin)
+	sc.release(t)
+	service.Wait()
 	if n := sc.agentRuns(t); n != 2 {
 		t.Errorf("%d agent runs, want 2 (the split and the acceptance check)", n)
 	}
-	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: acceptance check") {
-		t.Errorf("the second request is not an acceptance check:\n%s", text)
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
 }
 
-// keptAfterPlanner runs the Planner of #6 to its result while the fake
+// assertAcceptingWithNoNotification checks that #6 is in
+// cumin/status/accepting, that the newest request is an acceptance check,
+// and that the Owner got no notification and no comment.
+func assertAcceptingWithNoNotification(t *testing.T, sc *scene) {
+	t.Helper()
+	want := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: acceptance check") {
+		t.Errorf("the newest request is not an acceptance check:\n%s", text)
+	}
+	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
+		t.Errorf("notifications = %v, want none", messages)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none", n)
+	}
+}
+
+// planningScene is the scene of a restart during the split: the requirement
+// issue #6 is in cumin/status/planning since labeledAt, and no Planner
+// runs. The sub-issues are the ones that the test adds.
+func planningScene(t *testing.T, options ...cliOptions) (*scene, time.Time) {
+	t.Helper()
+	sc := newScene(t, options...)
+	labeledAt := sceneNow.Add(-time.Hour)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/planning"},
+		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/planning", At: labeledAt, Actor: cuminSlug, ActorType: "Bot"}}})
+	// The sub-issue of newScene belongs to no requirement issue here.
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
+	return sc, labeledAt
+}
+
+// A restart in cumin/status/planning with a split that passes the check:
+// the issue moves to cumin/status/awaiting-plan-review with one
+// notification and no request.
+func TestPlanning_ARestartWithAVerifiedSplitAsksTheOwnerToReviewThePlan(t *testing.T) {
+	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
+
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none", n)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "needs a review") {
+		t.Errorf("notifications = %v, want one that says that the split needs a review", messages)
+	}
+}
+
+// A restart in cumin/status/planning with no sub-issue: the new cumin
+// requests the split once more. With still no sub-issue, the issue goes to
+// cumin/status/awaiting-decision with the reason, and a later restart
+// requests nothing.
+func TestPlanning_ARestartWithNoSubIssueRequestsTheSplitOnceMoreAndThenStopsForTheOwner(t *testing.T) {
+	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	path := filepath.Join(t.TempDir(), "state.json")
+
+	sc.pollAndWait(t, sc.serviceWithState(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1 (the second request)", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: plan") {
+		t.Errorf("the request text is not a plan:\n%s", text)
+	}
+	reason := "this requirement issue has no sub-issue"
+	assertStoppedForTheOwner(t, sc, []string{"Row: R2", reason, "Retried: once"}, []string{reason})
+
+	restarted := sc.serviceWithState(path)
+	sc.pollAndWait(t, restarted)
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs after one more restart, want still 1", n)
+	}
+	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason}, []string{reason})
+	if got := restarted.State.Issue("example-org/example-repo", 6); got != (state.Issue{}) {
+		t.Errorf("the state of #6 = %+v, want none after the stop", got)
+	}
+}
+
+// A split run that hit the quota limit and left no split does not use up
+// the second request: the end of the run checks the quota before the
+// request is counted, so the issue keeps cumin/status/planning with a count
+// of zero. After the limit, one poll sends the second request.
+func TestPlanning_ARunThatHitTheQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	// The sub-issue of newScene belongs to no requirement issue here.
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
+	// The minimal run before the first request passes. The Planner run
+	// reports a weekly usage of 0.51 (planner-done.jsonl) against a target
+	// of 50, and leaves no split.
+	reset := sceneNow.Add(time.Hour)
+	sc.setQuota(t, 0.10, reset, 0.10, reset)
+	sc.quota.Weekly.Target = 50
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+
+	sc.pollTimes(t, service, 3)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Fatalf("%d agent runs, want 1: the quota stops the second request", n)
+	}
+	if n := service.State.Issue("example-org/example-repo", 6).SplitRequests; n != 0 {
+		t.Errorf("the state file counts %d second requests, want none", n)
+	}
+	planning := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, planning) {
+		t.Errorf("labels of #6 = %v, want %v", got, planning)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 at the limit, want none", n)
+	}
+
+	sc.clock.Set(reset)
+	sc.setQuota(t, 0.05, reset.Add(5*time.Hour), 0.10, reset.Add(time.Hour))
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 2 {
+		t.Fatalf("%d agent runs after the limit, want 2: one poll sends the second request", n)
+	}
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: plan") {
+		t.Errorf("the request text is not a split:\n%s", text)
+	}
+	// The Planner left no split again, so the issue stops for the Owner:
+	// the request after the limit was the one second request.
+	stopped := []string{githubtest.RequirementLabel, workflow.LabelAwaitingDecision}
+	if got := requirementLabels(t, sc); !slices.Equal(got, stopped) {
+		t.Errorf("labels of #6 = %v, want %v", got, stopped)
+	}
+}
+
+// A restart after the second request: the state file says that the split
+// was requested again, and no sub-issue exists. The issue goes to
+// cumin/status/awaiting-decision with no request.
+func TestPlanning_ARestartAfterTheSecondRequestStopsWithNoRequest(t *testing.T) {
+	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	service := sc.serviceWithState(filepath.Join(t.TempDir(), "state.json"))
+	if err := service.State.Set("example-org/example-repo", 6, state.Issue{SplitRequests: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	reason := "this requirement issue has no sub-issue"
+	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason, "Retried: once"}, []string{reason})
+}
+
+// A question of the Planner, written after the issue got
+// cumin/status/planning: the issue goes to cumin/status/awaiting-decision
+// with one notification. cumin requests nothing and writes no comment of
+// its own.
+func TestPlanning_AQuestionOfThePlannerStopsForTheOwnerWithNoRequest(t *testing.T) {
+	sc, labeledAt := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
+		Body: workflow.DecisionRequestHeading + ": which sign-in method does the login screen use?", Author: plannerLogin, AuthorIsBot: true, At: labeledAt.Add(30 * time.Minute),
+	})
+
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
+		t.Errorf("%d comments on #6, want only the question of the Planner", n)
+	}
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question during the split") {
+		t.Errorf("notifications = %v, want one about the question", messages)
+	}
+}
+
+// A restart in cumin/status/planning with every sub-issue closed: the issue
+// goes to cumin/status/accepting, the Planner is asked for the acceptance
+// check once, and the Owner gets no notification.
+func TestPlanning_EverySubIssueClosedGoesToAcceptingWithNoNotification(t *testing.T) {
+	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: sceneNow.Add(-2 * time.Hour), Labels: []string{"risk/low"}})
+	service := sc.service()
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+
+	assertAcceptingWithNoNotification(t, sc)
+
+	acceptanceComment(sc, sceneNow, plannerLogin)
+	sc.release(t)
+	service.Wait()
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 (the acceptance check)", n)
+	}
+}
+
+// While the Planner runs, a poll changes nothing on the issue: no label, no
+// comment, no notification, and no second request.
+func TestPlanning_APollChangesNothingWhileThePlannerRuns(t *testing.T) {
+	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	// No sub-issue yet: without the running Planner, the poll would request
+	// the split again.
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
+	service := sc.service()
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
+
+	for range 2 {
+		if err := service.Poll(context.Background()); err != nil {
+			t.Fatalf("Poll while the Planner runs: %v", err)
+		}
+	}
+
+	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v while the Planner runs", got, want)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes {
+		t.Errorf("%d label changes of #6 while the Planner runs, want none", n-writes)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 while the Planner runs, want none", n)
+	}
+	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
+		t.Errorf("notifications = %v, want none while the Planner runs", messages)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 while the Planner runs", n)
+	}
+
+	// The Planner creates the sub-issue and ends.
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
+	sc.release(t)
+	service.Wait()
+	assertSplitWaitsForTheOwner(t, sc, service)
+}
+
+// afterPlannerRun runs the Planner of #6 to its result while the fake
 // GitHub answers as fail sets it, and returns the service after the run.
 // The run holds until the failure is set, so that the failure meets the
 // step after the run and no call before it.
-func keptAfterPlanner(t *testing.T, sc *scene, fail func()) *workflow.Service {
+func afterPlannerRun(t *testing.T, sc *scene, fail func()) *workflow.Service {
 	t.Helper()
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	service := sc.service()
@@ -372,37 +644,14 @@ func keptAfterPlanner(t *testing.T, sc *scene, fail func()) *workflow.Service {
 	return service
 }
 
-// assertPlannerStepIsKept checks that #6 waits with a kept step: the label
-// stays, no comment is written, the Owner is not notified, no second
-// Planner started, and the issue counts as in work.
-func assertPlannerStepIsKept(t *testing.T, sc *scene, service *workflow.Service) {
-	t.Helper()
-	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
-	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
-		t.Errorf("labels of #6 = %v, want %v while the step is kept", got, want)
-	}
-	if comments := sc.fake.Comments(sc.repo, 6); len(comments) != 0 {
-		t.Errorf("%d comments on #6, want none while the step is kept: %+v", len(comments), comments)
-	}
-	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
-		t.Errorf("notifications = %v, want none while the step is kept", messages)
-	}
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1: no Planner starts while the step is kept", n)
-	}
-	if got := workflow.InProgressIssues(service); !slices.Equal(got, []string{"example-org/example-repo#6"}) {
-		t.Errorf("issues in work = %v, want #6 while the step is kept", got)
-	}
-}
-
 // assertSplitWaitsForTheOwner checks the end of R2 on a pass: the label
-// cumin/status/awaiting-owner-review, one notification, no comment, and no
+// cumin/status/awaiting-plan-review, one notification, no comment, and no
 // issue in work.
 func assertSplitWaitsForTheOwner(t *testing.T, sc *scene, service *workflow.Service) {
 	t.Helper()
-	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}
+	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
-		t.Errorf("labels of #6 = %v, want %v after the kept step ran", got, want)
+		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
@@ -415,248 +664,236 @@ func assertSplitWaitsForTheOwner(t *testing.T, sc *scene, service *workflow.Serv
 		t.Errorf("%d agent runs, want 1", n)
 	}
 	if got := workflow.InProgressIssues(service); len(got) != 0 {
-		t.Errorf("issues in work = %v, want none after the kept step ended", got)
+		t.Errorf("issues in work = %v, want none after the split ended", got)
 	}
 }
 
-// R2 with Core-28 (cumin-core.md): the fake GitHub fails every try of the
-// read after done. cumin keeps the check of the split: the label stays, and
-// no comment is written. A poll before the delay does not run the step, and
-// starts no Planner. The poll after the delay runs it, and the requirement
-// issue moves as if the step had not failed.
-func TestR2_TheCheckOfTheSplitRunsAgainAtALaterPollAfterATemporaryFailure(t *testing.T) {
+// The fake GitHub fails every try of the read after done. cumin keeps
+// nothing: the label stays, no comment is written, and the issue is not in
+// work. The next poll decides from the same facts, and the requirement
+// issue moves as if the read had not failed. No second Planner starts.
+func TestR2_AFailedReadAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
-	service := keptAfterPlanner(t, sc, func() {
+	service := afterPlannerRun(t, sc, func() {
 		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
 	})
+	assertSplitWaitsForThePoll(t, sc, service)
 
-	assertPlannerStepIsKept(t, sc, service)
-	logs := sc.logs.String()
-	if n := strings.Count(logs, `"msg":"kept the check of the split after a temporary failure: a later poll runs it again"`); n != 1 {
-		t.Errorf("%d log lines for the kept step, want 1:\n%s", n, logs)
-	}
+	sc.pollAndWait(t, service)
 
-	// The fake answers again, and the delay is not over: the step waits.
-	if err := pollAtMinute(sc, service, 4); err != nil {
-		t.Fatalf("Poll at minute 4: %v", err)
-	}
-	assertPlannerStepIsKept(t, sc, service)
-
-	if err := pollAtMinute(sc, service, 5); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
-	}
 	assertSplitWaitsForTheOwner(t, sc, service)
 }
 
-// A failed label change keeps the check of the split. The later run changes
-// the label once and notifies once.
-func TestR2_AFailedLabelChangeKeepsTheCheckOfTheSplit(t *testing.T) {
+// A failed label change after done leaves the issue in
+// cumin/status/planning with no notification. The next poll changes the
+// label once and notifies once.
+func TestR2_AFailedLabelChangeAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
-	service := keptAfterPlanner(t, sc, func() {
-		sc.fake.CloseTimes(http.MethodPut, putRequirementLabelsPath, 1)
+	service := afterPlannerRun(t, sc, func() {
+		sc.fake.FailNext(http.MethodPut, putRequirementLabelsPath, http.StatusForbidden)
 	})
-	assertPlannerStepIsKept(t, sc, service)
+	assertSplitWaitsForThePoll(t, sc, service)
 	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
 
-	if err := pollAtMinute(sc, service, 5); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
-	}
-	if err := pollAtMinute(sc, service, 10); err != nil {
-		t.Fatalf("Poll at minute 10: %v", err)
-	}
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
 
 	assertSplitWaitsForTheOwner(t, sc, service)
 	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
-		t.Errorf("%d label changes of #6 by the kept step, want 1", n-writes)
+		t.Errorf("%d label changes of #6 by the polls, want 1", n-writes)
 	}
 }
 
-// The label change of the check of the split reached GitHub, and its answer
-// was lost. The kept step reads the requirement issue first and sees the
-// new label: it does not change the label again, and it sends the
-// notification that the first try did not send.
-func TestR2_ALabelChangeThatAlreadyHappenedIsNotMadeTwice(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
-	service := keptAfterPlanner(t, sc, func() {
-		sc.fake.CloseTimes(http.MethodPut, putRequirementLabelsPath, 1)
-	})
-	assertPlannerStepIsKept(t, sc, service)
-	if err := sc.fake.SetLabels(sc.repo, 6, []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}); err != nil {
-		t.Fatal(err)
+// assertSplitWaitsForThePoll checks that #6 waits for the next poll after
+// a Planner run whose end was not decided: the label stays, no comment is
+// written, the Owner is not notified, and the issue is not in work.
+func assertSplitWaitsForThePoll(t *testing.T, sc *scene, service *workflow.Service) {
+	t.Helper()
+	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v until the next poll", got, want)
 	}
-	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
-
-	if err := pollAtMinute(sc, service, 5); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
-	}
-
-	assertSplitWaitsForTheOwner(t, sc, service)
-	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes {
-		t.Errorf("%d label changes of #6 by the kept step, want none", n-writes)
-	}
-}
-
-// A failure that is not temporary is not kept: a kept check of the split
-// that runs again and finds a sub-issue without a risk label stops the
-// requirement issue for the Owner (R2).
-func TestR2_AKeptCheckOfTheSplitThatFailsStillStopsForTheOwner(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle})
-	service := keptAfterPlanner(t, sc, func() {
-		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
-	})
-	assertPlannerStepIsKept(t, sc, service)
-
-	if err := pollAtMinute(sc, service, 5); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
-	}
-
-	reason := "the sub-issue #10 has no risk label"
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason}, []string{reason})
-	if got := workflow.InProgressIssues(service); len(got) != 0 {
-		t.Errorf("issues in work = %v, want none after the issue stopped", got)
-	}
-}
-
-// R2 with Core-28 (cumin-core.md): after blocked, the fake GitHub fails
-// every try of the read before the stop. cumin keeps the stop: no comment
-// is written. The poll after the delay stops the requirement issue for the
-// Owner with one comment, and no Planner runs again.
-func TestR2_TheStopAfterBlockedRunsAgainAtALaterPollAfterATemporaryFailure(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl", holds: true})
-	// No status label on the sub-issue, so that I1 does not start it.
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
-	service := keptAfterPlanner(t, sc, func() {
-		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
-	})
-	assertPlannerStepIsKept(t, sc, service)
-	if !strings.Contains(sc.logs.String(), `"msg":"kept the stop after blocked after a temporary failure: a later poll runs it again"`) {
-		t.Errorf("the log does not say that the stop after blocked is kept:\n%s", sc.logs.String())
-	}
-
-	if err := pollAtMinute(sc, service, 4); err != nil {
-		t.Fatalf("Poll at minute 4: %v", err)
-	}
-	assertPlannerStepIsKept(t, sc, service)
-
-	if err := pollAtMinute(sc, service, 5); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
-	}
-	if err := pollAtMinute(sc, service, 10); err != nil {
-		t.Fatalf("Poll at minute 10: %v", err)
-	}
-
-	const question = "## Decision needed: which sign-in method does the login screen use?"
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{question}, []string{question})
-	if n := sc.agentRuns(t); n != 1 {
-		t.Errorf("%d agent runs, want 1", n)
-	}
-	if got := workflow.InProgressIssues(service); len(got) != 0 {
-		t.Errorf("issues in work = %v, want none after the issue stopped", got)
-	}
-}
-
-// The label change to cumin/status/implementing (every sub-issue is closed)
-// reached GitHub, and its answer was lost. The kept step sees the new
-// label: it changes no label and sends no notification, and the requirement
-// issue leaves the set of issues in work.
-func TestR2_ALostLabelChangeToImplementingIsNotMadeTwiceAndNotifiesNobody(t *testing.T) {
-	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
-	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: sceneNow.Add(-time.Hour), Labels: []string{"risk/low"}})
-	service := keptAfterPlanner(t, sc, func() {
-		sc.fake.CloseTimes(http.MethodPut, putRequirementLabelsPath, 1)
-	})
-	assertPlannerStepIsKept(t, sc, service)
-	if err := sc.fake.SetLabels(sc.repo, 6, []string{githubtest.RequirementLabel, workflow.LabelImplementing}); err != nil {
-		t.Fatal(err)
-	}
-	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
-
-	// The poll runs the kept step first. Then it asks for the acceptance
-	// check (R4), which changes no label; that run holds until the release.
-	sc.clock.Set(sceneNow.Add(5 * time.Minute))
-	if err := service.Poll(context.Background()); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
-	}
-	waitForAgentRun(t, sc)
-	sc.release(t)
-	service.Wait()
-
-	if !strings.Contains(sc.logs.String(), "while the check of the split was kept; nothing changes") {
-		t.Errorf("the log does not say that the kept step changed nothing:\n%s", sc.logs.String())
-	}
-	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes {
-		t.Errorf("%d label changes of #6 by the kept step, want none", n-writes)
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none until the next poll", n)
 	}
 	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
-		t.Errorf("notifications = %v, want none", messages)
+		t.Errorf("notifications = %v, want none until the next poll", messages)
+	}
+	if got := workflow.InProgressIssues(service); len(got) != 0 {
+		t.Errorf("issues in work = %v, want none: cumin keeps no step", got)
+	}
+}
+
+// After blocked, the fake GitHub fails every try of the read before the
+// stop. cumin keeps nothing for a later step, so the question of the
+// Planner must not be lost: the log holds the whole blocked_reason, and the
+// Owner gets one notification that says so. The label stays, no comment is
+// written, and the issue is not in work. The next poll decides once from
+// the facts on GitHub, and no Planner runs again.
+func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
+	// The blocked_reason has more than one line, so that the test tells the
+	// whole text from its first line.
+	sc := newScene(t, cliOptions{fixture: "planner-blocked-two-lines.jsonl", holds: true})
+	// No status label on the sub-issue, so that I1 does not start it.
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
+	service := afterPlannerRun(t, sc, func() {
+		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
+	})
+	planning := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, planning) {
+		t.Errorf("labels of #6 = %v, want %v until the next poll", got, planning)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6, want none until the next poll", n)
+	}
+	if got := workflow.InProgressIssues(service); len(got) != 0 {
+		t.Errorf("issues in work = %v, want none: cumin keeps no step", got)
+	}
+	for _, want := range []string{
+		`"msg":"R2: the stop after blocked failed for a temporary reason; the next poll decides"`,
+		`"comment":"## Decision needed: which sign-in method does the login screen use?\n\nOption A: a password. Option B: a passkey."`,
+	} {
+		if !strings.Contains(sc.logs.String(), want) {
+			t.Errorf("the log has no %s:\n%s", want, sc.logs.String())
+		}
+	}
+	messages := sc.messagesExceptQ4()
+	if len(messages) != 1 || !strings.Contains(messages[0], workflow.PlannerQuestionNotWrittenReason) || !strings.Contains(messages[0], "issue #6") {
+		t.Fatalf("notifications = %v, want one that says that the Planner asked a question and that the log holds the text", messages)
+	}
+	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
+
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	// The polls decide from the split on GitHub, and send their own
+	// notification; the one about the question is not sent again.
+	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
 	}
-	if got := workflow.InProgressIssues(service); len(got) != 0 {
-		t.Errorf("issues in work = %v, want none after the kept step ended", got)
+	messages = sc.messagesExceptQ4()
+	if len(messages) != 2 || !strings.Contains(messages[1], "needs a review") {
+		t.Errorf("notifications = %v, want the one about the question and one that says that the split needs a review", messages)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
+		t.Errorf("%d label changes of #6 by the polls, want 1", n-writes)
 	}
 }
 
-// Another hand set cumin/status/awaiting-owner-review while the check of
-// the split was kept after a failed read. cumin sent no label change, so it
-// does not trust that label: it leaves the issue and notifies nobody.
-func TestR2_AKeptCheckLeavesALabelThatAnotherHandSet(t *testing.T) {
+// The Planner run ends between the two reads of a poll: after the poll read
+// the snapshot, which still shows cumin/status/planning. The run decides its
+// own end, changes the label, and notifies the Owner. The poll read the set
+// of running agents before the snapshot, so the run still counts as
+// running: the poll decides nothing from the old label. The label changes
+// once, the Owner gets one notification, and no second request starts.
+func TestPlanning_ARunThatEndsDuringThePollIsNotDecidedTwice(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
-	service := keptAfterPlanner(t, sc, func() {
-		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
-	})
-	assertPlannerStepIsKept(t, sc, service)
-	labels := []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}
-	if err := sc.fake.SetLabels(sc.repo, 6, labels); err != nil {
-		t.Fatal(err)
+	service := sc.service()
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
 	}
+	waitForAgentRun(t, sc)
 	writes := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath)
 
-	if err := pollAtMinute(sc, service, 5); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
+	// The answer of the snapshot query is built, and then the run ends.
+	sc.fake.BeforeNextAnswer(http.MethodPost, "/graphql", func() {
+		sc.release(t)
+		service.Wait()
+	})
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll during the end of the run: %v", err)
+	}
+	service.Wait()
+
+	assertSplitWaitsForTheOwner(t, sc, service)
+	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
+		t.Errorf("%d label changes of #6 after the run ended, want 1", n-writes)
 	}
 
-	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, labels) {
-		t.Errorf("labels of #6 = %v, want %v", got, labels)
-	}
-	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes {
-		t.Errorf("%d label changes of #6 by the kept step, want none", n-writes)
-	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 0 {
-		t.Errorf("notifications = %v, want none", messages)
-	}
-	if got := workflow.InProgressIssues(service); len(got) != 0 {
-		t.Errorf("issues in work = %v, want none after the kept step ended", got)
-	}
+	// The next poll sees the new label and has nothing to decide.
+	sc.pollAndWait(t, service)
+	assertSplitWaitsForTheOwner(t, sc, service)
 }
 
-// The kept stop after blocked wrote nothing before it was kept. When
-// another hand changed the label in between, the kept stop still posts the
-// decision request of the Planner once and stops the issue for the Owner.
-func TestR2_TheKeptStopAfterBlockedPostsTheDecisionRequestWhateverTheLabelIs(t *testing.T) {
+// The start of the second request fails: the work directory cannot be
+// prepared. No Planner ran, so the state file does not count the request,
+// and the issue is not stopped. A later poll, whose start works, sends the
+// one second request; only after it does the issue stop for the Owner.
+func TestPlanning_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
+	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	path := filepath.Join(t.TempDir(), "state.json")
+	broken := sc.serviceWithState(path)
+	broken.Targets[0].RemoteURL = filepath.Join(t.TempDir(), "no-such-repository.git")
+
+	sc.pollAndWait(t, broken)
+	sc.pollAndWait(t, broken)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs, want none: the start failed", n)
+	}
+	if got := broken.State.Issue("example-org/example-repo", 6).SplitRequests; got != 0 {
+		t.Errorf("the count of the second request = %d, want 0 after a failed start", got)
+	}
+	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v after a failed start", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
+		t.Errorf("%d comments on #6 after a failed start, want none", n)
+	}
+
+	sc.pollAndWait(t, sc.serviceWithState(path))
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1 (the second request)", n)
+	}
+	reason := "this requirement issue has no sub-issue"
+	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason, "Retried: once"}, []string{reason})
+}
+
+// A blocked result whose stop wrote the comment and then failed to change
+// the label: cumin-core wrote the decision request, and the issue stays in
+// cumin/status/planning. The next poll reads that comment as the question
+// of the Planner: the issue goes to cumin/status/awaiting-decision with no
+// second request and no second comment.
+func TestPlanning_ABlockedResultWithAFailedLabelChangeStopsAtTheNextPollWithNoRequest(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl", holds: true})
+	// cumin-core posts the blocked_reason, so the comment is of its App.
+	sc.fake.SetCommentAuthor(cuminSlug)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
-	service := keptAfterPlanner(t, sc, func() {
-		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
+	service := afterPlannerRun(t, sc, func() {
+		sc.fake.FailNext(http.MethodPut, putRequirementLabelsPath, http.StatusForbidden)
 	})
-	assertPlannerStepIsKept(t, sc, service)
-	if err := sc.fake.SetLabels(sc.repo, 6, []string{githubtest.RequirementLabel, workflow.LabelAwaitingOwnerReview}); err != nil {
-		t.Fatal(err)
+	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Fatalf("labels of #6 = %v, want %v after the failed label change", got, want)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
+		t.Fatalf("%d comments on #6 after the stop, want the decision request", n)
 	}
 
-	if err := pollAtMinute(sc, service, 5); err != nil {
-		t.Fatalf("Poll at minute 5: %v", err)
-	}
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
 
-	const question = "## Decision needed: which sign-in method does the login screen use?"
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{question}, []string{question})
-	if got := workflow.InProgressIssues(service); len(got) != 0 {
-		t.Errorf("issues in work = %v, want none after the issue stopped", got)
+	want = []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1: no second request", n)
+	}
+	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
+		t.Errorf("%d comments on #6, want still 1", n)
 	}
 }

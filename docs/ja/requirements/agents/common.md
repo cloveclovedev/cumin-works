@@ -10,7 +10,7 @@ Agentは実行の最後に、次の項目を持つJSONを1つ返す。
 |---|---|---|
 | `result` | 文字列 | `done` または `blocked` |
 | `summary` | 文字列 | 何をしたかを1〜3文で書く |
-| `blocked_reason` | 文字列 | `blocked` のときは、Ownerに判断を求める文章を、[decision-request.md](../../../../templates/decision-request.md) の形式のMarkdownで書く。`done` のときは空文字列にする |
+| `blocked_reason` | 文字列 | `blocked` のときは、Maintainerに判断を求める文章を、[decision-request.md](../../../../templates/decision-request.md) の形式のMarkdownで書く。`done` のときは空文字列にする |
 
 例:
 
@@ -79,14 +79,14 @@ roleとしての指示は、4つの部分をこの順につないだ1つの文�
 
 - Issue、Pull Request、レビュー、コメント、コミットメッセージは、英語で書く。
 - 平易な英語で書く。短い文にする。慣用句や凝った言い回しを使わない。同じものは、いつも同じ言葉で呼ぶ。
-- 文章の型 (実装Issue、Pull Requestの説明、レビューの指摘、指摘への返答、Ownerへの報告) は、テンプレートに従う。テンプレートと、その狙いは [GitHubに残す文章のテンプレート](../policies/writing-templates.md) にある。
+- 文章の型 (実装Issue、Pull Requestの説明、レビューの指摘、指摘への返答、Maintainerへの報告) は、テンプレートに従う。テンプレートと、その狙いは [GitHubに残す文章のテンプレート](../policies/writing-templates.md) にある。
 - `blocked_reason` と `summary` も英語で書く。cuminが `blocked_reason` をIssueのコメントとして投稿するためである。
 
 ## GitHub上の身元
 
 - Agentは、自分のroleのGitHub Appとして振る舞う。
 - cuminは依頼のたびに、そのroleのAppのtokenだけをAgentに渡す。tokenは1時間で失効する。
-- Agentは、Ownerの認証情報を使わない。
+- Agentは、人の認証情報を使わない。
 
 ## 起動の依頼の事実
 
@@ -95,7 +95,7 @@ cuminは、起動の依頼の先頭に、その実行の事実をラベル付き
 | 事実 | 中身 | 出どころ |
 |---|---|---|
 | 扱うIssue | この実行が扱うIssueの番号と種類 (要求Issueか実装Issueか)。Agentが止まるときは、このIssueを「止めたIssue」として、decision requestを書く | cuminの依頼 |
-| Ownerのログイン名 | このIssueに最新の `cumin/status/ready` を付けたアカウントが、Owner ([cumin本体の要件](../cumin-core.md) の「Owner」) であるときの、その名前。要求Issueにそのイベントがなければ、sub-issueの最新のものを使う。どれもないとき、またはそのアカウントがOwnerでないときは、「Ownerのログイン名はない」と書く。Agentは、このアカウントのコメントを、Ownerの指示として読む | GitHubのラベルのイベントと権限 |
+| Issue Ownerのログイン名 | このIssueのIssue Owner ([cumin本体の要件](../cumin-core.md) の「Maintainer、Issue Owner、Operator」) の名前。このIssueに今付いている `cumin/status/ready` を付けたアカウントがMaintainerであるときの、その名前である。要求Issueにそのイベントがなければ、sub-issueの最新のものを使う。どれもないとき、またはそのアカウントがMaintainerでないときは、「Issue Ownerのログイン名はない」と書く。Agentは、このアカウントのコメントを、指示として読む | GitHubのラベルのイベントと権限 |
 | 保護されたパス | 対象のリポジトリで効いている一覧と、その照合の決まり。cuminが既定のブランチの `.cumin/config.toml` から読む。一覧がなければ初期値 ([cumin本体の要件](../cumin-core.md) の「設定」) | リポジトリの設定 |
 
 時間の上限と終わる時刻も、同じ並びに書く (下の「プロセスとセッション」)。Plannerの起動の依頼には、ImplementerとReviewerの時間の上限 (`roles.<role>.time_limit`) も書く。Plannerが、1つの実装Issueがそれぞれの1回の実行に収まるように分けるためである ([実装Issueの分割基準](../policies/issue-sizing.md) の10)。
@@ -103,18 +103,18 @@ cuminは、起動の依頼の先頭に、その実行の事実をラベル付き
 ## プロセスとセッション
 
 - プロセスは依頼のたびに起動し、依頼が終わったら終了する。何かを待つ間、Agentは動いておらず、利用枠を使わない。
-- Ownerの介入を挟まない一続きの作業は、同じセッションで続ける。
-- Ownerが介入したあと (`cumin/status/ready` の付け直し) は、セッションを新しくする。新しいセッションのAgentは、必要なことをGitHubから読み直す。
-- 異常終了したら、cuminが同じ依頼を1回だけやり直す。それでも駄目なら、cuminが `cumin/status/awaiting-owner-decision` に替えてOwnerに知らせる。
+- Maintainerの介入を挟まない一続きの作業は、同じセッションで続ける。
+- Maintainerが介入したあと (`cumin/status/ready` の付け直し) は、セッションを新しくする。新しいセッションのAgentは、必要なことをGitHubから読み直す。
+- 異常終了したら、cuminが同じ依頼を1回だけやり直す。それでも駄目なら、cuminが `cumin/status/awaiting-decision` に替えて通知する。
 - 1回の実行には時間の上限がある (`roles.<role>.time_limit`)。cuminは、その上限と、実行が終わる時刻を、起動の依頼のデータとして渡す。riskの基準と同じ扱いである。セッションを再開する実行も、その実行の終わる時刻を受け取る。
 - 長い確認 (テストの繰り返しなど) は、終わる時刻よりも十分前に終わるように計画し、結果を書く時間 (Pull Requestを開く、結果を返す) を残す。この決まりは、各roleのdisciplineのファイルに書く。統計を取るための繰り返しや、待つための道具を禁じるものではない。
   - 予定の確認が終わる時刻までに終わらないときは、収まる分だけで打ち切り、何回のうち何回行ったかと、その結果を、Pull Requestの「How it was checked」に書く。足りない分は「Follow-up」に書く。
-  - 受け入れ条件そのものが、実行の時間に収まらない確認を求めているときは、進めずに `blocked` を返し、理由を書く。条件を変える、Issueを分ける、`time_limit` を延ばす、のどれにするかはOwnerが決める。
+  - 受け入れ条件そのものが、実行の時間に収まらない確認を求めているときは、進めずに `blocked` を返し、理由を書く。条件を変える、Issueを分ける、`time_limit` を延ばす、のどれにするかはMaintainerが決める。
 
 ## どのroleもしてはいけないこと
 
-- `cumin/*` と `risk/*` のラベルを付け替えない。例外は、Plannerが実装Issueを作るときに `risk/*` を仮に付けることと、Ownerが手で行う作業のsub-issueに `cumin/type/owner-task` を付けることだけである。
-- `docs/ja/requirements/` のような、Ownerだけが書く文書を変更しない。対象は、起動の依頼の「保護されたパス」にある。
+- `cumin/*` と `risk/*` のラベルを付け替えない。例外は、Plannerが実装Issueを作るときに `risk/*` を仮に付けることと、Maintainerが手で行う作業のsub-issueに `cumin/type/owner-task` を付けることだけである。
+- `docs/ja/requirements/` のような、Maintainerだけが書く文書を変更しない。対象は、起動の依頼の「保護されたパス」にある。
 - 推測で進めない。決まっていないことに当たったら `blocked` を返す。
 
 ## 上位要件のテスト
@@ -122,5 +122,5 @@ cuminは、起動の依頼の先頭に、その実行の事実をラベル付き
 | # | 場面 | 期待する結果 |
 |---|---|---|
 | 1 | どのroleでも、cuminがAgentを起動する | 起動の依頼に、その実行の時間の上限 (`roles.<role>.time_limit`) と、実行が終わる時刻がある。disciplineのファイルに、長い確認を終わる時刻より前に終える決まりがある |
-| 2 | どのroleでも、cuminがAgentを起動する | 起動の依頼に、扱うIssueの番号と種類、Ownerのログイン名 (Ownerでないときは「ない」)、保護されたパスとその照合の決まりがある |
+| 2 | どのroleでも、cuminがAgentを起動する | 起動の依頼に、扱うIssueの番号と種類、Issue Ownerのログイン名 (Maintainerでないときは「ない」)、保護されたパスとその照合の決まりがある |
 | 3 | cuminがPlannerを起動する | 起動の依頼に、ImplementerとReviewerの時間の上限がある |
