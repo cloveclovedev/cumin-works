@@ -7,7 +7,8 @@
 
 autonumber
 
-actor "Owner" as Owner
+actor "Maintainer" as Maintainer
+actor "Operator" as Operator
 participant "cumin" as Cumin
 participant Planner <<Agent>>
 participant "Implementer" as Impl <<Agent>>
@@ -27,19 +28,19 @@ end note
 
 == 1. Receive a requirement ==
 
-Owner -> Tracker : write the requirement as an issue, add cumin/type/requirement
-Owner -> Tracker : when done, add cumin/status/ready to the requirement issue
-note right of Owner
+Maintainer -> Tracker : write the requirement as an issue, add cumin/type/requirement
+Maintainer -> Tracker : when done, add cumin/status/ready to the requirement issue
+note right of Maintainer
   The only entry to cumin is an issue. No layout of the repository is assumed.
   Adding cumin/status/ready means "submitted" (a draft is not picked up).
-  The Owner may keep requirement documents (for example requirements/) in the repository.
+  A Maintainer may keep requirement documents (for example requirements/) in the repository.
   Linked from the issue, they are context that the agents read.
 end note
 
 Cumin -> Tracker : poll for issues with cumin/type/requirement and cumin/status/ready
 note right of Cumin
   cumin is resident and fetches work by itself.
-  The Owner does not start it.
+  A Maintainer does not start it.
 end note
 
 == 2. Plan ==
@@ -65,13 +66,13 @@ Cumin -> Tracker : check that sub-issues exist and each has a risk
 == 3. Check the plan ==
 
 Cumin -> Tracker : change the label of the requirement issue to cumin/status/awaiting-plan-review
-Cumin -> Owner : notify: the split needs a check
-Owner -> Tracker : check the split and the risks (the Owner fixes them if needed)
-Owner -> Tracker : if good, add cumin/status/ready to the implementation issues
-note right of Owner
+Cumin ->] : notify: the split needs a check
+Maintainer -> Tracker : check the split and the risks (a Maintainer fixes them if needed)
+Maintainer -> Tracker : if good, add cumin/status/ready to the implementation issues
+note right of Maintainer
   cumin/status/ready means three things:
   the split is approved, the risk is final, and the implementation may start.
-  The Owner always takes part in the risk (a start).
+  A Maintainer always takes part in the risk (a start).
   It may go on only some sub-issues. When they are all closed and only
   sub-issues without the label remain, cumin asks for a check again.
 end note
@@ -82,7 +83,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   note over Cumin
     AI resources are free = the usage of both quota windows of Claude Code is below its limit.
     Weekly window: the pace limit = target x min(1, (elapsed + lead) / 7 days), so the week is used evenly.
-    5h window: the threshold of the current time band (higher when the Owner does not work).
+    5h window: the threshold of the current time band (higher when the Operator does not work).
     The target, the lead, the thresholds, and the time bands are in the settings file of cumin.
     cumin can read the usage (the result of a Claude Code run holds the usage and the reset time; measured).
   end note
@@ -91,7 +92,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   note right of Cumin
     Changing the label is the claim. It comes before the request, so the same issue is never requested twice.
     The status label is on the implementation issue, always exactly one. cumin changes all of them (never an agent).
-    An issue that already has a pull request continues from there (after the Owner sends it back or answers).
+    An issue that already has a pull request continues from there (after a Maintainer sends it back or answers).
     The agent then gets a new session and reads the issue, the pull request, and the comments again.
   end note
   Cumin -> Impl : request: implement this issue
@@ -99,7 +100,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   Impl --> Cumin : implementation done (the agent run ended)
   Cumin -> Repo : check that the pull request is open
   Cumin -> Tracker : change the label to cumin/status/checking
-  Cumin -> Repo : wait until every required check passes (on a failure, ask the Implementer for a fix; on a conflict, ask the Implementer to resolve it; when the checks do not report in time, ask the Owner; with no required check, it passes at once)
+  Cumin -> Repo : wait until every required check passes (on a failure, ask the Implementer for a fix; on a conflict, ask the Implementer to resolve it; when the checks do not report in time, ask a Maintainer; with no required check, it passes at once)
   note right of Cumin
     An open pull request alone does not mean the implementation is done.
     cumin decides from facts on GitHub, not from what an agent reports.
@@ -128,28 +129,28 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
     Cumin -> Tracker : close the implementation issue once, when GitHub did not
   else approved, risk/medium or risk/high
     Cumin -> Tracker : change the label to cumin/status/awaiting-merge-decision
-    Cumin -> Owner : notify: the merge needs a decision
-    Owner -> Repo : approve the head commit with a review
+    Cumin ->] : notify: the merge needs a decision
+    Maintainer -> Repo : approve the head commit with a review
     Cumin -> Tracker : change the label to cumin/status/merging (I12)
     Cumin -> Repo : merge at the next poll
     Cumin -> Tracker : close the implementation issue once, when GitHub did not
-    note right of Owner
+    note right of Maintainer
       To send it back, comment on the pull request and add cumin/status/ready to the implementation issue again.
       Whether risk/medium can move to an automatic merge is decided while running.
     end note
   else blocking comments left after 3 rounds
     Cumin -> Rev : request: sort out what is not decided
-    Rev -> Repo : post a short report for the Owner
+    Rev -> Repo : post a short report for a Maintainer
     Cumin -> Tracker : change the label to cumin/status/awaiting-decision
-    Cumin -> Owner : notify: a decision is needed
-    Owner -> Repo : answer
-    Owner -> Tracker : add cumin/status/ready to the implementation issue again
+    Cumin ->] : notify: a decision is needed
+    Maintainer -> Repo : answer
+    Maintainer -> Tracker : add cumin/status/ready to the implementation issue again
   end
   Cumin -> Tracker : after the merge, copy the remaining work (Follow-up and suggestions not taken) to the requirement issue as a follow-up note
-  note over Owner, Cumin
-    While waiting for the Owner, cumin goes on with other issues that do not depend on it.
-    The Owner's "go ahead" for work is adding cumin/status/ready.
-    The Owner's "merge it" is an approving review of the head commit (I12).
+  note over Maintainer, Cumin
+    While waiting for a Maintainer, cumin goes on with other issues that do not depend on it.
+    A Maintainer's "go ahead" for work is adding cumin/status/ready.
+    A Maintainer's "merge it" is an approving review of the head commit (I12).
   end note
 end
 
@@ -164,16 +165,16 @@ Planner -> Repo : check each item of Requirements of the requirement issue on th
 Planner -> Tracker : comment the result, the evidence, and the remaining work on the requirement issue
 Planner --> Cumin : check done (the agent run ended)
 Cumin -> Tracker : check that the comment exists, change the label of the requirement issue to cumin/status/awaiting-acceptance
-Cumin -> Owner : notify: the requirement can be accepted
+Cumin ->] : notify: the requirement can be accepted
 alt accept
-  Owner -> Tracker : close the requirement issue (= accepted)
-  note right of Owner
-    Work from the follow-up notes that the Owner wants goes into a new requirement issue.
+  Maintainer -> Tracker : close the requirement issue (= accepted)
+  note right of Maintainer
+    Work from the follow-up notes that a Maintainer wants goes into a new requirement issue.
   end note
 else send back
-  Owner -> Tracker : add to the requirement issue, or add sub-issues
-  Owner -> Tracker : add cumin/status/ready to the added sub-issues
-  note right of Owner
+  Maintainer -> Tracker : add to the requirement issue, or add sub-issues
+  Maintainer -> Tracker : add cumin/status/ready to the added sub-issues
+  note right of Maintainer
     A send-back does not go through the Planner (a start).
     Back to "4. Implement and review"; when every sub-issue is closed,
     the acceptance notification comes again.
@@ -183,19 +184,19 @@ end
 == Exception: an agent cannot go on ==
 
 Cumin -> Tracker : change the label to cumin/status/awaiting-decision
-Cumin -> Owner : notify: blocked, a decision is needed
-Owner -> Tracker : answer
-Owner -> Tracker : add cumin/status/ready to the implementation issue again
+Cumin ->] : notify: blocked, a decision is needed
+Maintainer -> Tracker : answer
+Maintainer -> Tracker : add cumin/status/ready to the implementation issue again
 
 == Exception: the quota reached its limit ==
 
-Cumin -> Owner : notify: the quota reached its limit, so no new issue starts
-opt the Owner allows using up the current 5h window
-  Owner -> Cumin : allow: use up the current 5h window
-  note right of Owner
+Cumin ->] : notify: the quota reached its limit, so no agent starts
+opt the Operator allows using up the current 5h window
+  Operator -> Cumin : allow: use up the current 5h window
+  note right of Operator
     The allowance lasts until that 5h window resets. The 5h threshold becomes 100%.
     Nothing raises the pace limit of the weekly window.
-    First, the Owner gives the allowance with a command on the Host (from outside through Tailscale and SSH).
+    First, the Operator gives the allowance with a command on the Host (from outside through Tailscale and SSH).
     Later: a Discord bot, so that the allowance comes from Discord.
   end note
 end
@@ -205,22 +206,22 @@ end note
 
 == Exception: no issue can go on ==
 
-Cumin -> Owner : notify: waiting
-note right of Owner
+Cumin ->] : notify: waiting
+note right of Maintainer
   First, cumin only notifies and does nothing else.
   Later: draft the next requirement issue from the requirement documents, and more.
 end note
 
-note over Owner, Cumin
+note over Maintainer, Cumin
   A notification only says "come and look". The conversation is in issues and pull requests.
   Notifications use a Discord webhook (replaceable later).
 end note
 
 note over Cumin, Rev
-  The identities on GitHub are apart from the Owner, one GitHub App for each role (policy):
+  The identities on GitHub are apart from a Maintainer, one GitHub App for each role (policy):
   cumin-core, cumin-planner, cumin-implementer, cumin-reviewer.
   The target repository (peppercheck) is public, so rulesets work on the Free plan.
-  A ruleset limits updates of main to the Owner and cumin-core.
+  A ruleset limits updates of main to a Maintainer and cumin-core.
 end note
 
 @enduml
