@@ -57,8 +57,8 @@ const notWrittenNote = " cumin did not write the comment on the issue; the log o
 // A step that fails is logged and does not stop the next one: a Maintainer
 // must learn about a stopped issue even when one call failed. Nothing is
 // undone. What cumin wrote on GitHub is the fact of the matter, and the
-// notification only asks a Maintainer to look. A comment that was not written
-// goes to the log as a whole, and the notification says so.
+// notification only asks to look. A comment that was not written goes to
+// the log as a whole, and the notification says so.
 func (s *Service) stopForMaintainer(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, st stop) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	log = log.With("action", st.action)
@@ -220,9 +220,9 @@ func LinkMissingReason(pullRequest int) string {
 	return fmt.Sprintf("cumin-core linked the pull request #%d to this issue, but the issue does not show the closing link when cumin reads it again.", pullRequest)
 }
 
-// RiskLabelReason is the sentence of the merge after the review of the
-// Reviewer when the issue has no risk label, or more than one: cumin reads
-// the risk from the issue only (principle 5).
+// RiskLabelReason is the sentence of "stop the review" when the issue has no
+// risk label, or more than one: cumin reads the risk from the issue only
+// (principle 5).
 func RiskLabelReason(decision MergeDecision) string {
 	if decision == MergeTwoRiskLabels {
 		return "The pull request is approved, but this issue has more than one risk label, so cumin does not merge it."

@@ -384,7 +384,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 // conflicts (resolveConflict). The end of that run is the end of any
 // Implementer run: the check of the pull request after the Implementer ends
 // verifies it, and a head that did not change stops the issue for a
-// Maintainer with the action "request a conflict resolution".
+// Maintainer with the action "stop the implementation".
 //
 // The request does not count toward the limit of check fix requests: a
 // conflict comes from the merge of another pull request, not from a

@@ -297,7 +297,7 @@ func (s *Service) StopBudget() time.Duration {
 // the CLI of a role reads and cannot ignore. cumin run logs them at its
 // start. For Claude Code the list is empty: --setting-sources project
 // ignores the user-level files (measured-constraints.md row 6e), and auto
-// memory is off through the environment (row 86).
+// memory is off through the environment (measured-constraints.md row 86).
 func (s *Service) HostWarnings() []string {
 	roles := make([]config.Role, 0, len(s.Roles))
 	for role := range s.Roles {
