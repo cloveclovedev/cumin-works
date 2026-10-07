@@ -1,6 +1,6 @@
 @startuml poll-decide
 ' cumin works - the decision of a poll: from a snapshot to a list of actions.
-' The row numbers (I1 and so on) are the rows of issue-states.md.
+' The names of the actions are the names of the transitions of issue-states.md.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
@@ -17,38 +17,39 @@ partition "Poll (each repository)" {
   else (no)
   endif
   :Build one snapshot from the two reads;
-  :Name the R1 and I1 candidates in the order
+  :Name the candidates of request the split
+  and request the implementation in the order
   of the starts, none without a free slot
   (pure function);
-  while (a candidate is left, and fewer\nOwner candidates than free slots?) is (yes)
+  while (a candidate is left, and fewer\nMaintainer candidates than free slots?) is (yes)
     :Read the actor of the newest
     cumin/status/ready (1 point), and the
     permission of a person (1 REST call);
-    if (the actor is the Owner?) then (yes)
-      :Store the Owner in the snapshot;
+    if (the actor is a Maintainer?) then (yes)
+      :Store the login of the Maintainer in the snapshot;
     else (no)
-      :Store "not the Owner" in the snapshot,
-      log and notify the Owner once
+      :Store "not a Maintainer" in the snapshot,
+      log and notify once
       for this ready event;
     endif
   endwhile (no)
 }
 partition "Decision (pure function, no I/O)" {
-  :Collect I14 candidates
+  :Collect candidates of request a conflict resolution
   - open sub-issues with cumin/status/checking
   - the pull request is CONFLICTING
     (UNKNOWN and MERGEABLE are no candidates);
-  :Collect I3 candidates
+  :Collect candidates of request the review
   - open sub-issues with cumin/status/checking
   - the pull request is not CONFLICTING
   - every required check passed on the head commit
     of the pull request;
-  :Collect I4 candidates
+  :Collect candidates of request a check fix
   - open sub-issues with cumin/status/checking
   - the pull request is not CONFLICTING
   - a required check failed on the head commit
     of the pull request;
-  :Collect I15 candidates
+  :Collect candidates of stop for missing checks
   - open sub-issues with cumin/status/checking
   - the pull request is not CONFLICTING
   - no required check failed, and a required check
@@ -64,92 +65,101 @@ partition "Decision (pure function, no I/O)" {
     checking, or reviewing;
   :Compute the free slots
   max_issues_in_progress - issues in progress;
-  :Collect R1 candidates
+  :Collect candidates of request the split
   - open requirement issues
   - with cumin/status/ready
   - every blocked-by issue closed
-  - the Owner added the newest cumin/status/ready
-    (not the Owner, or not read: skipped);
-  :Collect I1 candidates
+  - a Maintainer added the newest cumin/status/ready
+    (not a Maintainer, or not read: skipped);
+  :Collect candidates of request the implementation
   - open sub-issues
   - with cumin/status/ready
   - every blocked-by issue closed
-  - the Owner added the newest cumin/status/ready
-    (not the Owner, or not read: skipped);
-  :Sort the R1, R4, and I1 candidates
+  - a Maintainer added the newest cumin/status/ready
+    (not a Maintainer, or not read: skipped);
+  :Sort the candidates of request the split,
+  request the acceptance check, and request the implementation
   by priority label (highest first; no label last),
   then by issue number,
   and keep as many as the free slots;
-  :Collect I12 candidates
+  :Collect candidates of start the merge
   - open sub-issues with cumin/status/awaiting-merge-decision
   - an APPROVED review of a person
     on the head commit of the pull request;
-  :Collect I13 candidates
+  :Collect candidates of send back for changes
   - open sub-issues with cumin/status/awaiting-merge-decision
     and without cumin/status/ready
   - a CHANGES_REQUESTED review of a person
     on the head commit of the pull request,
     submitted after the last
     cumin/status/awaiting-merge-decision of the issue;
-  :Collect I14 candidates of the Owner's review
+  :Collect candidates of request a conflict resolution
+  while a Maintainer decides
   - open sub-issues with cumin/status/awaiting-merge-decision
     and without cumin/status/ready
   - the pull request is CONFLICTING
     (UNKNOWN and MERGEABLE are no candidates);
-  :Collect I11 copies
+  :Collect copy the labels to the pull request
   - each open pull request that closes an issue
   - its cumin/status/* and risk/* differ
     from the issue in this snapshot;
   :Return the list of actions
-  (I14, I3, I4, I15, R1 and I1, I12, I13,
-  I14 of the Owner's review, I11, in this order);
+  (request a conflict resolution, request the review,
+  request a check fix or stop for failed checks,
+  stop for missing checks, request the split and
+  request the implementation, start the merge,
+  send back for changes, request a conflict resolution
+  while a Maintainer decides, copy the labels to
+  the pull request, in this order);
 }
 partition "Apply (in the order of the list)" {
-  :I14: change the label to cumin/status/implementing,
+  :request a conflict resolution: change the label to cumin/status/implementing,
   then ask the Implementer to resolve the conflict
   in the same session;
-  :I3: change the label to cumin/status/reviewing;
-  if (I4: fix requests below the limit?) then (yes)
-    :count one more, change the label to
+  :request the review: change the label to cumin/status/reviewing;
+  if (fix requests below the limit?) then (yes)
+    :request a check fix: count one more, change the label to
     cumin/status/implementing, and request
     a fix in the same session;
   else (no)
-    :hand it back to the Owner (row I4);
+    :stop for failed checks:
+    hand it back to a Maintainer;
   endif
-  :I15: change the label to
+  :stop for missing checks: change the label to
   cumin/status/awaiting-decision, then
-  hand it back to the Owner (row I15) with
+  hand it back to a Maintainer with
   the head commit, the required checks that
   have not reported, and the time waited
   (with no open pull request: that fact,
   and the time waited);
-  :R1: change the label to cumin/status/planning,
+  :request the split: change the label to cumin/status/planning,
   then ask the Planner to split
-  I1: change the label to cumin/status/implementing,
+  request the implementation: change the label to cumin/status/implementing,
   then ask the Implementer
   If a label does not change,
   try again at the next poll;
-  :I12: read the permission of each reviewer,
-  and when the latest review of an Owner approves
+  :start the merge: read the permission of each reviewer,
+  and when the latest review of a Maintainer approves
   the head commit, run the merge step;
-  :I13: read the permission of each reviewer,
-  and when the latest review of an Owner requests
+  :send back for changes: read the permission of each reviewer,
+  and when the latest review of a Maintainer requests
   changes on the head commit, after the last
   cumin/status/awaiting-merge-decision, change the label to
   cumin/status/implementing, then ask the Implementer
   to address that review in the same session;
-  :I14 of the Owner's review: when I12 and I13
+  :request a conflict resolution while a Maintainer decides:
+  when start the merge and send back for changes
   did not take the issue at this poll,
   change the label to cumin/status/implementing,
   then ask the Implementer to resolve the conflict
   in the same session;
-  :I11: make the labels of the pull request
+  :copy the labels to the pull request: make the labels of the pull request
   the same as the issue;
 }
 note right
-  I11 copies the labels of the issue as this poll
+  copy the labels to the pull request copies the labels of the issue as this poll
   read them. A label that this poll or the end of
-  a run (I2) changed reaches the pull request
+  a run (wait for the checks) changed reaches the pull request
   at the next poll.
 end note
 stop

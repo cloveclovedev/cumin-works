@@ -1,5 +1,5 @@
 @startuml poll-split
-' cumin works - the way out of cumin/status/planning: the decision that a poll and the end of a Planner run share, the second request of the split, and the way back to the Owner.
+' cumin works - the way out of cumin/status/planning: the decision that a poll and the end of a Planner run share, the second request of the split, and the way back to a Maintainer.
 ' Document: poll.md, sections on the decision of the poll and on the end of a run.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -12,13 +12,13 @@ if (Who decides?) then (the end of a Planner run of a split)
     if (The read failed with
     a temporary failure?) then (yes)
       :Log the whole blocked_reason,
-      notify the Owner. The label stays.
+      notify. The label stays.
       The next poll decides;
       stop
     else (no)
     endif
     :Comment blocked_reason, change the label to
-    cumin/status/awaiting-decision, notify the Owner;
+    cumin/status/awaiting-decision, notify;
     stop
   else (done, or abnormal end)
     :Read the requirement issue again
@@ -46,7 +46,7 @@ partition "Decision (pure function SplitEnd, no I/O)" {
   elseif (One or more sub-issues, and exactly one
   risk label on every sub-issue?) then (yes)
     if (An open sub-issue?) then (yes)
-      :ask the Owner to review the plan;
+      :ask for the plan review;
     else (no)
       :request the acceptance check;
     endif
@@ -61,7 +61,7 @@ switch (Action?)
 case (review the plan)
   :Change the label to
   cumin/status/awaiting-plan-review;
-  :Notify the Owner
+  :Notify
   (the split needs a review);
 case (acceptance check)
   :Change the label to
@@ -84,7 +84,7 @@ case (stop the split)
   cumin/status/awaiting-decision;
   :Comment the failed check
   (not after a question);
-  :Notify the Owner;
+  :Notify;
 endswitch
 stop
 @enduml

@@ -61,7 +61,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
   - `-p <依頼文>`: 依頼文はプロンプトの引数で渡す。
     - 依頼文の先頭には、その実行の事実を、ラベルを付けた行のかたまりとして置く。1行目は、cuminからのデータであることを示す。続く行は、扱うIssue (その実行が扱うIssueの番号と種類。種類は「requirement issue」か「implementation issue」。例: `- Issue of the run: #12 (implementation issue)`)、Issue Ownerのログイン名 (例: `- Issue Owner login: <login>`。ないときは `- Issue Owner login: there is no Issue Owner login`)、保護されたパス (そのリポジトリで効いている一覧を1行に1つずつ書き、続けて照合の決まりを固定の英文で書く。決まりは5つで、どの深さにも合うこと、位置が決まること、ディレクトリ、ワイルドカードが使えないこと、大文字と小文字を区別しないことである。一覧が空のときは「none」と書き、決まりは書かない)、実行時間の上限 (その実行に使う設定の `roles.<role>.time_limit`)、実行が終わる時刻 (起動の時刻に上限を足した時刻。UTCのRFC 3339) である。Plannerの依頼には、そのあとに2行を足す。Implementerの時間の上限とReviewerの時間の上限 (設定の `roles.implementer.time_limit` と `roles.reviewer.time_limit`。例: `- Time limit of the Implementer: 50m`、`- Time limit of the Reviewer: 50m`) である。ImplementerとReviewerの依頼には、この2行を書かない。かたまりのあとに空行を1つ置き、呼び出し処理の依頼文を続ける。決まりは [Agentに共通の要件](../requirements/agents/common.md) の「起動の依頼の事実」と「プロセスとセッション」にある。
     - 事実は実行のたびに変わるので、roleの指示ではなく依頼文に入れる。どのroleの、どの種類の依頼にも入れる。続きの依頼 (`--resume`) にも入れ、終わる時刻はその実行のものになる。Plannerの続きの依頼にも、ImplementerとReviewerの時間の上限をもう一度入れる。
-    - かたまりを作るのは `internal/agent` の純粋な関数である。扱うIssueとOwnerのログイン名は、呼び出し処理が起動の依頼のデータとして渡す。Ownerのログイン名は、呼び出し処理がGitHubから読んで決める ([定期確認の設計](poll.md) の「Ownerのログイン名の読み取り」)。空のときは「ない」と書く。時間の上限と終わる時刻は、起動の入口が時計と設定を読んで渡す。ImplementerとReviewerの時間の上限も、起動の入口が、持っているroleごとの設定から読んで渡す。時計は入口が持ち、テストが差し替える。Issueの番号のない起動 (テスト) では、扱うIssueの行とOwnerのログイン名の行を書かない。
+    - かたまりを作るのは `internal/agent` の純粋な関数である。扱うIssueとOwnerのログイン名は、呼び出し処理が起動の依頼のデータとして渡す。Ownerのログイン名は、呼び出し処理がGitHubから読んで決める ([定期確認の設計](poll.md) の「Issue Ownerのログイン名の読み取り」)。空のときは「ない」と書く。時間の上限と終わる時刻は、起動の入口が時計と設定を読んで渡す。ImplementerとReviewerの時間の上限も、起動の入口が、持っているroleごとの設定から読んで渡す。時計は入口が持ち、テストが差し替える。Issueの番号のない起動 (テスト) では、扱うIssueの行とOwnerのログイン名の行を書かない。
   - `--setting-sources project`: ユーザアカウントの設定と `CLAUDE.md` を読ませない (実測 6e、27)。
   - `--permission-mode bypassPermissions`: 全てのツールを許可する。headlessの実行では、許可を求められても答える人がいない。`--dangerously-skip-permissions` と同じ意味である (CLI reference)。
   - `--json-schema <結果のスキーマ>`: 結果を [共通の形式](../requirements/agents/common.md) に従わせる。スキーマの文字列は、コードの側で要件文書と同じに保つ。
@@ -114,12 +114,12 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 ### 異常終了のやり直し
 
-- 異常終了 (プロセスの失敗、`result` がない、`is_error`、結果がスキーマに合わない、実行時間の上限、起動の記録にユーザの文脈がある) のとき、呼び出し処理は、実行の中で同じ依頼をやり直さない。実装も、レビューも、分割も、受け入れの確認も、実行の終わりにGitHubの事実から決める。結果がなければ、1回だけ依頼し直す ([定期確認の設計](poll.md) の「実行終了の判定」、「Reviewerへの依頼 (I3、I10)」、「Plannerへの依頼 (R1、R2、R4)」)。異常終了、結果を残さなかった実行、再起動で切れた実行が、同じ1つの決まりになる。ImplementerとPlannerの依頼し直しは、同じ作業場所で続ける。途中までの作業がworktreeに残っているためである。Reviewerの依頼し直しは、worktreeを作り直す。Reviewerは何もworktreeに残さないためである。
+- 異常終了 (プロセスの失敗、`result` がない、`is_error`、結果がスキーマに合わない、実行時間の上限、起動の記録にユーザの文脈がある) のとき、呼び出し処理は、実行の中で同じ依頼をやり直さない。実装も、レビューも、分割も、受け入れの確認も、実行の終わりにGitHubの事実から決める。結果がなければ、1回だけ依頼し直す ([定期確認の設計](poll.md) の「実行終了の判定」、「Reviewerへの依頼 (request the review、stop the review)」、「Plannerへの依頼 (request the split、request the acceptance check)」)。異常終了、結果を残さなかった実行、再起動で切れた実行が、同じ1つの決まりになる。ImplementerとPlannerの依頼し直しは、同じ作業場所で続ける。途中までの作業がworktreeに残っているためである。Reviewerの依頼し直しは、worktreeを作り直す。Reviewerは何もworktreeに残さないためである。
 - 異常終了のあとのReviewerの依頼し直しは、そのラウンドの最初の依頼と同じセッションで始める (1ラウンド目は新しいセッション)。異常終了した実行のセッションは再開しない。Implementerの依頼し直しは、Hostの状態ファイルにImplementerのセッションがあれば、その続きから始める。状態ファイルに残るのは、正常に終わった実行のセッションだけである。異常終了した実行のセッションは残さないので、最初の実行が異常終了したときは、新しいセッションになる。
 - 異常終了した実行のセッションを再開しない理由は3つある。異常終了の種類の多くは、セッションの番号を返さない (プロセスの失敗、`init` のイベントがない) か、同じ結果を繰り返す (起動の記録にユーザの文脈がある、環境の誤り)。実行時間の上限で止めた実行を再開すると、長い文脈を読み直す分だけ利用枠を余計に使い、また上限に当たりやすい。判定が1つで済み、種類ごとの分岐が要らない。
 - 見直す合図: 異常終了が頻発して、やり直しの利用枠が目立つようになったとき。種類ごとに分ける (結果の形式だけが誤っていたときは再開する、など) 案がある。
 - cuminが止まるとき (contextの取り消し) の異常終了は、やり直さない。新しい実行を始めずに終わり、ラベルも変えない ([cumin本体の設計メモ](cumin-core.md) の「止め方」)。
-- どのroleでも、依頼し直したあとにも結果がなければ、Ownerに戻す ([定期確認の設計](poll.md) の「うまくいかなかったときに、Ownerに戻す道」)。
+- どのroleでも、依頼し直したあとにも結果がなければ、Ownerに戻す ([定期確認の設計](poll.md) の「うまくいかなかったときに、Maintainerに戻す道」)。
 - 依頼し直しの回数は、Hostの状態ファイルに持つ (Implementerは `implementation_requests`、Reviewerは `review_requests` と `cause_requests`、Plannerは `split_requests` と `acceptance_requests`)。再起動のあとの定期確認も、同じ回数から決めるためである。Implementerの回数は、ラベルを `cumin/status/implementing` に替える場所で、ラベルを替える前に0に戻す。
 
 ### 実行時間の上限
