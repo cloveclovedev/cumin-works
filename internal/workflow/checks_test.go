@@ -12,8 +12,8 @@ import (
 const actionsApp = 15368
 
 // TestChecksOf covers the text on required checks of issue-states.md: what
-// the checks of a commit say together, for I3 (every check passed, to
-// reviewing) and I4 (a check failed, fix request).
+// the checks of a commit say together, for "request the review" (every check passed, to
+// reviewing) and "request a check fix" (a check failed, fix request).
 func TestChecksOf(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -132,8 +132,8 @@ func TestChecksOf(t *testing.T) {
 	}
 }
 
-// TestDecide_I3 covers which issues the poll moves to the review.
-func TestDecide_I3(t *testing.T) {
+// TestDecide_RequestTheReview covers which issues the poll moves to the review.
+func TestDecide_RequestTheReview(t *testing.T) {
 	required := []RequiredCheck{{Name: "ci"}}
 	passed := []CheckResult{{Name: "ci", Conclusion: CheckPassed}}
 	pending := []CheckResult{{Name: "ci", Conclusion: CheckPending}}
@@ -169,17 +169,17 @@ func TestDecide_I3(t *testing.T) {
 			subs:     []SubIssue{sub(10, []string{LabelChecking}, pending)},
 		},
 		{
-			name:     "a failed check waits for I4, not for I3",
+			name:     "a failed check waits for a check fix, not for the review",
 			required: required,
 			subs:     []SubIssue{sub(10, []string{LabelChecking}, failed)},
 		},
 		{
-			name:     "another status label is not I3",
+			name:     "another status label is not for the review",
 			required: required,
 			subs:     []SubIssue{sub(10, []string{LabelImplementing}, passed)},
 		},
 		{
-			name:     "a closed issue is not I3",
+			name:     "a closed issue is not for the review",
 			required: required,
 			subs:     []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}, PullRequests: []PullRequest{{Number: 20, Checks: passed}}}},
 		},
@@ -192,9 +192,11 @@ func TestDecide_I3(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
-			// The limit of issues in progress does not hold I3 back: the
+			// The limit of issues in progress does not hold "request the review" back: the
 			// issue is already counted in it.
-			// I4 and I11 are other rules (TestDecide_I4, TestDecide_I11).
+			// "request a check fix" and "copy the labels to the pull request" are
+			// other rules (TestDecide_RequestACheckFix,
+			// TestDecide_CopyTheLabelsToThePullRequest).
 			var got []Action
 			for _, action := range Decide(snapshot, 1, tt.required, nil, time.Time{}, 0) {
 				if _, ok := action.(StartReview); ok {
@@ -226,9 +228,9 @@ func TestSnapshot_HasIssueChecking(t *testing.T) {
 	}
 }
 
-// TestDecide_I4 covers which issues the poll sends back for a check fix,
+// TestDecide_RequestACheckFix covers which issues the poll sends back for a check fix,
 // and which failed checks the action names.
-func TestDecide_I4(t *testing.T) {
+func TestDecide_RequestACheckFix(t *testing.T) {
 	required := []RequiredCheck{{Name: "ci"}, {Name: "lint", Integration: 15368}}
 	waiting := func(number int, checks ...CheckResult) SubIssue {
 		return SubIssue{Number: number, Labels: []string{LabelChecking, "risk/low"},
@@ -268,7 +270,7 @@ func TestDecide_I4(t *testing.T) {
 			subs: []SubIssue{waiting(10, ci(CheckPassed), CheckResult{Name: "lint", Conclusion: CheckFailed, Integration: 99})},
 		},
 		{
-			name: "another status label is not I4",
+			name: "another status label is not for a check fix",
 			subs: []SubIssue{{Number: 10, Labels: []string{LabelImplementing}, PullRequests: []PullRequest{{Number: 20, Checks: []CheckResult{ci(CheckFailed)}}}}},
 		},
 		{
@@ -296,10 +298,12 @@ func TestDecide_I4(t *testing.T) {
 	}
 }
 
-// TestDecide_I14_WhileTheOwnerDecides covers I14 for an issue in
+// TestDecide_RequestAConflictResolutionWhileTheMaintainerDecides covers
+// "request a conflict resolution" for an issue in
 // cumin/status/awaiting-merge-decision: only a CONFLICTING pull request sends
-// the issue back, and the candidates of I12 and of I13 come before it.
-func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
+// the issue back, and the candidates of "start the merge" and of "send back
+// for changes" come before it.
+func TestDecide_RequestAConflictResolutionWhileTheMaintainerDecides(t *testing.T) {
 	const head = "1111"
 	awaitingMaintainer := func(number int, mergeable MergeableState, reviews ...Review) SubIssue {
 		return SubIssue{Number: number, Labels: []string{LabelAwaitingMergeDecision, "risk/medium"},
@@ -330,11 +334,11 @@ func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 			subs: []SubIssue{awaitingMaintainer(10, MergeableUnknown)},
 		},
 		{
-			name: "mergeable leaves the issue waiting for the Owner",
+			name: "mergeable leaves the issue waiting for the Maintainer",
 			subs: []SubIssue{awaitingMaintainer(10, Mergeable)},
 		},
 		{
-			name: "an approval on the conflicting head is a candidate of I12 first",
+			name: "an approval on the conflicting head is a candidate of the merge first",
 			subs: []SubIssue{awaitingMaintainer(10, Conflicting, maintainer(ReviewApproved))},
 			want: []Action{
 				MergeMaintainerApproval{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
@@ -342,7 +346,7 @@ func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 			},
 		},
 		{
-			name: "a request for changes on the conflicting head is a candidate of I13 first",
+			name: "a request for changes on the conflicting head is a candidate of the send-back for changes first",
 			subs: []SubIssue{awaitingMaintainer(10, Conflicting, maintainer(ReviewChangesRequested))},
 			want: []Action{
 				FixMaintainerReview{Number: 10, PullRequest: 20, Reviewers: []string{"the-owner"}},
@@ -389,10 +393,10 @@ func TestDecide_I14_WhileTheOwnerDecides(t *testing.T) {
 	}
 }
 
-// TestDecide_I14 covers which issues the poll sends back for a conflict
+// TestDecide_RequestAConflictResolution covers which issues the poll sends back for a conflict
 // resolution: only a pull request that GitHub reports as CONFLICTING, and
-// before the rows of the checks (I3, I4) for that issue.
-func TestDecide_I14(t *testing.T) {
+// before the rows of the checks ("request the review", "request a check fix") for that issue.
+func TestDecide_RequestAConflictResolution(t *testing.T) {
 	required := []RequiredCheck{{Name: "ci"}}
 	ci := func(c CheckConclusion) []CheckResult { return []CheckResult{{Name: "ci", Conclusion: c}} }
 	waiting := func(number int, mergeable MergeableState, checks []CheckResult) SubIssue {
@@ -437,11 +441,11 @@ func TestDecide_I14(t *testing.T) {
 			},
 		},
 		{
-			name: "another status label is not I14",
+			name: "another status label is not for a conflict resolution",
 			subs: []SubIssue{{Number: 10, Labels: []string{LabelReviewing}, PullRequests: []PullRequest{{Number: 20, Mergeable: Conflicting}}}},
 		},
 		{
-			name: "a closed issue is not I14",
+			name: "a closed issue is not for a conflict resolution",
 			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}, PullRequests: []PullRequest{{Number: 20, Mergeable: Conflicting}}}},
 		},
 		{
@@ -456,7 +460,8 @@ func TestDecide_I14(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, SubIssues: tt.subs}}}
-			// I11 is another rule (TestDecide_I11).
+			// "copy the labels to the pull request" is another rule
+			// (TestDecide_CopyTheLabelsToThePullRequest).
 			var got []Action
 			for _, action := range Decide(snapshot, 1, required, nil, time.Time{}, 0) {
 				switch action.(type) {
@@ -471,12 +476,14 @@ func TestDecide_I14(t *testing.T) {
 	}
 }
 
-// TestDecide_I15 covers which issues the poll stops for the Owner because a
+// TestDecide_StopForMissingChecks covers which issues the poll stops for the
+// Maintainer because a
 // required check did not report in time: only after the wait time, counted
 // from the later one of the label time and the commit time of the head
-// commit, and only after the rows of the conflict (I14) and of the checks
-// (I3, I4).
-func TestDecide_I15(t *testing.T) {
+// commit, and only after the rows of the conflict ("request a conflict
+// resolution") and of the checks
+// ("request the review", "request a check fix").
+func TestDecide_StopForMissingChecks(t *testing.T) {
 	required := []RequiredCheck{{Name: "ci"}, {Name: "lint"}, {Name: "unit"}}
 	labeled := time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC)
 	wait := time.Hour
@@ -587,13 +594,13 @@ func TestDecide_I15(t *testing.T) {
 			now:  labeled.Add(2 * wait),
 		},
 		{
-			name: "another status label is not I15",
+			name: "another status label is not stopped for missing checks",
 			subs: []SubIssue{{Number: 10, Labels: []string{LabelReviewing}, CheckingAt: labeled,
 				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
 			now: labeled.Add(2 * wait),
 		},
 		{
-			name: "a closed issue is not I15",
+			name: "a closed issue is not stopped for missing checks",
 			subs: []SubIssue{{Number: 10, Closed: true, Labels: []string{LabelChecking}, CheckingAt: labeled,
 				PullRequests: []PullRequest{{Number: 20, HeadCommit: "abc", HeadCommittedAt: labeled}}}},
 			now: labeled.Add(2 * wait),
@@ -609,7 +616,8 @@ func TestDecide_I15(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, LabelTimesRead: true, SubIssues: tt.subs}}}
 			decide := func() []Action {
-				// I11 is another rule (TestDecide_I11).
+				// "copy the labels to the pull request" is another rule
+				// (TestDecide_CopyTheLabelsToThePullRequest).
 				var got []Action
 				for _, action := range Decide(snapshot, 1, required, nil, tt.now, wait) {
 					switch action.(type) {
@@ -631,9 +639,10 @@ func TestDecide_I15(t *testing.T) {
 	}
 }
 
-// The sentence of I15 names the head commit, each required check that has
+// The sentence of "stop for missing checks" names the head commit, each
+// required check that has
 // not reported, and the time that cumin waited.
-func TestUnreportedChecksReason_I15(t *testing.T) {
+func TestUnreportedChecksReason(t *testing.T) {
 	got := UnreportedChecksReason(StopForUnreportedChecks{
 		Number: 10, PullRequest: 21, HeadCommit: "0123abcd",
 		Unreported: []RequiredCheck{{Name: "ci"}, {Name: "lint"}}, Waited: 61*time.Minute + 400*time.Millisecond,
@@ -645,9 +654,9 @@ func TestUnreportedChecksReason_I15(t *testing.T) {
 	}
 }
 
-// With no open pull request, the sentence of I15 says that, and the time
+// With no open pull request, the sentence of "stop for missing checks" says that, and the time
 // that cumin waited.
-func TestUnreportedChecksReason_I15_NoOpenPullRequest(t *testing.T) {
+func TestUnreportedChecksReason_NoOpenPullRequest(t *testing.T) {
 	got := UnreportedChecksReason(StopForUnreportedChecks{Number: 10, Waited: 61*time.Minute + 400*time.Millisecond})
 	for _, want := range []string{"No open pull request closes this issue", "waited 1h1m0s", "checks_wait_time"} {
 		if !strings.Contains(got, want) {
@@ -660,7 +669,7 @@ func TestUnreportedChecksReason_I15_NoOpenPullRequest(t *testing.T) {
 }
 
 // CheckFixAllowed: max_check_fix_requests requests are sent, not one more.
-func TestCheckFixAllowed_I4(t *testing.T) {
+func TestCheckFixAllowed(t *testing.T) {
 	for _, tt := range []struct {
 		count, limit int
 		want         bool

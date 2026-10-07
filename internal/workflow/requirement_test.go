@@ -11,7 +11,8 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
 
-// newRequirementScene is a scene for R3 and R6. The sub-issue #19 is in
+// newRequirementScene is a scene for "mark the requirement as in work" and
+// "ask about the remaining sub-issues". The sub-issue #19 is in
 // cumin/status/reviewing, so it fills the limit of issues in progress (1 in
 // the scene) and no agent starts: these rows move labels only.
 func newRequirementScene(t *testing.T, requirementLabels ...string) *scene {
@@ -28,10 +29,11 @@ func requirementLabels(t *testing.T, sc *scene) []string {
 	return sc.fake.Issue(sc.repo, 6).Labels
 }
 
-// Core-13 (cumin-core.md): a sub-issue that kept cumin/status/ready from
+// The test of a top-level requirement in cumin-core.md: a sub-issue that kept
+// cumin/status/ready from
 // before the review label does not move the requirement issue; a
-// cumin/status/ready that the Owner adds afterwards does.
-func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing.T) {
+// cumin/status/ready that the Maintainer adds afterwards does.
+func TestOnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing.T) {
 	review := sceneNow.Add(-time.Hour)
 	sc := newRequirementScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"},
@@ -50,7 +52,7 @@ func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing
 		t.Errorf("%d GraphQL requests, want 7", n)
 	}
 
-	// The Owner reviews the new sub-issue and lets it start.
+	// The Maintainer reviews the new sub-issue and lets it start.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "New", Labels: []string{"cumin/status/ready", "risk/low"},
 		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/ready", At: review.Add(time.Minute)}}})
 	sc.pollAndWait(t, service)
@@ -60,18 +62,18 @@ func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
 	if !strings.Contains(sc.logs.String(), `"msg":"mark the requirement as in work: the sub-issues of the requirement issue are in progress"`) {
-		t.Error("the log has no R3 line")
+		t.Error("the log has no line that marks the requirement as in work")
 	}
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want none", n)
 	}
 }
 
-// R3 after the acceptance check: the requirement issue waits in
-// cumin/status/awaiting-acceptance, and the Owner sends work back with a new
+// "mark the requirement as in work" after the acceptance check: the requirement issue waits in
+// cumin/status/awaiting-acceptance, and the Maintainer sends work back with a new
 // sub-issue. cumin compares its cumin/status/ready with the time of
 // cumin/status/awaiting-acceptance, and marks the requirement as in work.
-func TestR3_AReadyAddedAfterTheAcceptanceMovesTheRequirementIssue(t *testing.T) {
+func TestAReadyAddedAfterTheAcceptanceMovesTheRequirementIssue(t *testing.T) {
 	accepted := sceneNow.Add(-time.Hour)
 	sc := newRequirementScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"},
@@ -91,10 +93,11 @@ func TestR3_AReadyAddedAfterTheAcceptanceMovesTheRequirementIssue(t *testing.T) 
 	}
 }
 
-// R3 without a status label on the requirement issue: the Owner wrote the
+// "mark the requirement as in work" without a status label on the requirement
+// issue: the Maintainer wrote the
 // sub-issues by hand, and one ready sub-issue is enough. No label times are
 // read.
-func TestR3_ARequirementIssueWithoutAStatusLabelFollowsAReadySubIssue(t *testing.T) {
+func TestARequirementIssueWithoutAStatusLabelFollowsAReadySubIssue(t *testing.T) {
 	sc := newRequirementScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"cumin/status/ready", "risk/low"}})
 	sc.pollAndWait(t, sc.service())
@@ -110,13 +113,14 @@ func TestR3_ARequirementIssueWithoutAStatusLabelFollowsAReadySubIssue(t *testing
 	}
 }
 
-// Core-12 (cumin-core.md): the Owner let only a part of the sub-issues
-// start, and those closed. The requirement issue goes back to the Owner
+// The test of a top-level requirement in cumin-core.md: the Maintainer let
+// only a part of the sub-issues
+// start, and those closed. The requirement issue goes back to the Maintainer
 // with one notification; a ready on a remaining sub-issue moves it to
 // implementing again.
-func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
+func TestTheRemainingSubIssuesGoBackToTheMaintainerOnce(t *testing.T) {
 	sc := newRequirementScene(t, "cumin/status/implementing")
-	// #19 closed: the part that the Owner let start is done.
+	// #19 closed: the part that the Maintainer let start is done.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 19, Parent: 6, Title: "Done", Closed: true, Labels: []string{"risk/low"}})
 	// A sub-issue of another requirement issue fills the limit, so the
 	// ready below starts no agent.
@@ -131,7 +135,7 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Fatalf("labels of #6 = %v, want %v", got, want)
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications after two polls, want 1: %v", len(messages), messages)
 	}
@@ -141,7 +145,7 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 		}
 	}
 
-	// The Owner lets the remaining sub-issue start.
+	// The Maintainer lets the remaining sub-issue start.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"cumin/status/ready", "risk/low"},
 		LabelEvents: []githubtest.LabelEvent{{Label: "cumin/status/ready", At: sceneNow.Add(time.Minute)}}})
 	sc.pollAndWait(t, service)
@@ -149,28 +153,29 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {
 		t.Errorf("labels of #6 = %v, want implementing again", got)
 	}
-	if n := len(sc.messagesExceptQ4()); n != 1 {
+	if n := len(sc.messagesExceptWaiting()); n != 1 {
 		t.Errorf("%d notifications, want still 1", n)
 	}
 }
 
-// R6 waits while a sub-issue is open with a status label.
-func TestR6_AnOpenSubIssueWithAStatusLabelKeepsImplementing(t *testing.T) {
+// "ask about the remaining sub-issues" waits while a sub-issue is open with a status label.
+func TestAnOpenSubIssueWithAStatusLabelKeepsImplementing(t *testing.T) {
 	sc := newRequirementScene(t, "cumin/status/implementing")
 	sc.pollAndWait(t, sc.service())
 
 	if got := requirementLabels(t, sc); !slices.Contains(got, "cumin/status/implementing") {
 		t.Errorf("labels of #6 = %v, want implementing kept", got)
 	}
-	if n := len(sc.messagesExceptQ4()); n != 0 {
+	if n := len(sc.messagesExceptWaiting()); n != 0 {
 		t.Errorf("%d notifications, want none", n)
 	}
 }
 
-// When R3 cannot move the requirement issue, its ready sub-issue is not
+// When "mark the requirement as in work" cannot move the requirement issue,
+// its ready sub-issue is not
 // claimed in the same poll: the claim would take away the cumin/status/ready
-// that R3 needs to apply again.
-func TestR3_AFailedMoveKeepsTheSubIssueReady(t *testing.T) {
+// that "mark the requirement as in work" needs to apply again.
+func TestAFailedMoveOfTheRequirementIssueKeepsTheSubIssueReady(t *testing.T) {
 	sc := newScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel}})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)

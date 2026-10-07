@@ -72,7 +72,7 @@ func TestPoll_ASuccessfulPollLetsTheNextRunOfFailuresNotifyAgain(t *testing.T) {
 	sc := newScene(t)
 	// The poll that succeeds claims the ready sub-issue and starts the
 	// agent. The pull request lets the verification pass, so that run
-	// tells the Owner nothing and the notifications below are only the
+	// tells the Maintainer nothing and the notifications below are only the
 	// ones of the failed polls.
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	sc.fake.SetFile(sc.repo, ".cumin/config.toml", wrongFile(`work_dir = "/tmp/elsewhere"`))
@@ -83,7 +83,7 @@ func TestPoll_ASuccessfulPollLetsTheNextRunOfFailuresNotifyAgain(t *testing.T) {
 		t.Fatalf("%d notifications, want 1", n)
 	}
 
-	// The Owner merged a fix.
+	// The Maintainer merged a fix.
 	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{Content: "max_review_rounds = 2\n"})
 	pollTimes(t, service, 1, false)
 	if n := len(sc.webhook.messagesSent()); n != 1 {
@@ -101,7 +101,7 @@ func TestPoll_ASuccessfulPollLetsTheNextRunOfFailuresNotifyAgain(t *testing.T) {
 	}
 }
 
-// After the Owner was told, a new reason brings no second notification
+// After the Operator was told, a new reason brings no second notification
 // before a poll of the repository succeeds. The requirement says that the
 // next one comes after a successful poll, whatever the reason.
 func TestPoll_ANewReasonAfterANotificationIsSilentUntilASuccess(t *testing.T) {

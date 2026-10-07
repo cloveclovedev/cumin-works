@@ -18,7 +18,8 @@ import (
 // one App, so it is the bot of that App.
 const plannerLogin = implementerSlug
 
-// newAcceptanceScene is the scene of R4 and R7: the requirement issue #6 is
+// newAcceptanceScene is the scene of "request the acceptance check" and "ask
+// for the acceptance": the requirement issue #6 is
 // in cumin/status/implementing and its only sub-issue #10 closed an hour
 // ago. The options say how the fake CLI answers as the Planner.
 func newAcceptanceScene(t *testing.T, options cliOptions) (*scene, time.Time) {
@@ -57,14 +58,15 @@ func (sc *scene) serviceWithState(path string) *workflow.Service {
 	return service
 }
 
-// Core-7 (cumin-core.md): when every sub-issue closes, the requirement
-// issue gets cumin/status/accepting without a new ready of the Owner, and
+// The test of a top-level requirement in cumin-core.md: when every sub-issue
+// closes, the requirement
+// issue gets cumin/status/accepting without a new ready of the Maintainer, and
 // the Planner is asked for the acceptance check once. While the Planner
 // runs, a poll changes nothing on the issue. The end of the run finds the
 // comment and moves the issue to cumin/status/awaiting-acceptance with one
 // notification, although the table holds a Fail. A restart asks nothing
 // again.
-func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.T) {
+func TestTheAcceptanceCheckIsRequestedOnceAndHandedToTheMaintainer(t *testing.T) {
 	sc, closedAt := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	service := sc.service()
 
@@ -114,7 +116,7 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
@@ -131,7 +133,7 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 // state file holds. With still no comment, the issue goes to
 // cumin/status/awaiting-decision with the reason, and a later restart
 // requests nothing.
-func TestAccepting_ARestartRequestsTheCheckOnceMoreAndThenStopsForTheOwner(t *testing.T) {
+func TestAccepting_ARestartRequestsTheCheckOnceMoreAndThenStopsForTheMaintainer(t *testing.T) {
 	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	path := filepath.Join(t.TempDir(), "state.json")
 	first := sc.serviceWithState(path)
@@ -161,7 +163,7 @@ func TestAccepting_ARestartRequestsTheCheckOnceMoreAndThenStopsForTheOwner(t *te
 		if len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.NoAcceptanceCheckReason) {
 			t.Errorf("the comments of #6 = %+v, want one with the reason", comments)
 		}
-		messages := sc.messagesExceptQ4()
+		messages := sc.messagesExceptWaiting()
 		if len(messages) != 1 || !strings.Contains(messages[0], workflow.NoAcceptanceCheckReason) {
 			t.Errorf("notifications = %v, want one with the reason", messages)
 		}
@@ -178,7 +180,7 @@ func TestAccepting_ARestartRequestsTheCheckOnceMoreAndThenStopsForTheOwner(t *te
 // The start of the second request fails: the work directory cannot be
 // prepared. No Planner ran, so the state file does not count the request,
 // and the issue is not stopped. A later poll, whose start works, sends the
-// one second request; only after it does the issue stop for the Owner.
+// one second request; only after it does the issue stop for the Maintainer.
 func TestAccepting_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
 	sc, _ := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	path := filepath.Join(t.TempDir(), "state.json")
@@ -250,7 +252,7 @@ func TestAccepting_AQuotaLimitDoesNotUseUpTheSecondRequest(t *testing.T) {
 	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: acceptance check") {
 		t.Errorf("the request text is not an acceptance check:\n%s", text)
 	}
-	// The Planner left no comment again, so the issue stops for the Owner:
+	// The Planner left no comment again, so the issue stops for the Maintainer:
 	// the request after the limit was the one second request.
 	stopped := []string{githubtest.RequirementLabel, "cumin/status/awaiting-decision"}
 	if got := requirementLabels(t, sc); !slices.Equal(got, stopped) {
@@ -349,14 +351,14 @@ func TestAccepting_AFailedLabelChangeOfTheStopRequestsNothingAtTheNextPoll(t *te
 	if comments := sc.fake.Comments(sc.repo, 6); len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.NoAcceptanceCheckReason) {
 		t.Errorf("the comments of #6 = %+v, want one with the reason", comments)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 {
 		t.Errorf("notifications = %v, want one", messages)
 	}
 }
 
 // A restart after the Planner wrote the comment: the issue moves to
 // cumin/status/awaiting-acceptance with one notification and no request.
-func TestAccepting_ARestartAfterTheCommentAsksTheOwnerToAccept(t *testing.T) {
+func TestAccepting_ARestartAfterTheCommentAsksTheMaintainerToAccept(t *testing.T) {
 	sc, closedAt := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	acceptanceComment(sc, closedAt.Add(30*time.Minute), plannerLogin)
 
@@ -371,15 +373,15 @@ func TestAccepting_ARestartAfterTheCommentAsksTheOwnerToAccept(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "ask for the acceptance") {
-		t.Errorf("notifications = %v, want one with R7", messages)
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "ask for the acceptance") {
+		t.Errorf("notifications = %v, want one that asks for the acceptance", messages)
 	}
 }
 
 // A restart after the Planner wrote a question: the issue goes to
 // cumin/status/awaiting-decision with one notification. cumin requests
 // nothing and writes no comment of its own.
-func TestAccepting_AQuestionOfThePlannerStopsForTheOwnerWithNoRequest(t *testing.T) {
+func TestAccepting_AQuestionOfThePlannerStopsForTheMaintainerWithNoRequest(t *testing.T) {
 	sc, closedAt := acceptingScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
 		Body: workflow.DecisionRequestHeading + ": which sign-in method does the login screen use?", Author: plannerLogin, AuthorIsBot: true, At: closedAt.Add(30 * time.Minute),
@@ -399,16 +401,17 @@ func TestAccepting_AQuestionOfThePlannerStopsForTheOwnerWithNoRequest(t *testing
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
 		t.Errorf("%d comments on #6, want only the question of the Planner", n)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question") {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question") {
 		t.Errorf("notifications = %v, want one about the question", messages)
 	}
 }
 
 // A comment from before the last close belongs to an earlier round, and a
-// comment of another author never counts: R4 asks. Neither run leaves a
+// comment of another author never counts: "request the acceptance check"
+// asks. Neither run leaves a
 // comment that counts, so cumin asks once more and then stops for the
-// Owner, in one run of cumin.
-func TestR4_AnOldCommentOrAnotherAuthorAsksAgain(t *testing.T) {
+// Maintainer, in one run of cumin.
+func TestAnOldAcceptanceCommentOrAnotherAuthorAsksAgain(t *testing.T) {
 	tests := []struct {
 		name   string
 		offset time.Duration
@@ -434,7 +437,7 @@ func TestR4_AnOldCommentOrAnotherAuthorAsksAgain(t *testing.T) {
 }
 
 // A requirement issue without a sub-issue is not checked.
-func TestR4_NoSubIssueNoCheck(t *testing.T) {
+func TestNoSubIssueNoAcceptanceCheck(t *testing.T) {
 	sc := newScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
 	sc.pollAndWait(t, sc.service())
@@ -444,9 +447,9 @@ func TestR4_NoSubIssueNoCheck(t *testing.T) {
 	}
 }
 
-// A blocked acceptance check stops the requirement issue for the Owner with
-// the row R4, and is not run again.
-func TestR4_BlockedStopsForTheOwner(t *testing.T) {
+// A blocked acceptance check stops the requirement issue for the Maintainer with
+// the step "stop the acceptance check", and is not run again.
+func TestABlockedAcceptanceCheckStopsForTheMaintainer(t *testing.T) {
 	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-blocked.jsonl"})
 	sc.pollAndWait(t, sc.service())
 
@@ -460,7 +463,7 @@ func TestR4_BlockedStopsForTheOwner(t *testing.T) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
 	if messages := sc.webhook.messagesSent(); len(messages) != 1 || !strings.Contains(messages[0], "stop the acceptance check") {
-		t.Errorf("notifications = %v, want one with R4", messages)
+		t.Errorf("notifications = %v, want one that stops the acceptance check", messages)
 	}
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
@@ -469,7 +472,7 @@ func TestR4_BlockedStopsForTheOwner(t *testing.T) {
 
 // The acceptance check reads the merged work: the work directory of the
 // split, made before the merge, is made again at the head of main.
-func TestR4_TheCheckReadsTheMergedWork(t *testing.T) {
+func TestTheAcceptanceCheckReadsTheMergedWork(t *testing.T) {
 	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl"})
 
 	// The split ran at the first commit of main.

@@ -308,7 +308,7 @@ func TestI3_TwoAbnormalEndsOfTheReviewerStopForTheOwner(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 {
 		t.Errorf("notifications = %v, want one", messages)
 	}
 }

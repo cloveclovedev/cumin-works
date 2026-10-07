@@ -160,7 +160,7 @@ func TestImplementing_ARestartWithNoPullRequestSendsOneSecondRequestThenStops(t 
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
 		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
 	}
 }
@@ -190,7 +190,7 @@ func TestImplementing_AQuestionAfterTheLabelStopsWithNoRequest(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 10)); n != 1 {
 		t.Errorf("%d comments on #10, want only the question", n)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question") {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question") {
 		t.Errorf("notifications = %v, want one about the question", messages)
 	}
 }
@@ -314,7 +314,7 @@ func TestImplementing_ARestartRightAfterACheckFixStillSendsOneSecondRequest(t *t
 
 // A work directory that cannot be prepared sends no request. The next poll
 // requests the implementation again, and the second failure stops the
-// implementation for the Owner with the reason. The polls that follow send
+// implementation for the Maintainer with the reason. The polls that follow send
 // nothing more.
 func TestImplementing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheIssue(t *testing.T) {
 	sc := newScene(t)
@@ -344,7 +344,7 @@ func TestImplementing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheIssue(t *testi
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
 		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
 	}
 }
@@ -376,7 +376,7 @@ func TestImplementing_ARestartDuringAConflictResolutionRequestsTheResolutionAgai
 }
 
 // The stop after a second abnormal end names the kind of that end, so that
-// the Owner knows where to look.
+// the Maintainer knows where to look.
 func TestImplementing_TheStopAfterASecondAbnormalEndNamesItsKind(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "is-error.jsonl"})
 	service := sc.service()

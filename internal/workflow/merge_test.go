@@ -131,7 +131,7 @@ func TestCore04_ARiskMediumPullRequestIsNotMerged(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
@@ -438,7 +438,7 @@ func TestI14_AResolutionThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 {
 		t.Errorf("%d notifications, want 1: %v", len(messages), messages)
 	}
 }
@@ -494,7 +494,7 @@ func (sc *scene) assertStoppedAt(t *testing.T, action workflow.ActionName, reaso
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
 		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 || !strings.Contains(messages[0], string(action)+": ") {
 		t.Errorf("notifications = %v, want one of %s", messages, action)
 	}

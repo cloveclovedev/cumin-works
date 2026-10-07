@@ -75,7 +75,7 @@ func assertStillReviewing(t *testing.T, sc *scene, service *workflow.Service, ri
 	if got := workflow.InProgressIssues(service); len(got) != 0 {
 		t.Errorf("issues in work = %v, want none: cumin keeps no step after the run", got)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 0 {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 0 {
 		t.Errorf("notifications = %v, want none", messages)
 	}
 }
@@ -155,7 +155,7 @@ func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *test
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
 		t.Errorf("notifications = %v, want one that asks for the merge decision", messages)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
@@ -222,7 +222,7 @@ func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPol
 	if n := sc.reviewRequests(); n != 1 {
 		t.Errorf("%d requests of the review of the Owner, want 1", n)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") {
 		t.Errorf("notifications = %v, want one that asks for the merge decision", messages)
 	}
 }
@@ -242,7 +242,7 @@ func TestReviewing_AFailedReadOfTheRequiredChecksChangesNothingAndTheNextPollDec
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 {
 		t.Errorf("notifications = %v, want one", messages)
 	}
 }
@@ -291,7 +291,7 @@ func TestReviewing_ARestartWithNoReviewSendsOneSecondRequestThenStops(t *testing
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, workflow.MissingReviewReason) {
 		t.Errorf("comments on #10 = %+v, want the reason once", comments)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 {
 		t.Errorf("notifications = %v, want one", messages)
 	}
 }
@@ -475,7 +475,7 @@ func TestReviewing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheReview(t *testing
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
 		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
 	}
 }
@@ -510,7 +510,7 @@ func TestReviewing_ABlockedResultWhoseCommentIsRefusedStillStopsTheReview(t *tes
 			t.Errorf("the log has no %s", want)
 		}
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 || !strings.Contains(messages[0], "cumin did not write the comment on the issue") {
 		t.Errorf("notifications = %v, want one that says that the comment was not written", messages)
 	}
@@ -603,7 +603,7 @@ func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #10 = %v, want %v", got, want)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], reason) {
 		t.Errorf("notifications = %v, want one with the reason %q", messages, reason)
 	}
 }

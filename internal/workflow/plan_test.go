@@ -16,9 +16,9 @@ import (
 
 const putRequirementLabelsPath = "/repos/example-org/example-repo/issues/6/labels"
 
-// newPlanScene is the scene of R1: the requirement issue #6 carries
+// newPlanScene is the scene of "request the split": the requirement issue #6 carries
 // cumin/status/ready, and its sub-issue #10 carries no status label, so
-// that I1 does not start it. The fake CLI answers as a Planner that
+// that "request the implementation" does not start it. The fake CLI answers as a Planner that
 // returned done.
 func newPlanScene(t *testing.T) *scene {
 	t.Helper()
@@ -28,11 +28,11 @@ func newPlanScene(t *testing.T) *scene {
 	return sc
 }
 
-// R1 (issue-states.md): a ready requirement issue moves to
+// "request the split": a ready requirement issue moves to
 // cumin/status/planning, and only then the Planner starts once, with the
 // request "plan", in a new session and a detached checkout of the default
 // branch.
-func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
+func TestAReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 	sc := newPlanScene(t)
 	service := sc.service()
 	for i := range 3 {
@@ -45,8 +45,8 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
 	}
-	// Two label changes: planning before the request (R1), and the review
-	// of the Owner after the run (R2).
+	// Two label changes: planning before the request ("request the split"), and the review
+	// of the Maintainer after the run ("ask for the plan review").
 	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != 2 {
 		t.Errorf("%d label changes of #6, want 2", n)
 	}
@@ -100,9 +100,9 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 	}
 }
 
-// R1 with Core-8 (cumin-core.md): after a restart, the requirement issue
+// A restart during the split (cumin-core.md): after a restart, the requirement issue
 // in cumin/status/planning is not requested again.
-func TestR1_RestartDoesNotRequestTwice(t *testing.T) {
+func TestRestartDoesNotRequestTheSplitTwice(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.pollAndWait(t, sc.service())
 	sc.pollAndWait(t, sc.service())
@@ -112,9 +112,9 @@ func TestR1_RestartDoesNotRequestTwice(t *testing.T) {
 	}
 }
 
-// R1 waits while a blocked-by issue of the requirement issue is open, and
+// "request the split" waits while a blocked-by issue of the requirement issue is open, and
 // starts after it closes.
-func TestR1_AnOpenBlockedByIssueWaits(t *testing.T) {
+func TestAnOpenBlockedByIssueOfTheRequirementIssueWaits(t *testing.T) {
 	sc := newPlanScene(t)
 	blocker := &githubtest.Issue{Number: 3, Title: "Another requirement"}
 	sc.fake.AddIssue(sc.repo, blocker)
@@ -140,7 +140,7 @@ func TestR1_AnOpenBlockedByIssueWaits(t *testing.T) {
 // running, counts against the limit of issues in progress
 // (max_issues_in_progress is 1 in the scene), so a ready sub-issue of
 // another requirement issue waits.
-func TestR1_PlanningFillsTheLimit(t *testing.T) {
+func TestPlanningFillsTheLimit(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/planning"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 7, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
@@ -159,7 +159,7 @@ func TestR1_PlanningFillsTheLimit(t *testing.T) {
 
 // The start request of the Planner carries the risk criteria of the
 // repository, which the instruction ends with.
-func TestR1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
+func TestTheInstructionOfThePlannerEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 	const criteria = "# Risk criteria of this repository\n\nEvery change is risk/high.\n"
 	sc := newPlanScene(t)
 	sc.fake.SetFile(sc.repo, ".cumin/risk-criteria.md", githubtest.File{Content: criteria})
@@ -171,7 +171,7 @@ func TestR1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 	}
 }
 
-// assertStoppedForTheMaintainer checks the stop step of R2 on the requirement
+// assertStoppedForTheMaintainer checks the stop step of "stop the split" on the requirement
 // issue #6: one comment that holds each of body, the label
 // cumin/status/awaiting-decision, and one notification that holds
 // each of message.
@@ -182,10 +182,10 @@ func assertStoppedForTheMaintainer(t *testing.T, sc *scene, body, message []stri
 
 // assertStoppedForTheMaintainerAfterAPoll is assertStoppedForTheMaintainer for a
 // test that polls after the stop: that poll may add the notice that
-// nothing can go on (Q4), which does not count.
+// nothing can go on ("tell that cumin waits"), which does not count.
 func assertStoppedForTheMaintainerAfterAPoll(t *testing.T, sc *scene, body, message []string) {
 	t.Helper()
-	assertStoppedWithMessages(t, sc, sc.messagesExceptQ4(), body, message)
+	assertStoppedWithMessages(t, sc, sc.messagesExceptWaiting(), body, message)
 }
 
 func assertStoppedWithMessages(t *testing.T, sc *scene, messages, body, message []string) {
@@ -213,10 +213,10 @@ func assertStoppedWithMessages(t *testing.T, sc *scene, messages, body, message 
 	}
 }
 
-// R2 (issue-states.md): after done, the requirement issue has one or more
+// "ask for the plan review": after done, the requirement issue has one or more
 // sub-issues, each with exactly one risk label. Then it moves to
-// cumin/status/awaiting-plan-review, and the Owner is notified once.
-func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
+// cumin/status/awaiting-plan-review, and the Maintainer is notified once.
+func TestASplitWithOneRiskLabelEachGoesToTheMaintainer(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Second", Labels: []string{"risk/high"}})
 	sc.pollAndWait(t, sc.service())
@@ -237,9 +237,9 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
 	}
-	// One poll, the read of the login of the Owner before the start, and
+	// One poll, the read of the login of the Issue Owner before the start, and
 	// after the run one read of the issue, of the account of its status
-	// label, of its label times, and of its comments: R2 judges on the
+	// label, of its label times, and of its comments: cumin judges on the
 	// facts of that moment.
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
 		t.Errorf("%d GraphQL requests, want 6", n)
@@ -250,9 +250,9 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 }
 
 // A split that fails the check is requested once more, in the same work
-// directory. The second failure stops the requirement issue for the Owner
+// directory. The second failure stops the requirement issue for the Maintainer
 // with the sentence of the failed check.
-func TestR2_NoSubIssueRequestsTheSplitAgainAndThenStopsForTheOwner(t *testing.T) {
+func TestNoSubIssueRequestsTheSplitAgainAndThenStopsForTheMaintainer(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
 	sc.pollAndWait(t, sc.service())
@@ -264,7 +264,7 @@ func TestR2_NoSubIssueRequestsTheSplitAgainAndThenStopsForTheOwner(t *testing.T)
 	assertStoppedForTheMaintainer(t, sc, []string{"## Stopped for a Maintainer", "Step: stop the split", reason, "Retried: once"}, []string{reason})
 }
 
-func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
+func TestARiskLabelMissingOrTwiceStopsForTheMaintainer(t *testing.T) {
 	tests := []struct {
 		name   string
 		labels []string
@@ -286,7 +286,7 @@ func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
 
 // A blocked result posts the blocked_reason of the Planner and is not run
 // again.
-func TestR2_BlockedStopsForTheOwnerWithoutARetry(t *testing.T) {
+func TestABlockedSplitStopsForTheMaintainerWithoutARetry(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-blocked.jsonl"})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	sc.pollAndWait(t, sc.service())
@@ -300,8 +300,8 @@ func TestR2_BlockedStopsForTheOwnerWithoutARetry(t *testing.T) {
 
 // An abnormal end is decided from the facts on GitHub, as every other end:
 // with no sub-issue, the same request runs once more; after the second run
-// the requirement issue stops for the Owner with what the split lacks.
-func TestR2_ASecondAbnormalEndStopsForTheOwner(t *testing.T) {
+// the requirement issue stops for the Maintainer with what the split lacks.
+func TestASecondAbnormalEndOfTheSplitStopsForTheMaintainer(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-invalid-result.jsonl"})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
@@ -318,9 +318,9 @@ func TestR2_ASecondAbnormalEndStopsForTheOwner(t *testing.T) {
 	}
 }
 
-// A step of the stop that fails does not stop the next one: the Owner still
+// A step of the stop that fails does not stop the next one: the Maintainer still
 // gets the label and the notification when the comment was not written.
-func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
+func TestAFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: subIssueTitle})
 	sc.fake.FailNext(http.MethodPost, "/repos/example-org/example-repo/issues/6/comments", http.StatusInternalServerError)
@@ -337,11 +337,12 @@ func TestR2_AFailedCommentStillChangesTheLabelAndNotifies(t *testing.T) {
 	}
 }
 
-// R2 with every sub-issue closed: the Owner resumed a requirement issue after
+// The end of the split with every sub-issue closed: the Maintainer resumed a
+// requirement issue after
 // a blocked acceptance check, and the Planner created nothing. At the end of
 // the split, the requirement issue goes to cumin/status/accepting without a
 // notification, and the Planner is asked for the acceptance check.
-func TestR2_EverySubIssueClosedGoesToTheAcceptanceCheckWithNoNotification(t *testing.T) {
+func TestEverySubIssueClosedGoesToTheAcceptanceCheckWithNoNotification(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: sceneNow.Add(-time.Hour), Labels: []string{"risk/low"}})
@@ -371,7 +372,7 @@ func TestR2_EverySubIssueClosedGoesToTheAcceptanceCheckWithNoNotification(t *tes
 
 // assertAcceptingWithNoNotification checks that #6 is in
 // cumin/status/accepting, that the newest request is an acceptance check,
-// and that the Owner got no notification and no comment.
+// and that the Maintainer got no notification and no comment.
 func assertAcceptingWithNoNotification(t *testing.T, sc *scene) {
 	t.Helper()
 	want := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
@@ -406,7 +407,7 @@ func planningScene(t *testing.T, options ...cliOptions) (*scene, time.Time) {
 // A restart in cumin/status/planning with a split that passes the check:
 // the issue moves to cumin/status/awaiting-plan-review with one
 // notification and no request.
-func TestPlanning_ARestartWithAVerifiedSplitAsksTheOwnerToReviewThePlan(t *testing.T) {
+func TestPlanning_ARestartWithAVerifiedSplitAsksTheMaintainerToReviewThePlan(t *testing.T) {
 	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 
@@ -424,7 +425,7 @@ func TestPlanning_ARestartWithAVerifiedSplitAsksTheOwnerToReviewThePlan(t *testi
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "needs a review") {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "needs a review") {
 		t.Errorf("notifications = %v, want one that says that the split needs a review", messages)
 	}
 }
@@ -433,7 +434,7 @@ func TestPlanning_ARestartWithAVerifiedSplitAsksTheOwnerToReviewThePlan(t *testi
 // requests the split once more. With still no sub-issue, the issue goes to
 // cumin/status/awaiting-decision with the reason, and a later restart
 // requests nothing.
-func TestPlanning_ARestartWithNoSubIssueRequestsTheSplitOnceMoreAndThenStopsForTheOwner(t *testing.T) {
+func TestPlanning_ARestartWithNoSubIssueRequestsTheSplitOnceMoreAndThenStopsForTheMaintainer(t *testing.T) {
 	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	path := filepath.Join(t.TempDir(), "state.json")
 
@@ -502,7 +503,7 @@ func TestPlanning_ARunThatHitTheQuotaLimitDoesNotUseUpTheSecondRequest(t *testin
 	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, "Request: plan") {
 		t.Errorf("the request text is not a split:\n%s", text)
 	}
-	// The Planner left no split again, so the issue stops for the Owner:
+	// The Planner left no split again, so the issue stops for the Maintainer:
 	// the request after the limit was the one second request.
 	stopped := []string{githubtest.RequirementLabel, workflow.LabelAwaitingDecision}
 	if got := requirementLabels(t, sc); !slices.Equal(got, stopped) {
@@ -534,7 +535,7 @@ func TestPlanning_ARestartAfterTheSecondRequestStopsWithNoRequest(t *testing.T) 
 // cumin/status/planning: the issue goes to cumin/status/awaiting-decision
 // with one notification. cumin requests nothing and writes no comment of
 // its own.
-func TestPlanning_AQuestionOfThePlannerStopsForTheOwnerWithNoRequest(t *testing.T) {
+func TestPlanning_AQuestionOfThePlannerStopsForTheMaintainerWithNoRequest(t *testing.T) {
 	sc, labeledAt := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	sc.fake.AddComment(sc.repo, 6, githubtest.Comment{
 		Body: workflow.DecisionRequestHeading + ": which sign-in method does the login screen use?", Author: plannerLogin, AuthorIsBot: true, At: labeledAt.Add(30 * time.Minute),
@@ -554,14 +555,14 @@ func TestPlanning_AQuestionOfThePlannerStopsForTheOwnerWithNoRequest(t *testing.
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 1 {
 		t.Errorf("%d comments on #6, want only the question of the Planner", n)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question during the split") {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "asked a question during the split") {
 		t.Errorf("notifications = %v, want one about the question", messages)
 	}
 }
 
 // A restart in cumin/status/planning with every sub-issue closed: the issue
 // goes to cumin/status/accepting, the Planner is asked for the acceptance
-// check once, and the Owner gets no notification.
+// check once, and the Maintainer gets no notification.
 func TestPlanning_EverySubIssueClosedGoesToAcceptingWithNoNotification(t *testing.T) {
 	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Closed: true, ClosedAt: sceneNow.Add(-2 * time.Hour), Labels: []string{"risk/low"}})
@@ -644,7 +645,7 @@ func afterPlannerRun(t *testing.T, sc *scene, fail func()) *workflow.Service {
 	return service
 }
 
-// assertSplitWaitsForTheMaintainer checks the end of R2 on a pass: the label
+// assertSplitWaitsForTheMaintainer checks the end of the split on a pass: the label
 // cumin/status/awaiting-plan-review, one notification, no comment, and no
 // issue in work.
 func assertSplitWaitsForTheMaintainer(t *testing.T, sc *scene, service *workflow.Service) {
@@ -656,7 +657,7 @@ func assertSplitWaitsForTheMaintainer(t *testing.T, sc *scene, service *workflow
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 || !strings.Contains(messages[0], "needs a review") {
 		t.Errorf("notifications = %v, want one that says that the split needs a review", messages)
 	}
@@ -672,7 +673,7 @@ func assertSplitWaitsForTheMaintainer(t *testing.T, sc *scene, service *workflow
 // nothing: the label stays, no comment is written, and the issue is not in
 // work. The next poll decides from the same facts, and the requirement
 // issue moves as if the read had not failed. No second Planner starts.
-func TestR2_AFailedReadAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
+func TestAFailedReadAfterTheSplitIsDecidedAtTheNextPoll(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	service := afterPlannerRun(t, sc, func() {
@@ -688,7 +689,7 @@ func TestR2_AFailedReadAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
 // A failed label change after done leaves the issue in
 // cumin/status/planning with no notification. The next poll changes the
 // label once and notifies once.
-func TestR2_AFailedLabelChangeAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
+func TestAFailedLabelChangeAfterTheSplitIsDecidedAtTheNextPoll(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	service := afterPlannerRun(t, sc, func() {
@@ -708,7 +709,7 @@ func TestR2_AFailedLabelChangeAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
 
 // assertSplitWaitsForThePoll checks that #6 waits for the next poll after
 // a Planner run whose end was not decided: the label stays, no comment is
-// written, the Owner is not notified, and the issue is not in work.
+// written, the Maintainer is not notified, and the issue is not in work.
 func assertSplitWaitsForThePoll(t *testing.T, sc *scene, service *workflow.Service) {
 	t.Helper()
 	want := []string{githubtest.RequirementLabel, workflow.LabelPlanning}
@@ -729,14 +730,14 @@ func assertSplitWaitsForThePoll(t *testing.T, sc *scene, service *workflow.Servi
 // After blocked, the fake GitHub fails every try of the read before the
 // stop. cumin keeps nothing for a later step, so the question of the
 // Planner must not be lost: the log holds the whole blocked_reason, and the
-// Owner gets one notification that says so. The label stays, no comment is
+// Maintainer gets one notification that says so. The label stays, no comment is
 // written, and the issue is not in work. The next poll decides once from
 // the facts on GitHub, and no Planner runs again.
-func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
+func TestAFailedReadAfterABlockedSplitIsDecidedAtTheNextPoll(t *testing.T) {
 	// The blocked_reason has more than one line, so that the test tells the
 	// whole text from its first line.
 	sc := newScene(t, cliOptions{fixture: "planner-blocked-two-lines.jsonl", holds: true})
-	// No status label on the sub-issue, so that I1 does not start it.
+	// No status label on the sub-issue, so that "request the implementation" does not start it.
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	service := afterPlannerRun(t, sc, func() {
 		sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
@@ -759,7 +760,7 @@ func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
 			t.Errorf("the log has no %s:\n%s", want, sc.logs.String())
 		}
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 || !strings.Contains(messages[0], workflow.PlannerQuestionNotWrittenReason) || !strings.Contains(messages[0], "issue #6") {
 		t.Fatalf("notifications = %v, want one that says that the Planner asked a question and that the log holds the text", messages)
 	}
@@ -777,7 +778,7 @@ func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
 	if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 		t.Errorf("%d comments on #6, want none", n)
 	}
-	messages = sc.messagesExceptQ4()
+	messages = sc.messagesExceptWaiting()
 	if len(messages) != 2 || !strings.Contains(messages[1], "needs a review") {
 		t.Errorf("notifications = %v, want the one about the question and one that says that the split needs a review", messages)
 	}
@@ -791,10 +792,10 @@ func TestR2_AFailedReadAfterBlockedIsDecidedAtTheNextPoll(t *testing.T) {
 
 // The Planner run ends between the two reads of a poll: after the poll read
 // the snapshot, which still shows cumin/status/planning. The run decides its
-// own end, changes the label, and notifies the Owner. The poll read the set
+// own end, changes the label, and notifies the Maintainer. The poll read the set
 // of running agents before the snapshot, so the run still counts as
 // running: the poll decides nothing from the old label. The label changes
-// once, the Owner gets one notification, and no second request starts.
+// once, the Maintainer gets one notification, and no second request starts.
 func TestPlanning_ARunThatEndsDuringThePollIsNotDecidedTwice(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
@@ -829,7 +830,7 @@ func TestPlanning_ARunThatEndsDuringThePollIsNotDecidedTwice(t *testing.T) {
 // The start of the second request fails: the work directory cannot be
 // prepared. No Planner ran, so the state file does not count the request,
 // and the issue is not stopped. A later poll, whose start works, sends the
-// one second request; only after it does the issue stop for the Owner.
+// one second request; only after it does the issue stop for the Maintainer.
 func TestPlanning_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
 	sc, _ := planningScene(t, cliOptions{fixture: "planner-done.jsonl"})
 	path := filepath.Join(t.TempDir(), "state.json")

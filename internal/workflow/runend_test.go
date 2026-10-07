@@ -38,16 +38,16 @@ func (sc *scene) issueReads(number int) int {
 }
 
 // After an Implementer run, cumin reads only the issue of the run: once for
-// the verification (I2), and once more after it added the closing link. The
+// the verification of the pull request, and once more after it added the closing link. The
 // one poll query is the poll that started the run.
-func TestI2_TheEndOfAnImplementerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
+func TestTheEndOfAnImplementerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 
 	sc.pollAndWait(t, sc.service())
 
 	if !strings.Contains(sc.logs.String(), `"msg":"wait for the checks: verified the pull request"`) {
-		t.Fatal("the log does not say that I2 verified the pull request")
+		t.Fatal("the log does not say that cumin verified the pull request")
 	}
 	if n := sc.pollQueries(); n != 1 {
 		t.Errorf("%d poll queries, want 1 (the poll; none after the run)", n)
@@ -59,14 +59,14 @@ func TestI2_TheEndOfAnImplementerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 
 // After a Reviewer run and after the approval of the Reviewer, cumin reads
 // only the issue of the run, once: the same read decides the way out of
-// cumin/status/reviewing and the merge (I6).
-func TestI6_TheApprovalOfTheReviewerReadsOnlyTheIssueOfTheRun(t *testing.T) {
+// cumin/status/reviewing and the merge ("start the merge").
+func TestTheApprovalOfTheReviewerReadsOnlyTheIssueOfTheRun(t *testing.T) {
 	sc := approved(t, "risk/low")
 
 	sc.pollAndWait(t, sc.service())
 
 	if !strings.Contains(sc.logs.String(), `"msg":"start the merge: the Reviewer approved the head commit"`) {
-		t.Fatal("the log does not say that I6 started the merge")
+		t.Fatal("the log does not say that cumin started the merge")
 	}
 	if n := sc.pollQueries(); n != 1 {
 		t.Errorf("%d poll queries, want 1 (the poll; none after the run)", n)
@@ -77,8 +77,8 @@ func TestI6_TheApprovalOfTheReviewerReadsOnlyTheIssueOfTheRun(t *testing.T) {
 }
 
 // After a Planner run, cumin reads only the requirement issue of the run,
-// with its sub-issues (R2).
-func TestR2_TheEndOfAPlannerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
+// with its sub-issues.
+func TestTheEndOfAPlannerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 	sc := newPlanScene(t)
 
 	sc.pollAndWait(t, sc.service())
@@ -94,7 +94,7 @@ func TestR2_TheEndOfAPlannerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 	}
 }
 
-// closeRequirementIssue closes the requirement issue #6, as the Owner does
+// closeRequirementIssue closes the requirement issue #6, as the Maintainer does
 // on GitHub.
 func (sc *scene) closeRequirementIssue(t *testing.T) {
 	t.Helper()
@@ -108,7 +108,7 @@ func (sc *scene) closeRequirementIssue(t *testing.T) {
 // Implementer run gets no action at the end of the run: a poll would not
 // read its sub-issue, so the read of one issue does not either, and the
 // label stays.
-func TestI2_ARequirementIssueClosedDuringTheRunGetsNoAction(t *testing.T) {
+func TestARequirementIssueClosedDuringTheImplementerRunGetsNoAction(t *testing.T) {
 	sc := newScene(t, cliOptions{holds: true})
 	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
 	service := sc.service()
@@ -137,7 +137,7 @@ func TestI2_ARequirementIssueClosedDuringTheRunGetsNoAction(t *testing.T) {
 
 // The same for the approval of the Reviewer: a risk/low pull request is not
 // merged when the requirement issue closed during the Reviewer run.
-func TestI6_ARequirementIssueClosedDuringTheReviewerRunIsNotMerged(t *testing.T) {
+func TestARequirementIssueClosedDuringTheReviewerRunIsNotMerged(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}, holds: true})
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
@@ -166,8 +166,8 @@ func TestI6_ARequirementIssueClosedDuringTheReviewerRunIsNotMerged(t *testing.T)
 }
 
 // The same for the Planner: a requirement issue that closes during the
-// split keeps its label, and the Owner gets no notification.
-func TestR2_ARequirementIssueClosedDuringTheSplitGetsNoAction(t *testing.T) {
+// split keeps its label, and the Maintainer gets no notification.
+func TestARequirementIssueClosedDuringTheSplitGetsNoAction(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})

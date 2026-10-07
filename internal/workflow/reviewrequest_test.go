@@ -33,7 +33,7 @@ func assertWaitsForMaintainerWithOneNotification(t *testing.T, sc *scene) {
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
-	messages := sc.messagesExceptQ4()
+	messages := sc.messagesExceptWaiting()
 	if len(messages) != 1 || !strings.Contains(messages[0], "the merge needs a decision") || !strings.Contains(messages[0], "/pull/21") {
 		t.Errorf("notifications = %v, want one that asks for the merge decision and links #21", messages)
 	}

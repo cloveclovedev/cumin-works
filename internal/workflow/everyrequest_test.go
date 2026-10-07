@@ -37,7 +37,7 @@ type everyRequest struct {
 	// row then reaches it through the real end of that run in the fake CLI.
 	afterRun bool
 	// needsReadyOfMaintainer says that the decision gives the request only for
-	// a cumin/status/ready of the Owner. While cumin stops after the
+	// a cumin/status/ready of the Maintainer. While cumin stops after the
 	// current runs, the poll does not read who added that label, so the
 	// request waits before the check before the start, with no log line.
 	needsReadyOfMaintainer bool
@@ -167,7 +167,7 @@ var everyRequestRows = []everyRequest{
 		prepare: session,
 	},
 	{
-		request: "fix of the review of the Owner", logged: "owner review fix",
+		request: "fix of the review of the Maintainer", logged: "owner review fix",
 		call: "merge.go: fixMaintainerReview: owner review fix",
 		scene: func(t *testing.T, _ bool) *scene {
 			sc := awaitingMaintainer(t)

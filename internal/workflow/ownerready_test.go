@@ -161,7 +161,7 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 				if n := strings.Count(sc.logs.String(), "is not of a Maintainer"); n != 1 {
 					t.Errorf("%d log lines for one ready event across three polls, want 1:\n%s", n, sc.logs.String())
 				}
-				messages := sc.messagesExceptQ4()
+				messages := sc.messagesExceptWaiting()
 				if len(messages) != 1 || !strings.Contains(messages[0], s.row) || !strings.Contains(messages[0], "is not a person with write access") {
 					t.Errorf("messages = %q, want one of %s about the ready that is not of the Owner", messages, s.row)
 				}
@@ -433,7 +433,7 @@ func TestOwnerReady_AReadyOutsideTheEventsReadDoesNotTakeTheOwnerOfASubIssue(t *
 	if n := strings.Count(sc.logs.String(), "is not of a Maintainer"); n != 1 {
 		t.Errorf("%d log lines across three polls, want 1:\n%s", n, sc.logs.String())
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "could not find") {
+	if messages := sc.messagesExceptWaiting(); len(messages) != 1 || !strings.Contains(messages[0], "could not find") {
 		t.Errorf("messages = %q, want one that says that cumin found no ready event", messages)
 	}
 }

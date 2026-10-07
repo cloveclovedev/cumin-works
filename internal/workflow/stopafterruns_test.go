@@ -130,7 +130,7 @@ func TestStopAfterRuns_LetsTheRunEndAppliesItsNextStateAndStartsNothingNew(t *te
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
 	}
-	// A stop after the runs is not "nothing to do": the Owner asked for it.
+	// A stop after the runs is not "nothing to do": the Operator asked for it.
 	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
 		t.Errorf("notifications = %v, want none", messages)
 	}
@@ -380,9 +380,9 @@ func TestStopAfterRuns_AMergedPullRequestStillClosesItsIssue(t *testing.T) {
 
 // While cumin stops after the current runs, the steps that start no agent
 // still run. A failed required check at the limit of check fix requests
-// stops the issue for the Owner, with the label and the comment, and no
+// stops the issue for the Maintainer, with the label and the comment, and no
 // Implementer starts.
-func TestStopAfterRuns_AFailedCheckAtTheLimitStillStopsForTheOwner(t *testing.T) {
+func TestStopAfterRuns_AFailedCheckAtTheLimitStillStopsForTheMaintainer(t *testing.T) {
 	sc := newScene(t)
 	service := sc.service()
 	// 3 is max_check_fix_requests of the scene.
