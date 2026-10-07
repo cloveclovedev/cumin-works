@@ -104,7 +104,7 @@ func TestDefaultRiskCriteria_HoldsWhatTheRequirementsRelyOn(t *testing.T) {
 		"authentication", "cryptography", "session handling", "payments",
 		"external service", "public API", "`.cumin/`",
 		"When in doubt, take the higher one",
-		"The Owner decides the risk",
+		"A Maintainer decides the risk",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the built-in risk criteria does not say: %s", want)
