@@ -13,14 +13,14 @@ import (
 )
 
 const (
-	theOwner    = "the-owner"
-	olderCommit = "0000000000000000000000000000000000000000"
+	theMaintainer = "the-owner"
+	olderCommit   = "0000000000000000000000000000000000000000"
 )
 
-// awaitingOwner puts issue #10 in cumin/status/awaiting-merge-decision after
+// awaitingMaintainer puts issue #10 in cumin/status/awaiting-merge-decision after
 // I7, with risk/medium, the pull request #21 with one passed required
 // check, and the Owner as an admin of the repository.
-func awaitingOwner(t *testing.T, opts ...cliOptions) *scene {
+func awaitingMaintainer(t *testing.T, opts ...cliOptions) *scene {
 	t.Helper()
 	sc := newScene(t, opts...)
 	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
@@ -30,7 +30,7 @@ func awaitingOwner(t *testing.T, opts ...cliOptions) *scene {
 		// The reviews of the Owner in the tests are newer than this label.
 		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelAwaitingMergeDecision, At: sceneNow.Add(-10 * time.Minute)}},
 	})
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 	return sc
 }
 
@@ -54,9 +54,9 @@ func permissionReads(sc *scene) int {
 // and cumin-core merges the pull request once, across polls, then closes
 // the issue that GitHub left open.
 func TestI12_AnApprovalOfTheOwnerOnTheHeadIsMergedOnce(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
 	service := sc.service()
 
 	for range 4 {
@@ -92,7 +92,7 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 		setup func(sc *scene)
 	}{
 		{"an approval on an older commit", func(sc *scene) {
-			sc.review(theOwner, false, "APPROVED", olderCommit, 5)
+			sc.review(theMaintainer, false, "APPROVED", olderCommit, 5)
 		}},
 		{"an approval of a bot", func(sc *scene) {
 			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 5)
@@ -106,7 +106,7 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sc := awaitingOwner(t)
+			sc := awaitingMaintainer(t)
 			tc.setup(sc)
 			service := sc.service()
 
@@ -125,10 +125,10 @@ func TestI12_ApprovalsThatDoNotCountAreNotMerged(t *testing.T) {
 // An approval of the Owner after a comment of another person, and a comment
 // of the Owner after the approval, still count: comments decide nothing.
 func TestI12_ACommentOfTheOwnerKeepsTheApproval(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 10)
-	sc.review(theOwner, false, "COMMENTED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 10)
+	sc.review(theMaintainer, false, "COMMENTED", sc.remoteHead, 5)
 	service := sc.service()
 
 	sc.pollTimes(t, service, 3)
@@ -141,8 +141,8 @@ func TestI12_ACommentOfTheOwnerKeepsTheApproval(t *testing.T) {
 // Without a review of a person that decides on the head commit, cumin reads
 // no permission and no required checks.
 func TestI12_ThePermissionIsReadOnlyForACandidate(t *testing.T) {
-	sc := awaitingOwner(t)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", olderCommit, 5)
+	sc := awaitingMaintainer(t)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", olderCommit, 5)
 	service := sc.service()
 
 	if err := service.Poll(context.Background()); err != nil {
@@ -161,9 +161,9 @@ func TestI12_ThePermissionIsReadOnlyForACandidate(t *testing.T) {
 // The Owner approved, but a required check does not pass on the head
 // commit: cumin waits.
 func TestI12_TheMergeWaitsForTheRequiredChecks(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.repo.PullRequests[21].Checks = []githubtest.Check{{Name: "ci", Status: "IN_PROGRESS"}}
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
@@ -179,12 +179,12 @@ func TestI12_TheMergeWaitsForTheRequiredChecks(t *testing.T) {
 // The risk label is read from the issue at I12 too: not exactly one stops
 // the issue with the row I12.
 func TestI12_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
 		Labels: []string{"risk/medium", "risk/high", workflow.LabelAwaitingMergeDecision},
 	})
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
 	service := sc.service()
 
 	sc.pollAndWait(t, service)
@@ -202,7 +202,7 @@ func TestI12_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 func TestOwnerApproved_I12(t *testing.T) {
 	const head = "2222222222222222222222222222222222222222"
 	at := func(minutes int) time.Time { return time.Date(2026, 10, 1, 10, minutes, 0, 0, time.UTC) }
-	owners := map[string]bool{"owner": true, "owner-two": true, "app[bot]": true}
+	maintainers := map[string]bool{"owner": true, "owner-two": true, "app[bot]": true}
 	for _, tc := range []struct {
 		name    string
 		reviews []workflow.Review
@@ -223,8 +223,8 @@ func TestOwnerApproved_I12(t *testing.T) {
 		{"a bot never counts", []workflow.Review{{Author: "app[bot]", State: workflow.ReviewApproved, Commit: head, SubmittedAt: at(1)}}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := workflow.OwnerApproved(tc.reviews, head, owners); got != tc.want {
-				t.Errorf("OwnerApproved = %v, want %v", got, tc.want)
+			if got := workflow.MaintainerApproved(tc.reviews, head, maintainers); got != tc.want {
+				t.Errorf("MaintainerApproved = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -232,8 +232,8 @@ func TestOwnerApproved_I12(t *testing.T) {
 		permission, userType string
 		want                 bool
 	}{{"admin", "User", true}, {"write", "User", true}, {"read", "User", false}, {"none", "User", false}, {"write", "Bot", false}, {"admin", "Bot", false}} {
-		if got := workflow.IsOwner(tc.permission, tc.userType); got != tc.want {
-			t.Errorf("IsOwner(%q, %q) = %v, want %v", tc.permission, tc.userType, got, tc.want)
+		if got := workflow.IsMaintainer(tc.permission, tc.userType); got != tc.want {
+			t.Errorf("IsMaintainer(%q, %q) = %v, want %v", tc.permission, tc.userType, got, tc.want)
 		}
 	}
 }
@@ -241,7 +241,7 @@ func TestOwnerApproved_I12(t *testing.T) {
 // A candidate that is not an approval of an Owner does nothing, so Q4 still
 // tells the Owner once that cumin waits.
 func TestI12_ACandidateThatDoesNothingLeavesQ4ToNotify(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.review("someone", false, "APPROVED", sc.remoteHead, 5)
 	service := sc.service()
 
@@ -257,12 +257,12 @@ func TestI12_ACandidateThatDoesNothingLeavesQ4ToNotify(t *testing.T) {
 // A conflict of the merge of I12 goes to the Implementer as for I6. A
 // resolution that leaves the head stops the implementation for the Owner.
 func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.fake.SetPullRequestHeadCommitTime(sc.repo, 21, headBeforeTheLabel)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
 	service := sc.serviceWithSession(t)
 
 	sc.pollTimes(t, service, 3)
@@ -274,8 +274,8 @@ func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 	if !strings.Contains(text, "Request: conflict resolution") {
 		t.Error("the run was not a conflict resolution")
 	}
-	if !strings.Contains(text, ownerLoginLine) {
-		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
+	if !strings.Contains(text, issueOwnerLoginLine) {
+		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theMaintainer, text)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Step: stop the implementation") ||
@@ -288,16 +288,16 @@ func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 // no request and keeps cumin/status/merging, so the next poll sends the
 // merge again and requests the resolution.
 func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.fake.SetPullRequestConflict(sc.repo, 21)
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
 	service := sc.serviceWithSession(t)
 	// The first read of the permission is the one of the reviewer for I12,
 	// the second one is the same read for the conditions of the merge, and
 	// the third one is the read of the login of the Owner.
-	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission", 2, everyTry, http.StatusBadGateway)
+	sc.fake.FailTimes(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theMaintainer+"/permission", 2, everyTry, http.StatusBadGateway)
 
 	sc.pollAndWait(t, service)
 	_ = service.Poll(t.Context())
@@ -315,8 +315,8 @@ func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *t
 	if n := sc.agentRuns(t); n != 1 {
 		t.Fatalf("%d agent runs, want one resolution after the next poll", n)
 	}
-	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, ownerLoginLine) {
-		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
+	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, issueOwnerLoginLine) {
+		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theMaintainer, text)
 	}
 }
 
@@ -326,12 +326,12 @@ func TestI12_AFailedReadOfTheOwnerLoginAtAConflictIsTriedAgainAtTheNextPoll(t *t
 // review fix" in the session of the Implementer, across polls. The request
 // for changes also takes an earlier approval back, so nothing is merged.
 func TestI13_ARequestForChangesOfTheOwnerOnTheHeadSendsOneRequest(t *testing.T) {
-	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc := awaitingMaintainer(t, cliOptions{holds: true})
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 10)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 10)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 	sc.repo.PullRequests[21].Reviews[2].URL = "https://github.com/example-org/example-repo/pull/21#pullrequestreview-7"
-	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 	service := sc.serviceWithSession(t)
 	ctx := context.Background()
 
@@ -361,7 +361,7 @@ func TestI13_ARequestForChangesOfTheOwnerOnTheHeadSendsOneRequest(t *testing.T) 
 	requireIssueOfTheRun(t, text, 10, "implementation issue")
 	for _, want := range []string{"Request: owner review fix", "Pull request: #21",
 		"Review: https://github.com/example-org/example-repo/pull/21#pullrequestreview-7",
-		"Branch: cumin/10-add-the-login-screen", ownerLoginLine} {
+		"Branch: cumin/10-add-the-login-screen", issueOwnerLoginLine} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
 		}
@@ -385,7 +385,7 @@ func TestI13_RequestsForChangesThatDoNotCountSendNoRequest(t *testing.T) {
 		setup func(sc *scene)
 	}{
 		{"a request for changes on an older commit", func(sc *scene) {
-			sc.review(theOwner, false, "CHANGES_REQUESTED", olderCommit, 5)
+			sc.review(theMaintainer, false, "CHANGES_REQUESTED", olderCommit, 5)
 		}},
 		{"a request for changes of a bot", func(sc *scene) {
 			sc.review(implementerSlug, true, "CHANGES_REQUESTED", sc.remoteHead, 5)
@@ -398,11 +398,11 @@ func TestI13_RequestsForChangesThatDoNotCountSendNoRequest(t *testing.T) {
 			sc.review("writer-bot", false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 		}},
 		{"a comment-only review of the Owner", func(sc *scene) {
-			sc.review(theOwner, false, "COMMENTED", sc.remoteHead, 5)
+			sc.review(theMaintainer, false, "COMMENTED", sc.remoteHead, 5)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sc := awaitingOwner(t)
+			sc := awaitingMaintainer(t)
 			tc.setup(sc)
 			service := sc.service()
 
@@ -422,8 +422,8 @@ func TestI13_RequestsForChangesThatDoNotCountSendNoRequest(t *testing.T) {
 
 // A label that does not change sends no request; the next poll sends it.
 func TestI13_WithoutTheLabelChangeNoRequestIsSent(t *testing.T) {
-	sc := awaitingOwner(t)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc := awaitingMaintainer(t)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 	service := sc.service()
 	sc.fake.FailNext(http.MethodPut, issue10Path+"/labels", http.StatusBadGateway)
 
@@ -451,12 +451,12 @@ func TestI13_WithoutTheLabelChangeNoRequestIsSent(t *testing.T) {
 // APPROVE of the Reviewer.
 func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) {
 	// Run 1 is the fix, which pushes a new head; run 2 is the review.
-	sc := awaitingOwner(t, cliOptions{movesHeadOnRun: 1, reviews: []string{"NONE", "APPROVE"}})
+	sc := awaitingMaintainer(t, cliOptions{movesHeadOnRun: 1, reviews: []string{"NONE", "APPROVE"}})
 	oldHead := sc.remoteHead
 	// The Reviewer asked for changes once before it approved.
 	sc.review(implementerSlug, true, "CHANGES_REQUESTED", olderCommit, 30)
 	sc.review(implementerSlug, true, "APPROVED", oldHead, 20)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", oldHead, 5)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", oldHead, 5)
 	service := sc.serviceWithSession(t)
 
 	for range 3 {
@@ -493,7 +493,7 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 	}
 
 	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
-		Author: theOwner, State: "APPROVED", Commit: newHead, SubmittedAt: sceneNow.Add(time.Hour)})
+		Author: theMaintainer, State: "APPROVED", Commit: newHead, SubmittedAt: sceneNow.Add(time.Hour)})
 	sc.pollTimes(t, service, 2)
 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
@@ -512,9 +512,9 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 func TestI13_AnAnswerWithoutACommitSendsNoSecondRequestForTheSameReview(t *testing.T) {
 	const sentBack = `"msg":"send back for changes: a Maintainer requested changes; the issue goes back to the Implementer"`
 	// Run 1 is the answer, which pushes nothing; run 2 is the review.
-	sc := awaitingOwner(t, cliOptions{reviews: []string{"NONE", "APPROVE"}})
+	sc := awaitingMaintainer(t, cliOptions{reviews: []string{"NONE", "APPROVE"}})
 	head := sc.remoteHead
-	sc.review(theOwner, false, "CHANGES_REQUESTED", head, 5)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", head, 5)
 	service := sc.serviceWithSession(t)
 
 	for range 5 {
@@ -538,7 +538,7 @@ func TestI13_AnAnswerWithoutACommitSendsNoSecondRequestForTheSameReview(t *testi
 	}
 
 	sc.repo.PullRequests[21].Reviews = append(sc.repo.PullRequests[21].Reviews, githubtest.Review{
-		Author: theOwner, State: "CHANGES_REQUESTED", Commit: head, SubmittedAt: sceneNow.Add(time.Hour)})
+		Author: theMaintainer, State: "CHANGES_REQUESTED", Commit: head, SubmittedAt: sceneNow.Add(time.Hour)})
 	sc.pollAndWait(t, service)
 
 	if n := strings.Count(sc.logs.String(), sentBack); n != 2 {
@@ -552,13 +552,13 @@ func TestI13_AnAnswerWithoutACommitSendsNoSecondRequestForTheSameReview(t *testi
 // A comment and cumin/status/ready on the issue still start the Implementer
 // in a new session (I1), also when the Owner requested changes on the head.
 func TestI13_AReadyOfTheOwnerStillStartsTheImplementer(t *testing.T) {
-	sc := awaitingOwner(t)
+	sc := awaitingMaintainer(t)
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
 		Number: 10, Parent: 6, Title: subIssueTitle,
 		Labels:      []string{"risk/medium", workflow.LabelAwaitingMergeDecision, workflow.LabelReady},
-		LabelEvents: []githubtest.LabelEvent{readyBy(theOwner, 1)},
+		LabelEvents: []githubtest.LabelEvent{readyBy(theMaintainer, 1)},
 	})
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 	service := sc.serviceWithSession(t)
 
 	sc.pollAndWait(t, service)
@@ -578,7 +578,7 @@ func TestI13_AReadyOfTheOwnerStillStartsTheImplementer(t *testing.T) {
 func TestOwnerRequestedChanges_I13(t *testing.T) {
 	const head = "2222222222222222222222222222222222222222"
 	at := func(minutes int) time.Time { return time.Date(2026, 10, 1, 10, minutes, 0, 0, time.UTC) }
-	owners := map[string]bool{"owner": true, "owner-two": true, "app[bot]": true}
+	maintainers := map[string]bool{"owner": true, "owner-two": true, "app[bot]": true}
 	// The issue last got cumin/status/awaiting-merge-decision at minute 0,
 	// before the reviews of the table.
 	for _, tc := range []struct {
@@ -610,16 +610,16 @@ func TestOwnerRequestedChanges_I13(t *testing.T) {
 		{"a bot never counts", []workflow.Review{{Author: "app[bot]", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			review, ok := workflow.OwnerRequestedChanges(tc.reviews, head, owners, at(0))
+			review, ok := workflow.MaintainerRequestedChanges(tc.reviews, head, maintainers, at(0))
 			if ok != (tc.want != "") || review.URL != tc.want {
-				t.Errorf("OwnerRequestedChanges = %q, %v; want %q", review.URL, ok, tc.want)
+				t.Errorf("MaintainerRequestedChanges = %q, %v; want %q", review.URL, ok, tc.want)
 			}
 		})
 	}
 	t.Run("the time of the label is not known", func(t *testing.T) {
 		reviews := []workflow.Review{{Author: "owner", State: workflow.ReviewChangesRequested, Commit: head, SubmittedAt: at(1), URL: "review-1"}}
-		if review, ok := workflow.OwnerRequestedChanges(reviews, head, owners, time.Time{}); ok {
-			t.Errorf("OwnerRequestedChanges = %q, true; want no review without the time of the label", review.URL)
+		if review, ok := workflow.MaintainerRequestedChanges(reviews, head, maintainers, time.Time{}); ok {
+			t.Errorf("MaintainerRequestedChanges = %q, true; want no review without the time of the label", review.URL)
 		}
 	})
 }
@@ -630,10 +630,10 @@ func TestOwnerRequestedChanges_I13(t *testing.T) {
 // conflict resolution request resumes the Implementer session across
 // polls. cumin calls no merge.
 func TestI14_AConflictWhileTheOwnerDecidesSendsOneResolutionRequest(t *testing.T) {
-	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc := awaitingMaintainer(t, cliOptions{holds: true})
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
-	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 	service := sc.serviceWithSession(t)
 	ctx := context.Background()
 
@@ -664,7 +664,7 @@ func TestI14_AConflictWhileTheOwnerDecidesSendsOneResolutionRequest(t *testing.T
 	}
 	text := promptOf(t, args)
 	for _, want := range []string{"Request: conflict resolution", "Pull request: #21",
-		"The pull request #21 has merge conflicts with the default branch main", ownerLoginLine} {
+		"The pull request #21 has merge conflicts with the default branch main", issueOwnerLoginLine} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
 		}
@@ -683,7 +683,7 @@ func TestI14_AConflictWhileTheOwnerDecidesSendsOneResolutionRequest(t *testing.T
 func TestI14_UnknownAndMergeableLeaveTheIssueWaitingForTheOwner(t *testing.T) {
 	for _, mergeable := range []string{"UNKNOWN", "MERGEABLE"} {
 		t.Run(mergeable, func(t *testing.T) {
-			sc := awaitingOwner(t)
+			sc := awaitingMaintainer(t)
 			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 			sc.fake.SetPullRequestMergeable(sc.repo, 21, mergeable)
 			service := sc.serviceWithSession(t)
@@ -709,10 +709,10 @@ func TestI14_UnknownAndMergeableLeaveTheIssueWaitingForTheOwner(t *testing.T) {
 // I13: the poll sends the fix of the Owner's review, and no conflict
 // resolution of I14 beside it.
 func TestI14_ARequestForChangesOfTheOwnerOnAConflictingHeadGoesThroughI13(t *testing.T) {
-	sc := awaitingOwner(t, cliOptions{holds: true})
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc := awaitingMaintainer(t, cliOptions{holds: true})
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
 	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
-	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 	service := sc.serviceWithSession(t)
 
 	if err := service.Poll(context.Background()); err != nil {
@@ -737,11 +737,11 @@ func TestI14_ARequestForChangesOfTheOwnerOnAConflictingHeadGoesThroughI13(t *tes
 // not pass leaves I12 waiting, so I14 sends the conflict resolution at the
 // same poll: the checks of a conflicting pull request do not run again.
 func TestI14_AnApprovalThatWaitsForTheChecksOnAConflictingHeadSendsTheResolution(t *testing.T) {
-	sc := awaitingOwner(t, cliOptions{holds: true})
+	sc := awaitingMaintainer(t, cliOptions{holds: true})
 	sc.repo.PullRequests[21].Checks = []githubtest.Check{{Name: "ci", Status: "IN_PROGRESS"}}
-	sc.review(theOwner, false, "APPROVED", sc.remoteHead, 5)
+	sc.review(theMaintainer, false, "APPROVED", sc.remoteHead, 5)
 	sc.fake.SetPullRequestMergeable(sc.repo, 21, "CONFLICTING")
-	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 	service := sc.serviceWithSession(t)
 
 	if err := service.Poll(context.Background()); err != nil {

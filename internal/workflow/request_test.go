@@ -157,7 +157,7 @@ func TestCheckFixRequestText_I4(t *testing.T) {
 // request. It copies no comment: the Implementer reads them on GitHub.
 func TestOwnerReviewFixRequestText_I13(t *testing.T) {
 	const review = "https://github.com/example-org/example-repo/pull/21#pullrequestreview-7"
-	text := OwnerReviewFixRequestText("example-org/example-repo", 10, 21, "cumin/10-add-the-login-screen",
+	text := MaintainerReviewFixRequestText("example-org/example-repo", 10, 21, "cumin/10-add-the-login-screen",
 		"/work/example-org/example-repo/10-implementer", review)
 	if !strings.HasPrefix(text, "Request: owner review fix\n") {
 		t.Errorf("the request text does not start with the kind \"owner review fix\":\n%s", text)

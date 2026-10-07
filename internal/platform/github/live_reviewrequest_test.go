@@ -23,8 +23,8 @@ func TestLiveReviewRequestFacts(t *testing.T) {
 	l := newLive(t)
 	defer func() { t.Log("\n" + l.table()) }()
 
-	owner := os.Getenv("CUMIN_LIVE_OWNER")
-	if owner == "" {
+	maintainer := os.Getenv("CUMIN_LIVE_OWNER")
+	if maintainer == "" {
 		t.Fatal("set CUMIN_LIVE_OWNER to the login of a human account with admin or write permission on the sandbox")
 	}
 	core := l.token(t, "cumin-core")
@@ -39,8 +39,8 @@ func TestLiveReviewRequestFacts(t *testing.T) {
 	requestPath := fmt.Sprintf("/repos/{repo}/pulls/%d/requested_reviewers", pull.Number)
 
 	// Fact V1: the request for the Owner, with the token of cumin-core.
-	first := l.api(t, core, http.MethodPost, requestPath, map[string]any{"reviewers": []string{owner}})
-	count := l.requestedReviewers(t, core, pull.Number, owner)
+	first := l.api(t, core, http.MethodPost, requestPath, map[string]any{"reviewers": []string{maintainer}})
+	count := l.requestedReviewers(t, core, pull.Number, maintainer)
 	l.record("V1", "The cumin-core App requests the review of the Owner on a pull request of the Implementer App", "201, the pull request lists the login under `requested_reviewers`",
 		fmt.Sprintf("Status %d: %s. The login is listed %d time(s)", first.status, first.message(), count))
 	if first.status != http.StatusCreated || count != 1 {
@@ -48,8 +48,8 @@ func TestLiveReviewRequestFacts(t *testing.T) {
 	}
 
 	// Fact V2: the same request again.
-	second := l.api(t, core, http.MethodPost, requestPath, map[string]any{"reviewers": []string{owner}})
-	count = l.requestedReviewers(t, core, pull.Number, owner)
+	second := l.api(t, core, http.MethodPost, requestPath, map[string]any{"reviewers": []string{maintainer}})
+	count = l.requestedReviewers(t, core, pull.Number, maintainer)
 	l.record("V2", "The cumin-core App sends the same request a second time", "No failure, the login is listed once",
 		fmt.Sprintf("Status %d: %s. The login is listed %d time(s)", second.status, second.message(), count))
 	if second.status != http.StatusCreated || count != 1 {

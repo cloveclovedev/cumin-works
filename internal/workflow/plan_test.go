@@ -171,19 +171,19 @@ func TestR1_TheInstructionEndsWithTheRiskCriteriaOfTheRepository(t *testing.T) {
 	}
 }
 
-// assertStoppedForTheOwner checks the stop step of R2 on the requirement
+// assertStoppedForTheMaintainer checks the stop step of R2 on the requirement
 // issue #6: one comment that holds each of body, the label
 // cumin/status/awaiting-decision, and one notification that holds
 // each of message.
-func assertStoppedForTheOwner(t *testing.T, sc *scene, body, message []string) {
+func assertStoppedForTheMaintainer(t *testing.T, sc *scene, body, message []string) {
 	t.Helper()
 	assertStoppedWithMessages(t, sc, sc.webhook.messagesSent(), body, message)
 }
 
-// assertStoppedForTheOwnerAfterAPoll is assertStoppedForTheOwner for a
+// assertStoppedForTheMaintainerAfterAPoll is assertStoppedForTheMaintainer for a
 // test that polls after the stop: that poll may add the notice that
 // nothing can go on (Q4), which does not count.
-func assertStoppedForTheOwnerAfterAPoll(t *testing.T, sc *scene, body, message []string) {
+func assertStoppedForTheMaintainerAfterAPoll(t *testing.T, sc *scene, body, message []string) {
 	t.Helper()
 	assertStoppedWithMessages(t, sc, sc.messagesExceptQ4(), body, message)
 }
@@ -261,7 +261,7 @@ func TestR2_NoSubIssueRequestsTheSplitAgainAndThenStopsForTheOwner(t *testing.T)
 		t.Fatalf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwner(t, sc, []string{"## Stopped for a Maintainer", "Step: stop the split", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheMaintainer(t, sc, []string{"## Stopped for a Maintainer", "Step: stop the split", reason, "Retried: once"}, []string{reason})
 }
 
 func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
@@ -279,7 +279,7 @@ func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
 			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: tt.labels})
 			sc.pollAndWait(t, sc.service())
 
-			assertStoppedForTheOwner(t, sc, []string{"Step: stop the split", tt.reason}, []string{tt.reason})
+			assertStoppedForTheMaintainer(t, sc, []string{"Step: stop the split", tt.reason}, []string{tt.reason})
 		})
 	}
 }
@@ -292,7 +292,7 @@ func TestR2_BlockedStopsForTheOwnerWithoutARetry(t *testing.T) {
 	sc.pollAndWait(t, sc.service())
 
 	const question = "## Decision needed: which sign-in method does the login screen use?"
-	assertStoppedForTheOwner(t, sc, []string{question}, []string{question})
+	assertStoppedForTheMaintainer(t, sc, []string{question}, []string{question})
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs, want 1", n)
 	}
@@ -310,7 +310,7 @@ func TestR2_ASecondAbnormalEndStopsForTheOwner(t *testing.T) {
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want 2 (the request and one retry)", n)
 	}
-	assertStoppedForTheOwner(t, sc,
+	assertStoppedForTheMaintainer(t, sc,
 		[]string{"Step: stop the split", "this requirement issue has no sub-issue", "Retried: once", "Pull request: None"},
 		[]string{"this requirement issue has no sub-issue"})
 	if !strings.Contains(sc.logs.String(), `"msg":"request the split again: the split does not pass the check; the same request runs again in the same work directory"`) {
@@ -446,14 +446,14 @@ func TestPlanning_ARestartWithNoSubIssueRequestsTheSplitOnceMoreAndThenStopsForT
 		t.Errorf("the request text is not a plan:\n%s", text)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwner(t, sc, []string{"Step: stop the split", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheMaintainer(t, sc, []string{"Step: stop the split", reason, "Retried: once"}, []string{reason})
 
 	restarted := sc.serviceWithState(path)
 	sc.pollAndWait(t, restarted)
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs after one more restart, want still 1", n)
 	}
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Step: stop the split", reason}, []string{reason})
+	assertStoppedForTheMaintainerAfterAPoll(t, sc, []string{"Step: stop the split", reason}, []string{reason})
 	if got := restarted.State.Issue("example-org/example-repo", 6); got != (state.Issue{}) {
 		t.Errorf("the state of #6 = %+v, want none after the stop", got)
 	}
@@ -527,7 +527,7 @@ func TestPlanning_ARestartAfterTheSecondRequestStopsWithNoRequest(t *testing.T) 
 		t.Errorf("%d agent runs, want none", n)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Step: stop the split", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheMaintainerAfterAPoll(t, sc, []string{"Step: stop the split", reason, "Retried: once"}, []string{reason})
 }
 
 // A question of the Planner, written after the issue got
@@ -623,7 +623,7 @@ func TestPlanning_APollChangesNothingWhileThePlannerRuns(t *testing.T) {
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"risk/low"}})
 	sc.release(t)
 	service.Wait()
-	assertSplitWaitsForTheOwner(t, sc, service)
+	assertSplitWaitsForTheMaintainer(t, sc, service)
 }
 
 // afterPlannerRun runs the Planner of #6 to its result while the fake
@@ -644,10 +644,10 @@ func afterPlannerRun(t *testing.T, sc *scene, fail func()) *workflow.Service {
 	return service
 }
 
-// assertSplitWaitsForTheOwner checks the end of R2 on a pass: the label
+// assertSplitWaitsForTheMaintainer checks the end of R2 on a pass: the label
 // cumin/status/awaiting-plan-review, one notification, no comment, and no
 // issue in work.
-func assertSplitWaitsForTheOwner(t *testing.T, sc *scene, service *workflow.Service) {
+func assertSplitWaitsForTheMaintainer(t *testing.T, sc *scene, service *workflow.Service) {
 	t.Helper()
 	want := []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}
 	if got := sc.fake.Issue(sc.repo, 6).Labels; !slices.Equal(got, want) {
@@ -682,7 +682,7 @@ func TestR2_AFailedReadAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
 
 	sc.pollAndWait(t, service)
 
-	assertSplitWaitsForTheOwner(t, sc, service)
+	assertSplitWaitsForTheMaintainer(t, sc, service)
 }
 
 // A failed label change after done leaves the issue in
@@ -700,7 +700,7 @@ func TestR2_AFailedLabelChangeAfterTheRunIsDecidedAtTheNextPoll(t *testing.T) {
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 
-	assertSplitWaitsForTheOwner(t, sc, service)
+	assertSplitWaitsForTheMaintainer(t, sc, service)
 	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
 		t.Errorf("%d label changes of #6 by the polls, want 1", n-writes)
 	}
@@ -816,14 +816,14 @@ func TestPlanning_ARunThatEndsDuringThePollIsNotDecidedTwice(t *testing.T) {
 	}
 	service.Wait()
 
-	assertSplitWaitsForTheOwner(t, sc, service)
+	assertSplitWaitsForTheMaintainer(t, sc, service)
 	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != writes+1 {
 		t.Errorf("%d label changes of #6 after the run ended, want 1", n-writes)
 	}
 
 	// The next poll sees the new label and has nothing to decide.
 	sc.pollAndWait(t, service)
-	assertSplitWaitsForTheOwner(t, sc, service)
+	assertSplitWaitsForTheMaintainer(t, sc, service)
 }
 
 // The start of the second request fails: the work directory cannot be
@@ -859,7 +859,7 @@ func TestPlanning_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
 		t.Errorf("%d agent runs, want 1 (the second request)", n)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Step: stop the split", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheMaintainerAfterAPoll(t, sc, []string{"Step: stop the split", reason, "Retried: once"}, []string{reason})
 }
 
 // A blocked result whose stop wrote the comment and then failed to change

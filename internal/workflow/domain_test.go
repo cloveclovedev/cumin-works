@@ -145,13 +145,13 @@ func TestDecide_I1(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := decideReadyOfOwner(tt.snapshot, tt.maxInProgress, nil, nil, time.Time{}, 0)
+			got := decideReadyOfMaintainer(tt.snapshot, tt.maxInProgress, nil, nil, time.Time{}, 0)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
 			// The same snapshot in another order gives the same actions.
 			shuffled := shuffle(tt.snapshot)
-			if again := decideReadyOfOwner(shuffled, tt.maxInProgress, nil, nil, time.Time{}, 0); !slices.Equal(again, tt.want) {
+			if again := decideReadyOfMaintainer(shuffled, tt.maxInProgress, nil, nil, time.Time{}, 0); !slices.Equal(again, tt.want) {
 				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
 			}
 		})
@@ -228,11 +228,11 @@ func TestDecide_R1(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := decideReadyOfOwner(tt.snapshot, tt.maxInProgress, nil, nil, time.Time{}, 0)
+			got := decideReadyOfMaintainer(tt.snapshot, tt.maxInProgress, nil, nil, time.Time{}, 0)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
-			if again := decideReadyOfOwner(shuffle(tt.snapshot), tt.maxInProgress, nil, nil, time.Time{}, 0); !slices.Equal(again, tt.want) {
+			if again := decideReadyOfMaintainer(shuffle(tt.snapshot), tt.maxInProgress, nil, nil, time.Time{}, 0); !slices.Equal(again, tt.want) {
 				t.Errorf("Decide on the shuffled snapshot = %+v, want %+v", again, tt.want)
 			}
 		})
@@ -312,7 +312,7 @@ func TestDecide_R3AndR6(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := decideReadyOfOwner(Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}}, 0, nil, nil, time.Time{}, 0)
+			got := decideReadyOfMaintainer(Snapshot{RequirementIssues: []RequirementIssue{tt.requirement}}, 0, nil, nil, time.Time{}, 0)
 			if !slices.EqualFunc(got, tt.want, func(a, b Action) bool { return a == b }) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
@@ -325,12 +325,12 @@ func TestDecide_R3AndR6(t *testing.T) {
 func TestDecide_ClaimsWaitForTheLabelTimes(t *testing.T) {
 	requirement := RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelAwaitingPlanReview},
 		SubIssues: []SubIssue{{Number: 10, Labels: []string{LabelReady, "risk/low"}}}}
-	if got := decideReadyOfOwner(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
+	if got := decideReadyOfMaintainer(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
 		t.Errorf("Decide without the label times = %+v, want no action", got)
 	}
 	requirement.LabelTimesRead = true
 	want := []Action{Claim{Number: 10, RequirementIssue: 6}}
-	if got := decideReadyOfOwner(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil, time.Time{}, 0); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
+	if got := decideReadyOfMaintainer(Snapshot{RequirementIssues: []RequirementIssue{requirement}}, 1, nil, nil, time.Time{}, 0); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
 		t.Errorf("Decide with the label times = %+v, want %+v", got, want)
 	}
 }
@@ -388,7 +388,7 @@ func TestDecide_R4AndR7(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := decideReadyOfOwner(tt.snapshot, tt.room, nil, nil, time.Time{}, 0)
+			got := decideReadyOfMaintainer(tt.snapshot, tt.room, nil, nil, time.Time{}, 0)
 			if !slices.EqualFunc(got, tt.want, func(a, b Action) bool { return a == b }) {
 				t.Errorf("Decide = %+v, want %+v", got, tt.want)
 			}
@@ -412,7 +412,7 @@ func TestDecide_ReadyIssuesBeyondTheLimitDoNotLowerTheFreeSlots(t *testing.T) {
 		Running: map[int]bool{7: true, 10: true, 13: true},
 	}
 	starts := 0
-	for _, action := range decideReadyOfOwner(snapshot, 2, nil, nil, time.Time{}, 0) {
+	for _, action := range decideReadyOfMaintainer(snapshot, 2, nil, nil, time.Time{}, 0) {
 		switch action.(type) {
 		case Claim, Plan:
 			starts++
@@ -421,7 +421,7 @@ func TestDecide_ReadyIssuesBeyondTheLimitDoNotLowerTheFreeSlots(t *testing.T) {
 	if starts != 1 {
 		t.Errorf("%d starts, want 1: one slot of 2 is free, whatever the number of ready issues", starts)
 	}
-	if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
+	if got := decideReadyOfMaintainer(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
 		t.Errorf("Decide with a limit of 1 = %+v, want no action: the test would pass for a wrong reason", got)
 	}
 }
@@ -482,14 +482,14 @@ func TestDecide_I1SkipsAnOwnerTask(t *testing.T) {
 	ready := SubIssue{Number: 11, Labels: []string{LabelReady, "risk/low"}}
 	snapshot := Snapshot{RequirementIssues: []RequirementIssue{{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: []SubIssue{ownerTask, ready}}}}
 	want := []Action{Claim{Number: 11, RequirementIssue: 6}}
-	if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
+	if got := decideReadyOfMaintainer(snapshot, 1, nil, nil, time.Time{}, 0); !slices.EqualFunc(got, want, func(a, b Action) bool { return a == b }) {
 		t.Errorf("Decide = %+v, want %+v", got, want)
 	}
 
 	// An issue that became an owner task while an agent works on it still
 	// counts by its status label: an agent may run or start for it (I4).
 	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{LabelOwnerTask, LabelChecking, "risk/high"}
-	if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
+	if got := decideReadyOfMaintainer(snapshot, 1, nil, nil, time.Time{}, 0); len(got) != 0 {
 		t.Errorf("Decide with an owner task in checking = %+v, want no claim", got)
 	}
 }
@@ -840,7 +840,7 @@ func TestDecide_I11(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got []Action
-			for _, action := range decideReadyOfOwner(tt.snapshot, 1, nil, nil, time.Time{}, 0) {
+			for _, action := range decideReadyOfMaintainer(tt.snapshot, 1, nil, nil, time.Time{}, 0) {
 				if _, ok := action.(CopyLabels); ok {
 					got = append(got, action)
 				}
@@ -875,10 +875,10 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 		}
 		return n
 	}
-	if n := claims(decideReadyOfOwner(sub([]string{LabelAwaitingMergeDecision, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil, nil, time.Time{}, 0)); n != 0 {
+	if n := claims(decideReadyOfMaintainer(sub([]string{LabelAwaitingMergeDecision, "risk/low"}, []string{LabelReady, "risk/low"}), 1, nil, nil, time.Time{}, 0)); n != 0 {
 		t.Errorf("%d claims for a ready pull request of an issue in review, want 0", n)
 	}
-	if n := claims(decideReadyOfOwner(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingDecision}), 1, nil, nil, time.Time{}, 0)); n != 1 {
+	if n := claims(decideReadyOfMaintainer(sub([]string{LabelReady, "risk/low"}, []string{LabelAwaitingDecision}), 1, nil, nil, time.Time{}, 0)); n != 1 {
 		t.Errorf("%d claims for a ready issue, want 1", n)
 	}
 }
@@ -952,8 +952,8 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.snapshot.MovesWithoutOwner(); got != tt.want {
-				t.Errorf("MovesWithoutOwner = %v, want %v", got, tt.want)
+			if got := tt.snapshot.MovesWithoutMaintainer(); got != tt.want {
+				t.Errorf("MovesWithoutMaintainer = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -964,16 +964,16 @@ func TestSnapshot_MovesWithoutOwner(t *testing.T) {
 // cumin/status/awaiting-merge-decision, not running, with a CHANGES_REQUESTED
 // review of a person on the head commit, submitted after
 // cumin/status/awaiting-merge-decision was last added to the issue. Who of the
-// reviewers is an Owner is decided later (OwnerRequestedChanges).
+// reviewers is an Owner is decided later (MaintainerRequestedChanges).
 func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t *testing.T) {
 	t.Parallel()
 	const head, old = "2222222222222222222222222222222222222222", "1111111111111111111111111111111111111111"
-	awaitingOwnerAt := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
+	awaitingMaintainerAt := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
 	review := func(author string, state ReviewState, commit string) Review {
-		return Review{Author: author, State: state, Commit: commit, SubmittedAt: awaitingOwnerAt.Add(time.Minute)}
+		return Review{Author: author, State: state, Commit: commit, SubmittedAt: awaitingMaintainerAt.Add(time.Minute)}
 	}
 	answered := review("owner", ReviewChangesRequested, head)
-	answered.SubmittedAt = awaitingOwnerAt.Add(-time.Minute)
+	answered.SubmittedAt = awaitingMaintainerAt.Add(-time.Minute)
 	for _, tc := range []struct {
 		name    string
 		labels  []string
@@ -987,12 +987,12 @@ func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t 
 	}{
 		{name: "a request for changes of a person on the head", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{review("owner", ReviewChangesRequested, head), review("other", ReviewApproved, old)},
-			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"other", "owner"}}}},
+			want:    []Action{FixMaintainerReview{Number: 10, PullRequest: 21, Reviewers: []string{"other", "owner"}}}},
 		{name: "a request for changes from before the issue last waited for the Owner", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{answered}},
 		{name: "a new request for changes after an answered one", labels: []string{LabelAwaitingMergeDecision},
 			reviews: []Review{answered, review("owner", ReviewChangesRequested, head)},
-			want:    []Action{FixOwnerReview{Number: 10, PullRequest: 21, Reviewers: []string{"owner"}}}},
+			want:    []Action{FixMaintainerReview{Number: 10, PullRequest: 21, Reviewers: []string{"owner"}}}},
 		{name: "the label times are not read", labels: []string{LabelAwaitingMergeDecision}, timesNotRead: true,
 			reviews: []Review{review("owner", ReviewChangesRequested, head)}},
 		{name: "a request for changes on an older commit", labels: []string{LabelAwaitingMergeDecision},
@@ -1012,12 +1012,12 @@ func TestDecide_ARequestForChangesOfAPersonOnTheHeadIsACandidateOfTheSendBack(t 
 			snapshot := Snapshot{
 				RequirementIssues: []RequirementIssue{{
 					Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, LabelTimesRead: !tc.timesNotRead,
-					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels, AwaitingMergeDecisionAt: awaitingOwnerAt,
+					SubIssues: []SubIssue{{Number: 10, Closed: tc.closed, Labels: tc.labels, AwaitingMergeDecisionAt: awaitingMaintainerAt,
 						PullRequests: []PullRequest{{Number: 21, HeadCommit: head, Labels: tc.labels, Reviews: tc.reviews}}}},
 				}},
 				Running: map[int]bool{10: tc.running},
 			}
-			if got := decideReadyOfOwner(snapshot, 1, nil, nil, time.Time{}, 0); !reflect.DeepEqual(got, tc.want) {
+			if got := decideReadyOfMaintainer(snapshot, 1, nil, nil, time.Time{}, 0); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("Decide = %#v, want %#v", got, tc.want)
 			}
 		})
@@ -1345,7 +1345,7 @@ func TestReviewEnd_DecidesFromTheFacts(t *testing.T) {
 		{"the second request of the cause returned done and left no explanation", reviewingSub(ReviewingFacts{CauseRequested: true, CauseRequestedAgain: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
 			StopReview{Number: 10, Action: ActionStopAtTheRoundLimit, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
 		{"approved with risk/medium", reviewingSub(ReviewingFacts{}, Review{State: ReviewApproved, Commit: "new"}),
-			AskOwnerToMerge{Number: 10, PullRequest: 21}},
+			AskMaintainerToMerge{Number: 10, PullRequest: 21}},
 		{"approved, a required check does not pass", reviewingSub(ReviewingFacts{Required: []RequiredCheck{{Name: "ci"}}}, Review{State: ReviewApproved, Commit: "new"}),
 			BackToChecks{Number: 10}},
 		{"the head commit moved", reviewingSub(ReviewingFacts{RequestedHead: "old"}, Review{State: ReviewChangesRequested, Commit: "old"}),

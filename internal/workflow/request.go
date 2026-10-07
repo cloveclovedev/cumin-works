@@ -252,7 +252,7 @@ The Reviewer requested changes on the pull request #%[5]d. Read that review and 
 `, repository, number, branch, workDir, pullRequest, review)
 }
 
-// OwnerReviewFixRequestText returns the request text of the kind "owner
+// MaintainerReviewFixRequestText returns the request text of the kind "owner
 // review fix" (implementer.md, the request kinds): the Owner requested
 // changes on the head commit of a pull request that waits for the merge
 // decision (I13). The request resumes the Implementer session and names the
@@ -261,7 +261,7 @@ The Reviewer requested changes on the pull request #%[5]d. Read that review and 
 // Implementer replies to them. The body of the review has no comment
 // thread, so the text asks for one comment on the pull request as its
 // answer.
-func OwnerReviewFixRequestText(repository string, number, pullRequest int, branch, workDir, review string) string {
+func MaintainerReviewFixRequestText(repository string, number, pullRequest int, branch, workDir, review string) string {
 	return fmt.Sprintf(`Request: owner review fix
 Repository: %[1]s
 Implementation issue: #%[2]d

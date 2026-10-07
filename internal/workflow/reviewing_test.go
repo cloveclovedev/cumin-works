@@ -138,7 +138,7 @@ func TestReviewing_ARestartAfterAChangeRequestSendsExactlyOneFixRequest(t *testi
 // the Owner and one notification. The polls that follow send nothing more.
 func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
-	sc.readyByTheOwner()
+	sc.readyByTheMaintainer()
 	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/medium")
 	if n := sc.reviewRequests(); n != 0 {
@@ -176,7 +176,7 @@ func TestReviewing_ARestartAfterAnApprovalWithRiskMediumAsksTheOwnerOnce(t *test
 // one review request, and one notification.
 func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPollAsksTheOwner(t *testing.T) {
 	sc, stopped := reviewerScene(t, cliOptions{reviews: []string{"APPROVE"}}, "risk/medium")
-	sc.readyByTheOwner()
+	sc.readyByTheMaintainer()
 	afterReviewerRun(t, sc, stopped, failEveryRead(sc))
 	assertStillReviewing(t, sc, stopped, "risk/medium")
 	awaitingLabel := func() int {
@@ -192,7 +192,7 @@ func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPol
 	restarted := sc.restartedWith(stopped)
 	// The read of the permission of the actor of cumin/status/ready is the
 	// last step of the read of the login of the Owner.
-	permissionPath := "/repos/example-org/example-repo/collaborators/" + theOwner + "/permission"
+	permissionPath := "/repos/example-org/example-repo/collaborators/" + theMaintainer + "/permission"
 	sc.fake.FailTimes(http.MethodGet, permissionPath, 0, everyTry, http.StatusBadGateway)
 	_ = pollAtMinute(sc, restarted, 1)
 

@@ -204,8 +204,8 @@ func TestI6_AFailedMergeStopsTheIssueOnce(t *testing.T) {
 // (failure column of I6).
 func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	sc := conflicting(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 2})
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 	service := sc.serviceWithSession(t)
 
 	sc.pollTimes(t, service, 2)
@@ -215,7 +215,7 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 	}
 	// The login of the Owner is read for the review, and again for the
 	// resolution request, which a later poll sends.
-	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theOwner+"/permission"); n != 2 {
+	if n := sc.fake.CountRequests(http.MethodGet, "/repos/example-org/example-repo/collaborators/"+theMaintainer+"/permission"); n != 2 {
 		t.Errorf("%d reads of the permission of the Owner, want 2", n)
 	}
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 1 {
@@ -226,8 +226,8 @@ func TestI6_AConflictSendsOneResolutionRequestInTheSameSession(t *testing.T) {
 		t.Errorf("--resume = %q, want the Implementer session", got)
 	}
 	text := promptOf(t, args)
-	if !strings.Contains(text, ownerLoginLine) {
-		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
+	if !strings.Contains(text, issueOwnerLoginLine) {
+		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theMaintainer, text)
 	}
 	for _, want := range []string{"Request: conflict resolution", "Pull request: #21", "Branch: cumin/10-add-the-login-screen",
 		"Default branch: main", "git merge origin/main", "do not force-push"} {
@@ -322,8 +322,8 @@ func conflictingBeforeChecks(t *testing.T, opts cliOptions, mergeable string) *s
 // I2 runs and the issue returns to cumin/status/checking.
 func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChecks(t *testing.T) {
 	sc := conflictingBeforeChecks(t, cliOptions{movesHeadOnRun: 1}, "CONFLICTING")
-	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theOwner, 30)}
-	sc.fake.SetPermission(theOwner, "admin", "User")
+	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 30)}
+	sc.fake.SetPermission(theMaintainer, "admin", "User")
 	service := sc.serviceWithSession(t)
 
 	sc.pollAndWait(t, service)
@@ -346,7 +346,7 @@ func TestI14_AConflictingPullRequestSendsOneResolutionRequestAndReturnsToTheChec
 	text := promptOf(t, args)
 	for _, want := range []string{"Request: conflict resolution", "Pull request: #21", "Branch: cumin/10-add-the-login-screen",
 		"Default branch: main", "The pull request #21 has merge conflicts with the default branch main", "git merge origin/main",
-		"do not force-push", ownerLoginLine} {
+		"do not force-push", issueOwnerLoginLine} {
 		if !strings.Contains(text, want) {
 			t.Errorf("the request text has no %q:\n%s", want, text)
 		}
@@ -513,8 +513,8 @@ func TestDecideMerge_I6_I7(t *testing.T) {
 		want   workflow.MergeDecision
 	}{
 		{"risk/low merges", []string{"cumin/status/reviewing", "risk/low"}, passed, workflow.MergeNow},
-		{"risk/medium asks the Owner", []string{"risk/medium"}, passed, workflow.MergeAskOwner},
-		{"risk/high asks the Owner", []string{"risk/high"}, passed, workflow.MergeAskOwner},
+		{"risk/medium asks the Owner", []string{"risk/medium"}, passed, workflow.MergeAskMaintainer},
+		{"risk/high asks the Owner", []string{"risk/high"}, passed, workflow.MergeAskMaintainer},
 		{"no risk label", []string{"cumin/status/reviewing"}, passed, workflow.MergeNoRiskLabel},
 		{"two risk labels", []string{"risk/low", "risk/medium"}, passed, workflow.MergeTwoRiskLabels},
 		{"a wrong risk label stops before the checks", nil, failed, workflow.MergeNoRiskLabel},

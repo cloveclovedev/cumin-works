@@ -623,7 +623,7 @@ func TestStart_AResumedSessionReceivesANewEndTime(t *testing.T) {
 
 	s.Now = fixedClock(time.Date(2026, 10, 3, 2, 30, 0, 0, time.UTC))
 	request := startRequest(t)
-	request.Facts = Facts{IssueNumber: 12, IssueKind: IssueKindImplementation, OwnerLogin: "example-owner"}
+	request.Facts = Facts{IssueNumber: 12, IssueKind: IssueKindImplementation, IssueOwnerLogin: "example-owner"}
 	request.SessionID = first.SessionID
 	if _, err := s.Start(context.Background(), request); err != nil {
 		t.Fatalf("Start of the resumed session: %v", err)

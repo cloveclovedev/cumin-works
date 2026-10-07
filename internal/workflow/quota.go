@@ -328,7 +328,7 @@ func limitReason(window quota.Name) string {
 // silence the stop for every repository. The issue whose start or run met the limit is the link. It
 // reports false when the channel failed.
 func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) bool {
-	return s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
+	return s.notify(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionStopAgentStarts),
 		Reason:     reason,
 		Repository: target.Repository.String(),

@@ -50,9 +50,9 @@ func pollAt(t *testing.T, sc *scene, service *workflow.Service, minutes int, nam
 	return queries(sc, name) - before
 }
 
-// waitsForOwner makes the sub-issue of the scene wait for the Owner, so
+// waitsForMaintainer makes the sub-issue of the scene wait for the Owner, so
 // that the repository has no issue in work.
-func waitsForOwner(t *testing.T, sc *scene) {
+func waitsForMaintainer(t *testing.T, sc *scene) {
 	t.Helper()
 	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelAwaitingDecision, "risk/low"}); err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestIdlePoll_ARepositoryInWorkIsPolledAtEveryPollInterval(t *testing.T) {
 // poll interval, and sends no GraphQL query between.
 func TestIdlePoll_ARepositoryWithNoIssueInWorkIsPolledOnceInEachIdlePollInterval(t *testing.T) {
 	sc := newScene(t)
-	waitsForOwner(t, sc)
+	waitsForMaintainer(t, sc)
 	service := idlePollService(sc)
 
 	for minute := range 11 {
@@ -99,7 +99,7 @@ func TestIdlePoll_ARepositoryWithNoIssueInWorkIsPolledOnceInEachIdlePollInterval
 // the next poll comes after the poll interval.
 func TestIdlePoll_AfterANewReadyTheNextPollComesAfterThePollInterval(t *testing.T) {
 	sc := newScene(t, cliOptions{sleeps: true})
-	waitsForOwner(t, sc)
+	waitsForMaintainer(t, sc)
 	service := idlePollService(sc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -229,7 +229,7 @@ func TestIdlePoll_TheEndOfAnAgentRunIsReadAtTheNextPoll(t *testing.T) {
 // poll reads the repository, and cumin exits after a poll with no run.
 func TestIdlePoll_AStopAfterTheRunsStillReadsAnIdleRepository(t *testing.T) {
 	sc := newScene(t)
-	waitsForOwner(t, sc)
+	waitsForMaintainer(t, sc)
 	service := sc.service()
 	service.PollInterval = 10 * time.Millisecond
 	service.IdlePollInterval = time.Hour

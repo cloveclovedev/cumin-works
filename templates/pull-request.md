@@ -100,7 +100,7 @@ ok  (every package)
 </details>
 
 ## Notes for the reviewer
-- Start at `stopForOwner` in `internal/workflow/stop.go`. Revert: the path only logged before.
+- Start at `stopForMaintainer` in `internal/workflow/stop.go`. Revert: the path only logged before.
 
 ## Documentation
 - `designs/poll.md` (the way back to the Owner), `designs/poll-verify.puml` and its SVG, `designs/code-layout.md`, `templates/stop-note.md` (new).

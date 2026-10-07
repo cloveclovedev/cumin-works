@@ -303,10 +303,10 @@ func TestCore34_AnIssueThatWaitsOnlyForTheQuotaIsNotWaiting(t *testing.T) {
 			return sc, sc.service()
 		},
 		"a change request of the Owner under awaiting-merge-decision": func(t *testing.T) (*scene, *workflow.Service) {
-			sc := awaitingOwner(t, cliOptions{})
+			sc := awaitingMaintainer(t, cliOptions{})
 			sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-			sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
-			sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+			sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+			sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 			sc.atAQuotaLimit(t)
 			return sc, sc.serviceWithSession(t)
 		},
@@ -342,10 +342,10 @@ func TestCore34_AnIssueThatWaitsOnlyForTheQuotaIsNotWaiting(t *testing.T) {
 // limit; then only the Owner can move the issue on, and the Owner hears
 // once.
 func TestQ4_AQuotaWaitThatEndedNotifiesOnce(t *testing.T) {
-	sc := awaitingOwner(t, cliOptions{})
+	sc := awaitingMaintainer(t, cliOptions{})
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
-	sc.review(theOwner, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
-	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theOwner, 60)}, sc.repo.Issues[10].LabelEvents...)
+	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
+	sc.repo.Issues[10].LabelEvents = append([]githubtest.LabelEvent{readyBy(theMaintainer, 60)}, sc.repo.Issues[10].LabelEvents...)
 	sc.atAQuotaLimit(t)
 	service := sc.serviceWithSession(t)
 	sc.pollTimes(t, service, 2)

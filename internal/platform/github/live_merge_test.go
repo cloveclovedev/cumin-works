@@ -23,8 +23,8 @@ func TestLiveMergeFacts(t *testing.T) {
 	l := newLive(t)
 	defer func() { t.Log("\n" + l.table()) }()
 
-	owner := os.Getenv("CUMIN_LIVE_OWNER")
-	if owner == "" {
+	maintainer := os.Getenv("CUMIN_LIVE_OWNER")
+	if maintainer == "" {
 		t.Fatal("set CUMIN_LIVE_OWNER to the login of a human account with admin or write permission on the sandbox")
 	}
 	core := l.token(t, "cumin-core")
@@ -38,9 +38,9 @@ func TestLiveMergeFacts(t *testing.T) {
 	// that is not a collaborator must never read as an Owner.
 	for i, account := range []struct {
 		login, what, userType string
-		isOwner               bool
+		isMaintainer          bool
 	}{
-		{owner, "the Owner", "User", true},
+		{maintainer, "the Owner", "User", true},
 		{botLogin, "the bot of the Implementer App", "Bot", false},
 		{"octocat", "an account that is not a collaborator", "User", false},
 	} {
@@ -63,7 +63,7 @@ func TestLiveMergeFacts(t *testing.T) {
 		l.record(fmt.Sprintf("M1.%d", i+1), "`collaborators/{username}/permission` with the token of cumin-core, for "+account.what, "Readable; the Owner is admin or write",
 			fmt.Sprintf("Status %d: %s. `permission` `%s`, `role_name` `%s`, `user.type` `%s`", resp.status, resp.message(), body.Permission, body.RoleName, userType))
 		writes := body.Permission == "admin" || body.Permission == "write"
-		if resp.status != http.StatusOK || userType != account.userType || writes != account.isOwner {
+		if resp.status != http.StatusOK || userType != account.userType || writes != account.isMaintainer {
 			t.Errorf("fact M1.%d: %s: status %d, permission %q, type %q", i+1, account.what, resp.status, body.Permission, userType)
 		}
 	}

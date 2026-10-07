@@ -37,19 +37,19 @@ func (s *Service) mergeWait() time.Duration {
 	return DefaultMergeWait
 }
 
-// askOwnerToMerge applies "ask the Owner to decide the merge" (I7): the
+// askMaintainerToMerge applies "ask the Owner to decide the merge" (I7): the
 // label cumin/status/awaiting-merge-decision, then the request of the
 // review of the Owner, then one notification that links the pull request.
-// ownerLogin gives the login of the Owner; it is read before the label
+// issueOwnerLogin gives the login of the Owner; it is read before the label
 // changes, and a failed read is returned with nothing changed. A label
 // change that fails is returned, without the review request and the
 // notification: the issue keeps cumin/status/reviewing, and the next poll
 // decides the same and notifies then. The review request changes no
 // decision: without an Owner login none is sent, and one that fails is only
 // logged. The notification goes out in both cases.
-func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest, ownerLogin func(ctx context.Context, token string) (string, error)) error {
+func (s *Service) askMaintainerToMerge(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, token string, sub SubIssue, pr PullRequest, issueOwnerLogin func(ctx context.Context, token string) (string, error)) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	login, err := ownerLogin(ctx, token)
+	login, err := issueOwnerLogin(ctx, token)
 	if err != nil {
 		return fmt.Errorf(string(ActionAskForTheMergeDecision)+": read the Issue Owner login of issue #%d: %w", sub.Number, err)
 	}
@@ -65,7 +65,7 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 	} else {
 		log.Info(string(ActionAskForTheMergeDecision)+": requested the review of the Issue Owner", "pull_request", pr.Number, "reviewer", login)
 	}
-	s.notifyOwner(ctx, log.With("action", ActionAskForTheMergeDecision), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log.With("action", ActionAskForTheMergeDecision), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionAskForTheMergeDecision),
 		Reason:     "the merge needs a decision",
 		Repository: target.Repository.String(),
@@ -97,7 +97,7 @@ func (s *Service) readMergingFacts(ctx context.Context, log *slog.Logger, token 
 // mergingNow reads one implementation issue again, and only that issue,
 // with the facts that MergeEnd decides from: the account of the newest
 // cumin/status/merging, the merged pull request when no open one is left,
-// the login of the Reviewer App, the Owners among the people whose reviews
+// the login of the Reviewer App, the Maintainers among the people whose reviews
 // decide, and the required checks.
 //
 // The error is the one of a read that failed. The bool is false when the
@@ -159,7 +159,7 @@ func (s *Service) mergingNow(ctx context.Context, log *slog.Logger, token string
 	if facts.Reviewer, err = s.Agents.BotLogin(ctx, owner, config.RoleReviewer); err != nil {
 		return failed("the login of the Reviewer App", err)
 	}
-	if facts.Owners, err = s.readOwners(ctx, token, target, DecidingReviewers(pr.Reviews)); err != nil {
+	if facts.Maintainers, err = s.readMaintainers(ctx, token, target, DecidingReviewers(pr.Reviews)); err != nil {
 		return failed("the permissions of the reviewers", err)
 	}
 	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
@@ -246,7 +246,7 @@ func (s *Service) sendMerge(ctx context.Context, log *slog.Logger, token string,
 		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 			return fmt.Errorf("stop the merge for a Maintainer: move issue #%d to %s: %w", a.Number, LabelAwaitingDecision, err)
 		}
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action: ActionStopTheMerge, issue: a.Number, labelDone: true, reason: reason,
 			comment: StopNote(ActionStopTheMerge, reason, pr.Number, false),
 		})
@@ -293,7 +293,7 @@ func (s *Service) closeMergedIssue(ctx context.Context, log *slog.Logger, token 
 			return err
 		}
 		reason := CloseFailedReason(pullRequest, statusAnswer(err))
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action: ActionStopTheMerge, issue: sub.Number, labels: sub.Labels, reason: reason,
 			comment: StopNote(ActionStopTheMerge, reason, pullRequest, false),
 		})
@@ -346,7 +346,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 	if !ok {
 		return nil
 	}
-	login, err := s.readOwnerLogin(ctx, token, target, sub.Number)
+	login, err := s.readIssueOwnerLogin(ctx, token, target, sub.Number)
 	if err != nil {
 		return fmt.Errorf("request a conflict resolution: read the Issue Owner login of issue #%d: %w", sub.Number, err)
 	}
@@ -361,8 +361,8 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 	branch := pr.HeadBranch
 	err = s.goImplementer(ctx, target, settings, sub.Number, implementerRequest{
 		action: ActionRequestAConflictResolution, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
-		sessionID:  s.State.Issue(repository, sub.Number).SessionID,
-		ownerLogin: login, permit: permit,
+		sessionID:       s.State.Issue(repository, sub.Number).SessionID,
+		issueOwnerLogin: login, permit: permit,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, sub.Number, pr.Number, branch, workDir, defaultBranch)
 		},
@@ -405,7 +405,7 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	if !ok {
 		return nil
 	}
-	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	issueOwnerLogin, err := s.readIssueOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return fmt.Errorf(string(ActionRequestAConflictResolution)+": read the Issue Owner login of issue #%d: %w", a.Number, err)
 	}
@@ -424,8 +424,8 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	defaultBranch := snapshot.DefaultBranch
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		action: ActionRequestAConflictResolution, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
-		sessionID:  s.State.Issue(repository, a.Number).SessionID,
-		ownerLogin: ownerLogin, permit: permit,
+		sessionID:       s.State.Issue(repository, a.Number).SessionID,
+		issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {
 			return ConflictResolutionRequestText(repository, a.Number, pr.Number, branch, workDir, defaultBranch)
 		},
@@ -436,10 +436,10 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	return nil
 }
 
-// mergeOwnerApproval applies "start the merge" (I12) to a candidate: it
+// mergeMaintainerApproval applies "start the merge" (I12) to a candidate: it
 // reads the permission of each person whose review decides, keeps the
-// Owners (IsOwner), and checks that the latest review of an Owner is
-// APPROVED on the head commit (OwnerApproved). Then the risk label and the
+// Maintainers (IsMaintainer), and checks that the latest review of an Owner is
+// APPROVED on the head commit (MaintainerApproved). Then the risk label and the
 // required checks decide as for I6 (DecideMerge); the risk does not choose
 // between the Owner and cumin here, because the Owner already decided. Only
 // the label changes, to cumin/status/merging: the merge is sent inside that
@@ -450,7 +450,7 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 // permission that cannot be read is an error of the poll; the next poll
 // tries again. Checks that do not pass leave the issue as it is: I12
 // applies again when they pass.
-func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, required []RequiredCheck, a MergeOwnerApproval) (bool, error) {
+func (s *Service) mergeMaintainerApproval(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, required []RequiredCheck, a MergeMaintainerApproval) (bool, error) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number)
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
@@ -460,11 +460,11 @@ func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target T
 	if !ok || pr.Number != a.PullRequest {
 		return false, fmt.Errorf(string(ActionStartTheMerge)+": pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
-	owners, err := s.readOwners(ctx, token, target, a.Reviewers)
+	maintainers, err := s.readMaintainers(ctx, token, target, a.Reviewers)
 	if err != nil {
 		return false, fmt.Errorf(string(ActionStartTheMerge)+": issue #%d: %w", a.Number, err)
 	}
-	if !OwnerApproved(pr.Reviews, pr.HeadCommit, owners) {
+	if !MaintainerApproved(pr.Reviews, pr.HeadCommit, maintainers) {
 		log.Debug(string(ActionStartTheMerge)+": no approval of a Maintainer on the head commit", "pull_request", pr.Number)
 		return false, nil
 	}
@@ -475,7 +475,7 @@ func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target T
 		return false, nil
 	case MergeNoRiskLabel, MergeTwoRiskLabels:
 		reason := RiskLabelReason(decision)
-		s.stopForOwner(ctx, log, target, settings, stop{
+		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action: ActionStartTheMerge, issue: a.Number, labels: sub.Labels, reason: reason,
 			comment: StopNote(ActionStartTheMerge, reason, pr.Number, false),
 		})
@@ -489,25 +489,25 @@ func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target T
 	return true, nil
 }
 
-// readOwners reads the permission of each person whose review decides, and
-// returns who of them is an Owner (IsOwner).
-func (s *Service) readOwners(ctx context.Context, token string, target Target, reviewers []string) (map[string]bool, error) {
-	owners := map[string]bool{}
+// readMaintainers reads the permission of each person whose review decides, and
+// returns who of them is an Owner (IsMaintainer).
+func (s *Service) readMaintainers(ctx context.Context, token string, target Target, reviewers []string) (map[string]bool, error) {
+	maintainers := map[string]bool{}
 	for _, login := range reviewers {
 		permission, userType, err := s.GitHub.RepositoryPermission(ctx, token, target.Repository.Owner, target.Repository.Name, login)
 		if err != nil {
 			return nil, err
 		}
-		owners[login] = IsOwner(permission, userType)
+		maintainers[login] = IsMaintainer(permission, userType)
 	}
-	return owners, nil
+	return maintainers, nil
 }
 
-// fixOwnerReview applies I13 to a candidate: it reads the permission of each
-// person whose review decides, keeps the Owners (IsOwner), and checks that
+// fixMaintainerReview applies I13 to a candidate: it reads the permission of each
+// person whose review decides, keeps the Maintainers (IsMaintainer), and checks that
 // the latest review of an Owner is CHANGES_REQUESTED on the head commit,
 // newer than the last cumin/status/awaiting-merge-decision of the issue
-// (OwnerRequestedChanges). Then the label becomes cumin/status/implementing
+// (MaintainerRequestedChanges). Then the label becomes cumin/status/implementing
 // first (principle 3), and the Implementer addresses that review in the
 // session of its last run, on the branch of the pull request. The end of
 // that run is the end of any Implementer run: I2 verifies it, then the
@@ -523,7 +523,7 @@ func (s *Service) readOwners(ctx context.Context, token string, target Target, r
 // permission or a login of the Owner that cannot be read, and a label that
 // does not change, are errors of the poll: nothing is requested, the issue
 // keeps cumin/status/awaiting-merge-decision, and the next poll tries again.
-func (s *Service) fixOwnerReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixOwnerReview) (acted, waits bool, err error) {
+func (s *Service) fixMaintainerReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixMaintainerReview) (acted, waits bool, err error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	log := s.logger().With("repository", repository, "issue", a.Number)
@@ -535,11 +535,11 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 	if !ok || pr.Number != a.PullRequest {
 		return false, false, fmt.Errorf(string(ActionSendBackForChanges)+": pull request #%d of issue #%d is not in the snapshot", a.PullRequest, a.Number)
 	}
-	owners, err := s.readOwners(ctx, token, target, a.Reviewers)
+	maintainers, err := s.readMaintainers(ctx, token, target, a.Reviewers)
 	if err != nil {
 		return false, false, fmt.Errorf(string(ActionSendBackForChanges)+": issue #%d: %w", a.Number, err)
 	}
-	review, ok := OwnerRequestedChanges(pr.Reviews, pr.HeadCommit, owners, sub.AwaitingMergeDecisionAt)
+	review, ok := MaintainerRequestedChanges(pr.Reviews, pr.HeadCommit, maintainers, sub.AwaitingMergeDecisionAt)
 	if !ok {
 		log.Debug(string(ActionSendBackForChanges)+": no new request for changes of a Maintainer on the head commit", "pull_request", pr.Number)
 		return false, false, nil
@@ -548,7 +548,7 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 	if !ok {
 		return false, true, nil
 	}
-	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
+	issueOwnerLogin, err := s.readIssueOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
 		return false, false, fmt.Errorf(string(ActionSendBackForChanges)+": read the Issue Owner login of issue #%d: %w", a.Number, err)
 	}
@@ -564,10 +564,10 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 	branch := pr.HeadBranch
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
 		action: ActionSendBackForChanges, kind: "owner review fix", branch: branch, pullRequest: pr.Number,
-		sessionID:  s.State.Issue(repository, a.Number).SessionID,
-		ownerLogin: ownerLogin, permit: permit,
+		sessionID:       s.State.Issue(repository, a.Number).SessionID,
+		issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {
-			return OwnerReviewFixRequestText(repository, a.Number, pr.Number, branch, workDir, review.URL)
+			return MaintainerReviewFixRequestText(repository, a.Number, pr.Number, branch, workDir, review.URL)
 		},
 	})
 	if err != nil {

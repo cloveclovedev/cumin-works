@@ -197,15 +197,15 @@ func TestDecide_EachRuleThatReadsAPullRequestDecidesOnTheSnapshotOfTheTwoQueries
 		t.Errorf("pull requests of #18 = %+v, want none", sub.PullRequests)
 	}
 	required := []RequiredCheck{{Name: "ci"}}
-	actions := decideReadyOfOwner(snapshot, 20, required, nil, t0.Add(2*time.Hour), time.Hour)
+	actions := decideReadyOfMaintainer(snapshot, 20, required, nil, t0.Add(2*time.Hour), time.Hour)
 	want := []Action{
 		ResolveConflict{Number: 13, PullRequest: 113},
 		StartReview{Number: 11, PullRequest: 111},
 		FixChecks{Number: 12, PullRequest: 112, Failed: required},
 		StopForUnreportedChecks{Number: 14, PullRequest: 114, HeadCommit: head(14), Unreported: required, Waited: 2 * time.Hour},
 		Claim{Number: 10, RequirementIssue: 6},
-		MergeOwnerApproval{Number: 15, PullRequest: 115, Reviewers: []string{"example-owner"}},
-		FixOwnerReview{Number: 16, PullRequest: 116, Reviewers: []string{"example-owner"}},
+		MergeMaintainerApproval{Number: 15, PullRequest: 115, Reviewers: []string{"example-owner"}},
+		FixMaintainerReview{Number: 16, PullRequest: 116, Reviewers: []string{"example-owner"}},
 		CopyLabels{Issue: 17, PullRequest: 117, Labels: []string{LabelReviewing, "risk/low"}},
 	}
 	if len(actions) != len(want) {

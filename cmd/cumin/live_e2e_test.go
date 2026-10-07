@@ -68,12 +68,12 @@ None
 `
 
 type e2e struct {
-	repo    string
-	owner   string // the gh login that plays the Owner
-	runID   string
-	logPath string
-	logFrom int64
-	rows    [][2]string // step, evidence
+	repo       string
+	maintainer string // the gh login that plays the Owner
+	runID      string
+	logPath    string
+	logFrom    int64
+	rows       [][2]string // step, evidence
 }
 
 func (e *e2e) record(step, evidence string) {
@@ -206,7 +206,7 @@ func (e *e2e) checkStatusPath(t *testing.T, number int, want []string, last stri
 		name := strings.TrimPrefix(ev.Label.Name, e2eStatusPrefix)
 		path = append(path, name)
 		if name == "ready" {
-			if ev.Actor.Login != e.owner {
+			if ev.Actor.Login != e.maintainer {
 				t.Errorf("issue #%d: %s set ready, want the Owner", number, ev.Actor.Login)
 			}
 		} else if !ev.Actor.isApp("core") {
@@ -442,7 +442,7 @@ func newE2E(t *testing.T) *e2e {
 	if err := json.Unmarshal([]byte(e.gh(t, "api", "user")), &user); err != nil {
 		t.Fatal(err)
 	}
-	e.owner = user.Login
+	e.maintainer = user.Login
 	permission := e.gh(t, "api", "repos/"+e.repo+"/collaborators/"+user.Login+"/permission", "--jq", ".permission")
 	if user.Type != "User" || (permission != "admin" && permission != "write") {
 		t.Fatalf("the gh login must be a person with write permission on %s: type %s, permission %s", e.repo, user.Type, permission)
@@ -594,13 +594,13 @@ func TestLiveE2E(t *testing.T) {
 		}
 		var reviews []e2eReview
 		e.api(t, fmt.Sprintf("pulls/%d/reviews?per_page=100", pull.Number), &reviews)
-		var reviewer, owner *e2eReview
+		var reviewer, maintainer *e2eReview
 		for i, r := range reviews {
 			if r.User.isApp("reviewer") {
 				reviewer = &reviews[i]
 			}
-			if r.User.Login == e.owner {
-				owner = &reviews[i]
+			if r.User.Login == e.maintainer {
+				maintainer = &reviews[i]
 			}
 		}
 		if reviewer == nil || reviewer.State != "APPROVED" || reviewer.CommitID != pull.Head.SHA {
@@ -625,10 +625,10 @@ func TestLiveE2E(t *testing.T) {
 		evidence := fmt.Sprintf("states of #%d: %s; pull request #%d by the Implementer App on `%s`; Reviewer App APPROVED the head commit; merged by cumin-core at %s (one commit on the default branch); issue closed as completed at %s",
 			number, path, pull.Number, pull.Head.Ref, pull.MergedAt, issue.ClosedAt)
 		if number == medium {
-			if owner == nil || owner.State != "APPROVED" || owner.CommitID != pull.Head.SHA || owner.SubmittedAt > pull.MergedAt {
-				t.Errorf("pull request #%d: the merge at %s does not follow an approval of the Owner on the head commit: %+v", pull.Number, pull.MergedAt, owner)
+			if maintainer == nil || maintainer.State != "APPROVED" || maintainer.CommitID != pull.Head.SHA || maintainer.SubmittedAt > pull.MergedAt {
+				t.Errorf("pull request #%d: the merge at %s does not follow an approval of the Owner on the head commit: %+v", pull.Number, pull.MergedAt, maintainer)
 			} else {
-				evidence += "; the Owner approved at " + owner.SubmittedAt
+				evidence += "; the Owner approved at " + maintainer.SubmittedAt
 			}
 			e.record("risk/medium: claim, verify done, review, ask the Owner, merge after the approval, close (I1, I2, I3, I7, I12)", evidence)
 		} else {

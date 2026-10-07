@@ -31,11 +31,11 @@ type Facts struct {
 	// the line out: a run without an issue behind it (a test).
 	IssueNumber int
 	IssueKind   IssueKind
-	// OwnerLogin is the login of the Owner of the issue: the account that
+	// IssueOwnerLogin is the login of the Owner of the issue: the account that
 	// added the newest cumin/status/ready, when that account is the Owner.
 	// Empty says that there is no Owner login. The line stands with the
 	// line of the issue.
-	OwnerLogin string
+	IssueOwnerLogin string
 	// ProtectedPaths is the list of protected paths that applies in the
 	// target repository, resolved by the caller: the list of its
 	// .cumin/config.toml, or the default list. cumin does not check the
@@ -90,8 +90,8 @@ func factsBlock(facts runFacts) string {
 	b.WriteString("Facts of this run (data from cumin):\n")
 	if facts.IssueNumber != 0 {
 		b.WriteString("- Issue of the run: #" + strconv.Itoa(facts.IssueNumber) + " (" + string(facts.IssueKind) + ")\n")
-		if facts.OwnerLogin != "" {
-			b.WriteString("- Issue Owner login: " + facts.OwnerLogin + "\n")
+		if facts.IssueOwnerLogin != "" {
+			b.WriteString("- Issue Owner login: " + facts.IssueOwnerLogin + "\n")
 		} else {
 			b.WriteString("- Issue Owner login: there is no Issue Owner login\n")
 		}
