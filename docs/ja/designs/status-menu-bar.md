@@ -174,7 +174,7 @@
 
 | 決める、または確かめること | どこで |
 |---|---|
-| Agentなしで進む作業中の状態 (`cumin/status/merging`) と、実行のあとに持っておいた手順を、`agents` に載せるか。受け入れの確認は、`cumin/status/accepting` のもとのPlannerの実行として載る | [#502](https://github.com/cloveclovedev/cumin-works/issues/502) |
+| Agentなしで進む作業中の状態 (`cumin/status/merging`) を、`agents` に載せるか。受け入れの確認は、`cumin/status/accepting` のもとのPlannerの実行として載る | [#502](https://github.com/cloveclovedev/cumin-works/issues/502) |
 | golden fileの置き場所と、Swiftのテストからの読み方 | [#503](https://github.com/cloveclovedev/cumin-works/issues/503)、[#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 | 対応するmacOSとSwiftの最も古い版 (macOS 11.0 以上) | [#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 
