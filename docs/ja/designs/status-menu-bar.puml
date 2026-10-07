@@ -5,7 +5,8 @@
 skinparam shadowing false
 skinparam defaultFontName sans-serif
 
-actor Owner
+actor Maintainer
+actor Operator
 cloud "GitHub" as github
 
 rectangle "cumin run (Go)" as run
@@ -19,8 +20,8 @@ run --> status : write a temporary file,\nthen rename:\nafter every poll,\nat th
 app -up-> status : read every 5 s
 app -left-> config : read every 5 s
 app --> bar : three segments (glyph and count),\nlist with links, old file,\nsound and blink
-Owner -up-> bar : look, open a link
-Owner -up-> config : edit
+Maintainer -up-> bar : look, open a link
+Operator -up-> config : edit
 
 note bottom of status
   The only contract between the two parts.
