@@ -10,7 +10,7 @@ start
 if (stored usage read at most 5 minutes ago?) then (yes)
   :no minimal run;\nthe stored usage decides;
 else (no)
-if (stopped, the next try time is still ahead\n(from the stored usage), and no new allowance (Q2)) then (yes)
+if (stopped, the next try time is still ahead\n(from the stored usage), and no new allowance (resume agent starts)) then (yes)
   :the agent does not start, no minimal run;\nno label change, no count;
   stop
 else (no)
@@ -22,16 +22,16 @@ else (no)
 endif
 :minimal run of Claude Code\n(read the usage);
 if (usage read?) then (no)
-  :stop agent starts (Q1): no label change, no count;\nnotify once until a read succeeds;\nkeep the failed read for the rest of this poll;
+  :stop agent starts: no label change, no count;\nnotify once until a read succeeds;\nkeep the failed read for the rest of this poll;
   stop
 else (yes)
 endif
 :store the usage, its reset times,\nand the time of the read;
 endif
-:5h limit = threshold of the current time band\n(100% while the allowance of Q2 holds);
+:5h limit = threshold of the current time band\n(100% while the allowance of the Operator holds);
 :weekly limit = pace limit\ntarget x min(1, (elapsed + lead) / 7 days);
 if (5h usage >= 5h limit\nor weekly usage >= weekly limit?) then (yes)
-  :stop agent starts (Q1): no label change, no count;\nnotify once for each window;\ncompute the next try time (Q3);
+  :stop agent starts: no label change, no count;\nnotify once for each window;\ncompute the next try time (for resume agent starts);
   stop
 else (no)
   :change the label or count the request,\nthen start the agent;
@@ -39,7 +39,7 @@ endif
 :the agent run ends;
 :store the usage of the run\nand the time of the read;
 if (a limit is reached?) then (yes)
-  :stop agent starts (Q1);\nnotify once for each window;
+  :stop agent starts;\nnotify once for each window;
 else (no)
 endif
 stop

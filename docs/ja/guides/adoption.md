@@ -29,7 +29,7 @@ cuminは、必須のcheckが先頭のコミットで全て通るのを待って�
 
 - 必須のcheckにするjobは、どのPull Requestでも必ず動くものにする。workflowの `on.pull_request.paths` で絞ると、関係のないPull Requestではworkflowごと飛ばされ、checkが保留のまま残って、mergeとcuminの両方が止まる。
 - 変わったパスでjobを分けたいときは、必ず動く1つのjobを必須のcheckにし、その中で、またはその後ろのjobの `if` で、動かすかどうかを決める。条件で飛ばされたjobは、通った扱いになる。
-- workflowは、cuminを入れる前にOwnerが用意する。ImplementerのAppには、workflowを変える権限がない。
+- workflowは、cuminを入れる前にMaintainerが用意する。ImplementerのAppには、workflowを変える権限がない。
 
 ## 3. 保護されたパスを決める
 
@@ -39,7 +39,7 @@ cuminは、必須のcheckが先頭のコミットで全て通るのを待って�
 
 | パス | 目安 |
 |---|---|
-| 要件の文書 | 足す。要件を書くのはOwnerだけである |
+| 要件の文書 | 足す。要件を書くのはMaintainerだけである |
 | デプロイの設定、本番の設定、秘密の値の参照 | 足す。誤った変更を、mergeの前に止めたい |
 | 開発の対象そのもの (コード、テスト、設計の文書) | 足さない。Agentの仕事である |
 
@@ -62,7 +62,7 @@ cuminは、必須のcheckが先頭のコミットで全て通るのを待って�
 
 ## 6. 最初の要求Issue
 
-- 最初の要求Issueは、Ownerが書く。[要求Issueのテンプレート](../../../templates/requirement-issue.md) に従い、`cumin/type/requirement` と `cumin/status/ready` を付ける。
+- 最初の要求Issueは、Maintainerが書く。[要求Issueのテンプレート](../../../templates/requirement-issue.md) に従い、`cumin/type/requirement` と `cumin/status/ready` を付ける。
 - 最初は、小さく、結果を確かめやすいものにする。Plannerの分割、Implementerの実装、Reviewerのレビュー、mergeまでの流れを、1回通して見るためである。
 - 要求Issueどうしの順番は、blocked by で決める。先の要求Issueが閉じるまで、後の分割は始まらない。
 - 依存のないIssueのうち、先に進めたいものには、優先度のラベルを付ける。Organizationが既に優先度のラベルを使っているなら、その名前を `.cumin/config.toml` の `priority_labels` に書く ([設定の一覧](../development/configuration.md) の「優先度のラベル」)。

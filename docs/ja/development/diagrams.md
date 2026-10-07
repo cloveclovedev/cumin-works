@@ -4,11 +4,11 @@
 
 ## 図のラベルは英語
 
-`.puml` には英語だけを書く。ラベルは、識別子 (`cumin/status/ready`、I3) と、短い英語の語句にする。コメントも英語にする。図は、IssueやPull Requestにそのまま画像として貼られ、GitHubに書くものは全て英語だからである。
+`.puml` には英語だけを書く。ラベルは、識別子 (`cumin/status/ready`、request the review) と、短い英語の語句にする。コメントも英語にする。図は、IssueやPull Requestにそのまま画像として貼られ、GitHubに書くものは全て英語だからである。
 
 図の読み方や、ラベルだけでは分からない意味は、図を埋め込んだ文書の日本語の本文で説明する。
 
-状態遷移図では、`issue-states.md` の1つの行を1本の矢印にし、ラベルをその行の番号 (R1、I3 など) で始める。1本の矢印に2つの行を書かない。こうすると、IssueやPull Requestで、1つの行だけに色を付けて示せる。状態を変えない行 (I11) は、矢印ではなくメモで示す。
+状態遷移図では、`issue-states.md` の1つの行を1本の矢印にし、ラベルをその行の遷移の名前 (request the split、request the review など) で始める。1本の矢印に2つの行を書かない。こうすると、IssueやPull Requestで、1つの行だけに色を付けて示せる。状態を変えない行 (「copy the labels to the pull request」) は、矢印ではなくメモで示す。
 
 ## 文書への埋め込み
 

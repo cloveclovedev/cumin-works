@@ -10,7 +10,7 @@ Agent は起動しないので、利用枠は使わない。対象は sandbox �
 - 対象のリポジトリの持ち主の4つの App (`cumin-core` と3つの role) の Client ID が設定にあり、Keychain にそれぞれの秘密鍵がある ([セットアップの手順](setup-guide.md) の手順1)。1つでも欠けると、`cumin run` は起動せずにキーの名前を表示して終わる。
 - その4つの App が、sandbox のリポジトリを選んでインストールしてある (同じ手順書の手順2)。インストールが無いと、cumin は起動はするが、token を発行できずに定期確認が毎回失敗する。
 - 対象のリポジトリに `cumin/status/ready` の付いた Issue がない。あると Agent が起動して、利用枠を使う。
-- 確認の間は、Owner がログインしている。launchd の LaunchAgent は、ログイン中のユーザの下でだけ動く。
+- 確認の間は、Operator がログインしている。launchd の LaunchAgent は、ログイン中のユーザの下でだけ動く。
 
 ## 何を確かめるか
 
@@ -55,4 +55,4 @@ launchctl kill SIGTERM gui/$(id -u)/dev.cloveclove.cumin   # 止める
 - 結果は、対応する Issue にコメントとして残す。実行したコマンド、確かめたことと結果を書く。
 - 手元の絶対パスは `~` に置き換える。設定ファイルの中身、Client ID、token、Organization の名前は書かない。
 - 利用枠の数値は書かない。この確認では Agent を起動しないので、そもそも出ない。
-- 確認のあとは、Host と sandbox を元の状態に戻す。Owner が LaunchAgent を残すと言ったときだけ、残す。
+- 確認のあとは、Host と sandbox を元の状態に戻す。Operator が LaunchAgent を残すと言ったときだけ、残す。

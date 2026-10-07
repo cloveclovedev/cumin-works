@@ -28,7 +28,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `max_issues_in_progress` | リポジトリごとに同時に進めるIssueの数 | `1` | 1以上 |
 | `max_review_rounds` | レビューのラウンドの上限 | `3` | 1以上 |
 | `max_check_fix_requests` | checkの修正を依頼する回数の上限 | `3` | 1以上 |
-| `checks_wait_time` | 必須のcheckが全て結果を返すのを待つ時間。過ぎたら、Ownerに回す | `"60m"` | 0より大きい |
+| `checks_wait_time` | 必須のcheckが全て結果を返すのを待つ時間。過ぎたら、Maintainerに回す | `"60m"` | 0より大きい |
 | `merge_method` | cuminがPull Requestをmergeするときの方法 | `"squash"` | `"squash"`、`"merge"`、`"rebase"` のどれか |
 | `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
 | `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
@@ -38,7 +38,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 | `quota.five_hour.bands` | 5h枠の時間帯ごとのしきい値。下の「時間帯」を参照 | なし | 時間帯どうしは、重ねられない |
 | `quota.weekly.target` | weekly枠のペースの上限の式の目標 (%) | `85` | 1〜100 |
 | `quota.weekly.lead` | weekly枠のペースの上限の式で、経過時間に足す時間 (前倒し) | `"24h"` | 0以上、`"168h"` (7日) 未満 |
-| `notify.discord.enabled` | OwnerへのDiscordの通知を出すか。`false` のとき、cuminはラベルの付け替えとコメントをふだんどおり行い、通知だけを出さない | `true` | 真偽値 |
+| `notify.discord.enabled` | Discordの通知を出すか。`false` のとき、cuminはラベルの付け替えとコメントをふだんどおり行い、通知だけを出さない | `true` | 真偽値 |
 | `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps` が書き込む | なし | キーを書くなら、空にできない |
 
 - `<role>` は、`planner`、`implementer`、`reviewer` のどれかである。
@@ -48,7 +48,7 @@ Hostの設定ファイルと、対象のリポジトリの設定ファイルに�
 
 ## 時間帯
 
-`[[quota.five_hour.bands]]` を並べると、5h枠のしきい値を時間帯ごとに変えられる。Ownerが使わない時間帯のしきい値を高くする、という使い方をする。
+`[[quota.five_hour.bands]]` を並べると、5h枠のしきい値を時間帯ごとに変えられる。Operatorが使わない時間帯のしきい値を高くする、という使い方をする。
 
 | キー | 内容 | 制限 |
 |---|---|---|
@@ -147,7 +147,7 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 
 - 書かないキーには、Hostの設定ファイルの値が残る。優先順位は、初期値、Hostの設定ファイル、リポジトリの設定ファイルの順に強くなる。
 - 値の制限と、制限を外れたときの文章は、Hostの設定ファイルと同じである。
-- 次のものは、そのリポジトリのエラーになる。cuminはキーの名前をログに出して、そのリポジトリの定期確認を飛ばす。他のリポジトリの定期確認は続く。Ownerが直したものをmergeすると、次の定期確認から元に戻る。
+- 次のものは、そのリポジトリのエラーになる。cuminはキーの名前をログに出して、そのリポジトリの定期確認を飛ばす。他のリポジトリの定期確認は続く。Maintainerが直したものをmergeすると、次の定期確認から元に戻る。
   - Hostに属するキー (`repositories`、`work_dir`、`poll_interval`、`idle_poll_interval`、`max_issues_in_progress`、`quota` の表、`github_apps` の表、`roles.<role>.cli_path`、`roles.<role>.time_limit`)
   - 知らないキーと、知らないroleの名前
   - 制限を外れた値
