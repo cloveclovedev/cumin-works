@@ -1,7 +1,7 @@
 # Template: follow-up note
 
 Written by: cumin, without an agent, as one comment on the requirement issue.
-Read by: the Owner, when the Owner accepts the requirement.
+Read by: a Maintainer, when the Maintainer accepts the requirement.
 
 cumin writes this comment after a pull request of an implementation issue is merged. The comment collects the work that is left, so that it is not lost in the pull request.
 

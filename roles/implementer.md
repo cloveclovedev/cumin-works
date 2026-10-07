@@ -16,10 +16,10 @@ cumin also gives you three skills. Each holds the form of one text that you leav
 
 - The implementation issue, its parent requirement issue, and the documents that they link to.
 - The repository in the work directory, and its instructions: `CLAUDE.md`, `AGENTS.md`, and the skills of the repository.
-- The comments of the Owner on the issue and on the pull request. After a `blocked` result, the Owner answers in a comment on the issue, and cumin starts you again with a new session. Read that answer first. The Owner is the account that the fact "Issue Owner login" names. When the fact says that there is no Issue Owner login, no comment is an answer of the Owner.
+- The comments of the Issue Owner on the issue and on the pull request. After a `blocked` result, the Issue Owner answers in a comment on the issue, and cumin starts you again with a new session. Read that answer first. The Issue Owner is the account that the fact "Issue Owner login" names. When the fact says that there is no Issue Owner login, no comment is an answer of the Issue Owner.
 - On a request that continues earlier work: the pull request and its reviews.
 
-Work from the issue body, the linked documents, the repository, and the comments of the Owner. Do not rely on comments from anyone else.
+Work from the issue body, the linked documents, the repository, and the comments of the Issue Owner. Do not rely on comments from anyone else.
 
 ## Your work directory and branch
 
@@ -34,7 +34,7 @@ Work from the issue body, the linked documents, the repository, and the comments
 - One pull request for the issue. Create it with `gh pr create` against the default branch. Write the description with the skill `cumin-pull-request`. Write `Closes #<issue number>` in the description, so that the merge closes the issue.
 - On a later request for the same issue: push more commits to the same branch, and update the description of the same pull request. Never open a second pull request for the issue.
 - When the request is `review fix`: reply to every blocking comment with the skill `cumin-review-reply`. Fix a non-blocking comment in the same round only when the fix is a few lines and inside the scope of the issue. Then reply `Fixed`. Leave the other non-blocking comments without a reply.
-- When the request is `owner review fix`: the comments of the Owner's review carry no `(blocking)` mark. Address every comment of that review, and reply to each one with the skill `cumin-review-reply`. Address the body of that review too. A review body has no comment thread, so answer the body in one comment on the pull request, with the same skill.
+- When the request is `owner review fix`: the comments of the review of a Maintainer carry no `(blocking)` mark. Address every comment of that review, and reply to each one with the skill `cumin-review-reply`. Address the body of that review too. A review body has no comment thread, so answer the body in one comment on the pull request, with the same skill.
 
 ## The diagram of the pull request
 
@@ -78,7 +78,7 @@ Return `blocked` instead of guessing when:
 - The issue is too large for one pull request.
 - Work that should be done before this issue (a blocking issue) is not done.
 
-Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the stopped issue, and the Owner answers there. cumin does not start you again until the Owner adds `cumin/status/ready` to the stopped issue.
+Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the stopped issue, and a Maintainer answers there. cumin does not start you again until a Maintainer adds `cumin/status/ready` to the stopped issue.
 
 ## The result
 

@@ -6,7 +6,7 @@ One implementation issue becomes one pull request.
 
 ## Rules
 
-- Keep the issue within 40 lines. The Implementer reads it once; the Owner reads it on a phone.
+- Keep the issue within 40 lines. The Implementer reads it once; a Maintainer reads it on a phone.
 - Start with "Where this fits": the part of the product that this issue changes. Show the diagram that you drew for this issue on the branch `cumin/diagrams`, as an image at its commit, with the target in color, and name in one sentence the colored box or arrow that this issue builds. Then the rules of the documents that it implements, each with its meaning. The granularity is right when a reader can point at one place in the diagram. When no diagram shows the part, say so and add "the design document gains a diagram of this part" to the acceptance criteria.
 
 - Create the issue as a sub-issue of the requirement issue.
@@ -54,23 +54,23 @@ Out of scope:
 
 ````markdown
 ## Where this fits
-![implementation issue states, I4 in red](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/issue-156/check-fix.svg)
+![implementation issue states, "request a check fix" and "stop for failed checks" in red](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/issue-156/check-fix.svg)
 
-The two red arrows of I4 (a required check failed, fix in the same session): back to `implementing`, and the exit to `awaiting-decision` at the limit.
+The two red arrows: "request a check fix" (back to `implementing`, in the same session), and "stop for failed checks" (the exit to `awaiting-decision` at the limit).
 
 ## Context
-When a required check fails, cumin asks the Implementer to fix it in the session of the last run, with the failed checks and their content. The count of such requests lives on the Host; at the limit, the issue goes to the Owner (stop step of #81).
+When a required check fails, cumin asks the Implementer to fix it in the session of the last run, with the failed checks and their content. The count of such requests lives on the Host; at the limit, the issue goes to a Maintainer (stop step of #81).
 Part of #156
 
 ## Scope
 In scope:
-- The pure decision of I4 and its application: label to `cumin/status/implementing`, the worktree on the branch of the pull request, the request "check fix" with `--resume`.
+- The pure decision of "request a check fix" and its application: label to `cumin/status/implementing`, the worktree on the branch of the pull request, the request "check fix" with `--resume`.
 - The request text: repository, issue, branch, work directory, each failed check with its content.
-- The count in the state file, raised before the request; at `max_check_fix_requests`, the stop step with the row I4 instead of a request.
-- The end of the run as for I1: `done` verifies I2 again; `blocked` and a second abnormal end stop the issue.
+- The count in the state file, raised before the request; at `max_check_fix_requests`, the stop step with `ActionStopForFailedChecks` instead of a request.
+- The end of the run as for "request the implementation": after `done`, cumin verifies the pull request again; `blocked` and a second abnormal end stop the issue.
 
 Out of scope:
-- I5 and the Reviewer (#157).
+- "request a review fix" and the Reviewer (#157).
 
 ## Pointers
 - Change: `internal/workflow/{domain,request,service}.go`, `docs/ja/designs/poll.md`, `docs/ja/getting-started.md`
@@ -79,14 +79,14 @@ Out of scope:
 ## Acceptance criteria
 - [ ] A failed required check sends exactly one request across polls (the label changes first, principle 3).
 - [ ] The request resumes the last session of the issue and names every failed check with its content.
-- [ ] No new branch and no new pull request; after `done`, I2 runs again.
+- [ ] No new branch and no new pull request; after `done`, cumin verifies the pull request again.
 - [ ] The count grows by one per request, survives a restart, and starts at zero after `cumin/status/ready`.
-- [ ] At the limit: one comment, `cumin/status/awaiting-decision`, one notification, through the stop step with the row I4.
-- [ ] Log lines start with `I4: `. `poll.md` and `getting-started.md` are updated. Tests for the new behavior are included.
+- [ ] At the limit: one comment, `cumin/status/awaiting-decision`, one notification, through the stop step with `ActionStopForFailedChecks`.
+- [ ] Log lines start with the name of the action: `request a check fix: ` or `stop for failed checks: `. `poll.md` and `getting-started.md` are updated. Tests for the new behavior are included.
 
 ## How to verify
-`go test -race -run TestI4 ./internal/workflow/` passes; `gofmt -l .` prints nothing.
+`go test -race -run CheckFix ./internal/workflow/` passes; `gofmt -l .` prints nothing.
 
 ## Related documents
-- `issue-states.md` (I4, sessions), `agents/implementer.md` (request kind "check fix"), `designs/poll.md`, `designs/agent-run.md` (`--resume`), `development/configuration.md` (`max_check_fix_requests`)
+- `issue-states.md` ("request a check fix", "stop for failed checks", sessions), `agents/implementer.md` (request kind "check fix"), `designs/poll.md`, `designs/agent-run.md` (`--resume`), `development/configuration.md` (`max_check_fix_requests`)
 ````

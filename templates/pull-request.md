@@ -1,13 +1,13 @@
 # Template: pull request description
 
 Written by: the Implementer.
-Read by: the Reviewer and the Owner.
+Read by: the Reviewer and a Maintainer.
 
 ## Rules
 
 - Title: use Conventional Commits, `<type>(<scope>): <description>`. Write the description as an order: "add ...", not "added ...".
 - Write `Closes #<implementation issue>` so that the merge closes the issue.
-- Keep the description within 40 lines, folded blocks excluded. The Owner reads it on a phone and decides from "What", the diagram, "Design", and the table under "How it was checked".
+- Keep the description within 40 lines, folded blocks excluded. A Maintainer reads it on a phone and decides from "What", the diagram, "Design", and the table under "How it was checked".
 - Under "Where this fits", copy the section of the issue as it is: the image and the sentence that names the box or the arrow. Rewrite it only when the implementation moved the change to another place. To change the image, add a new SVG `issue-<issue number>/<name>.svg` on the branch `cumin/diagrams`, as your role says, and show it at its commit; never commit such a diagram on the branch of this pull request. When this pull request changed a diagram of the design documents, show that SVG at the commit of this branch. The heading is the same in the issue and in the pull request on purpose.
 - Under "What", give the same information that the diff of a design note gives: how it worked before, what this pull request changes, and the approach. Write it as "Before" and "After", each one to three lines. An identifier never stands alone; add its meaning.
 - Under "How it was checked", write one row for each thing that changed: what it is, how you checked it, and the result. Put the command output in a `<details>` block. Do not only say that the tests pass.
@@ -64,23 +64,23 @@ $ go test -race ./...
 
 ````markdown
 ## Where this fits
-![I2 verification](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/docs/ja/designs/poll-verify.svg)
+![the verification of the pull request after done](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/docs/ja/designs/poll-verify.svg)
 
-The failure branches of the I2 verification (diagram changed by this pull request).
+The failure branches of the verification of the pull request after `done` (diagram changed by this pull request).
 
 ## What
-Hand the issue back to the Owner when the I2 verification (open pull request, author, head pushed) fails after `done`.
+Hand the issue back to a Maintainer when the verification of the pull request (open, author, head pushed) fails after `done`.
 
 Before: a failed verification was logged; the issue kept `cumin/status/implementing` with nothing on GitHub to say why.
 After: cumin posts one comment in a fixed shape (`templates/stop-note.md`), sets `cumin/status/awaiting-decision`, and sends one notification that names the failed check. The comment is a template of cumin, not of an agent, so that its shape stays a contract.
 
 ## Why
-A stopped issue was invisible to the Owner. The same sentence goes into the comment and the notification, so the Owner reads the same words in both places.
+A stopped issue was invisible to a Maintainer. The same sentence goes into the comment and the notification, so a Maintainer reads the same words in both places.
 Closes #141
 
 ## Acceptance criteria
 - [x] Each check gives its own reason, the same in the comment and in the notification — `VerificationReason`, `TestVerificationReason_OneSentenceForEachCheck`
-- [x] One comment, the label, exactly one notification — `TestI2_DoneWithout...`, `...OfAnotherAuthor...`, `...NotPushed...`
+- [x] One comment, the label, exactly one notification — 3 tests in `internal/workflow/service_test.go`
 - [x] The template reaches no agent — `TestTemplatesOfCumin_ReachNoAgent`
 
 ## How it was checked
@@ -103,7 +103,7 @@ ok  (every package)
 - Start at `stopForOwner` in `internal/workflow/stop.go`. Revert: the path only logged before.
 
 ## Documentation
-- `designs/poll.md` (the way back to the Owner), `designs/poll-verify.puml` and its SVG, `designs/code-layout.md`, `templates/stop-note.md` (new).
+- `designs/poll.md` (the way back to a Maintainer), `designs/poll-verify.puml` and its SVG, `designs/code-layout.md`, `templates/stop-note.md` (new).
 
 ## Follow-up
 - The retry after an abnormal end is the next issue; it calls the same step with `Retried: once`.
