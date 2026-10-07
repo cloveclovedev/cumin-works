@@ -34,7 +34,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				TimeLimit: 20 * time.Minute, End: time.Date(2026, 10, 3, 1, 20, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Issue of the run: #7 (requirement issue)\n" +
-				"- Login of the Owner: there is no Owner login\n" +
+				"- Issue Owner login: there is no Issue Owner login\n" +
 				"- Time limit of the run: 20m\n" +
 				"- End time of the run: 2026-10-03T01:20:00Z\n",
 		},
@@ -44,7 +44,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				TimeLimit: 50 * time.Minute, End: time.Date(2026, 10, 3, 1, 50, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Issue of the run: #12 (implementation issue)\n" +
-				"- Login of the Owner: example-owner\n" +
+				"- Issue Owner login: example-owner\n" +
 				"- Time limit of the run: 50m\n" +
 				"- End time of the run: 2026-10-03T01:50:00Z\n",
 		},
@@ -55,7 +55,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				TimeLimit: 50 * time.Minute, End: time.Date(2026, 10, 3, 1, 50, 0, 0, time.UTC)},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Issue of the run: #12 (implementation issue)\n" +
-				"- Login of the Owner: there is no Owner login\n" +
+				"- Issue Owner login: there is no Issue Owner login\n" +
 				"- Protected paths (agents keep these paths unchanged):\n" +
 				"  - `.cumin/`\n" +
 				"  - `CLAUDE.md`\n" +
@@ -85,7 +85,7 @@ func TestFactsBlock_NamesTheIssueTheProtectedPathsTheTimeLimitAndTheEndTimeInUTC
 				Role: config.RolePlanner, ImplementerTimeLimit: 50 * time.Minute, ReviewerTimeLimit: 30 * time.Minute},
 			want: "Facts of this run (data from cumin):\n" +
 				"- Issue of the run: #7 (requirement issue)\n" +
-				"- Login of the Owner: there is no Owner login\n" +
+				"- Issue Owner login: there is no Issue Owner login\n" +
 				"- Time limit of the run: 20m\n" +
 				"- End time of the run: 2026-10-03T01:20:00Z\n" +
 				"- Time limit of the Implementer: 50m\n" +

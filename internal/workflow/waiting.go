@@ -104,7 +104,7 @@ func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete 
 		return
 	}
 	log := s.logger()
-	log.Info(string(ActionTellThatCuminWaits) + ": no issue can go on and no agent runs; the Owner is told once")
+	log.Info(string(ActionTellThatCuminWaits) + ": no issue can go on and no agent runs; the notification goes out once")
 	sent := s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action: string(ActionTellThatCuminWaits),
 		Reason: "No issue can go on and no agent runs. cumin waits for a new ready issue or a decision.",

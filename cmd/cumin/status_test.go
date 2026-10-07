@@ -78,7 +78,7 @@ func TestStatusShowsTheWorkTheWaitingIssuesAndTheQuota(t *testing.T) {
 		"weekly window: 20.0% used, pace limit 85.0%",
 		"agent starts: stopped by the 5h window, next try at " + stamp(at.Add(2*time.Hour), statusZone),
 		"Agents at work (from the labels on GitHub):\n" + agentsAtWorkNote + "\n  example-org/example-repo #6 cumin/status/planning\n  example-org/example-repo #10 cumin/status/reviewing\n  example-org/example-repo #14 cumin/status/accepting\n",
-		"Waiting for the Owner:\n",
+		"Waiting for a Maintainer:\n",
 		"  example-org/example-repo #11 cumin/status/awaiting-decision\n",
 		"  example-org/example-repo #13 cumin/status/awaiting-merge-decision\n",
 		"  example-org/example-repo #8 cumin/status/awaiting-plan-review\n",

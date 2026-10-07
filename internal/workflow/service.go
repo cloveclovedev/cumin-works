@@ -646,7 +646,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	merges := 0
 	for _, action := range actions {
 		if a, ok := action.(ResolveConflict); ok && ownerDecided[a.Number] {
-			log.Info(string(ActionRequestAConflictResolution)+": waits for the review of the Owner on the conflicting head", "issue", a.Number)
+			log.Info(string(ActionRequestAConflictResolution)+": waits for the review of a Maintainer on the conflicting head", "issue", a.Number)
 			continue
 		}
 		// A candidate of I12 or of I13 is only a check; it counts as
@@ -875,9 +875,9 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionStopForMissingChecks)+": stop issue #%d for the Owner: %w", a.Number, err)
+		return fmt.Errorf(string(ActionStopForMissingChecks)+": stop issue #%d for a Maintainer: %w", a.Number, err)
 	}
-	log.Info(string(ActionStopForMissingChecks)+": the issue waits for the Owner", "labels", labels)
+	log.Info(string(ActionStopForMissingChecks)+": the issue waits for a Maintainer", "labels", labels)
 	reason := UnreportedChecksReason(a)
 	s.stopForOwner(ctx, log, target, settings, stop{
 		action:    ActionStopForMissingChecks,
@@ -929,9 +929,9 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		// stop, and must not post the comment and notify again.
 		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-			return fmt.Errorf(string(ActionStopForFailedChecks)+": stop issue #%d for the Owner: %w", a.Number, err)
+			return fmt.Errorf(string(ActionStopForFailedChecks)+": stop issue #%d for a Maintainer: %w", a.Number, err)
 		}
-		log.Info(string(ActionStopForFailedChecks)+": the issue waits for the Owner", "labels", labels)
+		log.Info(string(ActionStopForFailedChecks)+": the issue waits for a Maintainer", "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
 			action:    ActionStopForFailedChecks,
 			issue:     a.Number,
@@ -950,7 +950,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
-		return fmt.Errorf(string(ActionRequestACheckFix)+": read the login of the Owner of issue #%d: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestACheckFix)+": read the Issue Owner login of issue #%d: %w", a.Number, err)
 	}
 	counted := stored
 	counted.CheckFixRequests++
@@ -1547,7 +1547,7 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 		return fmt.Errorf(string(ActionStopTheImplementation)+": move issue #%d to awaiting-decision: %w", a.Number, err)
 	}
 	if !a.Question {
-		log.Warn(string(ActionStopTheImplementation)+": the implementation stops for the Owner", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)
+		log.Warn(string(ActionStopTheImplementation)+": the implementation stops for a Maintainer", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
 			action:    ActionStopTheImplementation,
 			issue:     a.Number,
@@ -1558,7 +1558,7 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 		return nil
 	}
 	log = log.With("action", ActionStopTheImplementation)
-	log.Info(string(ActionStopTheImplementation)+": the Implementer asked a question; the issue waits for the Owner", "labels", labels)
+	log.Info(string(ActionStopTheImplementation)+": the Implementer asked a question; the issue waits for a Maintainer", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionStopTheImplementation),
 		Reason:     "The Implementer asked a question during the implementation.",
@@ -1585,7 +1585,7 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
-		return fmt.Errorf(string(ActionRequestTheImplementationAgain)+": read the login of the Owner of issue #%d: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestTheImplementationAgain)+": read the Issue Owner login of issue #%d: %w", a.Number, err)
 	}
 	repository := target.Repository.String()
 	branch := sub.Implementing.Branch

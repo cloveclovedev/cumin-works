@@ -82,7 +82,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 				if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
 					log.Error(string(st.action)+": the label was not changed", "error", err.Error())
 				} else {
-					log.Info(string(st.action)+": the issue waits for the Owner", "labels", labels)
+					log.Info(string(st.action)+": the issue waits for a Maintainer", "labels", labels)
 				}
 			}
 		}
@@ -124,7 +124,7 @@ func (s *Service) notifyOwner(ctx context.Context, log *slog.Logger, enabled boo
 		return true
 	}
 	if err := s.Notify.Notify(ctx, n); err != nil {
-		log.Error("the Owner was not notified", "error", err.Error())
+		log.Error("the notification was not sent", "error", err.Error())
 		return errors.Is(err, notify.ErrNoSender)
 	}
 	log.Info("the notification was sent")

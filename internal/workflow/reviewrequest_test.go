@@ -77,7 +77,7 @@ func TestI7_TheReviewOfTheOwnerIsRequestedOnce(t *testing.T) {
 	if label < 0 || request < label {
 		t.Errorf("the request (%d) does not follow the label change (%d)", request, label)
 	}
-	if want := `"msg":"ask for the merge decision: requested the review of the Owner"`; !strings.Contains(sc.logs.String(), want) {
+	if want := `"msg":"ask for the merge decision: requested the review of the Issue Owner"`; !strings.Contains(sc.logs.String(), want) {
 		t.Errorf("the log has no %s", want)
 	}
 }
@@ -112,19 +112,19 @@ func TestI7_WithoutTheReviewRequestTheLabelAndTheNotificationAreAsBefore(t *test
 				// GitHub reports triage as read.
 				sc.fake.SetPermission("a-triager", "read", "User")
 			},
-			log: `"msg":"ask for the merge decision: there is no Owner login; the review of the Owner is not requested"`},
+			log: `"msg":"ask for the merge decision: there is no Issue Owner login; the review of the Issue Owner is not requested"`},
 		{name: "the request answers 422", requests: 1,
 			prepare: func(sc *scene) {
 				sc.readyByTheOwner()
 				sc.fake.FailNext(http.MethodPost, reviewRequestPath, http.StatusUnprocessableEntity)
 			},
-			log: `"level":"ERROR","msg":"ask for the merge decision: the review of the Owner was not requested; the notification still goes out"`},
+			log: `"level":"ERROR","msg":"ask for the merge decision: the review of the Issue Owner was not requested; the notification still goes out"`},
 		{name: "the request answers 500", requests: 1,
 			prepare: func(sc *scene) {
 				sc.readyByTheOwner()
 				sc.fake.FailNext(http.MethodPost, reviewRequestPath, http.StatusInternalServerError)
 			},
-			log: `"level":"ERROR","msg":"ask for the merge decision: the review of the Owner was not requested; the notification still goes out"`},
+			log: `"level":"ERROR","msg":"ask for the merge decision: the review of the Issue Owner was not requested; the notification still goes out"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

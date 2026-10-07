@@ -156,7 +156,7 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T
 				if n := len(sc.fake.Comments(sc.repo, 6)); n != 0 {
 					t.Errorf("%d comments on #6, want none", n)
 				}
-				if n := strings.Count(sc.logs.String(), "is not of cumin-core or of an Owner"); n != 1 {
+				if n := strings.Count(sc.logs.String(), "is not of cumin-core or of a Maintainer"); n != 1 {
 					t.Errorf("%d log lines for one label event across three polls, want 1:\n%s", n, sc.logs.String())
 				}
 				messages := sc.messagesExceptQ4()
@@ -193,7 +193,7 @@ func TestStatusLabel_ALabelOfCuminCoreOrOfAnOwnerDecidesAsBefore(t *testing.T) {
 				if n := sc.agentRuns(t); n != 1 {
 					t.Errorf("%d agent runs, want 1", n)
 				}
-				if strings.Contains(sc.logs.String(), "is not of cumin-core or of an Owner") {
+				if strings.Contains(sc.logs.String(), "is not of cumin-core or of a Maintainer") {
 					t.Errorf("a label that counts was logged as one of another account:\n%s", sc.logs.String())
 				}
 			})
@@ -221,7 +221,7 @@ func TestStatusLabel_ARepeatedEventOfAnotherGitHubAppDoesNotHideTheAccount(t *te
 			if n := sc.agentRuns(t); n != 1 {
 				t.Errorf("%d agent runs, want 1", n)
 			}
-			if strings.Contains(sc.logs.String(), "is not of cumin-core or of an Owner") {
+			if strings.Contains(sc.logs.String(), "is not of cumin-core or of a Maintainer") {
 				t.Errorf("a label that counts was logged as one of another account:\n%s", sc.logs.String())
 			}
 		})

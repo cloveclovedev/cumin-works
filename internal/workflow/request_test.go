@@ -169,7 +169,7 @@ func TestOwnerReviewFixRequestText_I13(t *testing.T) {
 		"Branch: cumin/10-add-the-login-screen\n",
 		"Work directory: /work/example-org/example-repo/10-implementer\n",
 		"Review: " + review + "\n",
-		"The Owner requested changes on the pull request #21",
+		"A Maintainer requested changes on the pull request #21",
 		"Read that review and its comments on GitHub",
 		"Address every comment of that review",
 		"Do not open a new pull request",

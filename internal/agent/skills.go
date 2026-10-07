@@ -57,7 +57,7 @@ var skills = []Skill{
 	},
 	{
 		Name:        "cumin-decision-request",
-		Description: "Write a decision request for the Owner. Use before you return the result blocked, to write blocked_reason.",
+		Description: "Write a decision request for a Maintainer. Use before you return the result blocked, to write blocked_reason.",
 		Template:    "decision-request.md",
 		Roles:       config.AllRoles(),
 	},
@@ -69,7 +69,7 @@ var skills = []Skill{
 	},
 	{
 		Name:        "cumin-plan-summary",
-		Description: "Write the plan of a requirement issue as one comment for the Owner. Use after every implementation issue exists, before you comment.",
+		Description: "Write the plan of a requirement issue as one comment for a Maintainer. Use after every implementation issue exists, before you comment.",
 		Template:    "plan-summary.md",
 		Roles:       []config.Role{config.RolePlanner},
 	},

@@ -244,8 +244,8 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPost, "/graphql"); n != 6 {
 		t.Errorf("%d GraphQL requests, want 6", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"ask for the plan review: the split waits for the Owner"`) {
-		t.Error("the log does not say that the split waits for the Owner")
+	if !strings.Contains(sc.logs.String(), `"msg":"ask for the plan review: the split waits for a Maintainer"`) {
+		t.Error("the log does not say that the split waits for a Maintainer")
 	}
 }
 

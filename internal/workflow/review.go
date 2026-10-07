@@ -128,7 +128,7 @@ func (s *Service) reviewRequestOf(ctx context.Context, token string, target Targ
 	readyAt := times[number][LabelReady]
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, number)
 	if err != nil {
-		return reviewerRequest{}, fmt.Errorf(string(ActionRequestTheReview)+": read the login of the Owner of issue #%d: %w", number, err)
+		return reviewerRequest{}, fmt.Errorf(string(ActionRequestTheReview)+": read the Issue Owner login of issue #%d: %w", number, err)
 	}
 	round := ReviewRounds(pr.Reviews, reviewer, readyAt) + 1
 	// An approval of the head commit leaves no diff to name.
@@ -545,14 +545,14 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			return nil, err
 		}
 		if !a.Question {
-			log.Warn(string(a.Action)+": the review stops for the Owner", "reason", a.Reason, "retried", a.Retried, "labels", labels)
+			log.Warn(string(a.Action)+": the review stops for a Maintainer", "reason", a.Reason, "retried", a.Retried, "labels", labels)
 			s.stopForOwner(ctx, log, target, settings, stop{
 				action: a.Action, issue: number, labelDone: true, reason: a.Reason,
 				comment: StopNote(a.Action, a.Reason, a.PullRequest, a.Retried),
 			})
 			return nil, nil
 		}
-		log.Info(string(ActionStopTheReview)+": the Reviewer asked a question; the issue waits for the Owner", "labels", labels)
+		log.Info(string(ActionStopTheReview)+": the Reviewer asked a question; the issue waits for a Maintainer", "labels", labels)
 		s.notifyOwner(ctx, log.With("action", ActionStopTheReview), settings.Settings.Notify.DiscordEnabled, notify.Notification{
 			Action:     string(ActionStopTheReview),
 			Reason:     "The Reviewer asked a question during the review.",
@@ -579,7 +579,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		if err != nil {
 			return nil, err
 		}
-		log.Info(string(ActionStopAtTheRoundLimit)+": the issue waits for the Owner", "labels", labels, "comment", a.Explanation.URL)
+		log.Info(string(ActionStopAtTheRoundLimit)+": the issue waits for a Maintainer", "labels", labels, "comment", a.Explanation.URL)
 		s.notifyOwner(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.Settings.Notify.DiscordEnabled, notify.Notification{
 			Action:     string(ActionStopAtTheRoundLimit),
 			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstBodyLine(a.Explanation.Body)),
@@ -594,7 +594,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		}
 		login, err := ownerLogin(ctx, token)
 		if err != nil {
-			return nil, fmt.Errorf(string(ActionRequestAReviewFix)+": read the login of the Owner of issue #%d: %w", number, err)
+			return nil, fmt.Errorf(string(ActionRequestAReviewFix)+": read the Issue Owner login of issue #%d: %w", number, err)
 		}
 		if err := s.startStay(repository, number, false); err != nil {
 			return nil, fmt.Errorf(string(ActionRequestAReviewFix)+": keep the start of the stay of issue #%d in implementing: %w", number, err)

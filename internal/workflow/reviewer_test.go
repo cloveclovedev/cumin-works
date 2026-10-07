@@ -463,7 +463,7 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 		t.Errorf("notifications = %q, want one of I8 that links the comment", messages)
 	}
 	for _, want := range []string{`"msg":"request the cause: blocking comments remain at the limit of rounds"`,
-		`"msg":"request the cause: requested the explanation of the cause"`, `"msg":"stop at the round limit: the issue waits for the Owner"`} {
+		`"msg":"request the cause: requested the explanation of the cause"`, `"msg":"stop at the round limit: the issue waits for a Maintainer"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}

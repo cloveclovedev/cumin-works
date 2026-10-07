@@ -39,7 +39,7 @@ func TestCore09_NothingToDoNotifiesOnceUntilCuminActs(t *testing.T) {
 	if len(q4) != 1 || !strings.Contains(q4[0], "No issue can go on") {
 		t.Fatalf("Q4 notifications = %q, want one", q4)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"tell that cumin waits: no issue can go on and no agent runs; the Owner is told once"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"tell that cumin waits: no issue can go on and no agent runs; the notification goes out once"`) {
 		t.Error("the log has no Q4 line")
 	}
 

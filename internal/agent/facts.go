@@ -91,9 +91,9 @@ func factsBlock(facts runFacts) string {
 	if facts.IssueNumber != 0 {
 		b.WriteString("- Issue of the run: #" + strconv.Itoa(facts.IssueNumber) + " (" + string(facts.IssueKind) + ")\n")
 		if facts.OwnerLogin != "" {
-			b.WriteString("- Login of the Owner: " + facts.OwnerLogin + "\n")
+			b.WriteString("- Issue Owner login: " + facts.OwnerLogin + "\n")
 		} else {
-			b.WriteString("- Login of the Owner: there is no Owner login\n")
+			b.WriteString("- Issue Owner login: there is no Issue Owner login\n")
 		}
 	}
 	if facts.ProtectedPaths != nil {
