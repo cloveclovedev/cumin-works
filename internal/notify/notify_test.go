@@ -65,7 +65,7 @@ func TestMessage_HoldsTheActionTheReasonAndTheLink(t *testing.T) {
 }
 
 // A reason that an agent wrote can be long. The message keeps the link,
-// which is the line that the Owner must be able to open.
+// which is the line that the Maintainer must be able to open.
 func TestMessage_CutsALongReasonAndKeepsTheLink(t *testing.T) {
 	t.Parallel()
 	link := "https://github.com/example-org/example-repo/issues/12"

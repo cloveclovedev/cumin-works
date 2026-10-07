@@ -10,7 +10,7 @@ import (
 
 // TestLiveReviewRequestFacts measures what the review request of #305
 // relies on: whether the token of cumin-core may request the review of the
-// Owner on a pull request of the Implementer App, what a second same
+// Maintainer on a pull request of the Implementer App, what a second same
 // request does, and how GitHub answers for an account that is not a
 // collaborator.
 //
@@ -38,10 +38,10 @@ func TestLiveReviewRequestFacts(t *testing.T) {
 	pull := l.openPullWithBody(t, implementer, branch, "test: live review request facts "+l.runID, "A live check of cumin-works. The test closes it.")
 	requestPath := fmt.Sprintf("/repos/{repo}/pulls/%d/requested_reviewers", pull.Number)
 
-	// Fact V1: the request for the Owner, with the token of cumin-core.
+	// Fact V1: the request for the Maintainer, with the token of cumin-core.
 	first := l.api(t, core, http.MethodPost, requestPath, map[string]any{"reviewers": []string{maintainer}})
 	count := l.requestedReviewers(t, core, pull.Number, maintainer)
-	l.record("V1", "The cumin-core App requests the review of the Owner on a pull request of the Implementer App", "201, the pull request lists the login under `requested_reviewers`",
+	l.record("V1", "The cumin-core App requests the review of the Issue Owner on a pull request of the Implementer App", "201, the pull request lists the login under `requested_reviewers`",
 		fmt.Sprintf("Status %d: %s. The login is listed %d time(s)", first.status, first.message(), count))
 	if first.status != http.StatusCreated || count != 1 {
 		t.Errorf("fact V1: status %d: %s, listed %d time(s)", first.status, first.message(), count)

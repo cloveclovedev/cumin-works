@@ -16,7 +16,7 @@ import (
 const headSHA = "2222222222222222222222222222222222222222"
 
 // TestFailedCheckContent_HoldsTheAnnotationsAndTheEndOfTheJobLog is what the
-// request of I4 (a required check failed, fix it) carries.
+// request of "request a check fix" (a required check failed, fix it) carries.
 func TestFailedCheckContent_HoldsTheAnnotationsAndTheEndOfTheJobLog(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
@@ -48,7 +48,7 @@ func TestFailedCheckContent_HoldsTheAnnotationsAndTheEndOfTheJobLog(t *testing.T
 	}
 }
 
-// TestFailedCheckContent_IsCutAtTheLimit keeps the request of I4 small.
+// TestFailedCheckContent_IsCutAtTheLimit keeps the request of "request a check fix" small.
 func TestFailedCheckContent_IsCutAtTheLimit(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
@@ -80,7 +80,7 @@ func TestFailedCheckContent_IsCutAtTheLimit(t *testing.T) {
 
 // TestFailedCheckContent_AChecksWhoseContentIsOutOfReachNamesItself: a
 // commit status, a missing job, and a call that fails are not errors. The
-// request of I4 goes out with the name of the check.
+// request of "request a check fix" goes out with the name of the check.
 func TestFailedCheckContent_AChecksWhoseContentIsOutOfReachNamesItself(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -118,8 +118,8 @@ func TestFailedCheckContent_AChecksWhoseContentIsOutOfReachNamesItself(t *testin
 			if !strings.Contains(text, `Check "ci" failed.`) || !strings.Contains(text, "could not read its content") {
 				t.Errorf("the text does not name the check and the missing content:\n%s", text)
 			}
-			// The Owner must be able to see in the log why the request of
-			// I4 carries no content.
+			// The Maintainer must be able to see in the log why the request of
+			// "request a check fix" carries no content.
 			if !strings.Contains(logs.String(), "WARN") {
 				t.Errorf("no warning for a check that could not be read: %s", logs)
 			}
@@ -209,7 +209,7 @@ func TestFailedCheckContent_ADetailsAddressOfAnotherAppIsNoJob(t *testing.T) {
 
 // TestFailedCheckContent_TwoRulesOfTheSameNameKeepTheirOwnText: two
 // rulesets can require the same name from two Apps. Each one keeps its own
-// annotations and log, so the request of I4 holds both failures.
+// annotations and log, so the request of "request a check fix" holds both failures.
 func TestFailedCheckContent_TwoRulesOfTheSameNameKeepTheirOwnText(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
@@ -236,7 +236,7 @@ func TestFailedCheckContent_TwoRulesOfTheSameNameKeepTheirOwnText(t *testing.T) 
 }
 
 // TestFailedCheckContent_TheAppOfTheRuleDecidesWhichRunIsRead: a rule that
-// names an App is met only by that App, in the decision (I3, I4) and here.
+// names an App is met only by that App, in the decision ("request the review", "request a check fix") and here.
 func TestFailedCheckContent_TheAppOfTheRuleDecidesWhichRunIsRead(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")

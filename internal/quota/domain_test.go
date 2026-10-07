@@ -24,8 +24,8 @@ func weekStart() time.Time { return weeklyReset.Add(-week) }
 func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 
 // The pace limit rises through the week, starts at target x lead / 7 days,
-// and never passes the target (Core-15).
-func TestCore15_PaceLimitAtTheStartTheMiddleAndTheEndOfAWeek(t *testing.T) {
+// and never passes the target (the weekly pace).
+func TestPaceLimitAtTheStartTheMiddleAndTheEndOfAWeek(t *testing.T) {
 	tests := []struct {
 		name string
 		at   time.Time
@@ -59,7 +59,7 @@ func TestPaceLimitWithoutLead(t *testing.T) {
 
 // The same weekly usage stops a start early in the week and lets it go
 // later, by time alone.
-func TestCore15_TheSameWeeklyUsageStopsEarlyAndPassesLater(t *testing.T) {
+func TestTheSameWeeklyUsageStopsEarlyAndPassesLater(t *testing.T) {
 	usage := Usage{Weekly: Window{Utilization: 0.40, ResetsAt: weeklyReset}}
 	early := Decide(usage, defaults, Allowance{}, weekStart().Add(24*time.Hour), time.UTC)
 	if early.Allows() || len(early.Stopped) != 1 || early.Stopped[0] != Weekly {
@@ -126,9 +126,9 @@ func TestFiveHourLimitFollowsTheLocation(t *testing.T) {
 	}
 }
 
-// Q3: the next try time is the start of the band at its clock time in the
+// "resume agent starts": the next try time is the start of the band at its clock time in the
 // location, also when the offset is not a full hour.
-func TestQ3_NextTryAtTheStartOfABandInTheLocation(t *testing.T) {
+func TestNextTryAtTheStartOfABandInTheLocation(t *testing.T) {
 	settings := defaults
 	settings.FiveHour.Bands = []config.TimeBand{{From: 23 * 60, To: 6 * 60, Threshold: 95}}
 	for name, loc := range zones {
@@ -208,8 +208,8 @@ func TestDecideIgnoresAWindowWhoseResetHasPassed(t *testing.T) {
 	}
 }
 
-// Q3: the next try time of each window, and of both.
-func TestQ3_NextTry(t *testing.T) {
+// "resume agent starts": the next try time of each window, and of both.
+func TestNextTryOfEachWindow(t *testing.T) {
 	now := time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC) // 1 day into the week of weeklyReset
 	fiveHourReset := now.Add(3 * time.Hour)
 	night := defaults
@@ -277,9 +277,9 @@ func TestNewerKeepsTheNewestReading(t *testing.T) {
 	}
 }
 
-// Q2 and Core-16: an allowance makes the 5h limit 100% until its end, and
+// An allowance makes the 5h limit 100% until its end, and
 // never passes the weekly pace limit.
-func TestQ2_AnAllowanceLiftsOnlyTheFiveHourLimit(t *testing.T) {
+func TestAnAllowanceLiftsOnlyTheFiveHourLimit(t *testing.T) {
 	now := weeklyReset.Add(-time.Hour) // the weekly limit is the target
 	fiveHourReset := now.Add(2 * time.Hour)
 	allowance := Allowance{FiveHourUntil: fiveHourReset}

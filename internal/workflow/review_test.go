@@ -213,7 +213,7 @@ func TestReviewRounds_TheCountComesFromGitHubAndSurvivesARestart(t *testing.T) {
 	}
 }
 
-// I8 counts only a decision request of the Reviewer that is not older than
+// "stop at the round limit" counts only a decision request of the Reviewer that is not older than
 // its last review.
 func TestExplanationOf_IsANewDecisionRequestOfTheReviewer(t *testing.T) {
 	const reviewer = "example-reviewer[bot]"

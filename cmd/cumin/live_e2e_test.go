@@ -1,6 +1,6 @@
 package main
 
-// The live scenario E2E-1: one requirement issue goes from the Owner's ready
+// The live scenario E2E-1: one requirement issue goes from the Maintainer's ready
 // to the acceptance check on the sandbox, with cumin running under launchd.
 // It runs only with CUMIN_LIVE=1. docs/ja/development/live-tests.md says how
 // to prepare the Host and how to run it.
@@ -69,7 +69,7 @@ None
 
 type e2e struct {
 	repo       string
-	maintainer string // the gh login that plays the Owner
+	maintainer string // the gh login that plays the Maintainer
 	runID      string
 	logPath    string
 	logFrom    int64
@@ -198,7 +198,7 @@ func (e *e2e) statusEvents(t *testing.T, number int) []e2eLabelEvent {
 }
 
 // checkStatusPath checks that the states start with the wanted ones, that
-// the Owner set every ready, and that cumin-core set every other state.
+// the Maintainer set every ready, and that cumin-core set every other state.
 func (e *e2e) checkStatusPath(t *testing.T, number int, want []string, last string) string {
 	t.Helper()
 	var path []string
@@ -207,7 +207,7 @@ func (e *e2e) checkStatusPath(t *testing.T, number int, want []string, last stri
 		path = append(path, name)
 		if name == "ready" {
 			if ev.Actor.Login != e.maintainer {
-				t.Errorf("issue #%d: %s set ready, want the Owner", number, ev.Actor.Login)
+				t.Errorf("issue #%d: %s set ready, want the Maintainer", number, ev.Actor.Login)
 			}
 		} else if !ev.Actor.isApp("core") {
 			t.Errorf("issue #%d: %s set %s, want the cumin-core App", number, ev.Actor.Login, name)
@@ -462,7 +462,7 @@ func newE2E(t *testing.T) *e2e {
 }
 
 // waitFor polls until done reports true. An issue that cumin hands back to
-// the Owner with awaiting-decision ends the test: cumin could not go
+// the Maintainer with awaiting-decision ends the test: cumin could not go
 // on, which is a defect to record.
 func (e *e2e) waitFor(t *testing.T, what string, limit time.Duration, issues []int, done func() bool) {
 	t.Helper()
@@ -473,7 +473,7 @@ func (e *e2e) waitFor(t *testing.T, what string, limit time.Duration, issues []i
 		}
 		for _, number := range issues {
 			if issue := e.issue(t, number); strings.Contains(issue.status(), "awaiting-decision") {
-				t.Fatalf("%s: cumin stopped issue #%d for the Owner (awaiting-decision)", what, number)
+				t.Fatalf("%s: cumin stopped issue #%d for the Maintainer (awaiting-decision)", what, number)
 			}
 		}
 		if time.Now().After(deadline) {
@@ -488,7 +488,7 @@ func TestLiveE2E(t *testing.T) {
 	pid := launchdPID(t)
 	defer func() { t.Logf("E2E-1 evidence (run %s):\n\n%s", e.runID, e.table()) }()
 
-	// The Owner writes the requirement issue and says that it is ready.
+	// The Maintainer writes the requirement issue and says that it is ready.
 	url := e.gh(t, "issue", "create", "--repo", e.repo, "--title", "Describe the live scenario E2E-1 ("+e.runID+")",
 		"--body", fmt.Sprintf(e2eRequirement, e.runID), "--label", "cumin/type/requirement", "--label", "cumin/status/ready")
 	requirement, err := strconv.Atoi(url[strings.LastIndex(url, "/")+1:])
@@ -496,9 +496,9 @@ func TestLiveE2E(t *testing.T) {
 		t.Fatalf("gh issue create answered %q", url)
 	}
 	t.Logf("requirement issue #%d", requirement)
-	e.record("The Owner's ready on the requirement issue", fmt.Sprintf("issue #%d, created with `cumin/status/ready`", requirement))
+	e.record("The Maintainer's ready on the requirement issue", fmt.Sprintf("issue #%d, created with `cumin/status/ready`", requirement))
 
-	// The split: start (R1) and verification (R2).
+	// The split: start ("request the split") and verification ("ask for the plan review").
 	e.waitFor(t, "the split", e2eSplitLimit, []int{requirement}, func() bool {
 		return e.issue(t, requirement).status() == e2eStatusPrefix+"awaiting-plan-review"
 	})
@@ -525,10 +525,10 @@ func TestLiveE2E(t *testing.T) {
 		t.Fatalf("the requirement issue has %d plan summaries of the Planner, want 1", len(plans))
 	}
 	checkHeadings(t, "the plan summary", plans[0].Body, "### Summary", "### Requirement coverage", "### To approve")
-	e.record("Start the split, verify the split (R1, R2)", fmt.Sprintf("states of #%d: %s; sub-issues of the Planner: %s; plan summary %s",
+	e.record("Start the split, verify the split ('request the split', 'ask for the plan review')", fmt.Sprintf("states of #%d: %s; sub-issues of the Planner: %s; plan summary %s",
 		requirement, path, strings.Join(planned, ", "), plans[0].HTMLURL))
 
-	// The Owner settles the risk: one risk/low and one risk/medium. The
+	// The Maintainer settles the risk: one risk/low and one risk/medium. The
 	// choice of the Planner stays when it already is that.
 	low, medium := subs[1].Number, subs[0].Number
 	if subs[0].labels(e2eRiskPrefix)[0] == "risk/low" && subs[1].labels(e2eRiskPrefix)[0] != "risk/low" {
@@ -546,10 +546,10 @@ func TestLiveE2E(t *testing.T) {
 	for _, sub := range subs {
 		e.gh(t, "issue", "edit", strconv.Itoa(sub.Number), "--repo", e.repo, "--add-label", "cumin/status/ready")
 	}
-	e.record("The Owner's risk and ready on the sub-issues", fmt.Sprintf("#%d `risk/low`, #%d `risk/medium`, both `cumin/status/ready`", low, medium))
+	e.record("The Maintainer's risk and ready on the sub-issues", fmt.Sprintf("#%d `risk/low`, #%d `risk/medium`, both `cumin/status/ready`", low, medium))
 
-	// The work on both sub-issues. The only step of the Owner is the
-	// approval of the risk/medium pull request when cumin asks for it (I7).
+	// The work on both sub-issues. The only step of the Maintainer is the
+	// approval of the risk/medium pull request when cumin asks for it ("ask for the merge decision").
 	var approvedAt time.Time
 	all := []int{requirement, low, medium}
 	e.waitFor(t, "the merge of both pull requests", e2eWorkLimit, all, func() bool {
@@ -561,11 +561,11 @@ func TestLiveE2E(t *testing.T) {
 			var pull e2ePull
 			e.api(t, fmt.Sprintf("pulls/%d", pulls[0]), &pull)
 			if pull.Merged {
-				t.Fatalf("pull request #%d (risk/medium) was merged before the Owner approved it", pull.Number)
+				t.Fatalf("pull request #%d (risk/medium) was merged before the Maintainer approved it", pull.Number)
 			}
 			e.gh(t, "pr", "review", strconv.Itoa(pull.Number), "--repo", e.repo, "--approve")
 			approvedAt = time.Now()
-			e.record("The Owner's approval of the risk/medium pull request", fmt.Sprintf("pull request #%d, not merged while #%d waited in `awaiting-merge-decision`", pull.Number, medium))
+			e.record("The Maintainer's approval of the risk/medium pull request", fmt.Sprintf("pull request #%d, not merged while #%d waited in `awaiting-merge-decision`", pull.Number, medium))
 		}
 		return e.issue(t, low).State == "closed" && e.issue(t, medium).State == "closed"
 	})
@@ -573,8 +573,8 @@ func TestLiveE2E(t *testing.T) {
 	pulls := map[int]e2ePull{}
 	var lastClose time.Time
 	for _, number := range []int{low, medium} {
-		// Both issues end in merging: I6 starts the merge for risk/low, and
-		// I12 starts it after the approval of the Owner.
+		// Both issues end in merging: "start the merge" holds for risk/low at once, and
+		// for risk/medium after the approval of the Maintainer.
 		path := e.checkStatusPath(t, number, []string{"ready", "implementing", "checking", "reviewing"}, "merging")
 		linked := e.linkedPulls(t, number)
 		if len(linked) != 1 {
@@ -626,17 +626,17 @@ func TestLiveE2E(t *testing.T) {
 			number, path, pull.Number, pull.Head.Ref, pull.MergedAt, issue.ClosedAt)
 		if number == medium {
 			if maintainer == nil || maintainer.State != "APPROVED" || maintainer.CommitID != pull.Head.SHA || maintainer.SubmittedAt > pull.MergedAt {
-				t.Errorf("pull request #%d: the merge at %s does not follow an approval of the Owner on the head commit: %+v", pull.Number, pull.MergedAt, maintainer)
+				t.Errorf("pull request #%d: the merge at %s does not follow an approval of the Maintainer on the head commit: %+v", pull.Number, pull.MergedAt, maintainer)
 			} else {
-				evidence += "; the Owner approved at " + maintainer.SubmittedAt
+				evidence += "; the Maintainer approved at " + maintainer.SubmittedAt
 			}
-			e.record("risk/medium: claim, verify done, review, ask the Owner, merge after the approval, close (I1, I2, I3, I7, I12)", evidence)
+			e.record("risk/medium: claim, verify done, review, ask the Maintainer, merge after the approval, close ('request the implementation', 'wait for the checks', 'request the review', 'ask for the merge decision', 'start the merge')", evidence)
 		} else {
-			e.record("risk/low: claim, verify done, review, merge, close (I1, I2, I3, I6)", evidence)
+			e.record("risk/low: claim, verify done, review, merge, close ('request the implementation', 'wait for the checks', 'request the review', 'start the merge')", evidence)
 		}
 	}
 
-	// The acceptance check (R4) and the wait for the Owner (R7).
+	// The acceptance check ("request the acceptance check") and the wait for the Maintainer ("ask for the acceptance").
 	e.waitFor(t, "the acceptance check", e2eAcceptLimit, []int{requirement}, func() bool {
 		return e.issue(t, requirement).status() == e2eStatusPrefix+"awaiting-acceptance" &&
 			len(commentsOf(e.comments(t, requirement), "planner", "## Acceptance check")) > 0
@@ -650,7 +650,7 @@ func TestLiveE2E(t *testing.T) {
 		t.Errorf("the acceptance check at %s is not after the last close at %s", checks[0].CreatedAt, lastClose.Format(time.RFC3339))
 	}
 
-	// The follow-up notes (I9): one for each pull request, before the
+	// The follow-up notes ("write the follow-up note"): one for each pull request, before the
 	// acceptance check.
 	var notes []string
 	for _, number := range []int{low, medium} {
@@ -680,7 +680,7 @@ func TestLiveE2E(t *testing.T) {
 		}
 		notes = append(notes, found[0].HTMLURL)
 	}
-	e.record("Follow-up notes (I9)", "one note of cumin-core for each pull request, with the one line of \"Follow-up\" and no signature, before the acceptance check: "+strings.Join(notes, ", "))
+	e.record("Follow-up notes ('write the follow-up note')", "one note of cumin-core for each pull request, with the one line of \"Follow-up\" and no signature, before the acceptance check: "+strings.Join(notes, ", "))
 
 	checkHeadings(t, "the acceptance check", checks[0].Body, "### Constraints", "### Left after this requirement", "### To accept")
 	path = e.checkStatusPath(t, requirement, []string{"ready", "planning", "awaiting-plan-review", "implementing", "accepting", "awaiting-acceptance"}, "awaiting-acceptance")
@@ -688,11 +688,11 @@ func TestLiveE2E(t *testing.T) {
 	if last := events[len(events)-1]; last.CreatedAt < checks[0].CreatedAt {
 		t.Errorf("the requirement issue went to awaiting-acceptance at %s, before the acceptance check at %s", last.CreatedAt, checks[0].CreatedAt)
 	}
-	e.record("Requirement to implementing, to accepting for the acceptance check, wait for the acceptance (R3, R4, R7)",
+	e.record("Requirement to implementing, to accepting for the acceptance check, wait for the acceptance ('mark the requirement as in work', 'request the acceptance check', 'ask for the acceptance')",
 		fmt.Sprintf("states of #%d: %s; acceptance check of the Planner App %s", requirement, path, checks[0].HTMLURL))
 
 	// The log of cumin: the steps in order, the notifications, and nothing
-	// secret. The notification of R7 follows the label, so wait for it.
+	// secret. The notification of "ask for the acceptance" follows the label, so wait for it.
 	notified := func(lines []logLine, action string, issue int) int {
 		count := 0
 		for _, line := range lines {
@@ -740,7 +740,7 @@ func TestLiveE2E(t *testing.T) {
 			t.Errorf("the log has %d notifications of %s for issue #%d, want 1", count, n.action, n.issue)
 		}
 	}
-	e.record("Notifications", "log: `the notification was sent` once each for the split (R2), the merge decision (I7), and the acceptance (R7)")
+	e.record("Notifications", "log: `the notification was sent` once each for the split ('ask for the plan review'), the merge decision ('ask for the merge decision'), and the acceptance ('ask for the acceptance')")
 
 	secret := regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|/api/webhooks/|PRIVATE KEY|utilization|agent quota usage`)
 	for _, line := range lines {

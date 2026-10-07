@@ -1,7 +1,7 @@
 package github_test
 
 // Live checks against a sandbox repository with the registered GitHub Apps.
-// They run only with CUMIN_LIVE=1 and only after the Owner agrees.
+// They run only with CUMIN_LIVE=1 and only after the Maintainer agrees.
 // docs/ja/development/live-tests.md says how to run them.
 //
 // Every token stays inside this test process: it is never an argument of a
@@ -45,7 +45,7 @@ type resultRow struct {
 	what, expected, actual string
 }
 
-// newLive skips the test unless the Owner enabled the live checks.
+// newLive skips the test unless the Maintainer enabled the live checks.
 func newLive(t *testing.T) *live {
 	t.Helper()
 	if os.Getenv("CUMIN_LIVE") != "1" {

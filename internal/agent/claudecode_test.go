@@ -793,7 +793,7 @@ func TestRun_TheStartRecordMustListTheSkillsOfTheRole(t *testing.T) {
 }
 
 // The plugins that Claude Code ships in its binary pass the start check,
-// matched on the reserved source "<name>@builtin" (the Owner, on #156). Any
+// matched on the reserved source "<name>@builtin" (the Maintainer, on #156). Any
 // other plugin, a built-in name from another source, an entry without
 // source, or a shape that cumin cannot read stops the run, and the reason
 // names the source.

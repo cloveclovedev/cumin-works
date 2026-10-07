@@ -749,7 +749,7 @@ func TestSetupGitHubApps_SwappedClientIDsStop(t *testing.T) {
 
 // A valid Client ID and key of an App that another account owns is not a
 // registration for this organization.
-func TestSetupGitHubApps_AppOfAnotherOwnerStops(t *testing.T) {
+func TestSetupGitHubApps_AppOfAnotherMaintainerStops(t *testing.T) {
 	var out bytes.Buffer
 	browser := &fakeBrowser{org: "example-org"}
 	service := newService(t, browser, &memoryStore{}, &out)

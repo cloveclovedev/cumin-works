@@ -433,7 +433,7 @@ func TestWorktree_PrepareWithRelativeWorkDir(t *testing.T) {
 	}
 }
 
-// Head is what I2 compares with the head commit of the pull request.
+// Head is what "wait for the checks" compares with the head commit of the pull request.
 func TestWorktree_HeadReadsTheCommitOfTheWorktree(t *testing.T) {
 	r := newRemote(t)
 	var logs bytes.Buffer
@@ -453,7 +453,7 @@ func TestWorktree_HeadReadsTheCommitOfTheWorktree(t *testing.T) {
 	}
 
 	// A new commit in the worktree changes what Head returns, which is how
-	// I2 sees a commit that is not pushed.
+	// "wait for the checks" sees a commit that is not pushed.
 	if err := os.WriteFile(filepath.Join(dir, "local.txt"), []byte("change\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -41,7 +41,7 @@ func TestRequiredChecks_ReadsTheChecksOfTheRulesOfTheBranch(t *testing.T) {
 
 // TestRequiredChecks_ReadsEveryPageOfTheRules: the answer of GitHub is
 // paginated (with per_page=1 the sandbox returned four pages on 2026-09-25).
-// A required check on a later page must not be missed, because I3 would then
+// A required check on a later page must not be missed, because "request the review" would then
 // treat it as passed.
 func TestRequiredChecks_ReadsEveryPageOfTheRules(t *testing.T) {
 	fake, server := githubtest.New(t)
@@ -96,7 +96,7 @@ func TestRequiredChecks_AFailedCallNamesTheStatusWithoutTheToken(t *testing.T) {
 }
 
 // TestReadSnapshot_ReadsTheBranchTheLabelsAndTheChecksOfAPullRequest covers
-// what I3, I4, and I11 read of a pull request.
+// what "request the review", "request a check fix", and "copy the labels to the pull request" read of a pull request.
 func TestReadSnapshot_ReadsTheBranchTheLabelsAndTheChecksOfAPullRequest(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
@@ -198,7 +198,7 @@ func TestReadSnapshot_TooManyChecksOrLabelsOnAPullRequestIsAnError(t *testing.T)
 
 // TestReadSnapshot_AnUnknownKindOfCheckIsAnError: GitHub has two kinds of
 // check in the rollup today. A third one must stop the poll instead of
-// letting I3 pass an issue whose check cumin cannot read.
+// letting "request the review" pass an issue whose check cumin cannot read.
 func TestReadSnapshot_AnUnknownKindOfCheckIsAnError(t *testing.T) {
 	const answer = `{"data":{"nodes":[
 	       {"__typename":"Issue","number":10,

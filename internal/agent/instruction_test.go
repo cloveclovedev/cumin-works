@@ -225,7 +225,7 @@ func TestRoleFiles_SayThatTheRoleWinsOverItsDiscipline(t *testing.T) {
 	}
 }
 
-// The instruction of every role takes the Owner and the protected paths
+// The instruction of every role takes the Maintainer and the protected paths
 // from the facts of the start request, and holds no rule that derives them:
 // cumin knows these facts, so an agent must not work them out.
 func TestInstruction_EveryRoleUsesTheFactsOfTheStartRequest(t *testing.T) {
@@ -248,7 +248,7 @@ func TestInstruction_EveryRoleUsesTheFactsOfTheStartRequest(t *testing.T) {
 			}
 		}
 		for _, old := range []string{
-			// The rule that derived the Owner from the timelines.
+			// The rule that derived the Maintainer from the timelines.
 			"newest event",
 			"timelines of the sub-issues",
 			// The place and the default of the list of protected paths.
@@ -335,12 +335,12 @@ func TestInstruction_PlannerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 		"Read a pull request through the issues API",
 		// Only these three write a source; anyone may comment otherwise.
 		"is not a source",
-		// The Planner must be able to tell who the Owner is.
+		// The Planner must be able to tell who the Maintainer is.
 		"The Issue Owner is the account that the fact \"Issue Owner login\" names",
 		// The Planner must know which files the Implementer cannot change.
 		"the fact \"Protected paths\" holds the list",
 		"`.github/workflows/`",
-		// A short answer of the Owner replies to the question in the
+		// A short answer of the Maintainer replies to the question in the
 		// decision request, which cumin posted.
 		"the decision request that cumin posted for you",
 		// A blocked run is not run again, so nothing may exist yet.
@@ -449,7 +449,7 @@ func TestInstruction_ReviewerNamesItsSkillsAndHoldsItsContract(t *testing.T) {
 
 // The craft of the Reviewer: round 1 finds as much as it can with the
 // review skills of the CLI, and later rounds check only the fixes, so that
-// the review ends (the rules that the Owner approved on #157).
+// the review ends (the rules that the Maintainer approved on #157).
 func TestInstruction_ReviewerHoldsTheCraftOfItsDiscipline(t *testing.T) {
 	text, err := instruction(config.RoleReviewer, "")
 	if err != nil {

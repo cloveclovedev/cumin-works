@@ -46,10 +46,10 @@ func (sc *scene) labelChanges() int {
 	return n
 }
 
-// The ready of the Owner (issue-states.md, I1): the Implementer starts once
+// The ready of the Maintainer (issue-states.md, "request the implementation"): the Implementer starts once
 // when a person with write or admin permission added the newest
 // cumin/status/ready.
-func TestOwnerReady_AReadyOfTheOwnerStartsTheImplementerOnce(t *testing.T) {
+func TestMaintainerReady_AReadyOfTheMaintainerStartsTheImplementerOnce(t *testing.T) {
 	for _, permission := range []string{"write", "admin"} {
 		t.Run(permission, func(t *testing.T) {
 			sc := newScene(t)
@@ -73,10 +73,10 @@ func TestOwnerReady_AReadyOfTheOwnerStartsTheImplementerOnce(t *testing.T) {
 	}
 }
 
-// The ready of the Owner (issue-states.md, R1): the Planner starts once
-// when the Owner added the newest cumin/status/ready of the requirement
+// The ready of the Maintainer (issue-states.md, "request the split"): the Planner starts once
+// when the Maintainer added the newest cumin/status/ready of the requirement
 // issue.
-func TestOwnerReady_AReadyOfTheOwnerStartsThePlannerOnce(t *testing.T) {
+func TestMaintainerReady_AReadyOfTheMaintainerStartsThePlannerOnce(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 60), removedBefore(readyBy(theMaintainer, 5)), readyBy(theMaintainer, 5)}
 	sc.fake.SetPermission(theMaintainer, "write", "User")
@@ -119,12 +119,12 @@ func setNotMaintainerPermissions(sc *scene) {
 	sc.fake.SetPermission("a-visitor", "none", "User")
 }
 
-// A ready of an account that is not the Owner changes no label and sends
-// no request (issue-states.md, the ready of the Owner), also when an older
+// A ready of an account that is not a Maintainer changes no label and sends
+// no request (issue-states.md, the ready of the Maintainer), also when an older
 // ready was of the Owner: the label was removed, and the other account put
 // it on the issue again. Across three polls, cumin logs it once and tells
-// the Owner once.
-func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.T) {
+// the Maintainer once.
+func TestMaintainerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.T) {
 	scenes := []struct {
 		name   string
 		number int
@@ -163,7 +163,7 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 				}
 				messages := sc.messagesExceptWaiting()
 				if len(messages) != 1 || !strings.Contains(messages[0], s.row) || !strings.Contains(messages[0], "is not a person with write access") {
-					t.Errorf("messages = %q, want one of %s about the ready that is not of the Owner", messages, s.row)
+					t.Errorf("messages = %q, want one of %s about the ready that is not of a Maintainer", messages, s.row)
 				}
 			})
 		}
@@ -172,9 +172,9 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 
 // GitHub can record an event that adds cumin/status/ready again while the
 // label is on the issue, late and with the GitHub App that created the
-// issue (measured on 2026-10-05). The event of the Owner put the label on
-// the issue, so the issue starts as the ready of the Owner.
-func TestOwnerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheOwner(t *testing.T) {
+// issue (measured on 2026-10-05). The event of the Maintainer put the label on
+// the issue, so the issue starts as the ready of the Maintainer.
+func TestMaintainerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheMaintainer(t *testing.T) {
 	scenes := []struct {
 		name   string
 		number int
@@ -209,7 +209,7 @@ func TestOwnerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheOwner(t *testin
 				t.Errorf("labels of #%d = %v, want no cumin/status/ready after the start", s.number, got)
 			}
 			if strings.Contains(sc.logs.String(), "is not of a Maintainer") {
-				t.Errorf("the ready of the Owner was logged as one of another account:\n%s", sc.logs.String())
+				t.Errorf("the ready of the Maintainer was logged as one of another account:\n%s", sc.logs.String())
 			}
 		})
 	}
@@ -217,7 +217,7 @@ func TestOwnerReady_ARepeatedReadyEventOfAGitHubAppDoesNotHideTheOwner(t *testin
 
 // A new ready event of another account on the same issue is a new event:
 // cumin logs it once more.
-func TestOwnerReady_ANewReadyOfAnotherAccountIsLoggedAgain(t *testing.T) {
+func TestMaintainerReady_ANewReadyOfAnotherAccountIsLoggedAgain(t *testing.T) {
 	sc := newScene(t)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 5)}
 	setNotMaintainerPermissions(sc)
@@ -234,10 +234,10 @@ func TestOwnerReady_ANewReadyOfAnotherAccountIsLoggedAgain(t *testing.T) {
 	}
 }
 
-// An issue whose ready is not of the Owner takes no slot: with one slot,
-// another ready issue of the Owner starts in the same poll, although its
+// An issue whose ready is not of the Maintainer takes no slot: with one slot,
+// another ready issue of the Maintainer starts in the same poll, although its
 // number is higher.
-func TestOwnerReady_AReadyOfAnotherAccountTakesNoSlot(t *testing.T) {
+func TestMaintainerReady_AReadyOfAnotherAccountTakesNoSlot(t *testing.T) {
 	sc := newScene(t)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("a-triager", 5)}
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Another issue", Labels: []string{"cumin/status/ready", "risk/low"},
@@ -254,7 +254,7 @@ func TestOwnerReady_AReadyOfAnotherAccountTakesNoSlot(t *testing.T) {
 		t.Errorf("%d agent runs, want 2 for #11", n)
 	}
 	if got := sc.fake.Issue(sc.repo, 11).Labels; slices.Contains(got, "cumin/status/ready") {
-		t.Errorf("labels of #11 = %v, want no cumin/status/ready: the Owner's ready starts", got)
+		t.Errorf("labels of #11 = %v, want no cumin/status/ready: the Maintainer's ready starts", got)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, "cumin/status/ready") {
 		t.Errorf("labels of #10 = %v, want cumin/status/ready", got)
@@ -263,7 +263,7 @@ func TestOwnerReady_AReadyOfAnotherAccountTakesNoSlot(t *testing.T) {
 
 // A poll with no start candidate, or with no free slot, reads no actor and
 // no permission, so that the poll keeps its cost.
-func TestOwnerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
+func TestMaintainerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
 	tests := []struct {
 		name  string
 		setup func(*scene)
@@ -302,8 +302,8 @@ func TestOwnerReady_NoReadWithoutACandidateOrWithoutAFreeSlot(t *testing.T) {
 }
 
 // A start reads the actor and the permission once: the request takes the
-// login of the Owner from the read of the poll.
-func TestOwnerReady_AStartReadsTheActorAndThePermissionOnce(t *testing.T) {
+// login of the Issue Owner from the read of the poll.
+func TestMaintainerReady_AStartReadsTheActorAndThePermissionOnce(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
@@ -320,13 +320,13 @@ func TestOwnerReady_AStartReadsTheActorAndThePermissionOnce(t *testing.T) {
 		t.Errorf("%d reads of a permission, want 1", n)
 	}
 	if text := promptOf(t, sc.record(t, "agent.args")); !strings.Contains(text, issueOwnerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s:\n%s", theMaintainer, text)
+		t.Errorf("the prompt does not name the Issue Owner %s:\n%s", theMaintainer, text)
 	}
 }
 
 // A failed read of the actor logs an error, changes nothing, and the next
 // poll starts the issue.
-func TestOwnerReady_AFailedReadWaitsForTheNextPoll(t *testing.T) {
+func TestMaintainerReady_AFailedReadWaitsForTheNextPoll(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
@@ -346,7 +346,7 @@ func TestOwnerReady_AFailedReadWaitsForTheNextPoll(t *testing.T) {
 		t.Errorf("the log does not name the failed read:\n%s", sc.logs.String())
 	}
 	if strings.Contains(sc.logs.String(), "is not of a Maintainer") {
-		t.Errorf("a failed read is logged as a ready that is not of the Owner:\n%s", sc.logs.String())
+		t.Errorf("a failed read is logged as a ready that is not of a Maintainer:\n%s", sc.logs.String())
 	}
 
 	sc.pollAndWait(t, service)
@@ -355,9 +355,9 @@ func TestOwnerReady_AFailedReadWaitsForTheNextPoll(t *testing.T) {
 	}
 }
 
-// ReadyActorReads names the candidates of R1 and of I1 in the order of the
+// ReadyActorReads names the candidates of "request the split" and of "request the implementation" in the order of the
 // starts, and none without a free slot. Decide starts only a candidate
-// whose ready the Owner added.
+// whose ready the Maintainer added.
 func TestReadyActorReads_NamesTheStartCandidatesOnlyWithAFreeSlot(t *testing.T) {
 	ready := []string{workflow.LabelReady}
 	snapshot := workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{
@@ -385,7 +385,7 @@ func TestReadyActorReads_NamesTheStartCandidatesOnlyWithAFreeSlot(t *testing.T) 
 	}
 
 	// A ready that was not read can still start; a ready of another
-	// account waits for the Owner (the table under Q4). #12 leaves its
+	// account waits for the Maintainer (the table under "tell that cumin waits"). #12 leaves its
 	// working label, which would count by itself.
 	snapshot.RequirementIssues[0].SubIssues[0].Labels = []string{workflow.LabelAwaitingDecision}
 	if !snapshot.MovesWithoutMaintainer() {
@@ -399,14 +399,14 @@ func TestReadyActorReads_NamesTheStartCandidatesOnlyWithAFreeSlot(t *testing.T) 
 	snapshot.RequirementIssues[0].SubIssues[1].ReadyOwner = theMaintainer
 	actions := workflow.Decide(snapshot, 3, nil, nil, sceneNow, time.Hour)
 	if len(actions) != 1 || actions[0] != (workflow.Claim{Number: 11, RequirementIssue: 1}) {
-		t.Errorf("Decide = %v, want only the claim of #11, whose ready is of the Owner", actions)
+		t.Errorf("Decide = %v, want only the claim of #11, whose ready is of the Maintainer", actions)
 	}
 }
 
 // Only an event of the issue itself answers the check. A ready of a triage
 // account that left the newest label events that cumin reads starts
-// nothing, although a sub-issue has a ready of the Owner.
-func TestOwnerReady_AReadyOutsideTheEventsReadDoesNotTakeTheOwnerOfASubIssue(t *testing.T) {
+// nothing, although a sub-issue has a ready of the Maintainer.
+func TestMaintainerReady_AReadyOutsideTheEventsReadDoesNotTakeTheMaintainerOfASubIssue(t *testing.T) {
 	sc := newPlanScene(t)
 	events := []githubtest.LabelEvent{readyBy("a-triager", 500)}
 	for i := range 101 {

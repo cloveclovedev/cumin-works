@@ -88,7 +88,7 @@ func TestStatusShowsTheWorkTheWaitingIssuesAndTheQuota(t *testing.T) {
 			t.Errorf("the report has no %q:\n%s", want, text)
 		}
 	}
-	// A requirement issue in implementing has no agent of its own (R3).
+	// A requirement issue in implementing has no agent of its own ("mark the requirement as in work").
 	if strings.Contains(text, "#7 ") {
 		t.Errorf("the report lists #7:\n%s", text)
 	}

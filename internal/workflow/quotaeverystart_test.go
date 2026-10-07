@@ -60,10 +60,10 @@ func (sc *scene) assertNoStartAtTheLimit(t *testing.T, want []string) {
 	}
 }
 
-// Core-31 (cumin-core.md): at a limit, an issue with passed checks keeps
+// At a limit, an issue with passed checks keeps
 // cumin/status/checking and no Reviewer starts. After cumin quota allow,
 // one poll requests the review exactly once.
-func TestCore31_PassedChecksAtALimitStartNoReviewerAndKeepChecking(t *testing.T) {
+func TestPassedChecksAtALimitStartNoReviewerAndKeepChecking(t *testing.T) {
 	sc := approved(t, "risk/low")
 	reset := sc.atAQuotaLimit(t)
 	service := sc.service()
@@ -71,8 +71,8 @@ func TestCore31_PassedChecksAtALimitStartNoReviewerAndKeepChecking(t *testing.T)
 	sc.pollTimes(t, service, 3)
 
 	sc.assertNoStartAtTheLimit(t, []string{"cumin/status/checking", "risk/low"})
-	if q1 := sc.q1Messages(); len(q1) != 1 {
-		t.Errorf("notifications of the stop = %q, want one over three polls", q1)
+	if stopNotes := sc.quotaStopMessages(); len(stopNotes) != 1 {
+		t.Errorf("notifications of the stop = %q, want one over three polls", stopNotes)
 	}
 
 	allow(t, service, reset)
@@ -85,11 +85,11 @@ func TestCore31_PassedChecksAtALimitStartNoReviewerAndKeepChecking(t *testing.T)
 	}
 }
 
-// Core-32: the limit is reached by the Reviewer run that ends with
+// The limit is reached by the Reviewer run that ends with
 // REQUEST_CHANGES. No Implementer starts, and the issue keeps
 // cumin/status/reviewing. After the reset, one poll requests the review fix
 // exactly once.
-func TestCore32_AChangeRequestAtALimitStartsNoImplementerAndKeepsReviewing(t *testing.T) {
+func TestAChangeRequestAtALimitStartsNoImplementerAndKeepsReviewing(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}})
 	reset := sc.limitReachedByARun(t)
 	service := sc.service()
@@ -103,8 +103,8 @@ func TestCore32_AChangeRequestAtALimitStartsNoImplementerAndKeepsReviewing(t *te
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
 		t.Errorf("labels of #10 at the limit = %v, want %v", got, want)
 	}
-	if q1 := sc.q1Messages(); len(q1) != 1 || !strings.Contains(q1[0], "weekly") {
-		t.Errorf("notifications of the stop = %q, want one about the weekly window", q1)
+	if stopNotes := sc.quotaStopMessages(); len(stopNotes) != 1 || !strings.Contains(stopNotes[0], "weekly") {
+		t.Errorf("notifications of the stop = %q, want one about the weekly window", stopNotes)
 	}
 
 	sc.afterTheReset(t, reset)
@@ -122,7 +122,7 @@ func TestCore32_AChangeRequestAtALimitStartsNoImplementerAndKeepsReviewing(t *te
 
 // At a limit, a failed required check starts no check fix, changes no
 // label, and counts nothing. A ready issue waits for the same limit, and
-// the Owner hears once for both. After cumin quota allow, one poll sends
+// the Maintainer hears once for both. After cumin quota allow, one poll sends
 // the check fix exactly once.
 func TestStopAgentStarts_ACheckFixWaitsAtALimitAndTwoWaitingIssuesNotifyOnce(t *testing.T) {
 	sc := newScene(t, cliOptions{})
@@ -140,8 +140,8 @@ func TestStopAgentStarts_ACheckFixWaitsAtALimitAndTwoWaitingIssuesNotifyOnce(t *
 	if got := sc.fake.Issue(sc.repo, 11).Labels; !slices.Equal(got, []string{"cumin/status/ready", "risk/low"}) {
 		t.Errorf("labels of #11 at the limit = %v, want the ready issue as it was", got)
 	}
-	if q1 := sc.q1Messages(); len(q1) != 1 {
-		t.Errorf("notifications of the stop = %q, want one for two waiting issues", q1)
+	if stopNotes := sc.quotaStopMessages(); len(stopNotes) != 1 {
+		t.Errorf("notifications of the stop = %q, want one for two waiting issues", stopNotes)
 	}
 
 	service.Settings.MaxIssuesInProgress = 1
@@ -158,7 +158,7 @@ func TestStopAgentStarts_ACheckFixWaitsAtALimitAndTwoWaitingIssuesNotifyOnce(t *
 	}
 }
 
-// Core-33 and the conflict resolution: at a limit, the merge of an approved
+// The conflict resolution at a limit: at a limit, the merge of an approved
 // pull request under cumin/status/merging is still sent. GitHub refuses it
 // for a conflict, and no Implementer starts: the issue keeps
 // cumin/status/merging. After cumin quota allow, one poll requests the
@@ -209,9 +209,9 @@ func TestStopAgentStarts_AKnownConflictAtALimitSendsNoMerge(t *testing.T) {
 	assertOneConflictResolutionWithoutAMerge(t, sc)
 }
 
-// Core-33: at a limit, an approved pull request under cumin/status/merging
+// At a limit, an approved pull request under cumin/status/merging
 // merges. The steps that start no agent go on, and no usage is read.
-func TestCore33_AnApprovedPullRequestMergesAtALimit(t *testing.T) {
+func TestAnApprovedPullRequestMergesAtALimit(t *testing.T) {
 	sc := mergingScene(t, "risk/low")
 	sc.repo.Issues[10].LabelEvents = append(sc.repo.Issues[10].LabelEvents, readyBy(theMaintainer, 30))
 	sc.atAQuotaLimit(t)
@@ -231,10 +231,10 @@ func TestCore33_AnApprovedPullRequestMergesAtALimit(t *testing.T) {
 	}
 }
 
-// At a limit, a request for changes of the Owner starts no Implementer, and
+// At a limit, a request for changes of the Maintainer starts no Implementer, and
 // the issue keeps cumin/status/awaiting-merge-decision. After cumin quota
 // allow, one poll requests the fix exactly once.
-func TestStopAgentStarts_TheResponseToTheReviewOfTheOwnerWaitsAtALimit(t *testing.T) {
+func TestStopAgentStarts_TheResponseToTheReviewOfTheMaintainerWaitsAtALimit(t *testing.T) {
 	sc := awaitingMaintainer(t, cliOptions{})
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)
@@ -271,8 +271,8 @@ func TestStopAgentStarts_TheFirstAcceptanceCheckWaitsAtALimit(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, putRequirementLabelsPath); n != 0 {
 		t.Errorf("%d label changes of #6 at the limit, want none", n)
 	}
-	if q1 := sc.q1Messages(); len(q1) != 1 || !strings.Contains(q1[0], "issue #6") {
-		t.Errorf("notifications of the stop = %q, want one that links #6", q1)
+	if stopNotes := sc.quotaStopMessages(); len(stopNotes) != 1 || !strings.Contains(stopNotes[0], "issue #6") {
+		t.Errorf("notifications of the stop = %q, want one that links #6", stopNotes)
 	}
 
 	allow(t, service, reset)
@@ -295,12 +295,12 @@ func TestStopAgentStarts_TheFirstAcceptanceCheckWaitsAtALimit(t *testing.T) {
 	service.Wait()
 }
 
-// A request for changes of the Owner on a conflicting head that waits for
+// A request for changes of the Maintainer on a conflicting head that waits for
 // its permit keeps the issue for the poll: the first read of the usage
 // fails, a second read would succeed, and no conflict resolution starts.
 // The conflict resolution would move the head commit away from the review
-// of the Owner. The next poll requests the fix of that review.
-func TestStopAgentStarts_AWaitingReviewOfTheOwnerKeepsTheConflictResolutionBack(t *testing.T) {
+// of the Maintainer. The next poll requests the fix of that review.
+func TestStopAgentStarts_AWaitingReviewOfTheMaintainerKeepsTheConflictResolutionBack(t *testing.T) {
 	sc := awaitingMaintainer(t)
 	sc.review(implementerSlug, true, "APPROVED", sc.remoteHead, 30)
 	sc.review(theMaintainer, false, "CHANGES_REQUESTED", sc.remoteHead, 5)

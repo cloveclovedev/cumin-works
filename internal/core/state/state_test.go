@@ -236,7 +236,7 @@ func TestOpen_ReadsAFileOfVersion1(t *testing.T) {
 	}
 }
 
-// Q3: the latest quota usage survives a new store, so that a restart
+// "resume agent starts": the latest quota usage survives a new store, so that a restart
 // knows when to try again.
 func TestSetQuota_SurvivesANewStore(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")

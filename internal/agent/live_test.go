@@ -293,7 +293,7 @@ func (sb *sandbox) worktree(t *testing.T, branch string) string {
 // TestLive_AgentEnvironment is the live check of #70 on the sandbox
 // repository: a push and a pull request from the environment that cumin
 // builds for an agent appear under the Implementer App, not under the
-// Owner. It runs the real git and gh in that environment, without Claude
+// Maintainer. It runs the real git and gh in that environment, without Claude
 // Code and without quota. It runs only with CUMIN_LIVE=1 and
 // CUMIN_LIVE_REPO=<owner>/<repo>. docs/ja/development/live-tests.md says
 // how to run it.
@@ -512,7 +512,7 @@ func redactToken(s, token string) string {
 // check of #70: a real Claude Code run through Service.Start commits one
 // file, pushes, and opens a pull request on the sandbox, and both appear
 // under the Implementer App. It uses quota (the minimal quota run and one
-// agent run), so it runs only with CUMIN_LIVE=1 and after the Owner
+// agent run), so it runs only with CUMIN_LIVE=1 and after the Maintainer
 // agrees. It also exercises the check of the init event with a real run.
 func TestLive_AgentRunOnSandbox(t *testing.T) {
 	path := os.Getenv("CUMIN_CLAUDE_PATH")

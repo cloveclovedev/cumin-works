@@ -23,7 +23,7 @@ const fixtureSession = "11111111-2222-4333-8444-555555555555"
 
 // reviewing puts issue #10 in cumin/status/checking with the pull
 // request #21 at the head of the remote, no required check, and a state
-// file with the given entry. The next poll applies I3.
+// file with the given entry. The next poll applies "request the review".
 func (sc *scene) reviewing(t *testing.T, service *workflow.Service, stored state.Issue) string {
 	t.Helper()
 	sc.awaitingChecks(t, nil, nil)
@@ -43,11 +43,11 @@ func (sc *scene) addReview(t *testing.T, review githubtest.Review) {
 	pr.Reviews = append(pr.Reviews, review)
 }
 
-// I3 (issue-states.md), round 1: the Reviewer starts in a new session, in a
+// "request the review" (issue-states.md), round 1: the Reviewer starts in a new session, in a
 // detached checkout of the head commit next to nothing else, with the round
 // and the limit in the request. A Reviewer session stored from before the
 // last cumin/status/ready is not resumed.
-func TestI3_Round1StartsANewSessionAtTheHeadCommit(t *testing.T) {
+func TestTheReviewOfRound1StartsANewSessionAtTheHeadCommit(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	path := sc.reviewing(t, service, state.Issue{SessionID: "implementer-session", ReviewerSessionID: "old-reviewer-session"})
@@ -83,7 +83,7 @@ func TestI3_Round1StartsANewSessionAtTheHeadCommit(t *testing.T) {
 		t.Errorf("reviews = %+v, want one APPROVED on the head commit", reviews)
 	}
 	// The Reviewer keeps its own session; the session of the Implementer
-	// stays for I5.
+	// stays for "request a review fix".
 	got := state.Open(path, nil).Issue("example-org/example-repo", 10)
 	if got.ReviewerSessionID != fixtureSession || got.SessionID != "implementer-session" {
 		t.Errorf("state = %+v, want the new Reviewer session and the Implementer session kept", got)
@@ -99,11 +99,11 @@ func TestI3_Round1StartsANewSessionAtTheHeadCommit(t *testing.T) {
 	}
 }
 
-// I3, round 2: one request for changes of the Reviewer since the last
+// "request the review", round 2: one request for changes of the Reviewer since the last
 // cumin/status/ready makes the next review round 2. It resumes the
 // Reviewer session and names the commit of the last review. The round
 // comes from GitHub, so a new Service (a restart) counts the same.
-func TestI3_Round2ResumesTheReviewerSessionAndNamesTheLastReviewedCommit(t *testing.T) {
+func TestTheReviewOfRound2ResumesTheReviewerSessionAndNamesTheLastReviewedCommit(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session", ReviewerSessionID: "reviewer-session"})
@@ -131,11 +131,11 @@ func TestI3_Round2ResumesTheReviewerSessionAndNamesTheLastReviewedCommit(t *test
 	}
 }
 
-// I3, round 1 after an approval: the rounds start again at 1 in a new
+// "request the review", round 1 after an approval: the rounds start again at 1 in a new
 // session, and the request names the commit that the Reviewer approved
 // last, so that the Reviewer looks only at the diff from it. A dismissed
 // review and an approval of a person are not named.
-func TestI3_Round1AfterAnApprovalNamesTheApprovedCommit(t *testing.T) {
+func TestTheReviewOfRound1AfterAnApprovalNamesTheApprovedCommit(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session", ReviewerSessionID: "old-reviewer-session"})
@@ -171,7 +171,7 @@ func TestI3_Round1AfterAnApprovalNamesTheApprovedCommit(t *testing.T) {
 
 // An approval of the head commit leaves no diff to review, so the request
 // names no approved commit.
-func TestI3_AnApprovalOfTheHeadCommitIsNotNamed(t *testing.T) {
+func TestAnApprovalOfTheHeadCommitIsNotNamed(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
@@ -191,7 +191,7 @@ func TestI3_AnApprovalOfTheHeadCommitIsNotNamed(t *testing.T) {
 // The check after done (agents/reviewer.md, completion): a run that left no
 // review on the head commit with APPROVE or REQUEST_CHANGES is asked once
 // more, in the same session. A review with COMMENT only does not count.
-func TestI3_AReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
+func TestAReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"COMMENT", "APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
@@ -219,9 +219,9 @@ func TestI3_AReviewThatIsNotOnTheHeadCommitIsRequestedOnceMore(t *testing.T) {
 	}
 }
 
-// A second run without a review stops the issue for the Owner with the row
-// I5 (its failure column): one comment, one label change, one notification.
-func TestI3_ASecondRunWithoutAReviewStopsForTheOwner(t *testing.T) {
+// A second run without a review stops the issue for the Maintainer with the action
+// "stop the review": one comment, one label change, one notification.
+func TestASecondRunWithoutAReviewStopsForTheMaintainer(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"NONE", "NONE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
@@ -233,7 +233,7 @@ func TestI3_ASecondRunWithoutAReviewStopsForTheOwner(t *testing.T) {
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Step: stop the review") || !strings.Contains(comments[0].Body, workflow.MissingReviewReason) {
-		t.Fatalf("comments on #10 = %+v, want one stop note with the row I5", comments)
+		t.Fatalf("comments on #10 = %+v, want one stop note of 'stop the review'", comments)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/awaiting-decision", got)
@@ -243,9 +243,9 @@ func TestI3_ASecondRunWithoutAReviewStopsForTheOwner(t *testing.T) {
 	}
 }
 
-// I10 (issue-states.md): a blocked result of the Reviewer stops the issue at
+// "stop the review" (issue-states.md): a blocked result of the Reviewer stops the issue at
 // once, with the blocked_reason as the comment, and nothing is retried.
-func TestI10_ABlockedReviewerStopsWithoutARetry(t *testing.T) {
+func TestABlockedReviewerStopsWithoutARetry(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "blocked.jsonl"})
 	service := sc.service()
 	path := sc.reviewing(t, service, state.Issue{})
@@ -277,10 +277,10 @@ func TestI10_ABlockedReviewerStopsWithoutARetry(t *testing.T) {
 
 // An abnormal end of the Reviewer is decided as every other end: no review
 // is on the head commit, so the review is requested again once, in a new
-// session. A second end without a review stops the review for the Owner,
+// session. A second end without a review stops the review for the Maintainer,
 // and the note names the kind of the abnormal end. The polls that follow
 // start nothing: one stay starts the Reviewer two times at most.
-func TestI3_TwoAbnormalEndsOfTheReviewerStopForTheOwner(t *testing.T) {
+func TestTwoAbnormalEndsOfTheReviewerStopForTheMaintainer(t *testing.T) {
 	sc := newScene(t, cliOptions{fixture: "invalid-result.jsonl"})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
@@ -315,7 +315,7 @@ func TestI3_TwoAbnormalEndsOfTheReviewerStopForTheOwner(t *testing.T) {
 
 // Several polls while the Reviewer works start one review: the label
 // changes before the request (principle 3).
-func TestI3_TheReviewIsRequestedOnceAcrossPolls(t *testing.T) {
+func TestTheReviewIsRequestedOnceAcrossPolls(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
@@ -336,8 +336,8 @@ func TestI3_TheReviewIsRequestedOnceAcrossPolls(t *testing.T) {
 // The head can move while the Reviewer works. Only the old head passed the
 // required checks, so the issue goes back to cumin/status/checking
 // and nothing is reviewed on the new head yet (review of #244): the checks
-// run on it, and I3 or I4 decides again.
-func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
+// run on it, and "request the review" or "request a check fix" decides again.
+func TestAHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}, movesHeadOnRun: 1})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
@@ -358,11 +358,11 @@ func TestI3_AHeadThatMovedDuringTheReviewWaitsForTheChecksAgain(t *testing.T) {
 	}
 }
 
-// I5 (issue-states.md): REQUEST_CHANGES on the head commit below the limit
+// "request a review fix" (issue-states.md): REQUEST_CHANGES on the head commit below the limit
 // moves the issue back to cumin/status/implementing and asks the
 // Implementer to fix the comments in its own session, naming the review.
-// After done, I2 runs again and the issue waits for the checks.
-func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
+// After done, "wait for the checks" runs again and the issue waits for the checks.
+func TestChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES"}})
 	service := sc.service()
 	path := sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
@@ -398,7 +398,7 @@ func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
 	if got := strings.TrimSpace(sc.record(t, "agent.cwd")); got != realPath(t, wantDir) {
 		t.Errorf("the fix ran in %q, want %q", got, realPath(t, wantDir))
 	}
-	// The fix is pushed (the fake CLI adds no commit), so I2 passes.
+	// The fix is pushed (the fake CLI adds no commit), so "wait for the checks" passes.
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelChecking}) {
 		t.Errorf("labels of #10 = %v, want risk/low and cumin/status/checking", got)
 	}
@@ -424,12 +424,12 @@ func (sc *scene) atTheLimit(t *testing.T) {
 	}
 }
 
-// I8 (issue-states.md): REQUEST_CHANGES at the limit of rounds does not
+// "stop at the round limit" (issue-states.md): REQUEST_CHANGES at the limit of rounds does not
 // go to the Implementer. The Reviewer explains the cause in its session;
 // its decision request on the pull request is the reason, so cumin writes
 // no comment, moves the issue to cumin/status/awaiting-decision, and
 // sends one notification that links the explanation.
-func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
+func TestTheRoundLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}, comments: []string{"NONE", "DECISION"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
@@ -445,7 +445,7 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 		t.Errorf("--resume = %q, want the Reviewer session of round 3", got)
 	}
 	if text := promptOf(t, args); !strings.Contains(text, "Request: explain the cause") || !strings.Contains(text, "after 3 review rounds") {
-		t.Errorf("the request text is not the explanation of I8:\n%s", text)
+		t.Errorf("the request text is not the request of 'request the cause':\n%s", text)
 	}
 	requireIssueOfTheRun(t, promptOf(t, args), 10, "implementation issue")
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
@@ -460,7 +460,7 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 	}
 	messages := sc.webhook.messagesSent()
 	if len(messages) != 1 || !strings.Contains(messages[0], "stop at the round limit") || !strings.Contains(messages[0], "issuecomment-") {
-		t.Errorf("notifications = %q, want one of I8 that links the comment", messages)
+		t.Errorf("notifications = %q, want one of 'stop at the round limit' that links the comment", messages)
 	}
 	for _, want := range []string{`"msg":"request the cause: blocking comments remain at the limit of rounds"`,
 		`"msg":"request the cause: requested the explanation of the cause"`, `"msg":"stop at the round limit: the issue waits for a Maintainer"`} {
@@ -470,9 +470,9 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 	}
 }
 
-// Without the explanation, the stop step hands the issue to the Owner with
-// the row I8: one comment, one label change, one notification.
-func TestI8_WithoutTheExplanationTheStopStepHandsOverTheIssue(t *testing.T) {
+// Without the explanation, the stop step hands the issue to the Maintainer with
+// the action "stop at the round limit": one comment, one label change, one notification.
+func TestAtTheRoundLimitWithoutTheExplanationTheStopStepHandsOverTheIssue(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"REQUEST_CHANGES", "NONE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{SessionID: "implementer-session"})
@@ -485,7 +485,7 @@ func TestI8_WithoutTheExplanationTheStopStepHandsOverTheIssue(t *testing.T) {
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Step: stop at the round limit") || !strings.Contains(comments[0].Body, workflow.MissingExplanationReason) {
-		t.Fatalf("comments on #10 = %+v, want one stop note with the row I8", comments)
+		t.Fatalf("comments on #10 = %+v, want one stop note of 'stop at the round limit'", comments)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
 		t.Errorf("labels of #10 = %v, want cumin/status/awaiting-decision", got)

@@ -47,7 +47,7 @@ func TestRead_RejectsAnUnknownName(t *testing.T) {
 // The decision request names the stopped issue, with no role and no kind
 // of issue, so that the same lines are right for every role. The template
 // and its example hold the same "Next step" lines, and the three headings
-// that the Owner reads stay.
+// that the Maintainer reads stay.
 func TestDecisionRequest_NextStepNamesTheStoppedIssue(t *testing.T) {
 	text, err := Read("decision-request.md")
 	if err != nil {

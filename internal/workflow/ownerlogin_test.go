@@ -28,9 +28,9 @@ func removedBefore(event githubtest.LabelEvent) githubtest.LabelEvent {
 
 // The facts of the start request (agents/common.md): the prompt of the
 // Implementer names the account that added the newest cumin/status/ready
-// to the issue of the run, when that account is the Owner. An older event
-// by another Owner does not win.
-func TestOwnerLogin_TheImplementerReceivesTheActorOfTheNewestReady(t *testing.T) {
+// to the issue of the run, when that account is a Maintainer. An older event
+// by another Maintainer does not win.
+func TestIssueOwnerLogin_TheImplementerReceivesTheActorOfTheNewestReady(t *testing.T) {
 	sc := newScene(t)
 	sc.addUnlinkedPullRequest(21, sc.remoteHead)
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("an-earlier-owner", 60), removedBefore(readyBy(theMaintainer, 5)), readyBy(theMaintainer, 5)}
@@ -41,16 +41,16 @@ func TestOwnerLogin_TheImplementerReceivesTheActorOfTheNewestReady(t *testing.T)
 
 	text := promptOf(t, sc.record(t, "agent.args"))
 	if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+issueOwnerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theMaintainer, text)
+		t.Errorf("the prompt does not name the Issue Owner %s after the issue of the run:\n%s", theMaintainer, text)
 	}
 	if strings.Contains(text, "an-earlier-owner") {
 		t.Errorf("the prompt names the actor of an older event:\n%s", text)
 	}
 }
 
-// The prompt of the Planner names the Owner of the requirement issue: the
+// The prompt of the Planner names the Issue Owner of the requirement issue: the
 // event of the requirement issue wins over a newer event of a sub-issue.
-func TestOwnerLogin_ThePlannerReceivesTheOwnerOfTheRequirementIssue(t *testing.T) {
+func TestIssueOwnerLogin_ThePlannerReceivesTheIssueOwnerOfTheRequirementIssue(t *testing.T) {
 	sc := newPlanScene(t)
 	sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{readyBy(theMaintainer, 5)}
 	sc.repo.Issues[10].LabelEvents = []githubtest.LabelEvent{readyBy("another-owner", 1)}
@@ -61,12 +61,12 @@ func TestOwnerLogin_ThePlannerReceivesTheOwnerOfTheRequirementIssue(t *testing.T
 
 	text := promptOf(t, sc.record(t, "agent.args"))
 	if !strings.Contains(text, "- Issue of the run: #6 (requirement issue)"+issueOwnerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theMaintainer, text)
+		t.Errorf("the prompt does not name the Issue Owner %s after the issue of the run:\n%s", theMaintainer, text)
 	}
 }
 
-// The prompt of the Reviewer names the Owner of the implementation issue.
-func TestOwnerLogin_TheReviewerReceivesTheOwner(t *testing.T) {
+// The prompt of the Reviewer names the Issue Owner of the implementation issue.
+func TestIssueOwnerLogin_TheReviewerReceivesTheIssueOwner(t *testing.T) {
 	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}})
 	service := sc.service()
 	sc.reviewing(t, service, state.Issue{})
@@ -77,16 +77,16 @@ func TestOwnerLogin_TheReviewerReceivesTheOwner(t *testing.T) {
 
 	text := promptOf(t, sc.record(t, "agent.args"))
 	if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+issueOwnerLoginLine) {
-		t.Errorf("the prompt does not name the Owner %s after the issue of the run:\n%s", theMaintainer, text)
+		t.Errorf("the prompt does not name the Issue Owner %s after the issue of the run:\n%s", theMaintainer, text)
 	}
 }
 
-// Without an event, and with an actor that is not the Owner (cumin-core.md:
+// Without an event, and with an actor that is not a Maintainer (cumin-core.md:
 // a person with write permission or higher), the prompt says that there is
-// no Owner login. The permission of a GitHub App is not read. The start is
+// no Issue Owner login. The permission of a GitHub App is not read. The start is
 // the one of the Reviewer: the Implementer does not start on such a ready
-// (issue-states.md, the ready of the Owner).
-func TestOwnerLogin_WithoutAnOwnerThePromptSaysThatThereIsNoOwnerLogin(t *testing.T) {
+// (issue-states.md, the ready of the Maintainer).
+func TestIssueOwnerLogin_WithoutAnIssueOwnerThePromptSaysThatThereIsNoIssueOwnerLogin(t *testing.T) {
 	tests := []struct {
 		name            string
 		events          []githubtest.LabelEvent
@@ -112,11 +112,11 @@ func TestOwnerLogin_WithoutAnOwnerThePromptSaysThatThereIsNoOwnerLogin(t *testin
 
 			text := promptOf(t, sc.record(t, "agent.args"))
 			if !strings.Contains(text, "- Issue of the run: #10 (implementation issue)"+noIssueOwnerLoginLine) {
-				t.Errorf("the prompt does not say that there is no Owner login:\n%s", text)
+				t.Errorf("the prompt does not say that there is no Issue Owner login:\n%s", text)
 			}
 			for _, login := range []string{"a-triager", "some-app"} {
 				if strings.Contains(text, login) {
-					t.Errorf("the prompt names %s, which is not the Owner:\n%s", login, text)
+					t.Errorf("the prompt names %s, which is not the Issue Owner:\n%s", login, text)
 				}
 			}
 			n := 0
