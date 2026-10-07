@@ -30,7 +30,7 @@ func (s *Service) writeFollowUpNotes(ctx context.Context, log *slog.Logger, toke
 	var logins *followUpLogins
 	for i := range snapshot.RequirementIssues {
 		requirement := &snapshot.RequirementIssues[i]
-		log := log.With("requirement_issue", requirement.Number, "row", RowI9)
+		log := log.With("requirement_issue", requirement.Number, "action", ActionWriteTheFollowUpNote)
 		requirement.FollowUpsDone = s.writeNotesOf(ctx, log, token, target, *requirement, &logins)
 		if !requirement.FollowUpsDone && NeedsComments(*requirement) {
 			log.Info("R4: waits for the follow-up notes of the closed sub-issues")

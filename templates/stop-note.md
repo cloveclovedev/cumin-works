@@ -23,7 +23,7 @@ ended abnormally. When an agent returns `blocked`, cumin posts the
 ```markdown
 ## Stopped for the Owner
 
-Row: <the row of issue-states.md, such as I2>
+Row: <the name of the action of issue-states.md, such as stop the implementation>
 Reason: <one sentence: what cumin checked, and what it found>
 Pull request: #<number>, or None
 Retried: <once, or no>
@@ -36,7 +36,7 @@ To continue: <one sentence: what the Owner does>. Then add the label `cumin/stat
 ```markdown
 ## Stopped for the Owner
 
-Row: I2
+Row: stop the implementation
 Reason: The Implementer reported done, but no open pull request closes this issue.
 Pull request: None
 Retried: no

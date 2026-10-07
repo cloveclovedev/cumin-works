@@ -193,7 +193,7 @@ func TestI12_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 		t.Errorf("%d merge requests, want none", n)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I12") ||
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: start the merge") ||
 		!strings.Contains(comments[0].Body, workflow.RiskLabelReason(workflow.MergeTwoRiskLabels)) {
 		t.Errorf("comments of #10 = %+v, want one stop note of I12", comments)
 	}
@@ -278,7 +278,7 @@ func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I2") ||
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: stop the implementation") ||
 		!strings.Contains(comments[0].Body, workflow.ConflictNotResolvedReason(21)) {
 		t.Errorf("comments of #10 = %+v, want one stop note of the conflict that stays", comments)
 	}
@@ -370,7 +370,7 @@ func TestI13_ARequestForChangesOfTheOwnerOnTheHeadSendsOneRequest(t *testing.T) 
 		t.Errorf("%d merge requests, want none", n)
 	}
 	for _, want := range []string{`"msg":"I13: the Owner requested changes; the issue goes back to the Implementer"`,
-		`"msg":"I13: requested the work"`, `"kind":"owner review fix"`} {
+		`"msg":"send back for changes: requested the work"`, `"kind":"owner review fix"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -671,7 +671,7 @@ func TestI14_AConflictWhileTheOwnerDecidesSendsOneResolutionRequest(t *testing.T
 	}
 	logs := sc.logs.String()
 	label := strings.Index(logs, `"msg":"I14: the pull request conflicts with the default branch; the issue goes back to the Implementer"`)
-	request := strings.Index(logs, `"msg":"I14: requested the work"`)
+	request := strings.Index(logs, `"msg":"request a conflict resolution: requested the work"`)
 	if label < 0 || request < 0 || request < label {
 		t.Errorf("the log does not show the label change of I14 before the request (label at %d, request at %d)", label, request)
 	}
@@ -728,7 +728,7 @@ func TestI14_ARequestForChangesOfTheOwnerOnAConflictingHeadGoesThroughI13(t *tes
 	if text := promptOf(t, sc.record(t, "agent.args")); strings.Contains(text, "Request: conflict resolution") {
 		t.Errorf("the request is a conflict resolution, want the fix of the Owner's review:\n%s", text)
 	}
-	if logs := sc.logs.String(); strings.Contains(logs, `"msg":"I14: requested the work"`) {
+	if logs := sc.logs.String(); strings.Contains(logs, `"msg":"request a conflict resolution: requested the work"`) {
 		t.Error("I14 sent a request beside I13")
 	}
 }

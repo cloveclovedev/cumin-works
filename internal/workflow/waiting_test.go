@@ -16,7 +16,7 @@ import (
 func (sc *scene) q4Messages() []string {
 	var q4 []string
 	for _, m := range sc.webhook.messagesSent() {
-		if strings.HasPrefix(m, "cumin: Q4: ") {
+		if strings.HasPrefix(m, "cumin: tell that cumin waits: ") {
 			q4 = append(q4, m)
 		}
 	}

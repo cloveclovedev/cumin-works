@@ -1,10 +1,9 @@
 package workflow
 
 // This file holds the one place that stops an issue for the Owner. Every
-// row of issue-states.md that hands work back uses it with its own row
-// number: post one comment on the issue, replace the status label with
-// cumin/status/awaiting-decision, then notify the Owner. I2, I4, and
-// R2, I3, I5, I8, I10, and I15 use it today.
+// action of issue-states.md that hands work back uses it with its own
+// name (action.go): post one comment on the issue, replace the status
+// label with cumin/status/awaiting-decision, then notify the Owner.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
 
@@ -20,65 +19,10 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 )
 
-// The rows of issue-states.md that stop an issue for the Owner.
-const (
-	// RowI2 is the end of an Implementer run.
-	RowI2 = "I2"
-	// RowI4 is a failed required check after the limit of check fix
-	// requests.
-	RowI4 = "I4"
-	// RowR2 is the end of a Planner run that split a requirement issue.
-	RowR2 = "R2"
-	// RowR4 is the end of a Planner run that checked the acceptance.
-	RowR4 = "R4"
-	// RowI3 is a request of the review that did not start, twice.
-	RowI3 = "I3"
-	// RowI5 is the end of a Reviewer run whose review cumin did not find
-	// on the head commit, twice (the failure column of I5).
-	RowI5 = "I5"
-	// RowI10 is a Reviewer run that returned blocked.
-	RowI10 = "I10"
-	// RowI8 is the round limit of the review: the Reviewer explained the
-	// cause, or could not.
-	RowI8 = "I8"
-	// RowI6 is the merge after the approval of the Reviewer: a risk label
-	// that is not exactly one, a merge that failed, or a close that failed.
-	RowI6 = "I6"
-	// RowI7 asks the Owner for the merge decision. It does not stop the
-	// issue; it notifies.
-	RowI7 = "I7"
-	// RowI12 is the merge after the approval of the Owner: a risk label
-	// that is not exactly one, a merge that failed, or a close that failed.
-	RowI12 = "I12"
-	// RowMerging names the steps in cumin/status/merging, which have no
-	// row code: a merge that GitHub refused for a lasting reason, or a
-	// close after the merge that failed.
-	RowMerging = "merging"
-	// RowI14 is a pull request that conflicts with the default branch
-	// while its issue waits for the checks: a conflict resolution that
-	// left the head where it was.
-	RowI14 = "I14"
-	// RowI15 is a required check that did not report on the head commit
-	// within the wait time of the repository.
-	RowI15 = "I15"
-)
-
-// The rows that start the Planner (R1, R4) and that move a requirement
-// issue with a notification but without a stop (R6, R7).
-const (
-	RowR1 = "R1"
-	RowR7 = "R7"
-)
-
-// RowR6 is the row that hands a requirement issue back to the Owner when
-// only sub-issues without a status label are left. It notifies without a
-// stop: the requirement issue waits for a review, not for a decision.
-const RowR6 = "R6"
-
 // stop is one issue that cumin hands back to the Owner.
 type stop struct {
-	// row is the row of issue-states.md that stopped the issue.
-	row string
+	// action is the action of issue-states.md that stopped the issue.
+	action ActionName
 	// issue is the issue that stops: an implementation issue (I2) or a
 	// requirement issue (R2).
 	issue int
@@ -107,7 +51,7 @@ const notWrittenNote = " cumin did not write the comment on the issue; the log o
 
 // stopForOwner posts the comment, replaces the status label, and notifies
 // the Owner, in that order; with labelFirst, the label comes before the
-// comment. Every step is logged with the row.
+// comment. Every step is logged with the action.
 //
 // A step that fails is logged and does not stop the next one: the Owner
 // must learn about a stopped issue even when one call failed. Nothing is
@@ -116,7 +60,7 @@ const notWrittenNote = " cumin did not write the comment on the issue; the log o
 // goes to the log as a whole, and the notification says so.
 func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, st stop) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	log = log.With("row", st.row)
+	log = log.With("action", st.action)
 	// The comment holds the whole reason, so the notification links to it.
 	// Until it is written, the issue itself is the link.
 	link := github.IssueURL(owner, repo, st.issue)
@@ -124,7 +68,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 
 	token, err := target.Token(ctx)
 	if err != nil {
-		log.Error(st.row+": no token; the issue keeps its label, and the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
+		log.Error(string(st.action)+": no token; the issue keeps its label, and the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
 		reason += notWrittenNote
 	} else {
 		move := func() {
@@ -132,13 +76,13 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 			case st.labelDone:
 				// The caller changed the label and logged it.
 			case len(st.labels) == 0:
-				log.Error(st.row + ": the labels of the issue were not read; the label was not changed")
+				log.Error(string(st.action) + ": the labels of the issue were not read; the label was not changed")
 			default:
 				labels := ReplaceStatusLabel(st.labels, LabelAwaitingDecision)
 				if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
-					log.Error(st.row+": the label was not changed", "error", err.Error())
+					log.Error(string(st.action)+": the label was not changed", "error", err.Error())
 				} else {
-					log.Info(st.row+": the issue waits for the Owner", "labels", labels)
+					log.Info(string(st.action)+": the issue waits for the Owner", "labels", labels)
 				}
 			}
 		}
@@ -146,11 +90,11 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 			move()
 		}
 		if comment, err := s.GitHub.CreateIssueComment(ctx, token, owner, repo, st.issue, st.comment); err != nil {
-			log.Error(st.row+": the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
+			log.Error(string(st.action)+": the reason was not written on the issue; the whole text is here", "error", err.Error(), "comment", st.comment)
 			reason += notWrittenNote
 		} else {
 			link = comment.URL
-			log.Info(st.row+": wrote the reason on the issue", "comment", comment.ID)
+			log.Info(string(st.action)+": wrote the reason on the issue", "comment", comment.ID)
 		}
 		if !st.labelFirst {
 			move()
@@ -158,7 +102,7 @@ func (s *Service) stopForOwner(ctx context.Context, log *slog.Logger, target Tar
 	}
 
 	s.notifyOwner(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        st.row,
+		Row:        string(st.action),
 		Reason:     reason,
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", st.issue),
@@ -222,7 +166,7 @@ func (s *Service) readSubIssueNow(ctx context.Context, log *slog.Logger, target 
 //
 // pullRequest is 0 when there is none. retried says whether the same
 // request had been run again before cumin gave up.
-func StopNote(row, reason string, pullRequest int, retried bool) string {
+func StopNote(action ActionName, reason string, pullRequest int, retried bool) string {
 	pr := "None"
 	if pullRequest > 0 {
 		pr = fmt.Sprintf("#%d", pullRequest)
@@ -239,7 +183,7 @@ Pull request: %s
 Retried: %s
 
 To continue: read the reason, fix what it names, and say in a comment how to go on. Then add the label `+"`cumin/status/ready`"+` to this issue.
-`, row, reason, pr, tried)
+`, action, reason, pr, tried)
 }
 
 // VerificationReason is the sentence of one failed check of I2. It goes

@@ -312,7 +312,7 @@ type logLine struct {
 	Repository       string `json:"repository"`
 	Issue            int    `json:"issue"`
 	RequirementIssue int    `json:"requirement_issue"`
-	Row              string `json:"row"`
+	Action           string `json:"action"`
 	MergeMethod      string `json:"merge_method"`
 	raw              string
 }
@@ -693,23 +693,23 @@ func TestLiveE2E(t *testing.T) {
 
 	// The log of cumin: the steps in order, the notifications, and nothing
 	// secret. The notification of R7 follows the label, so wait for it.
-	notified := func(lines []logLine, row string, issue int) int {
+	notified := func(lines []logLine, action string, issue int) int {
 		count := 0
 		for _, line := range lines {
-			if line.Msg == "the Owner was notified" && line.Repository == e.repo && line.Row == row && line.Issue == issue {
+			if line.Msg == "the Owner was notified" && line.Repository == e.repo && line.Action == action && line.Issue == issue {
 				count++
 			}
 		}
 		return count
 	}
 	e.waitFor(t, "the notification of the acceptance in the log", 3*time.Minute, nil, func() bool {
-		return notified(e.logLines(t), "R7", requirement) > 0
+		return notified(e.logLines(t), "ask for the acceptance", requirement) > 0
 	})
 	lines := e.logLines(t)
 	e.record("Log of the requirement issue", checkLogOrder(t, lines, e.repo, requirement,
-		"R1: moved the requirement issue to planning", "R1: requested the Planner", "R2: the split waits for the Owner",
+		"R1: moved the requirement issue to planning", "request the split: requested the Planner", "R2: the split waits for the Owner",
 		"R3: the sub-issues of the requirement issue are in progress", "I9: wrote the follow-up note", "I9: wrote the follow-up note",
-		"R4: moved the requirement issue to accepting", "R4: requested the Planner", "R7: the requirement issue waits for the acceptance of the Owner"))
+		"R4: moved the requirement issue to accepting", "request the acceptance check: requested the Planner", "R7: the requirement issue waits for the acceptance of the Owner"))
 	e.record("Log of the risk/low sub-issue", checkLogOrder(t, lines, e.repo, low,
 		"I1: claimed the issue", "I2: verified the pull request", "I3: the pull request is ready for review",
 		"I6: start the merge: the Reviewer approved the head commit", "merged the pull request"))
@@ -733,11 +733,11 @@ func TestLiveE2E(t *testing.T) {
 	}
 	e.record("Merge method", "log: `merge_method` is `squash` in both `merged the pull request` lines")
 	for _, n := range []struct {
-		row   string
-		issue int
-	}{{"R2", requirement}, {"I7", medium}, {"R7", requirement}} {
-		if count := notified(lines, n.row, n.issue); count != 1 {
-			t.Errorf("the log has %d notifications of %s for issue #%d, want 1", count, n.row, n.issue)
+		action string
+		issue  int
+	}{{"ask for the plan review", requirement}, {"ask for the merge decision", medium}, {"ask for the acceptance", requirement}} {
+		if count := notified(lines, n.action, n.issue); count != 1 {
+			t.Errorf("the log has %d notifications of %s for issue #%d, want 1", count, n.action, n.issue)
 		}
 	}
 	e.record("Notifications", "log: `the Owner was notified` once each for the split (R2), the merge decision (I7), and the acceptance (R7)")

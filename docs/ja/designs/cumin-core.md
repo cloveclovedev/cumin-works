@@ -62,7 +62,7 @@
 
 ### Ownerへの通知
 
-- 通知は `internal/notify` の1か所を通る。ほかのパッケージが渡すのは、行の番号 (`I2` など)、理由の1行、リポジトリ、対象 (`issue #12`)、リンクだけで、どの手段で届くかを知らない。
+- 通知は `internal/notify` の1か所を通る。ほかのパッケージが渡すのは、動作の名前 (`stop the implementation` など。下の「動作の名前」)、理由の1行、リポジトリ、対象 (`issue #12`)、リンクだけで、どの手段で届くかを知らない。
 - 手段は `internal/platform/discord` が受け持つ。webhookのアドレス、JSONの本文、応答、1つのメッセージの上限 (2000文字。公式: Execute Webhook) は、ここで止まる。
 - 境界を越える値は、文章1つである (`Send(ctx, text)`)。1行目を要約にする。構造体を `internal/notify` に置いて渡すと、`internal/platform/*` がfeatureのパッケージをimportすることになり、依存の向きに反する ([コードの構成の設計](code-layout.md))。題と本文を分けて扱う手段が要るようになったら、型を共有の場所に移す。
 - 呼び出しには `wait=true` を付ける。付けないと、APIは受け取った時点で204を返し、公式ドキュメントのとおり「保存に失敗してもエラーにならない」ので、届かなかった通知を成功として扱ってしまう。
@@ -74,6 +74,19 @@
 - メッセージの中の `@everyone` や利用者への言及を、Discordに解釈させない (`allowed_mentions` の `parse` を空にする。公式: Allowed Mentions Object)。通知の文章にはAgentが書いた部分が入るので、そのままだとチャンネル全体を呼び出せてしまう。
 - 採らなかった案: `internal/notify` からDiscordを直接呼ぶ。手段を差し替えるときに、featureのパッケージを書き換えることになる。
 - 採らなかった案: Discordのbotで双方向にする。[要求のbacklog](../requirements/backlog.md) にある。
+
+### 動作の名前
+
+![動作の名前の一覧と、それを使う文章](action-names.svg)
+
+赤い箱が、動作の名前の一覧である。
+
+- cuminの動作の名前は、`internal/workflow/action.go` の1か所にある。[Issueの状態と遷移](../requirements/workflow/issue-states.md) の表の「名前」の列の遷移1つにつき、定数が1つあり、値はその名前そのもの (小文字) である。一覧は純粋で、標準ライブラリの外を読まない。
+- コードは、動作をこの定数で指す。どの定数を使うかは、コードの経路の条件で決める。同じ実行の終わりでも、checkを待つ経路は `wait for the checks`、Ownerに戻す経路は `stop the implementation` である。
+- ログのフィールド `action` の値、コードが定数から組み立てるログの文の先頭、通知の1行目、停止のノートの `Row:` の行の値は、この名前である。
+- 表に名前のない経路は、その経路が失敗させた遷移か、同じ場面の停止の名前を使う。`awaiting-merge-decision` でriskのラベルがちょうど1つでないときは `start the merge`、原因の整理が得られないまま止めるときは `stop at the round limit` である。
+- テストが、一覧に空の名前と重複がないことを確かめる。
+- 採らなかった案: 表の行の番号 (`I2` など) の定数。1つの番号が複数の遷移を指すので、ログを読む人が表を引かないと、何が起きたか分からない。
 
 ### launchd
 

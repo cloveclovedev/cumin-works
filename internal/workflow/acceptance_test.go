@@ -118,7 +118,7 @@ func TestCore07_TheAcceptanceCheckIsRequestedOnceAndHandedToTheOwner(t *testing.
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"R7", "can be accepted", "issue #6"} {
+	for _, want := range []string{"ask for the acceptance", "can be accepted", "issue #6"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
@@ -371,7 +371,7 @@ func TestAccepting_ARestartAfterTheCommentAsksTheOwnerToAccept(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "R7") {
+	if messages := sc.messagesExceptQ4(); len(messages) != 1 || !strings.Contains(messages[0], "ask for the acceptance") {
 		t.Errorf("notifications = %v, want one with R7", messages)
 	}
 }
@@ -459,7 +459,7 @@ func TestR4_BlockedStopsForTheOwner(t *testing.T) {
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	if messages := sc.webhook.messagesSent(); len(messages) != 1 || !strings.Contains(messages[0], "R4") {
+	if messages := sc.webhook.messagesSent(); len(messages) != 1 || !strings.Contains(messages[0], "stop the acceptance check") {
 		t.Errorf("notifications = %v, want one with R4", messages)
 	}
 	if n := sc.agentRuns(t); n != 1 {

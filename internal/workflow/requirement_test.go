@@ -135,7 +135,7 @@ func TestCore12_TheRemainingSubIssuesGoBackToTheOwnerOnce(t *testing.T) {
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications after two polls, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"R6", "need a review", "issue #6", "/issues/6"} {
+	for _, want := range []string{"ask about the remaining sub-issues", "need a review", "issue #6", "/issues/6"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}

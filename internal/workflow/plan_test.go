@@ -92,7 +92,7 @@ func TestR1_AReadyRequirementIssueIsPlannedOnce(t *testing.T) {
 
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"R1: moved the requirement issue to planning"`, `"cumin/status/planning"`,
-		`"msg":"R1: requested the Planner"`, `"kind":"plan"`, `"role":"planner"`,
+		`"msg":"request the split: requested the Planner"`, `"kind":"plan"`, `"role":"planner"`,
 		`"msg":"the agent run ended"`, `"result":"done"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s", want)
@@ -206,7 +206,7 @@ func assertStoppedWithMessages(t *testing.T, sc *scene, messages, body, message 
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range append([]string{"R2", "example-org/example-repo", "issue #6"}, message...) {
+	for _, want := range append([]string{"stop the split", "example-org/example-repo", "issue #6"}, message...) {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
@@ -232,7 +232,7 @@ func TestR2_ASplitWithOneRiskLabelEachGoesToTheOwner(t *testing.T) {
 	if len(messages) != 1 {
 		t.Fatalf("%d notifications, want 1: %v", len(messages), messages)
 	}
-	for _, want := range []string{"R2", "needs a review", "issue #6", "/issues/6"} {
+	for _, want := range []string{"ask for the plan review", "needs a review", "issue #6", "/issues/6"} {
 		if !strings.Contains(messages[0], want) {
 			t.Errorf("the notification has no %q:\n%s", want, messages[0])
 		}
@@ -261,7 +261,7 @@ func TestR2_NoSubIssueRequestsTheSplitAgainAndThenStopsForTheOwner(t *testing.T)
 		t.Fatalf("%d agent runs, want 2 (the request and the second request)", n)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwner(t, sc, []string{"## Stopped for the Owner", "Row: R2", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheOwner(t, sc, []string{"## Stopped for the Owner", "Row: stop the split", reason, "Retried: once"}, []string{reason})
 }
 
 func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
@@ -279,7 +279,7 @@ func TestR2_ARiskLabelMissingOrTwiceStopsForTheOwner(t *testing.T) {
 			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: tt.labels})
 			sc.pollAndWait(t, sc.service())
 
-			assertStoppedForTheOwner(t, sc, []string{"Row: R2", tt.reason}, []string{tt.reason})
+			assertStoppedForTheOwner(t, sc, []string{"Row: stop the split", tt.reason}, []string{tt.reason})
 		})
 	}
 }
@@ -311,7 +311,7 @@ func TestR2_ASecondAbnormalEndStopsForTheOwner(t *testing.T) {
 		t.Fatalf("%d agent runs, want 2 (the request and one retry)", n)
 	}
 	assertStoppedForTheOwner(t, sc,
-		[]string{"Row: R2", "this requirement issue has no sub-issue", "Retried: once", "Pull request: None"},
+		[]string{"Row: stop the split", "this requirement issue has no sub-issue", "Retried: once", "Pull request: None"},
 		[]string{"this requirement issue has no sub-issue"})
 	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split does not pass the check; the same request runs again in the same work directory"`) {
 		t.Error("the log does not say that the request ran again")
@@ -446,14 +446,14 @@ func TestPlanning_ARestartWithNoSubIssueRequestsTheSplitOnceMoreAndThenStopsForT
 		t.Errorf("the request text is not a plan:\n%s", text)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwner(t, sc, []string{"Row: R2", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheOwner(t, sc, []string{"Row: stop the split", reason, "Retried: once"}, []string{reason})
 
 	restarted := sc.serviceWithState(path)
 	sc.pollAndWait(t, restarted)
 	if n := sc.agentRuns(t); n != 1 {
 		t.Errorf("%d agent runs after one more restart, want still 1", n)
 	}
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason}, []string{reason})
+	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: stop the split", reason}, []string{reason})
 	if got := restarted.State.Issue("example-org/example-repo", 6); got != (state.Issue{}) {
 		t.Errorf("the state of #6 = %+v, want none after the stop", got)
 	}
@@ -527,7 +527,7 @@ func TestPlanning_ARestartAfterTheSecondRequestStopsWithNoRequest(t *testing.T) 
 		t.Errorf("%d agent runs, want none", n)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: stop the split", reason, "Retried: once"}, []string{reason})
 }
 
 // A question of the Planner, written after the issue got
@@ -859,7 +859,7 @@ func TestPlanning_AFailedStartDoesNotUseUpTheSecondRequest(t *testing.T) {
 		t.Errorf("%d agent runs, want 1 (the second request)", n)
 	}
 	reason := "this requirement issue has no sub-issue"
-	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: R2", reason, "Retried: once"}, []string{reason})
+	assertStoppedForTheOwnerAfterAPoll(t, sc, []string{"Row: stop the split", reason, "Retried: once"}, []string{reason})
 }
 
 // A blocked result whose stop wrote the comment and then failed to change

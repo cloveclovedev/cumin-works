@@ -65,8 +65,8 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 	} else {
 		log.Info("I7: requested the review of the Owner", "pull_request", pr.Number, "reviewer", login)
 	}
-	s.notifyOwner(ctx, log.With("row", RowI7), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        RowI7,
+	s.notifyOwner(ctx, log.With("action", ActionAskForTheMergeDecision), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		Row:        string(ActionAskForTheMergeDecision),
 		Reason:     "the merge needs a decision",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", sub.Number),
@@ -247,8 +247,8 @@ func (s *Service) sendMerge(ctx context.Context, log *slog.Logger, token string,
 			return fmt.Errorf("stop the merge for the Owner: move issue #%d to %s: %w", a.Number, LabelAwaitingDecision, err)
 		}
 		s.stopForOwner(ctx, log, target, settings, stop{
-			row: RowMerging, issue: a.Number, labelDone: true, reason: reason,
-			comment: StopNote(RowMerging, reason, pr.Number, false),
+			action: ActionStopTheMerge, issue: a.Number, labelDone: true, reason: reason,
+			comment: StopNote(ActionStopTheMerge, reason, pr.Number, false),
 		})
 		return nil
 	}
@@ -294,8 +294,8 @@ func (s *Service) closeMergedIssue(ctx context.Context, log *slog.Logger, token 
 		}
 		reason := CloseFailedReason(pullRequest, statusAnswer(err))
 		s.stopForOwner(ctx, log, target, settings, stop{
-			row: RowMerging, issue: sub.Number, labels: sub.Labels, reason: reason,
-			comment: StopNote(RowMerging, reason, pullRequest, false),
+			action: ActionStopTheMerge, issue: sub.Number, labels: sub.Labels, reason: reason,
+			comment: StopNote(ActionStopTheMerge, reason, pullRequest, false),
 		})
 		return nil
 	}
@@ -360,7 +360,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 	log.Info("the merge conflicts; the issue goes back to the Implementer", "pull_request", pr.Number, "labels", labels)
 	branch := pr.HeadBranch
 	err = s.goImplementer(ctx, target, settings, sub.Number, implementerRequest{
-		row: RowMerging, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
+		action: ActionRequestAConflictResolution, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, sub.Number).SessionID,
 		ownerLogin: login, permit: permit,
 		text: func(workDir string) string {
@@ -423,7 +423,7 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	}
 	defaultBranch := snapshot.DefaultBranch
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
-		row: RowI14, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
+		action: ActionRequestAConflictResolution, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, a.Number).SessionID,
 		ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {
@@ -476,8 +476,8 @@ func (s *Service) mergeOwnerApproval(ctx context.Context, token string, target T
 	case MergeNoRiskLabel, MergeTwoRiskLabels:
 		reason := RiskLabelReason(decision)
 		s.stopForOwner(ctx, log, target, settings, stop{
-			row: RowI12, issue: a.Number, labels: sub.Labels, reason: reason,
-			comment: StopNote(RowI12, reason, pr.Number, false),
+			action: ActionStartTheMerge, issue: a.Number, labels: sub.Labels, reason: reason,
+			comment: StopNote(ActionStartTheMerge, reason, pr.Number, false),
 		})
 		return true, nil
 	}
@@ -563,7 +563,7 @@ func (s *Service) fixOwnerReview(ctx context.Context, token string, target Targe
 		"pull_request", pr.Number, "review", review.URL, "labels", labels)
 	branch := pr.HeadBranch
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
-		row: "I13", kind: "owner review fix", branch: branch, pullRequest: pr.Number,
+		action: ActionSendBackForChanges, kind: "owner review fix", branch: branch, pullRequest: pr.Number,
 		sessionID:  s.State.Issue(repository, a.Number).SessionID,
 		ownerLogin: ownerLogin, permit: permit,
 		text: func(workDir string) string {

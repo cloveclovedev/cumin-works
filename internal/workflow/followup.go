@@ -14,9 +14,6 @@ import (
 	"time"
 )
 
-// RowI9 is the row of the follow-up note in issue-states.md.
-const RowI9 = "I9"
-
 // MergedPullRequest is the pull request that closed a sub-issue, as much as
 // the follow-up note needs.
 type MergedPullRequest struct {

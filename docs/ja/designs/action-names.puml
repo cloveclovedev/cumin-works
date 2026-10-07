@@ -1,0 +1,24 @@
+@startuml action-names
+' cumin works - the one list of the names of the actions of cumin.
+' Document: cumin-core.md, topic on the names of the actions.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+left to right direction
+
+rectangle "issue-states.md\nthe column of names\n(one name for each transition)" as source
+rectangle "internal/workflow/action.go\nthe list of actions\n(one constant for each name)" as list #FFDDDD
+
+rectangle "texts that cumin writes" {
+  rectangle "log field ""action""" as field
+  rectangle "start of a log message\nthat the code builds" as message
+  rectangle "first line of a notification" as notification
+  rectangle "line ""Row:"" of the stop note" as note
+}
+
+source --> list : the same words,\nlower case
+list --> field
+list --> message
+list --> notification
+list --> note
+@enduml

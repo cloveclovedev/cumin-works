@@ -25,9 +25,6 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/quota"
 )
 
-// RowQ1 is the row "stop agent starts" at a quota limit.
-const RowQ1 = "Q1"
-
 // quotaNotices keeps the Owner from getting the same notification of "stop agent starts" twice.
 // It lives in memory: a restart may send one more, and the state file
 // holds nothing for it (designs/quota.md, the topic on duplicate
@@ -332,7 +329,7 @@ func limitReason(window quota.Name) string {
 // reports false when the channel failed.
 func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) bool {
 	return s.notifyOwner(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        RowQ1,
+		Row:        string(ActionStopAgentStarts),
 		Reason:     reason,
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", number),

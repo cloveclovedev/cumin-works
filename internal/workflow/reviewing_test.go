@@ -127,7 +127,7 @@ func TestReviewing_ARestartAfterAChangeRequestSendsExactlyOneFixRequest(t *testi
 	if text := promptOf(t, args); !strings.Contains(text, "Request: review fix") {
 		t.Errorf("the request text is no review fix:\n%s", text)
 	}
-	if n := strings.Count(sc.logs.String(), `"msg":"I5: requested the work"`); n != 1 {
+	if n := strings.Count(sc.logs.String(), `"msg":"request a review fix: requested the work"`); n != 1 {
 		t.Errorf("%d fix requests in the log, want 1", n)
 	}
 }
@@ -454,10 +454,12 @@ func TestReviewing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheReview(t *testing
 		t.Errorf("%d agent runs, want none", n)
 	}
 	logs := sc.logs.String()
-	tries := strings.Count(logs, `"msg":"I3: the work directory was not prepared"`) +
-		strings.Count(logs, `"msg":"I3: the worktree of an earlier round was not removed"`)
-	if tries != 2 {
-		t.Errorf("%d requests that did not start, want 2: no third request", tries)
+	for _, action := range []workflow.ActionName{workflow.ActionRequestTheReview, workflow.ActionRequestTheReviewAgain} {
+		tries := strings.Count(logs, `"msg":"`+string(action)+`: the work directory was not prepared"`) +
+			strings.Count(logs, `"msg":"`+string(action)+`: the worktree of an earlier round was not removed"`)
+		if tries != 1 {
+			t.Errorf("%d requests of %q that did not start, want 1: no third request", tries, action)
+		}
 	}
 	want := []string{"risk/low", workflow.LabelAwaitingDecision}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, want) {
@@ -468,7 +470,7 @@ func TestReviewing_AWorkDirectoryThatIsNotPreparedTwiceStopsTheReview(t *testing
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"## Stopped for the Owner", "Row: I3", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
+	for _, want := range []string{"## Stopped for the Owner", "Row: stop the review", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -503,7 +505,7 @@ func TestReviewing_ABlockedResultWhoseCommentIsRefusedStillStopsTheReview(t *tes
 		t.Errorf("%d comments on #10, want none: GitHub refused the comment", len(comments))
 	}
 	logs := sc.logs.String()
-	for _, want := range []string{`"msg":"I10: the reason was not written on the issue; the whole text is here"`, `"comment":"## Decision needed: which sign-in method does the login screen use?"`} {
+	for _, want := range []string{`"msg":"stop the review: the reason was not written on the issue; the whole text is here"`, `"comment":"## Decision needed: which sign-in method does the login screen use?"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -558,7 +560,7 @@ func TestReviewing_AStopAfterTheRunsStartsNoReviewFixAndTheNextStartSendsOne(t *
 	if n := sc.agentRuns(t); n != 2 {
 		t.Fatalf("%d agent runs, want the review and one fix", n)
 	}
-	if n := strings.Count(sc.logs.String(), `"msg":"I5: requested the work"`); n != 1 {
+	if n := strings.Count(sc.logs.String(), `"msg":"request a review fix: requested the work"`); n != 1 {
 		t.Errorf("%d fix requests in the log, want 1", n)
 	}
 }
@@ -592,7 +594,7 @@ func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"Row: I8", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
+	for _, want := range []string{"Row: stop at the round limit", "Reason: " + reason, "Pull request: #21", "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}

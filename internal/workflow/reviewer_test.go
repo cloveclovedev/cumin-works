@@ -232,7 +232,7 @@ func TestI3_ASecondRunWithoutAReviewStopsForTheOwner(t *testing.T) {
 		t.Errorf("%d agent runs, want 2", n)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I5") || !strings.Contains(comments[0].Body, workflow.MissingReviewReason) {
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: stop the review") || !strings.Contains(comments[0].Body, workflow.MissingReviewReason) {
 		t.Fatalf("comments on #10 = %+v, want one stop note with the row I5", comments)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
@@ -265,7 +265,7 @@ func TestI10_ABlockedReviewerStopsWithoutARetry(t *testing.T) {
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications, want 1", n)
 	}
-	for _, want := range []string{`"msg":"I10: the agent returned blocked"`, `"row":"I10"`} {
+	for _, want := range []string{`"msg":"stop the review: the agent returned blocked"`, `"action":"stop the review"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -300,7 +300,7 @@ func TestI3_TwoAbnormalEndsOfTheReviewerStopForTheOwner(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"Row: I5", "Reason: " + reason, "ended abnormally (" + agent.EndInvalidResult.String() + ")", "Retried: once"} {
+	for _, want := range []string{"Row: stop the review", "Reason: " + reason, "ended abnormally (" + agent.EndInvalidResult.String() + ")", "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -407,7 +407,7 @@ func TestI5_ChangesRequestedGoToTheImplementerInItsSession(t *testing.T) {
 		t.Errorf("state = %+v, want both sessions of the two runs", got)
 	}
 	for _, want := range []string{`"msg":"I5: the Reviewer requested changes; the issue goes back to the Implementer"`,
-		`"round":1`, `"msg":"I5: requested the work"`, `"kind":"review fix"`, `"msg":"I2: verified the pull request"`} {
+		`"round":1`, `"msg":"request a review fix: requested the work"`, `"kind":"review fix"`, `"msg":"I2: verified the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -459,7 +459,7 @@ func TestI8_TheLimitEndsWithTheExplanationAndOneNotification(t *testing.T) {
 		t.Fatalf("comments on #21 = %+v, want the explanation", explanations)
 	}
 	messages := sc.webhook.messagesSent()
-	if len(messages) != 1 || !strings.Contains(messages[0], "I8") || !strings.Contains(messages[0], "issuecomment-") {
+	if len(messages) != 1 || !strings.Contains(messages[0], "stop at the round limit") || !strings.Contains(messages[0], "issuecomment-") {
 		t.Errorf("notifications = %q, want one of I8 that links the comment", messages)
 	}
 	for _, want := range []string{`"msg":"I8: blocking comments remain at the limit of rounds"`,
@@ -484,7 +484,7 @@ func TestI8_WithoutTheExplanationTheStopStepHandsOverTheIssue(t *testing.T) {
 		t.Errorf("%d agent runs, want 2", n)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: I8") || !strings.Contains(comments[0].Body, workflow.MissingExplanationReason) {
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: stop at the round limit") || !strings.Contains(comments[0].Body, workflow.MissingExplanationReason) {
 		t.Fatalf("comments on #10 = %+v, want one stop note with the row I8", comments)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {
