@@ -1339,11 +1339,11 @@ func TestReviewEnd_DecidesFromTheFacts(t *testing.T) {
 		{"the cause is explained", reviewingSub(ReviewingFacts{Explained: true, Explanation: explanation}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
 			StopAtRoundLimit{Number: 10, Explanation: explanation}},
 		{"the request of the cause left no explanation", reviewingSub(ReviewingFacts{CauseRequested: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
-			StopReview{Number: 10, Row: ActionStopAtTheRoundLimit, Reason: MissingExplanationReason, PullRequest: 21}},
+			StopReview{Number: 10, Action: ActionStopAtTheRoundLimit, Reason: MissingExplanationReason, PullRequest: 21}},
 		{"the second request of the cause left no explanation", reviewingSub(ReviewingFacts{CauseRequestedAgain: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
-			StopReview{Number: 10, Row: ActionStopAtTheRoundLimit, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
+			StopReview{Number: 10, Action: ActionStopAtTheRoundLimit, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
 		{"the second request of the cause returned done and left no explanation", reviewingSub(ReviewingFacts{CauseRequested: true, CauseRequestedAgain: true}, Review{State: ReviewChangesRequested, Commit: "old"}, changes),
-			StopReview{Number: 10, Row: ActionStopAtTheRoundLimit, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
+			StopReview{Number: 10, Action: ActionStopAtTheRoundLimit, Reason: MissingCauseReason, PullRequest: 21, Retried: true}},
 		{"approved with risk/medium", reviewingSub(ReviewingFacts{}, Review{State: ReviewApproved, Commit: "new"}),
 			AskOwnerToMerge{Number: 10, PullRequest: 21}},
 		{"approved, a required check does not pass", reviewingSub(ReviewingFacts{Required: []RequiredCheck{{Name: "ci"}}}, Review{State: ReviewApproved, Commit: "new"}),
@@ -1353,9 +1353,9 @@ func TestReviewEnd_DecidesFromTheFacts(t *testing.T) {
 		{"no review on the head commit", reviewingSub(ReviewingFacts{}),
 			RequestReviewAgain{Number: 10, PullRequest: 21}},
 		{"no review after the second request", reviewingSub(ReviewingFacts{RequestedAgain: true}),
-			StopReview{Number: 10, Row: ActionStopTheReview, Reason: MissingReviewReason, PullRequest: 21, Retried: true}},
+			StopReview{Number: 10, Action: ActionStopTheReview, Reason: MissingReviewReason, PullRequest: 21, Retried: true}},
 		{"a question after the label", reviewingSub(ReviewingFacts{QuestionAt: time.Date(2026, 1, 2, 4, 0, 0, 0, time.UTC)}, changes),
-			StopReview{Number: 10, Question: true, Row: ActionStopTheReview, PullRequest: 21}},
+			StopReview{Number: 10, Question: true, Action: ActionStopTheReview, PullRequest: 21}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

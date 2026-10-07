@@ -205,6 +205,17 @@ func newFakeWebhook(t *testing.T) *fakeWebhook {
 		w.WriteHeader(status)
 	}))
 	t.Cleanup(f.server.Close)
+	// A notification names no person: it goes to a channel, not to one
+	// reader. Every notification of every test is checked here.
+	t.Cleanup(func() {
+		for _, message := range f.messagesSent() {
+			for _, person := range []string{"Owner", "Maintainer", "Operator"} {
+				if strings.Contains(message, person) {
+					t.Errorf("the notification names a person (%s):\n%s", person, message)
+				}
+			}
+		}
+	})
 	return f
 }
 
@@ -1007,7 +1018,7 @@ func TestI2_BlockedStopsTheIssueForTheOwner(t *testing.T) {
 	}
 	logs := sc.logs.String()
 	for _, want := range []string{`"msg":"stop the implementation: the agent returned blocked"`, `"msg":"stop the implementation: wrote the reason on the issue"`,
-		`"msg":"stop the implementation: the issue waits for the Owner"`, `"msg":"the Owner was notified"`, `"action":"stop the implementation"`} {
+		`"msg":"stop the implementation: the issue waits for the Owner"`, `"msg":"the notification was sent"`, `"action":"stop the implementation"`} {
 		if !strings.Contains(logs, want) {
 			t.Errorf("the log has no %s:\n%s", want, logs)
 		}
@@ -1103,7 +1114,7 @@ func TestCore05_AnInvalidResultIsRetriedOnceAndThenGoesToTheOwner(t *testing.T) 
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	for _, want := range []string{"## Stopped for the Owner", "Row: stop the implementation", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "Retried: once", "Pull request: None"} {
+	for _, want := range []string{"## Stopped for a Maintainer", "Step: stop the implementation", workflow.VerificationReason(workflow.FailureNoOpenPullRequest), "Retried: once", "Pull request: None"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, body)
 		}
@@ -1224,7 +1235,7 @@ func assertStopped(t *testing.T, sc *scene, reason string, pullRequest int, retr
 		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
 	}
 	body := comments[0].Body
-	want := []string{"## Stopped for the Owner", "Row: stop the implementation", "Reason: " + reason, "Retried: " + retried, "cumin/status/ready"}
+	want := []string{"## Stopped for a Maintainer", "Step: stop the implementation", "Reason: " + reason, "Retried: " + retried, "cumin/status/ready"}
 	if pullRequest > 0 {
 		want = append(want, fmt.Sprintf("Pull request: #%d", pullRequest))
 	} else {
@@ -2463,7 +2474,7 @@ func TestI4_TheLimitStopsTheIssueForTheOwner(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments, want 1", len(comments))
 	}
-	for _, want := range []string{"Row: stop for failed checks", "(ci)", "after 3 check fix requests", "Pull request: #21"} {
+	for _, want := range []string{"Step: stop for failed checks", "(ci)", "after 3 check fix requests", "Pull request: #21"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -2596,7 +2607,7 @@ func TestI15_RequiredChecksThatDoNotReportInTimeStopTheIssueOnce(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments, want 1", len(comments))
 	}
-	for _, want := range append([]string{"Row: stop for missing checks", "Pull request: #21"}, facts...) {
+	for _, want := range append([]string{"Step: stop for missing checks", "Pull request: #21"}, facts...) {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -2655,7 +2666,7 @@ func TestI15_NoOpenPullRequestStopsTheIssueOnceAfterTheWaitTime(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments, want 1", len(comments))
 	}
-	for _, want := range append([]string{"Row: stop for missing checks", "Pull request: None"}, facts...) {
+	for _, want := range append([]string{"Step: stop for missing checks", "Pull request: None"}, facts...) {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}

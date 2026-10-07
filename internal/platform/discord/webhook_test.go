@@ -57,7 +57,7 @@ func send(f *fakeDiscord, text string) error {
 
 func TestSend_ExecutesTheWebhookWithTheTextAsContent(t *testing.T) {
 	f := newFakeDiscord(t)
-	if err := send(f, "cumin: I2: the Implementer returned blocked"); err != nil {
+	if err := send(f, "cumin: stop the implementation: the Implementer returned blocked"); err != nil {
 		t.Fatalf("Send() = %v, want nil", err)
 	}
 	if f.calls != 1 {
@@ -73,7 +73,7 @@ func TestSend_ExecutesTheWebhookWithTheTextAsContent(t *testing.T) {
 	if got := f.header.Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", got)
 	}
-	if got, _ := f.body["content"].(string); got != "cumin: I2: the Implementer returned blocked" {
+	if got, _ := f.body["content"].(string); got != "cumin: stop the implementation: the Implementer returned blocked" {
 		t.Errorf("content = %q, want the text", got)
 	}
 	// Nothing in a notification may ring a channel: an agent writes part
@@ -94,7 +94,7 @@ func TestSend_ExecutesTheWebhookWithTheTextAsContent(t *testing.T) {
 // nobody, because the request turns mention parsing off.
 func TestSend_DoesNotLetAMentionRingAChannel(t *testing.T) {
 	f := newFakeDiscord(t)
-	if err := send(f, "cumin: I2: @everyone the run stopped"); err != nil {
+	if err := send(f, "cumin: stop the implementation: @everyone the run stopped"); err != nil {
 		t.Fatalf("Send() = %v, want nil", err)
 	}
 	if content, _ := f.body["content"].(string); !strings.Contains(content, "@everyone") {
@@ -178,7 +178,7 @@ func TestSend_CutsAMessageThatIsTooLong(t *testing.T) {
 
 func TestCut_KeepsAMessageThatFits(t *testing.T) {
 	t.Parallel()
-	text := "cumin: I2: the verification failed"
+	text := "cumin: stop the implementation: the verification failed"
 	if got := Cut(text); got != text {
 		t.Errorf("Cut(%q) = %q, want the text", text, got)
 	}

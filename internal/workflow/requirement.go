@@ -161,7 +161,7 @@ func (s *Service) tellStatusOfAnother(ctx context.Context, log *slog.Logger, tar
 	log.Warn("the newest "+label+" is not of cumin-core or of an Owner: cumin does nothing until an Owner adds the right label again",
 		"actor", actor.Login, "actor_type", actor.Type)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Reason:     fmt.Sprintf("%s was added by %s, who is not cumin-core or an Owner. cumin does nothing until an Owner adds the right label again.", label, labelActorName(actor)),
+		Reason:     fmt.Sprintf("%s was added by %s, which is not cumin-core and not a person with write access. cumin does nothing until a person with write access adds the right label again.", label, labelActorName(actor)),
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", number),
 		Link:       github.IssueURL(target.Repository.Owner, target.Repository.Name, number),
@@ -185,8 +185,8 @@ func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, targ
 		"actor", actor.Login, "actor_type", actor.Type)
 	by := labelActorName(actor)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(action),
-		Reason:     fmt.Sprintf("%s was added by %s, who is not the Owner. cumin starts nothing until the Owner adds the label again.", LabelReady, by),
+		Action:     string(action),
+		Reason:     fmt.Sprintf("%s was added by %s, which is not a person with write access. cumin starts nothing until a person with write access adds the label again.", LabelReady, by),
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", number),
 		Link:       github.IssueURL(target.Repository.Owner, target.Repository.Name, number),
@@ -219,7 +219,7 @@ func (s *Service) reviewRemaining(ctx context.Context, token string, target Targ
 	log.Info(string(ActionAskAboutTheRemainingSubIssues)+": the remaining sub-issues wait for the Owner", "labels", labels)
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionAskAboutTheRemainingSubIssues),
+		Action:     string(ActionAskAboutTheRemainingSubIssues),
 		Reason:     "The sub-issues that are left have no status label and need a review.",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", a.Number),

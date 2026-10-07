@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestMessage_HoldsTheRowTheReasonAndTheLink(t *testing.T) {
+func TestMessage_HoldsTheActionTheReasonAndTheLink(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name         string
@@ -22,13 +22,13 @@ func TestMessage_HoldsTheRowTheReasonAndTheLink(t *testing.T) {
 		{
 			name: "every field",
 			notification: Notification{
-				Row:        "I2",
+				Action:     "stop the implementation",
 				Reason:     "the Implementer returned blocked",
 				Repository: "example-org/example-repo",
 				Subject:    "issue #12",
 				Link:       "https://github.com/example-org/example-repo/issues/12",
 			},
-			want: "cumin: I2: the Implementer returned blocked\n" +
+			want: "cumin: stop the implementation: the Implementer returned blocked\n" +
 				"example-org/example-repo issue #12\n" +
 				"https://github.com/example-org/example-repo/issues/12",
 		},
@@ -45,8 +45,8 @@ func TestMessage_HoldsTheRowTheReasonAndTheLink(t *testing.T) {
 		},
 		{
 			name:         "a reason of more than one line becomes one line",
-			notification: Notification{Row: "I2", Reason: "the run ended abnormally\n\nkind: time limit\n"},
-			want:         "cumin: I2: the run ended abnormally kind: time limit",
+			notification: Notification{Action: "stop the implementation", Reason: "the run ended abnormally\n\nkind: time limit\n"},
+			want:         "cumin: stop the implementation: the run ended abnormally kind: time limit",
 		},
 		{
 			name:         "nothing but a reason",
@@ -70,7 +70,7 @@ func TestMessage_CutsALongReasonAndKeepsTheLink(t *testing.T) {
 	t.Parallel()
 	link := "https://github.com/example-org/example-repo/issues/12"
 	got := Message(Notification{
-		Row:        "I2",
+		Action:     "stop the implementation",
 		Reason:     strings.Repeat("a", maxReason+1000),
 		Repository: "example-org/example-repo",
 		Subject:    "issue #12",
@@ -83,7 +83,7 @@ func TestMessage_CutsALongReasonAndKeepsTheLink(t *testing.T) {
 	if lines[2] != link {
 		t.Errorf("the last line is %q, want the link", lines[2])
 	}
-	if n := len([]rune(lines[0])); n != len("cumin: I2: ")+maxReason {
+	if n := len([]rune(lines[0])); n != len("cumin: stop the implementation: ")+maxReason {
 		t.Errorf("the summary holds %d characters, want the prefix and %d", n, maxReason)
 	}
 	if !strings.HasSuffix(lines[0], reasonCut) {
@@ -105,7 +105,7 @@ func (f *fakeSender) Send(_ context.Context, text string) error {
 func TestNotify_SendsTheMessageThroughTheSender(t *testing.T) {
 	t.Parallel()
 	sender := &fakeSender{}
-	notification := Notification{Row: "I2", Reason: "the verification failed", Repository: "example-org/example-repo"}
+	notification := Notification{Action: "stop the implementation", Reason: "the verification failed", Repository: "example-org/example-repo"}
 
 	if err := New(sender).Notify(context.Background(), notification); err != nil {
 		t.Fatalf("Notify() = %v, want nil", err)

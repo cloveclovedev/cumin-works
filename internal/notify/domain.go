@@ -28,14 +28,14 @@ const reasonCut = "..."
 // Notification is one thing that cumin tells the Owner. The caller fills
 // the fields that it has; an empty field is left out of the message.
 type Notification struct {
-	// Row is the name of the action in the tables of
-	// docs/ja/requirements/workflow/issue-states.md, such as "wait for
-	// the checks". It is
-	// empty when no row covers the notification, as for a poll of one
-	// repository that keeps failing.
-	Row string
-	// Reason is why the Owner must look, in one line. A reason with more
-	// than one line is joined into one.
+	// Action is the name of the action of cumin, as the tables of
+	// docs/ja/requirements/workflow/issue-states.md write it, such as
+	// "stop the implementation". It is empty when no action covers the
+	// notification, as for a poll of one repository that keeps failing.
+	Action string
+	// Reason is why a person must look, in one line. A reason with more
+	// than one line is joined into one. It names no person: a notification
+	// goes to a channel, not to one reader.
 	Reason string
 	// Repository is the target repository, as "<owner>/<repo>".
 	Repository string
@@ -57,8 +57,8 @@ type Notification struct {
 func Message(n Notification) string {
 	var lines []string
 	summary := cutReason(oneLine(n.Reason))
-	if n.Row != "" {
-		summary = oneLine(n.Row) + ": " + summary
+	if n.Action != "" {
+		summary = oneLine(n.Action) + ": " + summary
 	}
 	lines = append(lines, "cumin: "+summary)
 

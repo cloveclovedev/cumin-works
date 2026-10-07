@@ -162,7 +162,7 @@ func TestOwnerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.
 					t.Errorf("%d log lines for one ready event across three polls, want 1:\n%s", n, sc.logs.String())
 				}
 				messages := sc.messagesExceptQ4()
-				if len(messages) != 1 || !strings.Contains(messages[0], s.row) || !strings.Contains(messages[0], "is not the Owner") {
+				if len(messages) != 1 || !strings.Contains(messages[0], s.row) || !strings.Contains(messages[0], "is not a person with write access") {
 					t.Errorf("messages = %q, want one of %s about the ready that is not of the Owner", messages, s.row)
 				}
 			})

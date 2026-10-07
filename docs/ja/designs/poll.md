@@ -508,7 +508,7 @@ checkの結果の読み方:
   - 実行を待って止める間と、利用枠が上限に達している間 (Q1、stop agent starts) は、衝突でも何も変えない。衝突の解消は起動の許可を取れないので、ラベルを替えず、Implementerも起動せず、ログに1行出す。Issueは `cumin/status/merging` のまま残り、許可が取れる定期確認が、同じ衝突から依頼する。Agentへのほかの依頼と同じく、起動を待つためである。その間、`mergeable` が `CONFLICTING` のPull Requestにはmergeを送らない。`MERGEABLE` か `UNKNOWN` と読んだPull Requestには、mergeを送り、断られたら待つ。
   - 衝突の解消は、既定のブランチをPull Requestのブランチにmergeして行う。Implementerの指示は強制pushを禁じており、rebaseしたブランチはpushできないためである。新しい先頭のコミットには、Reviewerの新しい承認が要る。ラウンドは、最後の `APPROVE` から数え直す (「レビューのラウンドの数え方」)。
   - 衝突の解消の実行が `done` で終わっても、Pull Requestの先頭のコミットが衝突したときのままなら、`cumin/status/implementing` の出口の判定がOwnerに戻す。そのまま通すと、同じ衝突がレビューとmergeを何度も回るためである。
-  - 「stop the merge for the Owner」: 先頭のコミットが動いたという答え (409) と、それ以外の一時的でない拒否 (GitHubの答えを入れる) は、ラベルを `cumin/status/awaiting-decision` に替えてから、1文のコメントと通知でOwnerに戻す。コメントの `Row` は `stop the merge` である。ただし、拒否のあとにPull Requestを読んでmerge済みなら、止めない。前のmergeの答えが届かなかった場合で、次の定期確認が閉じる。
+  - 「stop the merge for the Owner」: 先頭のコミットが動いたという答え (409) と、それ以外の一時的でない拒否 (GitHubの答えを入れる) は、ラベルを `cumin/status/awaiting-decision` に替えてから、1文のコメントと通知でOwnerに戻す。コメントの `Step` は `stop the merge` である。ただし、拒否のあとにPull Requestを読んでmerge済みなら、止めない。前のmergeの答えが届かなかった場合で、次の定期確認が閉じる。
   - 1回の定期確認で、1つのリポジトリに2つ以上のmergeを送るときは、2つ目からは送る前に5秒待つ (`DefaultMergeWait`)。GitHubが既定のブランチを更新する時間を置くためである。待つ時間は設定の表にないので、コードに置く。
 - 採らなかった案: mergeの前に読んだ `mergeable` だけで衝突を決め、mergeの答えからは決めない。読んだ値が古い `MERGEABLE` のことがあり、衝突を見落とす (#286 の M4)。`CONFLICTING` と読んだときだけmergeを省き、ほかは呼んでから読むほうが、確かに分かる。
 
@@ -591,7 +591,7 @@ checkの結果の読み方:
 
 ### うまくいかなかったときに、Ownerに戻す道
 
-- 先に進めないときは、1か所の手順でOwnerに戻す。動作の名前 (`stop the implementation`、`stop the split` など。`internal/workflow/action.go` の一覧) を引数で受け取り、順に、止まったIssue (I2では実装Issue、R2では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-decision` に替え、Ownerに通知する。I4、I15 (必須のcheckが結果を返さない)、I3 (Reviewerへの依頼が2回とも起動できない)、I5 (Reviewerのレビューが2回とも見つからない。異常終了を含む)、I10 (Reviewerの `blocked`) も、同じ手順を、その経路の動作の名前で呼ぶ。あとの行 (I8) も同じである。コメントの `Row` の行と通知の1行目は、その名前を示す。
+- 先に進めないときは、1か所の手順でOwnerに戻す。動作の名前 (`stop the implementation`、`stop the split` など。`internal/workflow/action.go` の一覧) を引数で受け取り、順に、止まったIssue (I2では実装Issue、R2では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-decision` に替え、Ownerに通知する。I4、I15 (必須のcheckが結果を返さない)、I3 (Reviewerへの依頼が2回とも起動できない)、I5 (Reviewerのレビューが2回とも見つからない。異常終了を含む)、I10 (Reviewerの `blocked`) も、同じ手順を、その経路の動作の名前で呼ぶ。あとの行 (I8) も同じである。コメントの `Step` の行と通知の1行目は、その名前を示す。
 - 順番に意味がある。理由がGitHubに残ってからラベルが替わり、最後に「見に来てほしい」と伝える。`blocked` の道だけは、ラベルを先に替えてからコメントを書く。コメントを書けなかったときに、次の定期確認が同じ作業を依頼し直さないためである。定期確認が決める停止も、ラベルを先に替える。
 - 途中で1つ失敗しても、次を止めない。コメントを書けなくてもラベルは替え、ラベルを替えられなくても通知は出す。巻き戻しもしない。止まったIssueがあることは、どれか1つが落ちても伝わるほうがよい。失敗はログに出す。
 - 通知のリンクは、書いたコメントのアドレスにする。理由の全文がそこにあるためである。コメントを書けなかったときは、Issueのアドレスにする。tokenを取れなかったときも同じである。そのときは、コメントの全文をHostのログに error で出し、通知の理由に、コメントを書けなかったことと、全文がHostのログにあることを足す。

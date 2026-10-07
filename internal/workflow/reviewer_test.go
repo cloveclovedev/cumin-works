@@ -232,7 +232,7 @@ func TestI3_ASecondRunWithoutAReviewStopsForTheOwner(t *testing.T) {
 		t.Errorf("%d agent runs, want 2", n)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: stop the review") || !strings.Contains(comments[0].Body, workflow.MissingReviewReason) {
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Step: stop the review") || !strings.Contains(comments[0].Body, workflow.MissingReviewReason) {
 		t.Fatalf("comments on #10 = %+v, want one stop note with the row I5", comments)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/low", workflow.LabelAwaitingDecision}) {
@@ -300,7 +300,7 @@ func TestI3_TwoAbnormalEndsOfTheReviewerStopForTheOwner(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("%d comments on #10, want one stop note: %+v", len(comments), comments)
 	}
-	for _, want := range []string{"Row: stop the review", "Reason: " + reason, "ended abnormally (" + agent.EndInvalidResult.String() + ")", "Retried: once"} {
+	for _, want := range []string{"Step: stop the review", "Reason: " + reason, "ended abnormally (" + agent.EndInvalidResult.String() + ")", "Retried: once"} {
 		if !strings.Contains(comments[0].Body, want) {
 			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
 		}
@@ -484,7 +484,7 @@ func TestI8_WithoutTheExplanationTheStopStepHandsOverTheIssue(t *testing.T) {
 		t.Errorf("%d agent runs, want 2", n)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: stop at the round limit") || !strings.Contains(comments[0].Body, workflow.MissingExplanationReason) {
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Step: stop at the round limit") || !strings.Contains(comments[0].Body, workflow.MissingExplanationReason) {
 		t.Fatalf("comments on #10 = %+v, want one stop note with the row I8", comments)
 	}
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Contains(got, workflow.LabelAwaitingDecision) {

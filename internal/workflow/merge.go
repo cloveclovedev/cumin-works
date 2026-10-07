@@ -66,7 +66,7 @@ func (s *Service) askOwnerToMerge(ctx context.Context, log *slog.Logger, target 
 		log.Info(string(ActionAskForTheMergeDecision)+": requested the review of the Owner", "pull_request", pr.Number, "reviewer", login)
 	}
 	s.notifyOwner(ctx, log.With("action", ActionAskForTheMergeDecision), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
-		Row:        string(ActionAskForTheMergeDecision),
+		Action:     string(ActionAskForTheMergeDecision),
 		Reason:     "the merge needs a decision",
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", sub.Number),

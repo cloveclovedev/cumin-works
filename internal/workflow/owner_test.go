@@ -193,7 +193,7 @@ func TestI12_AnIssueWithoutOneRiskLabelIsStopped(t *testing.T) {
 		t.Errorf("%d merge requests, want none", n)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: start the merge") ||
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Step: start the merge") ||
 		!strings.Contains(comments[0].Body, workflow.RiskLabelReason(workflow.MergeTwoRiskLabels)) {
 		t.Errorf("comments of #10 = %+v, want one stop note of I12", comments)
 	}
@@ -278,7 +278,7 @@ func TestI12_AConflictThatStaysStopsTheImplementationForTheOwner(t *testing.T) {
 		t.Errorf("the conflict resolution request does not name the Owner %s:\n%s", theOwner, text)
 	}
 	comments := sc.fake.Comments(sc.repo, 10)
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Row: stop the implementation") ||
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "Step: stop the implementation") ||
 		!strings.Contains(comments[0].Body, workflow.ConflictNotResolvedReason(21)) {
 		t.Errorf("comments of #10 = %+v, want one stop note of the conflict that stays", comments)
 	}
