@@ -33,7 +33,7 @@ func (s *Service) writeFollowUpNotes(ctx context.Context, log *slog.Logger, toke
 		log := log.With("requirement_issue", requirement.Number, "action", ActionWriteTheFollowUpNote)
 		requirement.FollowUpsDone = s.writeNotesOf(ctx, log, token, target, *requirement, &logins)
 		if !requirement.FollowUpsDone && NeedsComments(*requirement) {
-			log.Info("R4: waits for the follow-up notes of the closed sub-issues")
+			log.Info(string(ActionRequestTheAcceptanceCheck) + ": waits for the follow-up notes of the closed sub-issues")
 		}
 	}
 }
@@ -63,10 +63,10 @@ func (s *Service) writeNotesOf(ctx context.Context, log *slog.Logger, token stri
 	}
 	read, rate, err := s.GitHub.ReadIssueComments(ctx, token, owner, repo, requirement.Number, since)
 	if err != nil {
-		log.Error("I9: the comments were not read", "error", err.Error())
+		log.Error(string(ActionWriteTheFollowUpNote)+": the comments were not read", "error", err.Error())
 		return false
 	}
-	log.Debug("I9: read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	log.Debug(string(ActionWriteTheFollowUpNote)+": read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	comments := make([]Comment, 0, len(read))
 	for _, c := range read {
 		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body})
@@ -98,12 +98,12 @@ func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	linked, rate, err := s.GitHub.ReadLinkedPullRequests(ctx, token, owner, repo, sub.Number)
 	if err != nil {
-		log.Error("I9: the linked pull requests were not read", "error", err.Error())
+		log.Error(string(ActionWriteTheFollowUpNote)+": the linked pull requests were not read", "error", err.Error())
 		return nil, err
 	}
-	log.Debug("I9: read the linked pull requests", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	log.Debug(string(ActionWriteTheFollowUpNote)+": read the linked pull requests", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	if len(linked) == 0 {
-		log.Debug("I9: no pull request is linked to the issue")
+		log.Debug(string(ActionWriteTheFollowUpNote) + ": no pull request is linked to the issue")
 	}
 	// The pull requests that need a note: those with a note already, those
 	// that leave work now, and those that are still open.
@@ -134,7 +134,7 @@ func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token
 			return nil, err
 		}
 		if _, ok := FollowUpNote(sub, pr, reviewer, nil); !ok {
-			log.Debug("I9: nothing is left to copy", "pull_request", l.Number)
+			log.Debug(string(ActionWriteTheFollowUpNote)+": nothing is left to copy", "pull_request", l.Number)
 			continue
 		}
 		toWrite = append(toWrite, pending{number: l.Number, pr: pr})
@@ -147,10 +147,10 @@ func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token
 		note, _ := FollowUpNote(sub, p.pr, reviewer, notes)
 		comment, err := s.GitHub.CreateIssueComment(ctx, token, owner, repo, requirement, note)
 		if err != nil {
-			log.Error("I9: the follow-up note was not written", "pull_request", p.number, "error", err.Error())
+			log.Error(string(ActionWriteTheFollowUpNote)+": the follow-up note was not written", "pull_request", p.number, "error", err.Error())
 			return written, err
 		}
-		log.Info("I9: wrote the follow-up note", "pull_request", p.number, "comment", comment.URL)
+		log.Info(string(ActionWriteTheFollowUpNote)+": wrote the follow-up note", "pull_request", p.number, "comment", comment.URL)
 		written = append(written, FollowUpMark{Issue: sub.Number, PullRequest: p.number, At: time.Now(), Notes: notes})
 	}
 	return written, nil
@@ -161,10 +161,10 @@ func (s *Service) writeFollowUpNote(ctx context.Context, log *slog.Logger, token
 func (s *Service) readPullRequestNote(ctx context.Context, log *slog.Logger, token string, target Target, number int) (MergedPullRequest, error) {
 	read, rate, err := s.GitHub.ReadPullRequestNote(ctx, token, target.Repository.Owner, target.Repository.Name, number)
 	if err != nil {
-		log.Error("I9: the pull request was not read", "error", err.Error())
+		log.Error(string(ActionWriteTheFollowUpNote)+": the pull request was not read", "error", err.Error())
 		return MergedPullRequest{}, err
 	}
-	log.Debug("I9: read the pull request", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	log.Debug(string(ActionWriteTheFollowUpNote)+": read the pull request", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	pr := MergedPullRequest{Number: read.Number, Merged: read.Merged, Body: read.Body}
 	for _, t := range read.Threads {
 		thread := ReviewThread{Path: t.Path, Line: t.Line}
@@ -181,17 +181,17 @@ func (s *Service) readPullRequestNote(ctx context.Context, log *slog.Logger, tok
 // Reviewer by the second.
 func (s *Service) followUpLogins(ctx context.Context, log *slog.Logger, target Target) (cumin, reviewer string, ok bool) {
 	if target.Login == nil || s.Agents == nil {
-		log.Debug("I9: no login of cumin-core or of the Reviewer; no follow-up note")
+		log.Debug(string(ActionWriteTheFollowUpNote) + ": no login of cumin-core or of the Reviewer; no follow-up note")
 		return "", "", false
 	}
 	cumin, err := target.Login(ctx)
 	if err != nil {
-		log.Error("I9: the login of cumin-core was not read", "error", err.Error())
+		log.Error(string(ActionWriteTheFollowUpNote)+": the login of cumin-core was not read", "error", err.Error())
 		return "", "", false
 	}
 	reviewer, err = s.Agents.BotLogin(ctx, target.Repository.Owner, config.RoleReviewer)
 	if err != nil {
-		log.Error("I9: the login of the Reviewer App was not read", "error", err.Error())
+		log.Error(string(ActionWriteTheFollowUpNote)+": the login of the Reviewer App was not read", "error", err.Error())
 		return "", "", false
 	}
 	return cumin, reviewer, true

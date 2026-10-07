@@ -59,7 +59,7 @@ func TestCore13_OnlyAReadyAddedAfterTheReviewMovesTheRequirementIssue(t *testing
 	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
 		t.Errorf("labels of #6 = %v, want %v", got, want)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"R3: the sub-issues of the requirement issue are in progress"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"mark the requirement as in work: the sub-issues of the requirement issue are in progress"`) {
 		t.Error("the log has no R3 line")
 	}
 	if n := sc.agentRuns(t); n != 0 {

@@ -86,7 +86,7 @@ func TestImplementing_AReadThatFailsAfterTheRunChangesNothingAndTheNextPollDecid
 		t.Fatalf("Poll at minute 1: %v", err)
 	}
 	assertWaitsForTheChecks(t, sc)
-	if !strings.Contains(sc.logs.String(), `"msg":"I2: verified the pull request"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"wait for the checks: verified the pull request"`) {
 		t.Errorf("the log does not say that the pull request was verified:\n%s", sc.logs.String())
 	}
 }

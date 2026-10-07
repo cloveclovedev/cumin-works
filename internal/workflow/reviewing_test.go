@@ -196,7 +196,7 @@ func TestReviewing_AFailedReadOfTheOwnerLoginBeforeI7ChangesNothingAndTheNextPol
 	sc.fake.FailTimes(http.MethodGet, permissionPath, 0, everyTry, http.StatusBadGateway)
 	_ = pollAtMinute(sc, restarted, 1)
 
-	if !strings.Contains(sc.logs.String(), "I7: read the login of the Owner of issue #10") {
+	if !strings.Contains(sc.logs.String(), "ask for the merge decision: read the login of the Owner of issue #10") {
 		t.Errorf("the log does not name the failed read of the login of the Owner:\n%s", sc.logs.String())
 	}
 	assertStillReviewing(t, sc, restarted, "risk/medium")
@@ -583,7 +583,7 @@ func TestReviewing_TwoAbnormalEndsOfTheCauseRunStopTheReview(t *testing.T) {
 	if n := sc.agentRuns(t); n != 3 {
 		t.Errorf("%d agent runs, want 3: the review and two requests of the cause", n)
 	}
-	if n := strings.Count(sc.logs.String(), `"msg":"I8: requested the explanation of the cause"`); n != 2 {
+	if n := strings.Count(sc.logs.String(), `"msg":"request the cause: requested the explanation of the cause"`); n != 2 {
 		t.Errorf("%d requests of the cause in the log, want 2", n)
 	}
 	if n := service.State.Issue("example-org/example-repo", 10).CauseRequests; n != 2 {

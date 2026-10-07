@@ -449,7 +449,7 @@ func TestR4_AFailedNoteWaitsForTheNextPoll(t *testing.T) {
 	if n := sc.agentRuns(t); n != 0 {
 		t.Fatalf("%d agent runs with the note missing, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), "R4: waits for the follow-up notes") {
+	if !strings.Contains(sc.logs.String(), "request the acceptance check: waits for the follow-up notes") {
 		t.Error("the log does not say that R4 waits")
 	}
 
@@ -501,10 +501,10 @@ func TestR4_AFailedReadOfTheCommentsWaits(t *testing.T) {
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), "I9: the comments were not read") {
+	if !strings.Contains(sc.logs.String(), "write the follow-up note: the comments were not read") {
 		t.Fatal("the failed query was not the read of I9")
 	}
-	if !strings.Contains(sc.logs.String(), "R4: waits for the follow-up notes") {
+	if !strings.Contains(sc.logs.String(), "request the acceptance check: waits for the follow-up notes") {
 		t.Error("the log does not say that R4 waits")
 	}
 }

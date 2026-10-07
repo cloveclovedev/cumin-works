@@ -646,7 +646,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	merges := 0
 	for _, action := range actions {
 		if a, ok := action.(ResolveConflict); ok && ownerDecided[a.Number] {
-			log.Info("I14: waits for the review of the Owner on the conflicting head", "issue", a.Number)
+			log.Info(string(ActionRequestAConflictResolution)+": waits for the review of the Owner on the conflicting head", "issue", a.Number)
 			continue
 		}
 		// A candidate of I12 or of I13 is only a check; it counts as
@@ -715,7 +715,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			}
 		case Claim:
 			if notStarted[a.RequirementIssue] {
-				log.Info("I1: waits for R3 of the requirement issue", "issue", a.Number, "requirement_issue", a.RequirementIssue)
+				log.Info(string(ActionRequestTheImplementation)+": waits for \""+string(ActionMarkTheRequirementAsInWork)+"\" of the requirement issue", "issue", a.Number, "requirement_issue", a.RequirementIssue)
 				continue
 			}
 			if err := s.claim(ctx, token, target, snapshot, settings, a); err != nil {
@@ -773,7 +773,7 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	sub, ok := snapshot.SubIssue(c.Number)
 	if !ok {
-		return fmt.Errorf("I1: issue #%d is not in the snapshot", c.Number)
+		return fmt.Errorf(string(ActionRequestTheImplementation)+": issue #%d is not in the snapshot", c.Number)
 	}
 	permit, ok := s.permitStart(ctx, s.logger().With("repository", target.Repository.String(), "issue", c.Number), "claim", config.RoleImplementer, target, c.Number)
 	if !ok {
@@ -787,19 +787,19 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	// must end. The issue keeps cumin/status/ready, so the next poll
 	// claims it again.
 	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
-		return fmt.Errorf("I1: clear the state of issue #%d: %w", c.Number, err)
+		return fmt.Errorf(string(ActionRequestTheImplementation)+": clear the state of issue #%d: %w", c.Number, err)
 	}
 	labels := LabelsAfterClaim(sub.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, c.Number, labels); err != nil {
-		return fmt.Errorf("I1: claim issue #%d: %w", c.Number, err)
+		return fmt.Errorf(string(ActionRequestTheImplementation)+": claim issue #%d: %w", c.Number, err)
 	}
 	log := s.logger().With("repository", target.Repository.String(), "issue", c.Number)
-	log.Info("I1: claimed the issue",
+	log.Info(string(ActionRequestTheImplementation)+": claimed the issue",
 		"requirement_issue", c.RequirementIssue, "labels", labels)
 	// The poll read the Owner of the newest cumin/status/ready before the
 	// decision (readReadyOwners); I1 holds only with that Owner.
 	if err := s.startImplementer(ctx, permit, target, settings, sub, sub.ReadyOwner); err != nil {
-		return fmt.Errorf("I1: request the work for issue #%d: %w", c.Number, err)
+		return fmt.Errorf(string(ActionRequestTheImplementation)+": request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
 }
@@ -810,9 +810,9 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 func (s *Service) copyLabels(ctx context.Context, token string, target Target, a CopyLabels) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.PullRequest, a.Labels); err != nil {
-		return fmt.Errorf("I11: copy the labels of issue #%d to pull request #%d: %w", a.Issue, a.PullRequest, err)
+		return fmt.Errorf(string(ActionCopyTheLabelsToThePullRequest)+": copy the labels of issue #%d to pull request #%d: %w", a.Issue, a.PullRequest, err)
 	}
-	s.logger().Info("I11: copied the labels of the issue to the pull request",
+	s.logger().Info(string(ActionCopyTheLabelsToThePullRequest)+": copied the labels of the issue to the pull request",
 		"repository", target.Repository.String(), "issue", a.Issue,
 		"pull_request", a.PullRequest, "labels", a.Labels)
 	return nil
@@ -861,23 +861,23 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "pull_request", a.PullRequest)
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
-		return fmt.Errorf("I15: issue #%d is not in the snapshot", a.Number)
+		return fmt.Errorf(string(ActionStopForMissingChecks)+": issue #%d is not in the snapshot", a.Number)
 	}
 	if a.PullRequest == 0 {
-		log.Warn("I15: no open pull request closes the issue after the wait time", "waited", a.Waited.String())
+		log.Warn(string(ActionStopForMissingChecks)+": no open pull request closes the issue after the wait time", "waited", a.Waited.String())
 	} else {
 		names := make([]string, 0, len(a.Unreported))
 		for _, check := range a.Unreported {
 			names = append(names, check.Name)
 		}
-		log.Warn("I15: the required checks did not report within the wait time",
+		log.Warn(string(ActionStopForMissingChecks)+": the required checks did not report within the wait time",
 			"head_commit", a.HeadCommit, "unreported", names, "waited", a.Waited.String())
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf("I15: stop issue #%d for the Owner: %w", a.Number, err)
+		return fmt.Errorf(string(ActionStopForMissingChecks)+": stop issue #%d for the Owner: %w", a.Number, err)
 	}
-	log.Info("I15: the issue waits for the Owner", "labels", labels)
+	log.Info(string(ActionStopForMissingChecks)+": the issue waits for the Owner", "labels", labels)
 	reason := UnreportedChecksReason(a)
 	s.stopForOwner(ctx, log, target, settings, stop{
 		action:    ActionStopForMissingChecks,
@@ -908,11 +908,11 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	log := s.logger().With("repository", repository, "issue", a.Number, "pull_request", a.PullRequest)
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
-		return fmt.Errorf("I4: issue #%d is not in the snapshot", a.Number)
+		return fmt.Errorf(string(ActionRequestACheckFix)+": issue #%d is not in the snapshot", a.Number)
 	}
 	pr, ok := sub.LatestPullRequest()
 	if !ok {
-		return fmt.Errorf("I4: issue #%d has no open pull request", a.Number)
+		return fmt.Errorf(string(ActionRequestACheckFix)+": issue #%d has no open pull request", a.Number)
 	}
 	names := make([]string, 0, len(a.Failed))
 	for _, check := range a.Failed {
@@ -924,14 +924,14 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	if !CheckFixAllowed(stored.CheckFixRequests, limit) {
 		reason := fmt.Sprintf("A required check failed again (%s) after %d check fix requests, the limit of this repository (max_check_fix_requests).",
 			strings.Join(names, ", "), stored.CheckFixRequests)
-		log.Warn("I4: the limit of check fix requests is reached", "failed", names, "check_fix_requests", stored.CheckFixRequests)
+		log.Warn(string(ActionStopForFailedChecks)+": the limit of check fix requests is reached", "failed", names, "check_fix_requests", stored.CheckFixRequests)
 		// The label first: until it changes, the next poll decides the same
 		// stop, and must not post the comment and notify again.
 		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-			return fmt.Errorf("I4: stop issue #%d for the Owner: %w", a.Number, err)
+			return fmt.Errorf(string(ActionStopForFailedChecks)+": stop issue #%d for the Owner: %w", a.Number, err)
 		}
-		log.Info("I4: the issue waits for the Owner", "labels", labels)
+		log.Info(string(ActionStopForFailedChecks)+": the issue waits for the Owner", "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
 			action:    ActionStopForFailedChecks,
 			issue:     a.Number,
@@ -950,25 +950,25 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
-		return fmt.Errorf("I4: read the login of the Owner of issue #%d: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestACheckFix)+": read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
 	counted := stored
 	counted.CheckFixRequests++
 	counted.ImplementationRequests, counted.ConflictResolution = 0, false
 	if err := s.State.Set(repository, a.Number, counted); err != nil {
-		return fmt.Errorf("I4: keep the count of check fix requests of issue #%d: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestACheckFix)+": keep the count of check fix requests of issue #%d: %w", a.Number, err)
 	}
 	labels := LabelsAfterCheckFix(sub.Labels)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 		// No request starts, so the count goes back: a label that fails
 		// again must not use up the limit without a single fix.
 		if undo := s.State.Set(repository, a.Number, stored); undo != nil {
-			log.Error("I4: the count of check fix requests was not set back", "error", undo.Error())
+			log.Error(string(ActionRequestACheckFix)+": the count of check fix requests was not set back", "error", undo.Error())
 		}
-		return fmt.Errorf("I4: move issue #%d back to the Implementer: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestACheckFix)+": move issue #%d back to the Implementer: %w", a.Number, err)
 	}
 	stored = counted
-	log.Info("I4: a required check failed; the issue goes back to the Implementer",
+	log.Info(string(ActionRequestACheckFix)+": a required check failed; the issue goes back to the Implementer",
 		"failed", names, "check_fix_requests", stored.CheckFixRequests, "labels", labels)
 
 	failed := make([]github.RequiredCheck, 0, len(a.Failed))
@@ -1187,7 +1187,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	repository := target.Repository.String()
 	if req.count {
 		if err := s.countImplementationRequest(repository, number, 1); err != nil {
-			log.Error("I2: the request was not counted; the next poll decides again", "error", err.Error())
+			log.Error(string(req.action)+": the request was not counted; the next poll decides again", "error", err.Error())
 			return
 		}
 	}
@@ -1231,6 +1231,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	}
 
 	again, counted, permit := req.again, req.count, req.permit
+	action := req.action
 	for {
 		run, err := s.startAgent(ctx, permit, request)
 		var abnormal *agent.AbnormalEnd
@@ -1247,7 +1248,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			log.Error("the agent was not started", "error", err.Error())
 			if counted {
 				if err := s.countImplementationRequest(repository, number, -1); err != nil {
-					log.Error("I2: the count of the request that did not start was not taken back", "error", err.Error())
+					log.Error(string(ActionRequestTheImplementationAgain)+": the count of the request that did not start was not taken back", "error", err.Error())
 				}
 			}
 			return
@@ -1263,7 +1264,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 
 		token, err := target.Token(ctx)
 		if err != nil {
-			log.Error("I2: no token; the next poll decides the end of the implementation", "error", err.Error())
+			log.Error(string(action)+": no token; the next poll decides the end of the implementation", "error", err.Error())
 			return
 		}
 		sub, ok := s.implementingNow(ctx, log, token, target, settings, number, req.branch)
@@ -1291,15 +1292,16 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 				return
 			}
 			if err := s.countImplementationRequest(repository, number, 1); err != nil {
-				log.Error("I2: the request was not counted; the next poll decides again", "error", err.Error())
+				log.Error(string(ActionRequestTheImplementationAgain)+": the request was not counted; the next poll decides again", "error", err.Error())
 				return
 			}
 			again, counted = true, true
+			action = ActionRequestTheImplementationAgain
 			request.SessionID = s.State.Issue(repository, number).SessionID
-			log.Info("I2: the pull request does not pass the check; the same request runs again in the same work directory",
+			log.Info(string(ActionRequestTheImplementationAgain)+": the pull request does not pass the check; the same request runs again in the same work directory",
 				"resumed", request.SessionID != "")
 		default:
-			log.Info("I2: the end of the implementation was not decided; the next poll decides", "labels", sub.Labels)
+			log.Info(string(action)+": the end of the implementation was not decided; the next poll decides", "labels", sub.Labels)
 			return
 		}
 	}
@@ -1318,7 +1320,7 @@ func (s *Service) stopForWorkDirectory(ctx context.Context, log *slog.Logger, ta
 	}
 	token, err := target.Token(ctx)
 	if err != nil {
-		log.Error("I2: no token; the next poll decides the end of the implementation", "error", err.Error())
+		log.Error(string(ActionStopTheImplementation)+": no token; the next poll decides the end of the implementation", "error", err.Error())
 		return
 	}
 	sub, ok := s.subIssueNow(ctx, log, target, number)
@@ -1407,13 +1409,13 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
 	if err != nil {
-		log.Error("I2: the issue was not read again; the next poll decides", "error", err.Error())
+		log.Error(string(ActionWaitForTheChecks)+": the issue was not read again; the next poll decides", "error", err.Error())
 		return SubIssue{}, false
 	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	sub := toSubIssue(read.Issue)
 	if !ImplementationNeedsFacts(sub, false) {
-		log.Info("I2: the issue is not in cumin/status/implementing; nothing changes", "labels", sub.Labels)
+		log.Info(string(ActionWaitForTheChecks)+": the issue is not in cumin/status/implementing; nothing changes", "labels", sub.Labels)
 		return sub, false
 	}
 	actor, counts, err := s.readStatusActor(ctx, token, target, number, LabelImplementing, false)
@@ -1431,7 +1433,7 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 		return sub, false
 	}
 	if facts.Implementer, err = s.Agents.BotLogin(ctx, owner, config.RoleImplementer); err != nil {
-		log.Error("I2: the login of the Implementer App was not read; the next poll decides", "error", err.Error())
+		log.Error(string(ActionWaitForTheChecks)+": the login of the Implementer App was not read; the next poll decides", "error", err.Error())
 		return sub, false
 	}
 	// cumin-core posts the blocked_reason of the Implementer, so its
@@ -1440,17 +1442,17 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 	if target.Login != nil {
 		core, err := target.Login(ctx)
 		if err != nil {
-			log.Error("I2: the login of cumin-core was not read; the next poll decides", "error", err.Error())
+			log.Error(string(ActionWaitForTheChecks)+": the login of cumin-core was not read; the next poll decides", "error", err.Error())
 			return sub, false
 		}
 		askers = append(askers, core)
 	}
 	comments, rate, err := s.GitHub.ReadIssueComments(ctx, token, owner, repo, number, facts.ImplementingAt)
 	if err != nil {
-		log.Error("I2: the comments were not read; the next poll decides", "error", err.Error())
+		log.Error(string(ActionWaitForTheChecks)+": the comments were not read; the next poll decides", "error", err.Error())
 		return sub, false
 	}
-	log.Debug("I2: read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	log.Debug(string(ActionWaitForTheChecks)+": read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	asked := make([]Comment, 0, len(comments))
 	for _, c := range comments {
 		asked = append(asked, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
@@ -1461,7 +1463,7 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 	}
 	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, facts.Branch)
 	if err != nil {
-		log.Error("I2: the open pull requests of the branch were not read; the next poll decides", "branch", facts.Branch, "error", err.Error())
+		log.Error(string(ActionWaitForTheChecks)+": the open pull requests of the branch were not read; the next poll decides", "branch", facts.Branch, "error", err.Error())
 		return sub, false
 	}
 	for _, pr := range listed {
@@ -1469,7 +1471,7 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 	}
 	workDir := s.Workspace.Dir(agent.Checkout{Owner: owner, Repo: repo, Issue: number, Role: config.RoleImplementer, Branch: facts.Branch})
 	if facts.LocalHead, err = s.Workspace.Head(ctx, workDir); err != nil {
-		log.Info("I2: the head commit of the work directory was not read", "error", err.Error())
+		log.Info(string(ActionWaitForTheChecks)+": the head commit of the work directory was not read", "error", err.Error())
 		facts.LocalHead = ""
 	}
 	stored := s.State.Issue(target.Repository.String(), number)
@@ -1502,30 +1504,30 @@ func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token str
 		pr := a.PullRequest
 		if err := s.GitHub.AddClosingLink(ctx, token, sub.NodeID, a.PullRequestNodeID); err != nil {
 			if temporary(err) != nil {
-				return fmt.Errorf("I2: add the closing link of issue #%d: %w", a.Number, err)
+				return fmt.Errorf(string(ActionWaitForTheChecks)+": add the closing link of issue #%d: %w", a.Number, err)
 			}
-			log.Warn("I2: the closing link was not added", "pull_request", pr, "error", err.Error())
+			log.Warn(string(ActionStopTheImplementation)+": the closing link was not added", "pull_request", pr, "error", err.Error())
 			stopI2(LinkFailedReason(pr, githubAnswer(err)))
 			return nil
 		}
 		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, a.Number)
 		if err != nil {
-			return fmt.Errorf("I2: read issue #%d after the closing link: %w", a.Number, err)
+			return fmt.Errorf(string(ActionWaitForTheChecks)+": read issue #%d after the closing link: %w", a.Number, err)
 		}
 		log.Debug("read the issue again", "issue", a.Number, "rate_limit_cost", again.RateLimit.Cost, "rate_limit_remaining", again.RateLimit.Remaining)
 		sub = toSubIssue(again.Issue)
 		if !linksPullRequest(sub, pr) {
-			log.Warn("I2: the closing link is missing after cumin-core added it", "pull_request", pr)
+			log.Warn(string(ActionStopTheImplementation)+": the closing link is missing after cumin-core added it", "pull_request", pr)
 			stopI2(LinkMissingReason(pr))
 			return nil
 		}
-		log.Info("I2: added the closing link", "pull_request", pr)
+		log.Info(string(ActionWaitForTheChecks)+": added the closing link", "pull_request", pr)
 	}
 	labels := ReplaceStatusLabel(sub.Labels, LabelChecking)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf("I2: move issue #%d to checking: %w", a.Number, err)
+		return fmt.Errorf(string(ActionWaitForTheChecks)+": move issue #%d to checking: %w", a.Number, err)
 	}
-	log.Info("I2: verified the pull request", "pull_request", a.PullRequest, "labels", labels)
+	log.Info(string(ActionWaitForTheChecks)+": verified the pull request", "pull_request", a.PullRequest, "labels", labels)
 	return nil
 }
 
@@ -1542,10 +1544,10 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf("I2: move issue #%d to awaiting-decision: %w", a.Number, err)
+		return fmt.Errorf(string(ActionStopTheImplementation)+": move issue #%d to awaiting-decision: %w", a.Number, err)
 	}
 	if !a.Question {
-		log.Warn("I2: the implementation stops for the Owner", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)
+		log.Warn(string(ActionStopTheImplementation)+": the implementation stops for the Owner", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)
 		s.stopForOwner(ctx, log, target, settings, stop{
 			action:    ActionStopTheImplementation,
 			issue:     a.Number,
@@ -1556,7 +1558,7 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 		return nil
 	}
 	log = log.With("action", ActionStopTheImplementation)
-	log.Info("I2: the Implementer asked a question; the issue waits for the Owner", "labels", labels)
+	log.Info(string(ActionStopTheImplementation)+": the Implementer asked a question; the issue waits for the Owner", "labels", labels)
 	s.notifyOwner(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
 		Action:     string(ActionStopTheImplementation),
 		Reason:     "The Implementer asked a question during the implementation.",
@@ -1583,7 +1585,7 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 	}
 	ownerLogin, err := s.readOwnerLogin(ctx, token, target, a.Number)
 	if err != nil {
-		return fmt.Errorf("I2: read the login of the Owner of issue #%d: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestTheImplementationAgain)+": read the login of the Owner of issue #%d: %w", a.Number, err)
 	}
 	repository := target.Repository.String()
 	branch := sub.Implementing.Branch
@@ -1606,7 +1608,7 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 			}
 		}
 	}
-	s.logger().Info("I2: the pull request does not pass the check; the implementation is requested again",
+	s.logger().Info(string(ActionRequestTheImplementationAgain)+": the pull request does not pass the check; the implementation is requested again",
 		"repository", repository, "issue", a.Number, "kind", req.kind)
 	return s.goImplementer(ctx, target, settings, a.Number, req)
 }

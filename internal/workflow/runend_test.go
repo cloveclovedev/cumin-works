@@ -46,7 +46,7 @@ func TestI2_TheEndOfAnImplementerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 
 	sc.pollAndWait(t, sc.service())
 
-	if !strings.Contains(sc.logs.String(), `"msg":"I2: verified the pull request"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"wait for the checks: verified the pull request"`) {
 		t.Fatal("the log does not say that I2 verified the pull request")
 	}
 	if n := sc.pollQueries(); n != 1 {
@@ -65,7 +65,7 @@ func TestI6_TheApprovalOfTheReviewerReadsOnlyTheIssueOfTheRun(t *testing.T) {
 
 	sc.pollAndWait(t, sc.service())
 
-	if !strings.Contains(sc.logs.String(), `"msg":"I6: start the merge: the Reviewer approved the head commit"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"start the merge: the Reviewer approved the head commit"`) {
 		t.Fatal("the log does not say that I6 started the merge")
 	}
 	if n := sc.pollQueries(); n != 1 {
@@ -83,7 +83,7 @@ func TestR2_TheEndOfAPlannerRunReadsOnlyTheIssueOfTheRun(t *testing.T) {
 
 	sc.pollAndWait(t, sc.service())
 
-	if !strings.Contains(sc.logs.String(), `"msg":"R2: the split waits for the Owner"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"ask for the plan review: the split waits for the Owner"`) {
 		t.Fatal("the log does not say that the split waits for the Owner")
 	}
 	if n := sc.pollQueries(); n != 1 {

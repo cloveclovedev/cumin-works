@@ -78,7 +78,7 @@ func TestI12_AnApprovalOfTheOwnerOnTheHeadIsMergedOnce(t *testing.T) {
 	if n := permissionReads(sc); n != 2 {
 		t.Errorf("%d permission reads, want 2 (the Owner, for I12 and for the merge)", n)
 	}
-	for _, want := range []string{`"msg":"I12: start the merge: the Owner approved the head commit"`, `"msg":"merged the pull request"`} {
+	for _, want := range []string{`"msg":"start the merge: the Owner approved the head commit"`, `"msg":"merged the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
@@ -171,7 +171,7 @@ func TestI12_TheMergeWaitsForTheRequiredChecks(t *testing.T) {
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I12: the Owner approved; the merge waits for the required checks"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"start the merge: the Owner approved; the merge waits for the required checks"`) {
 		t.Error("the log does not say that the merge waits")
 	}
 }
@@ -369,7 +369,7 @@ func TestI13_ARequestForChangesOfTheOwnerOnTheHeadSendsOneRequest(t *testing.T) 
 	if n := sc.fake.CountRequests(http.MethodPut, mergePath); n != 0 {
 		t.Errorf("%d merge requests, want none", n)
 	}
-	for _, want := range []string{`"msg":"I13: the Owner requested changes; the issue goes back to the Implementer"`,
+	for _, want := range []string{`"msg":"send back for changes: the Owner requested changes; the issue goes back to the Implementer"`,
 		`"msg":"send back for changes: requested the work"`, `"kind":"owner review fix"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
@@ -473,15 +473,15 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"risk/medium", workflow.LabelAwaitingMergeDecision}) {
 		t.Fatalf("labels of #10 = %v, want risk/medium and cumin/status/awaiting-merge-decision", got)
 	}
-	for _, want := range []string{`"msg":"I2: verified the pull request"`, `"msg":"I3: the Reviewer approved the head commit"`,
-		`"msg":"I7: the merge waits for the Owner"`} {
+	for _, want := range []string{`"msg":"wait for the checks: verified the pull request"`, `"msg":"ask for the merge decision: the Reviewer approved the head commit"`,
+		`"msg":"ask for the merge decision: the merge waits for the Owner"`} {
 		if !strings.Contains(sc.logs.String(), want) {
 			t.Errorf("the log has no %s", want)
 		}
 	}
 	requested := ""
 	for line := range strings.Lines(sc.logs.String()) {
-		if strings.Contains(line, `"msg":"I3: requested the review"`) {
+		if strings.Contains(line, `"msg":"request the review: requested the review"`) {
 			requested = line
 		}
 	}
@@ -510,7 +510,7 @@ func TestI13_AfterTheFixTheOwnerDecidesAgainAndAnApprovalIsMerged(t *testing.T) 
 // polls send no request for that review; a new request for changes of the
 // Owner sends one.
 func TestI13_AnAnswerWithoutACommitSendsNoSecondRequestForTheSameReview(t *testing.T) {
-	const sentBack = `"msg":"I13: the Owner requested changes; the issue goes back to the Implementer"`
+	const sentBack = `"msg":"send back for changes: the Owner requested changes; the issue goes back to the Implementer"`
 	// Run 1 is the answer, which pushes nothing; run 2 is the review.
 	sc := awaitingOwner(t, cliOptions{reviews: []string{"NONE", "APPROVE"}})
 	head := sc.remoteHead
@@ -524,7 +524,7 @@ func TestI13_AnAnswerWithoutACommitSendsNoSecondRequestForTheSameReview(t *testi
 	if got := sc.repo.PullRequests[21].HeadCommit; got != head {
 		t.Fatalf("the head of the pull request moved to %s", got)
 	}
-	if !strings.Contains(sc.logs.String(), `"msg":"I7: the merge waits for the Owner"`) {
+	if !strings.Contains(sc.logs.String(), `"msg":"ask for the merge decision: the merge waits for the Owner"`) {
 		t.Fatal("the issue did not come back to the Owner after the answer")
 	}
 	if n := strings.Count(sc.logs.String(), sentBack); n != 1 {
@@ -670,7 +670,7 @@ func TestI14_AConflictWhileTheOwnerDecidesSendsOneResolutionRequest(t *testing.T
 		}
 	}
 	logs := sc.logs.String()
-	label := strings.Index(logs, `"msg":"I14: the pull request conflicts with the default branch; the issue goes back to the Implementer"`)
+	label := strings.Index(logs, `"msg":"request a conflict resolution: the pull request conflicts with the default branch; the issue goes back to the Implementer"`)
 	request := strings.Index(logs, `"msg":"request a conflict resolution: requested the work"`)
 	if label < 0 || request < 0 || request < label {
 		t.Errorf("the log does not show the label change of I14 before the request (label at %d, request at %d)", label, request)
