@@ -102,7 +102,7 @@ type Settings struct {
 	MaxReviewRounds     int
 	MaxCheckFixRequests int
 	// ChecksWaitTime is how long cumin waits for every required check to
-	// report on the head commit, before it stops the issue for the Owner.
+	// report on the head commit, before it stops the issue for a Maintainer.
 	ChecksWaitTime time.Duration
 	MergeMethod    MergeMethod
 	// PriorityLabels are the labels that order the starts, highest
@@ -202,7 +202,7 @@ type RoleSettings struct {
 	Model   string // empty means the default model of the CLI
 }
 
-// NotifySettings holds how cumin tells the Owner that it needs attention.
+// NotifySettings holds how cumin notifies that it needs attention.
 // A target repository may change these keys in its .cumin/config.toml.
 type NotifySettings struct {
 	// DiscordEnabled is the setting notify.discord.enabled. When it is

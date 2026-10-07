@@ -8,7 +8,8 @@ import (
 
 // RequestReview requests the review of one account on a pull request, so
 // that GitHub lists the pull request under the review requests of that
-// account (I7; docs/ja/designs/poll.md, the topic on the merge step).
+// account ("ask for the merge decision"; docs/ja/designs/poll.md, the topic
+// on the merge step).
 // Official: "Request reviewers for a pull request" (reviewers; 201);
 // Permissions required for GitHub Apps: Pull requests write. The same
 // request for an account that is already requested does not fail, and an

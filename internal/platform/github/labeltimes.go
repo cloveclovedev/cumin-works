@@ -20,9 +20,9 @@ const labelTimesEvents = 100
 // Measured on 2026-10-05 on cumin-works: with UNLABELED_EVENT beside
 // LABELED_EVENT, the query still costs 1 point. The events that removed a
 // label are read because of the rule of puttingLabelEvents.
-// It runs only for a requirement issue where R3 can apply
-// (docs/ja/designs/poll.md, the topic on the label times), so the poll
-// query keeps its cost.
+// It runs only for a requirement issue where "mark the requirement as in
+// work" can apply (docs/ja/designs/poll.md, the topic on the label times),
+// so the poll query keeps its cost.
 const labelTimesQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $events: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {

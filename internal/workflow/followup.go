@@ -1,10 +1,10 @@
 package workflow
 
-// This file is the pure part of I9 (copy the work left after a merge into a
-// follow-up note): which closed sub-issues still need a read, what the note
-// copies from the pull request, and the text of the note. The text follows
-// templates/follow-up-note.md; a test keeps the two equal.
-// docs/ja/designs/poll.md, the topic on the follow-up notes.
+// This file is the pure part of "write the follow-up note" (copy the work
+// left after a merge into a follow-up note): which closed sub-issues still
+// need a read, what the note copies from the pull request, and the text of
+// the note. The text follows templates/follow-up-note.md; a test keeps the
+// two equal. docs/ja/designs/poll.md, the topic on the follow-up notes.
 
 import (
 	"fmt"
@@ -100,11 +100,11 @@ func FollowUpMarks(comments []Comment, cumin string) []FollowUpMark {
 }
 
 // FollowUpCandidates are the closed sub-issues of the requirement issue
-// that I9 must read. A sub-issue is done when notes were written at or
-// after its last close, and each pull request that those notes name as
-// needing a note has its own. A write that failed halfway leaves a pull
-// request without its note, so the sub-issue is read again. A sub-issue
-// that was opened again and closed later is read again too;
+// that "write the follow-up note" must read. A sub-issue is done when notes
+// were written at or after its last close, and each pull request that those
+// notes name as needing a note has its own. A write that failed halfway
+// leaves a pull request without its note, so the sub-issue is read again. A
+// sub-issue that was opened again and closed later is read again too;
 // HasFollowUpNote then tells the pull requests apart.
 func FollowUpCandidates(requirement RequirementIssue, marks []FollowUpMark) []SubIssue {
 	var candidates []SubIssue

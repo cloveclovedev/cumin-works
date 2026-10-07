@@ -15,6 +15,6 @@ func PrivateKeyAccount(clientID string) string {
 }
 
 // DiscordWebhookAccount is the account name of the item that holds the
-// address of the Discord webhook for the notifications to the Owner.
+// address of the Discord webhook for the notifications.
 // `cumin run` reads it at start and keeps it in memory.
 const DiscordWebhookAccount = "discord-webhook-url"

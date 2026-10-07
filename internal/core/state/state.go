@@ -1,10 +1,11 @@
 // Package state keeps the small amount of state that cumin holds on the
 // Host: for each implementation issue, the session of the last agent run and
-// the number of check fix requests (I4); for each requirement issue in
+// the number of check fix requests; for each requirement issue in
 // cumin/status/accepting, the session of the last Planner run and the number
-// of repeated acceptance check requests; and the latest quota usage (Q3). The requirement allows only what
-// cumin can lose without losing work (cumin-core.md, the section on what
-// cumin keeps): a lost file starts a new session and a count of zero.
+// of repeated acceptance check requests; and the latest quota usage. The
+// requirement allows only what cumin can lose without losing work
+// (cumin-core.md, the section on what cumin keeps): a lost file starts a new
+// session and a count of zero.
 //
 // Only `cumin run` writes the file (designs/cumin-core.md, the topic on the
 // files of the Host), so no lock is needed between processes.
@@ -32,14 +33,16 @@ const Version = 2
 // Issue is what cumin keeps for one implementation issue.
 type Issue struct {
 	// SessionID is the session of the last Implementer run of the issue.
-	// A request in the same session resumes it (I4, I5).
+	// A request in the same session resumes it ("request a check fix",
+	// "request a review fix").
 	SessionID string `json:"session_id,omitempty"`
 	// ReviewerSessionID is the session of the last Reviewer run of the
 	// issue. The Reviewer and the Implementer never share a session
-	// (agents/reviewer.md); round 2 and later resume this one (I3).
+	// (agents/reviewer.md); round 2 and later resume this one
+	// ("request the review").
 	ReviewerSessionID string `json:"reviewer_session_id,omitempty"`
 	// CheckFixRequests is how many check fixes cumin has asked for since
-	// the Owner last added cumin/status/ready (I4).
+	// a Maintainer last added cumin/status/ready.
 	CheckFixRequests int `json:"check_fix_requests,omitempty"`
 	// AcceptanceRequests is how many times cumin has requested the
 	// acceptance check again during this stay of a requirement issue in
@@ -82,8 +85,8 @@ type QuotaWindow struct {
 
 // Quota is the latest quota usage that cumin read, and when it read it.
 // While agent starts are stopped, cumin decides from it when to try again, so that
-// a restart makes no minimal run before that time (Q3). The file keeps
-// only the numbers of the account; it holds no token.
+// a restart makes no minimal run before that time ("resume agent starts").
+// The file keeps only the numbers of the account; it holds no token.
 type Quota struct {
 	FiveHour QuotaWindow `json:"five_hour"`
 	Weekly   QuotaWindow `json:"weekly"`
@@ -194,8 +197,8 @@ func (s *Store) Set(repository string, number int, issue Issue) error {
 	}
 	if err := s.save(); err != nil {
 		// The entry goes back to what the file holds, so that a caller that
-		// tries again never builds on a change that was not saved (I4 would
-		// count requests that never started).
+		// tries again never builds on a change that was not saved (the count
+		// of check fix requests would hold requests that never started).
 		if had {
 			s.data.Issues[k] = before
 		} else {
@@ -238,8 +241,9 @@ func (s *Store) SetQuota(q Quota) error {
 }
 
 // Clear removes the entry of one implementation issue and saves the file.
-// A claim (I1) calls it: after the Owner adds cumin/status/ready, the next
-// request starts a new session and the count starts at zero.
+// A claim ("request the implementation") calls it: after a Maintainer adds
+// cumin/status/ready, the next request starts a new session and the count
+// starts at zero.
 func (s *Store) Clear(repository string, number int) error {
 	return s.Set(repository, number, Issue{})
 }

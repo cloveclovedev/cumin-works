@@ -6,7 +6,7 @@ package setup
 // the output.
 //
 // docs/ja/designs/cumin-core.md, the topics on the Keychain items and on
-// notifications to the Owner.
+// notifications.
 
 import (
 	"bufio"
@@ -29,7 +29,7 @@ type NotifyStore interface {
 	Get(ctx context.Context, service, account string) ([]byte, error)
 }
 
-// Channel is one way of telling the Owner that cumin needs attention.
+// Channel is one way of notifying that cumin needs attention.
 // v0.1 has one; another channel adds its own flag and its own item.
 type Channel struct {
 	// Flag is the flag of `cumin setup notify` that names the channel.
@@ -118,7 +118,7 @@ func ReadAddress(in io.Reader, out io.Writer, channel Channel, prompt Prompt) (s
 }
 
 // StoreNotifyAddress puts the address of the channel into the Keychain and
-// reads it back, so that the Owner learns at once when the item did not
+// reads it back, so that the Operator learns at once when the item did not
 // take. It writes what happened to out, never the address.
 func StoreNotifyAddress(ctx context.Context, store NotifyStore, channel Channel, address string, out io.Writer) error {
 	if err := CheckNotifyAddress(address); err != nil {

@@ -1,4 +1,4 @@
-// Package notify tells the Owner that cumin needs attention.
+// Package notify sends a notification when cumin needs attention.
 //
 // The requirement (docs/ja/requirements/cumin-core.md, the section on
 // notifications) says that every notification goes through this one place,
@@ -25,7 +25,7 @@ const maxReason = 500
 // reasonCut marks a reason that was cut.
 const reasonCut = "..."
 
-// Notification is one thing that cumin tells the Owner. The caller fills
+// Notification is one thing that cumin notifies. The caller fills
 // the fields that it has; an empty field is left out of the message.
 type Notification struct {
 	// Action is the name of the action of cumin, as the tables of
@@ -39,10 +39,10 @@ type Notification struct {
 	Reason string
 	// Repository is the target repository, as "<owner>/<repo>".
 	Repository string
-	// Subject names what the Owner should open, such as "issue #12". It is
+	// Subject names what a reader should open, such as "issue #12". It is
 	// empty when the notification is about the repository itself.
 	Subject string
-	// Link is the address that the Owner opens. The caller builds it,
+	// Link is the address that a reader opens. The caller builds it,
 	// because this package knows no forge.
 	Link string
 }
@@ -53,7 +53,7 @@ type Notification struct {
 //
 // The text is the only value that crosses to a sender, so that a provider
 // package never has to import this one (docs/ja/designs/cumin-core.md, the
-// topic on notifications to the Owner).
+// topic on notifications).
 func Message(n Notification) string {
 	var lines []string
 	summary := cutReason(oneLine(n.Reason))

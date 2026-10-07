@@ -267,7 +267,7 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	// launchd gives the job no working directory, so the plist must hold an
-	// absolute path even when the Owner typed a relative one.
+	// absolute path even when the Operator typed a relative one.
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)

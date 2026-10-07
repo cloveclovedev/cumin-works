@@ -16,7 +16,7 @@ import (
 // App, and the query costs 1 point. Measured on 2026-10-05 on cumin-works:
 // with UNLABELED_EVENT beside LABELED_EVENT, it still costs 1 point. It
 // runs before each start of an agent (docs/ja/designs/poll.md, the topic
-// on the login of the Owner).
+// on the login of the Issue Owner).
 const labelActorQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $events: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {

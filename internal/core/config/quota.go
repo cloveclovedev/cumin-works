@@ -16,7 +16,8 @@ const (
 )
 
 // QuotaSettings holds the settings of the limits that stop agent starts. This
-// package only loads them. The quota rules (Q1 to Q3) use them.
+// package only loads them. The quota rules ("stop agent starts",
+// "resume agent starts") use them.
 type QuotaSettings struct {
 	FiveHour FiveHourQuota
 	Weekly   WeeklyQuota

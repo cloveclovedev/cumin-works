@@ -267,9 +267,9 @@ func (w Workspace) Remove(ctx context.Context, c Checkout) error {
 // when it removed the worktree or when there was none, and false when it
 // kept a worktree with work that is not on GitHub.
 //
-// A continuation (I1) uses it: a worktree of an earlier round can be on
-// another branch or behind the pull request, but it can also hold the work
-// of a run that cumin stopped before the push.
+// A continuation ("request the implementation") uses it: a worktree of an
+// earlier round can be on another branch or behind the pull request, but it
+// can also hold the work of a run that cumin stopped before the push.
 func (w Workspace) RemoveIfPushed(ctx context.Context, c Checkout) (bool, error) {
 	if err := c.validate(); err != nil {
 		return false, fmt.Errorf("remove worktree: %w", err)
@@ -398,9 +398,9 @@ func (w Workspace) onlyPushedWork(ctx context.Context, c Checkout) (bool, error)
 	return status == "" && unpushed == "", nil
 }
 
-// Head returns the full SHA of the head commit of the worktree dir. I2
-// compares it with the head commit of the pull request, to see that the
-// last commit of the agent is pushed.
+// Head returns the full SHA of the head commit of the worktree dir. "wait
+// for the checks" compares it with the head commit of the pull request, to
+// see that the last commit of the agent is pushed.
 func (w Workspace) Head(ctx context.Context, dir string) (string, error) {
 	out, err := w.git(ctx, dir, "rev-parse", "HEAD")
 	if err != nil {

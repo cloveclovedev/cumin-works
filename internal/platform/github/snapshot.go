@@ -41,7 +41,7 @@ import (
 // for (pullRequestsQuery; measured on cumin-works on 2026-10-03).
 //
 // MaxOpenClosingPullRequests is the most open closing pull requests that
-// the snapshot reads for one issue. I2 adds no closing link that would go
+// the snapshot reads for one issue. cumin adds no closing link that would go
 // over it, because every later poll would then fail on that issue.
 const MaxOpenClosingPullRequests = 2
 
@@ -108,8 +108,8 @@ type RepositoryFile struct {
 }
 
 // Issue is one issue as the snapshot sees it. A requirement issue has
-// SubIssues and BlockedBy (R1). A sub-issue has Title, BlockedBy, and
-// PullRequests.
+// SubIssues and BlockedBy ("request the split"). A sub-issue has Title,
+// BlockedBy, and PullRequests.
 type Issue struct {
 	Number    int
 	Closed    bool
@@ -118,20 +118,21 @@ type Issue struct {
 	// Title is read for sub-issues only; the branch name of a request is
 	// made from it.
 	Title string
-	// NodeID is the GraphQL ID, read for sub-issues only: I2 adds the
+	// NodeID is the GraphQL ID, read for sub-issues only: cumin adds the
 	// closing link with it. The field is a scalar, so it does not change
 	// the cost of the query.
 	NodeID    string
 	BlockedBy []IssueRef
-	// ClosedAt is when a closed sub-issue closed. R4 and R7 compare it with
-	// the time of the acceptance check comment. The field is a scalar, so it
-	// does not change the cost of the query.
+	// ClosedAt is when a closed sub-issue closed. "request the acceptance
+	// check" and "ask for the acceptance" compare it with the time of the
+	// acceptance check comment. The field is a scalar, so it does not
+	// change the cost of the query.
 	ClosedAt time.Time
 	// PullRequests are the open pull requests that close the sub-issue (the
 	// link that "Closes #N" makes). Closed and merged pull requests are not
 	// read: no rule of the poll needs them, and old pull requests of a
 	// waiting or closed issue must not reach the page limit. The follow-up
-	// note (I9) reads the merged pull request of a closed issue separately.
+	// note reads the merged pull request of a closed issue separately.
 	// The poll query does not read them: the caller takes them from
 	// ReadPullRequests. The read of one issue fills them.
 	PullRequests []PullRequest
@@ -144,14 +145,16 @@ type PullRequest struct {
 	// HeadCommit is the full SHA of the head of the pull request.
 	HeadCommit string
 	// HeadBranch is the branch of the pull request. A request that
-	// continues the work of an open pull request runs on it (I1).
+	// continues the work of an open pull request runs on it
+	// ("request the implementation").
 	HeadBranch string
-	// Labels are the labels of the pull request now. I11 compares them
-	// with the labels of the issue; no decision reads them (principle 5).
+	// Labels are the labels of the pull request now. "copy the labels to
+	// the pull request" compares them with the labels of the issue; no
+	// decision reads them (principle 5).
 	Labels []string
 	// Checks are the checks on the head commit, from statusCheckRollup.
-	// I3 and I4 read them together with the required checks of the branch
-	// (RequiredChecks).
+	// The decision on the checks reads them together with the required
+	// checks of the branch (RequiredChecks).
 	Checks []CheckResult
 	// Author is the login of the author as the REST API shows it: a GitHub
 	// App is "<slug>[bot]", the form of the identity that an agent commits
@@ -160,8 +163,8 @@ type PullRequest struct {
 	// author is gone (a deleted account).
 	Author string
 	// Reviews are the reviews of the pull request, oldest first. The round
-	// of the review and the checks after a Reviewer run read them (I3, I5,
-	// I8).
+	// of the review and the checks after a Reviewer run read them
+	// ("request the review", "request a review fix", "request the cause").
 	Reviews []Review
 	// Mergeable is what GitHub says about a merge into the base branch.
 	Mergeable MergeableState
@@ -203,15 +206,15 @@ type Review struct {
 	URL string
 }
 
-// CheckConclusion is what one check says, as the rows I3 and I4 read it.
-// GitHub has more conclusions; cumin needs only these three.
+// CheckConclusion is what one check says, as the decision on the checks
+// reads it. GitHub has more conclusions; cumin needs only these three.
 type CheckConclusion int
 
 const (
 	// CheckPending: the check has not finished, or has not reported yet.
 	CheckPending CheckConclusion = iota
 	// CheckPassed: success, skipped, or neutral. GitHub treats these three
-	// as not blocking a merge (row 51).
+	// as not blocking a merge (measured-constraints.md row 51).
 	CheckPassed
 	// CheckFailed: the check finished with any other conclusion.
 	CheckFailed
@@ -635,7 +638,8 @@ type checkNode struct {
 }
 
 // result converts one context. An unknown type is an error: cumin must not
-// decide I3 or I4 on a check whose shape it does not know.
+// decide "request the review" or "request a check fix" on a check whose
+// shape it does not know.
 func (n checkNode) result() (CheckResult, error) {
 	switch n.TypeName {
 	case "CheckRun":

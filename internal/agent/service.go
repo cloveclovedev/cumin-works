@@ -189,9 +189,10 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	}
 
 	// 3. The run. The login of the bot goes with the result, so that the
-	// caller can compare it with the author of a pull request (I2). The
-	// clock is read right before the run, so that the end time that the
-	// agent receives is not later than the time at which the run is cut.
+	// caller can compare it with the author of a pull request ("wait for
+	// the checks"). The clock is read right before the run, so that the
+	// end time that the agent receives is not later than the time at which
+	// the run is cut.
 	facts := runFacts{
 		Facts:                req.Facts,
 		TimeLimit:            settings.TimeLimit,
@@ -296,7 +297,7 @@ func (s *Service) StopBudget() time.Duration {
 // the CLI of a role reads and cannot ignore. cumin run logs them at its
 // start. For Claude Code the list is empty: --setting-sources project
 // ignores the user-level files (measured-constraints.md row 6e), and auto
-// memory is off through the environment (row 86).
+// memory is off through the environment (measured-constraints.md row 86).
 func (s *Service) HostWarnings() []string {
 	roles := make([]config.Role, 0, len(s.Roles))
 	for role := range s.Roles {

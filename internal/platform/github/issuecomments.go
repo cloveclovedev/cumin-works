@@ -11,14 +11,16 @@ import (
 // issueCommentsLast is the page size of the comments of an issue or a pull
 // request. The comment that cumin looks for is among the newest (the
 // acceptance check after the last sub-issue closed, the decision request of
-// I8 after the last review), and one page is the usual read.
+// "request the cause" after the last review), and one page is the usual
+// read.
 const issueCommentsLast = 50
 
 // The query of the newest comments of one issue or pull request. It runs
-// only for a requirement issue whose sub-issues are all closed (R4, R7), and
-// after a Reviewer run that explained the cause (I8), so the poll query
-// keeps its cost (docs/ja/designs/poll.md, the topic on the comments of a
-// requirement issue). issueOrPullRequest answers for both; issue(number:)
+// only for a requirement issue whose sub-issues are all closed
+// ("request the acceptance check", "ask for the acceptance"), and after a
+// Reviewer run that explained the cause ("request the cause"), so the poll
+// query keeps its cost (docs/ja/designs/poll.md, the topic on the comments
+// of a requirement issue). issueOrPullRequest answers for both; issue(number:)
 // does not resolve the number of a pull request (checked on 2026-09-30 on
 // cumin-works: NOT_FOUND). The cost stays 1 point.
 const issueCommentsQuery = `query($owner: String!, $name: String!, $number: Int!, $last: Int!, $before: String) {
@@ -36,8 +38,9 @@ fragment commentPage on IssueCommentConnection {
   nodes { createdAt body url author { __typename login } }
 }`
 
-// Comment is one comment of an issue or a pull request, as much as R4, R7,
-// and I8 need.
+// Comment is one comment of an issue or a pull request, as much as
+// "request the acceptance check", "ask for the acceptance", and
+// "request the cause" need.
 type Comment struct {
 	// Author is the login as the REST API shows it: a GitHub App is
 	// "<slug>[bot]". Empty when the author is gone.

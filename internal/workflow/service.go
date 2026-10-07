@@ -29,10 +29,10 @@ type Target struct {
 	// passes the Token method of a github.TokenSource. Tests pass a function
 	// that returns the token of the fake.
 	Token func(ctx context.Context) (string, error)
-	// Login returns the login of the bot of cumin-core, "<slug>[bot]". I9
-	// uses it to find its own follow-up notes. cumin run passes the
-	// BotLogin method of the same github.TokenSource. Without it, cumin
-	// writes no follow-up note.
+	// Login returns the login of the bot of cumin-core, "<slug>[bot]".
+	// "write the follow-up note" uses it to find its own follow-up notes.
+	// cumin run passes the BotLogin method of the same github.TokenSource.
+	// Without it, cumin writes no follow-up note.
 	Login func(ctx context.Context) (string, error)
 }
 
@@ -45,13 +45,14 @@ type Service struct {
 	// Workspace holds the clone and the worktrees of each repository, under
 	// the setting work_dir.
 	Workspace agent.Workspace
-	// Notify tells the Owner that an issue needs an answer. cmd/cumin
+	// Notify sends the notification that an issue needs an answer. cmd/cumin
 	// builds it from the webhook URL in the Keychain. A nil notifier
 	// reports that no channel is configured, which is logged.
 	Notify *notify.Notifier
 	// State is what cumin keeps on the Host for each implementation issue:
 	// the session of the last run, and the number of check fix requests
-	// (I4); and for each requirement issue in cumin/status/accepting: the
+	// ("request a check fix"); and for each requirement issue in
+	// cumin/status/accepting: the
 	// session of the Planner, and whether the acceptance check was requested
 	// again. A nil store keeps nothing, which is the same as losing the
 	// file: the next request starts a new session and counts from zero.
@@ -82,9 +83,11 @@ type Service struct {
 	Labels []github.Label
 	Logger *slog.Logger
 	// AllowancePath is the allowance file that `cumin quota allow` writes
-	// (Q2). Each check before a start reads it. Empty means no allowance.
+	// ("resume agent starts", when the Operator allows to use up the 5-hour
+	// window). Each check before a start reads it. Empty means no allowance.
 	AllowancePath string
-	// Now is the clock of the quota decisions (Q1). Nil means time.Now.
+	// Now is the clock of the quota decisions ("stop agent starts"). Nil
+	// means time.Now.
 	// Tests set it, so that a week passes without waiting.
 	Now func() time.Time
 	// Location is the time zone of the time bands of the 5h quota window.
@@ -133,23 +136,23 @@ type Service struct {
 	priorityLabelsDone map[string]bool
 
 	// pollFailures counts the consecutive failed polls of each repository,
-	// so that a failure that repeats reaches the Owner once
+	// so that a failure that repeats is notified once
 	// (pollfailure.go).
 	failureMu sync.Mutex
 	// readyTold holds, for each issue, the time of the status label event
-	// of an account that does not count (another account than the Owner
-	// for cumin/status/ready; than cumin-core or an Owner for the others)
-	// that cumin already logged and told the Owner about. cumin can lose
-	// it: after a restart it tells the Owner once more.
+	// of an account that does not count (another account than a Maintainer
+	// for cumin/status/ready; than cumin-core or a Maintainer for the others)
+	// that cumin already logged and notified about. cumin can lose
+	// it: after a restart it notifies once more.
 	readyMu      sync.Mutex
 	readyTold    map[string]time.Time
 	pollFailures map[string]*repeatedFailure
 
-	// quota keeps which notifications of "stop agent starts" the Owner already got
+	// quota keeps which notifications of "stop agent starts" cumin already sent
 	// (quota.go). The polls and the ends of the runs share it.
 	quotaMu sync.Mutex
 	quota   quotaNotices
-	// waitingTold says that the Owner heard Q4 (waiting) since cumin last
+	// waitingTold says that cumin sent "tell that cumin waits" since it last
 	// did something (waiting.go). quotaMu guards it.
 	waitingTold bool
 	// quotaUnread says that the read of the usage failed in this poll
@@ -197,7 +200,7 @@ type inProgressKey struct {
 // nil, so that `cumin run` exits with 0 and launchd leaves it stopped.
 //
 // No label is changed on the way out. An issue that was in progress keeps
-// cumin/status/implementing, and the Owner restarts it with
+// cumin/status/implementing, and a Maintainer restarts it with
 // cumin/status/ready (issue-states.md, the section on what v0.1 does not
 // build).
 //
@@ -308,7 +311,7 @@ func (s *Service) inProgressIssues() []string {
 //
 // After the stop signal the entry stays, even when the run ends at once
 // because its CLI follows SIGTERM. The issue keeps
-// cumin/status/implementing in that case, so the Owner has to restart it,
+// cumin/status/implementing in that case, so a Maintainer has to restart it,
 // and the line of the stop must name it. Nothing removes entries after the
 // signal; the process is on its way out.
 func (s *Service) markInProgress(ctx context.Context, repository string, issue int) func() {
@@ -400,7 +403,7 @@ func (s *Service) ensurePriorityLabels(ctx context.Context, log *slog.Logger, to
 
 // Poll does one poll of every target repository: read the snapshot, decide,
 // and apply the actions. A failure in one repository does not stop the
-// others, and a failure that repeats tells the Owner (pollFailed). The
+// others, and a failure that repeats is notified (pollFailed). The
 // returned error joins the failures.
 func (s *Service) Poll(ctx context.Context) error {
 	var errs []error
@@ -432,7 +435,8 @@ func (s *Service) Poll(ctx context.Context) error {
 		errs = append(errs, err)
 		s.pollFailed(ctx, target.Repository, err)
 	}
-	// Q4 sends only after a poll that read every repository; a decided
+	// "tell that cumin waits" sends only after a poll that read every
+	// repository; a decided
 	// action ends the silence even when another repository failed. A stop request
 	// holds work back, so having nothing to do is not news then.
 	if !finishing {
@@ -595,9 +599,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	}
 	s.ensurePriorityLabels(ctx, log, token, target, settings, readAgain)
 	// The required checks are a REST call of their own, so the poll makes
-	// it only when an issue of this repository waits for the checks (I3,
-	// I4) or has an approval of a person to check (I12). Its budget is not
-	// the one of the snapshot query.
+	// it only when an issue of this repository waits for the checks ("request
+	// the review", "request a check fix") or has an approval of a person to
+	// check ("start the merge" after the approval of a Maintainer). Its budget
+	// is not the one of the snapshot query.
 	var required []RequiredCheck
 	if snapshot.HasIssueChecking() || snapshot.HasMaintainerApprovalCandidate() {
 		read, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
@@ -625,22 +630,24 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	s.writeFollowUpNotes(ctx, log, token, target, &snapshot)
 	s.cleanUp(ctx, log, target, snapshot)
 	var errs []error
-	// A requirement issue that R3 could not move keeps its sub-issues
+	// A requirement issue that "mark the requirement as in work" could not
+	// move keeps its sub-issues
 	// waiting in this poll. A claim would take cumin/status/ready away from
-	// the sub-issue, and R3 would then never apply again: the requirement
+	// the sub-issue, and that action would then never apply again: the requirement
 	// issue would stay in awaiting-plan-review while its work goes on.
 	notStarted := map[int]bool{}
-	// An issue that cumin moves on without the Owner keeps Q4 silent, even
-	// when this poll decides nothing for it.
+	// An issue that cumin moves on without a Maintainer keeps "tell that
+	// cumin waits" silent, even when this poll decides nothing for it.
 	result.movesOn = snapshot.MovesWithoutMaintainer()
 	result.issueInWork = snapshot.HasIssueInWork()
 	actions := Decide(snapshot, s.Settings.MaxIssuesInProgress, required, settings.Settings.PriorityLabelNames(),
 		s.now(), settings.Settings.ChecksWaitTime)
-	// An issue that I12 or I13 took at this poll gets no conflict resolution
-	// of I14: the review of the Owner on the conflicting head decides
-	// first. A check of I12 or of I13 that failed keeps the issue too, so
-	// that the next poll decides it again. So does a request for changes of
-	// the Owner that waits for the permit of its start.
+	// An issue that "start the merge" after the approval of a Maintainer or
+	// "send back for changes" took at this poll gets no "request a conflict
+	// resolution": the review of a Maintainer on the conflicting head decides
+	// first. A check of one of those two actions that failed keeps the issue
+	// too, so that the next poll decides it again. So does a request for
+	// changes of a Maintainer that waits for the permit of its start.
 	maintainerDecided := map[int]bool{}
 	// The merges that this poll sent, for the wait between two of them.
 	merges := 0
@@ -649,8 +656,10 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			log.Info(string(ActionRequestAConflictResolution)+": waits for the review of a Maintainer on the conflicting head", "issue", a.Number)
 			continue
 		}
-		// A candidate of I12 or of I13 is only a check; it counts as
-		// progress for Q4 when it merges, stops, or sends back the issue.
+		// A candidate of "start the merge" after the approval of a Maintainer
+		// or of "send back for changes" is only a check; it counts as progress
+		// for "tell that cumin waits" when it merges, stops, or sends back the
+		// issue.
 		switch action.(type) {
 		case MergeMaintainerApproval, FixMaintainerReview:
 		default:
@@ -766,7 +775,8 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	return errors.Join(errs...)
 }
 
-// claim applies I1: replace the status label of the sub-issue with
+// claim applies "request the implementation": replace the status label of
+// the sub-issue with
 // cumin/status/implementing, and only then request the work. When the label
 // change fails, nothing is requested; the next poll decides again.
 func (s *Service) claim(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, c Claim) error {
@@ -779,12 +789,13 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if !ok {
 		return nil
 	}
-	// The Owner added cumin/status/ready, so the work starts again from a
+	// A Maintainer added cumin/status/ready, so the work starts again from a
 	// new session and a count of zero (issue-states.md, the section on the
 	// sessions of an agent). This comes before the label change: a state
 	// that cumin cannot clear would resume the old session of a request in
-	// the same session (I4) after a restart, which the Owner's intervention
-	// must end. The issue keeps cumin/status/ready, so the next poll
+	// the same session ("request a check fix") after a restart, which the
+	// intervention of a Maintainer must end. The issue keeps
+	// cumin/status/ready, so the next poll
 	// claims it again.
 	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": clear the state of issue #%d: %w", c.Number, err)
@@ -796,15 +807,17 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	log := s.logger().With("repository", target.Repository.String(), "issue", c.Number)
 	log.Info(string(ActionRequestTheImplementation)+": claimed the issue",
 		"requirement_issue", c.RequirementIssue, "labels", labels)
-	// The poll read the Owner of the newest cumin/status/ready before the
-	// decision (readReadyOwners); I1 holds only with that Owner.
+	// The poll read the Issue Owner of the newest cumin/status/ready before
+	// the decision (readReadyOwners); "request the implementation" holds only
+	// with that Issue Owner.
 	if err := s.startImplementer(ctx, permit, target, settings, sub, sub.ReadyOwner); err != nil {
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
 }
 
-// copyLabels applies I11: the pull request gets the cumin/status/* and
+// copyLabels applies "copy the labels to the pull request": the pull
+// request gets the cumin/status/* and
 // risk/* labels of the issue that it closes. A pull request is an issue on
 // the labels endpoint, so the call is the one for an issue.
 func (s *Service) copyLabels(ctx context.Context, token string, target Target, a CopyLabels) error {
@@ -832,8 +845,8 @@ type implementerRequest struct {
 	pullRequest int
 	// sessionID resumes that session. Empty starts a new session.
 	sessionID string
-	// issueOwnerLogin is the login of the Owner for the facts of the request,
-	// read before the label changed. Empty says that there is none.
+	// issueOwnerLogin is the login of the Issue Owner for the facts of the
+	// request, read before the label changed. Empty says that there is none.
 	issueOwnerLogin string
 	// text builds the request text once the work directory is known.
 	text func(workDir string) string
@@ -848,11 +861,12 @@ type implementerRequest struct {
 	permit StartPermit
 }
 
-// stopForUnreportedChecks applies I15: a required check has not reported on
+// stopForUnreportedChecks applies "stop for missing checks": a required
+// check has not reported on
 // the head commit of the pull request within the wait time of the
 // repository, or no open pull request closes the issue. The issue goes to
-// the Owner through the stop step with the row I15. No agent starts: cumin
-// writes what it sees, and the Owner finds the cause.
+// a Maintainer through the stop step with that action. No agent starts: cumin
+// writes what it sees, and a Maintainer finds the cause.
 //
 // The label changes first: until it changes, the next poll decides the same
 // stop, and must not post the comment and notify again (principle 3).
@@ -890,12 +904,13 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 	return nil
 }
 
-// fixChecks applies I4: a required check failed on the head commit of the
+// fixChecks applies "request a check fix": a required check failed on the
+// head commit of the
 // pull request. Below the limit of the repository, the count grows by one,
 // the status label becomes cumin/status/implementing, and the Implementer
 // fixes the checks in the session of its last run, on the branch of the
-// pull request. At the limit, the issue goes to the Owner through the stop
-// step with the row I4.
+// pull request. At the limit, the issue goes to a Maintainer through the
+// stop step with the action "stop for failed checks".
 //
 // The count is saved before the label changes: a count that cumin cannot
 // keep would let the requests run past the limit, so the label stays and
@@ -993,7 +1008,8 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	})
 }
 
-// startImplementer requests the work of I1 from the Implementer. The
+// startImplementer requests the work of "request the implementation" from
+// the Implementer. The
 // request kind is "implement", or "continue" when an open pull request
 // already closes the issue; the work then goes on on the branch of that
 // pull request (ClaimBranch). The session is new in both cases
@@ -1053,7 +1069,8 @@ func (s *Service) startAgent(ctx context.Context, permit StartPermit, request ag
 // goImplementer runs one Implementer request in its own goroutine, so that
 // the poll goes on while the agent works. What the goroutine does (the
 // worktree, the start, the end of the run) is only logged and handled by
-// the end of the run (I2).
+// the end of the run (the check of the pull request after the Implementer
+// ends).
 func (s *Service) goImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) error {
 	if s.Agents == nil {
 		return errors.New("no agent service is configured")
@@ -1070,7 +1087,8 @@ func (s *Service) goImplementer(ctx context.Context, target Target, settings *Re
 
 // startStay writes, in the state file, the start of a new stay of the
 // implementation issue in cumin/status/implementing: no second request
-// yet, and whether the request is a conflict resolution (I6, I12, I14). A
+// yet, and whether the request is a conflict resolution (of "start the
+// merge" or of "request a conflict resolution"). A
 // resolution that leaves the head commit stops the issue, so that the same
 // conflict does not go round the review again (ImplementationEnd).
 //
@@ -1097,14 +1115,14 @@ func (s *Service) countImplementationRequest(repository string, number, delta in
 	return s.State.Set(repository, number, stored)
 }
 
-// readIssueOwnerLogin reads the login of the Owner for the facts of a start
-// request (docs/ja/requirements/agents/common.md, the facts of the start
-// request): the account that added the newest cumin/status/ready to the
+// readIssueOwnerLogin reads the login of the Issue Owner for the facts of a
+// start request (docs/ja/requirements/agents/common.md, the facts of the
+// start request): the account that added the newest cumin/status/ready to the
 // issue of the run, or to a sub-issue when a requirement issue has no such
-// event. The login is passed only when that account is the Owner (IsMaintainer).
-// The empty login says that there is no Owner login. A failed read is an
-// error: the caller reads before it changes the label, changes nothing, and
-// sends no request, so the next poll tries again.
+// event. The login is passed only when that account is a Maintainer
+// (IsMaintainer). The empty login says that there is no Issue Owner login. A
+// failed read is an error: the caller reads before it changes the label,
+// changes nothing, and sends no request, so the next poll tries again.
 func (s *Service) readIssueOwnerLogin(ctx context.Context, token string, target Target, number int) (string, error) {
 	actor, isMaintainer, err := s.readReadyActor(ctx, token, target, number, true)
 	if err != nil || !isMaintainer {
@@ -1114,19 +1132,20 @@ func (s *Service) readIssueOwnerLogin(ctx context.Context, token string, target 
 }
 
 // readReadyActor reads the account that added the newest cumin/status/ready
-// to the issue, and whether that account is the Owner (IsMaintainer). subIssues
-// lets an event of a sub-issue answer for a requirement issue with no such
-// event; the check of R1 and of I1 passes false, so that only an event of
-// the issue itself can start work.
+// to the issue, and whether that account is a Maintainer (IsMaintainer).
+// subIssues lets an event of a sub-issue answer for a requirement issue with
+// no such event; the check of "request the split" and of "request the
+// implementation" passes false, so that only an event of the issue itself can
+// start work.
 func (s *Service) readReadyActor(ctx context.Context, token string, target Target, number int, subIssues bool) (github.LabelActor, bool, error) {
 	return s.readStatusActor(ctx, token, target, number, LabelReady, subIssues)
 }
 
 // readStatusActor reads the account that added the newest status label to
 // the issue, and whether the label counts as a state (StatusLabelCounts):
-// the account is an Owner or, for every label but cumin/status/ready, the
+// the account is a Maintainer or, for every label but cumin/status/ready, the
 // cumin-core App. The permission is read only for a person: a GitHub App is
-// never the Owner. A failed read of the login of cumin-core is an error, so
+// never a Maintainer. A failed read of the login of cumin-core is an error, so
 // that the caller decides nothing.
 func (s *Service) readStatusActor(ctx context.Context, token string, target Target, number int, label string, subIssues bool) (github.LabelActor, bool, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
@@ -1161,7 +1180,7 @@ func (s *Service) readStatusActor(ctx context.Context, token string, target Targ
 // decides from the facts on GitHub. So every end is the same case: a done
 // result, an abnormal end, and a run that a restart of cumin cut off, which
 // the next poll finds. Only a blocked result is not read from GitHub: cumin
-// posts the blocked_reason and stops the issue for the Owner at once.
+// posts the blocked_reason and stops the issue for a Maintainer at once.
 //
 // When the facts ask for the second request, it runs here in the same work
 // directory, in the kept session when the state file holds one. The quota
@@ -1173,7 +1192,7 @@ func (s *Service) readStatusActor(ctx context.Context, token string, target Targ
 // A second request of a poll is counted before the work directory is
 // prepared. A work directory that is not prepared sends no request: the
 // next poll requests the implementation again, and the second failure stops
-// the implementation for the Owner (stopForWorkDirectory).
+// the implementation for a Maintainer (stopForWorkDirectory).
 func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	role := settings.Settings.Roles[config.RoleImplementer]
@@ -1191,13 +1210,14 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			return
 		}
 	}
-	// A request on an open pull request (a continuation of I1, a check fix
-	// of I4) starts from the pull request on GitHub. A worktree of an
+	// A request on an open pull request (a continuation of "request the
+	// implementation", a check fix) starts from the pull request on GitHub.
+	// A worktree of an
 	// earlier round can be on another branch, or behind commits that were
 	// pushed since, and Prepare reuses a worktree as it is; so it goes, and
 	// Prepare creates the worktree again from origin/<branch>. A worktree
 	// that holds work that is not on GitHub stays: a run that cumin stopped
-	// leaves its work there, and the Owner restarts the issue with
+	// leaves its work there, and a Maintainer restarts the issue with
 	// cumin/status/ready.
 	if req.pullRequest != 0 {
 		removed, err := s.Workspace.RemoveIfPushed(ctx, checkout)
@@ -1279,7 +1299,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			}
 			return
 		case StopImplementation:
-			// The Owner needs the kind of the end to know where to look.
+			// A Maintainer needs the kind of the end to know where to look.
 			if abnormal != nil && !a.Question {
 				a.Reason = AfterAbnormalEndReason(a.Reason, "Implementer", abnormal.Kind)
 			}
@@ -1307,7 +1327,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	}
 }
 
-// stopForWorkDirectory stops the implementation for the Owner when the work
+// stopForWorkDirectory stops the implementation for a Maintainer when the work
 // directory of the second request of this stay was not prepared: the first
 // request and the second one both sent nothing to the Implementer, and a
 // third one would fail the same way. After the first failure nothing
@@ -1334,11 +1354,12 @@ func (s *Service) stopForWorkDirectory(ctx context.Context, log *slog.Logger, ta
 }
 
 // stopAfterBlocked stops the issue for a blocked result, with the action of
-// the result (I2 for the Implementer, I10 for the Reviewer): the
+// the result ("stop the implementation" for the Implementer, "stop the
+// review" for the Reviewer): the
 // blocked_reason of the agent becomes the comment, because the agent
 // already wrote it in the form of templates/decision-request.md, and its
-// first line is the question for the Owner. Nothing is retried: a blocked
-// result usually means that a requirement is missing, so the Owner answers
+// first line is the question for a Maintainer. Nothing is retried: a blocked
+// result usually means that a requirement is missing, so a Maintainer answers
 // first (issue-states.md, the paragraph on a blocked result).
 //
 // The label changes first, then the comment is written. A comment that
@@ -1402,7 +1423,7 @@ func (s *Service) readImplementingFacts(ctx context.Context, log *slog.Logger, t
 //
 // The second value is false when a read failed, and when the issue is not
 // an open issue in cumin/status/implementing any more: nothing is decided
-// then. A label that does not count ends the read, and the Owner is told
+// then. A label that does not count ends the read, and cumin notifies
 // once. A worktree that the Host does not hold gives an empty head commit,
 // so the pull request does not pass the check.
 func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int, branch string) (SubIssue, bool) {
@@ -1479,11 +1500,11 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 	return sub, true
 }
 
-// waitForChecks applies "wait for the checks" (I2): the pull request passes
+// waitForChecks applies "wait for the checks": the pull request passes
 // the check. When the issue has no closing link to the pull request,
 // cumin-core adds it and reads the issue once more to see it; then the
 // status label becomes cumin/status/checking. A link that GitHub refuses,
-// and a link that is still missing, hand the issue back to the Owner
+// and a link that is still missing, hand the issue back to a Maintainer
 // through the stop step, with one sentence.
 //
 // A failed read or label change is returned and changes nothing more: the
@@ -1531,9 +1552,9 @@ func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token str
 	return nil
 }
 
-// stopImplementation applies "stop the implementation for the Owner": the
+// stopImplementation applies "stop the implementation": the
 // implementation issue moves from cumin/status/implementing to
-// cumin/status/awaiting-decision, and the Owner is notified. After a
+// cumin/status/awaiting-decision, and cumin notifies. After a
 // question of the Implementer, its comment holds the reason, and cumin
 // writes none. Otherwise cumin writes the reason on the issue.
 //
@@ -1630,9 +1651,10 @@ func githubAnswer(err error) string {
 }
 
 // keepSession stores the session of the run of the role, so that a request
-// in the same session can resume it (I4, I5, and the later rounds of I3).
-// The Implementer and the Reviewer each keep their own. A failure is logged
-// and changes nothing else: the next request then starts a new session.
+// in the same session can resume it ("request a check fix", "request a review
+// fix", and the later rounds of "request the review"). The Implementer and
+// the Reviewer each keep their own. A failure is logged and changes nothing
+// else: the next request then starts a new session.
 func (s *Service) keepSession(log *slog.Logger, target Target, role config.Role, number int, sessionID string) {
 	if sessionID == "" {
 		return
@@ -1650,7 +1672,7 @@ func (s *Service) keepSession(log *slog.Logger, target Target, role config.Role,
 }
 
 // firstLine is the first line of s, for one log field. The first line of a
-// blocked_reason is the question that the Owner must answer.
+// blocked_reason is the question that a Maintainer must answer.
 func firstLine(s string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
 	return line

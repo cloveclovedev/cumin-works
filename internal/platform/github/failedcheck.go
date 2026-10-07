@@ -1,6 +1,6 @@
 package github
 
-// This file reads what a failed check says, for the request of I4 (a
+// This file reads what a failed check says, for "request a check fix" (a
 // required check failed, fix it in the same session). Row 54 of
 // measured-constraints.md holds what an installation token can read of a
 // failed GitHub Actions check in a public repository: the annotations of
@@ -23,7 +23,7 @@ import (
 
 // Limits of the text that FailedCheckContent returns. They are constants of
 // the code, not settings: the settings table of the requirement does not
-// list them. The request of I4 carries the text, so it stays small enough
+// list them. "request a check fix" carries the text, so it stays small enough
 // to read.
 const (
 	// checkContentLimit is the longest text for one failed check.
@@ -53,14 +53,14 @@ type FailedCheck struct {
 // on the commit: its failure annotations, and then the end of the log of
 // its job. One text is at most checkContentLimit bytes, and a text that was
 // cut says so. The answer keeps the order of failed, so that the request of
-// I4 is the same for the same facts; two rules can require the same name
-// from two Apps, and each one keeps its own text.
+// a check fix is the same for the same facts; two rules can require the
+// same name from two Apps, and each one keeps its own text.
 //
 // Nothing here is an error for the caller. A check that cumin cannot read
 // (a commit status, a missing permission, a job that is gone) gives a text
 // that names the check and says that its content could not be read, and one
-// line goes to the log. The request of I4 is worth sending with the names
-// alone.
+// line goes to the log. The request of a check fix is worth sending with
+// the names alone.
 //
 // Official: REST "List check runs for a Git reference", "List check run
 // annotations", and "Download job logs for a workflow run" (a redirect to a
@@ -102,8 +102,8 @@ func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, 
 }
 
 // pickRun returns the check run of one failed required check. A rule that
-// names an App is met only by that App, as it is in the decision of I3 and
-// I4, so the content never comes from the run of another App. Only a run
+// names an App is met only by that App, as it is in the decision on the
+// checks, so the content never comes from the run of another App. Only a run
 // that failed is read: a name can have two runs, and a rerun can pass
 // between the snapshot and this read. Among the runs that failed, the
 // newest one (the highest id) is the one to read.
@@ -128,8 +128,9 @@ func pickRun(runs []checkRun, check RequiredCheck) (checkRun, bool) {
 }
 
 // failedConclusion reports whether a conclusion of REST is a failure.
-// Success, skipped, and neutral are the three that pass (row 51);
-// a run without a conclusion has not finished.
+// Success, skipped, and neutral are the three that pass
+// (measured-constraints.md row 51); a run without a conclusion has not
+// finished.
 func failedConclusion(conclusion string) bool {
 	switch conclusion {
 	case "", "success", "skipped", "neutral":
@@ -148,7 +149,8 @@ type checkRun struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	Conclusion string `json:"conclusion"`
-	// DetailsURL ends with the id of the job of GitHub Actions (row 54).
+	// DetailsURL ends with the id of the job of GitHub Actions
+	// (measured-constraints.md row 54).
 	DetailsURL string `json:"details_url"`
 	// App is the App that reported the check run. A rule of a branch can
 	// name it (RequiredCheck.Integration).
@@ -229,8 +231,8 @@ type annotation struct {
 }
 
 // annotations returns the failure annotations of a check run. Annotations
-// of another level (notice, warning) are left out: the request of I4 is
-// about what failed. Every page is read, because the failure can stand
+// of another level (notice, warning) are left out: the request of a check
+// fix is about what failed. Every page is read, because the failure can stand
 // behind a hundred warnings; the read stops early once the failures are
 // longer than the text will be.
 func (c *AppClient) annotations(ctx context.Context, token, owner, repo string, id int64) ([]annotation, error) {
@@ -258,8 +260,9 @@ func (c *AppClient) annotations(ctx context.Context, token, owner, repo string, 
 }
 
 // jobLogTail returns the end of the log of the job of a check run. The job
-// id is the last part of the details address of the check run (row 54). A
-// check run of another kind of App has no job, and then the tail is empty.
+// id is the last part of the details address of the check run
+// (measured-constraints.md row 54). A check run of another kind of App has
+// no job, and then the tail is empty.
 func (c *AppClient) jobLogTail(ctx context.Context, token, owner, repo, detailsURL string) (string, error) {
 	id := jobID(detailsURL)
 	if id == "" {
@@ -272,7 +275,8 @@ func (c *AppClient) jobLogTail(ctx context.Context, token, owner, repo, detailsU
 }
 
 // actionsJobPath is the path of the details address of a check run of
-// GitHub Actions: ".../actions/runs/<run id>/job/<job id>" (row 54).
+// GitHub Actions: ".../actions/runs/<run id>/job/<job id>"
+// (measured-constraints.md row 54).
 var actionsJobPath = regexp.MustCompile(`/actions/runs/\d+/job/(\d+)$`)
 
 // jobID is the job of a check run of GitHub Actions, or an empty string

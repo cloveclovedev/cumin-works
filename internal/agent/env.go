@@ -97,7 +97,7 @@ func environment(cred Credentials, ghConfigDir string) []string {
 	basic := cred.basicHeader()
 	return append(baseEnvironment(),
 		// git reads no configuration file of the Host user or of the
-		// system, so no credential helper and no identity of the Owner
+		// system, so no credential helper and no identity of the Operator
 		// (git(1): GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM).
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_NOSYSTEM=1",

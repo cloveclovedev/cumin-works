@@ -1,7 +1,7 @@
 package workflow
 
-// This file starts the Reviewer (I3: the required checks passed, so the
-// Reviewer reviews the head commit) and applies the way out of
+// This file starts the Reviewer ("request the review": the required checks
+// passed, so the Reviewer reviews the head commit) and applies the way out of
 // cumin/status/reviewing, which the poll and the end of a Reviewer run
 // decide with the same pure function (ReviewEnd).
 // docs/ja/designs/poll.md, the topic on the Reviewer request.
@@ -32,10 +32,10 @@ type reviewerRequest struct {
 	readyAt time.Time
 	// sessionID resumes that session. Empty starts a new session.
 	sessionID string
-	// issueOwnerLogin is the login of the Owner for the facts of the request,
-	// read before the label changed. Empty says that there is none. The
-	// requests that follow in the same run (the review fix of I5, the
-	// explanation of the cause of I8) carry the same login.
+	// issueOwnerLogin is the login of the Issue Owner for the facts of the
+	// request, read before the label changed. Empty says that there is none.
+	// The requests that follow in the same run ("request a review fix",
+	// "request the cause") carry the same login.
 	issueOwnerLogin string
 	// again says that the request is the second one of its kind during this
 	// stay in cumin/status/reviewing: "request the review again", or the
@@ -45,18 +45,18 @@ type reviewerRequest struct {
 	// ended and left its session: it resumes that session with the short
 	// text. Without it, the second request is the whole review request.
 	resumes bool
-	// cause is the review that the request "request the cause from the
-	// Reviewer" (I8) is about, or nil for a review request.
+	// cause is the review that the request "request the cause" is about, or
+	// nil for a review request.
 	cause *Review
 	// permit is the permit of the start of this request (permitStart).
 	permit StartPermit
 }
 
-// startReview applies I3: every required check passed on the head commit of
-// the pull request. cumin reads the round from GitHub first, writes the
-// start of the stay in the state file, then changes the label to
-// cumin/status/reviewing, then starts the Reviewer; a read that fails
-// changes nothing, and the next poll tries again (principle 3).
+// startReview applies "request the review": every required check passed on
+// the head commit of the pull request. cumin reads the round from GitHub
+// first, writes the start of the stay in the state file, then changes the
+// label to cumin/status/reviewing, then starts the Reviewer; a read that
+// fails changes nothing, and the next poll tries again (principle 3).
 //
 // Round 1 starts a new session. Round 2 and later resume the session of
 // the last Reviewer run of the issue, and name the commit of the last
@@ -106,7 +106,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 // reviewRequestOf reads what a request to the Reviewer needs, for the pull
 // request as cumin read it: the login of the Reviewer App, the last
 // cumin/status/ready of the issue, which starts the count of the rounds,
-// and the login of the Owner. It changes nothing.
+// and the login of the Issue Owner. It changes nothing.
 func (s *Service) reviewRequestOf(ctx context.Context, token string, target Target, settings *RepositorySettings, number int, pr PullRequest) (reviewerRequest, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
@@ -179,20 +179,20 @@ func (s *Service) goInWork(ctx context.Context, target Target, number int, step 
 
 // runReviewer prepares the Reviewer worktree at the head commit and runs
 // one request to the Reviewer to its end: the review, the review again, or
-// the cause at the round limit (I8).
+// the cause at the round limit.
 //
 // Every end but a blocked result is the same case: a done result and an
 // abnormal end are decided as the poll decides (endReview), from the facts
 // on GitHub, and ReviewEnd decides. Nothing is retried inside the run: the
 // second request is "request the review again", once for each stay in
-// cumin/status/reviewing. A blocked result is I10: cumin posts the
-// blocked_reason and stops the issue for the Owner at once. A failed read
-// changes nothing: the issue keeps cumin/status/reviewing, and the next
-// poll decides from the same facts.
+// cumin/status/reviewing. A blocked result is "stop the review": cumin posts
+// the blocked_reason and stops the issue for a Maintainer at once. A failed
+// read changes nothing: the issue keeps cumin/status/reviewing, and the
+// next poll decides from the same facts.
 //
 // A request that did not start (the work directory, the start of the
 // agent) keeps its count. After the first one, the next poll requests
-// again; the second one stops the review for the Owner
+// again; the second one stops the review for a Maintainer
 // (stopForReviewerStart).
 func (s *Service) runReviewer(ctx context.Context, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
 	repository := target.Repository.String()
@@ -299,7 +299,7 @@ func stopOfReviewerRequest(req reviewerRequest) ActionName {
 	return ActionStopTheReview
 }
 
-// stopForReviewerStart stops the review for the Owner when the second
+// stopForReviewerStart stops the review for a Maintainer when the second
 // request of this stay did not start: the work directory was not prepared,
 // or the agent was not started. A third request would fail the same way.
 // After a first request that did not start, nothing changes here, and the
@@ -354,7 +354,7 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 		log.Info(string(req.action())+": the end of the review was not decided; the next poll decides", "labels", sub.Labels)
 		return
 	}
-	// The Owner needs the kind of the end to know where to look.
+	// A Maintainer needs the kind of the end to know where to look.
 	if stop, ok := action.(StopReview); ok && abnormal != nil && stop.Retried {
 		stop.Reason = AfterAbnormalEndReason(stop.Reason, "Reviewer", abnormal.Kind)
 		action = stop
@@ -401,7 +401,7 @@ func (s *Service) readReviewingFacts(ctx context.Context, log *slog.Logger, toke
 // The error is the one of a read that failed. The bool is false when the
 // issue is not an open issue in cumin/status/reviewing any more. Nothing is
 // decided in both cases. A label that does not count ends the read, and
-// the Owner is told once.
+// one notification goes out.
 func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int) (SubIssue, string, bool, error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	failed := func(what string, err error) (SubIssue, string, bool, error) {
@@ -521,11 +521,12 @@ func (s *Service) countReviewRequest(repository string, number int, cause bool) 
 // An error says that nothing more happened: the issue keeps
 // cumin/status/reviewing, and the next poll decides again from the same
 // facts. No request, comment, or notification goes out before the label
-// changed, so none goes out twice. issueOwnerLogin gives the login of the Owner
-// for a review fix and for the review request of I7. afterRun says that a
-// Reviewer run of this stay just returned done and left its session; a poll
-// passes false, because a restart of cumin can have cut the run before its
-// session was kept, and so does the end of a run that ended abnormally.
+// changed, so none goes out twice. issueOwnerLogin gives the login of the
+// Issue Owner for a review fix and for the review request of "ask for the
+// merge decision". afterRun says that a Reviewer run of this stay just
+// returned done and left its session; a poll passes false, because a restart
+// of cumin can have cut the run before its session was kept, and so does the
+// end of a run that ended abnormally.
 func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, defaultBranch string, issueOwnerLogin func(ctx context.Context, token string) (string, error), afterRun bool, action Action) (func(context.Context), error) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
@@ -691,12 +692,12 @@ func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token s
 // notification alike.
 const MissingReviewReason = "cumin requested the review twice, but the latest review of the Reviewer is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
 
-// MissingCauseReason is the sentence of the stop of I8 after the second
-// request of the cause of one stay that left no decision request, for the
-// comment and the notification alike.
+// MissingCauseReason is the sentence of "stop at the round limit" after the
+// second request of the cause of one stay that left no decision request, for
+// the comment and the notification alike.
 const MissingCauseReason = "Blocking comments remain at the limit of review rounds. cumin requested the cause from the Reviewer twice, but the Reviewer wrote no decision request on the pull request after its last review."
 
-// MissingExplanationReason is the sentence of the stop of I8 when the
-// Reviewer wrote no decision request, for the comment and the
+// MissingExplanationReason is the sentence of "stop at the round limit"
+// when the Reviewer wrote no decision request, for the comment and the
 // notification alike.
 const MissingExplanationReason = "Blocking comments remain at the limit of review rounds, and the Reviewer reported done, but it wrote no decision request on the pull request after its last review."

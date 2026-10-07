@@ -9,18 +9,18 @@ import (
 
 // closerPageSize is the page size of the review threads of a pull request
 // and of the comments of one thread. A connection over it is an error, so
-// that I9 never lists a part of the comments as all of them.
+// that the follow-up note never lists a part of the comments as all of them.
 const closerPageSize = 100
 
 // linkedLimit is the page size of the linked pull requests of one issue.
-// More is an error, so that I9 never misses a merged one.
+// More is an error, so that the follow-up note never misses a merged one.
 const linkedLimit = 10
 
 // The query of the pull requests that are linked to close one issue, open,
-// closed, and merged (I9). Who closed the issue does not matter: since
-// 2026-09-30 GitHub may not close an issue at the merge, and cumin or the
-// Owner closes it then (docs/ja/designs/poll.md, the topic on the
-// follow-up notes).
+// closed, and merged ("write the follow-up note"). Who closed the issue
+// does not matter: since 2026-09-30 GitHub may not close an issue at the
+// merge, and cumin or a Maintainer closes it then (docs/ja/designs/poll.md,
+// the topic on the follow-up notes).
 //
 // Official, GraphQL schema: Issue.closedByPullRequestsReferences with
 // includeClosedPrs. Checked on 2026-09-30; one query cost 1 point.

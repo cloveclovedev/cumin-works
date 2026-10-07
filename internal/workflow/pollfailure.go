@@ -4,10 +4,10 @@ package workflow
 // snapshot above its page size, a wrong .cumin/config.toml, a label change
 // that GitHub refused. Each failure is logged and the other repositories
 // go on, but a failure that repeats means that nothing moves in that
-// repository, and the Owner has to know.
+// repository, and a notification has to say so.
 //
-// This file counts the consecutive failures of each repository and tells
-// the Owner once. docs/ja/designs/poll.md, the topic on a poll that keeps
+// This file counts the consecutive failures of each repository and
+// notifies once. docs/ja/designs/poll.md, the topic on a poll that keeps
 // failing.
 
 import (
@@ -21,7 +21,7 @@ import (
 )
 
 // pollFailuresBeforeNotice is how many polls of one repository must fail
-// with the same reason before cumin tells the Owner (cumin-core.md, the
+// with the same reason before cumin notifies (cumin-core.md, the
 // table of notifications).
 const pollFailuresBeforeNotice = 3
 
@@ -36,7 +36,7 @@ type repeatedFailure struct {
 	reason string
 	// count is how many polls in a row failed with that reason.
 	count int
-	// told is true after the Owner was told that the polls of this
+	// told is true after cumin notified that the polls of this
 	// repository keep failing. It goes back to false only when a poll of
 	// the repository succeeds, so a new reason does not bring a second
 	// notification before then.
@@ -44,16 +44,16 @@ type repeatedFailure struct {
 }
 
 // pollSucceeded forgets the failures of one repository. The next run of
-// failures is counted from the start, and the Owner is told again.
+// failures is counted from the start, and cumin notifies again.
 func (s *Service) pollSucceeded(repository config.Repository) {
 	s.failureMu.Lock()
 	defer s.failureMu.Unlock()
 	delete(s.pollFailures, repositoryKey(repository))
 }
 
-// pollFailed counts one failed poll and tells the Owner on the third
+// pollFailed counts one failed poll and notifies on the third
 // failure with the same reason. A different reason starts the count again,
-// because it is another problem. After the Owner was told, nothing more is
+// because it is another problem. After the notification, nothing more is
 // sent about this repository until one of its polls succeeds, whatever the
 // reason (cumin-core.md, the last line of the table of notifications).
 func (s *Service) pollFailed(ctx context.Context, repository config.Repository, err error) {
@@ -68,8 +68,8 @@ func (s *Service) pollFailed(ctx context.Context, repository config.Repository, 
 		s.pollFailures[repositoryKey(repository)] = failure
 	}
 	if failure.reason != reason {
-		// Another problem: the count starts again. Whether the Owner was
-		// already told stays, because the requirement says that the next
+		// Another problem: the count starts again. Whether cumin already
+		// notified stays, because the requirement says that the next
 		// notification comes after a poll of this repository succeeds.
 		failure.reason, failure.count = reason, 0
 	}

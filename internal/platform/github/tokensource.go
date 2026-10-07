@@ -60,7 +60,7 @@ func (s *TokenSource) Token(ctx context.Context) (string, error) {
 
 // BotLogin returns the login of the bot of the App, "<slug>[bot]", from
 // GET /app. The slug never changes, so the first success is kept. The
-// follow-up note (I9) uses it to know its own comments.
+// follow-up note uses it to know its own comments.
 func (s *TokenSource) BotLogin(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

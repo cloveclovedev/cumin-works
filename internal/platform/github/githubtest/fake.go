@@ -93,8 +93,8 @@ type PullRequest struct {
 	Closes []int
 	// HeadBranch is the branch of the pull request.
 	HeadBranch string
-	// Labels are the labels of the pull request. I11 makes them equal to
-	// the labels of the issue.
+	// Labels are the labels of the pull request. "copy the labels to the
+	// pull request" makes them equal to the labels of the issue.
 	Labels []string
 	// Checks are the checks on the head commit, as statusCheckRollup
 	// returns them.
@@ -103,7 +103,7 @@ type PullRequest struct {
 	Reviews []Review
 	// Body is the description of the pull request.
 	Body string
-	// Threads are the review threads, as the follow-up note (I9) reads
+	// Threads are the review threads, as the follow-up note reads
 	// them.
 	Threads []ReviewThread
 	// Conflict makes a merge answer 405, and mergeable read false, as
@@ -631,9 +631,9 @@ func (f *Fake) PullRequestCloses(r *Repository, number int) []int {
 	return slices.Clone(pr.Closes)
 }
 
-// SetLabels replaces the labels of an issue or of a pull request, as the
-// Owner does by hand on GitHub. Issues and pull requests share one sequence
-// of numbers on GitHub, so the number names one of them.
+// SetLabels replaces the labels of an issue or of a pull request, as a
+// Maintainer does by hand on GitHub. Issues and pull requests share one
+// sequence of numbers on GitHub, so the number names one of them.
 func (f *Fake) SetLabels(r *Repository, number int, labels []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1326,8 +1326,9 @@ func (f *Fake) serveCreateLabel(w http.ResponseWriter, body []byte, owner, name 
 
 // serveSetIssueLabels answers PUT /repos/{owner}/{repo}/issues/{n}/labels:
 // it replaces every label of the issue. A pull request is an issue on this
-// endpoint, so the number may name a pull request too (I11). Official: "Set
-// labels for an issue", "Every pull request is an issue".
+// endpoint, so the number may name a pull request too
+// ("copy the labels to the pull request"). Official: "Set labels for an
+// issue", "Every pull request is an issue".
 func (f *Fake) serveSetIssueLabels(w http.ResponseWriter, body []byte, owner, name string, number int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -1404,9 +1405,9 @@ func (f *Fake) serveCreateIssueComment(w http.ResponseWriter, body []byte, owner
 	f.lastCommentID++
 	comment := Comment{ID: f.lastCommentID, Body: *request.Body, At: f.now(), Author: f.commentAuthor, AuthorIsBot: f.commentAuthor != ""}
 	// The token of the fake is the same for cumin and for the agents. In the
-	// tests only an agent comments on a pull request (the Reviewer of I8),
-	// and cumin comments on issues; so a comment on a pull request is by
-	// the App of the fake.
+	// tests only an agent comments on a pull request (the Reviewer of
+	// "request the cause"), and cumin comments on issues; so a comment on a
+	// pull request is by the App of the fake.
 	if isPullRequest && f.app != nil {
 		comment.Author, comment.AuthorIsBot = f.app.Slug, true
 	}
@@ -1756,7 +1757,7 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 			Before *string `json:"before"`
 			// Linked belongs to the query of the linked pull requests of
 			// one issue, and Threads to the query of one pull request for
-			// the follow-up note (I9).
+			// the follow-up note.
 			Linked  int `json:"linked"`
 			Threads int `json:"threads"`
 			// IssueID and PullRequestIDs belong to the closing link.
@@ -2040,7 +2041,7 @@ func (f *Fake) serveIssueComments(w http.ResponseWriter, repo *Repository, numbe
 // the labels that a test gave an issue without an event. On GitHub every
 // label of an issue has an event, so the fake answers one for each such
 // label: at the zero time, before every other event, by this account. Its
-// permission is admin until a test sets another one, so it is an Owner.
+// permission is admin until a test sets another one, so it is a Maintainer.
 const SeedActor = "seed-owner"
 
 // withSeededLabelEvents returns the label events of the issue, with one

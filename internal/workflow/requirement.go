@@ -1,12 +1,14 @@
 package workflow
 
-// This file applies the rows that move a requirement issue with its
-// sub-issues: R3 (a sub-issue may start) and R6 (only sub-issues without a
-// status label are left), and reads the label times that R3, a sub-issue
-// that waits for its checks, and the send-back after a request for changes
-// of the Owner (I13) need, the Owner of the newest cumin/status/ready
-// that R1 and I1 need, and the account of the newest status label of a
-// state that cumin is about to act from.
+// This file applies the transitions that move a requirement issue with its
+// sub-issues: "mark the requirement as in work" (a sub-issue may start) and
+// "ask about the remaining sub-issues" (only sub-issues without a status
+// label are left), and reads the label times that "mark the requirement as
+// in work", a sub-issue that waits for its checks, and the send-back after
+// a request for changes of a Maintainer ("send back for changes") need, the
+// Issue Owner of the newest cumin/status/ready that "request the split" and
+// "request the implementation" need, and the account of the newest status
+// label of a state that cumin is about to act from.
 // docs/ja/designs/poll.md, the topics on the label times and on the
 // decision of the poll.
 
@@ -22,8 +24,9 @@ import (
 
 // readLabelTimes adds the label times to each requirement issue of the
 // snapshot that needs them (NeedsLabelTimes), with one small query for each.
-// A failed read is logged and leaves LabelTimesRead false, so R3 and I13
-// wait for the next poll and the other rules go on.
+// A failed read is logged and leaves LabelTimesRead false, so "mark the
+// requirement as in work" and "send back for changes" wait for the next
+// poll and the other rules go on.
 func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token string, target Target, snapshot *Snapshot) {
 	for i := range snapshot.RequirementIssues {
 		requirement := &snapshot.RequirementIssues[i]
@@ -48,13 +51,14 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 	}
 }
 
-// readReadyOwners reads, for the candidates of R1 and of I1, who added the
-// newest cumin/status/ready, and stores in the snapshot whether that
-// account is the Owner (issue-states.md, the ready of the Owner). It reads
-// only when a slot is free, in the order of the starts, and stops when it
-// has as many candidates of the Owner as free slots (ReadyActorReads). Only
-// an event of the issue itself answers: a candidate carries the label, so
-// no ready event among the events that are read means "not the Owner". A
+// readReadyOwners reads, for the candidates of "request the split" and of
+// "request the implementation", who added the newest cumin/status/ready,
+// and stores in the snapshot whether that account is a Maintainer
+// (issue-states.md, the ready of a Maintainer). It reads only when a slot
+// is free, in the order of the starts, and stops when it has as many
+// candidates of a Maintainer as free slots (ReadyActorReads). Only an
+// event of the issue itself answers: a candidate carries the label, so no
+// ready event among the events that are read means "not a Maintainer". A
 // failed read is logged and leaves ReadyRead false, so the issue waits for
 // the next poll and the other rules go on.
 func (s *Service) readReadyOwners(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
@@ -108,8 +112,8 @@ func (s *Service) readStatusActors(ctx context.Context, log *slog.Logger, token 
 }
 
 // readStatusOfRequirement reads who added the newest status label of one
-// requirement issue, stores whether the label counts, and tells the Owner
-// when it does not (tellStatusOfAnother).
+// requirement issue, stores whether the label counts, and notifies when it
+// does not (tellStatusOfAnother).
 func (s *Service) readStatusOfRequirement(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, requirement *RequirementIssue) {
 	label := statusLabel(requirement.Labels)
 	actor, counts, err := s.readStatusActor(ctx, token, target, requirement.Number, label, false)
@@ -123,8 +127,8 @@ func (s *Service) readStatusOfRequirement(ctx context.Context, log *slog.Logger,
 	}
 }
 
-// toldLabelEvent reports whether cumin already told the Owner about the
-// label event of the issue at that time, and remembers the event. The time
+// toldLabelEvent reports whether cumin already notified about the label
+// event of the issue at that time, and remembers the event. The time
 // of the event names it, so one event is told once, not at every poll.
 func (s *Service) toldLabelEvent(target Target, number int, at time.Time) bool {
 	key := fmt.Sprintf("%s#%d", repositoryKey(target.Repository), number)
@@ -138,7 +142,7 @@ func (s *Service) toldLabelEvent(target Target, number int, at time.Time) bool {
 	return ok && told.Equal(at)
 }
 
-// labelActorName names the account of a label event for the Owner.
+// labelActorName names the account of a label event for a notification.
 func labelActorName(actor github.LabelActor) string {
 	switch {
 	case actor.Login != "":
@@ -149,8 +153,8 @@ func labelActorName(actor github.LabelActor) string {
 	return "an account that cumin could not find among the newest label events"
 }
 
-// tellStatusOfAnother logs, and tells the Owner, that another account than
-// cumin-core or an Owner added the newest status label of the issue, so
+// tellStatusOfAnother logs, and notifies, that another account than
+// cumin-core or a Maintainer added the newest status label of the issue, so
 // cumin does nothing from that state: no agent, no merge, no label change.
 // It does so once for one such event, not at every poll.
 func (s *Service) tellStatusOfAnother(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, number int, label string, actor github.LabelActor) {
@@ -168,8 +172,8 @@ func (s *Service) tellStatusOfAnother(ctx context.Context, log *slog.Logger, tar
 	})
 }
 
-// tellReadyOfAnother logs, and tells the Owner, that another account than
-// the Owner added the newest cumin/status/ready of the issue, so cumin
+// tellReadyOfAnother logs, and notifies, that another account than a
+// Maintainer added the newest cumin/status/ready of the issue, so cumin
 // starts nothing for it. It does so once for one such event, not at every
 // poll: the time of the event names it.
 func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, snapshot Snapshot, number int, actor github.LabelActor) {
@@ -193,8 +197,9 @@ func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, targ
 	})
 }
 
-// startRequirement applies R3: the requirement issue moves to
-// cumin/status/implementing. No agent starts; the sub-issues start by I1.
+// startRequirement applies "mark the requirement as in work": the
+// requirement issue moves to cumin/status/implementing. No agent starts;
+// the sub-issues start by "request the implementation".
 func (s *Service) startRequirement(ctx context.Context, token string, target Target, snapshot Snapshot, a StartRequirement) error {
 	labels, err := s.moveRequirement(ctx, token, target, snapshot, a.Number, LabelImplementing)
 	if err != nil {
@@ -205,8 +210,9 @@ func (s *Service) startRequirement(ctx context.Context, token string, target Tar
 	return nil
 }
 
-// reviewRemaining applies R6: the requirement issue moves to
-// cumin/status/awaiting-plan-review, and the Owner is notified. The
+// reviewRemaining applies "ask about the remaining sub-issues": the
+// requirement issue moves to cumin/status/awaiting-plan-review, and cumin
+// sends a notification. The
 // notification follows the label change, and the next poll no longer sees
 // cumin/status/implementing, so one move sends one notification. When the
 // label cannot change, nothing is sent, and the next poll tries again.

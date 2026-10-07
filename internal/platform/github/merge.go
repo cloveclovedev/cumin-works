@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// The merge step of I6 and I12 (docs/ja/designs/poll.md, the topic on the
-// merge step): merge the pull request at the approved head commit, tell a
-// conflict apart from the other failures, and close the implementation
-// issue once when GitHub did not.
+// The merge step of "start the merge" (docs/ja/designs/poll.md, the topic
+// on the merge step): merge the pull request at the approved head commit,
+// tell a conflict apart from the other failures, and close the
+// implementation issue once when GitHub did not.
 
 // ErrHeadMoved is the answer of a merge whose sha is not the head of the
 // pull request: 409 (official: "Merge a pull request"; measured in #286,
@@ -20,8 +20,8 @@ var ErrHeadMoved = errors.New("the head of the pull request is not the approved 
 
 // ErrConflict is the answer of a merge that conflicts with the base branch:
 // 405, and the pull request then reads mergeable false. A ruleset refusal
-// is 405 as well (measured row 62), and only mergeable tells them apart
-// (measured in #286, M4 and M5).
+// is 405 as well (measured-constraints.md row 62), and only mergeable tells
+// them apart (measured in #286, M4 and M5).
 var ErrConflict = errors.New("the pull request has merge conflicts")
 
 // ErrBaseModified is the answer of a merge that GitHub refuses right after

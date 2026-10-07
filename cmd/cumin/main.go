@@ -17,7 +17,7 @@ const (
 	exitBadUsage = 2
 )
 
-// command is one subcommand that the Owner uses. The list comes from
+// command is one subcommand that the Operator uses. The list comes from
 // docs/ja/requirements/cumin-core.md.
 type command struct {
 	name    string // may have two words, such as "quota allow"

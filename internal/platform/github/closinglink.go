@@ -8,18 +8,19 @@ import (
 	"strings"
 )
 
-// I2 finds the pull request of an implementation issue by the branch that
-// cumin chose and by its author, and cumin-core adds the closing link when
-// GitHub did not make it from "Closes #N" (docs/ja/designs/poll.md, the
-// topic on the end of a run).
+// The check after the Implementer ends finds the pull request of an
+// implementation issue by the branch that cumin chose and by its author, and
+// cumin-core adds the closing link when GitHub did not make it from
+// "Closes #N" (docs/ja/designs/poll.md, the topic on the end of a run).
 
 // branchPageSize is the page size of the open pull requests of one branch.
 // A branch has one open pull request in normal work; a full page is an
-// error, so that I2 never decides on a part of the list.
+// error, so that the check after the Implementer ends never decides on a
+// part of the list.
 const branchPageSize = 100
 
 // BranchPullRequest is an open pull request of one branch, as much of it as
-// I2 needs.
+// the check after the Implementer ends needs.
 type BranchPullRequest struct {
 	Number int
 	// NodeID is the GraphQL ID; the closing link takes it.

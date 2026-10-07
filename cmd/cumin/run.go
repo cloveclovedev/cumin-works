@@ -28,8 +28,8 @@ import (
 // runRun is `cumin run`: the resident program. It loads the Host settings,
 // reads the private key of every GitHub App of each target repository owner
 // from the Keychain, creates the missing labels, and polls until SIGINT or
-// SIGTERM, or until the stop after the current runs that the Owner asked for. launchd
-// starts and restarts it.
+// SIGTERM, or until the stop after the current runs that the Operator asked
+// for. launchd starts and restarts it.
 func runRun(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cumin run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -112,9 +112,9 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		logger.Warn("global instruction file on the Host", "warning", warning)
 	}
 
-	// The notifications to the Owner. The address of the webhook is read
+	// The notifications. The address of the webhook is read
 	// once here and stays in memory (designs/cumin-core.md, the topic on
-	// notifications to the Owner).
+	// notifications).
 	notifier, destination := readNotifier(ctx, logger)
 
 	allowancePath, err := allowanceFile()
@@ -139,7 +139,8 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		IdlePollInterval: settings.IdlePollInterval,
 		Labels:           workflow.RepositoryLabels(),
 		Logger:           logger,
-		// cumin quota allow writes it; each check before a start reads it (Q2).
+		// cumin quota allow writes it; each check before a start reads it
+		// ("resume agent starts").
 		AllowancePath: allowancePath,
 		// cumin stop --after-current-runs writes it; each poll reads it.
 		StopRequestPath: stopRequestPath,
@@ -190,7 +191,7 @@ func readNotifier(ctx context.Context, logger *slog.Logger) (*notify.Notifier, s
 }
 
 // missingWebhook reports the missing Keychain item every time cumin has
-// something to tell the Owner. The poll logs the error and goes on; the
+// something to notify. The poll logs the error and goes on; the
 // comment and the label on GitHub are written either way.
 type missingWebhook struct{}
 

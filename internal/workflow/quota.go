@@ -25,15 +25,15 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/quota"
 )
 
-// quotaNotices keeps the Owner from getting the same notification of "stop agent starts" twice.
-// It lives in memory: a restart may send one more, and the state file
-// holds nothing for it (designs/quota.md, the topic on duplicate
+// quotaNotices keeps cumin from sending the same notification of "stop agent
+// starts" twice. It lives in memory: a restart may send one more, and the
+// state file holds nothing for it (designs/quota.md, the topic on duplicate
 // notifications).
 type quotaNotices struct {
-	// told holds the windows that the Owner heard about since agent starts last
+	// told holds the windows that cumin notified about since agent starts last
 	// resumed.
 	told map[quota.Name]bool
-	// unreadTold says that the Owner heard that the usage was not read,
+	// unreadTold says that cumin notified that the usage was not read,
 	// since the last read that succeeded.
 	unreadTold bool
 	// allowanceWarning is the last reason why the allowance file was not
@@ -94,7 +94,7 @@ func (s *Service) location() *time.Location {
 // was and a later poll decides again.
 //
 // It reports false when the agent must not start: the usage was not read,
-// or a window is at or above its limit. The Owner hears once for each
+// or a window is at or above its limit. cumin notifies once for each
 // cause, until agent starts resume.
 func (s *Service) quotaAllowsStart(ctx context.Context, log *slog.Logger, request string, role config.Role, target Target, number int) bool {
 	if s.Agents == nil {
@@ -104,7 +104,7 @@ func (s *Service) quotaAllowsStart(ctx context.Context, log *slog.Logger, reques
 	// A stored usage that is new enough decides, with no minimal run.
 	if usage, fresh := s.freshUsage(); fresh {
 		// Each poll decides again while the usage is new enough, so a stop
-		// is a debug line here. The Owner still hears once.
+		// is a debug line here. cumin still notifies once.
 		log.Debug("the stored quota usage is new enough; no minimal run", "request", request)
 		return s.usageAllowsStart(ctx, log, slog.LevelDebug, request, target, number, usage)
 	}
@@ -116,7 +116,7 @@ func (s *Service) quotaAllowsStart(ctx context.Context, log *slog.Logger, reques
 		return false
 	}
 	// One failed read is enough for one poll: a new minimal run would fail
-	// the same way. The first failure already told the Owner.
+	// the same way. The first failure already sent a notification.
 	if s.quotaUnreadInPoll() {
 		log.Debug("agent starts stopped: the quota usage was not read in this poll; no minimal run", "request", request)
 		return false
@@ -147,7 +147,7 @@ func (s *Service) quotaAllowsStart(ctx context.Context, log *slog.Logger, reques
 }
 
 // usageAllowsStart decides one start from a usage, stored or just read. At
-// a limit, the Owner hears once for each window, and the stop is logged at
+// a limit, cumin notifies once for each window, and the stop is logged at
 // level.
 func (s *Service) usageAllowsStart(ctx context.Context, log *slog.Logger, level slog.Level, request string, target Target, number int, usage quota.Usage) bool {
 	decision := s.decideQuota(log, usage)
@@ -282,7 +282,7 @@ func (s *Service) decideQuota(log *slog.Logger, usage quota.Usage) quota.Decisio
 
 // forgetResumedWindows takes back the mark of each window that is below its
 // limit in this read. A window that stops again later is a new stop, and
-// the Owner hears about it again, whatever the other window does.
+// cumin notifies about it again, whatever the other window does.
 func (s *Service) forgetResumedWindows(decision quota.Decision) {
 	s.quotaMu.Lock()
 	defer s.quotaMu.Unlock()
@@ -293,7 +293,7 @@ func (s *Service) forgetResumedWindows(decision quota.Decision) {
 	}
 }
 
-// tellQuotaLimit notifies the Owner once for each window that stops the
+// tellQuotaLimit notifies once for each window that stops the
 // agent starts, until agent starts resume. The mark is set before the send, so
 // that a poll and the end of a run never send the same notification twice,
 // and taken back when the channel fails, so that a later check tries again.

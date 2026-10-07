@@ -31,9 +31,9 @@ type Facts struct {
 	// the line out: a run without an issue behind it (a test).
 	IssueNumber int
 	IssueKind   IssueKind
-	// IssueOwnerLogin is the login of the Owner of the issue: the account that
-	// added the newest cumin/status/ready, when that account is the Owner.
-	// Empty says that there is no Owner login. The line stands with the
+	// IssueOwnerLogin is the login of the Issue Owner: the account that
+	// added the newest cumin/status/ready, when that account is a Maintainer.
+	// Empty says that there is no Issue Owner login. The line stands with the
 	// line of the issue.
 	IssueOwnerLogin string
 	// ProtectedPaths is the list of protected paths that applies in the
@@ -80,11 +80,11 @@ type runFacts struct {
 
 // factsBlock returns the block of labelled lines of the facts. The first
 // line says that the lines are data from cumin. The issue of the run and
-// the login of the Owner come next, then the protected paths, one entry on
-// each line, with the rules of matching. The end time is in UTC as RFC
-// 3339, whatever the location of the time is.
-// A run of the Planner has two more lines at the end: the time limits of
-// the Implementer and of the Reviewer.
+// the login of the Issue Owner come next, then the protected paths, one entry
+// on each line, with the rules of matching. The end time is in UTC as RFC
+// 3339, whatever the location of the time is. A run of the Planner has two
+// more lines at the end: the time limits of the Implementer and of the
+// Reviewer.
 func factsBlock(facts runFacts) string {
 	var b strings.Builder
 	b.WriteString("Facts of this run (data from cumin):\n")

@@ -1,9 +1,9 @@
 package workflow
 
-// This file holds the one place that stops an issue for the Owner. Every
+// This file holds the one place that stops an issue for a Maintainer. Every
 // action of issue-states.md that hands work back uses it with its own
 // name (action.go): post one comment on the issue, replace the status
-// label with cumin/status/awaiting-decision, then notify the Owner.
+// label with cumin/status/awaiting-decision, then notify.
 //
 // docs/ja/designs/poll.md, the topic on the failure paths.
 
@@ -19,12 +19,12 @@ import (
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 )
 
-// stop is one issue that cumin hands back to the Owner.
+// stop is one issue that cumin hands back to a Maintainer.
 type stop struct {
 	// action is the action of issue-states.md that stopped the issue.
 	action ActionName
-	// issue is the issue that stops: an implementation issue (I2) or a
-	// requirement issue (R2).
+	// issue is the issue that stops: an implementation issue or a
+	// requirement issue.
 	issue int
 	// labels are the labels of the issue now. An empty list means that
 	// cumin could not read them; the labels are then left alone, because
@@ -36,11 +36,12 @@ type stop struct {
 	comment string
 	// labelFirst replaces the status label before the comment is written:
 	// the stop after a blocked result. A comment that GitHub refuses then
-	// leaves the issue with the Owner, and no poll requests the work again.
+	// leaves the issue with a Maintainer, and no poll requests the work again.
 	labelFirst bool
 	// labelDone says that the caller already replaced the status label.
-	// A stop that a poll decides (I4, I15) changes the label first: a label that
-	// cumin cannot change would otherwise repeat the comment and the
+	// A stop that a poll decides ("stop for failed checks", "stop for missing
+	// checks") changes the label first: a label that cumin cannot change
+	// would otherwise repeat the comment and the
 	// notification at every poll (principle 3).
 	labelDone bool
 }
@@ -49,15 +50,15 @@ type stop struct {
 // comment was not written on the issue.
 const notWrittenNote = " cumin did not write the comment on the issue; the log of the Host holds the whole text."
 
-// stopForMaintainer posts the comment, replaces the status label, and notifies
-// the Owner, in that order; with labelFirst, the label comes before the
+// stopForMaintainer posts the comment, replaces the status label, and
+// notifies, in that order; with labelFirst, the label comes before the
 // comment. Every step is logged with the action.
 //
-// A step that fails is logged and does not stop the next one: the Owner
+// A step that fails is logged and does not stop the next one: a Maintainer
 // must learn about a stopped issue even when one call failed. Nothing is
 // undone. What cumin wrote on GitHub is the fact of the matter, and the
-// notification only asks the Owner to look. A comment that was not written
-// goes to the log as a whole, and the notification says so.
+// notification only asks to look. A comment that was not written goes to
+// the log as a whole, and the notification says so.
 func (s *Service) stopForMaintainer(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, st stop) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	log = log.With("action", st.action)
@@ -115,7 +116,8 @@ func (s *Service) stopForMaintainer(ctx context.Context, log *slog.Logger, targe
 // failure is logged at error level and undoes nothing.
 //
 // It reports false only when a channel failed to take the notification, so
-// that a caller that sends a notification once (Q1) can try again later.
+// that a caller that sends a notification once ("stop agent starts") can
+// try again later.
 // A notification that is off, or that has no channel, reports true: trying
 // again changes nothing.
 func (s *Service) notify(ctx context.Context, log *slog.Logger, enabled bool, n notify.Notification) bool {
@@ -186,9 +188,10 @@ To continue: a Maintainer reads the reason, fixes what it names, and says in a c
 `, action, reason, pr, tried)
 }
 
-// VerificationReason is the sentence of one failed check of I2. It goes
-// into the comment on the issue and into the notification, so that the
-// Owner reads the same words in both places.
+// VerificationReason is the sentence of one failed check of the pull
+// request after the Implementer ends. It goes into the comment on the issue
+// and into the notification, so that a Maintainer reads the same words in
+// both places.
 func VerificationReason(failure VerificationFailure) string {
 	switch failure {
 	case FailureNoOpenPullRequest:
@@ -203,20 +206,23 @@ func VerificationReason(failure VerificationFailure) string {
 	return "The verification of the pull request failed."
 }
 
-// LinkFailedReason is the sentence of I2 when cumin-core could not add the
-// closing link: it names the pull request and the answer of GitHub.
+// LinkFailedReason is the sentence of "stop the implementation" when
+// cumin-core could not add the closing link: it names the pull request and
+// the answer of GitHub.
 func LinkFailedReason(pullRequest int, answer string) string {
 	return fmt.Sprintf("cumin-core could not link the pull request #%d to this issue as a closing reference; GitHub answered: %s.", pullRequest, strings.TrimSuffix(answer, "."))
 }
 
-// LinkMissingReason is the sentence of I2 when GitHub accepted the closing
-// link, but the issue does not show it when cumin reads it again.
+// LinkMissingReason is the sentence of "stop the implementation" when
+// GitHub accepted the closing link, but the issue does not show it when
+// cumin reads it again.
 func LinkMissingReason(pullRequest int) string {
 	return fmt.Sprintf("cumin-core linked the pull request #%d to this issue, but the issue does not show the closing link when cumin reads it again.", pullRequest)
 }
 
-// RiskLabelReason is the sentence of I6 when the issue has no risk label,
-// or more than one: cumin reads the risk from the issue only (principle 5).
+// RiskLabelReason is the sentence of "stop the review" when the issue has no
+// risk label, or more than one: cumin reads the risk from the issue only
+// (principle 5).
 func RiskLabelReason(decision MergeDecision) string {
 	if decision == MergeTwoRiskLabels {
 		return "The pull request is approved, but this issue has more than one risk label, so cumin does not merge it."
@@ -231,8 +237,9 @@ func ConflictNotResolvedReason(pullRequest int) string {
 	return fmt.Sprintf("The Implementer reported done after the conflict resolution, but the head of the pull request #%d is still the commit that conflicted with the default branch.", pullRequest)
 }
 
-// UnreportedChecksReason is the sentence of I15: the facts that cumin sees,
-// without a cause. It names the head commit, each required check that has
+// UnreportedChecksReason is the sentence of "stop for missing checks": the
+// facts that cumin sees, without a cause. It names the head commit, each
+// required check that has
 // not reported, and the time that cumin waited. With no open pull request,
 // it says that, and the time that cumin waited.
 func UnreportedChecksReason(a StopForUnreportedChecks) string {
@@ -261,13 +268,13 @@ func MergeFailedReason(pullRequest int, answer string) string {
 }
 
 // CloseFailedReason is the sentence of a close after the merge that
-// failed. The pull request is merged; the Owner closes the issue.
+// failed. The pull request is merged; a Maintainer closes the issue.
 func CloseFailedReason(pullRequest int, answer string) string {
 	return fmt.Sprintf("cumin-core merged the pull request #%d, but could not close this issue; GitHub answered: %s. Close this issue by hand.", pullRequest, strings.TrimSuffix(answer, "."))
 }
 
-// SplitReason is the sentence of "stop the split for the Owner" when the
-// split fails a check of R2 after two requests, for the comment and the
+// SplitReason is the sentence of "stop the split" when the split fails the
+// check of the split after two requests, for the comment and the
 // notification alike.
 func SplitReason(v SplitVerification) string {
 	failed := "the verification of the split failed"
@@ -299,7 +306,7 @@ func ReviewerNotStartedReason() string {
 }
 
 // AfterAbnormalEndReason adds, to the reason of a stop, the kind of the
-// abnormal end of the run of the role that the stop follows: the Owner
+// abnormal end of the run of the role that the stop follows: a Maintainer
 // needs the kind to know where to look.
 func AfterAbnormalEndReason(reason, role string, kind fmt.Stringer) string {
 	return fmt.Sprintf("%s The last %s run ended abnormally (%s).", reason, role, kind)
