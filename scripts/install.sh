@@ -1,10 +1,10 @@
 #!/bin/sh
-# Build cumin and put it where the Owner and launchd can run it.
+# Build cumin and put it where the Operator and launchd can run it.
 #
 # Usage:
 #   scripts/install.sh [--prefix <dir>] [--restart]
 #
-# The default prefix is ~/.local/bin, a directory of the Owner's own user,
+# The default prefix is ~/.local/bin, a directory of the Operator's own user,
 # so no sudo is needed. With --restart, the LaunchAgent is restarted when it
 # is loaded, so that the new binary takes over. The LaunchAgent holds the
 # path of cumin as it is, so it does not have to be written again.
@@ -50,7 +50,7 @@ install -m 0755 "$staging/cumin" "$prefix/cumin" || die "cannot install into $pr
 echo "installed: $prefix/cumin"
 
 # A prefix that is not on PATH still works for launchd, because the plist
-# holds the full path, but the Owner could not run "cumin" by name.
+# holds the full path, but the Operator could not run "cumin" by name.
 on_path=0
 IFS=:
 for dir in $PATH; do

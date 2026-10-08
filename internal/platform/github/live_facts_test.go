@@ -149,9 +149,9 @@ func TestLiveGitHubFacts(t *testing.T) {
 			// With no comment there is no notification to confirm.
 			t.Errorf("fact 10: the comment was not created: status %d: %s", resp.status, resp.message())
 		}
-		l.record("10", "A comment of the cumin-core App that mentions a person (row 19)", "The person gets a notification", fmt.Sprintf("Comment posted: status %d. The Maintainer confirms the notification by hand", resp.status))
+		l.record("10", "A comment of the cumin-core App that mentions a person (measured-constraints.md row 19)", "The person gets a notification", fmt.Sprintf("Comment posted: status %d. The Maintainer confirms the notification by hand", resp.status))
 	} else {
-		l.record("10", "A comment of the cumin-core App that mentions a person (row 19)", "The person gets a notification", "Not run: `CUMIN_LIVE_MENTION` is not set")
+		l.record("10", "A comment of the cumin-core App that mentions a person (measured-constraints.md row 19)", "The person gets a notification", "Not run: `CUMIN_LIVE_MENTION` is not set")
 	}
 
 	// Fact 3: a required check that an `if` condition skipped does not stop the merge.

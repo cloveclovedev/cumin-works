@@ -5,7 +5,7 @@ package main
 // It runs only with CUMIN_LIVE=1. docs/ja/development/live-tests.md says how
 // to prepare the Host and how to run it.
 //
-// The test plays the Owner: it writes the requirement issue, settles the risk
+// The test plays a Maintainer: it writes the requirement issue, settles the risk
 // labels, adds cumin/status/ready, and approves the risk/medium pull request.
 // It does this with the `gh` login of the Host, which stays in the `gh`
 // processes of this test and never reaches cumin or an agent. Everything
@@ -437,7 +437,7 @@ func newE2E(t *testing.T) *e2e {
 	}
 	e.logFrom = info.Size()
 
-	// The gh login is the Owner: a person with write permission or more.
+	// The gh login is a Maintainer: a person with write permission or more.
 	var user e2eUser
 	if err := json.Unmarshal([]byte(e.gh(t, "api", "user")), &user); err != nil {
 		t.Fatal(err)

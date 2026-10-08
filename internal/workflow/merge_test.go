@@ -411,7 +411,7 @@ func TestAnUnknownMergeStateWaitsForALaterPoll(t *testing.T) {
 }
 
 // "request a conflict resolution": a resolution that ends with done and leaves the head at the commit
-// that conflicted stops the issue once for the Owner: the head commit is
+// that conflicted stops the issue once for a Maintainer: the head commit is
 // older than cumin/status/implementing. The polls that follow send nothing
 // more.
 func TestAResolutionWhileCheckingThatLeavesTheHeadStopsTheIssueOnce(t *testing.T) {
