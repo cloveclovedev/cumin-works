@@ -14,12 +14,12 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 
 | 依頼の種類 | きっかけ | セッション |
 |---|---|---|
-| 実装 | I1: `cumin/status/ready` の付いた実装Issueに着手する。Pull Requestはまだない | 新しいセッション |
-| 続き | I1: Maintainerが差し戻したか回答したあとに、`cumin/status/ready` が付け直された。Pull Requestは既にある | 新しいセッション |
-| checkの修正 | I4: 必須のcheckが失敗した | 直前と同じセッション |
-| 指摘の修正 | I5: Reviewerが `REQUEST_CHANGES` を出した | 直前と同じセッション |
-| 衝突の解消 | I6、I12: mergeしようとしたら衝突した。I14: checkを待つ間に衝突した | 直前と同じセッション |
-| Maintainerのレビューへの対応 | I13: MaintainerがPull Requestに `REQUEST_CHANGES` を出した | 直前と同じセッション。MaintainerのレビューとそのコメントをGitHubから読み、Reviewerの指摘と同じく、返答のテンプレートで各コメントに答える |
+| 実装 | 「request the implementation」: `cumin/status/ready` の付いた実装Issueに着手する。Pull Requestはまだない | 新しいセッション |
+| 続き | 「request the implementation」: Maintainerが差し戻したか回答したあとに、`cumin/status/ready` が付け直された。Pull Requestは既にある | 新しいセッション |
+| checkの修正 | 「request a check fix」: 必須のcheckが失敗した | 直前と同じセッション |
+| 指摘の修正 | 「request a review fix」: Reviewerが `REQUEST_CHANGES` を出した | 直前と同じセッション |
+| 衝突の解消 | 「request a conflict resolution」: mergeしようとしたら衝突した。または、checkを待つ間に衝突した | 直前と同じセッション |
+| Maintainerのレビューへの対応 | 「send back for changes」: MaintainerがPull Requestに `REQUEST_CHANGES` を出した | 直前と同じセッション。MaintainerのレビューとそのコメントをGitHubから読み、Reviewerの指摘と同じく、返答のテンプレートで各コメントに答える |
 
 ## 入力
 
@@ -95,7 +95,7 @@ cuminは、Implementerの `done` という申告ではなく、この事実で�
 - 保護されたパスの一覧は、Pull Requestのブランチではなくmainにあるものを読む。一覧そのもの (`.cumin/`) も保護されたパスに含める。こうしないと、Implementerが同じPull Requestの中で一覧を書き換えて、checkをすり抜けられる。
 - Implementerは `.github/workflows` を変更する権限を持たないので、workflowそのものを書き換えることもできない。
 
-checkが失敗したときは、他の必須のcheckと同じくI4に乗り、cuminがImplementerに修正を依頼する。cuminに専用の仕組みは要らない。
+checkが失敗したときは、他の必須のcheckと同じく「request a check fix」に乗り、cuminがImplementerに修正を依頼する。cuminに専用の仕組みは要らない。
 
 ## blocked を返すとき
 

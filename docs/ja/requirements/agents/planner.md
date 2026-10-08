@@ -14,8 +14,8 @@ cuminが次のときに起動する。番号は [Issueのラベルと状態遷�
 
 | 依頼の種類 | きっかけ | セッション |
 |---|---|---|
-| 分割 | R1: Maintainerが、`cumin/type/requirement` の付いた要求Issueに `cumin/status/ready` を付けた | 新しいセッション |
-| 受け入れの確認 | R4: 要求Issueのsub-issueが全て閉じた | 新しいセッション |
+| 分割 | 「request the split」: Maintainerが、`cumin/type/requirement` の付いた要求Issueに `cumin/status/ready` を付けた | 新しいセッション |
+| 受け入れの確認 | 「request the acceptance check」: 要求Issueのsub-issueが全て閉じた | 新しいセッション |
 
 ## 入力
 
@@ -81,7 +81,7 @@ GitHub上では `cumin-planner` として振る舞う。持っている権限は
 
 ## riskの基準
 
-riskは `risk/low`、`risk/medium`、`risk/high` の3段階である。段階の違いは、mergeを誰が判断するかに効く。`risk/low` はcuminがmergeし、`risk/medium` と `risk/high` はMaintainerがmergeを判断する (I6、I7)。
+riskは `risk/low`、`risk/medium`、`risk/high` の3段階である。段階の違いは、mergeを誰が判断するかに効く。`risk/low` はcuminがmergeし、`risk/medium` と `risk/high` はMaintainerがmergeを判断する (「start the merge」、「ask for the merge decision」)。
 
 どの変更をどの段階にするかの基準は、PlannerとReviewerがそのまま受け取る英語の文章で、設定で決まる。初期値は [disciplines/software-engineering/risk-criteria.md](../../../../disciplines/software-engineering/risk-criteria.md) で、Hostかリポジトリに `risk-criteria.md` があれば、cuminはその内容を代わりに指示に入れる (置き場所と優先順位は [cumin本体の要件](../cumin-core.md) の「設定」にある)。Reviewerにも、同じ基準が渡る。
 

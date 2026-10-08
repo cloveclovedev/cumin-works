@@ -46,8 +46,6 @@ Operator:
 
 - 通知先は、Hostの設定で決まる。誰がそれを読むかは、その設定しだいである。そこで、文書では「通知する」とだけ書き、相手の名前を書かない
 
-ほかの文書で「Owner」とだけ書いている箇所は、上の3つの名前への書き換えが済むまで、Maintainerのことである。
-
 ## 受け持つこと
 
 | 受け持つこと | 内容 |
@@ -56,7 +54,7 @@ Operator:
 | 状態の管理 | `cumin/status/*` のラベルを付け替える。条件は [Issueのラベルと状態遷移](workflow/issue-states.md) に従う。実装Issueの状態とriskのラベルを、そのIssueを閉じるPull Requestにもコピーする |
 | Agentの起動 | roleごとの指示、作業場所、GitHub Appのtokenを用意して、Agentを起動する。終了を待ち、結果のJSONを検証する |
 | 事実の確認 | Agentが `done` を返したあと、完了したかどうかをGitHub上の事実で確かめる |
-| merge | `risk/low` で、Reviewerが承認し、必須のcheckが通ったPull Requestをmergeする (I6)。`risk/medium` と `risk/high` は、Maintainerが承認したあとにmergeする (I12)。mergeの方法は設定で選べる (初期値はsquash)。mergeのあと、GitHubが実装Issueを閉じなければ、そのmergeの手順の中で1回だけ閉じる |
+| merge | `risk/low` で、Reviewerが承認し、必須のcheckが通ったPull Requestをmergeする (「start the merge」)。`risk/medium` と `risk/high` は、Maintainerが承認したあとにmergeする (「start the merge」)。mergeの方法は設定で選べる (初期値はsquash)。mergeのあと、GitHubが実装Issueを閉じなければ、そのmergeの手順の中で1回だけ閉じる |
 | フォローアップノート | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、フォローアップノートとして要求Issueに転記する。フォローアップノートは、要求Issueに付ける1つのコメントである。AIの判断は使わず、決まった形式から機械的に拾う |
 | 通知 | 人の対応が要るとき、Discordのwebhookで知らせる |
 | 利用枠の管理 | 使用率を読み、上限に達している間はAgentの起動を止める。weekly枠は週を通して配分し、5h枠はOperatorの分を時間帯ごとに残す |
@@ -162,7 +160,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 - 対応されなかった指摘とは、`cumin-reviewer` の `(non-blocking)` の指摘のうち、`Fixed` か `Answer` で始まる返答が付いていないものである。ラベルが `praise` と `note` の指摘は拾わない
 - 拾うものが何もなければ、フォローアップノートを書かない
 - フォローアップノートを書くのは、要求Issueが開いている間だけである。閉じた要求Issueには書かない
-- sub-issueが全て閉じたときは、フォローアップノートを、受け入れの確認の依頼 (R4) より先に書く。Plannerが確認を始めるときにも、Maintainerが通知を見て来たときにも、フォローアップノートがそろっている
+- sub-issueが全て閉じたときは、フォローアップノートを、受け入れの確認の依頼 (「request the acceptance check」) より先に書く。Plannerが確認を始めるときにも、Maintainerが通知を見て来たときにも、フォローアップノートがそろっている
 - 1つのPull Requestについて、フォローアップノートは1つだけにする。コメントに目印を埋め込み、cuminが再起動しても二重に書かない
 - 形式は [follow-up-note.md](../../../templates/follow-up-note.md) に従う
 - フォローアップノートは記録である。Issueにはしない。Maintainerは受け入れのときに一覧を見て、やりたいものを新しい要求Issueに書く。そこからは通常のフローに乗り、Plannerが実装Issueに分割する
@@ -173,14 +171,14 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 
 | 知らせるとき | 表の番号 |
 |---|---|
-| 分割結果の確認が必要 | R2 |
-| 残りのsub-issueの確認が必要 | R6 |
-| 要求が受け入れ可能になった | R7 |
-| mergeの判断が必要 | I7 |
-| Agentが先に進めない。指摘が残った。mergeできない、またはmergeのあとに実装Issueを閉じられない | I2、I4、I6、I8、I10、I12、R2、R4 |
-| 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、Agentの起動を止めた | Q1 |
-| Maintainerが動かなければ何も進まない (進められるIssueがなく、動いているAgentもなく、check待ちのIssueもない) | Q4 |
-| Maintainerでないアカウントが `cumin/status/ready` を付けたので、着手しなかった | R1、I1 (Maintainerのready) |
+| 分割結果の確認が必要 | 「ask for the plan review」 |
+| 残りのsub-issueの確認が必要 | 「ask about the remaining sub-issues」 |
+| 要求が受け入れ可能になった | 「ask for the acceptance」 |
+| mergeの判断が必要 | 「ask for the merge decision」 |
+| Agentが先に進めない。指摘が残った。mergeできない、またはmergeのあとに実装Issueを閉じられない | 「stop the implementation」、「stop for failed checks」、「stop the merge」、「stop at the round limit」、「stop the review」、「stop the split」、「stop the acceptance check」 |
+| 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、Agentの起動を止めた | 「stop agent starts」 |
+| Maintainerが動かなければ何も進まない (進められるIssueがなく、動いているAgentもなく、check待ちのIssueもない) | 「tell that cumin waits」 |
+| Maintainerでないアカウントが `cumin/status/ready` を付けたので、着手しなかった | 「request the split」、「request the implementation」 (Maintainerのready) |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
 
 通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
@@ -202,7 +200,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 | 対象のリポジトリ | cuminが確かめるリポジトリの一覧 | なし | できない |
 | 定期確認の間隔 | GitHubを確かめる間隔 | 60秒 | できない |
 | アイドルの間隔 | 作業中のIssueがないリポジトリを確かめる間隔。対象のリポジトリが増えても、GitHub GraphQLのポイントの枠に収めるためである。定期確認の間隔より短くできない | 5分 | できない |
-| リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、同時に進めるIssueの数の上限。数えるのは、`cumin/status/planning` と `cumin/status/accepting` の要求Issueと、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing`、`cumin/status/merging` の開いている実装Issueである。`cumin/status/implementing` の要求Issue (R3) は、Agentが動いていないので数えない。人の番を待っているIssueも、`cumin/status/ready` が付いているIssueも数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
+| リポジトリごとに同時に進めるIssueの数 | 1つのリポジトリで、同時に進めるIssueの数の上限。数えるのは、`cumin/status/planning` と `cumin/status/accepting` の要求Issueと、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing`、`cumin/status/merging` の開いている実装Issueである。`cumin/status/implementing` の要求Issue (「mark the requirement as in work」) は、Agentが動いていないので数えない。人の番を待っているIssueも、`cumin/status/ready` が付いているIssueも数えない。違うリポジトリのIssueは、並行して進めてよい | 1 | できない |
 | 5h枠のしきい値 | 5h枠の使用率がこれ以上なら、Agentの起動を止める。時間帯ごとに指定できる。どの時間帯にも入らない時刻には、初期のしきい値を使う | 85% | できない |
 | weekly枠の目標 | ペースの上限の式の目標。weekly枠に時間帯はない | 85% | できない |
 | weekly枠の前倒し | ペースの上限の式で、経過時間に足す時間 | 1日 | できない |
@@ -211,7 +209,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 | roleとGitHub Appの対応 | roleごとのAppのClient ID。秘密鍵がHostにあるので、Hostの設定に書く。リポジトリの持ち主 (Organization) ごとに指定できる | なし | できない |
 | レビューのラウンドの上限 | これを超えて指摘が残ったら、Maintainerに回す | 3 | できる |
 | checkの修正を依頼する回数の上限 | これを超えたら、Maintainerに回す | 3 | できる |
-| checkの待ち時間 | 必須のcheckが全て結果を返すのを待つ時間。過ぎたら、Maintainerに回す ([Issueのラベルと状態遷移](workflow/issue-states.md) のI15)。CIの長さはリポジトリごとに違うので、リポジトリで上書きできる | 60分 | できる |
+| checkの待ち時間 | 必須のcheckが全て結果を返すのを待つ時間。過ぎたら、Maintainerに回す ([Issueのラベルと状態遷移](workflow/issue-states.md) の「stop for missing checks」)。CIの長さはリポジトリごとに違うので、リポジトリで上書きできる | 60分 | できる |
 | roleごとのCLI | roleごとに、どのCLIとモデルでAgentを動かすか | Claude Code | できる |
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
 | 優先度のラベル | 着手の順番を決めるラベルの一覧。優先度の高い順に書く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「着手の順番」)。設定に書いたラベルはOrganizationのものなので、cuminは作らず、変えない。足りないラベルは、リポジトリの準備のスクリプトが、実行した人に尋ねてから作る。設定に書かなければ初期値のラベルを使い、足りないものをcuminが作る | `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` | リポジトリだけで決める |
@@ -260,11 +258,11 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 18 | `cumin/status/awaiting-merge-decision` の実装IssueのPull Requestを、Maintainerが今の先頭のコミットでGitHubのレビューにより承認する | cuminがmergeし、実装Issueが閉じる。古いコミットへの承認、botの承認、writeの権限のないアカウントの承認、あとから `REQUEST_CHANGES` で覆された承認では、mergeしない |
 | 19 | cuminがmergeしたあと、GitHubが実装Issueを閉じない | cuminが1回だけ閉じる。Maintainerがそれを開き直しても、あとの定期確認では閉じない |
 | 20 | 着手できるIssueが2つあり、番号の大きいほうに、より高い優先度のラベルが付いている | 優先度の高いほうから着手する。同じ優先度なら、番号の小さいほうから着手する。優先度のラベルがないIssueは、最後に着手する。設定でラベルの名前を変えると、その名前で順番が決まる |
-| 21 | 必須のcheckを待つ実装Issueが1つだけあり、動いているAgentもいない | 待ち状態の通知 (Q4) を出さない。checkが終わって進み、Maintainerの対応だけが残ったときに、1回だけ通知する |
+| 21 | 必須のcheckを待つ実装Issueが1つだけあり、動いているAgentもいない | 待ち状態の通知 (「tell that cumin waits」) を出さない。checkが終わって進み、Maintainerの対応だけが残ったときに、1回だけ通知する |
 | 22 | `cumin/status/awaiting-merge-decision` の実装IssueのPull Requestに、Maintainerが今の先頭のコミットで `REQUEST_CHANGES` を出す | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerの直前のセッションで直させる。直したあと、check、Reviewerのレビューを経て、もう一度Maintainerの判断を待つ。Implementerがコミットせずに答えたときも、もう一度Maintainerの判断を待ち、同じレビューで2回目の差し戻しはしない。botや、writeの権限のないアカウントの `REQUEST_CHANGES` では、何もしない |
 | 23 | Maintainerでないアカウントが、Issueに `cumin/status/ready` を付ける | 着手しない。ラベルは替えない。1回だけ通知する。Maintainerが `cumin/status/ready` を付け直すと着手する |
 | 24 | `cumin/status/checking` または `cumin/status/awaiting-merge-decision` の実装IssueのPull Requestが、既定のブランチと衝突する | cuminが実装Issueを `cumin/status/implementing` に替え、Implementerに衝突の解消を1回だけ依頼する。GitHubがまだ計算している (`UNKNOWN`) 間は依頼しない。checkの修正を依頼した回数は増えない |
-| 25 | `cumin/status/checking` の実装Issueで、必須のcheckが、checkの待ち時間を過ぎても先頭のコミットで結果を返さない | `cumin/status/awaiting-decision` に替え、先頭のコミット、結果を返していない必須のcheck、待った時間を添えて、1回だけ通知する。待ち時間の内に結果が返れば、I3かI4で進む。開いているPull Requestがなくなったときも、待ち時間を過ぎたら、そのことを添えて1回だけ通知する |
+| 25 | `cumin/status/checking` の実装Issueで、必須のcheckが、checkの待ち時間を過ぎても先頭のコミットで結果を返さない | `cumin/status/awaiting-decision` に替え、先頭のコミット、結果を返していない必須のcheck、待った時間を添えて、1回だけ通知する。待ち時間の内に結果が返れば、「request the review」、「request a check fix」、「stop for failed checks」のどれかで進む。開いているPull Requestがなくなったときも、待ち時間を過ぎたら、そのことを添えて1回だけ通知する |
 | 26 | 作業中のIssueがないリポジトリと、作業中のIssueがあるリポジトリを、同時に対象にする | 作業中のリポジトリは定期確認の間隔で、作業中でないリポジトリはアイドルの間隔で確かめる。作業中でないリポジトリでMaintainerが `cumin/status/ready` を付けると、アイドルの間隔のうちに着手する |
 | 27 | Agentの実行が終わったあと、GitHubの読み取りが1回だけネットワークの誤りで失敗する | 数秒あけた読み取りで成功し、そのまま次の手順に進む |
 | 28 | Agentの実行が終わったあと、GitHubの読み取りが、やり直しても一時的な失敗で終わる | Issueはラベルを保つ。あとの定期確認で読み直し、成功したら、失敗しなかったときと同じ動作をする。書き込みは二重にならない。cuminを再起動しても、同じ結果になる |
@@ -273,4 +271,4 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 31 | 利用枠が上限に達している間に、実装Issueの必須のcheckが通る | Reviewerを起動しない。実装Issueは `cumin/status/checking` のまま残り、ラベルは替わらない。上限のあとの定期確認で、レビューが1回だけ依頼される |
 | 32 | 利用枠が上限に達している間に、Reviewerが `REQUEST_CHANGES` を出して終わる | Implementerを起動しない。実装Issueは `cumin/status/reviewing` のまま残る。上限のあとの定期確認で、指摘の修正が1回だけ依頼される |
 | 33 | 利用枠が上限に達している間に、承認されたPull Requestが `cumin/status/merging` にある | mergeする。Agentを起動しない動作は、上限に関係なく進む |
-| 34 | 利用枠だけで待っているIssueがあり、動いているAgentがいない | 「待ち状態になった」の通知 (Q4) を出さない。利用枠の通知 (Q1) は、1つの上限につき1回のままである |
+| 34 | 利用枠だけで待っているIssueがあり、動いているAgentがいない | 「待ち状態になった」の通知 (「tell that cumin waits」) を出さない。利用枠の通知 (「stop agent starts」) は、1つの上限につき1回のままである |

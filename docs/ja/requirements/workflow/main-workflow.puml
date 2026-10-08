@@ -125,13 +125,13 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
 
   alt approved, risk/low
     Cumin -> Tracker : change the label to cumin/status/merging
-    Cumin -> Repo : merge at the next poll (I6)
+    Cumin -> Repo : merge at the next poll
     Cumin -> Tracker : close the implementation issue once, when GitHub did not
   else approved, risk/medium or risk/high
     Cumin -> Tracker : change the label to cumin/status/awaiting-merge-decision
     Cumin ->] : notify: the merge needs a decision
     Maintainer -> Repo : approve the head commit with a review
-    Cumin -> Tracker : change the label to cumin/status/merging (I12)
+    Cumin -> Tracker : change the label to cumin/status/merging
     Cumin -> Repo : merge at the next poll
     Cumin -> Tracker : close the implementation issue once, when GitHub did not
     note right of Maintainer
@@ -150,7 +150,7 @@ loop while an issue has cumin/status/ready, its dependencies are done, and AI re
   note over Maintainer, Cumin
     While waiting for a Maintainer, cumin goes on with other issues that do not depend on it.
     A Maintainer's "go ahead" for work is adding cumin/status/ready.
-    A Maintainer's "merge it" is an approving review of the head commit (I12).
+    A Maintainer's "merge it" is an approving review of the head commit.
   end note
 end
 
