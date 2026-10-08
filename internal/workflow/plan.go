@@ -10,7 +10,6 @@ package workflow
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -240,13 +239,10 @@ func (s *Service) goPlanner(ctx context.Context, target Target, settings *Reposi
 	if s.Agents == nil {
 		return fmt.Errorf("%s: request the %s for issue #%d: no agent service is configured", req.action(), req.kind, number)
 	}
-	done := s.markInProgress(ctx, target.Repository.String(), number, agentRun{role: config.RolePlanner, request: req.kind, title: req.title})
-	s.running.Add(1)
-	go func() {
-		defer s.running.Done()
-		defer done()
+	run := agentRun{role: config.RolePlanner, request: req.kind, title: req.title}
+	s.goInWork(ctx, target, number, run, func(ctx context.Context) {
 		s.runPlanner(ctx, target, settings, number, req)
-	}()
+	})
 	return nil
 }
 
@@ -265,7 +261,6 @@ func (s *Service) goPlanner(ctx context.Context, target Target, settings *Reposi
 func (s *Service) runPlanner(ctx context.Context, target Target, settings *RepositorySettings, number int, req plannerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RolePlanner)
 	s.noteRequest(target.Repository.String(), number, config.RolePlanner, req.kind)
-	role := settings.Settings.Roles[config.RolePlanner]
 	checkout := agent.Checkout{
 		Owner: target.Repository.Owner,
 		Repo:  target.Repository.Name,
@@ -298,16 +293,7 @@ func (s *Service) runPlanner(ctx context.Context, target Target, settings *Repos
 		}
 	}
 	log.Info(string(req.action())+": requested the Planner", "kind", req.kind)
-	request := agent.StartRequest{
-		Owner:        target.Repository.Owner,
-		Repo:         target.Repository.Name,
-		Role:         config.RolePlanner,
-		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindRequirement, IssueOwnerLogin: req.issueOwnerLogin, ProtectedPaths: settings.ProtectedPaths},
-		Text:         req.text(target.Repository.String(), number, workDir),
-		WorkDir:      workDir,
-		Settings:     &role,
-	}
+	request := startRequest(target, settings, config.RolePlanner, number, req.issueOwnerLogin, req.text(target.Repository.String(), number, workDir), workDir)
 	if req.work == workAcceptanceCheck {
 		request.SessionID = req.sessionID
 		s.runAcceptanceCheck(ctx, log, target, settings, number, request, req.permit, req.again, req.count)
@@ -341,29 +327,19 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 	again, counted, permit := req.again, req.count, req.permit
 	action := req.action()
 	for {
-		run, err := s.startAgent(ctx, permit, request)
-		var abnormal *agent.AbnormalEnd
-		switch {
-		case errors.As(err, &abnormal):
-			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-				"session_id", abnormal.SessionID, "detail", abnormal.Detail)
-			if ctx.Err() != nil {
-				return
-			}
-		case err != nil:
-			log.Error("the agent was not started", "error", err.Error())
+		end := s.runRequest(ctx, log, target, number, permit, request, keepNoSession)
+		switch end.kind {
+		case runStopping:
+			return
+		case runNotStarted:
 			s.notStarted(log, repository, number, workSplit, counted)
 			return
-		default:
-			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-			s.quotaAfterRun(ctx, log, target, number, run)
-			if run.Result.Result != agent.ResultDone {
-				log.Warn("the agent returned blocked", "reason", firstLine(strings.TrimSpace(run.Result.BlockedReason)))
-				if err := s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.work.stop(), run.Result.BlockedReason, true); err != nil {
-					log.Warn(string(req.work.stop())+": the stop after blocked failed for a temporary reason; the next poll decides", "reason", err.Error())
-				}
-				return
+		case runBlocked:
+			log.Warn("the agent returned blocked", "reason", firstLine(strings.TrimSpace(end.run.Result.BlockedReason)))
+			if err := s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.work.stop(), end.run.Result.BlockedReason, true); err != nil {
+				log.Warn(string(req.work.stop())+": the stop after blocked failed for a temporary reason; the next poll decides", "reason", err.Error())
 			}
+			return
 		}
 
 		token, err := target.Token(ctx)
@@ -444,30 +420,18 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 		action = ActionRequestTheAcceptanceCheckAgain
 	}
 	for {
-		run, err := s.startAgent(ctx, permit, request)
-		var abnormal *agent.AbnormalEnd
-		switch {
-		case errors.As(err, &abnormal):
-			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-				"session_id", abnormal.SessionID, "detail", abnormal.Detail)
-			if ctx.Err() != nil {
-				return
-			}
-			s.keepSession(log, target, config.RolePlanner, number, abnormal.SessionID)
-		case err != nil:
-			log.Error("the agent was not started", "error", err.Error())
+		end := s.runRequest(ctx, log, target, number, permit, request, keepResumableSession)
+		switch end.kind {
+		case runStopping:
+			return
+		case runNotStarted:
 			s.notStarted(log, repository, number, workAcceptanceCheck, counted)
 			return
-		default:
-			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-			s.quotaAfterRun(ctx, log, target, number, run)
-			if run.Result.Result != agent.ResultDone {
-				log.Warn("the agent returned blocked", "reason", firstLine(strings.TrimSpace(run.Result.BlockedReason)))
-				_ = s.stopAfterPlannerBlocked(ctx, log, target, settings, number, ActionStopTheAcceptanceCheck, run.Result.BlockedReason, false)
-				s.clearRequirementState(log, repository, number)
-				return
-			}
-			s.keepSession(log, target, config.RolePlanner, number, run.SessionID)
+		case runBlocked:
+			log.Warn("the agent returned blocked", "reason", firstLine(strings.TrimSpace(end.run.Result.BlockedReason)))
+			_ = s.stopAfterPlannerBlocked(ctx, log, target, settings, number, ActionStopTheAcceptanceCheck, end.run.Result.BlockedReason, false)
+			s.clearRequirementState(log, repository, number)
+			return
 		}
 
 		token, err := target.Token(ctx)

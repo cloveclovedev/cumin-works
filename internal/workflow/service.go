@@ -1153,6 +1153,105 @@ func (s *Service) startAgent(ctx context.Context, permit StartPermit, request ag
 	return s.Agents.Start(ctx, request)
 }
 
+// startRequest builds the start request of a role for an issue, with the
+// facts of the run. The Planner works on a requirement issue, and the
+// Implementer and the Reviewer on an implementation issue. The caller sets
+// the session to resume.
+func startRequest(target Target, settings *RepositorySettings, role config.Role, number int, issueOwnerLogin, text, workDir string) agent.StartRequest {
+	kind := agent.IssueKindImplementation
+	if role == config.RolePlanner {
+		kind = agent.IssueKindRequirement
+	}
+	roleSettings := settings.Settings.Roles[role]
+	return agent.StartRequest{
+		Owner:        target.Repository.Owner,
+		Repo:         target.Repository.Name,
+		Role:         role,
+		RiskCriteria: settings.RiskCriteria,
+		Facts:        agent.Facts{IssueNumber: number, IssueKind: kind, IssueOwnerLogin: issueOwnerLogin, ProtectedPaths: settings.ProtectedPaths},
+		Text:         text,
+		WorkDir:      workDir,
+		Settings:     &roleSettings,
+	}
+}
+
+// runEnd is the kind of the end of one request to an agent.
+type runEnd int
+
+const (
+	// runDone: the agent returned done.
+	runDone runEnd = iota
+	// runBlocked: the agent returned blocked.
+	runBlocked
+	// runAbnormal: the run ended abnormally, and cumin goes on.
+	runAbnormal
+	// runNotStarted: the agent was not started.
+	runNotStarted
+	// runStopping: the run ended abnormally while cumin is stopping. The
+	// label stays, and the next start of cumin decides from the facts on
+	// GitHub.
+	runStopping
+)
+
+// requestEnd is the end of one request to an agent: its kind, the run of a
+// done or a blocked result, and the abnormal end.
+type requestEnd struct {
+	kind     runEnd
+	run      *agent.Run
+	abnormal *agent.AbnormalEnd
+}
+
+// keptSession says which ends of a run keep the session of the run.
+type keptSession int
+
+const (
+	// keepNoSession: every request starts a new session (the split).
+	keepNoSession keptSession = iota
+	// keepEndedSession: a run that ended, done or blocked (the Implementer
+	// and the Reviewer).
+	keepEndedSession
+	// keepResumableSession: a done result and an abnormal end, which the
+	// second request resumes (the acceptance check).
+	keepResumableSession
+)
+
+// runRequest runs one request to an agent and returns its end. It is the
+// only caller of startAgent. It logs the end, applies "stop agent starts"
+// from the usage of the run, and keeps the session as keep says. What
+// follows the end (the counts, the second request, the stop) belongs to the
+// caller.
+func (s *Service) runRequest(ctx context.Context, log *slog.Logger, target Target, number int, permit StartPermit, request agent.StartRequest, keep keptSession) requestEnd {
+	run, err := s.startAgent(ctx, permit, request)
+	var abnormal *agent.AbnormalEnd
+	switch {
+	case errors.As(err, &abnormal):
+		log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
+			"session_id", abnormal.SessionID, "detail", abnormal.Detail)
+		if ctx.Err() != nil {
+			return requestEnd{kind: runStopping, abnormal: abnormal}
+		}
+		if keep == keepResumableSession {
+			s.keepSession(log, target, request.Role, number, abnormal.SessionID)
+		}
+		return requestEnd{kind: runAbnormal, abnormal: abnormal}
+	case err != nil:
+		log.Error("the agent was not started", "error", err.Error())
+		return requestEnd{kind: runNotStarted}
+	}
+	log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
+	s.quotaAfterRun(ctx, log, target, number, run)
+	if run.Result.Result != agent.ResultDone {
+		if keep == keepEndedSession {
+			s.keepSession(log, target, request.Role, number, run.SessionID)
+		}
+		return requestEnd{kind: runBlocked, run: run}
+	}
+	if keep != keepNoSession {
+		s.keepSession(log, target, request.Role, number, run.SessionID)
+	}
+	return requestEnd{kind: runDone, run: run}
+}
+
 // goImplementer runs one Implementer request in its own goroutine, so that
 // the poll goes on while the agent works. What the goroutine does (the
 // worktree, the start, the end of the run) is only logged and handled by
@@ -1162,13 +1261,10 @@ func (s *Service) goImplementer(ctx context.Context, target Target, settings *Re
 	if s.Agents == nil {
 		return errors.New("no agent service is configured")
 	}
-	done := s.markInProgress(ctx, target.Repository.String(), number, agentRun{role: config.RoleImplementer, request: req.kind, title: req.title})
-	s.running.Add(1)
-	go func() {
-		defer s.running.Done()
-		defer done()
+	run := agentRun{role: config.RoleImplementer, request: req.kind, title: req.title}
+	s.goInWork(ctx, target, number, run, func(ctx context.Context) {
 		s.runImplementer(ctx, target, settings, number, req)
-	}()
+	})
 	return nil
 }
 
@@ -1283,7 +1379,6 @@ func (s *Service) readStatusActor(ctx context.Context, token string, target Targ
 func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
 	s.noteRequest(target.Repository.String(), number, config.RoleImplementer, req.kind)
-	role := settings.Settings.Roles[config.RoleImplementer]
 	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
 		Repo:   target.Repository.Name,
@@ -1326,48 +1421,27 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 	}
 	log.Info(string(req.action)+": requested the work", "kind", req.kind, "branch", req.branch,
 		"pull_request", req.pullRequest, "resumed", req.sessionID != "")
-	request := agent.StartRequest{
-		Owner:        target.Repository.Owner,
-		Repo:         target.Repository.Name,
-		Role:         config.RoleImplementer,
-		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, IssueOwnerLogin: req.issueOwnerLogin, ProtectedPaths: settings.ProtectedPaths},
-		Text:         req.text(workDir),
-		WorkDir:      workDir,
-		Settings:     &role,
-		SessionID:    req.sessionID,
-	}
+	request := startRequest(target, settings, config.RoleImplementer, number, req.issueOwnerLogin, req.text(workDir), workDir)
+	request.SessionID = req.sessionID
 
 	again, counted, permit := req.again, req.count, req.permit
 	action := req.action
 	for {
-		run, err := s.startAgent(ctx, permit, request)
-		var abnormal *agent.AbnormalEnd
-		switch {
-		case errors.As(err, &abnormal):
-			log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-				"session_id", abnormal.SessionID, "detail", abnormal.Detail)
-			if ctx.Err() != nil {
-				// cumin is stopping. The label stays, and the next start
-				// of cumin decides from the facts on GitHub.
-				return
-			}
-		case err != nil:
-			log.Error("the agent was not started", "error", err.Error())
+		end := s.runRequest(ctx, log, target, number, permit, request, keepEndedSession)
+		abnormal := end.abnormal
+		switch end.kind {
+		case runStopping:
+			return
+		case runNotStarted:
 			if counted {
 				if err := s.countImplementationRequest(repository, number, -1); err != nil {
 					log.Error(string(ActionRequestTheImplementationAgain)+": the count of the request that did not start was not taken back", "error", err.Error())
 				}
 			}
 			return
-		default:
-			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-			s.quotaAfterRun(ctx, log, target, number, run)
-			s.keepSession(log, target, config.RoleImplementer, number, run.SessionID)
-			if run.Result.Result != agent.ResultDone {
-				s.stopAfterBlocked(ctx, log, target, settings, ActionStopTheImplementation, "Implementer", number, run.Result.BlockedReason)
-				return
-			}
+		case runBlocked:
+			s.stopAfterBlocked(ctx, log, target, settings, ActionStopTheImplementation, "Implementer", number, end.run.Result.BlockedReason)
+			return
 		}
 
 		token, err := target.Token(ctx)

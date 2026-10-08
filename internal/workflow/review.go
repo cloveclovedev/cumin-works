@@ -203,7 +203,6 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	log := s.logger().With("repository", repository, "issue", number,
 		"role", config.RoleReviewer, "pull_request", req.review.PullRequest)
 	s.noteRequest(repository, number, config.RoleReviewer, req.kind())
-	role := settings.Settings.Roles[config.RoleReviewer]
 	action := req.action()
 	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
@@ -227,17 +226,8 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 		return
 	}
 	req.review.WorkDir = workDir
-	request := agent.StartRequest{
-		Owner:        target.Repository.Owner,
-		Repo:         target.Repository.Name,
-		Role:         config.RoleReviewer,
-		RiskCriteria: settings.RiskCriteria,
-		Facts:        agent.Facts{IssueNumber: number, IssueKind: agent.IssueKindImplementation, IssueOwnerLogin: req.issueOwnerLogin, ProtectedPaths: settings.ProtectedPaths},
-		Text:         ReviewRequestText(req.review),
-		WorkDir:      workDir,
-		Settings:     &role,
-		SessionID:    req.sessionID,
-	}
+	request := startRequest(target, settings, config.RoleReviewer, number, req.issueOwnerLogin, ReviewRequestText(req.review), workDir)
+	request.SessionID = req.sessionID
 	switch {
 	case req.cause != nil:
 		request.Text = ExplainCauseRequestText(req.review.Repository, number, req.review.PullRequest, req.review.Limit, workDir)
@@ -254,31 +244,18 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 			"head_commit", req.review.HeadCommit, "resumed", req.sessionID != "")
 	}
 
-	run, err := s.startAgent(ctx, req.permit, request)
-	var abnormal *agent.AbnormalEnd
-	switch {
-	case errors.As(err, &abnormal):
-		log.Info("the agent run ended abnormally", "kind", abnormal.Kind.String(),
-			"session_id", abnormal.SessionID, "detail", abnormal.Detail)
-		if ctx.Err() != nil {
-			// cumin is stopping. The label stays, and the next start of
-			// cumin decides from the facts on GitHub.
-			return
-		}
-	case err != nil:
-		log.Error("the agent was not started", "error", err.Error())
+	end := s.runRequest(ctx, log, target, number, req.permit, request, keepEndedSession)
+	switch end.kind {
+	case runStopping:
+		return
+	case runNotStarted:
 		s.stopForReviewerStart(ctx, log, target, settings, number, req)
 		return
-	default:
-		log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
-		s.quotaAfterRun(ctx, log, target, number, run)
-		s.keepSession(log, target, config.RoleReviewer, number, run.SessionID)
-		if run.Result.Result != agent.ResultDone {
-			s.stopAfterBlocked(ctx, log, target, settings, stopOfReviewerRequest(req), "Reviewer", number, run.Result.BlockedReason)
-			return
-		}
+	case runBlocked:
+		s.stopAfterBlocked(ctx, log, target, settings, stopOfReviewerRequest(req), "Reviewer", number, end.run.Result.BlockedReason)
+		return
 	}
-	s.endReview(ctx, log, target, settings, number, req, abnormal)
+	s.endReview(ctx, log, target, settings, number, req, end.abnormal)
 }
 
 // action is the action of the request: the request of the cause, the
