@@ -40,6 +40,9 @@ type MonitorFacts struct {
 	Location      *time.Location
 	// Running are the agent runs that cumin holds as running, in any order.
 	Running []state.MonitorAgent
+	// Waiting are the issues that wait for a Maintainer, in the order of
+	// the file: each repository from the snapshot of its last read.
+	Waiting []state.MonitorWaiting
 }
 
 // BuildMonitorFile builds the content of the monitor file from the facts of
@@ -53,7 +56,61 @@ func BuildMonitorFile(facts MonitorFacts) state.MonitorFile {
 		StopRequested: facts.StopRequested,
 		Quota:         monitorQuota(facts),
 		Agents:        monitorAgents(facts.Running),
+		Waiting:       facts.Waiting,
 	}
+}
+
+// monitorWaitingKinds are the status labels that wait for a person, each
+// with its kind in the monitor file.
+var monitorWaitingKinds = []struct{ label, kind string }{
+	{LabelAwaitingPlanReview, state.MonitorWaitingPlanReview},
+	{LabelAwaitingMergeDecision, state.MonitorWaitingMergeDecision},
+	{LabelAwaitingAcceptance, state.MonitorWaitingAcceptance},
+	{LabelAwaitingDecision, state.MonitorWaitingDecision},
+}
+
+// monitorWaitingKind is the kind of an issue with these labels in the
+// monitor file. The status label alone decides it. ok is false for an issue
+// that does not wait for a person.
+func monitorWaitingKind(labels []string) (kind string, ok bool) {
+	for _, waiting := range monitorWaitingKinds {
+		if slices.Contains(labels, waiting.label) {
+			return waiting.kind, true
+		}
+	}
+	return "", false
+}
+
+// WaitingIssues returns the issues of the snapshot that wait for a
+// Maintainer, by the number of the issue: the requirement issues and the
+// open sub-issues with one of the four status labels that wait for a
+// person. repository is "<owner>/<repo>". The URL of a merge decision is
+// the URL of the open pull request that the poll read, because a Maintainer
+// decides there; without one, and for the other kinds, it is the URL of the
+// issue. It is pure.
+func (s Snapshot) WaitingIssues(repository string) []state.MonitorWaiting {
+	var waiting []state.MonitorWaiting
+	add := func(number int, title string, labels []string, pullRequests []PullRequest) {
+		kind, ok := monitorWaitingKind(labels)
+		if !ok {
+			return
+		}
+		url := fmt.Sprintf("https://github.com/%s/issues/%d", repository, number)
+		if kind == state.MonitorWaitingMergeDecision && len(pullRequests) > 0 {
+			url = fmt.Sprintf("https://github.com/%s/pull/%d", repository, pullRequests[0].Number)
+		}
+		waiting = append(waiting, state.MonitorWaiting{Repository: repository, Issue: number, Kind: kind, Title: title, URL: url})
+	}
+	for _, requirement := range s.RequirementIssues {
+		add(requirement.Number, requirement.Title, requirement.Labels, nil)
+		for _, sub := range requirement.SubIssues {
+			if !sub.Closed {
+				add(sub.Number, sub.Title, sub.Labels, sub.PullRequests)
+			}
+		}
+	}
+	slices.SortFunc(waiting, func(a, b state.MonitorWaiting) int { return cmp.Compare(a.Issue, b.Issue) })
+	return waiting
 }
 
 // monitorAgents is the list of the running agents in its fixed order: by
@@ -114,6 +171,7 @@ func (s *Service) writeMonitorFile(stopRequested bool) {
 	s.monitorMu.Lock()
 	defer s.monitorMu.Unlock()
 	facts.Running = s.runningAgents()
+	facts.Waiting = s.waitingIssues()
 	s.monitorFacts = &facts
 	s.writeMonitor(facts)
 }
@@ -161,6 +219,29 @@ func (s *Service) runningAgents() []state.MonitorAgent {
 		})
 	}
 	return agents
+}
+
+// noteWaitingIssues keeps the issues of a repository that wait for a
+// Maintainer, from the snapshot that a poll just read. A repository that a
+// poll passes over, or whose read fails, keeps the ones of its last read.
+func (s *Service) noteWaitingIssues(repository string, waiting []state.MonitorWaiting) {
+	s.monitorMu.Lock()
+	defer s.monitorMu.Unlock()
+	if s.monitorWaiting == nil {
+		s.monitorWaiting = map[string][]state.MonitorWaiting{}
+	}
+	s.monitorWaiting[repository] = waiting
+}
+
+// waitingIssues returns the issues that wait for a Maintainer, in the order
+// of the targets and then by the number of the issue. The caller holds
+// monitorMu.
+func (s *Service) waitingIssues() []state.MonitorWaiting {
+	var waiting []state.MonitorWaiting
+	for _, target := range s.Targets {
+		waiting = append(waiting, s.monitorWaiting[target.Repository.String()]...)
+	}
+	return waiting
 }
 
 // pollErrors returns the repositories whose last poll failed, in the order
