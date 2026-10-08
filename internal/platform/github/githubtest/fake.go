@@ -1805,6 +1805,14 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 		f.serveIssueComments(w, repo, v.Number, v.Last, v.Before)
 		return
 	}
+	if v.Number != 0 && v.Events != 0 {
+		after := ""
+		if v.After != nil {
+			after = *v.After
+		}
+		f.serveLabelTimes(w, repo, v.Number, after, v.SubIssues, v.Events)
+		return
+	}
 	if v.Number != 0 && v.After != nil {
 		f.serveSubIssuePage(w, repo, v.Number, *v.After, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks, v.Reviews)
 		return
@@ -1813,11 +1821,6 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 		f.serveOneIssue(w, repo, v.Number, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks, v.Reviews)
 		return
 	}
-	if v.Number != 0 {
-		f.serveLabelTimes(w, repo, v.Number, v.SubIssues, v.Events)
-		return
-	}
-
 	after := 0
 	if v.After != nil {
 		after, _ = strconv.Atoi(*v.After)
@@ -2106,9 +2109,11 @@ func withSeededLabelEvents(issue *Issue) []LabelEvent {
 
 // serveLabelTimes answers the query of the label times and the query of
 // the actor of a label: the newest label events of the issue and of each of
-// its sub-issues, each with its actor. Official: the LabeledEvent and the
-// UnlabeledEvent of the timeline of an Issue.
-func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, subIssues, events int) {
+// its sub-issues, each with its actor. The sub-issues are one page: at most
+// subIssues of them after the cursor, which is the number of the last
+// sub-issue of the page before, or empty for the first page. Official: the
+// LabeledEvent and the UnlabeledEvent of the timeline of an Issue.
+func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number int, after string, subIssues, events int) {
 	issue, ok := repo.Issues[number]
 	if !ok {
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -2136,18 +2141,25 @@ func (f *Fake) serveLabelTimes(w http.ResponseWriter, repo *Repository, number, 
 		}
 		return map[string]any{"nodes": nodes}
 	}
+	last, _ := strconv.Atoi(after)
 	var subs []*Issue
 	for _, candidate := range sortedIssues(repo) {
-		if candidate.Parent == number {
+		if candidate.Parent == number && candidate.Number > last {
 			subs = append(subs, candidate)
 		}
 	}
+	page := connection(subs, subIssues, func(sub *Issue) any {
+		return map[string]any{"number": sub.Number, "timelineItems": timeline(sub)}
+	})
+	endCursor := any(nil)
+	if n := min(len(subs), subIssues); n > 0 {
+		endCursor = strconv.Itoa(subs[n-1].Number)
+	}
+	page["pageInfo"].(map[string]any)["endCursor"] = endCursor
 	node := map[string]any{
 		"number":        number,
 		"timelineItems": timeline(issue),
-		"subIssues": connection(subs, subIssues, func(sub *Issue) any {
-			return map[string]any{"number": sub.Number, "timelineItems": timeline(sub)}
-		}),
+		"subIssues":     page,
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": map[string]any{"issue": node}, "rateLimit": rateLimit(1)},
