@@ -1,3 +1,4 @@
 .DS_Store
 /cumin
 .claude/worktrees/
+tools/status-bar/.build/
