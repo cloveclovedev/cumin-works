@@ -2,6 +2,8 @@ package github_test
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -61,5 +63,48 @@ func TestAddClosingLink_ReturnsTheAnswerOfGitHub(t *testing.T) {
 	}
 	if got := fake.PullRequestCloses(repo, 21); len(got) != 0 {
 		t.Errorf("pull request #21 closes %v, want none", got)
+	}
+}
+
+// Both failure paths of AddClosingLink return a ClosingLinkError: a caller
+// reads the answer of GitHub from it, and the message keeps its text.
+func TestAddClosingLink_ReturnsATypedErrorWithTheAnswerOfGitHub(t *testing.T) {
+	tests := []struct {
+		name       string
+		fail       func(fake *githubtest.Fake)
+		wantAnswer string
+	}{
+		{
+			name:       "a GraphQL answer with errors",
+			fail:       func(fake *githubtest.Fake) { fake.SetLinkErrors("Resource not accessible by integration", "Not found") },
+			wantAnswer: "Resource not accessible by integration; Not found",
+		},
+		{
+			name:       "a request that GitHub refuses",
+			fail:       func(fake *githubtest.Fake) { fake.FailTimes(http.MethodPost, "/graphql", 0, 1, http.StatusForbidden) },
+			wantAnswer: "POST /graphql: status 403: Failure requested by the test",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake, server := githubtest.New(t)
+			repo := fake.AddRepository("example-org", "example-repo")
+			fake.AddIssue(repo, &githubtest.Issue{Number: 10})
+			fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 21})
+			tt.fail(fake)
+			client := github.NewAppClient(server.URL, server.Client())
+
+			err := client.AddClosingLink(context.Background(), githubtest.Token, githubtest.IssueNodeID(repo, 10), githubtest.PullRequestNodeID(repo, 21))
+			var link *github.ClosingLinkError
+			if !errors.As(err, &link) {
+				t.Fatalf("AddClosingLink error = %v, want a ClosingLinkError", err)
+			}
+			if link.Answer != tt.wantAnswer {
+				t.Errorf("Answer = %q, want %q", link.Answer, tt.wantAnswer)
+			}
+			if want := "github: add the closing link: " + tt.wantAnswer; err.Error() != want {
+				t.Errorf("Error() = %q, want %q", err.Error(), want)
+			}
+		})
 	}
 }
