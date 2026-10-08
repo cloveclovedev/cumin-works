@@ -40,7 +40,7 @@
 
 - 場所は `~/.local/state/cumin/monitor.json` である。cuminを外から見る道具のためのファイルであり、cumin自身の状態ではないので、`state.json` と紛れない名前にする。[cumin本体の設計メモ](cumin-core.md) の「Hostに置くファイル」の決まり (JSON、先頭に `version`、同じディレクトリの一時ファイルに書いてから rename、書くプロセスは1つだけ) に従う。権限は `state.json` と同じ (ファイルは0600) にする。
 - 書くのは `cumin run` だけである。cuminは、このファイルを読まず、ここから何も決めない。起動時にも読まず、次に書くときに上書きする。失っても、次に書くまで表示が古くなるだけである。
-- 書く時点は2つである。定期確認の1回り (`poll_interval` ごとの、全ての対象リポジトリの確認) の終わりと、Agentの実行の終わりである。どのリポジトリも飛ばした回りでも書く。`last_poll.at` が `poll_interval` ごとに進むので、アプリは1つの決まった上限で、cuminが止まったことに気付ける。
+- 書く時点は2つである。定期確認の1回り (`poll_interval` ごとの、全ての対象リポジトリの確認) の終わりと、Agentの実行の終わりである。どのリポジトリも飛ばした回りでも書く。実行の終わりの書き込みは、`agents` だけを今のものにし、ほかのフィールドは最後の定期確認の1回りのままにする。`last_poll.at` は、定期確認でだけ進む。実行の始まりでは書かない。実行は定期確認の中で始まるので、その回りの終わりの書き込みに載る。`last_poll.at` が `poll_interval` ごとに進むので、アプリは1つの決まった上限で、cuminが止まったことに気付ける。
 - 採らなかった案: リポジトリを確かめた回りだけ書く。作業中のIssueがないと、書く間隔が `idle_poll_interval` まで延び、止まったことに気付くのが遅れる。
 - 採らなかった案 (前の決定): 実行中の一覧をファイルに書かない。手元のファイルが1つ増えるためだった。#392 で、表示のために書くと決めた。
 - 採らなかった案: 止まるときに「止まった」と書く。異常終了では書けないので、古いファイルの判定はどちらにしても要る。
@@ -61,7 +61,7 @@
 | `quota.state` | 文字列 | `open` (Agentの起動を進める)、`stopped` (上限に達して止めている、「stop agent starts」)、`unread` (使用率を読み取れず止めている、「stop agent starts」) |
 | `quota.stopped_windows` | 配列 | 上限に達した枠の名前。`5h` と `weekly`。`stopped` のときだけ要素を持つ |
 | `quota.next_try_at` | 時刻 | 次にAgentの起動を試す時刻 (「resume agent starts」)。ないときは、キーを書かない |
-| `agents` | 配列 | `cumin run` が実行中として持つAgentの実行。1つの実行が1つの要素 |
+| `agents` | 配列 | `cumin run` が実行中として持つAgentの実行。1つの実行が1つの要素。リポジトリ、Issueの番号の順に並べる |
 | `agents[].repository` | 文字列 | `<owner>/<repo>` |
 | `agents[].issue` | 整数 | Issueの番号 |
 | `agents[].role` | 文字列 | `planner`、`implementer`、`reviewer` |
@@ -115,6 +115,7 @@
 - 区画より細かく分けるのは、あとで表示を変えても、ファイルを変えずに済むようにするためである。
 - 判断の依頼と、止まったIssueは、どちらも `decision` で、分けない。分けるにはコメントを読むことになる。
 - `merge-decision` のURLは、定期確認の2つ目の問い合わせ ([定期確認の設計](poll.md) の「2つの問い合わせ」) が読んだ、開いているPull Requestの番号から作る。Maintainerが判断する場所は、Pull Requestだからである。開いているPull Requestが読めていないときは、IssueのURLにする。
+- `agents` に載るのは、`cumin run` が実行中として持つ実行だけである。Agentなしで進む作業中の状態 (`cumin/status/merging`) は載せない。受け入れの確認は、`cumin/status/accepting` のもとのPlannerの実行として載る。1つの実行が別の依頼に続くとき (レビューのあとの原因の説明、レビューのあとの修正) は、roleと依頼の種類が今の依頼のものに変わる。
 - 題名は、メニューの行に出す。sub-issueの題名は、定期確認が既に読んでいる。要求Issueの題名は、1つ目の問い合わせに項目を1つ足して読む。問い合わせの数は増えない。`agents` の題名は、依頼を始めるときのスナップショットから取り、実行とともに持つ。
 - 採らなかった案 (前の決定): 題名を載せず、URLをどれもIssueにする。載せるものは減るが、行が番号だけになり、mergeの判断ではPull Requestへ移る手間が残る。
 - 利用枠は、状態の名前と、枠の名前と、次に試す時刻だけを載せる。使用率、上限、リセット時刻は載せない。受け入れた不利益: weekly枠の次に試す時刻は使用率から計算するので、設定を知る人は使用率を逆算できる。ファイルはHostのユーザだけが読める。
@@ -174,7 +175,6 @@
 
 | 決める、または確かめること | どこで |
 |---|---|
-| Agentなしで進む作業中の状態 (`cumin/status/merging`) を、`agents` に載せるか。受け入れの確認は、`cumin/status/accepting` のもとのPlannerの実行として載る | [#502](https://github.com/cloveclovedev/cumin-works/issues/502) |
 | golden fileの置き場所と、Swiftのテストからの読み方 | [#503](https://github.com/cloveclovedev/cumin-works/issues/503)、[#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 | 対応するmacOSとSwiftの最も古い版 (macOS 11.0 以上) | [#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 

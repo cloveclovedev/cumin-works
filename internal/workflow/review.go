@@ -24,6 +24,8 @@ import (
 // that it resumes.
 type reviewerRequest struct {
 	review ReviewRequest
+	// title is the title of the issue, for the monitor file.
+	title string
 	// reviewer is the login of the Reviewer App, "<slug>[bot]". The check
 	// after the run reads its latest review.
 	reviewer string
@@ -82,7 +84,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	if err != nil {
 		return err
 	}
-	req.permit = permit
+	req.permit, req.title = permit, sub.Title
 	// The stay starts before the label changes, as the stay in
 	// cumin/status/implementing does (startStay): a restart of cumin right
 	// after the label change then finds the head commit of the request, and
@@ -160,15 +162,17 @@ func (s *Service) reviewRequestOf(ctx context.Context, token string, target Targ
 // goReviewer runs one Reviewer request in its own goroutine, so that the
 // poll goes on while the agent works.
 func (s *Service) goReviewer(ctx context.Context, target Target, settings *RepositorySettings, number int, req reviewerRequest) {
-	s.goInWork(ctx, target, number, func(ctx context.Context) {
+	run := agentRun{role: config.RoleReviewer, request: req.kind(), title: req.title}
+	s.goInWork(ctx, target, number, run, func(ctx context.Context) {
 		s.runReviewer(ctx, target, settings, number, req)
 	})
 }
 
 // goInWork runs a step of an issue in its own goroutine, and counts the
-// issue as in work until the step ends, so that no poll decides for it.
-func (s *Service) goInWork(ctx context.Context, target Target, number int, step func(context.Context)) {
-	done := s.markInProgress(ctx, target.Repository.String(), number)
+// issue as in work until the step ends, so that no poll decides for it. run
+// is the run that the step starts with.
+func (s *Service) goInWork(ctx context.Context, target Target, number int, run agentRun, step func(context.Context)) {
+	done := s.markInProgress(ctx, target.Repository.String(), number, run)
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
@@ -198,6 +202,7 @@ func (s *Service) runReviewer(ctx context.Context, target Target, settings *Repo
 	repository := target.Repository.String()
 	log := s.logger().With("repository", repository, "issue", number,
 		"role", config.RoleReviewer, "pull_request", req.review.PullRequest)
+	s.noteRequest(repository, number, config.RoleReviewer, req.kind())
 	role := settings.Settings.Roles[config.RoleReviewer]
 	action := req.action()
 	checkout := agent.Checkout{
@@ -286,6 +291,14 @@ func (r reviewerRequest) action() ActionName {
 		return ActionRequestTheReviewAgain
 	}
 	return ActionRequestTheReview
+}
+
+// kind is the request kind of reviewer.md, for the monitor file.
+func (r reviewerRequest) kind() string {
+	if r.cause != nil {
+		return "explain the cause"
+	}
+	return "review"
 }
 
 // stopOfReviewerRequest is the action that stops the review after a request
@@ -609,7 +622,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		branch := pr.HeadBranch
 		return func(ctx context.Context) {
 			s.runImplementer(ctx, target, settings, number, implementerRequest{
-				action: ActionRequestAReviewFix, kind: "review fix", branch: branch, pullRequest: pr.Number,
+				action: ActionRequestAReviewFix, kind: "review fix", title: sub.Title, branch: branch, pullRequest: pr.Number,
 				sessionID:       s.State.Issue(repository, number).SessionID,
 				issueOwnerLogin: login, permit: permit,
 				text: func(workDir string) string {
@@ -683,7 +696,16 @@ func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token s
 	if err != nil || rest == nil {
 		return err
 	}
-	s.goInWork(ctx, target, number, rest)
+	// The rest is the review fix of the Implementer, or a request to the
+	// Reviewer.
+	run := agentRun{role: config.RoleReviewer, request: "review", title: sub.Title}
+	switch action.(type) {
+	case RequestReviewFix:
+		run.role, run.request = config.RoleImplementer, "review fix"
+	case RequestCause:
+		run.request = "explain the cause"
+	}
+	s.goInWork(ctx, target, number, run, rest)
 	return nil
 }
 
