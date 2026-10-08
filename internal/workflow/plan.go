@@ -262,6 +262,7 @@ func (s *Service) goPlanner(ctx context.Context, target Target, settings *Reposi
 // (runAcceptanceCheck).
 func (s *Service) runPlanner(ctx context.Context, target Target, settings *RepositorySettings, number int, req plannerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RolePlanner)
+	s.noteRequest(target.Repository.String(), number, config.RolePlanner, req.kind)
 	role := settings.Settings.Roles[config.RolePlanner]
 	checkout := agent.Checkout{
 		Owner: target.Repository.Owner,

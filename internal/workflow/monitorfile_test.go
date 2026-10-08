@@ -374,6 +374,46 @@ func TestMonitorFile_ListsAPlannerRunWithItsRequestKind(t *testing.T) {
 	}
 }
 
+// An acceptance check that follows a split in the same step changes the
+// request kind of the run: the next write of the file says "acceptance
+// check", not "plan".
+func TestMonitorFile_AnAcceptanceCheckThatFollowsASplitChangesTheRequestKind(t *testing.T) {
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	service := sc.service()
+	path := withMonitorFile(t, service)
+	request := func() string {
+		t.Helper()
+		if err := service.Poll(context.Background()); err != nil {
+			t.Fatalf("Poll: %v", err)
+		}
+		read, raw := readMonitorFile(t, path)
+		if len(*read.Agents) != 1 || (*read.Agents)[0].Issue != 6 || (*read.Agents)[0].Role != "planner" {
+			t.Fatalf("agents does not list the Planner run of #6:\n%s", raw)
+		}
+		return (*read.Agents)[0].Request
+	}
+	if got := request(); got != "plan" {
+		t.Fatalf("request = %q during the split, want %q", got, "plan")
+	}
+	waitForAgentRun(t, sc)
+
+	// The split ends; every sub-issue is closed, so the same step goes on
+	// with the acceptance check.
+	sc.release(t)
+	waitForAgentRun(t, sc)
+	waitForLog(t, sc, `request the acceptance check: every sub-issue is closed; the acceptance check follows`)
+	if got := request(); got != "acceptance check" {
+		t.Errorf("request = %q during the acceptance check that follows the split, want %q", got, "acceptance check")
+	}
+	// The run leaves no acceptance check comment, so the step requests the
+	// acceptance check once more.
+	sc.release(t)
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
+}
+
 // A Reviewer run is listed with the implementation issue and the request
 // kind of the review.
 func TestMonitorFile_ListsAReviewerRunWithItsRequestKind(t *testing.T) {
