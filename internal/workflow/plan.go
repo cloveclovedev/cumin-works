@@ -1,10 +1,12 @@
 package workflow
 
-// This file applies the rows of a requirement issue that start and end a
+// This file applies the actions of a requirement issue that start and end a
 // Planner run: "request the split", the way out of cumin/status/planning
-// (the check of the split), and the acceptance check.
-// docs/ja/designs/poll.md, the topics on
-// the request to the Planner and on the end of a run.
+// (the check of the split), "request the acceptance check", and the way out
+// of cumin/status/accepting. It also reads the facts that these actions
+// need: the acceptance check comment, and the requirement issue at the end
+// of a run. docs/ja/designs/poll.md, the topics on the request to the
+// Planner and on the end of a run.
 
 import (
 	"context"
