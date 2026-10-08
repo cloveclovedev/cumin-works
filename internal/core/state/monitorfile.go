@@ -1,7 +1,7 @@
 package state
 
 // This file is the monitor file of the Host: `cumin run` writes it at the
-// end of every poll, for a tool that shows cumin from outside (the menu bar
+// end of every poll and at the end of every agent run, for a tool that shows cumin from outside (the menu bar
 // app). No code of cumin reads it, and cumin decides nothing from it; a
 // lost file only makes the display old until the next write
 // (designs/status-menu-bar.md, the topic on the monitor file).
@@ -38,6 +38,24 @@ type MonitorFile struct {
 	LastPoll      MonitorLastPoll `json:"last_poll"`
 	StopRequested bool            `json:"stop_requested"`
 	Quota         MonitorQuota    `json:"quota"`
+	// Agents are the agent runs that `cumin run` holds as running. It is
+	// written as [] when there is none.
+	Agents []MonitorAgent `json:"agents"`
+}
+
+// MonitorAgent is one agent run that `cumin run` holds as running.
+type MonitorAgent struct {
+	// Repository is "<owner>/<repo>".
+	Repository string `json:"repository"`
+	Issue      int    `json:"issue"`
+	// Role is "planner", "implementer", or "reviewer".
+	Role string `json:"role"`
+	// Request is the request kind, as the role file names it.
+	Request string `json:"request"`
+	// Title is the title of the issue.
+	Title string `json:"title"`
+	// URL is the URL of the issue.
+	URL string `json:"url"`
 }
 
 // MonitorLastPoll is the last poll of all target repositories.
@@ -80,6 +98,9 @@ func WriteMonitorFile(path string, m MonitorFile) error {
 	}
 	if m.Quota.StoppedWindows == nil {
 		m.Quota.StoppedWindows = []string{}
+	}
+	if m.Agents == nil {
+		m.Agents = []MonitorAgent{}
 	}
 	if m.Quota.NextTryAt != nil {
 		next := m.Quota.NextTryAt.UTC()

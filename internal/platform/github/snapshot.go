@@ -108,15 +108,16 @@ type RepositoryFile struct {
 }
 
 // Issue is one issue as the snapshot sees it. A requirement issue has
-// SubIssues and BlockedBy ("request the split"). A sub-issue has Title,
-// BlockedBy, and PullRequests.
+// SubIssues and BlockedBy ("request the split"). A sub-issue has
+// BlockedBy and PullRequests.
 type Issue struct {
 	Number    int
 	Closed    bool
 	Labels    []string
 	SubIssues []Issue
-	// Title is read for sub-issues only; the branch name of a request is
-	// made from it.
+	// Title is the title of the issue. The branch name of a request is made
+	// from the title of a sub-issue, and the monitor file shows the title
+	// of both. The field is a scalar, so it does not change the cost.
 	Title string
 	// NodeID is the GraphQL ID, read for sub-issues only: cumin adds the
 	// closing link with it. The field is a scalar, so it does not change
@@ -312,6 +313,7 @@ const pullRequestsQuery = `query($ids: [ID!]!, $labels: Int!, $pullRequests: Int
 const requirementIssueFields = `
 fragment requirementIssueFields on Issue {
   number
+  title
   state
   labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
   blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
@@ -327,6 +329,7 @@ fragment requirementIssueFields on Issue {
 const requirementIssueWithPullRequestsFields = `
 fragment requirementIssueFields on Issue {
   number
+  title
   state
   labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
   blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }

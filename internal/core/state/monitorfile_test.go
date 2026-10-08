@@ -120,7 +120,8 @@ func TestMonitorFile_EmptyArraysAreWrittenAndAMissingNextTryIsNot(t *testing.T) 
   "quota": {
     "state": "open",
     "stopped_windows": []
-  }
+  },
+  "agents": []
 }
 `
 	if string(raw) != want {

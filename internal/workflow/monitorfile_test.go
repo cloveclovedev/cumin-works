@@ -41,6 +41,7 @@ type monitorFile struct {
 		StoppedWindows *[]string  `json:"stopped_windows"`
 		NextTryAt      *time.Time `json:"next_try_at"`
 	} `json:"quota"`
+	Agents *[]state.MonitorAgent `json:"agents"`
 }
 
 // readMonitorFile reads the monitor file, and fails the test when a field
@@ -56,7 +57,7 @@ func readMonitorFile(t *testing.T, path string) (monitorFile, string) {
 		t.Fatalf("the monitor file is not JSON: %v\n%s", err, raw)
 	}
 	if read.Version == nil || read.LastPoll == nil || read.LastPoll.At == nil || read.LastPoll.Errors == nil ||
-		read.StopRequested == nil || read.Quota == nil || read.Quota.StoppedWindows == nil {
+		read.StopRequested == nil || read.Quota == nil || read.Quota.StoppedWindows == nil || read.Agents == nil {
 		t.Fatalf("the monitor file misses a field that is always written:\n%s", raw)
 	}
 	return read, string(raw)
@@ -239,6 +240,10 @@ func TestMonitorFile_MatchesTheGoldenFile(t *testing.T) {
 			Weekly:   config.WeeklyQuota{Target: 85, Lead: 24 * time.Hour},
 		},
 		Location: time.UTC,
+		Running: []state.MonitorAgent{
+			{Repository: "example/tool", Issue: 12, Role: "implementer", Request: "implement", Title: "feat(api): add the list endpoint", URL: "https://github.com/example/tool/issues/12"},
+			{Repository: "example/app", Issue: 31, Role: "planner", Request: "acceptance check", Title: "Show the history of an item", URL: "https://github.com/example/app/issues/31"},
+		},
 	})
 	path := filepath.Join(t.TempDir(), state.MonitorFileName)
 	if err := state.WriteMonitorFile(path, built); err != nil {
@@ -294,5 +299,164 @@ func TestMonitorFile_TheQuotaStateFollowsTheFactsOfThePoll(t *testing.T) {
 				t.Errorf("quota = %+v, want windows and a next try only when stopped", got)
 			}
 		})
+	}
+}
+
+// While an agent runs, the monitor file lists the issue with its role, its
+// request kind, its title, and its URL. The request kind is "continue",
+// because an open pull request already closes the issue. After the run ends, the file no
+// longer lists the issue, with no poll in between: last_poll.at stays the
+// time of the poll.
+func TestMonitorFile_ListsARunningAgentUntilItsRunEnds(t *testing.T) {
+	sc := newScene(t, cliOptions{holds: true})
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+	path := withMonitorFile(t, service)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+
+	read, raw := readMonitorFile(t, path)
+	want := []state.MonitorAgent{{
+		Repository: "example-org/example-repo", Issue: 10, Role: "implementer", Request: "continue",
+		Title: subIssueTitle, URL: "https://github.com/example-org/example-repo/issues/10",
+	}}
+	if !slices.Equal(*read.Agents, want) {
+		t.Fatalf("agents = %+v, want %+v:\n%s", *read.Agents, want, raw)
+	}
+
+	// The clock moves, so that a write of a poll would show in last_poll.at.
+	sc.clock.Set(sceneNow.Add(time.Minute))
+	sc.release(t)
+	service.Wait()
+	read, raw = readMonitorFile(t, path)
+	if len(*read.Agents) != 0 || !strings.Contains(raw, `"agents": []`) {
+		t.Errorf("the file still lists the agent after the end of its run:\n%s", raw)
+	}
+	if !read.LastPoll.At.Equal(sceneNow) {
+		t.Errorf("last_poll.at = %s, want the time of the one poll %s", read.LastPoll.At, sceneNow)
+	}
+	if n := sc.pollQueries(); n != 1 {
+		t.Errorf("%d poll queries, want 1: the end of the run writes the file, not a poll", n)
+	}
+}
+
+// A Planner run is listed with the requirement issue, its title, and the
+// request kind of the acceptance check.
+func TestMonitorFile_ListsAPlannerRunWithItsRequestKind(t *testing.T) {
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Title: "Add the login", Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
+	service := sc.service()
+	path := withMonitorFile(t, service)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+
+	read, raw := readMonitorFile(t, path)
+	want := []state.MonitorAgent{{
+		Repository: "example-org/example-repo", Issue: 6, Role: "planner", Request: "acceptance check",
+		Title: "Add the login", URL: "https://github.com/example-org/example-repo/issues/6",
+	}}
+	if !slices.Equal(*read.Agents, want) {
+		t.Errorf("agents = %+v, want %+v:\n%s", *read.Agents, want, raw)
+	}
+	// The run leaves no acceptance check comment, so the same step requests
+	// the acceptance check again: the issue stays in the list until the
+	// second run ends.
+	sc.release(t)
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
+	if read, raw := readMonitorFile(t, path); len(*read.Agents) != 0 {
+		t.Errorf("the file still lists the agent after the end of its run:\n%s", raw)
+	}
+}
+
+// An acceptance check that follows a split in the same step changes the
+// request kind of the run: the next write of the file says "acceptance
+// check", not "plan".
+func TestMonitorFile_AnAcceptanceCheckThatFollowsASplitChangesTheRequestKind(t *testing.T) {
+	sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/ready"}})
+	service := sc.service()
+	path := withMonitorFile(t, service)
+	request := func() string {
+		t.Helper()
+		if err := service.Poll(context.Background()); err != nil {
+			t.Fatalf("Poll: %v", err)
+		}
+		read, raw := readMonitorFile(t, path)
+		if len(*read.Agents) != 1 || (*read.Agents)[0].Issue != 6 || (*read.Agents)[0].Role != "planner" {
+			t.Fatalf("agents does not list the Planner run of #6:\n%s", raw)
+		}
+		return (*read.Agents)[0].Request
+	}
+	if got := request(); got != "plan" {
+		t.Fatalf("request = %q during the split, want %q", got, "plan")
+	}
+	waitForAgentRun(t, sc)
+
+	// The split ends; every sub-issue is closed, so the same step goes on
+	// with the acceptance check.
+	sc.release(t)
+	waitForAgentRun(t, sc)
+	waitForLog(t, sc, `request the acceptance check: every sub-issue is closed; the acceptance check follows`)
+	if got := request(); got != "acceptance check" {
+		t.Errorf("request = %q during the acceptance check that follows the split, want %q", got, "acceptance check")
+	}
+	// The run leaves no acceptance check comment, so the step requests the
+	// acceptance check once more.
+	sc.release(t)
+	waitForAgentRun(t, sc)
+	sc.release(t)
+	service.Wait()
+}
+
+// A Reviewer run is listed with the implementation issue and the request
+// kind of the review.
+func TestMonitorFile_ListsAReviewerRunWithItsRequestKind(t *testing.T) {
+	sc := newScene(t, cliOptions{reviews: []string{"APPROVE"}, holds: true})
+	sc.awaitingChecks(t, []string{"ci"}, []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Parent: 6, Title: subIssueTitle, Labels: []string{"cumin/status/checking", "risk/low"}})
+	service := sc.service()
+	path := withMonitorFile(t, service)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+
+	read, raw := readMonitorFile(t, path)
+	want := []state.MonitorAgent{{
+		Repository: "example-org/example-repo", Issue: 10, Role: "reviewer", Request: "review",
+		Title: subIssueTitle, URL: "https://github.com/example-org/example-repo/issues/10",
+	}}
+	if !slices.Equal(*read.Agents, want) {
+		t.Errorf("agents = %+v, want %+v:\n%s", *read.Agents, want, raw)
+	}
+	sc.release(t)
+	service.Wait()
+	if read, raw := readMonitorFile(t, path); len(*read.Agents) != 0 {
+		t.Errorf("the file still lists the agent after the end of its run:\n%s", raw)
+	}
+}
+
+// The list of the running agents has a fixed order, whatever order the
+// facts have: by the repository, then by the number of the issue.
+func TestMonitorFile_TheRunningAgentsHaveAFixedOrder(t *testing.T) {
+	agents := []state.MonitorAgent{
+		{Repository: "example/tool", Issue: 12},
+		{Repository: "example/app", Issue: 31},
+		{Repository: "example/tool", Issue: 9},
+		{Repository: "example/app", Issue: 4},
+	}
+	want := []state.MonitorAgent{agents[3], agents[1], agents[2], agents[0]}
+	for range 3 {
+		got := workflow.BuildMonitorFile(workflow.MonitorFacts{Running: agents, Location: time.UTC}).Agents
+		if !slices.Equal(got, want) {
+			t.Fatalf("agents = %+v, want %+v", got, want)
+		}
+		slices.Reverse(agents)
 	}
 }

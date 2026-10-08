@@ -361,7 +361,7 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 	log.Info("the merge conflicts; the issue goes back to the Implementer", "pull_request", pr.Number, "labels", labels)
 	branch := pr.HeadBranch
 	err = s.goImplementer(ctx, target, settings, sub.Number, implementerRequest{
-		action: ActionRequestAConflictResolution, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
+		action: ActionRequestAConflictResolution, kind: "conflict resolution", title: sub.Title, branch: branch, pullRequest: pr.Number,
 		sessionID:       s.State.Issue(repository, sub.Number).SessionID,
 		issueOwnerLogin: login, permit: permit,
 		text: func(workDir string) string {
@@ -426,7 +426,7 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	}
 	defaultBranch := snapshot.DefaultBranch
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
-		action: ActionRequestAConflictResolution, kind: "conflict resolution", branch: branch, pullRequest: pr.Number,
+		action: ActionRequestAConflictResolution, kind: "conflict resolution", title: sub.Title, branch: branch, pullRequest: pr.Number,
 		sessionID:       s.State.Issue(repository, a.Number).SessionID,
 		issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {
@@ -571,7 +571,7 @@ func (s *Service) fixMaintainerReview(ctx context.Context, token string, target 
 		"pull_request", pr.Number, "review", review.URL, "labels", labels)
 	branch := pr.HeadBranch
 	err = s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
-		action: ActionSendBackForChanges, kind: "owner review fix", branch: branch, pullRequest: pr.Number,
+		action: ActionSendBackForChanges, kind: "owner review fix", title: sub.Title, branch: branch, pullRequest: pr.Number,
 		sessionID:       s.State.Issue(repository, a.Number).SessionID,
 		issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {

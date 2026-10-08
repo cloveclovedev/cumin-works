@@ -53,7 +53,7 @@
 | 読むもの | 項目 | 使う行 |
 |---|---|---|
 | 要求Issueと、そのsub-issue。番号、id、開閉、今のラベル | `Issue.subIssues`、`labels` | 要求Issueの遷移、「request the implementation」 |
-| sub-issueの題。依頼のブランチの名前に使う | `Issue.title` | 「request the implementation」 |
+| 要求Issueとsub-issueの題。sub-issueの題は、依頼のブランチの名前に使う。どちらの題も、モニターファイルの `agents[].title` に載せるだけで、判定には使わない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md))。スカラーなので、問い合わせのコストは変わらない | `Issue.title` | 「request the implementation」 |
 | sub-issueのGraphQLのid。「wait for the checks」がリンクを付けるときに使う。スカラーなので、問い合わせのコストは変わらない | `Issue.id` | 「wait for the checks」 |
 | 状態ラベルが付いた時刻。定期確認の問い合わせとは別の、小さな問い合わせで読む (「ラベルの時刻の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT])` の `createdAt` と `label` | 「mark the requirement as in work」、レビューのラウンド、「send back for changes」、「stop for missing checks」 |
 | 最新の `cumin/status/ready` を付けたアカウント。着手の候補 (「request the split」、「request the implementation」) では判定の前に、ほかの起動ではAgentを起動する前に、別の小さな問い合わせで読む (「Maintainerのreadyの確認 (request the split、request the implementation)」「Issue Ownerのログイン名の読み取り」) | `timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT])` の `createdAt`、`label`、`actor { __typename login }` | 「request the split」と「request the implementation」の条件 (Maintainerのready)、起動の依頼の事実 (どのroleでも) |

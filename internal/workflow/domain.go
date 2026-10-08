@@ -165,7 +165,9 @@ func (s Snapshot) HasMaintainerApprovalCandidate() bool { return len(maintainerA
 
 // RequirementIssue is an open issue with cumin/type/requirement.
 type RequirementIssue struct {
-	Number    int
+	Number int
+	// Title is for the monitor file only. No rule reads it.
+	Title     string
 	Labels    []string
 	SubIssues []SubIssue
 	// BlockedBy are the issues that block the requirement issue. A Maintainer

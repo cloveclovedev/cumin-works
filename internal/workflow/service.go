@@ -106,10 +106,16 @@ type Service struct {
 	// running counts the agent runs that the polls started. Each run has
 	// its own goroutine, so that the poll goes on while an agent works.
 	running sync.WaitGroup
-	// inProgress holds the issues whose agent is running, for the log of
-	// the stop.
+	// inProgress holds the issues whose agent is running, each with the run
+	// that the monitor file shows, for the log of the stop and for the
+	// monitor file.
 	progressMu sync.Mutex
-	inProgress map[inProgressKey]bool
+	inProgress map[inProgressKey]agentRun
+	// monitorFacts are the facts of the last poll in the monitor file, for
+	// the write at the end of a run. monitorMu guards them and every write
+	// of the file; it is taken before progressMu.
+	monitorMu    sync.Mutex
+	monitorFacts *MonitorFacts
 	// started counts the runs that cumin started. progressMu guards it.
 	started int
 	// startedAt is when Run started. A stop request from before it is
@@ -189,6 +195,16 @@ const DefaultStopGrace = 15 * time.Second
 type inProgressKey struct {
 	repository string
 	issue      int
+}
+
+// agentRun is what cumin keeps of the run of an issue in work, for the
+// monitor file (monitorfile.go).
+type agentRun struct {
+	role config.Role
+	// request is the request kind, as the role file names it.
+	request string
+	// title is the title of the issue in the snapshot of the request.
+	title string
 }
 
 // Run creates the missing labels in each target repository, then polls at
@@ -318,34 +334,60 @@ func (s *Service) inProgressIssues() []string {
 // cumin/status/implementing in that case, so a Maintainer has to restart it,
 // and the line of the stop must name it. Nothing removes entries after the
 // signal; the process is on its way out.
-func (s *Service) markInProgress(ctx context.Context, repository string, issue int) func() {
+func (s *Service) markInProgress(ctx context.Context, repository string, issue int, run agentRun) func() {
 	key := inProgressKey{repository: repository, issue: issue}
 	s.progressMu.Lock()
 	defer s.progressMu.Unlock()
 	if s.inProgress == nil {
-		s.inProgress = map[inProgressKey]bool{}
+		s.inProgress = map[inProgressKey]agentRun{}
 	}
-	s.inProgress[key] = true
+	s.inProgress[key] = run
 	s.started++
 	return func() { s.endRun(ctx, key) }
 }
 
+// noteRequest keeps the role and the request kind of the run of an issue in
+// work. One step in work can go on with another request: the cause or the
+// review fix after a review.
+func (s *Service) noteRequest(repository string, issue int, role config.Role, request string) {
+	key := inProgressKey{repository: repository, issue: issue}
+	s.progressMu.Lock()
+	defer s.progressMu.Unlock()
+	if run, ok := s.inProgress[key]; ok {
+		run.role, run.request = role, request
+		s.inProgress[key] = run
+	}
+}
+
 // endRun removes an issue from the set of issues in work when its run ends,
-// and wakes Run. See markInProgress for the case that leaves the entry.
+// writes the monitor file without the run, and wakes Run. See
+// markInProgress for the case that leaves the entry.
 func (s *Service) endRun(ctx context.Context, key inProgressKey) {
+	if !s.removeInProgress(ctx, key) {
+		return
+	}
+	// The file comes before the wake, so that the poll that the wake starts
+	// writes after it.
+	s.writeMonitorFileAfterRun()
+	select {
+	case s.runEnded <- struct{}{}:
+	default:
+	}
+}
+
+// removeInProgress removes an issue from the set of issues in work, and
+// says whether it did.
+func (s *Service) removeInProgress(ctx context.Context, key inProgressKey) bool {
 	s.progressMu.Lock()
 	defer s.progressMu.Unlock()
 	if ctx.Err() != nil {
-		return
+		return false
 	}
 	// The note comes first, so that a poll never sees neither the run
 	// nor its end.
 	s.noteRunEnded(key.repository)
 	delete(s.inProgress, key)
-	select {
-	case s.runEnded <- struct{}{}:
-	default:
-	}
+	return true
 }
 
 // ensureLabels creates the missing labels of each target repository. A
@@ -842,8 +884,11 @@ type implementerRequest struct {
 	// action starts the log lines of the request: the action of
 	// issue-states.md that requests the work.
 	action ActionName
-	// kind is the request kind of implementer.md, for the log.
-	kind   string
+	// kind is the request kind of implementer.md, for the log and for the
+	// monitor file.
+	kind string
+	// title is the title of the issue, for the monitor file.
+	title  string
 	branch string
 	// pullRequest is the open pull request whose work the request
 	// continues, or 0 for a first request.
@@ -1005,7 +1050,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		branch = BranchName(sub.Number, sub.Title)
 	}
 	return s.goImplementer(ctx, target, settings, a.Number, implementerRequest{
-		action: ActionRequestACheckFix, kind: "check fix", branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
+		action: ActionRequestACheckFix, kind: "check fix", title: sub.Title, branch: branch, pullRequest: pr.Number, sessionID: stored.SessionID,
 		issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {
 			return CheckFixRequestText(repository, a.Number, pr.Number, branch, workDir, texts)
@@ -1023,7 +1068,7 @@ func (s *Service) startImplementer(ctx context.Context, permit StartPermit, targ
 	branch, pullRequest := ClaimBranch(sub)
 	repository := target.Repository.String()
 	req := implementerRequest{
-		action: ActionRequestTheImplementation, kind: "implement", branch: branch, issueOwnerLogin: issueOwnerLogin, permit: permit,
+		action: ActionRequestTheImplementation, kind: "implement", title: sub.Title, branch: branch, issueOwnerLogin: issueOwnerLogin, permit: permit,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, sub.Number, branch, workDir)
 		},
@@ -1080,7 +1125,7 @@ func (s *Service) goImplementer(ctx context.Context, target Target, settings *Re
 	if s.Agents == nil {
 		return errors.New("no agent service is configured")
 	}
-	done := s.markInProgress(ctx, target.Repository.String(), number)
+	done := s.markInProgress(ctx, target.Repository.String(), number, agentRun{role: config.RoleImplementer, request: req.kind, title: req.title})
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
@@ -1200,6 +1245,7 @@ func (s *Service) readStatusActor(ctx context.Context, token string, target Targ
 // the implementation for a Maintainer (stopForWorkDirectory).
 func (s *Service) runImplementer(ctx context.Context, target Target, settings *RepositorySettings, number int, req implementerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RoleImplementer)
+	s.noteRequest(target.Repository.String(), number, config.RoleImplementer, req.kind)
 	role := settings.Settings.Roles[config.RoleImplementer]
 	checkout := agent.Checkout{
 		Owner:  target.Repository.Owner,
@@ -1616,7 +1662,7 @@ func (s *Service) requestImplementationAgain(ctx context.Context, token string, 
 	repository := target.Repository.String()
 	branch := sub.Implementing.Branch
 	req := implementerRequest{
-		action: ActionRequestTheImplementationAgain, kind: "implement", branch: branch, issueOwnerLogin: issueOwnerLogin, again: true, count: true, permit: permit,
+		action: ActionRequestTheImplementationAgain, kind: "implement", title: sub.Title, branch: branch, issueOwnerLogin: issueOwnerLogin, again: true, count: true, permit: permit,
 		sessionID: s.State.Issue(repository, a.Number).SessionID,
 		text: func(workDir string) string {
 			return ImplementRequestText(repository, a.Number, branch, workDir)
@@ -1738,7 +1784,7 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 // toRequirementIssue converts one requirement issue of the GitHub client,
 // from the poll or from the read of one issue.
 func toRequirementIssue(issue github.Issue) RequirementIssue {
-	requirement := RequirementIssue{Number: issue.Number, Labels: issue.Labels}
+	requirement := RequirementIssue{Number: issue.Number, Title: issue.Title, Labels: issue.Labels}
 	for _, blocker := range issue.BlockedBy {
 		requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 	}

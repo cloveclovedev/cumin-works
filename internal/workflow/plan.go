@@ -39,6 +39,7 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 		return fmt.Errorf("%s: issue #%d is not in the snapshot", action, p.Number)
 	}
 	req := planRequest
+	req.title = requirement.Title
 	if req.permit, ok = s.permitStart(ctx, s.logger().With("repository", target.Repository.String(), "issue", p.Number), "split", config.RolePlanner, target, p.Number); !ok {
 		return nil
 	}
@@ -121,6 +122,7 @@ func (s *Service) checkAcceptance(ctx context.Context, token string, target Targ
 		return fmt.Errorf("%s: issue #%d is not in the snapshot", action, a.Number)
 	}
 	req := acceptanceRequest
+	req.title = requirement.Title
 	if req.permit, ok = s.permitStart(ctx, s.logger().With("repository", repository, "issue", a.Number), "acceptance check", config.RolePlanner, target, a.Number); !ok {
 		return nil
 	}
@@ -161,9 +163,12 @@ func (s *Service) moveToAccepting(ctx context.Context, token string, target Targ
 type plannerRequest struct {
 	// work says what the Planner does: a split or an acceptance check.
 	work plannerWork
-	// kind is the request kind of planner.md, for the log.
+	// kind is the request kind of planner.md, for the log and for the
+	// monitor file.
 	kind string
-	text func(repository string, number int, workDir string) string
+	// title is the title of the requirement issue, for the monitor file.
+	title string
+	text  func(repository string, number int, workDir string) string
 	// issueOwnerLogin is the login of the Issue Owner for the facts of the
 	// request, read before the request. Empty says that there is none.
 	issueOwnerLogin string
@@ -233,7 +238,7 @@ func (s *Service) goPlanner(ctx context.Context, target Target, settings *Reposi
 	if s.Agents == nil {
 		return fmt.Errorf("%s: request the %s for issue #%d: no agent service is configured", req.action(), req.kind, number)
 	}
-	done := s.markInProgress(ctx, target.Repository.String(), number)
+	done := s.markInProgress(ctx, target.Repository.String(), number, agentRun{role: config.RolePlanner, request: req.kind, title: req.title})
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
@@ -257,6 +262,7 @@ func (s *Service) goPlanner(ctx context.Context, target Target, settings *Reposi
 // (runAcceptanceCheck).
 func (s *Service) runPlanner(ctx context.Context, target Target, settings *RepositorySettings, number int, req plannerRequest) {
 	log := s.logger().With("repository", target.Repository.String(), "issue", number, "role", config.RolePlanner)
+	s.noteRequest(target.Repository.String(), number, config.RolePlanner, req.kind)
 	role := settings.Settings.Roles[config.RolePlanner]
 	checkout := agent.Checkout{
 		Owner: target.Repository.Owner,
