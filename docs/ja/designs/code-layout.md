@@ -92,6 +92,7 @@
 | | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (「mark the requirement as in work」)、残りのsub-issueの確認を求める (「ask about the remaining sub-issues」)。「mark the requirement as in work」と、checkを待つsub-issueと、Maintainerのレビューへの対応 (「send back for changes」) のための、ラベルの時刻の読み取り。「request the split」と「request the implementation」のための、Maintainerのreadyの確認と、Maintainerでないreadyのログと通知。状態から決める要求Issueのための、状態ラベルを付けたアカウントの確認と、数えないラベルのログと通知 |
 | | `review.go` | Reviewerの依頼と、`cumin/status/reviewing` の出口。レビューの開始 (「request the review」)、出口の事実の読み取りと適用 (定期確認と実行の終わりが共に使う)、指摘の修正の依頼 (「request a review fix」)、レビューの依頼し直し、原因の説明の依頼 (「request the cause」)、`blocked` (「stop the review」) |
 | | `stop.go` | Maintainerに戻す1か所の手順 (コメント、ラベル、通知。`blocked` のあとは、ラベル、コメント、通知) と、通知の送り出し |
+| | `stopnote.go` | 純粋。停止のノートの文章 (`templates/stop-note.md` の形) と、Maintainerに戻す動作ごとの理由の文章。`stop.go` がこの文章を書き込む |
 | | `merge.go` | Maintainerにmergeの判断を求めること (「ask for the merge decision」。ラベル、Issue Ownerのレビューの依頼、通知)、Maintainerの承認のあとのmergeの開始 (「start the merge」)、`cumin/status/merging` の中の手順 (mergeを送る、閉じる、checkに戻る、衝突の解消の依頼、Maintainerに戻す)、Maintainerのレビューへの対応の依頼 (「send back for changes」)、checkまたはMaintainerの判断を待つ間の衝突の解消の依頼 (「request a conflict resolution」) |
 | | `cleanup.go` | 閉じたsub-issueの片付け (worktree、ローカルのブランチ、状態ファイルの項目) |
 | | `followup.go` | 純粋。フォローアップノートを読むsub-issue、拾うもの、ノートの文章と目印 (「write the follow-up note」) |
@@ -100,6 +101,7 @@
 | | `unreadissue.go` | 全部を読めないIssueを、Issueと上限の組ごとに1回だけ知らせる |
 | | `waiting.go` | Maintainerが動かなければ何も進まないときの1回だけの通知 (「tell that cumin waits」)。動作も実行中のAgentもなく、Agentの起動が利用枠だけで待っているIssueも、cuminがMaintainerなしで次に進めるIssueもないとき。利用枠だけで待っている起動の記録 |
 | | `quota.go` | Agentの起動の前の使用率の確認と、実行の終わりの確認 (「stop agent starts」)。枠ごとに1回だけ知らせる。使用率を状態ファイルに残し、読んだばかりの使用率があれば最小の実行をせずに判定する。止めている間は次に試す時刻まで読まない (「resume agent starts」) |
+| | `quotanote.go` | 純粋。「stop agent starts」の通知の理由の文章。標準ライブラリのほかに、`internal/quota` の枠の名前の型だけを使う |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準と、保護されたパスの一覧を決める。blobのoidが変わるまで結果を持つ |
 | `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (「resume agent starts」)、残した使用率が読んだばかりかどうか |
 | | `stored.go` | 純粋。判定に使う使用率と、状態ファイルに残す使用率の間の変換。`internal/workflow` と `cmd/cumin` が使う |
