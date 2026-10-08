@@ -68,7 +68,7 @@
 | `agents[].request` | 文字列 | 依頼の種類。roleの指示ファイルが使う名前 (`plan`、`acceptance check`、`implement`、`continue`、`check fix`、`conflict resolution`、`review`、`review fix`、`owner review fix`、`explain the cause`) |
 | `agents[].title` | 文字列 | Issueの題名 |
 | `agents[].url` | 文字列 | IssueのURL |
-| `waiting` | 配列 | Maintainerの対応を待つ、開いているIssue。リポジトリごとに、最後に読めたスナップショットから作る |
+| `waiting` | 配列 | Maintainerの対応を待つ、開いているIssue。リポジトリごとに、最後に読めたスナップショットから作る。設定のリポジトリの順、Issueの番号の順に並べる |
 | `waiting[].repository` | 文字列 | `<owner>/<repo>` |
 | `waiting[].issue` | 整数 | Issueの番号 |
 | `waiting[].kind` | 文字列 | 待つものの種類。下の表の4つの値 |
@@ -112,9 +112,11 @@
 | `decision` | `cumin/status/awaiting-decision` のIssue (要求Issueでも実装Issueでも) | 答えを待つ |
 
 - 種類は、人を待つ4つのラベル ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md)) の1つずつから決まる。名前は、ラベルの名前から `awaiting-` を除いたものである。定期確認が既に読んでいるラベルだけで決まり、sub-issueの開閉は読まない。問い合わせも足さない。
+- 載せるのは、4つのラベルのどれかを持つ要求Issueと、開いているsub-issueである。閉じたsub-issueは載せない。Issueの種類 (要求Issueか実装Issueか) では絞らない。表の「いつ」は、[Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) でそのラベルが付くIssueである。
+- 定期確認が飛ばしたリポジトリと、読み取りに失敗したリポジトリは、最後に読めたスナップショットの項目を保つ。ラベルが変わったIssueは、そのリポジトリを次に読めた定期確認の終わりの書き込みで、一覧から消える。
 - 区画より細かく分けるのは、あとで表示を変えても、ファイルを変えずに済むようにするためである。
 - 判断の依頼と、止まったIssueは、どちらも `decision` で、分けない。分けるにはコメントを読むことになる。
-- `merge-decision` のURLは、定期確認の2つ目の問い合わせ ([定期確認の設計](poll.md) の「2つの問い合わせ」) が読んだ、開いているPull Requestの番号から作る。Maintainerが判断する場所は、Pull Requestだからである。開いているPull Requestが読めていないときは、IssueのURLにする。
+- `merge-decision` のURLは、定期確認の2つ目の問い合わせ ([定期確認の設計](poll.md) の「2つの問い合わせ」) が読んだ、開いているPull Requestの番号から作る。Maintainerが判断する場所は、Pull Requestだからである。開いているPull Requestが読めていないときは、IssueのURLにする。開いているPull Requestが2つ以上あるときは、スナップショットの最初の1つにする。
 - `agents` に載るのは、`cumin run` が実行中として持つ実行だけである。Agentなしで進む作業中の状態 (`cumin/status/merging`) は載せない。受け入れの確認は、`cumin/status/accepting` のもとのPlannerの実行として載る。1つの実行が別の依頼に続くとき (レビューのあとの原因の説明、レビューのあとの修正) は、roleと依頼の種類が今の依頼のものに変わる。この変化では書かないので、ファイルには次の書き込み (定期確認の1回りの終わり、または実行の終わり) で載る。
 - 題名は、メニューの行に出す。sub-issueの題名は、定期確認が既に読んでいる。要求Issueの題名は、1つ目の問い合わせに項目を1つ足して読む。問い合わせの数は増えない。`agents` の題名は、依頼を始めるときのスナップショットから取り、実行とともに持つ。
 - 採らなかった案 (前の決定): 題名を載せず、URLをどれもIssueにする。載せるものは減るが、行が番号だけになり、mergeの判断ではPull Requestへ移る手間が残る。
@@ -126,7 +128,7 @@
 - 実行ターゲット1つと、テストのターゲット1つにする。表示はAppKitの `NSStatusItem` で作り、Dockには出さない。
 - 採らなかった案: SwiftUIの `MenuBarExtra`。点滅のたびに1枚の画像を描き直して差し替えるので、画像を直接渡せる `NSStatusItem` のほうが単純である。
 - 判定は純粋な型にまとめる。入力は、ファイルのバイト列、設定、今の時刻、前に見た項目である。出力は、メニューバーの区画、メニューの行、鳴らす音である。AppKitを使うのは、入口のファイルだけにする。
-- テストは `swift test` (XCTest) で、純粋な型だけを試す。時刻は引数で渡すので、どのマシンでも同じ結果になる。Goの受け入れテストのgolden fileを、Swiftのテストも読む。1つのファイルが、書く側と読む側の両方を確かめる。
+- テストは `swift test` (XCTest) で、純粋な型だけを試す。時刻は引数で渡すので、どのマシンでも同じ結果になる。Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) を、Swiftのテストも読む。1つのファイルが、書く側と読む側の両方を確かめる。
 - CIのmacOSのjobは、Maintainerの作業である ([#506](https://github.com/cloveclovedev/cumin-works/issues/506))。それまでは、ImplementerとReviewerがHostで `swift test` を実行する。
 - 起動は、ログイン時のLaunchAgentで行う。cuminのLaunchAgentとは別のものである。
 
@@ -175,7 +177,7 @@
 
 | 決める、または確かめること | どこで |
 |---|---|
-| golden fileの置き場所と、Swiftのテストからの読み方 | [#503](https://github.com/cloveclovedev/cumin-works/issues/503)、[#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
+| golden fileをSwiftのテストからどう読むか | [#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 | 対応するmacOSとSwiftの最も古い版 (macOS 11.0 以上) | [#504](https://github.com/cloveclovedev/cumin-works/issues/504) |
 
 ## 後回しにしたこと
