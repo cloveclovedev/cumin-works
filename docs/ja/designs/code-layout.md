@@ -45,7 +45,7 @@
 | | `quota.go` | 利用枠の設定 (5h枠のしきい値と時間帯、weekly枠の目標と前倒し) の読み込み |
 | `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、受け入れの確認を依頼し直した回数、分割を依頼し直した回数、実装を依頼し直した回数と依頼が衝突の解消かどうか、レビューを依頼し直した回数と原因の整理を依頼した回数と依頼した先頭のコミット、最新の使用率 (「resume agent starts」)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (「resume agent starts」) |
-| | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
+| | `stoprequest.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
 | | `monitorfile.go` | モニターファイル (`monitor.json`) の形と書き込み。書くのは `cumin run` だけで、cuminのコードは読まない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
