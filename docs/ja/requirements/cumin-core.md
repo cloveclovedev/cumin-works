@@ -83,7 +83,7 @@ Operatorが使うコマンド:
 | コマンド | 内容 |
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
-| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Maintainerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、Agentの起動を止めているかどうかとその原因の枠、実行が終わるのを待って止まる途中かどうか |
+| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Maintainerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、Agentの起動を止めているかどうかとその原因の枠、実行が終わるのを待って止まる途中かどうか、全部を読めないIssueとその超えた上限 (「全部を読めないIssue」) |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
 | `cumin stop --after-current-runs` | 実行中のAgentの実行が終わるのを待ってから、cuminを止める。新しい依頼は始めない。Agentの要らない動作は、止まるまで続ける |
 | `cumin --version` | cuminの版を表示する |
@@ -124,6 +124,19 @@ GitHubへの呼び出しは、すぐに直る理由で失敗することがあ�
 - Agentの実行のあとで、やり直しても一時的な失敗で終わったときは、cuminは何も持っておかない。Issueは今の状態のまま残り、次の定期確認が、GitHub上の事実から同じ動作を決める。すでに済んだ書き込み (ラベル、コメント、merge) は読み直しで見えるので、二重にはしない。mergeの答えが届かなかったときも、Issueは `cumin/status/merging` のまま残るので、次の定期確認が、Pull Requestがmerge済みかを読んで続ける
 - 数 (3回、数秒、1分、5分) は、設定にせず固定の値にする
 - 一次のレート制限を使い切っている間は、定期確認が続けて失敗するので、「同じリポジトリの定期確認が続けて失敗した」の通知が出る。通知を読んだ人は、それでレート制限に気付く
+
+## 全部を読めないIssue
+
+cuminは、1つのIssueについて読む数に上限を持つ。上限を超えたIssueは、全部を読めないIssueである。
+
+- sub-issueは、12件ずつ読む。12件は、1回の分割の上限と同じ数である ([要求Issueの大きさの基準](policies/requirement-sizing.md))。続きがあるIssueだけ、次のページを読む。3ページ、36件までである。sub-issueが12件以下のIssueしかない定期確認は、読む量が増えない
+- 分割し直した要求Issueは、前の分割の閉じたsub-issueを付けたままにできる。36件までは、定期確認が全部を読む
+- sub-issueが36件を超えたIssueは、全部を読めないIssueである。ラベル、blocked by のIssue、結び付いたPull Requestが、cuminの読む数を超えたIssueも同じである
+- sub-issueの1つが全部を読めないIssueなら、その要求Issueも、全部を読めないIssueとして扱う
+- 全部を読めないIssueについて、cuminは何も決めない。ラベルも替えない。一部だけを読んだ事実から決めると、間違った動作になるためである
+- 同じ定期確認で、ほかのIssueは今までどおり進める。1つのIssueが、リポジトリ全体の定期確認を止めない
+- cuminは、全部を読めないIssueを1回だけ通知する。通知には、Issueと、超えた上限を入れる。次に知らせるのは、そのIssueを全部読めた定期確認のあとである。cuminを再起動すると、もう一度知らせることがある
+- 数 (12件、3ページ) は、設定にせず固定の値にする
 
 ## 状態の持ち方
 
@@ -169,7 +182,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 
 通知するのは、人の対応が要るときと、cuminが止まったときだけである。通知は「見に来てほしい」と伝えるだけで、やりとりはIssueとPull Requestで行う。
 
-| 知らせるとき | 表の番号 |
+| 知らせるとき | 遷移の名前 |
 |---|---|
 | 分割結果の確認が必要 | 「ask for the plan review」 |
 | 残りのsub-issueの確認が必要 | 「ask about the remaining sub-issues」 |
@@ -180,6 +193,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 | Maintainerが動かなければ何も進まない (進められるIssueがなく、動いているAgentもなく、check待ちのIssueもない) | 「tell that cumin waits」 |
 | Maintainerでないアカウントが `cumin/status/ready` を付けたので、着手しなかった | 「request the split」、「request the implementation」 (Maintainerのready) |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
+| 全部を読めないIssueがある (「全部を読めないIssue」)。Issueごとに1回。次に知らせるのは、そのIssueを全部読めたあとである | — |
 
 通知には、対象のIssueかPull Requestへのリンクを入れる。通知の手段は、将来差し替えられるようにする。
 
@@ -272,3 +286,7 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 32 | 利用枠が上限に達している間に、Reviewerが `REQUEST_CHANGES` を出して終わる | Implementerを起動しない。実装Issueは `cumin/status/reviewing` のまま残る。上限のあとの定期確認で、指摘の修正が1回だけ依頼される |
 | 33 | 利用枠が上限に達している間に、承認されたPull Requestが `cumin/status/merging` にある | mergeする。Agentを起動しない動作は、上限に関係なく進む |
 | 34 | 利用枠だけで待っているIssueがあり、動いているAgentがいない | 「待ち状態になった」の通知 (「tell that cumin waits」) を出さない。利用枠の通知 (「stop agent starts」) は、1つの上限につき1回のままである |
+| 35 | sub-issueが20件ある要求Issue (閉じたものが8件、開いているものが12件) がある | 定期確認は失敗しない。20件を全部読み、今までどおり動く |
+| 36 | sub-issueが36件を超える要求Issueと、`cumin/status/ready` の付いた別の実装Issueがある | 定期確認は失敗しない。別の実装Issueには着手する。36件を超える要求Issueとそのsub-issueには、何もしない。ラベルも替えない |
+| 37 | 全部を読めないIssueがあるまま、定期確認を3回行う | 通知は1回だけである。通知に、Issueと超えた上限がある。`cumin status` が、そのIssueと上限を表示する |
+| 38 | 全部を読めなかったIssueのsub-issueを減らして、36件以下にする | 次の定期確認から、そのIssueも今までどおり動く |
