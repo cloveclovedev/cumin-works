@@ -116,6 +116,10 @@ type Service struct {
 	// of the file; it is taken before progressMu.
 	monitorMu    sync.Mutex
 	monitorFacts *MonitorFacts
+	// monitorWaiting keeps, for each repository, the issues that wait for a
+	// Maintainer in the snapshot of its last read, for the monitor file.
+	// monitorMu guards it.
+	monitorWaiting map[string][]state.MonitorWaiting
 	// started counts the runs that cumin started. progressMu guards it.
 	started int
 	// startedAt is when Run started. A stop request from before it is
@@ -632,6 +636,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		return err
 	}
 	snapshot.Running = running
+	s.noteWaitingIssues(target.Repository.String(), snapshot.WaitingIssues(target.Repository.String()))
 	log := s.logger().With("repository", target.Repository.String())
 
 	// The settings of this repository. A wrong file skips this repository

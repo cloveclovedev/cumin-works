@@ -41,6 +41,9 @@ type MonitorFile struct {
 	// Agents are the agent runs that `cumin run` holds as running. It is
 	// written as [] when there is none.
 	Agents []MonitorAgent `json:"agents"`
+	// Waiting are the open issues that wait for a Maintainer. It is written
+	// as [] when there is none.
+	Waiting []MonitorWaiting `json:"waiting"`
 }
 
 // MonitorAgent is one agent run that `cumin run` holds as running.
@@ -55,6 +58,29 @@ type MonitorAgent struct {
 	// Title is the title of the issue.
 	Title string `json:"title"`
 	// URL is the URL of the issue.
+	URL string `json:"url"`
+}
+
+// The values of MonitorWaiting.Kind: one for each status label that waits
+// for a person, named after the label without "awaiting-".
+const (
+	MonitorWaitingPlanReview    = "plan-review"
+	MonitorWaitingMergeDecision = "merge-decision"
+	MonitorWaitingAcceptance    = "acceptance"
+	MonitorWaitingDecision      = "decision"
+)
+
+// MonitorWaiting is one open issue that waits for a Maintainer.
+type MonitorWaiting struct {
+	// Repository is "<owner>/<repo>".
+	Repository string `json:"repository"`
+	Issue      int    `json:"issue"`
+	// Kind is what the issue waits for, one of the MonitorWaiting* values.
+	Kind string `json:"kind"`
+	// Title is the title of the issue.
+	Title string `json:"title"`
+	// URL is the URL of the open pull request for "merge-decision", and
+	// the URL of the issue for the other kinds.
 	URL string `json:"url"`
 }
 
@@ -101,6 +127,9 @@ func WriteMonitorFile(path string, m MonitorFile) error {
 	}
 	if m.Agents == nil {
 		m.Agents = []MonitorAgent{}
+	}
+	if m.Waiting == nil {
+		m.Waiting = []MonitorWaiting{}
 	}
 	if m.Quota.NextTryAt != nil {
 		next := m.Quota.NextTryAt.UTC()

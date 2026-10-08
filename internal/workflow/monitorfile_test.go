@@ -3,9 +3,11 @@ package workflow_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +43,8 @@ type monitorFile struct {
 		StoppedWindows *[]string  `json:"stopped_windows"`
 		NextTryAt      *time.Time `json:"next_try_at"`
 	} `json:"quota"`
-	Agents *[]state.MonitorAgent `json:"agents"`
+	Agents  *[]state.MonitorAgent   `json:"agents"`
+	Waiting *[]state.MonitorWaiting `json:"waiting"`
 }
 
 // readMonitorFile reads the monitor file, and fails the test when a field
@@ -57,7 +60,7 @@ func readMonitorFile(t *testing.T, path string) (monitorFile, string) {
 		t.Fatalf("the monitor file is not JSON: %v\n%s", err, raw)
 	}
 	if read.Version == nil || read.LastPoll == nil || read.LastPoll.At == nil || read.LastPoll.Errors == nil ||
-		read.StopRequested == nil || read.Quota == nil || read.Quota.StoppedWindows == nil || read.Agents == nil {
+		read.StopRequested == nil || read.Quota == nil || read.Quota.StoppedWindows == nil || read.Agents == nil || read.Waiting == nil {
 		t.Fatalf("the monitor file misses a field that is always written:\n%s", raw)
 	}
 	return read, string(raw)
@@ -243,6 +246,10 @@ func TestMonitorFile_MatchesTheGoldenFile(t *testing.T) {
 		Running: []state.MonitorAgent{
 			{Repository: "example/tool", Issue: 12, Role: "implementer", Request: "implement", Title: "feat(api): add the list endpoint", URL: "https://github.com/example/tool/issues/12"},
 			{Repository: "example/app", Issue: 31, Role: "planner", Request: "acceptance check", Title: "Show the history of an item", URL: "https://github.com/example/app/issues/31"},
+		},
+		Waiting: []state.MonitorWaiting{
+			{Repository: "example/tool", Issue: 9, Kind: "merge-decision", Title: "fix(api): return 404 for a missing item", URL: "https://github.com/example/tool/pull/14"},
+			{Repository: "example/app", Issue: 31, Kind: "decision", Title: "Show the history of an item", URL: "https://github.com/example/app/issues/31"},
 		},
 	})
 	path := filepath.Join(t.TempDir(), state.MonitorFileName)
@@ -459,4 +466,253 @@ func TestMonitorFile_TheRunningAgentsHaveAFixedOrder(t *testing.T) {
 		}
 		slices.Reverse(agents)
 	}
+}
+
+// addWaitingIssues adds, to the repository of the scene, issues that wait
+// for a Maintainer with each of the four status labels, and issues that do
+// not: a sub-issue with no status label, and closed sub-issues. It returns
+// the list that the monitor file holds for them.
+func addWaitingIssues(sc *scene) []state.MonitorWaiting {
+	add := func(number, parent int, title string, closed bool, labels ...string) {
+		sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: number, Parent: parent, Title: title, Closed: closed, Labels: labels})
+	}
+	add(1, 0, "Show the history of an item", false, githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview)
+	add(2, 1, "Add the history table", false, "risk/low")
+	add(3, 0, "Export the items", false, githubtest.RequirementLabel, workflow.LabelAwaitingAcceptance)
+	add(4, 3, "Add the export command", true, "risk/low")
+	add(5, 0, "Share an item", false, githubtest.RequirementLabel, workflow.LabelAwaitingDecision)
+	add(11, 6, "Add the logout button", false, workflow.LabelAwaitingDecision, "risk/low")
+	add(12, 6, "Add the password rule", true, workflow.LabelAwaitingDecision, "risk/low")
+	add(13, 6, "Add the session store", false, workflow.LabelAwaitingMergeDecision, "risk/medium")
+	add(14, 6, "Add the session timeout", false, workflow.LabelAwaitingMergeDecision, "risk/medium")
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 40, HeadCommit: sc.remoteHead, Author: implementerSlug, AuthorIsBot: true, Closes: []int{13}, HeadBranch: "cumin/13-add-the-session-store",
+	})
+	const repository, address = "example-org/example-repo", "https://github.com/example-org/example-repo"
+	return []state.MonitorWaiting{
+		{Repository: repository, Issue: 1, Kind: "plan-review", Title: "Show the history of an item", URL: address + "/issues/1"},
+		{Repository: repository, Issue: 3, Kind: "acceptance", Title: "Export the items", URL: address + "/issues/3"},
+		{Repository: repository, Issue: 5, Kind: "decision", Title: "Share an item", URL: address + "/issues/5"},
+		{Repository: repository, Issue: 11, Kind: "decision", Title: "Add the logout button", URL: address + "/issues/11"},
+		{Repository: repository, Issue: 13, Kind: "merge-decision", Title: "Add the session store", URL: address + "/pull/40"},
+		{Repository: repository, Issue: 14, Kind: "merge-decision", Title: "Add the session timeout", URL: address + "/issues/14"},
+	}
+}
+
+// The monitor file lists each open issue with one of the four status labels
+// that wait for a person, with its kind, its title, and its link, by the
+// number of the issue. A requirement issue and a sub-issue both count. A
+// merge decision links to the open pull request, and to the issue when
+// there is none. A closed sub-issue and an issue with another label are
+// not listed.
+func TestMonitorFile_ListsTheIssuesThatWaitForAMaintainerWithTheirKinds(t *testing.T) {
+	sc := newScene(t)
+	want := addWaitingIssues(sc)
+	// The sub-issue of the scene must not start an agent in this test.
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelChecking, "risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	service := sc.service()
+	path := withMonitorFile(t, service)
+	sc.pollAndWait(t, service)
+
+	read, raw := readMonitorFile(t, path)
+	if !slices.Equal(*read.Waiting, want) {
+		t.Fatalf("waiting = %+v, want %+v:\n%s", *read.Waiting, want, raw)
+	}
+	for _, kind := range []string{"plan-review", "merge-decision", "acceptance", "decision"} {
+		if !slices.ContainsFunc(want, func(w state.MonitorWaiting) bool { return w.Kind == kind }) {
+			t.Errorf("the test covers no issue of the kind %s", kind)
+		}
+	}
+}
+
+// The pure rule of the kind: each of the four status labels that wait for
+// a person gives its own kind, on a requirement issue and on a sub-issue
+// alike, and no other status label gives one.
+func TestMonitorFile_TheKindComesFromTheStatusLabelAlone(t *testing.T) {
+	kinds := map[string]string{
+		workflow.LabelAwaitingPlanReview:    "plan-review",
+		workflow.LabelAwaitingMergeDecision: "merge-decision",
+		workflow.LabelAwaitingAcceptance:    "acceptance",
+		workflow.LabelAwaitingDecision:      "decision",
+		workflow.LabelChecking:              "",
+		"cumin/status/ready":                "",
+		"cumin/status/implementing":         "",
+	}
+	for label, kind := range kinds {
+		snapshot := workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{{
+			Number: 2, Title: "requirement", Labels: []string{githubtest.RequirementLabel, label},
+			SubIssues: []workflow.SubIssue{
+				{Number: 1, Title: "open", Labels: []string{label, "risk/low"}},
+				{Number: 3, Title: "closed", Closed: true, Labels: []string{label, "risk/low"}},
+			},
+		}}}
+		var want []state.MonitorWaiting
+		if kind != "" {
+			want = []state.MonitorWaiting{
+				{Repository: "example/app", Issue: 1, Kind: kind, Title: "open", URL: "https://github.com/example/app/issues/1"},
+				{Repository: "example/app", Issue: 2, Kind: kind, Title: "requirement", URL: "https://github.com/example/app/issues/2"},
+			}
+		}
+		if got := snapshot.WaitingIssues("example/app"); !slices.Equal(got, want) {
+			t.Errorf("%s: waiting = %+v, want %+v", label, got, want)
+		}
+	}
+}
+
+// An issue leaves the list at the first poll after its label changes. A
+// poll whose read fails keeps the items of the last read, and names the
+// failure.
+func TestMonitorFile_AnIssueLeavesTheListAtTheFirstPollAfterItsLabelChanges(t *testing.T) {
+	sc := newScene(t)
+	waitsForMaintainer(t, sc)
+	service := sc.service()
+	path := withMonitorFile(t, service)
+	sc.pollAndWait(t, service)
+	want := []state.MonitorWaiting{{
+		Repository: "example-org/example-repo", Issue: 10, Kind: "decision",
+		Title: subIssueTitle, URL: "https://github.com/example-org/example-repo/issues/10",
+	}}
+	if read, raw := readMonitorFile(t, path); !slices.Equal(*read.Waiting, want) {
+		t.Fatalf("waiting = %+v, want %+v:\n%s", *read.Waiting, want, raw)
+	}
+
+	// The label changes on GitHub, and the next poll cannot read GitHub.
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelChecking, "risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	sc.addPullRequest(21, sc.remoteHead, implementerSlug, true)
+	sc.fake.FailTimes(http.MethodPost, "/graphql", 0, everyTry, http.StatusBadGateway)
+	pollTimes(t, service, 1, true)
+	read, raw := readMonitorFile(t, path)
+	if !slices.Equal(*read.Waiting, want) || len(*read.LastPoll.Errors) != 1 {
+		t.Fatalf("after a read that failed, the file does not keep the item of the last read with the error:\n%s", raw)
+	}
+
+	sc.pollAndWait(t, service)
+	read, raw = readMonitorFile(t, path)
+	if len(*read.Waiting) != 0 || !strings.Contains(raw, `"waiting": []`) || len(*read.LastPoll.Errors) != 0 {
+		t.Errorf("the file still lists the issue after the poll that read its new label:\n%s", raw)
+	}
+}
+
+// A repository that a poll passes over (the idle poll interval) keeps its
+// items in the file, while the poll writes its own time. The poll that
+// reads the repository again takes the new facts.
+func TestMonitorFile_ARepositoryThatAPollPassesOverKeepsItsItems(t *testing.T) {
+	sc := newScene(t)
+	// The sub-issue of the scene waits for its required checks: the
+	// repository is in work, and no agent runs.
+	if err := sc.fake.SetLabels(sc.repo, 10, []string{workflow.LabelChecking, "risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	other := sc.fake.AddRepository("example-org", "other-repo")
+	sc.fake.AddIssue(other, &githubtest.Issue{Number: 1, Title: "Share an item", Labels: []string{githubtest.RequirementLabel, workflow.LabelAwaitingDecision}})
+	service := idlePollService(sc)
+	service.Targets = append(service.Targets, target(sc, "other-repo"))
+	path := withMonitorFile(t, service)
+	want := []state.MonitorWaiting{{
+		Repository: "example-org/other-repo", Issue: 1, Kind: "decision",
+		Title: "Share an item", URL: "https://github.com/example-org/other-repo/issues/1",
+	}}
+
+	if n := pollAt(t, sc, service, 0, "other-repo"); n == 0 {
+		t.Fatal("the first poll did not read the idle repository")
+	}
+	// The label changes on GitHub; the polls of the next minutes pass over
+	// the repository, so the file keeps the item.
+	if err := sc.fake.SetLabels(other, 1, []string{githubtest.RequirementLabel, "cumin/status/implementing"}); err != nil {
+		t.Fatal(err)
+	}
+	for minute := 1; minute < 5; minute++ {
+		if n := pollAt(t, sc, service, minute, "other-repo"); n != 0 {
+			t.Fatalf("minute %d: the poll read the idle repository", minute)
+		}
+		read, raw := readMonitorFile(t, path)
+		if !slices.Equal(*read.Waiting, want) {
+			t.Fatalf("minute %d: waiting = %+v, want the item of the last read %+v:\n%s", minute, *read.Waiting, want, raw)
+		}
+		if at := sceneNow.Add(time.Duration(minute) * time.Minute); !read.LastPoll.At.Equal(at) {
+			t.Errorf("minute %d: last_poll.at = %s, want %s", minute, read.LastPoll.At, at)
+		}
+	}
+	if n := pollAt(t, sc, service, 5, "other-repo"); n == 0 {
+		t.Fatal("the poll after the idle poll interval did not read the repository")
+	}
+	if read, raw := readMonitorFile(t, path); len(*read.Waiting) != 0 {
+		t.Errorf("the file still lists the issue after the poll that read its new label:\n%s", raw)
+	}
+}
+
+// The acceptance test of the whole content of the monitor file, with the
+// fake GitHub and the fake CLI: the running agent, the issues that wait for
+// a Maintainer, the quota state, the stop request, and the last poll.
+func TestMonitorFile_HoldsTheWholeContentAfterAPoll(t *testing.T) {
+	sc := newScene(t, cliOptions{holds: true})
+	addWaitingIssues(sc)
+	service := sc.service()
+	withState(t, service)
+	path := withMonitorFile(t, service)
+	service.StopRequestPath = filepath.Join(t.TempDir(), state.StopRequestFileName)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	// The second poll reads the stop request, while the agent still runs.
+	requestStop(t, service.StopRequestPath)
+	later := sceneNow.Add(time.Minute)
+	sc.clock.Set(later)
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const address = "https://github.com/example-org/example-repo"
+	item := func(issue int, between, title, url string) string {
+		return `    {
+      "repository": "example-org/example-repo",
+      "issue": ` + strconv.Itoa(issue) + `,
+` + between + `      "title": "` + title + `",
+      "url": "` + address + url + `"
+    }`
+	}
+	waiting := func(issue int, kind, title, url string) string {
+		return item(issue, `      "kind": "`+kind+`",`+"\n", title, url)
+	}
+	want := `{
+  "version": 1,
+  "last_poll": {
+    "at": "` + later.UTC().Format(time.RFC3339) + `",
+    "errors": []
+  },
+  "stop_requested": true,
+  "quota": {
+    "state": "open",
+    "stopped_windows": []
+  },
+  "agents": [
+` + item(10, `      "role": "implementer",`+"\n"+`      "request": "implement",`+"\n", subIssueTitle, "/issues/10") + `
+  ],
+  "waiting": [
+` + strings.Join([]string{
+		waiting(1, "plan-review", "Show the history of an item", "/issues/1"),
+		waiting(3, "acceptance", "Export the items", "/issues/3"),
+		waiting(5, "decision", "Share an item", "/issues/5"),
+		waiting(11, "decision", "Add the logout button", "/issues/11"),
+		waiting(13, "merge-decision", "Add the session store", "/pull/40"),
+		waiting(14, "merge-decision", "Add the session timeout", "/issues/14"),
+	}, ",\n") + `
+  ]
+}
+`
+	if string(raw) != want {
+		t.Errorf("the monitor file is\n%s\nwant\n%s", raw, want)
+	}
+	sc.release(t)
+	service.Wait()
 }
