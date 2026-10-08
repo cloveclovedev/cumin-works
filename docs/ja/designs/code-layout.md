@@ -69,7 +69,12 @@
 | | `merge.go` | Pull Requestのmerge (衝突、先頭のコミットの移動、既定のブランチの変更の見分け)、mergeが済んだかの読み取り、Issueの開閉の読み取りと、完了として閉じること (「start the merge」) |
 | | `reviewrequest.go` | Pull RequestへのIssue Ownerのレビューの依頼 (「ask for the merge decision」。`POST .../pulls/{n}/requested_reviewers`) |
 | | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
-| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし、一次のレート制限の使い切り、書き込みを処理してから答えを落とす)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
+| | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。このファイルは、`Fake` の型、`New`、リポジトリとそのファイル、要求の振り分け、決めた失敗を持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし、一次のレート制限の使い切り、書き込みを処理してから答えを落とす)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
+| | `githubtest/graphql.go` | 偽GitHubのGraphQL。定期確認のsnapshotと、他の読み取り (1つのIssue、sub-issueのページ、Pull Requestの追記、Issueのコメント、ラベルの時刻)、閉じるリンクの追加 |
+| | `githubtest/issues.go` | 偽GitHubのRESTのIssue、ラベル、コメント。その型と、テストが状態を置く関数、読む関数 |
+| | `githubtest/pulls.go` | 偽GitHubのPull Request、レビュー、レビューの依頼、merge。その型と、テストが状態を置く関数、読む関数 |
+| | `githubtest/checks.go` | 偽GitHubのcheck run、annotation、jobのログ、ブランチのruleset |
+| | `githubtest/apps.go` | 偽GitHubのApp、installation、installation token、ユーザー、リポジトリでの権限 |
 | `internal/platform/discord` | `webhook.go` | Discordのwebhookの実行。アドレス、JSONの本文、応答、メッセージの上限 |
 | `internal/platform/keychain` | `keychain.go` | macOSの `security` コマンドで秘密の値を読み書きする |
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
@@ -129,13 +134,15 @@
 
 ### テストのファイル
 
-テストは、動作か話題ごとに1つのファイルに置く。上の表は、テストのファイルを、置き場所に理由があるものだけ載せる。`internal/workflow` の定期確認のテストと、`internal/setup` の `cumin setup github-apps` のテストは、次の図のように分かれる。
+テストは、動作か話題ごとに1つのファイルに置く。上の表は、テストのファイルを、置き場所に理由があるものだけ載せる。`internal/workflow` の定期確認のテストと、`internal/setup` の `cumin setup github-apps` のテストは、次の図のように分かれる。図は、偽GitHub (`githubtest`) のファイルも示す。
 
-![定期確認のテストと、cumin setup github-appsのテストのファイル](code-layout-files.svg)
+![定期確認のテスト、cumin setup github-appsのテスト、偽GitHubのファイル](code-layout-files.svg)
 
 図の元ファイル: [code-layout-files.puml](code-layout-files.puml)
 
 矢印は「使う」を表す。`scene_test.go` と `fakes_test.go` は、テストを持たず、他のファイルが使う偽物と補助の関数だけを持つ。`internal/workflow` の新しいテストは、その動作のファイルに足す。動作のファイルがなければ、新しいファイルを作る。`service_test.go` には、定期確認のループのテストだけを置く。
+
+偽GitHubは、endpointのグループごとに1つのファイルを持つ。`fake.go` が要求を振り分け、他のファイルが答える。新しいendpointは、そのグループのファイルに足し、`fake.go` の振り分けに1行を足す。
 
 ## まだ決めていないこと
 
