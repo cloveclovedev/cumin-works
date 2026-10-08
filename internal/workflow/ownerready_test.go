@@ -121,7 +121,7 @@ func setNotMaintainerPermissions(sc *scene) {
 
 // A ready of an account that is not a Maintainer changes no label and sends
 // no request (issue-states.md, the ready of the Maintainer), also when an older
-// ready was of the Owner: the label was removed, and the other account put
+// ready was of a Maintainer: the label was removed, and the other account put
 // it on the issue again. Across three polls, cumin logs it once and tells
 // the Maintainer once.
 func TestMaintainerReady_AReadyOfAnotherAccountStartsNothingAndIsToldOnce(t *testing.T) {

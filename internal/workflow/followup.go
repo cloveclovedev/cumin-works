@@ -272,9 +272,9 @@ func OpenNonBlockingComments(threads []ReviewThread, reviewer string) []OpenNonB
 // FollowUpNote returns the follow-up note of a merged pull request that is
 // linked to close the sub-issue, in the form of
 // templates/follow-up-note.md, and whether there is anything to list. With
-// nothing to list, cumin writes no note (Core-11). notes are the pull
-// requests of the sub-issue that need a note, for the marker; nil means
-// this one only.
+// nothing to list, cumin writes no note ("write the follow-up note"). notes
+// are the pull requests of the sub-issue that need a note, for the marker;
+// nil means this one only.
 func FollowUpNote(sub SubIssue, pr MergedPullRequest, reviewer string, notes []int) (string, bool) {
 	if notes == nil {
 		notes = []int{pr.Number}
