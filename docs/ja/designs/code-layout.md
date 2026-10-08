@@ -85,10 +85,14 @@
 | | `action.go` | 純粋。cuminの動作の名前の一覧。`issue-states.md` の表の「名前」の列の遷移1つにつき、定数が1つある。ログ、通知、停止のノートが、動作をこの名前で指す |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧。初期値の優先度のラベルは、設定が名前を決めていないリポジトリにだけ作る |
-| | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。Agentの起動の許可を取る関数と、Agentを起動するただ1つの関数 (`startAgent`) を持つ。役割の起動の依頼を組み立てる関数 (`startRequest`) と、1つの依頼を実行してその終わりを返す関数 (`runRequest`) も持つ。どの役割の依頼も、この2つを通る。必須のcheckが待ち時間を過ぎても結果を返さないIssueをMaintainerに戻す (「stop for missing checks」)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
+| | `service.go` | `Service` の型、定期確認のループ (`Run`)、cuminの停止、Agentが実行中のIssueの集まり。どの役割も使う手順も持つ: ラベルの付け替え (`moveIssue`)、Agentの起動の許可を取る関数、Agentを起動するただ1つの関数 (`startAgent`)、役割の起動の依頼を組み立てる関数 (`startRequest`)、1つの依頼を実行してその終わりを返す関数 (`runRequest`)。どの役割の依頼も、この2つを通る。実行のセッションをHostの状態に残す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
+| | `poll.go` | 1回の定期確認。足りないラベルを作り、リポジトリを読む番かを決め、スナップショットと必須のcheckを読み、判定を適用する (`pollRepository`)。リポジトリごとの最後の定期確認の記録も持つ (I/O) |
+| | `implement.go` | Implementerの依頼と、`cumin/status/implementing` の出口。着手 (「request the implementation」)、checkの修正の依頼 (「request a check fix」)、必須のcheckが待ち時間を過ぎても結果を返さないIssueをMaintainerに戻すこと (「stop for missing checks」)、ラベルのPull Requestへのコピー、Implementerの実行、実行終了の事実の読み取りと適用 (「wait for the checks」、「stop the implementation」、「request the implementation again」) |
+| | `convert.go` | `internal/platform/github` の型から、純粋な判定の型への変換 (`to...` の関数) |
 | | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
 | | `monitorfile.go` | モニターファイルの中身を、定期確認が既に持っている事実 (最後の定期確認の時刻とエラー、止める予約、利用枠の状態、実行中のAgentの実行、Maintainerの対応を待つIssue) から作る純粋関数と、スナップショットから待つIssueを選ぶ純粋関数と、定期確認の1回りの終わりとAgentの実行の終わりの書き込み。書き込みの失敗は警告のログだけにする |
-| | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (「request the split」)、`cumin/status/planning` の出口 (「ask for the plan review」、「request the acceptance check」、依頼し直し、「stop the split」) 、受け入れの確認の依頼 (「request the acceptance check」) と、`cumin/status/accepting` の出口 (「ask for the acceptance」、依頼し直し、Maintainerに戻すこと) |
+| | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (「request the split」)、`cumin/status/planning` の出口 (「ask for the plan review」、「request the acceptance check」、依頼し直し、「stop the split」)。分割と受け入れの確認が共に使うもの (Plannerの依頼、Plannerの実行、実行の終わりの要求Issueの読み取り) も持つ |
+| | `acceptance.go` | 受け入れの確認。その依頼 (「request the acceptance check」)、確認の実行、`cumin/status/accepting` の出口 (「ask for the acceptance」、依頼し直し、Maintainerに戻すこと)、受け入れの確認のコメントの読み取り |
 | | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (「mark the requirement as in work」)、残りのsub-issueの確認を求める (「ask about the remaining sub-issues」)。「mark the requirement as in work」と、checkを待つsub-issueと、Maintainerのレビューへの対応 (「send back for changes」) のための、ラベルの時刻の読み取り。「request the split」と「request the implementation」のための、Maintainerのreadyの確認と、Maintainerでないreadyのログと通知。状態から決める要求Issueのための、状態ラベルを付けたアカウントの確認と、数えないラベルのログと通知 |
 | | `review.go` | Reviewerの依頼と、`cumin/status/reviewing` の出口。レビューの開始 (「request the review」)、出口の事実の読み取りと適用 (定期確認と実行の終わりが共に使う)、指摘の修正の依頼 (「request a review fix」)、レビューの依頼し直し、原因の説明の依頼 (「request the cause」)、`blocked` (「stop the review」) |
 | | `stop.go` | Maintainerに戻す1か所の手順 (コメント、ラベル、通知。`blocked` のあとは、ラベル、コメント、通知) と、通知の送り出し |
@@ -141,13 +145,15 @@
 
 テストは、動作か話題ごとに1つのファイルに置く。上の表は、テストのファイルを、置き場所に理由があるものだけ載せる。`internal/workflow` の定期確認のテストと、`internal/setup` の `cumin setup github-apps` のテストは、次の図のように分かれる。図は、偽GitHub (`githubtest`) のファイルも示す。
 
-![定期確認のテスト、cumin setup github-appsのテスト、偽GitHub、Claude Codeの接続部分、snapshotのファイル](code-layout-files.svg)
+![定期確認と手順のファイル、定期確認のテスト、cumin setup github-appsのテスト、偽GitHub、Claude Codeの接続部分、snapshotのファイル](code-layout-files.svg)
 
 図の元ファイル: [code-layout-files.puml](code-layout-files.puml)
 
 矢印は「使う」を表す。`scene_test.go` と `fakes_test.go` は、テストを持たず、他のファイルが使う偽物と補助の関数だけを持つ。`internal/workflow` の新しいテストは、その動作のファイルに足す。動作のファイルがなければ、新しいファイルを作る。`service_test.go` には、定期確認のループのテストだけを置く。
 
 偽GitHubは、endpointのグループごとに1つのファイルを持つ。`fake.go` が要求を振り分け、他のファイルが答える。新しいendpointは、そのグループのファイルに足し、`fake.go` の振り分けに1行を足す。
+
+同じ図は、`internal/workflow` の定期確認と手順のファイルも示す。`service.go` のループが `poll.go` の1回の定期確認を呼び、`poll.go` が役割ごとのファイル (`implement.go`、`plan.go`、`acceptance.go`、`review.go`、`merge.go`) の動作を適用し、`convert.go` でGitHubの型を変換する。役割ごとのファイルは、どれも `service.go` の共通の手順を使う。図は、この矢印を省く。
 
 同じ図は、2つに分けた接続部分のファイルも示す。`claudecode.go` はCLIを実行し、`startrecord.go` の確認を呼ぶ。`snapshot.go` は読み取りを持ち、`snapshotquery.go` の問い合わせの文と応答のノードを使う。
 
