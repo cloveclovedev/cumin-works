@@ -235,10 +235,7 @@ func writeQuota(w io.Writer, settings *config.Settings, stateDir string, at time
 	} else {
 		allowance.FiveHourUntil = read.FiveHourUntil
 	}
-	usage := quota.Usage{
-		FiveHour: quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt},
-		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
-	}
+	usage := quota.StoredUsage(stored)
 	decision := quota.Decide(usage, settings.Quota, allowance, at, loc)
 	fmt.Fprintf(w, "  read at %s\n", stamp(stored.ReadAt, loc))
 	fmt.Fprintf(w, "  5h window:     %s used, limit %s, resets at %s\n",

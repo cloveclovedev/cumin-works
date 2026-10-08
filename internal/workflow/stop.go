@@ -102,7 +102,7 @@ func (s *Service) stopForMaintainer(ctx context.Context, log *slog.Logger, targe
 		}
 	}
 
-	s.notify(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(st.action),
 		Reason:     reason,
 		Repository: target.Repository.String(),

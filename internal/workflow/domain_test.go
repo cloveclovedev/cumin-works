@@ -240,13 +240,6 @@ func TestDecide_RequestTheSplit(t *testing.T) {
 	}
 }
 
-func TestLabelsAfterPlan(t *testing.T) {
-	got := LabelsAfterPlan([]string{LabelRequirement, LabelReady})
-	if want := []string{LabelRequirement, LabelPlanning}; !slices.Equal(got, want) {
-		t.Errorf("LabelsAfterPlan = %v, want %v", got, want)
-	}
-}
-
 // The check of the split: one or more sub-issues, each with exactly one risk
 // label. The first failing sub-issue by number is named.
 func TestVerifySplit(t *testing.T) {
@@ -694,20 +687,24 @@ func TestIsStatusLabel(t *testing.T) {
 	}
 }
 
-func TestLabelsAfterClaim(t *testing.T) {
-	got := LabelsAfterClaim([]string{"cumin/status/awaiting-decision", "risk/low", "cumin/status/ready", "question"})
-	if want := []string{"risk/low", "question", LabelImplementing}; !slices.Equal(got, want) {
-		t.Errorf("LabelsAfterClaim = %v, want %v", got, want)
-	}
-	if got := LabelsAfterClaim(nil); !slices.Equal(got, []string{LabelImplementing}) {
-		t.Errorf("LabelsAfterClaim(nil) = %v", got)
-	}
-}
-
 func TestReplaceStatusLabel(t *testing.T) {
-	got := ReplaceStatusLabel([]string{"cumin/status/implementing", "risk/low", "question"}, LabelChecking)
-	if want := []string{"risk/low", "question", LabelChecking}; !slices.Equal(got, want) {
-		t.Errorf("ReplaceStatusLabel = %v, want %v", got, want)
+	tests := []struct {
+		name   string
+		labels []string
+		status string
+		want   []string
+	}{
+		{"the other labels stay", []string{"cumin/status/implementing", "risk/low", "question"}, LabelChecking, []string{"risk/low", "question", LabelChecking}},
+		{"the type label stays", []string{LabelRequirement, LabelReady}, LabelPlanning, []string{LabelRequirement, LabelPlanning}},
+		{"every old status label goes", []string{"cumin/status/awaiting-decision", "risk/low", "cumin/status/ready", "question"}, LabelImplementing, []string{"risk/low", "question", LabelImplementing}},
+		{"no label", nil, LabelImplementing, []string{LabelImplementing}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ReplaceStatusLabel(tt.labels, tt.status); !slices.Equal(got, tt.want) {
+				t.Errorf("ReplaceStatusLabel = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

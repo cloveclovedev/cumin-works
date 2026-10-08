@@ -167,7 +167,7 @@ func (s *Service) freshUsage() (quota.Usage, bool) {
 	if !ok || !quota.Fresh(stored.ReadAt, s.now()) {
 		return quota.Usage{}, false
 	}
-	return storedUsage(stored), true
+	return quota.StoredUsage(stored), true
 }
 
 // quotaAfterRun applies "stop agent starts" at the end of an agent run: the
@@ -208,15 +208,11 @@ func (s *Service) keepUsage(log *slog.Logger, read agent.QuotaUsage) quota.Usage
 		if stored.ReadAt.After(readAt) {
 			readAt = stored.ReadAt
 		}
-		kept := storedUsage(stored)
+		kept := quota.StoredUsage(stored)
 		usage.FiveHour = quota.Newer(usage.FiveHour, kept.FiveHour)
 		usage.Weekly = quota.Newer(usage.Weekly, kept.Weekly)
 	}
-	err := s.State.SetQuota(state.Quota{
-		FiveHour: state.QuotaWindow{Utilization: usage.FiveHour.Utilization, ResetsAt: usage.FiveHour.ResetsAt},
-		Weekly:   state.QuotaWindow{Utilization: usage.Weekly.Utilization, ResetsAt: usage.Weekly.ResetsAt},
-		ReadAt:   readAt,
-	})
+	err := s.State.SetQuota(quota.ToStored(usage, readAt))
 	if err != nil {
 		log.Error("the quota usage was not kept", "error", err.Error())
 	}
@@ -231,7 +227,7 @@ func (s *Service) nextTry() (time.Time, bool) {
 		return time.Time{}, false
 	}
 	now := s.now()
-	next, stopped := quota.NextTry(storedUsage(stored), s.quotaSettings(), s.allowance(s.logger()), now, s.location())
+	next, stopped := quota.NextTry(quota.StoredUsage(stored), s.quotaSettings(), s.allowance(s.logger()), now, s.location())
 	if !stopped || !now.Before(next) {
 		return time.Time{}, false
 	}
@@ -328,20 +324,13 @@ func limitReason(window quota.Name) string {
 // silence the stop for every repository. The issue whose start or run met the limit is the link. It
 // reports false when the channel failed.
 func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) bool {
-	return s.notify(ctx, log, s.Settings != nil && s.Settings.Notify.DiscordEnabled, notify.Notification{
+	return s.notify(ctx, log, notificationOn(s.Settings), notify.Notification{
 		Action:     string(ActionStopAgentStarts),
 		Reason:     reason,
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", number),
 		Link:       github.IssueURL(target.Repository.Owner, target.Repository.Name, number),
 	})
-}
-
-func storedUsage(stored state.Quota) quota.Usage {
-	return quota.Usage{
-		FiveHour: quota.Window{Utilization: stored.FiveHour.Utilization, ResetsAt: stored.FiveHour.ResetsAt},
-		Weekly:   quota.Window{Utilization: stored.Weekly.Utilization, ResetsAt: stored.Weekly.ResetsAt},
-	}
 }
 
 func toUsage(read agent.QuotaUsage) quota.Usage {

@@ -70,11 +70,7 @@ func (s *Service) writeNotesOf(ctx context.Context, log *slog.Logger, token stri
 		return false
 	}
 	log.Debug(string(ActionWriteTheFollowUpNote)+": read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	comments := make([]Comment, 0, len(read))
-	for _, c := range read {
-		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body})
-	}
-	marks := FollowUpMarks(comments, (*logins).cumin)
+	marks := FollowUpMarks(toComments(read), (*logins).cumin)
 	done := true
 	for _, sub := range FollowUpCandidates(requirement, marks) {
 		written, err := s.writeFollowUpNote(ctx, log.With("issue", sub.Number), token, target, requirement.Number, sub, marks, (*logins).reviewer)
