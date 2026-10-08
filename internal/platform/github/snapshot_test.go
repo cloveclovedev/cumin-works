@@ -127,20 +127,109 @@ func TestReadSnapshot_GraphQLErrorNamesTheMessageWithoutTheToken(t *testing.T) {
 	}
 }
 
+// A requirement issue that is split again keeps the closed sub-issues of
+// its earlier split: 20 sub-issues are read in full, with one more call for
+// the next page, and the cost of the snapshot includes that call.
+func TestReadSnapshot_ReadsTwentySubIssuesInTwoPages(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 2, Labels: []string{"cumin/type/requirement"}})
+	for n := 10; n < 30; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1, Closed: n < 18})
+	}
+	fake.AddIssue(repo, &githubtest.Issue{Number: 40, Parent: 2})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	if n := fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
+		t.Errorf("%d GraphQL requests, want 2: the page of issues and one next page of sub-issues", n)
+	}
+	subIssues := snapshot.RequirementIssues[0].SubIssues
+	if len(subIssues) != 20 {
+		t.Fatalf("%d sub-issues of #1, want 20", len(subIssues))
+	}
+	for i, sub := range subIssues {
+		if sub.Number != 10+i || sub.Closed != (sub.Number < 18) {
+			t.Errorf("sub-issue %d = %+v, want #%d", i, sub, 10+i)
+		}
+	}
+	if other := snapshot.RequirementIssues[1].SubIssues; len(other) != 1 || other[0].Number != 40 {
+		t.Errorf("sub-issues of #2 = %+v, want #40 only", other)
+	}
+	// The fake costs 2 points for the page of two issues, and 1 point for
+	// the next page.
+	if snapshot.RateLimit.Cost != 3 {
+		t.Errorf("cost = %d, want the page of issues and the next page (3)", snapshot.RateLimit.Cost)
+	}
+}
+
+// A poll where every issue has at most one page of sub-issues sends no call
+// for a next page. Each next page costs one more call, up to three pages.
+func TestReadSnapshot_ANextPageOfSubIssuesCostsOneCall(t *testing.T) {
+	for _, tc := range []struct{ subIssues, calls int }{{0, 1}, {12, 1}, {13, 2}, {24, 2}, {25, 3}, {36, 3}} {
+		fake, server := githubtest.New(t)
+		repo := fake.AddRepository("example-org", "example-repo")
+		fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+		for n := 0; n < tc.subIssues; n++ {
+			fake.AddIssue(repo, &githubtest.Issue{Number: 10 + n, Parent: 1})
+		}
+		client := github.NewAppClient(server.URL, server.Client())
+
+		snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+		if err != nil {
+			t.Fatalf("%d sub-issues: ReadSnapshot: %v", tc.subIssues, err)
+		}
+		if n := fake.CountRequests(http.MethodPost, "/graphql"); n != tc.calls {
+			t.Errorf("%d sub-issues: %d GraphQL requests, want %d", tc.subIssues, n, tc.calls)
+		}
+		if n := len(snapshot.RequirementIssues[0].SubIssues); n != tc.subIssues {
+			t.Errorf("%d sub-issues: the snapshot holds %d", tc.subIssues, n)
+		}
+		if snapshot.RateLimit.Cost != tc.calls {
+			t.Errorf("%d sub-issues: cost = %d, want %d", tc.subIssues, snapshot.RateLimit.Cost, tc.calls)
+		}
+	}
+}
+
 func TestReadSnapshot_TooManySubIssuesIsAnError(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
-	// One more than the page size. The requirement allows 12 sub-issues
-	// for one requirement issue (requirement-sizing.md), so this never
-	// happens in normal use.
-	for n := 2; n <= 18; n++ {
+	// One more than three pages. The requirement allows 12 sub-issues for
+	// one split (requirement-sizing.md), so this needs more than three
+	// splits of one requirement issue.
+	for n := 2; n <= 38; n++ {
 		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1})
 	}
 	client := github.NewAppClient(server.URL, server.Client())
 
 	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
-	if err == nil || !strings.Contains(err.Error(), "issue #1 has more than 15 sub-issues") {
+	if err == nil || !strings.Contains(err.Error(), "issue #1 has more than 36 sub-issues") {
+		t.Errorf("err = %v, want an error that names issue #1", err)
+	}
+	if n := fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
+		t.Errorf("%d GraphQL requests, want 3: no fourth page is read", n)
+	}
+}
+
+// A next page that fails is an error of the read that names the issue: the
+// first page alone is a partial issue.
+func TestReadSnapshot_AFailedNextPageOfSubIssuesIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	for n := 10; n < 30; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1})
+	}
+	fake.FailAfter(http.MethodPost, "/graphql", 1, http.StatusNotFound)
+	client := github.NewAppClient(server.URL, server.Client())
+
+	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err == nil || !strings.Contains(err.Error(), "read the next sub-issues of issue #1") {
 		t.Errorf("err = %v, want an error that names issue #1", err)
 	}
 }
@@ -537,25 +626,64 @@ func TestReadRequirementIssue_ReturnsTheFactsOfThePollForOneIssue(t *testing.T) 
 	}
 }
 
+// The read of one requirement issue reads 20 sub-issues in full, with the
+// pull requests of the next page, in one more call.
+func TestReadRequirementIssue_ReadsTwentySubIssuesInTwoPages(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	for n := 10; n < 30; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1, Closed: n < 18, Labels: []string{"cumin/status/checking"}})
+	}
+	// One pull request on each page of the sub-issues.
+	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 50, HeadCommit: "2222222222222222222222222222222222222222", Author: "octocat", Closes: []int{20}})
+	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 51, HeadCommit: "3333333333333333333333333333333333333333", Author: "octocat", Closes: []int{28}})
+	client := github.NewAppClient(server.URL, server.Client())
+	ctx := context.Background()
+
+	snapshot, err := readTwoQueries(client)
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	before := fake.CountRequests(http.MethodPost, "/graphql")
+	read, err := client.ReadRequirementIssue(ctx, githubtest.Token, "example-org", "example-repo", 1)
+	if err != nil {
+		t.Fatalf("ReadRequirementIssue: %v", err)
+	}
+	if n := fake.CountRequests(http.MethodPost, "/graphql") - before; n != 2 {
+		t.Errorf("%d GraphQL requests, want 2: the issue and one next page of sub-issues", n)
+	}
+	if read.RateLimit.Cost != 2 {
+		t.Errorf("cost = %d, want the two calls (2)", read.RateLimit.Cost)
+	}
+	want := snapshot.RequirementIssues[0]
+	if len(want.SubIssues) != 20 || len(want.SubIssues[10].PullRequests) != 1 || len(want.SubIssues[18].PullRequests) != 1 {
+		t.Fatalf("the poll read %+v, want 20 sub-issues and the pull requests of #20 and #28", want)
+	}
+	if !reflect.DeepEqual(read.Issue, want) {
+		t.Errorf("issue = %+v, want the requirement issue of the poll %+v", read.Issue, want)
+	}
+}
+
 // An issue over a limit of the query is an error that names the issue, as
 // in the poll.
 func TestReadOneIssue_AnIssueOverALimitIsAnErrorThatNamesTheIssue(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
-	// One more sub-issue than the page size, and one of them with three
+	// One more sub-issue than three pages, and one of them with three
 	// open closing pull requests.
-	for n := 2; n <= 18; n++ {
+	for n := 2; n <= 38; n++ {
 		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1})
 	}
-	for n := 30; n <= 32; n++ {
+	for n := 50; n <= 52; n++ {
 		fake.AddPullRequest(repo, &githubtest.PullRequest{Number: n, Author: "octocat", Closes: []int{2}})
 	}
 	client := github.NewAppClient(server.URL, server.Client())
 	ctx := context.Background()
 
 	_, err := client.ReadRequirementIssue(ctx, githubtest.Token, "example-org", "example-repo", 1)
-	if err == nil || !strings.Contains(err.Error(), "read issue #1 of example-org/example-repo: issue #1 has more than 15 sub-issues") {
+	if err == nil || !strings.Contains(err.Error(), "read issue #1 of example-org/example-repo: issue #1 has more than 36 sub-issues") {
 		t.Errorf("err = %v, want an error that names issue #1", err)
 	}
 	_, err = client.ReadSubIssue(ctx, githubtest.Token, "example-org", "example-repo", 2)

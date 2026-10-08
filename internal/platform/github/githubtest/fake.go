@@ -1805,6 +1805,10 @@ func (f *Fake) serveGraphQL(w http.ResponseWriter, body []byte) {
 		f.serveIssueComments(w, repo, v.Number, v.Last, v.Before)
 		return
 	}
+	if v.Number != 0 && v.After != nil {
+		f.serveSubIssuePage(w, repo, v.Number, *v.After, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks, v.Reviews)
+		return
+	}
 	if v.Number != 0 && v.PullRequests != 0 {
 		f.serveOneIssue(w, repo, v.Number, v.Labels, v.SubIssues, v.BlockedBy, v.PullRequests, v.Checks, v.Reviews)
 		return
@@ -1925,6 +1929,49 @@ func (f *Fake) serveOneIssue(w http.ResponseWriter, repo *Repository, number, la
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": map[string]any{"repository": map[string]any{"defaultBranchRef": defaultBranch, "issue": node}, "rateLimit": rateLimit(1)},
 	})
+}
+
+// serveSubIssuePage answers the query of a next page of the sub-issues of
+// one issue: the sub-issues after the cursor, with their pull requests when
+// the query asks for them. Official: Issue.subIssues with first and after.
+func (f *Fake) serveSubIssuePage(w http.ResponseWriter, repo *Repository, number int, after string, labels, subIssues, blockedBy, pullRequests, checks, reviews int) {
+	issue, ok := repo.Issues[number]
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":   map[string]any{"repository": map[string]any{"issue": nil}, "rateLimit": rateLimit(1)},
+			"errors": []map[string]any{{"message": fmt.Sprintf("Could not resolve to an Issue with the number of %d.", number)}},
+		})
+		return
+	}
+	node := map[string]any{
+		"number":    issue.Number,
+		"subIssues": f.subIssues(repo, issue, after, labels, subIssues, blockedBy, pullRequests, checks, reviews),
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{"repository": map[string]any{"issue": node}, "rateLimit": rateLimit(1)},
+	})
+}
+
+// subIssues is one page of the sub-issues of the issue: at most first of
+// them after the cursor, which is the number of the last sub-issue of the
+// page before, or empty for the first page.
+func (f *Fake) subIssues(repo *Repository, issue *Issue, after string, labels, first, blockedBy, pullRequests, checks, reviews int) map[string]any {
+	last, _ := strconv.Atoi(after)
+	var subs []*Issue
+	for _, candidate := range sortedIssues(repo) {
+		if candidate.Parent == issue.Number && candidate.Number > last {
+			subs = append(subs, candidate)
+		}
+	}
+	page := connection(subs, first, func(sub *Issue) any {
+		return f.issueNode(repo, sub, labels, first, blockedBy, pullRequests, checks, reviews)
+	})
+	endCursor := any(nil)
+	if n := min(len(subs), first); n > 0 {
+		endCursor = strconv.Itoa(subs[n-1].Number)
+	}
+	page["pageInfo"].(map[string]any)["endCursor"] = endCursor
+	return page
 }
 
 // serveLinked answers the query of the pull requests that are linked to
@@ -2121,15 +2168,7 @@ func (f *Fake) issueNode(repo *Repository, issue *Issue, labels, subIssues, bloc
 		}(),
 		"labels": connection(issue.Labels, labels, func(name string) any { return map[string]any{"name": name} }),
 	}
-	var subs []*Issue
-	for _, candidate := range sortedIssues(repo) {
-		if candidate.Parent == issue.Number {
-			subs = append(subs, candidate)
-		}
-	}
-	node["subIssues"] = connection(subs, subIssues, func(sub *Issue) any {
-		return f.issueNode(repo, sub, labels, subIssues, blockedBy, pullRequests, checks, reviews)
-	})
+	node["subIssues"] = f.subIssues(repo, issue, "", labels, subIssues, blockedBy, pullRequests, checks, reviews)
 	node["blockedBy"] = connection(issue.BlockedBy, blockedBy, func(number int) any {
 		closed := false
 		if blocker, ok := repo.Issues[number]; ok {

@@ -70,7 +70,7 @@ func (c *AppClient) ReadOwnLabelActor(ctx context.Context, token, owner, repo st
 func (c *AppClient) readLabelActor(ctx context.Context, token, owner, repo string, number int, label string, subIssues bool) (LabelActor, RateLimit, error) {
 	variables := map[string]any{
 		"owner": owner, "name": repo, "number": number,
-		"subIssues": snapshotSubIssues, "events": labelTimesEvents,
+		"subIssues": labelSubIssues, "events": labelTimesEvents,
 	}
 	var resp labelActorResponse
 	request := map[string]any{"query": labelActorQuery, "variables": variables}
@@ -96,7 +96,7 @@ func (c *AppClient) readLabelActor(ctx context.Context, token, owner, repo strin
 		return LabelActor{}, rate, nil
 	}
 	if issue.SubIssues.PageInfo.HasNextPage {
-		return LabelActor{}, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, snapshotSubIssues)
+		return LabelActor{}, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, labelSubIssues)
 	}
 	var newest labelEventNode
 	found := false

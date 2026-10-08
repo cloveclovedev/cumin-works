@@ -18,7 +18,7 @@ package "Query 2: the pull requests of the selected sub-issues (up to 100 ids in
 }
 
 repo "1" --> "10 per page" req : issues
-req "1" --> "up to 15" sub : subIssues
+req "1" --> "12 per page, up to 36" sub : subIssues
 sub "1" --> "up to 100" blocker : blockedBy
 sub ..> selected : the selection (pure function)\nno selected sub-issue: no query 2
 selected "1" --> "up to 2" pr : closedByPullRequestsReferences

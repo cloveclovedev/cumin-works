@@ -54,7 +54,7 @@ type LabelTimes map[int]map[string]time.Time
 func (c *AppClient) ReadLabelTimes(ctx context.Context, token, owner, repo string, number int) (LabelTimes, RateLimit, error) {
 	variables := map[string]any{
 		"owner": owner, "name": repo, "number": number,
-		"subIssues": snapshotSubIssues, "events": labelTimesEvents,
+		"subIssues": labelSubIssues, "events": labelTimesEvents,
 	}
 	var resp labelTimesResponse
 	request := map[string]any{"query": labelTimesQuery, "variables": variables}
@@ -74,7 +74,7 @@ func (c *AppClient) ReadLabelTimes(ctx context.Context, token, owner, repo strin
 	}
 	issue := resp.Data.Repository.Issue
 	if issue.SubIssues.PageInfo.HasNextPage {
-		return nil, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, snapshotSubIssues)
+		return nil, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, labelSubIssues)
 	}
 	times := LabelTimes{}
 	times.add(issue.Number, issue.TimelineItems.Nodes)

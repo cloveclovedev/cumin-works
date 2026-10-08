@@ -74,6 +74,7 @@
 2つの問い合わせ:
 
 - 1回の定期確認は、GitHubを2つの問い合わせで読む。1つ目 (`snapshotQuery`) はsub-issueまでで止まり、番号、id、題、開閉、閉じた時刻、ラベル、blocked by を読む。2つ目 (`pullRequestsQuery`) は、選んだsub-issueだけについて、Issueを閉じる開いているPull Request (`closedByPullRequestsReferences` と、その下の全ての項目) を読む。上の表のPull Requestの行は、どれも2つ目の問い合わせで読む。
+- 1つ目の問い合わせは、sub-issueを12件ずつのページで読む (`subIssues(first: 12)` と `pageInfo { hasNextPage endCursor }`)。12件は、1回の分割の上限である。`hasNextPage` のIssueだけ、そのIssue 1つの問い合わせ (`subIssuePageQuery`) で、`after` を付けて次のページを読む。3ページ、36件までである。分割し直した要求Issueは、前の分割の閉じたsub-issueを持ち続けるためである。36件を超えるIssueは、Issueの番号を示すエラーにして、そのリポジトリの定期確認を止める。次のページは1ページごとに1ポイントで、どのIssueも12件以下の定期確認では、問い合わせの数もポイントも増えない (2026-10-08にcumin-worksで実測)。スナップショットのポイントの合計は、次のページのポイントを含む。1つの要求Issueの読み取り (`ReadRequirementIssue`) も、同じページで読む。ラベルの時刻の問い合わせと、ラベルを付けたアカウントの問い合わせは、sub-issueを15件までを1回で読む。
 - 分ける理由はポイントである。Pull Requestは、1ページ17ポイントのうち14ポイントを占めていた (2026-10-03に実測、[#421](https://github.com/cloveclovedev/cumin-works/pull/421))。今の値は、下の「ポイント」の項目にある。Pull Requestを読む行が当てはまるsub-issueは、少ない。
 - 選ぶのは、開いていて `cumin/status/*` のラベルが付いたsub-issueである。`internal/workflow` の純粋関数 `Snapshot.SubIssuesWithPullRequestRules` が、1つ目の読み取りから選ぶ。選んだsub-issueがなければ、2つ目の問い合わせを送らない。
 - `Service.Poll` が、2つの読み取りから1つのスナップショットを作る (`Snapshot.WithPullRequests`)。`Decide` と各行の判定は、そのスナップショットだけを読む純粋関数のままである。選ばなかったsub-issueは、Pull Requestなしでスナップショットに入る。
@@ -180,7 +181,7 @@ checkの結果の読み方:
 - `cumin/status/checking` の時刻だけが読めなかったときは、ほかの行を止めない。「mark the requirement as in work」が成り立ちえない要求Issueでは、着手 (「request the implementation」) も待たない。
 - 読めなかったときは、「send back for changes」の候補にしない。Issueは `cumin/status/awaiting-merge-decision` のままなので、次の定期確認でやり直す。
 - 読めなかったときは、ログに出して、「mark the requirement as in work」をその定期確認では判定しない。その要求Issueのsub-issueの着手 (「request the implementation」) も、次の定期確認まで待つ。着手すると `cumin/status/ready` が外れ、「mark the requirement as in work」が二度と成り立たなくなるためである。「mark the requirement as in work」がラベルを替えられなかったときも、同じ理由で待つ。ほかの行は進める。
-- 採らなかった案: 定期確認の問い合わせに、sub-issueごとのタイムラインを入れる。1ページに要求Issue 10件 x sub-issue 15件のタイムラインが加わり、ページを小さくしても、「mark the requirement as in work」が要らない定期確認のたびにコストが増える。
+- 採らなかった案: 定期確認の問い合わせに、sub-issueごとのタイムラインを入れる。1ページに要求Issue 10件 x sub-issue 12件のタイムラインが加わり、ページを小さくしても、「mark the requirement as in work」が要らない定期確認のたびにコストが増える。
 
 ### ラベルを付けたイベントの決まり
 
