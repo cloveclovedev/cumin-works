@@ -290,3 +290,4 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 36 | sub-issueが36件を超える要求Issueと、`cumin/status/ready` の付いた別の実装Issueがある | 定期確認は失敗しない。別の実装Issueには着手する。36件を超える要求Issueとそのsub-issueには、何もしない。ラベルも替えない |
 | 37 | 全部を読めないIssueがあるまま、定期確認を3回行う | 通知は1回だけである。通知に、Issueと超えた上限がある。`cumin status` が、そのIssueと上限を表示する |
 | 38 | 全部を読めなかったIssueのsub-issueを減らして、36件以下にする | 次の定期確認から、そのIssueも今までどおり動く |
+| 39 | `cumin/type/owner-task` のsub-issueだけが開いていて、要求Issueが `cumin/status/awaiting-plan-review` である。Maintainerがそのsub-issueを閉じる | 次の定期確認で、要求Issueが `cumin/status/accepting` に替わり、受け入れの確認が1回だけ依頼される。Maintainerはラベルを替えない |

@@ -24,6 +24,7 @@ Planning -[#D32F2F,bold]-> Accepting : <color:#D32F2F>request the acceptance che
 Planning -[#D32F2F,bold]-> Planning : <color:#D32F2F>request the split again</color>
 Planning -[#888888]-> Decision : stop the split
 PlanReview -[#888888]-> Implementing : mark the requirement as in work
+PlanReview -[#D32F2F,bold]-> Accepting : <color:#D32F2F>request the acceptance check</color>
 Implementing -[#D32F2F,bold]-> Accepting : <color:#D32F2F>request the acceptance check</color>
 Implementing -[#888888]-> PlanReview : ask about the remaining sub-issues
 Accepting -[#888888]-> Acceptance : ask for the acceptance
