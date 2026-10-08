@@ -549,7 +549,8 @@ type Claim struct {
 
 // StartReview is the action "request the review": every required check
 // passed on the head commit of the pull request, so the status label becomes
-// cumin/status/reviewing. Starting the Reviewer is a later requirement.
+// cumin/status/reviewing, and only then cumin starts the Reviewer
+// (review.go).
 type StartReview struct {
 	Number      int
 	PullRequest int
@@ -852,7 +853,7 @@ type FixMaintainerReview struct {
 	Reviewers   []string
 }
 
-// Action is one thing that cumin does after a poll. Later rules add types.
+// Action is one thing that cumin does after a poll.
 type Action interface {
 	isAction()
 }

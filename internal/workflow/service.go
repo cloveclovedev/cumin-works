@@ -1785,7 +1785,7 @@ func toChecks(read []github.CheckResult) []CheckResult {
 	return checks
 }
 
-// toConclusion folds the conclusion of the client into the one of the rules.
+// toReviews folds the reviews of the client into the ones of the rules.
 func toReviews(read []github.Review) []Review {
 	var reviews []Review
 	for _, r := range read {
@@ -1794,6 +1794,7 @@ func toReviews(read []github.Review) []Review {
 	return reviews
 }
 
+// toConclusion folds the conclusion of the client into the one of the rules.
 func toConclusion(c github.CheckConclusion) CheckConclusion {
 	switch c {
 	case github.CheckPassed:
