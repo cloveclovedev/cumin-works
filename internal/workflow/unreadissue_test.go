@@ -219,3 +219,147 @@ func TestPoll_AnotherFailureOfAReadStillFailsThePoll(t *testing.T) {
 		})
 	}
 }
+
+// unreadNotifications returns the notifications about an issue that cumin
+// cannot read in full.
+func (sc *scene) unreadNotifications() []string {
+	var messages []string
+	for _, message := range sc.webhook.messagesSent() {
+		if strings.Contains(message, "in full") {
+			messages = append(messages, message)
+		}
+	}
+	return messages
+}
+
+// Three polls with the same issue over the same limit give one
+// notification. It names the repository, the issue, the requirement issue,
+// and the limit, its link opens the issue, and it carries no name of an
+// action. The first poll requests the ready issue beside the unread one
+// (cumin-core.md, "Issues that cumin cannot read in full" and the last line
+// of the table of notifications).
+func TestPoll_AnIssueOverAReadLimitIsToldOnce(t *testing.T) {
+	for _, unread := range unreadIssues {
+		t.Run(unread.name, func(t *testing.T) {
+			sc := newScene(t)
+			sc.addUnlinkedPullRequest(21, sc.remoteHead)
+			sc.addUnread(unread)
+			service := sc.service()
+
+			pollTimes(t, service, 1, false)
+			if n := sc.agentRuns(t); n != 1 {
+				t.Errorf("%d agent runs, want 1: the run of #10 in the poll that tells", n)
+			}
+			pollTimes(t, service, 2, false)
+
+			messages := sc.unreadNotifications()
+			if len(messages) != 1 {
+				t.Fatalf("%d notifications after three polls, want 1: %v", len(messages), messages)
+			}
+			for _, want := range []string{
+				fmt.Sprintf("cumin: cumin cannot read issue #%d in full: it has %s.", unread.issue, unread.limit),
+				"requirement issue #30",
+				fmt.Sprintf("example-org/example-repo issue #%d", unread.issue),
+				fmt.Sprintf("https://github.com/example-org/example-repo/issues/%d", unread.issue),
+			} {
+				if !strings.Contains(messages[0], want) {
+					t.Errorf("the notification has no %q:\n%s", want, messages[0])
+				}
+			}
+		})
+	}
+}
+
+// After a poll that read the issue in full, a new pass of the limit is told
+// again. The poll that read the issue in full tells nothing.
+func TestPoll_AnIssueThatWasReadInFullIsToldAgainAtTheNextPassOfTheLimit(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	unread := unreadIssues[1]
+	sc.addUnread(unread)
+	over := sc.fake.Issue(sc.repo, 31).Labels
+	service := sc.service()
+
+	pollTimes(t, service, 2, false)
+	if n := len(sc.unreadNotifications()); n != 1 {
+		t.Fatalf("%d notifications, want 1", n)
+	}
+
+	// A Maintainer removed labels: the poll reads the issue in full.
+	if err := sc.fake.SetLabels(sc.repo, 31, []string{"risk/low"}); err != nil {
+		t.Fatal(err)
+	}
+	pollTimes(t, service, 1, false)
+	if n := len(sc.unreadNotifications()); n != 1 {
+		t.Errorf("%d notifications after the poll that read the issue in full, want 1", n)
+	}
+
+	if err := sc.fake.SetLabels(sc.repo, 31, over); err != nil {
+		t.Fatal(err)
+	}
+	pollTimes(t, service, 2, false)
+	if n := len(sc.unreadNotifications()); n != 2 {
+		t.Errorf("%d notifications after the new pass of the limit, want 2", n)
+	}
+}
+
+// Another limit of the same issue is told on its own, and the limit that
+// was told stays silent.
+func TestPoll_AnotherLimitOfTheSameIssueIsToldOnItsOwn(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	sc.addUnread(unreadIssues[0])
+	service := sc.service()
+
+	pollTimes(t, service, 2, false)
+	labels := []string{githubtest.RequirementLabel, "cumin/status/implementing"}
+	for i := range 100 {
+		labels = append(labels, fmt.Sprintf("area/%d", i))
+	}
+	if err := sc.fake.SetLabels(sc.repo, 30, labels); err != nil {
+		t.Fatal(err)
+	}
+	pollTimes(t, service, 2, false)
+
+	messages := sc.unreadNotifications()
+	if len(messages) != 2 {
+		t.Fatalf("%d notifications, want 2: %v", len(messages), messages)
+	}
+	if !strings.Contains(messages[0], "more than 36 sub-issues") || !strings.Contains(messages[1], "more than 100 labels") {
+		t.Errorf("the notifications do not name one limit each: %v", messages)
+	}
+}
+
+// With notify.discord.enabled = false in the file of the repository, an
+// issue over a read limit brings no notification, and the log says once that
+// the notification is off.
+func TestPoll_AnUnreadIssueFollowsTheSettingOfTheRepository(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	sc.addUnread(unreadIssues[1])
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{
+		Content: "max_review_rounds = 2\n\n[notify.discord]\nenabled = false\n",
+	})
+	service := sc.service()
+
+	pollTimes(t, service, 3, false)
+
+	if messages := sc.webhook.messagesSent(); len(messages) != 0 {
+		t.Errorf("%d notifications, want none: %v", len(messages), messages)
+	}
+	var told, off int
+	for l := range strings.SplitSeq(sc.logs.String(), "\n") {
+		if !strings.Contains(l, `"issue":31`) || !strings.Contains(l, `"limit":"more than 100 labels"`) {
+			continue
+		}
+		if strings.Contains(l, `"msg":"cumin tells once about the issue that it cannot read in full"`) {
+			told++
+		}
+		if strings.Contains(l, `"msg":"the notification is off for this repository"`) {
+			off++
+		}
+	}
+	if told != 1 || off != 1 {
+		t.Errorf("the log tells %d times and says %d times that the notification is off, want 1 and 1:\n%s", told, off, sc.logs.String())
+	}
+}
