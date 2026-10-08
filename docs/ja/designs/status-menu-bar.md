@@ -16,7 +16,7 @@
 扱わないこと:
 
 - ファイルに載せる事実をcuminがどう得るか。[定期確認の設計](poll.md) と [利用枠の設計](quota.md) にある。
-- アプリのビルドと起動の手順、LaunchAgentのplist。`docs/ja/guides/` に書く ([#507](https://github.com/cloveclovedev/cumin-works/issues/507))。
+- アプリのビルドと起動の手順、LaunchAgentのplist。[メニューバーのアプリを作って起動する](../guides/status-menu-bar.md) にある。
 - GitHubをアプリから読むこと、macOS以外のOS。#392 が範囲の外としている。
 
 ## 設計

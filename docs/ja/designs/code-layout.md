@@ -124,6 +124,7 @@
 | | `Sources/CuminStatusBar/AlertModel.swift` | 純粋。ファイルのバイト列、設定、今の時刻、前に見た項目から、新しい項目、鳴らす音、点滅する区画を決める |
 | | `Sources/CuminStatusBar/main.swift` | アプリの入口。AppKitを使う唯一のファイル。5秒ごとにモニターファイルと設定を読み、区画の画像とメニューを作り、音を鳴らし、区画を点滅させ、行のURLをブラウザで開く。ファイルを書かず、ネットワークを使わない |
 | | `Tests/CuminStatusBarTests/` | 純粋な型のテスト (XCTest)。Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) も読む |
+| | `dev.cloveclove.cumin-status-bar.plist` | アプリをログインのときに起動するLaunchAgentのplistのテンプレート。`__REPO__` をcheckoutのパスに置き換えて使う ([メニューバーのアプリを作って起動する](../guides/status-menu-bar.md)) |
 
 ## まだ決めていないこと
 
