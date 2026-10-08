@@ -131,7 +131,7 @@
 - テストは `swift test` (XCTest) で、純粋な型だけを試す。時刻は引数で渡すので、どのマシンでも同じ結果になる。Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) を、Swiftのテストも読む。1つのファイルが、書く側と読む側の両方を確かめる。
 - Swiftのテストは、golden fileを、テストのソースファイルの場所 (`#filePath`) からリポジトリの先頭をたどったパスで読む。写しも、packageのresourceも作らない。リポジトリのcheckoutの中で `swift test` を実行することが前提である。
 - 対応する最も古い版は、macOS 13 と、Swiftのtools version 5.9 である。手本のアプリ (#392 での決定) と同じにする。
-- CIのmacOSのjobは、Maintainerの作業である ([#506](https://github.com/cloveclovedev/cumin-works/issues/506))。それまでは、ImplementerとReviewerがHostで `swift test` を実行する。
+- CIのjob `status-bar` が、macOSのrunnerで `swift build` と `swift test` を実行する (`.github/workflows/ci.yml`)。テストはGoのコードのゴールデンファイルを読むので、アプリが読めない形にモニターファイルを変えると、このjobが失敗する。
 - 起動は、ログイン時のLaunchAgentで行う。cuminのLaunchAgentとは別のものである。
 
 ### ファイルの読み方と表示
