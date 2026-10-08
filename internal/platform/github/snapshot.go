@@ -96,6 +96,9 @@ const (
 // The sub-issues carry no pull request: ReadPullRequests reads those.
 // docs/ja/designs/poll.md, topic "What one poll reads".
 type RepositorySnapshot struct {
+	// Unread are the issues over a limit of the query. RequirementIssues
+	// holds no requirement issue of them: no rule decides on a partial issue.
+	Unread []UnreadIssue
 	// DefaultBranch is the name of the default branch, and DefaultBranchOID
 	// is the commit at its head. A repository without a commit has neither.
 	DefaultBranch    string
@@ -106,6 +109,52 @@ type RepositorySnapshot struct {
 	CuminRiskCriteria *RepositoryFile
 	RequirementIssues []Issue
 	RateLimit         RateLimit
+}
+
+// UnreadIssue is an issue that cumin cannot read in full: it has more of one
+// thing than the query reads (cumin-core.md, "Issues that cumin cannot read
+// in full").
+type UnreadIssue struct {
+	// Requirement is the requirement issue that the poll leaves out for
+	// the issue. ReadPullRequests does not know it and leaves it 0.
+	Requirement int
+	// Issue is the issue over the limit: the requirement issue itself, or
+	// one of its sub-issues.
+	Issue int
+	// Limit is the limit as text, for example "more than 36 sub-issues".
+	Limit string
+}
+
+// overLimitError is the error of an issue over a limit of the query. A poll
+// leaves the issue out and goes on; the read of one issue returns the error.
+type overLimitError struct {
+	issue int
+	limit string
+}
+
+func (e *overLimitError) Error() string {
+	return fmt.Sprintf("issue #%d has %s", e.issue, e.limit)
+}
+
+// overLimits returns the limits that err consists of. ok is false when err
+// is nil or holds any other error: that error stays an error of the read.
+func overLimits(err error) (limits []*overLimitError, ok bool) {
+	switch e := err.(type) {
+	case nil:
+		return nil, false
+	case *overLimitError:
+		return []*overLimitError{e}, true
+	case interface{ Unwrap() []error }:
+		for _, inner := range e.Unwrap() {
+			found, ok := overLimits(inner)
+			if !ok {
+				return nil, false
+			}
+			limits = append(limits, found...)
+		}
+		return limits, len(limits) > 0
+	}
+	return nil, false
 }
 
 // RepositoryFile is one text file of the default branch. OID is the blob of
@@ -742,8 +791,8 @@ func restLogin(typeName, login string) string {
 
 // pullRequest converts one node. Without includeClosedPrs, the connection
 // holds open pull requests only (the schema: closedByPullRequestsReferences).
-// A connection over its page size is an error, as it is for an issue. An
-// unknown mergeable value is an error too: cumin must not decide on a value
+// A connection over its page size is an error, as it is for an issue: the
+// caller puts the number of the issue in it. An unknown mergeable value is an error too: cumin must not decide on a value
 // whose meaning it does not know.
 func (n pullRequestNode) pullRequest() (PullRequest, error) {
 	pr := PullRequest{Number: n.Number, HeadCommit: n.HeadRefOid, HeadBranch: n.HeadRefName}
@@ -762,13 +811,13 @@ func (n pullRequestNode) pullRequest() (PullRequest, error) {
 		pr.Author = restLogin(n.Author.TypeName, n.Author.Login)
 	}
 	if n.Labels.PageInfo.HasNextPage {
-		return PullRequest{}, fmt.Errorf("pull request #%d has more than %d labels", n.Number, snapshotLabels)
+		return PullRequest{}, &overLimitError{limit: fmt.Sprintf("more than %d labels on pull request #%d", snapshotLabels, n.Number)}
 	}
 	for _, label := range n.Labels.Nodes {
 		pr.Labels = append(pr.Labels, label.Name)
 	}
 	if n.Reviews.PageInfo.HasNextPage {
-		return PullRequest{}, fmt.Errorf("pull request #%d has more than %d reviews", n.Number, snapshotReviews)
+		return PullRequest{}, &overLimitError{limit: fmt.Sprintf("more than %d reviews on pull request #%d", snapshotReviews, n.Number)}
 	}
 	for _, node := range n.Reviews.Nodes {
 		pr.Reviews = append(pr.Reviews, node.review())
@@ -777,7 +826,7 @@ func (n pullRequestNode) pullRequest() (PullRequest, error) {
 		return pr, nil
 	}
 	if n.StatusCheckRollup.Contexts.PageInfo.HasNextPage {
-		return PullRequest{}, fmt.Errorf("pull request #%d has more than %d checks", n.Number, snapshotChecks)
+		return PullRequest{}, &overLimitError{limit: fmt.Sprintf("more than %d checks on pull request #%d", snapshotChecks, n.Number)}
 	}
 	for _, node := range n.StatusCheckRollup.Contexts.Nodes {
 		check, err := node.result()
@@ -793,7 +842,10 @@ func (n pullRequestNode) pullRequest() (PullRequest, error) {
 // token: one GraphQL query for each page of requirement issues, and one more
 // for each next page of the sub-issues of one issue. Closed requirement
 // issues are not read (issue-states.md, principle 6). The sub-issues come
-// without their pull requests (ReadPullRequests).
+// without their pull requests (ReadPullRequests). A requirement issue that is
+// over a limit of the query, or that has such a sub-issue, is not in
+// RequirementIssues: Unread names the issue and the limit. Every other
+// failure is an error of the whole read.
 func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string) (RepositorySnapshot, error) {
 	var snapshot RepositorySnapshot
 	var after *string
@@ -833,6 +885,12 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 				return RepositorySnapshot{}, fmt.Errorf("github: read the snapshot of %s/%s: %w", owner, repo, err)
 			}
 			issue, err := node.issue()
+			if limits, ok := overLimits(err); ok {
+				for _, limit := range limits {
+					snapshot.Unread = append(snapshot.Unread, UnreadIssue{Requirement: node.Number, Issue: limit.issue, Limit: limit.limit})
+				}
+				continue
+			}
 			if err != nil {
 				return RepositorySnapshot{}, fmt.Errorf("github: read the snapshot of %s/%s: %w", owner, repo, err)
 			}
@@ -849,9 +907,11 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 
 // PullRequestsRead is what the second query of a poll returns: the open
 // closing pull requests of each sub-issue that the caller named, by the
-// number of the sub-issue, and the rate limit of the calls.
+// number of the sub-issue, and the rate limit of the calls. Unread are the
+// sub-issues over a limit of the query; PullRequests has no entry for them.
 type PullRequestsRead struct {
 	PullRequests map[int][]PullRequest
+	Unread       []UnreadIssue
 	RateLimit    RateLimit
 }
 
@@ -875,7 +935,8 @@ type pullRequestsResponse struct {
 // sub-issues, with the installation token. issueIDs are the node ids that
 // ReadSnapshot read. No id means no query. An id that is no longer an issue
 // (deleted or moved between the two reads) is an error, so that a rule never
-// decides on a sub-issue whose pull requests were not read.
+// decides on a sub-issue whose pull requests were not read. A sub-issue over
+// a limit of the query is not an error: Unread names it and the limit.
 func (c *AppClient) ReadPullRequests(ctx context.Context, token, owner, repo string, issueIDs []string) (PullRequestsRead, error) {
 	read := PullRequestsRead{PullRequests: map[int][]PullRequest{}}
 	for page := range slices.Chunk(issueIDs, snapshotPullRequestIssues) {
@@ -908,6 +969,12 @@ func (c *AppClient) ReadPullRequests(ctx context.Context, token, owner, repo str
 				return PullRequestsRead{}, fmt.Errorf("github: read the pull requests of %s/%s: the id %s is not an issue", owner, repo, page[i])
 			}
 			pullRequests, err := node.pullRequests()
+			if limits, ok := overLimits(err); ok {
+				for _, limit := range limits {
+					read.Unread = append(read.Unread, UnreadIssue{Issue: limit.issue, Limit: limit.limit})
+				}
+				continue
+			}
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -979,18 +1046,19 @@ func (s *RepositorySnapshot) readRepositoryFiles(resp snapshotResponse) error {
 }
 
 // issue converts one node. A connection with more nodes than the page size
-// is an error, so that a rule never decides on a partial issue. The
+// is an error (overLimitError), so that a rule never decides on a partial
+// issue. The
 // sub-issues are over their size when the last of their pages has a next
 // page (readNextSubIssues).
 func (n issueNode) issue() (Issue, error) {
 	if n.Labels.PageInfo.HasNextPage {
-		return Issue{}, fmt.Errorf("issue #%d has more than %d labels", n.Number, snapshotLabels)
+		return Issue{}, &overLimitError{issue: n.Number, limit: fmt.Sprintf("more than %d labels", snapshotLabels)}
 	}
 	if n.SubIssues.PageInfo.HasNextPage {
-		return Issue{}, fmt.Errorf("issue #%d has more than %d sub-issues", n.Number, snapshotSubIssues*snapshotSubIssuePages)
+		return Issue{}, &overLimitError{issue: n.Number, limit: fmt.Sprintf("more than %d sub-issues", snapshotSubIssues*snapshotSubIssuePages)}
 	}
 	if n.BlockedBy.PageInfo.HasNextPage {
-		return Issue{}, fmt.Errorf("issue #%d has more than %d blocked-by issues", n.Number, snapshotBlockedBy)
+		return Issue{}, &overLimitError{issue: n.Number, limit: fmt.Sprintf("more than %d blocked-by issues", snapshotBlockedBy)}
 	}
 	issue := Issue{Number: n.Number, Title: n.Title, NodeID: n.ID, Closed: n.State == "CLOSED"}
 	if n.ClosedAt != nil {
@@ -1027,12 +1095,17 @@ func (n issueNode) issue() (Issue, error) {
 // connections of an issue.
 func (n issueNode) pullRequests() ([]PullRequest, error) {
 	if n.PullRequests.PageInfo.HasNextPage {
-		return nil, fmt.Errorf("issue #%d has more than %d open closing pull requests", n.Number, snapshotPullRequests)
+		return nil, &overLimitError{issue: n.Number, limit: fmt.Sprintf("more than %d open closing pull requests", snapshotPullRequests)}
 	}
 	var pullRequests []PullRequest
 	var errs []error
 	for _, node := range n.PullRequests.Nodes {
 		pr, err := node.pullRequest()
+		if limit, ok := err.(*overLimitError); ok {
+			limit.issue = n.Number
+			errs = append(errs, limit)
+			continue
+		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("issue #%d: %w", n.Number, err))
 			continue

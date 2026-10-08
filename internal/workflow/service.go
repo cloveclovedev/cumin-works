@@ -582,6 +582,11 @@ func (s *Service) noteRunEnded(repository string) {
 // second query reads the pull requests of the sub-issues that a rule reads
 // them for; no such sub-issue means no second query (poll.md, the topic on
 // the two queries). The rate limit of the result is the one of both reads.
+//
+// The snapshot holds only the requirement issues that both reads read in
+// full. An issue over a limit of a query takes its requirement issue out,
+// with all its sub-issues, and the unread list of the result names the issue
+// and the limit. Every other failure of a read is an error.
 func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (github.RepositorySnapshot, Snapshot, error) {
 	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
 	if err != nil {
@@ -606,7 +611,14 @@ func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (
 	}
 	read.RateLimit.Cost += pullRequests.RateLimit.Cost
 	read.RateLimit.Remaining = pullRequests.RateLimit.Remaining
-	return read, snapshot.WithPullRequests(byIssue), nil
+	snapshot = snapshot.WithPullRequests(byIssue)
+	unread := map[int]bool{}
+	for _, issue := range pullRequests.Unread {
+		issue.Requirement = snapshot.RequirementOf(issue.Issue)
+		unread[issue.Requirement] = true
+		read.Unread = append(read.Unread, issue)
+	}
+	return read, snapshot.WithoutRequirementIssues(unread), nil
 }
 
 func (s *Service) pollRepository(ctx context.Context, target Target, finishing bool) (pollResult, error) {
@@ -638,6 +650,13 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	snapshot.Running = running
 	s.noteWaitingIssues(target.Repository.String(), snapshot.WaitingIssues(target.Repository.String()))
 	log := s.logger().With("repository", target.Repository.String())
+	// An issue over a limit of a read is no failure of the poll. The
+	// snapshot does not hold its requirement issue, so no rule and no later
+	// read of this poll sees it, and no label of it changes.
+	for _, issue := range read.Unread {
+		log.Warn("cumin cannot read the issue in full: the poll leaves its requirement issue out and goes on",
+			"issue", issue.Issue, "requirement_issue", issue.Requirement, "limit", issue.Limit)
+	}
 
 	// The settings of this repository. A wrong file skips this repository
 	// and this poll; the other repositories are polled by the caller.

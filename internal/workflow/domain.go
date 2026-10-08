@@ -100,6 +100,33 @@ func (s Snapshot) WithPullRequests(pullRequests map[int][]PullRequest) Snapshot 
 	return s
 }
 
+// RequirementOf returns the number of the requirement issue that holds the
+// sub-issue, or 0 when the snapshot has no such sub-issue.
+func (s Snapshot) RequirementOf(subIssue int) int {
+	for _, requirement := range s.RequirementIssues {
+		for _, sub := range requirement.SubIssues {
+			if sub.Number == subIssue {
+				return requirement.Number
+			}
+		}
+	}
+	return 0
+}
+
+// WithoutRequirementIssues returns the snapshot without the requirement
+// issues of the numbers, and so without their sub-issues. The poll removes
+// the requirement issue of an issue that cumin cannot read in full: no rule
+// decides on a partial issue.
+func (s Snapshot) WithoutRequirementIssues(numbers map[int]bool) Snapshot {
+	if len(numbers) == 0 {
+		return s
+	}
+	s.RequirementIssues = slices.DeleteFunc(slices.Clone(s.RequirementIssues), func(requirement RequirementIssue) bool {
+		return numbers[requirement.Number]
+	})
+	return s
+}
+
 // HasIssueInWork reports whether an issue of the repository is in work:
 // an open requirement issue with cumin/status/ready,
 // cumin/status/planning, or cumin/status/accepting, or an open sub-issue with cumin/status/ready,
