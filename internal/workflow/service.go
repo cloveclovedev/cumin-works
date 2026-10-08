@@ -1488,14 +1488,24 @@ func labelsNow(sub SubIssue, ok bool) []string {
 // failed read leaves the facts out, so nothing is decided for that issue in
 // this poll.
 func (s *Service) readImplementingFacts(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
+	readFacts(log, snapshot, ImplementationNeedsFacts, func(log *slog.Logger, number int) (SubIssue, bool) {
+		return s.implementingNow(ctx, log, token, target, settings, number, "")
+	})
+}
+
+// readFacts is the walk of the three read...Facts functions: for each
+// sub-issue of the snapshot that needs the facts of a state (needs), it
+// reads that issue again (read) and replaces it. A read that returns false
+// leaves the sub-issue as the poll read it.
+func readFacts(log *slog.Logger, snapshot *Snapshot, needs func(sub SubIssue, running bool) bool, read func(log *slog.Logger, number int) (SubIssue, bool)) {
 	for i := range snapshot.RequirementIssues {
 		for j := range snapshot.RequirementIssues[i].SubIssues {
 			sub := &snapshot.RequirementIssues[i].SubIssues[j]
-			if !ImplementationNeedsFacts(*sub, snapshot.Running[sub.Number]) {
+			if !needs(*sub, snapshot.Running[sub.Number]) {
 				continue
 			}
-			if read, ok := s.implementingNow(ctx, log.With("issue", sub.Number), token, target, settings, sub.Number, ""); ok {
-				*sub = read
+			if again, ok := read(log.With("issue", sub.Number), sub.Number); ok {
+				*sub = again
 			}
 		}
 	}
@@ -1516,13 +1526,11 @@ func (s *Service) readImplementingFacts(ctx context.Context, log *slog.Logger, t
 // so the pull request does not pass the check.
 func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int, branch string) (SubIssue, bool) {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
+	sub, _, err := s.readSubIssueAgain(ctx, log, token, target, number)
 	if err != nil {
 		log.Error(string(ActionWaitForTheChecks)+": the issue was not read again; the next poll decides", "error", err.Error())
 		return SubIssue{}, false
 	}
-	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	sub := toSubIssue(read.Issue)
 	if !ImplementationNeedsFacts(sub, false) {
 		log.Info(string(ActionWaitForTheChecks)+": the issue is not in cumin/status/implementing; nothing changes", "labels", sub.Labels)
 		return sub, false
@@ -1595,7 +1603,6 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 // issue keeps cumin/status/implementing, and the next poll decides again
 // from the same facts.
 func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, a WaitForChecks) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	stopI2 := func(reason string) {
 		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action:  ActionStopTheImplementation,
@@ -1615,12 +1622,11 @@ func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token str
 			stopI2(LinkFailedReason(pr, closingLinkAnswer(err)))
 			return nil
 		}
-		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, a.Number)
+		again, _, err := s.readSubIssueAgain(ctx, log, token, target, a.Number)
 		if err != nil {
 			return fmt.Errorf(string(ActionWaitForTheChecks)+": read issue #%d after the closing link: %w", a.Number, err)
 		}
-		log.Debug("read the issue again", "issue", a.Number, "rate_limit_cost", again.RateLimit.Cost, "rate_limit_remaining", again.RateLimit.Remaining)
-		sub = toSubIssue(again.Issue)
+		sub = again
 		if !linksPullRequest(sub, pr) {
 			log.Warn(string(ActionStopTheImplementation)+": the closing link is missing after cumin-core added it", "pull_request", pr)
 			stopI2(LinkMissingReason(pr))

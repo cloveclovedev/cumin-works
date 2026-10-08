@@ -83,17 +83,10 @@ func (s *Service) askMaintainerToMerge(ctx context.Context, log *slog.Logger, ta
 // and the labels of this moment. A failed read leaves the facts out, so
 // nothing is decided for that issue in this poll.
 func (s *Service) readMergingFacts(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
-	for i := range snapshot.RequirementIssues {
-		for j := range snapshot.RequirementIssues[i].SubIssues {
-			sub := &snapshot.RequirementIssues[i].SubIssues[j]
-			if !MergeNeedsFacts(*sub, snapshot.Running[sub.Number]) {
-				continue
-			}
-			if read, ok, err := s.mergingNow(ctx, log.With("issue", sub.Number), token, target, settings, sub.Number); ok && err == nil {
-				*sub = read
-			}
-		}
-	}
+	readFacts(log, snapshot, MergeNeedsFacts, func(log *slog.Logger, number int) (SubIssue, bool) {
+		sub, ok, err := s.mergingNow(ctx, log, token, target, settings, number)
+		return sub, ok && err == nil
+	})
 }
 
 // mergingNow reads one implementation issue again, and only that issue,
@@ -112,12 +105,10 @@ func (s *Service) mergingNow(ctx context.Context, log *slog.Logger, token string
 		log.Error("the merge: "+what+" was not read; the next poll decides", "error", err.Error())
 		return SubIssue{}, false, err
 	}
-	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
+	sub, defaultBranch, err := s.readSubIssueAgain(ctx, log, token, target, number)
 	if err != nil {
 		return failed("the issue", err)
 	}
-	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	sub := toSubIssue(read.Issue)
 	if !MergeNeedsFacts(sub, false) {
 		log.Info("the issue is not in cumin/status/merging; nothing changes", "labels", sub.Labels)
 		return sub, false, nil
@@ -164,7 +155,7 @@ func (s *Service) mergingNow(ctx context.Context, log *slog.Logger, token string
 	if facts.Maintainers, err = s.readMaintainers(ctx, token, target, DecidingReviewers(pr.Reviews)); err != nil {
 		return failed("the permissions of the reviewers", err)
 	}
-	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
+	required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, defaultBranch)
 	if err != nil {
 		return failed("the required checks", err)
 	}

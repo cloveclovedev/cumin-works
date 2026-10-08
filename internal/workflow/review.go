@@ -390,17 +390,10 @@ func (s *Service) endReview(ctx context.Context, log *slog.Logger, target Target
 // the labels of this moment. A failed read leaves the facts out, so nothing
 // is decided for that issue in this poll.
 func (s *Service) readReviewingFacts(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
-	for i := range snapshot.RequirementIssues {
-		for j := range snapshot.RequirementIssues[i].SubIssues {
-			sub := &snapshot.RequirementIssues[i].SubIssues[j]
-			if !ReviewNeedsFacts(*sub, snapshot.Running[sub.Number]) {
-				continue
-			}
-			if read, _, ok, err := s.reviewingNow(ctx, log.With("issue", sub.Number), token, target, settings, sub.Number); ok && err == nil {
-				*sub = read
-			}
-		}
-	}
+	readFacts(log, snapshot, ReviewNeedsFacts, func(log *slog.Logger, number int) (SubIssue, bool) {
+		sub, _, ok, err := s.reviewingNow(ctx, log, token, target, settings, number)
+		return sub, ok && err == nil
+	})
 }
 
 // reviewingNow reads one implementation issue again, and only that issue,
@@ -421,15 +414,13 @@ func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token stri
 		log.Error("the review: "+what+" was not read; the next poll decides", "error", err.Error())
 		return SubIssue{}, "", false, err
 	}
-	read, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, number)
+	sub, defaultBranch, err := s.readSubIssueAgain(ctx, log, token, target, number)
 	if err != nil {
 		return failed("the issue", err)
 	}
-	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	sub := toSubIssue(read.Issue)
 	if !ReviewNeedsFacts(sub, false) {
 		log.Info("the issue is not in cumin/status/reviewing; nothing changes", "labels", sub.Labels)
-		return sub, read.DefaultBranch, false, nil
+		return sub, defaultBranch, false, nil
 	}
 	actor, counts, err := s.readStatusActor(ctx, token, target, number, LabelReviewing, false)
 	if err != nil {
@@ -439,7 +430,7 @@ func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token stri
 	sub.Reviewing = facts
 	if !counts {
 		s.tellStatusOfAnother(ctx, log, target, settings, number, LabelReviewing, actor)
-		return sub, read.DefaultBranch, true, nil
+		return sub, defaultBranch, true, nil
 	}
 	if s.Agents == nil {
 		return failed("the login of the Reviewer App", errors.New("no agent service is configured"))
@@ -474,12 +465,12 @@ func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token stri
 	pr, ok := sub.LatestPullRequest()
 	if !ok {
 		log.Error(string(ActionRequestTheReview) + ": the pull request of the review is no longer open")
-		return sub, read.DefaultBranch, true, nil
+		return sub, defaultBranch, true, nil
 	}
 	if CheckReview(pr, facts.Reviewer) == ReviewApprovedOnHead {
 		// The required checks are a REST call of their own, so only an
 		// approval reads them.
-		required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, read.DefaultBranch)
+		required, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, defaultBranch)
 		if err != nil {
 			return failed("the required checks", err)
 		}
@@ -492,7 +483,7 @@ func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token stri
 		}
 		facts.Explanation, facts.Explained = ExplanationOf(comments, facts.Reviewer, latest.SubmittedAt)
 	}
-	return sub, read.DefaultBranch, true, nil
+	return sub, defaultBranch, true, nil
 }
 
 // readComments reads the comments of an issue or of a pull request since a
