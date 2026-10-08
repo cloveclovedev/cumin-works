@@ -164,6 +164,52 @@ func TestStatusShowsTheAllowance(t *testing.T) {
 	}
 }
 
+// A requirement issue over a read limit is listed with the limit and in no
+// other list. The other issues of the repository are listed as without it,
+// and the report is complete.
+func TestStatusShowsTheIssueThatCuminCannotReadInFull(t *testing.T) {
+	var without bytes.Buffer
+	if err := writeStatus(t.Context(), &without, statusSettings(), t.TempDir(), statusAt, statusZone, readFake(t)); err != nil {
+		t.Fatalf("writeStatus: %v", err)
+	}
+	if strings.Contains(without.String(), "cannot read in full") {
+		t.Errorf("the report has the list without an issue over a limit:\n%s", without.String())
+	}
+
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/planning"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 7, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 10, Parent: 7, Title: "a", Labels: []string{"cumin/status/reviewing", "risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 11, Parent: 7, Title: "b", Labels: []string{"cumin/status/awaiting-decision", "risk/low"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 30, Labels: []string{githubtest.RequirementLabel, "cumin/status/planning"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 31, Parent: 30, Labels: []string{"cumin/status/reviewing", "risk/low"}})
+	for n := 32; n <= 67; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 30, Closed: true})
+	}
+	client := github.NewAppClient(server.URL, server.Client())
+	read := func(ctx context.Context, r config.Repository) (github.RepositorySnapshot, error) {
+		return client.ReadSnapshot(ctx, githubtest.Token, r.Owner, r.Name)
+	}
+	var out bytes.Buffer
+	if err := writeStatus(t.Context(), &out, statusSettings(), t.TempDir(), statusAt, statusZone, read); err != nil {
+		t.Fatalf("writeStatus: %v", err)
+	}
+	text := out.String()
+	for _, want := range []string{
+		agentsAtWorkNote + "\n  example-org/example-repo #6 cumin/status/planning\n  example-org/example-repo #10 cumin/status/reviewing\n\n",
+		"Waiting for a Maintainer:\n  example-org/example-repo #11 cumin/status/awaiting-decision\n\n",
+		"Issues that cumin cannot read in full:\n  example-org/example-repo #30 more than 36 sub-issues\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the report has no %q:\n%s", want, text)
+		}
+	}
+	if !strings.HasSuffix(text, "#30 more than 36 sub-issues\n") || strings.Count(text, "#30 ") != 1 || strings.Contains(text, "#31 ") {
+		t.Errorf("the unread issue or its sub-issue is in another list:\n%s", text)
+	}
+}
+
 // A repository that cannot be read is named, and the report is not
 // complete.
 func TestStatusNamesARepositoryThatWasNotRead(t *testing.T) {

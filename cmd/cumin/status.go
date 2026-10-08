@@ -2,7 +2,8 @@ package main
 
 // This file is `cumin status` and `cumin --version`. `cumin status` shows
 // the Operator what cumin does now: the issues with an agent at work and the
-// issues that wait for a Maintainer, read from the labels on GitHub, and the
+// issues that wait for a Maintainer, read from the labels on GitHub, the
+// issues that cumin cannot read in full with the limit, and the
 // latest quota usage with the limits of now, and whether cumin stops after its runs. It
 // makes no minimal run and writes no file (docs/ja/designs/quota.md, the
 // topic on cumin status).
@@ -147,12 +148,17 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 	writeQuota(w, settings, stateDir, at, loc)
 	writeStopRequest(w, stateDir, loc)
 
-	var working, waiting, failed []string
+	var working, waiting, unread, failed []string
 	for _, repo := range settings.Repositories {
 		snapshot, err := read(ctx, repo)
 		if err != nil {
 			failed = append(failed, fmt.Sprintf("  %s: not read: %v", repo, err))
 			continue
+		}
+		// The snapshot holds no requirement issue of an unread issue, so
+		// such an issue is in no other list.
+		for _, issue := range snapshot.Unread {
+			unread = append(unread, fmt.Sprintf("  %s #%d %s", repo, issue.Issue, issue.Limit))
 		}
 		visit := func(issue github.Issue, requirement bool) {
 			for _, label := range issue.Labels {
@@ -176,6 +182,9 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 	}
 	writeList(w, "Agents at work (from the labels on GitHub):\n"+agentsAtWorkNote, working)
 	writeList(w, "Waiting for a Maintainer:", waiting)
+	if len(unread) > 0 {
+		writeList(w, "Issues that cumin cannot read in full:", unread)
+	}
 	if len(failed) > 0 {
 		writeList(w, "Repositories not read:", failed)
 		return fmt.Errorf("%d of %d repositories were not read", len(failed), len(settings.Repositories))

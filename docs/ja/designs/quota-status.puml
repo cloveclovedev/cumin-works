@@ -21,6 +21,10 @@ endif
 :note line, always printed, also for an empty list:\nan issue here can wait with no agent,\nonly while agent starts are stopped\nor a stop after the current runs is requested;
 :<repository> #<issue> <status label>, one line for each issue\nor\nnone;
 :Waiting for a Maintainer:\n<repository> #<issue> <status label>, one line for each issue\nor\nnone;
+if (an issue is over a read limit?) then (yes)
+  :Issues that cumin cannot read in full:\n<repository> #<issue> <limit>, one line for each limit\n(the issue is in no other list);
+else (no)
+endif
 if (a repository was not read?) then (yes)
   :Repositories not read:\n<repository>: not read: <reason>\n(the exit code is not 0);
 else (no)
