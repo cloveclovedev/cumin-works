@@ -398,7 +398,7 @@ func (s *Service) runImplementer(ctx context.Context, target Target, settings *R
 			log.Error(string(action)+": no token; the next poll decides the end of the implementation", "error", err.Error())
 			return
 		}
-		sub, ok := s.implementingNow(ctx, log, token, target, settings, number, req.branch)
+		sub, ok := s.implementingNow(ctx, log, token, target, settings, number, req.branch, action)
 		if !ok {
 			return
 		}
@@ -472,7 +472,7 @@ func (s *Service) stopForWorkDirectory(ctx context.Context, log *slog.Logger, ta
 // this poll.
 func (s *Service) readImplementingFacts(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
 	readFacts(log, snapshot, ImplementationNeedsFacts, func(log *slog.Logger, number int) (SubIssue, bool) {
-		return s.implementingNow(ctx, log, token, target, settings, number, "")
+		return s.implementingNow(ctx, log, token, target, settings, number, "", "")
 	})
 }
 
@@ -482,22 +482,27 @@ func (s *Service) readImplementingFacts(ctx context.Context, log *slog.Logger, t
 // requests after it, the open pull requests of the branch, the head commit
 // of the worktree, and what the state file holds for this stay. branch is the branch of
 // the run; the poll passes none and takes the branch that a claim would
-// choose (ClaimBranch).
+// choose (ClaimBranch). action is the action of the request in work, and
+// the log messages start with it; the poll passes none.
 //
 // The second value is false when a read failed, and when the issue is not
 // an open issue in cumin/status/implementing any more: nothing is decided
 // then. A label that does not count ends the read, and cumin notifies
 // once. A worktree that the Host does not hold gives an empty head commit,
 // so the pull request does not pass the check.
-func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int, branch string) (SubIssue, bool) {
+func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, number int, branch string, action ActionName) (SubIssue, bool) {
+	prefix := ""
+	if action != "" {
+		prefix = string(action) + ": "
+	}
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	sub, _, err := s.readSubIssueAgain(ctx, log, token, target, number)
 	if err != nil {
-		log.Error(string(ActionWaitForTheChecks)+": the issue was not read again; the next poll decides", "error", err.Error())
+		log.Error(prefix+"the issue was not read again; the next poll decides", "error", err.Error())
 		return SubIssue{}, false
 	}
 	if !ImplementationNeedsFacts(sub, false) {
-		log.Info(string(ActionWaitForTheChecks)+": the issue is not in cumin/status/implementing; nothing changes", "labels", sub.Labels)
+		log.Info(prefix+"the issue is not in cumin/status/implementing; nothing changes", "labels", sub.Labels)
 		return sub, false
 	}
 	actor, counts, err := s.readStatusActor(ctx, token, target, number, LabelImplementing, false)
@@ -515,7 +520,7 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 		return sub, false
 	}
 	if facts.Implementer, err = s.Agents.BotLogin(ctx, owner, config.RoleImplementer); err != nil {
-		log.Error(string(ActionWaitForTheChecks)+": the login of the Implementer App was not read; the next poll decides", "error", err.Error())
+		log.Error(prefix+"the login of the Implementer App was not read; the next poll decides", "error", err.Error())
 		return sub, false
 	}
 	// cumin-core posts the blocked_reason of the Implementer, so its
@@ -524,24 +529,24 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 	if target.Login != nil {
 		core, err := target.Login(ctx)
 		if err != nil {
-			log.Error(string(ActionWaitForTheChecks)+": the login of cumin-core was not read; the next poll decides", "error", err.Error())
+			log.Error(prefix+"the login of cumin-core was not read; the next poll decides", "error", err.Error())
 			return sub, false
 		}
 		askers = append(askers, core)
 	}
 	comments, rate, err := s.GitHub.ReadIssueComments(ctx, token, owner, repo, number, facts.ImplementingAt)
 	if err != nil {
-		log.Error(string(ActionWaitForTheChecks)+": the comments were not read; the next poll decides", "error", err.Error())
+		log.Error(prefix+"the comments were not read; the next poll decides", "error", err.Error())
 		return sub, false
 	}
-	log.Debug(string(ActionWaitForTheChecks)+": read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
+	log.Debug(prefix+"read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
 	facts.QuestionAt = QuestionAt(toComments(comments), askers...)
 	if facts.Branch = branch; branch == "" {
 		facts.Branch, _ = ClaimBranch(sub)
 	}
 	listed, err := s.GitHub.ListOpenPullRequestsOfBranch(ctx, token, owner, repo, facts.Branch)
 	if err != nil {
-		log.Error(string(ActionWaitForTheChecks)+": the open pull requests of the branch were not read; the next poll decides", "branch", facts.Branch, "error", err.Error())
+		log.Error(prefix+"the open pull requests of the branch were not read; the next poll decides", "branch", facts.Branch, "error", err.Error())
 		return sub, false
 	}
 	for _, pr := range listed {
@@ -549,7 +554,7 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 	}
 	workDir := s.Workspace.Dir(agent.Checkout{Owner: owner, Repo: repo, Issue: number, Role: config.RoleImplementer, Branch: facts.Branch})
 	if facts.LocalHead, err = s.Workspace.Head(ctx, workDir); err != nil {
-		log.Info(string(ActionWaitForTheChecks)+": the head commit of the work directory was not read", "error", err.Error())
+		log.Info(prefix+"the head commit of the work directory was not read", "error", err.Error())
 		facts.LocalHead = ""
 	}
 	stored := s.State.Issue(target.Repository.String(), number)

@@ -232,6 +232,40 @@ func TestImplementing_APollChangesNothingWhileTheImplementerRuns(t *testing.T) {
 	service.Wait()
 }
 
+// After a run ends and the issue left cumin/status/implementing, nothing
+// changes, and the log line starts with the action of the request in work
+// ("request the implementation"), not with a transition that this path
+// does not take.
+func TestImplementing_TheLogOfAnIssueThatLeftStartsWithTheActionOfTheRequest(t *testing.T) {
+	sc := newScene(t, cliOptions{holds: true})
+	service := sc.service()
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	left := []string{"risk/low", workflow.LabelAwaitingDecision}
+	if err := sc.fake.SetLabels(sc.repo, 10, left); err != nil {
+		t.Fatal(err)
+	}
+	changes := sc.labelChanges()
+	sc.release(t)
+	service.Wait()
+
+	want := `"msg":"` + string(workflow.ActionRequestTheImplementation) + `: the issue is not in cumin/status/implementing; nothing changes"`
+	if !strings.Contains(sc.logs.String(), want) {
+		t.Errorf("the log does not hold %s:\n%s", want, sc.logs.String())
+	}
+	if strings.Contains(sc.logs.String(), string(workflow.ActionWaitForTheChecks)+":") {
+		t.Errorf("the log names \"wait for the checks\", a transition that this path does not take:\n%s", sc.logs.String())
+	}
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, left) {
+		t.Errorf("labels of #10 = %v, want %v", got, left)
+	}
+	if n := sc.labelChanges(); n != changes {
+		t.Errorf("%d label changes after the run, want none", n-changes)
+	}
+}
+
 // A cumin/status/implementing that an account with only triage permission
 // added is not a state (issue-states.md, the account that added a status
 // label): no agent starts, no label changes, and the notification goes out once.
