@@ -3,8 +3,6 @@ package github
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"strings"
 	"time"
 )
 
@@ -16,14 +14,16 @@ import (
 // App, and the query costs 1 point. Measured on 2026-10-05 on cumin-works:
 // with UNLABELED_EVENT beside LABELED_EVENT, it still costs 1 point. It
 // runs before each start of an agent (docs/ja/designs/poll.md, the topic
-// on the login of the Issue Owner).
-const labelActorQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $events: Int!) {
+// on the login of the Issue Owner). The sub-issues are read in the pages of
+// the query of the label times, and only when the issue itself has no event
+// of the label.
+const labelActorQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $after: String, $events: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
       number
       timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: $events) { nodes { __typename ...labeled ...unlabeled } }
-      subIssues(first: $subIssues) {
-        pageInfo { hasNextPage }
+      subIssues(first: $subIssues, after: $after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           number
           timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: $events) { nodes { __typename ...labeled ...unlabeled } }
@@ -68,35 +68,18 @@ func (c *AppClient) ReadOwnLabelActor(ctx context.Context, token, owner, repo st
 }
 
 func (c *AppClient) readLabelActor(ctx context.Context, token, owner, repo string, number int, label string, subIssues bool) (LabelActor, RateLimit, error) {
-	variables := map[string]any{
-		"owner": owner, "name": repo, "number": number,
-		"subIssues": labelSubIssues, "events": labelTimesEvents,
+	issue, rate, err := c.readLabelEvents(ctx, token, owner, repo, number, labelActorQuery, nil)
+	if err != nil {
+		return LabelActor{}, rate, fmt.Errorf("github: read the actor of the label %s of %s/%s#%d: %w", label, owner, repo, number, err)
 	}
-	var resp labelActorResponse
-	request := map[string]any{"query": labelActorQuery, "variables": variables}
-	if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
-		return LabelActor{}, RateLimit{}, fmt.Errorf("github: read the actor of the label %s of %s/%s#%d: %w", label, owner, repo, number, err)
-	}
-	if len(resp.Errors) > 0 {
-		var messages []string
-		for _, e := range resp.Errors {
-			messages = append(messages, e.Message)
-		}
-		return LabelActor{}, RateLimit{}, fmt.Errorf("github: read the actor of the label %s of %s/%s#%d: %s", label, owner, repo, number, strings.Join(messages, "; "))
-	}
-	rate := RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}
-	if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
-		return LabelActor{}, rate, fmt.Errorf("github: read the actor of the label %s of %s/%s#%d: the response has no issue", label, owner, repo, number)
-	}
-	issue := resp.Data.Repository.Issue
 	if event, ok := puttingLabelEvents(issue.TimelineItems.Nodes)[label]; ok {
 		return event.labelActor(), rate, nil
 	}
 	if !subIssues {
 		return LabelActor{}, rate, nil
 	}
-	if issue.SubIssues.PageInfo.HasNextPage {
-		return LabelActor{}, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, labelSubIssues)
+	if err := c.readNextLabelEvents(ctx, token, owner, repo, issue, labelActorQuery, &rate); err != nil {
+		return LabelActor{}, rate, fmt.Errorf("github: read the actor of the label %s of %s/%s#%d: %w", label, owner, repo, number, err)
 	}
 	var newest labelEventNode
 	found := false
@@ -107,36 +90,6 @@ func (c *AppClient) readLabelActor(ctx context.Context, token, owner, repo strin
 		}
 	}
 	return newest.labelActor(), rate, nil
-}
-
-// The GraphQL response. It stops in this package.
-type labelActorResponse struct {
-	Data struct {
-		Repository *struct {
-			Issue *struct {
-				Number        int `json:"number"`
-				TimelineItems struct {
-					Nodes []labelEventNode `json:"nodes"`
-				} `json:"timelineItems"`
-				SubIssues struct {
-					PageInfo pageInfo `json:"pageInfo"`
-					Nodes    []struct {
-						Number        int `json:"number"`
-						TimelineItems struct {
-							Nodes []labelEventNode `json:"nodes"`
-						} `json:"timelineItems"`
-					} `json:"nodes"`
-				} `json:"subIssues"`
-			} `json:"issue"`
-		} `json:"repository"`
-		RateLimit struct {
-			Cost      int `json:"cost"`
-			Remaining int `json:"remaining"`
-		} `json:"rateLimit"`
-	} `json:"data"`
-	Errors []struct {
-		Message string `json:"message"`
-	} `json:"errors"`
 }
 
 func (n labelEventNode) labelActor() LabelActor {

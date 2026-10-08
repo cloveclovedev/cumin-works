@@ -55,12 +55,10 @@ const (
 	// split, so an issue with more is read in next pages, up to
 	// snapshotSubIssuePages pages. More is an error. A page of 10 requirement
 	// issues costs 3 points, and a next page of one issue costs 1 point
-	// (measured on cumin-works on 2026-10-08).
+	// (measured on cumin-works on 2026-10-08). The label times query and the
+	// label actor query read the sub-issues in the same pages.
 	snapshotSubIssues     = 12
 	snapshotSubIssuePages = 3
-	// The label times query and the label actor query read the sub-issues
-	// once, up to this many. More is an error.
-	labelSubIssues = 15
 	// Labels, blocked-by issues, and open closing pull requests are read
 	// once, up to this many for one issue. More is an error. An issue has
 	// one open closing pull request in normal use; a second one is read so

@@ -2,6 +2,9 @@ package github_test
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,5 +154,83 @@ func TestReadLabelActor_AnUnknownIssueIsAnError(t *testing.T) {
 	client := github.NewAppClient(server.URL, server.Client())
 	if _, _, err := client.ReadLabelActor(context.Background(), githubtest.Token, "example-org", "example-repo", 99, readyLabel); err == nil {
 		t.Error("ReadLabelActor of an unknown issue returned no error")
+	}
+}
+
+// A requirement issue that is split again keeps the closed sub-issues of
+// its earlier split: the newest event among 20 sub-issues answers, also
+// when it is on the second page.
+func TestReadLabelActor_ReadsTwentySubIssuesInTwoPages(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	t0 := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
+	for n := 10; n < 30; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 6, LabelEvents: []githubtest.LabelEvent{
+			{Label: readyLabel, At: t0.Add(time.Duration(n) * time.Minute), Actor: fmt.Sprintf("owner-%d", n), ActorType: "User"},
+		}})
+	}
+	client := github.NewAppClient(server.URL, server.Client())
+
+	actor, rate, err := client.ReadLabelActor(context.Background(), githubtest.Token, "example-org", "example-repo", 6, readyLabel)
+	if err != nil {
+		t.Fatalf("ReadLabelActor: %v", err)
+	}
+	if actor.Login != "owner-29" {
+		t.Errorf("actor = %+v, want owner-29: the newest event is on the second page", actor)
+	}
+	if n := fake.CountRequests(http.MethodPost, "/graphql"); n != 2 {
+		t.Errorf("%d GraphQL requests, want 2: the first page and one next page of sub-issues", n)
+	}
+	if rate.Cost != 2 {
+		t.Errorf("cost = %d, want 2: the cost of both calls", rate.Cost)
+	}
+}
+
+// An issue with at most one page of sub-issues costs one call. An issue
+// that carries the event itself costs one call with any number of
+// sub-issues: its sub-issues do not answer.
+func TestReadLabelActor_ReadsTheNextPageOnlyWhenItNeedsOne(t *testing.T) {
+	for _, tc := range []struct {
+		subIssues int
+		own       bool
+		calls     int
+	}{{0, false, 1}, {12, false, 1}, {13, false, 2}, {36, false, 3}, {20, true, 1}} {
+		fake, server := githubtest.New(t)
+		repo := fake.AddRepository("example-org", "example-repo")
+		issue := &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}}
+		if tc.own {
+			issue.LabelEvents = []githubtest.LabelEvent{{Label: readyLabel, At: time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC), Actor: "requirement-owner", ActorType: "User"}}
+		}
+		fake.AddIssue(repo, issue)
+		for n := 0; n < tc.subIssues; n++ {
+			fake.AddIssue(repo, &githubtest.Issue{Number: 10 + n, Parent: 6})
+		}
+		client := github.NewAppClient(server.URL, server.Client())
+
+		if _, _, err := client.ReadLabelActor(context.Background(), githubtest.Token, "example-org", "example-repo", 6, readyLabel); err != nil {
+			t.Fatalf("%d sub-issues: ReadLabelActor: %v", tc.subIssues, err)
+		}
+		if n := fake.CountRequests(http.MethodPost, "/graphql"); n != tc.calls {
+			t.Errorf("%d sub-issues, own event %v: %d GraphQL requests, want %d", tc.subIssues, tc.own, n, tc.calls)
+		}
+	}
+}
+
+func TestReadLabelActor_MoreThanThreePagesOfSubIssuesIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 6, Labels: []string{"cumin/type/requirement"}})
+	for n := 0; n < 37; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: 10 + n, Parent: 6})
+	}
+	client := github.NewAppClient(server.URL, server.Client())
+
+	_, _, err := client.ReadLabelActor(context.Background(), githubtest.Token, "example-org", "example-repo", 6, readyLabel)
+	if err == nil || !strings.Contains(err.Error(), "issue #6 has more than 36 sub-issues") {
+		t.Errorf("ReadLabelActor of 37 sub-issues: %v, want an error that names #6 and 36", err)
+	}
+	if n := fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
+		t.Errorf("%d GraphQL requests, want 3: no call after the third page", n)
 	}
 }

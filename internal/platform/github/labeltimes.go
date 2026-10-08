@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -22,14 +23,17 @@ const labelTimesEvents = 100
 // label are read because of the rule of puttingLabelEvents.
 // It runs only for a requirement issue where "mark the requirement as in
 // work" can apply (docs/ja/designs/poll.md, the topic on the label times),
-// so the poll query keeps its cost.
-const labelTimesQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $events: Int!) {
+// so the poll query keeps its cost. The sub-issues are read in the pages of
+// the snapshot (snapshotSubIssues, snapshotSubIssuePages): a next page is
+// the same query with `after`, and only an issue with more sub-issues asks
+// for it.
+const labelTimesQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $after: String, $events: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
       number
       timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: $events) { nodes { __typename ...labeled ...unlabeled } }
-      subIssues(first: $subIssues) {
-        pageInfo { hasNextPage }
+      subIssues(first: $subIssues, after: $after) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           number
           timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: $events) { nodes { __typename ...labeled ...unlabeled } }
@@ -52,29 +56,12 @@ type LabelTimes map[int]map[string]time.Time
 // issue and on each of its sub-issues. GitHub records the adding of a label
 // as an event of the issue.
 func (c *AppClient) ReadLabelTimes(ctx context.Context, token, owner, repo string, number int) (LabelTimes, RateLimit, error) {
-	variables := map[string]any{
-		"owner": owner, "name": repo, "number": number,
-		"subIssues": labelSubIssues, "events": labelTimesEvents,
+	issue, rate, err := c.readLabelEvents(ctx, token, owner, repo, number, labelTimesQuery, nil)
+	if err != nil {
+		return nil, rate, fmt.Errorf("github: read the label times of %s/%s#%d: %w", owner, repo, number, err)
 	}
-	var resp labelTimesResponse
-	request := map[string]any{"query": labelTimesQuery, "variables": variables}
-	if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
-		return nil, RateLimit{}, fmt.Errorf("github: read the label times of %s/%s#%d: %w", owner, repo, number, err)
-	}
-	if len(resp.Errors) > 0 {
-		var messages []string
-		for _, e := range resp.Errors {
-			messages = append(messages, e.Message)
-		}
-		return nil, RateLimit{}, fmt.Errorf("github: read the label times of %s/%s#%d: %s", owner, repo, number, strings.Join(messages, "; "))
-	}
-	rate := RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}
-	if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
-		return nil, rate, fmt.Errorf("github: read the label times of %s/%s#%d: the response has no issue", owner, repo, number)
-	}
-	issue := resp.Data.Repository.Issue
-	if issue.SubIssues.PageInfo.HasNextPage {
-		return nil, rate, fmt.Errorf("github: issue #%d has more than %d sub-issues", number, labelSubIssues)
+	if err := c.readNextLabelEvents(ctx, token, owner, repo, issue, labelTimesQuery, &rate); err != nil {
+		return nil, rate, fmt.Errorf("github: read the label times of %s/%s#%d: %w", owner, repo, number, err)
 	}
 	times := LabelTimes{}
 	times.add(issue.Number, issue.TimelineItems.Nodes)
@@ -82,6 +69,55 @@ func (c *AppClient) ReadLabelTimes(ctx context.Context, token, owner, repo strin
 		times.add(sub.Number, sub.TimelineItems.Nodes)
 	}
 	return times, rate, nil
+}
+
+// readLabelEvents runs one call of the query of the label times or of the
+// query of the actor of a label: the events of the issue, and one page of
+// its sub-issues with their events. after is nil for the first page.
+func (c *AppClient) readLabelEvents(ctx context.Context, token, owner, repo string, number int, query string, after *string) (*labelEventsIssue, RateLimit, error) {
+	variables := map[string]any{
+		"owner": owner, "name": repo, "number": number,
+		"subIssues": snapshotSubIssues, "after": after, "events": labelTimesEvents,
+	}
+	var resp labelEventsResponse
+	request := map[string]any{"query": query, "variables": variables}
+	if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
+		return nil, RateLimit{}, err
+	}
+	if len(resp.Errors) > 0 {
+		var messages []string
+		for _, e := range resp.Errors {
+			messages = append(messages, e.Message)
+		}
+		return nil, RateLimit{}, errors.New(strings.Join(messages, "; "))
+	}
+	rate := RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}
+	if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
+		return nil, rate, errors.New("the response has no issue")
+	}
+	return resp.Data.Repository.Issue, rate, nil
+}
+
+// readNextLabelEvents reads the next pages of the sub-issues of the issue
+// into it, one call of the query for each page, until the issue holds
+// snapshotSubIssuePages pages. An issue whose page has no next page costs no
+// call. The cost of each call is added to rate. More sub-issues than the
+// pages hold is an error that names the issue.
+func (c *AppClient) readNextLabelEvents(ctx context.Context, token, owner, repo string, issue *labelEventsIssue, query string, rate *RateLimit) error {
+	for pages := 1; pages < snapshotSubIssuePages && issue.SubIssues.PageInfo.HasNextPage; pages++ {
+		next, cost, err := c.readLabelEvents(ctx, token, owner, repo, issue.Number, query, &issue.SubIssues.PageInfo.EndCursor)
+		if err != nil {
+			return fmt.Errorf("read the next sub-issues: %w", err)
+		}
+		rate.Cost += cost.Cost
+		rate.Remaining = cost.Remaining
+		issue.SubIssues.Nodes = append(issue.SubIssues.Nodes, next.SubIssues.Nodes...)
+		issue.SubIssues.PageInfo = next.SubIssues.PageInfo
+	}
+	if issue.SubIssues.PageInfo.HasNextPage {
+		return fmt.Errorf("issue #%d has more than %d sub-issues", issue.Number, snapshotSubIssues*snapshotSubIssuePages)
+	}
+	return nil
 }
 
 func (t LabelTimes) add(number int, events []labelEventNode) {
@@ -121,25 +157,12 @@ func puttingLabelEvents(events []labelEventNode) map[string]labelEventNode {
 	return putting
 }
 
-// The GraphQL response. It stops in this package.
-type labelTimesResponse struct {
+// The GraphQL response of the query of the label times and of the query of
+// the actor of a label. It stops in this package.
+type labelEventsResponse struct {
 	Data struct {
 		Repository *struct {
-			Issue *struct {
-				Number        int `json:"number"`
-				TimelineItems struct {
-					Nodes []labelEventNode `json:"nodes"`
-				} `json:"timelineItems"`
-				SubIssues struct {
-					PageInfo pageInfo `json:"pageInfo"`
-					Nodes    []struct {
-						Number        int `json:"number"`
-						TimelineItems struct {
-							Nodes []labelEventNode `json:"nodes"`
-						} `json:"timelineItems"`
-					} `json:"nodes"`
-				} `json:"subIssues"`
-			} `json:"issue"`
+			Issue *labelEventsIssue `json:"issue"`
 		} `json:"repository"`
 		RateLimit struct {
 			Cost      int `json:"cost"`
@@ -149,6 +172,24 @@ type labelTimesResponse struct {
 	Errors []struct {
 		Message string `json:"message"`
 	} `json:"errors"`
+}
+
+// labelEventsIssue is one issue with its label events, and its sub-issues
+// with theirs.
+type labelEventsIssue struct {
+	Number        int `json:"number"`
+	TimelineItems struct {
+		Nodes []labelEventNode `json:"nodes"`
+	} `json:"timelineItems"`
+	SubIssues struct {
+		PageInfo pageInfo `json:"pageInfo"`
+		Nodes    []struct {
+			Number        int `json:"number"`
+			TimelineItems struct {
+				Nodes []labelEventNode `json:"nodes"`
+			} `json:"timelineItems"`
+		} `json:"nodes"`
+	} `json:"subIssues"`
 }
 
 // unlabeledEventType is the `__typename` of an event that removed a label.
