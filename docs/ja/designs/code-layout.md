@@ -24,7 +24,7 @@
 - `cmd/cumin` が全てを組み立てる。`internal/workflow` は `internal/agent`、`internal/quota`、`internal/notify`、`internal/platform/github`、`internal/core/config`、`internal/core/state` を使う。`internal/agent` は `roles`、`disciplines`、`templates`、`internal/platform/github`、`internal/core/config` を使う。`internal/platform/*` は `internal/core/*` を使ってよく、逆はない。`internal/quota` は `internal/core/config` と `internal/core/state` だけを使う。`internal/core/config` は、riskの基準の初期値のために `disciplines` を使う。`disciplines` と `templates` は標準ライブラリだけを使い、`roles` は `internal/core/config` をroleの名前のために使う。
 - Agentが受け取る文章を持つ3つのパッケージ (`roles`、`disciplines`、`templates`) は、どれも自分のMarkdownを読むだけで、互いを知らない。指示に組み立てるのは `internal/agent/instruction.go` だけである。どの部分がどこから来るかを1か所に集めておくと、外から差し替えられる段が増えても、変わるのはそこだけになる。
 - `internal/notify` は標準ライブラリだけを使う。通知の手段は、文章を受け取る `Sender` として外から差す。`internal/platform/discord` はその実装で、`internal/notify` をimportしない。`cmd/cumin` が2つをつなぐ ([cumin本体の設計メモ](cumin-core.md) の「通知」)。
-- 純粋なファイル (`domain.go`、`action.go`、`request.go`) は標準ライブラリだけを読む。HTTPのクライアント、`os/exec`、GitHubの型を持ち込まない。判定の表形式のテストが、I/Oなしで書けるようにするためである。
+- 純粋なファイル (`domain.go`、`action.go`、`request.go`、下の表が「純粋」と書くファイル) は標準ライブラリだけを読む。HTTPのクライアント、`os/exec`、GitHubの型を持ち込まない。判定の表形式のテストが、I/Oなしで書けるようにするためである。
 - GitHubの型 (RESTの本文、GraphQLの応答) は `internal/platform/github` で止める。他のパッケージには、cuminの型 (`RepositorySnapshot`、`Label`、`User` など) だけを渡す。
 
 ### パッケージとファイル
@@ -81,7 +81,13 @@
 | | `items.go` | cuminが使うKeychainの項目の名前 (Appの秘密鍵、Discordのwebhookのアドレス) |
 | `internal/notify` | `domain.go` | 純粋。通知の内容と、その文章 |
 | | `notify.go` | 通知を送る入口 `Notifier` と、手段を表す `Sender` |
-| `internal/workflow` | `domain.go` | 純粋。スナップショットの型、ラベルの名前、定期確認の判定 (「request the implementation」、「request the review」)、着手の順番 (優先度のラベル、Issueの番号)、Agentの起動の前の1つの確認 (`PermitStart`)、必須のcheckの判定、実行終了の判定 (「wait for the checks」、「stop the implementation」)、承認のあとの判定 (「start the merge」、「ask for the merge decision」)、Maintainerの承認の判定 (「start the merge」)、Maintainerの差し戻しの判定 (「send back for changes」)、checkまたはMaintainerの判断を待つ間の衝突の判定 (「request a conflict resolution」)、必須のcheckが結果を返さないときの判定 (「stop for missing checks」)、cuminがMaintainerなしで次に進めるIssueがあるかの判定 (「tell that cumin waits」) |
+| `internal/workflow` | `domain.go` | 純粋。ラベルの名前、スナップショットの型、動作の型、定期確認の判定 (`Decide`)、着手の順番 (優先度のラベル、Issueの番号) と着手の候補 (「request the implementation」)、Agentの起動の前の1つの確認 (`PermitStart`) |
+| | `checks.go` | 純粋。必須のcheckの判定 (`ChecksOf`、`FailedChecks`、`UnreportedChecks`) と、checkを待つIssueの判定 (「request the review」、「request a check fix」、「stop for missing checks」)、checkまたはMaintainerの判断を待つ間の衝突の判定 (「request a conflict resolution」) |
+| | `rounds.go` | 純粋。レビューのラウンドの数え方、Reviewerの実行のあとの結果 (`CheckReview`)、`cumin/status/reviewing` の出口の判定 (`ReviewEnd`)、原因の説明の読み取り |
+| | `mergerules.go` | 純粋。承認のあとの判定 (`DecideMerge`。「start the merge」、「ask for the merge decision」)、`cumin/status/merging` の中の手順の判定 (`MergeEnd`)、mergeの条件 (`MergeConditionsHold`)、Maintainerの承認の判定 (「start the merge」)、Maintainerの差し戻しの判定 (「send back for changes」) |
+| | `verify.go` | 純粋。Agentが `done` を返したあとの確認。Pull Requestの確認 (`VerifyDone`)、分割の確認 (`VerifySplit`)、`cumin/status/implementing` の出口の判定 (`ImplementationEnd`。「wait for the checks」、「stop the implementation」) |
+| | `requirementrules.go` | 純粋。要求Issueの判定。要求Issueのラベルの付け替え (「mark the requirement as in work」、「ask about the remaining sub-issues」)、分割の候補 (「request the split」) と受け入れの確認の候補 (「request the acceptance check」)、`cumin/status/planning` の出口 (`SplitEnd`) と `cumin/status/accepting` の出口 (`AcceptanceEnd`) の判定、ステータスのラベルを付けたアカウントの判定 |
+| | `pollrules.go` | 純粋。リポジトリ全体についての定期確認の判定。リポジトリが作業中か、定期確認の番か (`PollIsDue`)、cuminがMaintainerなしで次に進めるIssueがあるか (「tell that cumin waits」)、片付けるIssue、ラベルのPull Requestへのコピー (「copy the labels to the pull request」) |
 | | `action.go` | 純粋。cuminの動作の名前の一覧。`issue-states.md` の表の「名前」の列の遷移1つにつき、定数が1つある。ログ、通知、停止のノートが、動作をこの名前で指す |
 | | `request.go` | 純粋。ブランチの名前と、Agentへの依頼文 |
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧。初期値の優先度のラベルは、設定が名前を決めていないリポジトリにだけ作る |
@@ -145,7 +151,7 @@
 
 テストは、動作か話題ごとに1つのファイルに置く。上の表は、テストのファイルを、置き場所に理由があるものだけ載せる。`internal/workflow` の定期確認のテストと、`internal/setup` の `cumin setup github-apps` のテストは、次の図のように分かれる。図は、偽GitHub (`githubtest`) のファイルも示す。
 
-![定期確認と手順のファイル、定期確認のテスト、cumin setup github-appsのテスト、偽GitHub、Claude Codeの接続部分、snapshotのファイル](code-layout-files.svg)
+![定期確認と手順のファイル、純粋な判定のファイル、定期確認のテスト、cumin setup github-appsのテスト、偽GitHub、Claude Codeの接続部分、snapshotのファイル](code-layout-files.svg)
 
 図の元ファイル: [code-layout-files.puml](code-layout-files.puml)
 
@@ -154,6 +160,8 @@
 偽GitHubは、endpointのグループごとに1つのファイルを持つ。`fake.go` が要求を振り分け、他のファイルが答える。新しいendpointは、そのグループのファイルに足し、`fake.go` の振り分けに1行を足す。
 
 同じ図は、`internal/workflow` の定期確認と手順のファイルも示す。`service.go` のループが `poll.go` の1回の定期確認を呼び、`poll.go` が役割ごとのファイル (`implement.go`、`plan.go`、`acceptance.go`、`review.go`、`merge.go`) の動作を適用し、`convert.go` でGitHubの型を変換する。役割ごとのファイルは、どれも `service.go` の共通の手順を使う。図は、この矢印を省く。
+
+同じ図は、`internal/workflow` の純粋な判定のファイルも示す。`domain.go` の `Decide` が、話題ごとのファイル (`checks.go`、`rounds.go`、`mergerules.go`、`verify.go`、`requirementrules.go`、`pollrules.go`) の判定を集める。どのファイルも、`domain.go` の型を使い、標準ライブラリだけを使う。図は、型を使う矢印を省く。
 
 同じ図は、2つに分けた接続部分のファイルも示す。`claudecode.go` はCLIを実行し、`startrecord.go` の確認を呼ぶ。`snapshot.go` は読み取りを持ち、`snapshotquery.go` の問い合わせの文と応答のノードを使う。
 
