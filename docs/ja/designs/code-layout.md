@@ -120,7 +120,9 @@
 | `tools/status-bar` | `Package.swift` | メニューバーのアプリのSwiftのpackage。Goのモジュールとは別で、`swift build` と `swift test` で作って試す ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) |
 | | `Sources/CuminStatusBar/MonitorFile.swift` | 純粋。モニターファイルの形と読み取り。知らないフィールドを読み飛ばし、新しすぎる `version` を見分ける |
 | | `Sources/CuminStatusBar/MonitorModel.swift` | 純粋。ファイルのバイト列と今の時刻から、メニューバーの区画、メニューの行、状態の行、止まったと表示する理由を決める |
-| | `Sources/CuminStatusBar/main.swift` | アプリの入口。AppKitを使う唯一のファイル。5秒ごとにモニターファイルを読み、区画の画像とメニューを作り、行のURLをブラウザで開く。ファイルを書かず、ネットワークを使わない |
+| | `Sources/CuminStatusBar/Config.swift` | アプリの設定 (`status-bar.json`) の形と読み取り。ないキーと、ないファイルは、初期値にする |
+| | `Sources/CuminStatusBar/AlertModel.swift` | 純粋。ファイルのバイト列、設定、今の時刻、前に見た項目から、新しい項目、鳴らす音、点滅する区画を決める |
+| | `Sources/CuminStatusBar/main.swift` | アプリの入口。AppKitを使う唯一のファイル。5秒ごとにモニターファイルと設定を読み、区画の画像とメニューを作り、音を鳴らし、区画を点滅させ、行のURLをブラウザで開く。ファイルを書かず、ネットワークを使わない |
 | | `Tests/CuminStatusBarTests/` | 純粋な型のテスト (XCTest)。Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) も読む |
 
 ## まだ決めていないこと
