@@ -25,8 +25,11 @@ enum BarRenderer {
     /// Draws glyph+count segments in black into a single image and marks it
     /// as a template, so the menu bar tints it (white on dark, black on
     /// light) automatically. With no segment it draws the neutral glyph,
-    /// dimmed when cumin stopped, so that the item never disappears.
-    static func image(for segments: [BarSegment], stopped: Bool) -> NSImage {
+    /// dimmed when cumin stopped, so that the item never disappears. Blink
+    /// is a per-segment alpha dip: template rendering derives shape from the
+    /// alpha channel, so 0.25-alpha drawing shows as dimmed.
+    static func image(for segments: [BarSegment], stopped: Bool,
+                      blinking: Set<SegmentKind> = [], blinkOn: Bool = true) -> NSImage {
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         let height: CGFloat = 18
         let gap: CGFloat = 7
@@ -43,7 +46,8 @@ enum BarRenderer {
                 let count = NSAttributedString(
                     string: "\(seg.count)",
                     attributes: [.font: font, .foregroundColor: NSColor.black])
-                items.append((g, count, 1.0))
+                let alpha: CGFloat = (blinking.contains(seg.kind) && !blinkOn) ? 0.25 : 1.0
+                items.append((g, count, alpha))
             }
         }
 
@@ -64,8 +68,13 @@ enum BarRenderer {
                 x += item.glyph.size.width
                 if item.count.length > 0 {
                     x += innerGap
-                    let size = item.count.size()
-                    item.count.draw(at: NSPoint(x: x, y: (height - size.height) / 2))
+                    let faded = NSMutableAttributedString(attributedString: item.count)
+                    faded.addAttribute(
+                        .foregroundColor,
+                        value: NSColor.black.withAlphaComponent(item.alpha),
+                        range: NSRange(location: 0, length: faded.length))
+                    let size = faded.size()
+                    faded.draw(at: NSPoint(x: x, y: (height - size.height) / 2))
                     x += size.width
                 }
                 x += gap
@@ -79,36 +88,69 @@ enum BarRenderer {
 
 // MARK: - Controller
 
-final class StatusController: NSObject, NSApplicationDelegate {
+final class StatusController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var pollTimer: Timer?
+    private var blinkTimer: Timer?
+    private var blinkOn = true
     private var lastOutput = DisplayOutput()
+    private var config = Config()
+    private var alertState = AlertState()
+    private var blinking: Set<SegmentKind> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        // .common mode keeps the timer firing while the dropdown menu is
+        // .common mode keeps both timers firing while the dropdown menu is
         // open (menu tracking runs the run loop outside .default mode).
         let poll = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         RunLoop.main.add(poll, forMode: .common)
         pollTimer = poll
+        let blink = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self, !self.blinking.isEmpty else { return }
+            self.blinkOn.toggle()
+            self.render()
+        }
+        RunLoop.main.add(blink, forMode: .common)
+        blinkTimer = blink
         refresh()
     }
 
     private func refresh() {
         let data = try? Data(contentsOf: monitorFileURL)
-        let out = MonitorModel.evaluate(data, now: Date())
+        config = Config.load()
+        let now = Date()
+        let out = MonitorModel.evaluate(data, now: now, staleAfter: config.staleAfterSec)
+        let alert = AlertModel.evaluate(data, now: now, config: config, previous: alertState)
+        for name in alert.sounds { NSSound(named: name)?.play() }
+        alertState = alert.state
+        blinking = alert.blinking
+        if blinking.isEmpty { blinkOn = true }
         // An open menu keeps its items, so rebuild only on a change.
-        if statusItem.menu != nil && out == lastOutput { return }
+        let changed = statusItem.menu == nil || out != lastOutput
         lastOutput = out
+        render()
+        if changed { rebuildMenu() }
+    }
+
+    private func render() {
         statusItem.button?.image = BarRenderer.image(
-            for: out.segments, stopped: out.stoppedReason != nil)
-        rebuildMenu()
+            for: lastOutput.segments, stopped: lastOutput.stoppedReason != nil,
+            blinking: blinking, blinkOn: blinkOn)
+    }
+
+    /// The Maintainer opened the menu, so a blink for a new item stops.
+    func menuWillOpen(_ menu: NSMenu) {
+        alertState.menuOpened()
+        if config.blink == .new { blinking = [] }
+        if blinking.isEmpty { blinkOn = true }
+        render()
     }
 
     private func rebuildMenu() {
         let menu = NSMenu()
+        menu.delegate = self
         if let reason = lastOutput.stoppedReason {
             menu.addItem(NSMenuItem(title: reason, action: nil, keyEquivalent: ""))
         } else {
