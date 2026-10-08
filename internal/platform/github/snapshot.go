@@ -48,11 +48,22 @@ const MaxOpenClosingPullRequests = 2
 const (
 	// Requirement issues are read in pages of this size, with a cursor.
 	snapshotIssuePage = 10
-	// Sub-issues, labels, blocked-by issues, and open closing pull requests
-	// are read once, up to this many for one issue. More is an error. An
-	// issue has one open closing pull request in normal use; a second one
-	// is read so that the newest of two is found (VerifyDone).
-	snapshotSubIssues    = 15
+	// Sub-issues are read in pages of this size: the 12 sub-issues that the
+	// requirement allows for one split (requirement-sizing.md). A requirement
+	// issue that is split again keeps the closed sub-issues of the earlier
+	// split, so an issue with more is read in next pages, up to
+	// snapshotSubIssuePages pages. More is an error. A page of 10 requirement
+	// issues costs 3 points, and a next page of one issue costs 1 point
+	// (measured on cumin-works on 2026-10-08).
+	snapshotSubIssues     = 12
+	snapshotSubIssuePages = 3
+	// The label times query and the label actor query read the sub-issues
+	// once, up to this many. More is an error.
+	labelSubIssues = 15
+	// Labels, blocked-by issues, and open closing pull requests are read
+	// once, up to this many for one issue. More is an error. An issue has
+	// one open closing pull request in normal use; a second one is read so
+	// that the newest of two is found (VerifyDone).
 	snapshotLabels       = 100
 	snapshotBlockedBy    = 100
 	snapshotPullRequests = MaxOpenClosingPullRequests
@@ -316,7 +327,7 @@ fragment requirementIssueFields on Issue {
   labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
   blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
   subIssues(first: $subIssues) {
-    pageInfo { hasNextPage }
+    pageInfo { hasNextPage endCursor }
     nodes { ...subIssueFields }
   }
 }
@@ -331,7 +342,7 @@ fragment requirementIssueFields on Issue {
   labels(first: $labels) { pageInfo { hasNextPage } nodes { name } }
   blockedBy(first: $blockedBy) { pageInfo { hasNextPage } nodes { number state } }
   subIssues(first: $subIssues) {
-    pageInfo { hasNextPage }
+    pageInfo { hasNextPage endCursor }
     nodes { ...subIssueFields ...closingPullRequestFields }
   }
 }
@@ -411,6 +422,43 @@ const subIssueQuery = `query($owner: String!, $name: String!, $number: Int!, $la
       ...subIssueFields
       ...closingPullRequestFields
       parent { number state labels(first: $labels) { pageInfo { hasNextPage } nodes { name } } }
+    }
+  }
+  rateLimit { cost remaining }
+}
+` + subIssueFields + closingPullRequestFields
+
+// subIssuePageQuery and subIssuePageWithPullRequestsQuery read a next page
+// of the sub-issues of one requirement issue, with the fields of the poll
+// query and of the read of one requirement issue. Only an issue whose page
+// says hasNextPage is asked. Official: Issue.subIssues takes after and first,
+// and returns an IssueConnection with pageInfo
+// (https://docs.github.com/en/graphql/reference/issues).
+//
+// Measured on cumin-works on 2026-10-08 with rateLimit { cost }: 1 point for
+// a next page, with or without the pull requests.
+const subIssuePageQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $after: String!, $labels: Int!, $blockedBy: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      number
+      subIssues(first: $subIssues, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { ...subIssueFields }
+      }
+    }
+  }
+  rateLimit { cost remaining }
+}
+` + subIssueFields
+
+const subIssuePageWithPullRequestsQuery = `query($owner: String!, $name: String!, $number: Int!, $subIssues: Int!, $after: String!, $labels: Int!, $blockedBy: Int!, $pullRequests: Int!, $checks: Int!, $reviews: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      number
+      subIssues(first: $subIssues, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { ...subIssueFields ...closingPullRequestFields }
+      }
     }
   }
   rateLimit { cost remaining }
@@ -740,9 +788,10 @@ func (n pullRequestNode) pullRequest() (PullRequest, error) {
 }
 
 // ReadSnapshot reads the snapshot of one repository with the installation
-// token: one GraphQL query for each page of requirement issues. Closed
-// requirement issues are not read (issue-states.md, principle 6). The
-// sub-issues come without their pull requests (ReadPullRequests).
+// token: one GraphQL query for each page of requirement issues, and one more
+// for each next page of the sub-issues of one issue. Closed requirement
+// issues are not read (issue-states.md, principle 6). The sub-issues come
+// without their pull requests (ReadPullRequests).
 func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string) (RepositorySnapshot, error) {
 	var snapshot RepositorySnapshot
 	var after *string
@@ -778,6 +827,9 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 			}
 		}
 		for _, node := range resp.Data.Repository.Issues.Nodes {
+			if err := c.readNextSubIssues(ctx, token, owner, repo, &node, subIssuePageQuery, map[string]any{}, &snapshot.RateLimit); err != nil {
+				return RepositorySnapshot{}, fmt.Errorf("github: read the snapshot of %s/%s: %w", owner, repo, err)
+			}
 			issue, err := node.issue()
 			if err != nil {
 				return RepositorySnapshot{}, fmt.Errorf("github: read the snapshot of %s/%s: %w", owner, repo, err)
@@ -867,6 +919,44 @@ func (c *AppClient) ReadPullRequests(ctx context.Context, token, owner, repo str
 	return read, nil
 }
 
+// readNextSubIssues reads the next pages of the sub-issues of one requirement
+// issue into the node, one GraphQL query for each page, until the node holds
+// snapshotSubIssuePages pages. An issue whose page has no next page costs no
+// call. The cost of each call is added to rate. variables holds what the
+// query needs beside the issue, the page, and the sizes of the sub-issue.
+func (c *AppClient) readNextSubIssues(ctx context.Context, token, owner, repo string, node *issueNode, query string, variables map[string]any, rate *RateLimit) error {
+	for pages := 1; pages < snapshotSubIssuePages && node.SubIssues.PageInfo.HasNextPage; pages++ {
+		for name, value := range map[string]any{
+			"owner": owner, "name": repo, "number": node.Number,
+			"subIssues": snapshotSubIssues, "after": node.SubIssues.PageInfo.EndCursor,
+			"labels": snapshotLabels, "blockedBy": snapshotBlockedBy,
+		} {
+			variables[name] = value
+		}
+		var resp issueResponse
+		request := map[string]any{"query": query, "variables": variables}
+		if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
+			return fmt.Errorf("read the next sub-issues of issue #%d: %w", node.Number, err)
+		}
+		if len(resp.Errors) > 0 {
+			var messages []string
+			for _, e := range resp.Errors {
+				messages = append(messages, e.Message)
+			}
+			return fmt.Errorf("read the next sub-issues of issue #%d: %s", node.Number, strings.Join(messages, "; "))
+		}
+		if resp.Data.Repository == nil || resp.Data.Repository.Issue == nil {
+			return fmt.Errorf("read the next sub-issues of issue #%d: the response has no issue", node.Number)
+		}
+		rate.Cost += resp.Data.RateLimit.Cost
+		rate.Remaining = resp.Data.RateLimit.Remaining
+		page := resp.Data.Repository.Issue.SubIssues
+		node.SubIssues.Nodes = append(node.SubIssues.Nodes, page.Nodes...)
+		node.SubIssues.PageInfo = page.PageInfo
+	}
+	return nil
+}
+
 // readRepositoryFiles takes the default branch and the files of .cumin/
 // from the answer of the first page.
 func (s *RepositorySnapshot) readRepositoryFiles(resp snapshotResponse) error {
@@ -887,13 +977,15 @@ func (s *RepositorySnapshot) readRepositoryFiles(resp snapshotResponse) error {
 }
 
 // issue converts one node. A connection with more nodes than the page size
-// is an error, so that a rule never decides on a partial issue.
+// is an error, so that a rule never decides on a partial issue. The
+// sub-issues are over their size when the last of their pages has a next
+// page (readNextSubIssues).
 func (n issueNode) issue() (Issue, error) {
 	if n.Labels.PageInfo.HasNextPage {
 		return Issue{}, fmt.Errorf("issue #%d has more than %d labels", n.Number, snapshotLabels)
 	}
 	if n.SubIssues.PageInfo.HasNextPage {
-		return Issue{}, fmt.Errorf("issue #%d has more than %d sub-issues", n.Number, snapshotSubIssues)
+		return Issue{}, fmt.Errorf("issue #%d has more than %d sub-issues", n.Number, snapshotSubIssues*snapshotSubIssuePages)
 	}
 	if n.BlockedBy.PageInfo.HasNextPage {
 		return Issue{}, fmt.Errorf("issue #%d has more than %d blocked-by issues", n.Number, snapshotBlockedBy)
@@ -949,9 +1041,10 @@ func (n issueNode) pullRequests() ([]PullRequest, error) {
 }
 
 // ReadRequirementIssue reads one requirement issue with its sub-issues, as
-// one poll reads it, in one GraphQL query. An issue over a limit of the
-// query is an error that names the issue. An issue that a poll does not read
-// (closed, or without the requirement label) is an error too.
+// one poll reads it, in one GraphQL query, and one more for each next page
+// of its sub-issues. An issue over a limit of the query is an error that
+// names the issue. An issue that a poll does not read (closed, or without
+// the requirement label) is an error too.
 func (c *AppClient) ReadRequirementIssue(ctx context.Context, token, owner, repo string, number int) (IssueRead, error) {
 	return c.readIssue(ctx, token, owner, repo, number, requirementIssueQuery, map[string]any{"subIssues": snapshotSubIssues},
 		func(n issueNode) error { return n.polledAsRequirement() })
@@ -1004,11 +1097,18 @@ func (c *AppClient) readIssue(ctx context.Context, token, owner, repo string, nu
 	if err := polled(*resp.Data.Repository.Issue); err != nil {
 		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
 	}
+	rate := RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}
+	// A sub-issue is read without sub-issues, so only a requirement issue
+	// has a next page.
+	nextPage := map[string]any{"pullRequests": snapshotPullRequests, "checks": snapshotChecks, "reviews": snapshotReviews}
+	if err := c.readNextSubIssues(ctx, token, owner, repo, resp.Data.Repository.Issue, subIssuePageWithPullRequestsQuery, nextPage, &rate); err != nil {
+		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
+	}
 	issue, err := resp.Data.Repository.Issue.issue()
 	if err != nil {
 		return IssueRead{}, fmt.Errorf("github: read issue #%d of %s/%s: %w", number, owner, repo, err)
 	}
-	read := IssueRead{Issue: issue, RateLimit: RateLimit{Cost: resp.Data.RateLimit.Cost, Remaining: resp.Data.RateLimit.Remaining}}
+	read := IssueRead{Issue: issue, RateLimit: rate}
 	if ref := resp.Data.Repository.DefaultBranchRef; ref != nil {
 		read.DefaultBranch = ref.Name
 	}
