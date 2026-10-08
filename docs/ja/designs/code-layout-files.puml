@@ -1,0 +1,41 @@
+@startuml code-layout-files
+' cumin works - the files of a package, where the table of code-layout.md
+' cannot show which file uses which.
+' Document: code-layout.md, topic on the files of the tests.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+left to right direction
+
+package "internal/workflow (tests of the poll)" {
+  file "scene_test.go\nthe scene: fake GitHub, fake CLI,\nlocal remote, webhook, clock, log" as scene
+  file "service_test.go\nthe poll loop, the settings\nof the repository, the stop of cumin" as loop
+  file "claim_test.go\nrequest the implementation" as claim
+  file "verifydone_test.go\nwait for the checks\n(the end of the run)" as verify
+  file "stopimplementation_test.go\nstop the implementation" as stopimpl
+  file "awaitingchecks_test.go\nthe required checks:\nrequest the review,\nstop for missing checks,\ncopy the labels to the pull request" as awaiting
+  file "checkfix_test.go\nrequest a check fix,\nstop for failed checks" as checkfix
+  file "the other *_test.go files\n(one action or one topic each)" as others
+}
+
+loop --> scene
+claim --> scene
+verify --> scene
+stopimpl --> scene
+awaiting --> scene
+checkfix --> scene
+others --> scene
+
+package "internal/setup (tests of cumin setup github-apps)" {
+  file "fakes_test.go\nfake GitHub, fake browser,\nmemory store, newService" as fakes
+  file "manifest_test.go\nthe manifest and the callback" as manifest
+  file "settingsfile_test.go\nthe settings file and the stored keys" as settingsfile
+  file "install_test.go\nthe owner of an App\nand the install page" as install
+  file "permissions_test.go\na changed permission of an App" as permissions
+}
+
+manifest --> fakes
+settingsfile --> fakes
+install --> fakes
+permissions --> fakes
+@enduml
