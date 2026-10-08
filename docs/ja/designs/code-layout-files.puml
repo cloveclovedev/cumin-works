@@ -28,6 +28,23 @@ wfpoll --> wfmerge
 wfpoll --> wfconvert
 wfacceptance --> wfplan
 
+package "internal/workflow (the pure rules)" {
+  file "domain.go\nthe label names, the snapshot types,\nthe action types, Decide,\nthe order of the starts" as wfdomain
+  file "checks.go\nthe required checks and the issues\nthat wait for them" as wfchecks
+  file "rounds.go\nthe review rounds, CheckReview,\nReviewEnd, the explanation of the cause" as wfrounds
+  file "mergerules.go\nDecideMerge, MergeEnd, the conditions\nof the merge, the Maintainer review" as wfmergerules
+  file "verify.go\nVerifyDone, VerifySplit,\nImplementationEnd" as wfverify
+  file "requirementrules.go\nthe moves of a requirement issue,\nSplitEnd, AcceptanceEnd,\nthe status actor" as wfrequirementrules
+  file "pollrules.go\nthe repository in work, the due poll,\nthe wait of cumin, the label copy" as wfpollrules
+}
+
+wfdomain --> wfchecks
+wfdomain --> wfrounds
+wfdomain --> wfmergerules
+wfdomain --> wfverify
+wfdomain --> wfrequirementrules
+wfdomain --> wfpollrules
+
 package "internal/workflow (tests of the poll)" {
   file "scene_test.go\nthe scene: fake GitHub, fake CLI,\nlocal remote, webhook, clock, log" as scene
   file "service_test.go\nthe poll loop, the settings\nof the repository, the stop of cumin" as loop
