@@ -57,3 +57,24 @@ jobs:
           go-version-file: go.mod
       - name: go test (Keychain)
         run: go test -race -count=1 -v ./internal/platform/keychain/ ./internal/setup/
+
+  # The menu bar app is a Swift package apart from the Go module, so the job
+  # ci does not build it. The tests read the golden file of the Go code
+  # (internal/workflow/testdata/monitor-file.json), so a change of the
+  # monitor file that the app cannot read fails here. The runner image
+  # holds the Swift toolchain of Xcode; no action installs it.
+  status-bar:
+    name: status-bar
+    runs-on: macos-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools/status-bar
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: swift --version
+        run: swift --version
+      - name: swift build
+        run: swift build
+      - name: swift test
+        run: swift test
