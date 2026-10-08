@@ -67,7 +67,6 @@ type reviewerRequest struct {
 // (issue-states.md, the sessions of an agent; agents/reviewer.md, the scope
 // of each round).
 func (s *Service) startReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a StartReview) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
@@ -95,9 +94,9 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	if err := s.State.Set(repository, a.Number, stored); err != nil {
 		return fmt.Errorf(string(ActionRequestTheReview)+": keep the start of the review of issue #%d: %w", a.Number, err)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelReviewing)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionRequestTheReview)+": move issue #%d to the review: %w", a.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelReviewing)
+	if err != nil {
+		return fmt.Errorf(string(ActionRequestTheReview)+": %w", err)
 	}
 	s.logger().Info(string(ActionRequestTheReview)+": the pull request is ready for review",
 		"repository", repository, "issue", a.Number, "pull_request", a.PullRequest,
@@ -543,9 +542,9 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 	number := sub.Number
 	pr, _ := sub.LatestPullRequest()
 	move := func(name ActionName, label string) ([]string, error) {
-		labels := ReplaceStatusLabel(sub.Labels, label)
-		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, number, labels); err != nil {
-			return nil, fmt.Errorf("%s: move issue #%d to %s: %w", name, number, label, err)
+		labels, err := s.moveIssue(ctx, token, target, number, sub.Labels, label)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
 		}
 		return labels, nil
 	}

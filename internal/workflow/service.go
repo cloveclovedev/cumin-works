@@ -855,7 +855,6 @@ func (s *Service) pollRepository(ctx context.Context, target Target, finishing b
 // cumin/status/implementing, and only then request the work. When the label
 // change fails, nothing is requested; the next poll decides again.
 func (s *Service) claim(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, c Claim) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	sub, ok := snapshot.SubIssue(c.Number)
 	if !ok {
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": issue #%d is not in the snapshot", c.Number)
@@ -875,9 +874,9 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": clear the state of issue #%d: %w", c.Number, err)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, c.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionRequestTheImplementation)+": claim issue #%d: %w", c.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, c.Number, sub.Labels, LabelImplementing)
+	if err != nil {
+		return fmt.Errorf(string(ActionRequestTheImplementation)+": %w", err)
 	}
 	log := s.logger().With("repository", target.Repository.String(), "issue", c.Number)
 	log.Info(string(ActionRequestTheImplementation)+": claimed the issue",
@@ -889,6 +888,17 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil
+}
+
+// moveIssue replaces the status label of an issue: it sets the labels of the
+// issue with the new status label, and returns them. The caller puts the
+// name of its action before the error.
+func (s *Service) moveIssue(ctx context.Context, token string, target Target, number int, labels []string, status string) ([]string, error) {
+	moved := ReplaceStatusLabel(labels, status)
+	if err := s.GitHub.SetIssueLabels(ctx, token, target.Repository.Owner, target.Repository.Name, number, moved); err != nil {
+		return nil, fmt.Errorf("move issue #%d to %s: %w", number, status, err)
+	}
+	return moved, nil
 }
 
 // copyLabels applies "copy the labels to the pull request": the pull
@@ -949,7 +959,6 @@ type implementerRequest struct {
 // The label changes first: until it changes, the next poll decides the same
 // stop, and must not post the comment and notify again (principle 3).
 func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a StopForUnreportedChecks) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "pull_request", a.PullRequest)
 	sub, ok := snapshot.SubIssue(a.Number)
 	if !ok {
@@ -965,9 +974,9 @@ func (s *Service) stopForUnreportedChecks(ctx context.Context, token string, tar
 		log.Warn(string(ActionStopForMissingChecks)+": the required checks did not report within the wait time",
 			"head_commit", a.HeadCommit, "unreported", names, "waited", a.Waited.String())
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionStopForMissingChecks)+": stop issue #%d for a Maintainer: %w", a.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelAwaitingDecision)
+	if err != nil {
+		return fmt.Errorf(string(ActionStopForMissingChecks)+": %w", err)
 	}
 	log.Info(string(ActionStopForMissingChecks)+": the issue waits for a Maintainer", "labels", labels)
 	reason := UnreportedChecksReason(a)
@@ -1020,9 +1029,9 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 		log.Warn(string(ActionStopForFailedChecks)+": the limit of check fix requests is reached", "failed", names, "check_fix_requests", stored.CheckFixRequests)
 		// The label first: until it changes, the next poll decides the same
 		// stop, and must not post the comment and notify again.
-		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
-		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-			return fmt.Errorf(string(ActionStopForFailedChecks)+": stop issue #%d for a Maintainer: %w", a.Number, err)
+		labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelAwaitingDecision)
+		if err != nil {
+			return fmt.Errorf(string(ActionStopForFailedChecks)+": %w", err)
 		}
 		log.Info(string(ActionStopForFailedChecks)+": the issue waits for a Maintainer", "labels", labels)
 		s.stopForMaintainer(ctx, log, target, settings, stop{
@@ -1051,14 +1060,14 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	if err := s.State.Set(repository, a.Number, counted); err != nil {
 		return fmt.Errorf(string(ActionRequestACheckFix)+": keep the count of check fix requests of issue #%d: %w", a.Number, err)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelImplementing)
+	if err != nil {
 		// No request starts, so the count goes back: a label that fails
 		// again must not use up the limit without a single fix.
 		if undo := s.State.Set(repository, a.Number, stored); undo != nil {
 			log.Error(string(ActionRequestACheckFix)+": the count of check fix requests was not set back", "error", undo.Error())
 		}
-		return fmt.Errorf(string(ActionRequestACheckFix)+": move issue #%d back to the Implementer: %w", a.Number, err)
+		return fmt.Errorf(string(ActionRequestACheckFix)+": %w", err)
 	}
 	stored = counted
 	log.Info(string(ActionRequestACheckFix)+": a required check failed; the issue goes back to the Implementer",
@@ -1619,9 +1628,9 @@ func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token str
 		}
 		log.Info(string(ActionWaitForTheChecks)+": added the closing link", "pull_request", pr)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelChecking)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionWaitForTheChecks)+": move issue #%d to checking: %w", a.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelChecking)
+	if err != nil {
+		return fmt.Errorf(string(ActionWaitForTheChecks)+": %w", err)
 	}
 	log.Info(string(ActionWaitForTheChecks)+": verified the pull request", "pull_request", a.PullRequest, "labels", labels)
 	return nil
@@ -1638,9 +1647,9 @@ func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token str
 // same stop and requests nothing.
 func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, a StopImplementation) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionStopTheImplementation)+": move issue #%d to awaiting-decision: %w", a.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelAwaitingDecision)
+	if err != nil {
+		return fmt.Errorf(string(ActionStopTheImplementation)+": %w", err)
 	}
 	if !a.Question {
 		log.Warn(string(ActionStopTheImplementation)+": the implementation stops for a Maintainer", "reason", a.Reason, "pull_request", a.PullRequest, "retried", a.Retried, "labels", labels)

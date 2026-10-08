@@ -240,9 +240,5 @@ func (s *Service) moveRequirement(ctx context.Context, token string, target Targ
 	if !ok {
 		return nil, fmt.Errorf("issue #%d is not in the snapshot", number)
 	}
-	labels := ReplaceStatusLabel(requirement.Labels, status)
-	if err := s.GitHub.SetIssueLabels(ctx, token, target.Repository.Owner, target.Repository.Name, number, labels); err != nil {
-		return nil, fmt.Errorf("move issue #%d to %s: %w", number, status, err)
-	}
-	return labels, nil
+	return s.moveIssue(ctx, token, target, number, requirement.Labels, status)
 }
