@@ -112,7 +112,7 @@ cuminは、状態から動作を決める。GitHubでは、triageの権限でも
 | stop the split | `planning` → `awaiting-decision` | Plannerが動いていない。次のどちらかである。Plannerの質問のコメントが、`planning` になったあとに書かれている。または、分割が確認を通らず、「request the split again」を1回済ませている | 質問でなければ、理由をコメントに書く。通知する |
 | request the split again | `planning` → `planning` | Plannerが動いていない。分割が確認を通らない。Plannerの質問のコメントがない。この `planning` の間に、まだ依頼し直していない | Plannerに分割をもう一度依頼する。Plannerは、既にあるsub-issueを確かめて、同じものを二重に作らない |
 | mark the requirement as in work | `awaiting-plan-review` → `implementing`、`awaiting-acceptance` → `implementing`、状態ラベルなし → `implementing` | Maintainerが、sub-issueのどれかに `ready` を付けた。要求Issueに状態ラベルがあるときは、その `ready` が、要求Issueが今の状態になったあとに付いている | ラベルを替える |
-| request the acceptance check | `implementing` → `accepting` | sub-issueが1つ以上あり、全て閉じている。最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントが、まだない。閉じたsub-issueのフォローアップノート (「write the follow-up note」) を書き終えている。cuminに空きがある | Plannerに受け入れの確認を依頼する |
+| request the acceptance check | `implementing` → `accepting`、`awaiting-plan-review` → `accepting` | sub-issueが1つ以上あり、全て閉じている。最後のsub-issueが閉じたあとに書かれた受け入れの確認のコメントが、まだない。閉じたsub-issueのフォローアップノート (「write the follow-up note」) を書き終えている。cuminに空きがある | Plannerに受け入れの確認を依頼する |
 | ask about the remaining sub-issues | `implementing` → `awaiting-plan-review` | 開いているsub-issueが1つ以上あり、その全てに状態ラベルがない | 「残りのsub-issueの確認が必要」と通知する |
 | ask for the acceptance | `accepting` → `awaiting-acceptance` | 最後のsub-issueが閉じたあとに書かれた、受け入れの確認のコメントがある | 「受け入れ可能になった」と通知する |
 | request the acceptance check again | `accepting` → `accepting` | Plannerが動いていない。受け入れの確認のコメントも、Plannerの質問のコメントもない。この `accepting` の間に、まだ依頼し直していない | Plannerに受け入れの確認をもう一度依頼する |
@@ -134,9 +134,9 @@ cuminは、状態から動作を決める。GitHubでは、triageの権限でも
 
 「mark the requirement as in work」が `cumin/status/ready` の付いた時刻を見るのは、要求Issueを見直す場面のためである。前の分割で `cumin/status/ready` が付いたsub-issueは、cuminが着手するまでそのラベルのまま残る。ラベルの有無だけで判定すると、Maintainerが新しいsub-issueを確認する前に、要求Issueが `cumin/status/implementing` に替わってしまう。ラベルが付いた時刻は、GitHubがIssueのイベントとして記録している。
 
-`cumin/type/owner-task` の付いたsub-issueは、Maintainerが作業を済ませてから閉じる。cuminは、`cumin/status/ready` が付いていても着手しない。それに依存する実装Issueは、blocked by で止まる。Maintainerが閉じ忘れて他のsub-issueが全て閉じると、「ask about the remaining sub-issues」が成り立つ。
+`cumin/type/owner-task` の付いたsub-issueは、Maintainerが作業を済ませてから閉じる。cuminは、`cumin/status/ready` が付いていても着手しない。それに依存する実装Issueは、blocked by で止まる。Maintainerが閉じ忘れて他のsub-issueが全て閉じると、「ask about the remaining sub-issues」が成り立つ。そのあとMaintainerが閉じて、sub-issueが全て閉じると、`cumin/status/awaiting-plan-review` から「request the acceptance check」が成り立つ。Maintainerがラベルを替える必要はない。
 
-Maintainerは、分割結果の確認のとき、一部のsub-issueにだけ `cumin/status/ready` を付けてもよい。それらが全て閉じて、状態ラベルのないsub-issueだけが残ると、「ask about the remaining sub-issues」が成り立ち、cuminがもう一度、確認が要ると通知する。Maintainerが残りを忘れて、要求Issueが黙って止まることを防ぐ。残りのsub-issueが要らなくなったときは、Maintainerがそれを閉じる。全て閉じれば、「request the acceptance check」が成り立つ。
+Maintainerは、分割結果の確認のとき、一部のsub-issueにだけ `cumin/status/ready` を付けてもよい。それらが全て閉じて、状態ラベルのないsub-issueだけが残ると、「ask about the remaining sub-issues」が成り立ち、cuminがもう一度、確認が要ると通知する。Maintainerが残りを忘れて、要求Issueが黙って止まることを防ぐ。残りのsub-issueが要らなくなったときは、Maintainerがそれを閉じる。全て閉じれば、`cumin/status/awaiting-plan-review` から「request the acceptance check」が成り立つ。
 
 Maintainerは、要求Issueを書き終えたら `cumin/status/ready` を付ける。これで「request the split」が成り立つ。分割に失敗して `cumin/status/awaiting-decision` になったときも、要求Issueを直してから `cumin/status/ready` を付ける。sub-issueが途中まで作られていても、Plannerは既にあるsub-issueを確かめて、同じものを二重に作らない。`cumin/type/requirement` は要求Issueである印なので、外さずに付けたままにする。Maintainerの「進めてよい」の合図を、実装Issueと同じ `cumin/status/ready` に揃えるため、この形にしている。
 
@@ -294,7 +294,7 @@ Agentの起動を止めている間、Agentに依頼する遷移は成り立た�
 | `cumin/status/ready` で、blocked by のIssueが開いている | 数えない | 前のIssueが閉じるまで動けない。前のIssueがcuminの作業中なら、そちらが「tell that cumin waits」を止める |
 | どの状態でも、Agentへの依頼が利用枠だけで待っている | 数える。「tell that cumin waits」を出さない | 「stop agent starts」が原因を知らせている。枠が戻れば、cuminが依頼する |
 | `cumin/status/planning`、`cumin/status/implementing`、`cumin/status/reviewing`、`cumin/status/accepting`、`cumin/status/merging` | 数える。「tell that cumin waits」を出さない | Agentが動いていなくても、次の定期確認で、cuminが事実から次の動作を決める |
-| `cumin/status/awaiting-plan-review`、`cumin/status/awaiting-merge-decision`、`cumin/status/awaiting-acceptance`、`cumin/status/awaiting-decision` | 数えない | 人の番である |
+| `cumin/status/awaiting-plan-review`、`cumin/status/awaiting-merge-decision`、`cumin/status/awaiting-acceptance`、`cumin/status/awaiting-decision` | 数えない | 人の番である。ただし、sub-issueが全て閉じた `cumin/status/awaiting-plan-review` の要求Issueは数える。cuminが「request the acceptance check」で進める |
 | `cumin/type/owner-task`、状態ラベルのないIssue | 数えない | Maintainerが動くまで進まない |
 
 使用率の読み方:

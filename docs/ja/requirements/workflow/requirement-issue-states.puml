@@ -40,6 +40,7 @@ Planning --> Planning : request the split again\n[no Planner runs, cumin could n
 Planning --> Decision : stop the split\n[no Planner runs, and: the Planner asked\na question, or cumin could not verify the split\nthe second time]\n/ cumin notifies
 PlanReview --> Implementing : mark the requirement as in work\na Maintainer adds ready to a sub-issue\n/ cumin changes the label
 Implementing --> Accepting : request the acceptance check\n[every sub-issue is closed, cumin wrote the\nfollow-up notes, cumin has a free slot]\n/ cumin requests the acceptance check\nfrom the Planner
+PlanReview --> Accepting : request the acceptance check\n[every sub-issue is closed, cumin wrote the\nfollow-up notes, cumin has a free slot]\n/ cumin requests the acceptance check\nfrom the Planner
 Implementing --> PlanReview : ask about the remaining sub-issues\n[only sub-issues without a status label remain]\n/ cumin notifies
 Accepting --> Acceptance : ask for the acceptance\n[the Planner wrote the acceptance check]\n/ cumin notifies
 Accepting --> Accepting : request the acceptance check again\n[no Planner runs, the Planner wrote no\nacceptance check, first time]\n/ cumin requests the acceptance check again
