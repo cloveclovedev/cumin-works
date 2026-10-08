@@ -1546,15 +1546,6 @@ func (s *Service) stopBlocked(ctx context.Context, log *slog.Logger, target Targ
 	})
 }
 
-// labelsNow is the labels of the sub-issue that subIssueNow read, or none
-// when it could not be read.
-func labelsNow(sub SubIssue, ok bool) []string {
-	if !ok {
-		return nil
-	}
-	return sub.Labels
-}
-
 // readImplementingFacts adds the facts of the way out of
 // cumin/status/implementing to each sub-issue of the snapshot that needs
 // them (ImplementationNeedsFacts): it reads that issue again, so that the
@@ -1948,14 +1939,6 @@ func toPullRequests(read []github.PullRequest) []PullRequest {
 		})
 	}
 	return pullRequests
-}
-
-// settingsSource names where the settings of a poll came from, for the log.
-func settingsSource(fromRepository bool) string {
-	if fromRepository {
-		return "repository"
-	}
-	return "host"
 }
 
 func (s *Service) logger() *slog.Logger {
