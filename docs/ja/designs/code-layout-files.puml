@@ -1,7 +1,8 @@
 @startuml code-layout-files
 ' cumin works - the files of a package, where the table of code-layout.md
 ' cannot show which file uses which.
-' Document: code-layout.md, topic on the files of the tests.
+' Document: code-layout.md, topics on the files of the tests and on the
+' files of the two adapters.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
@@ -53,4 +54,18 @@ fake --> fakeissues
 fake --> fakepulls
 fake --> fakechecks
 fake --> fakeapps
+
+package "internal/agent (the adapter of Claude Code)" {
+  file "claudecode.go\nthe run of the CLI: the arguments,\nthe stream, the time limit" as claudecode
+  file "startrecord.go\nthe check of the start record\nand the JSON shape helpers" as startrecord
+}
+
+claudecode --> startrecord
+
+package "internal/platform/github (the snapshot)" {
+  file "snapshot.go\nthe exported types\nand the Read methods" as snapshot
+  file "snapshotquery.go\nthe query constants, the response nodes\nand their conversion methods" as snapshotquery
+}
+
+snapshot --> snapshotquery
 @enduml
