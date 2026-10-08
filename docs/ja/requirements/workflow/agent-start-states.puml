@@ -16,7 +16,7 @@ Starting --> Stopped : stop agent starts\n[cumin reads a quota window at its lim
 Stopped --> Starting : resume agent starts\nthe Operator allows the 5h window\n[the weekly window is under its limit]
 Stopped --> Starting : resume agent starts\n[the time of cumin's next try passed,\nboth windows are under their limit]
 
-note "tell that cumin waits, in both states: [nothing can go on without a Maintainer,\nno agent runs, no issue waits only for the quota] / cumin tells once that it waits." as Q4
+note "tell that cumin waits, in both states: [nothing can go on without a Maintainer,\nno agent runs, no issue waits only for the quota] / cumin tells once that it waits." as WaitsNote
 
 legend right
   This machine has one instance for one cumin, not one for each issue.

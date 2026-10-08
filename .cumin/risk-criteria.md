@@ -1,7 +1,7 @@
 # Risk criteria of cumin-works
 
 Risk says who decides the merge. cumin merges a pull request with `risk/low`
-by itself. The Owner decides the merge of `risk/medium` and `risk/high`.
+by itself. A Maintainer decides the merge of `risk/medium` and `risk/high`.
 These criteria replace the built-in ones for this repository.
 
 | Risk | Criteria |
@@ -10,4 +10,4 @@ These criteria replace the built-in ones for this repository.
 | `risk/high` | A change that a revert cannot undo, or that moves a boundary of trust or of money: a deployment or CI setting (`.github/`), the setup of a repository (`scripts/setup-repo.sh`, `scripts/setup-repo/`), authentication, cryptography, tokens, the permissions of the GitHub Apps, a side effect on an external service, or the rules of cumin itself (`.cumin/`). |
 | `risk/medium` | Everything that is not low or high: a change of non-test Go code, of the role instructions (`roles/`, `disciplines/`), or of the templates (`templates/`). |
 
-When in doubt, take the higher one. The Owner decides the risk in the end.
+When in doubt, take the higher one. A Maintainer decides the risk in the end.

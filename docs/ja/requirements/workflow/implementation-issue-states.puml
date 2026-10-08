@@ -60,8 +60,8 @@ Merging --> Implementing : request a conflict resolution\n[GitHub refused the me
 Merging --> Decision : stop the merge\n[GitHub refused the merge for another\nlasting reason]\n/ cumin notifies
 Decision --> Ready : a Maintainer adds ready
 
-note "copy the labels to the pull request: in every state, the labels of the issue differ from\nthose of its pull request / cumin copies the labels." as I11
-note "write the follow-up note: the issue is closed and its pull request is merged\n/ cumin writes the follow-up note." as I9
+note "copy the labels to the pull request: in every state, the labels of the issue differ from\nthose of its pull request / cumin copies the labels." as LabelsNote
+note "write the follow-up note: the issue is closed and its pull request is merged\n/ cumin writes the follow-up note." as FollowUpNote
 
 legend right
   A box is a state: a label on GitHub, without "cumin/status/". "do /" says who works in the state.

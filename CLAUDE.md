@@ -1,6 +1,6 @@
 # cumin-works
 
-cumin-works is a workflow engine written in Go. It polls GitHub, moves issues between states by changing labels, and starts agents (headless Claude Code) to plan, implement, and review. The engine follows fixed rules only. It contains no AI judgment. Every judgment belongs to an agent or to the Owner.
+cumin-works is a workflow engine written in Go. It polls GitHub, moves issues between states by changing labels, and starts agents (headless Claude Code) to plan, implement, and review. The engine follows fixed rules only. It contains no AI judgment. Every judgment belongs to an agent or to a Maintainer.
 
 The product name is cumin-works. The command name is `cumin`. The requirement documents call the running engine "cumin".
 
@@ -13,11 +13,11 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 - `docs/ja/requirements/workflow/issue-states.md` is the source of truth for every cumin action.
 - `docs/ja/requirements/backlog.md` lists what is decided to be out of scope for now. Do not build those things.
 
-`roles/` holds the contract of each role with cumin, `disciplines/<discipline>/` holds the standards of one field of work for each role and the built-in risk criteria, and `templates/` holds the English templates for text on GitHub. `templates/embed.go` embeds the templates for the code. The headings in the templates are a contract between cumin, the agents, and the Owner.
+`roles/` holds the contract of each role with cumin, `disciplines/<discipline>/` holds the standards of one field of work for each role and the built-in risk criteria, and `templates/` holds the English templates for text on GitHub. `templates/embed.go` embeds the templates for the code. The headings in the templates are a contract between cumin, the agents, and the Maintainers.
 
 ## Rules that you must not break
 
-- Do not change anything under `docs/ja/requirements/` without the Owner's approval in the conversation. If the implementation needs a requirement change, stop and ask first. `overview.md` is written by the Owner only.
+- Do not change anything under `docs/ja/requirements/` without a Maintainer's approval in the conversation. If the implementation needs a requirement change, stop and ask first. `overview.md` is written by a Maintainer only.
 - This repository is public. Do not write employer information, personal circumstances, concrete quota numbers, or local absolute paths in documents, code, tests, fixtures, commit messages, or pull requests.
 - Do not commit to `main`. Create a branch from `main` for every change.
 - Do not read or print secret values: Keychain items, private keys, tokens, webhook URLs, `.env` files. Tests generate their own keys.
@@ -36,9 +36,9 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 - cumin decides completion from facts on GitHub, never from what an agent reports. `done` from an agent only means "start checking".
 - cumin changes the status label before it starts an agent. It never requests the same work twice.
 - The same state must always produce the same action. Keep the decision logic as pure functions from a snapshot of GitHub facts to actions. Keep I/O (GitHub, CLI, Keychain, Discord, git) at the edges.
-- Name each cumin action in plain English words in code, comments, log lines, and test names (for example "verify done", "wait for the checks"). Never use a row code of `issue-states.md` (such as R1 or I3) alone.
+- Name each cumin action by its name in the tables of `issue-states.md`, in code, comments, log lines, and test names (for example "wait for the checks", "stop the implementation").
 - Configuration is TOML. Do not hard-code values that the settings table in `cumin-core.md` lists. Secrets are in the macOS Keychain, never in files or in the repository.
-- An agent receives only the token of its own GitHub App, never the Owner's credentials, and starts isolated from the Host user's settings (`docs/ja/designs/agent-run.md`).
+- An agent receives only the token of its own GitHub App, never the credentials of the Operator or of a Maintainer, and starts isolated from the Host user's settings (`docs/ja/designs/agent-run.md`).
 - Differences between agent CLIs stay inside one adapter in `internal/agent/`.
 
 ## Code
@@ -64,7 +64,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 - Acceptance tests run with `go test ./...` and need no network and no quota. They use a fake GitHub (`httptest`) behind the real client and a fake agent CLI executable.
 - Name each acceptance test by what it proves, for example `TestReadyIssueIsRequestedOnce`.
 - Make every test give the same result on any machine, at any time, and in any order.
-- Live tests (real GitHub Apps, real Claude Code) run only against the sandbox repository and only when an environment variable enables them. They may use quota without asking; ask the Owner first only for a run that takes hours.
+- Live tests (real GitHub Apps, real Claude Code) run only against the sandbox repository and only when an environment variable enables them. They may use quota without asking; ask the Operator first only for a run that takes hours.
 
 ## Commands
 

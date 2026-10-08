@@ -1,7 +1,7 @@
 # cumin settings for this repository.
 #
 # cumin and the cumin-protected-paths check read this file from the default
-# branch only. A change to this file takes effect after the Owner merges it.
+# branch only. A change to this file takes effect after a Maintainer merges it.
 # The check reads the list when it runs. A pull request whose check passed
 # before the merge is not checked again until it gets a new commit.
 
@@ -34,7 +34,7 @@ protected_paths = [
 priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 
 # How long cumin waits for every required check to report on the head commit
-# of a pull request. After this time it stops the issue for the Owner. The CI
+# of a pull request. After this time it stops the issue for a Maintainer. The CI
 # of this repository ends in about a minute, so ten minutes leave room for a
 # queue at GitHub Actions.
 checks_wait_time = "10m"

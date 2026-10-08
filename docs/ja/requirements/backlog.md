@@ -37,14 +37,14 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | Agentによる図の描き直し | 図はPlantUMLで、`scripts/render-diagrams.sh` がDockerで書き出す。Implementerの環境から `docker` に届くか、Agentが壊れたSVGを見分けられるかを、確かめていない。案は3つある。リポジトリのskillに手順と確かめ方を書く。CIで `.puml` を書き出し、コミットされたSVGと違えば落とす。Dockerの要らないrendererを使う。要求Issueの最後にPlannerが文書を仕上げる案は採らない。ImplementerがPull Requestごとに文書を直すほうが、差分で読めるためである | Implementerが図を変える場面が、まだない | 次にAgentを動かすlive scenarioで、`docker` に届くかを測ったとき。Implementerが `.puml` を変える実装Issueが出たとき |
 | 第三者のコメントの扱い | 公開リポジトリでは、Maintainerでもcuminでもない第三者が、IssueやPull Requestにコメントできる。cuminが第三者のコメントを見つけて、無視してよいかをPlannerに相談する。または、テンプレートに沿ったコメントなら、Maintainerのコメントと同じに扱う | 今は、第三者のコメントを判定に使わない。Agentは、起動の依頼の「Issue Ownerのログイン名」のアカウントのコメントだけを、指示として読む | 対象のリポジトリに、第三者のコメントが付くようになったとき |
 | 第三者のPull Requestの扱い | 公開リポジトリでは、第三者がforkからPull Requestを開ける。案: Maintainerが実装Issueに結び付けて `cumin/status/ready` を付けたら、check、Reviewerのレビュー、Maintainerのmergeの流れに乗せる。forkのブランチにはImplementerがpushできないので、指摘の修正を第三者に頼むか、Implementerが自分のブランチでPull Requestを作り直すかを決める必要がある | 今は、cuminはIssueに結び付かないPull Requestに触れない。第三者のPull Requestは、Maintainerが手で扱う | 対象のリポジトリに、第三者のPull Requestが来たとき |
-| cuminの作業中のIssueに結び付いた第三者のPull Request | 第三者のPull Requestが、本文の `Closes #N` などで、cuminの作業中の実装Issueに結び付くことがある。I2はPull Requestをブランチと作成者で見つけるので混ざらないが、ほかの行はIssueとPull Requestのリンクで見つけるので、第三者のPull Requestが判定に混ざりうる。案: 判定に使うPull Requestを、cuminがそのIssueのために決めたブランチと、ImplementerのGitHub Appの作成者のものに限る | まだ起きておらず、起きたときの動きも確かめていない | 第三者のPull Requestが来たとき。または、cuminの作業中のIssueに、別のPull Requestが結び付いたとき |
+| cuminの作業中のIssueに結び付いた第三者のPull Request | 第三者のPull Requestが、本文の `Closes #N` などで、cuminの作業中の実装Issueに結び付くことがある。「wait for the checks」はPull Requestをブランチと作成者で見つけるので混ざらないが、ほかの行はIssueとPull Requestのリンクで見つけるので、第三者のPull Requestが判定に混ざりうる。案: 判定に使うPull Requestを、cuminがそのIssueのために決めたブランチと、ImplementerのGitHub Appの作成者のものに限る | まだ起きておらず、起きたときの動きも確かめていない | 第三者のPull Requestが来たとき。または、cuminの作業中のIssueに、別のPull Requestが結び付いたとき |
 | Pull Requestに付けた `cumin/status/ready` を合図として読む | Maintainerが差し戻すとき、実装Issueではなく、見ているPull Requestに `cumin/status/ready` を付けても、cuminが合図として扱う | v0.1では、判定に使うのはIssueのラベルだけにした。Pull Requestのラベルは、Issueからコピーしたものであり、cuminは読まない | MaintainerがPull Requestの側に `cumin/status/ready` を付けてしまう間違いが続くとき |
 | コメントのスレッドを解決済みにする | Reviewerが、直ったことを確かめた指摘のスレッドを解決済みにする | v0.1では、cuminはレビューの結果だけで判定するので、要らない | Maintainerがレビューを読むときに、どの指摘が済んだのかが分かりにくいと感じたとき |
-| R3に失敗した回の着手の枠 | 要求Issueのラベルの付け替え (R3) が失敗すると、その回の定期確認では、その要求Issueのsub-issueのために取っておいた着手の枠が空いたままになる。ほかの `cumin/status/ready` のIssueが入れるとしても入らない。直すなら、失敗した付け替えが分かってから、空きを決める | 付け替えが失敗し続ける間だけ起きる。次の定期確認で空きは戻る (#205 のレビューの3回目で後回しにした) | R3の付け替えの失敗が、繰り返しログに出るとき |
-| Maintainerのmerge待ちの上に次の実装を積む | `risk/medium` と `risk/high` のPull Requestが、Reviewerの承認のあとでMaintainerのmergeの判断を待っている間に、それに依存する実装Issueにも着手する。依存先のPull Requestのブランチから切り、draftのPull Requestにして、依存先がmergeされるまではmergeしない。積むのは1段までにする。依存先にMaintainerの指摘で修正が入ったら、積んだ側をrebaseし、checkとレビューをやり直す。依存先がsquash mergeされたら、mainの上にrebaseし直す。着手するときに、依存先のブランチが消えたときにGitHubがPull Requestのbaseをmainに切り替えるかを、公式文書で確かめる | v0.1では、Maintainerのレビュー待ちは同時に進めるIssueの数に数えないので、依存のない作業は止まらない。止まるのは、残りの作業が全て待ちのIssueに依存しているときだけである。I1の条件、ブランチの土台、rebaseの依頼、I6のmergeの条件が変わり、依存先の方針をMaintainerが退けると、積んだ分は作り直しになる | 要求Issueを複数 `cumin/status/ready` にしておいても、Maintainerのレビュー待ちの間に、依存するIssueしか残らずにcuminが止まることが続いたとき。着手するときは、issue-states.md (I1、I6) と designs/poll.md に書く |
+| 「mark the requirement as in work」に失敗した回の着手の枠 | 要求Issueのラベルの付け替え (「mark the requirement as in work」) が失敗すると、その回の定期確認では、その要求Issueのsub-issueのために取っておいた着手の枠が空いたままになる。ほかの `cumin/status/ready` のIssueが入れるとしても入らない。直すなら、失敗した付け替えが分かってから、空きを決める | 付け替えが失敗し続ける間だけ起きる。次の定期確認で空きは戻る (#205 のレビューの3回目で後回しにした) | 「mark the requirement as in work」の付け替えの失敗が、繰り返しログに出るとき |
+| Maintainerのmerge待ちの上に次の実装を積む | `risk/medium` と `risk/high` のPull Requestが、Reviewerの承認のあとでMaintainerのmergeの判断を待っている間に、それに依存する実装Issueにも着手する。依存先のPull Requestのブランチから切り、draftのPull Requestにして、依存先がmergeされるまではmergeしない。積むのは1段までにする。依存先にMaintainerの指摘で修正が入ったら、積んだ側をrebaseし、checkとレビューをやり直す。依存先がsquash mergeされたら、mainの上にrebaseし直す。着手するときに、依存先のブランチが消えたときにGitHubがPull Requestのbaseをmainに切り替えるかを、公式文書で確かめる | v0.1では、Maintainerのレビュー待ちは同時に進めるIssueの数に数えないので、依存のない作業は止まらない。止まるのは、残りの作業が全て待ちのIssueに依存しているときだけである。「request the implementation」の条件、ブランチの土台、rebaseの依頼、「start the merge」の条件が変わり、依存先の方針をMaintainerが退けると、積んだ分は作り直しになる | 要求Issueを複数 `cumin/status/ready` にしておいても、Maintainerのレビュー待ちの間に、依存するIssueしか残らずにcuminが止まることが続いたとき。着手するときは、issue-states.md (「request the implementation」、「start the merge」) と designs/poll.md に書く |
 | Maintainerのアカウントを列挙する | Maintainerを、Hostの設定に書いたアカウントだけにする。今の定義 (対象リポジトリに write 以上の権限を持つ人のアカウント、#222) より狭くする | 1人で使う間は、write を持つ人はMaintainerだけである。write を渡すことは、mergeの判断を任せることと同じ意味にした | write の権限を持つ協力者を足すが、mergeの判断は任せたくないとき |
 | 失敗したcheckの読み方を固める | check runの再実行分も全て読み (`filter=all`)、定期確認のあとに再実行が通っても、失敗したときの内容を渡せるようにする。detailsのアドレスは、パスの終わりだけでなく、ホストがGitHub Actionsで、リポジトリがこのリポジトリであることまで確かめてから読む | #197 のレビューの4回目で出た指摘で、回数の上限で後回しにした。どちらも、今の使い方では誤った依頼にならない | 失敗の内容が空やずれたまま、Implementerに修正を依頼したことが起きたとき |
-| 続きの依頼で、別のブランチに残ったworktreeを使わない | GitHubに上がっていない作業が残ったworktreeが、Pull Requestと別のブランチにあると、続きの依頼でそのまま使われ、I2で止まる。止めるには、作業の破棄、ブランチの切り替え、Pull Requestの作り直しを同時に決める必要がある。forkからのPull Requestはブランチがforkにあるので、続きの依頼が `origin` に新しいブランチを作ってしまう | #200 のレビューの3回目で出た指摘で、回数の上限で後回しにした。cuminはforkのPull Requestを作らない | 続きの依頼がI2で止まることが、実際に起きたとき。forkのPull Requestを受け付けるとき |
+| 続きの依頼で、別のブランチに残ったworktreeを使わない | GitHubに上がっていない作業が残ったworktreeが、Pull Requestと別のブランチにあると、続きの依頼でそのまま使われ、「stop the implementation」で止まる。止めるには、作業の破棄、ブランチの切り替え、Pull Requestの作り直しを同時に決める必要がある。forkからのPull Requestはブランチがforkにあるので、続きの依頼が `origin` に新しいブランチを作ってしまう | #200 のレビューの3回目で出た指摘で、回数の上限で後回しにした。cuminはforkのPull Requestを作らない | 続きの依頼が「stop the implementation」で止まることが、実際に起きたとき。forkのPull Requestを受け付けるとき |
 
 ## Agent
 
@@ -121,7 +121,7 @@ cumin works v2 では、要求と要件を日本語のMarkdownで `docs/ja/requi
 | 要求Issue → 実装Issue | 分割の全体像の Requirement coverage。要求Issueの Requirements の1行ごとに、実装Issueを示す |
 | 実装Issue → Pull Request | 1つの実装Issueが1つのPull Requestになる。Pull Requestが実装Issueを閉じる |
 | 実装 → 受け入れ | 受け入れの確認の表。要求Issueの Requirements の1行が、表の1行になる |
-| 要件 → テスト | 要件の文書の行番号 (R1、I1、Q1、上位要件のテストの番号) を、テストの名前とコードのコメントに書く |
+| 要件 → テスト | 要件の文書の遷移の名前 (「request the split」など) と、上位要件のテストの番号を、テストの名前とコードのコメントに書く |
 
 切れているのは、要件文書の行から要求Issueの行への1本だけである。要件文書は人がレビューし、考え、直しやすいように母国語のMarkdownで書いているが、そこに書いた要求が漏れなく要求Issueになっているかを確かめる手段がない。
 
@@ -155,7 +155,7 @@ cumin works v2 では、要求と要件を日本語のMarkdownで `docs/ja/requi
 #### 方針の案
 
 - 正本は Markdown である。要求の構造化したデータは生成物で、人が直接編集しない。Maintainerが git の差分でレビューできる利点を守る。
-- IDは、文書名と行番号で作る。既に `issue-states.md` の R1、I1、Q1 と、各文書の上位要件のテストの番号がある。足りないのは、文書をまたいで一意にする接頭辞と、「番号は使い回さない。消した行は残して、廃止と書く」という決まりである。粒度は、真偽を確かめられる1つの決まりが1つのIDである。受け入れの確認の1行と同じ粒度になる。
+- IDは、文書名と行番号で作る。既に `issue-states.md` の遷移の名前 (「request the split」など) と、各文書の上位要件のテストの番号がある。足りないのは、文書をまたいで一意にする接頭辞と、「番号は使い回さない。消した行は残して、廃止と書く」という決まりである。粒度は、真偽を確かめられる1つの決まりが1つのIDである。受け入れの確認の1行と同じ粒度になる。
 - 要求Issueの Requirements の各行の先頭に、IDを書く。書くかどうかは任意である。Plannerは、分割の全体像と受け入れの確認に要求の文面をそのまま写すので、IDは下流に伝わる。テンプレートは変えない。
 - 構造的な検査は、決定論で行い、AIを使わない。検出するのは、未カバーの要求、文書にないIDへの参照、IDの重複、廃止した要求への参照、古い要求Issueである。古さは、要求IssueにリンクしたときのコミットSHAを書いておき、そのSHAと main で当該の行の文面を比べれば、git だけで分かる。意味が変わったかどうかは分からないが、見直す候補を出すには足りる。
 - 意味的な検査 (文書の変更を読んで、要求Issueを直す提案を書く) は判断なので、cuminではなくAgentの仕事である。Agentの表の「次の要求Issueの草案づくり」と「Plannerが要件文書の変更を下書きする」の隣に置く。
@@ -301,7 +301,7 @@ v0.1の目標は、cumin本体でpeppercheckの再構築を動かすことであ
 - 2つ目の分野を実際に回したくなったとき。
 - 1つのリポジトリの中で、仕事の種類によって指示を変えたくなったとき。
 - 追加のdisciplineを人に渡す段になったとき。契約と版が要る。
-- 着手するときは、指示の構成を `agents/common.md` に、ラベルと解決の順序を `issue-states.md` のラベルの一覧とR1、I1の確かめることに、設定を `cumin-core.md` に書く。
+- 着手するときは、指示の構成を `agents/common.md` に、ラベルと解決の順序を `issue-states.md` のラベルの一覧と「request the split」、「request the implementation」の確かめることに、設定を `cumin-core.md` に書く。
 
 #### 関連
 
@@ -321,20 +321,20 @@ v0.1の通知は一方向である。人の対応が要るときに、Discordの
 
 | 操作 | 場面 | 今の手段 |
 |---|---|---|
-| Issueの読み書きと、`cumin/status/ready` の付け直し | R2、R6、R7、I2、I4、I7、I8、I10 | GitHubの画面。Hostから離れていてもできる |
-| 5h枠の使い切りの許可 (Q2) | Q1で着手が止まったとき | Host上のコマンド (`cumin quota allow`)。Hostの前でしかできない |
+| Issueの読み書きと、`cumin/status/ready` の付け直し | 「ask for the plan review」、「stop the split」、「ask about the remaining sub-issues」、「ask for the acceptance」、「stop the implementation」、「stop for failed checks」、「ask for the merge decision」、「stop at the round limit」、「stop the review」 | GitHubの画面。Hostから離れていてもできる |
+| 5h枠の使い切りの許可 | 「stop agent starts」で着手が止まったとき | Host上のコマンド (`cumin quota allow`)。Hostの前でしかできない |
 
 #### 課題
 
-1. Q2の許可が、Hostの前でしか出せない。Q1で着手が止まってから、OperatorがHostに触るまで、新しい着手が再開しない。その間、Agentは動かず、使われなかった5h枠は、リセットとともに消える。
-2. 5h枠の時間帯ごとのしきい値 (`quota.five_hour.bands`) で、止まる頻度は下げられる。ただしweekly枠のペースの上限は、Operatorの許可でも上がらない。weekly枠で止まったときは、Q2でも時間帯でも緩和できない。
+1. 5h枠の使い切りの許可が、Hostの前でしか出せない。「stop agent starts」で着手が止まってから、OperatorがHostに触るまで、新しい着手が再開しない。その間、Agentは動かず、使われなかった5h枠は、リセットとともに消える。
+2. 5h枠の時間帯ごとのしきい値 (`quota.five_hour.bands`) で、止まる頻度は下げられる。ただしweekly枠のペースの上限は、Operatorの許可でも上がらない。weekly枠で止まったときは、使い切りの許可でも時間帯でも緩和できない。
 3. ラベルの付け替えが残る。Maintainerが決定をコメントに書いても、`cumin/status/ready` を付け直すまで、cuminは動かない (原則4)。この手間の大きさは、まだ測っていない。
 
 #### 検討した選択肢
 
 | | 案 | 良い点 | 悪い点 |
 |---|---|---|---|
-| A | webhookだけで作り、双方向にしない | 秘密の値がアドレス1つで済む。常時つなぐ接続が要らない。v0.1の形である | Q2の許可が、Hostの前でしか出せないままになる |
+| A | webhookだけで作り、双方向にしない | 秘密の値がアドレス1つで済む。常時つなぐ接続が要らない。v0.1の形である | 5h枠の使い切りの許可が、Hostの前でしか出せないままになる |
 | B | webhookで先に作り、あとでbotに差し替える | 通知の中身を先に固められる。差し替えで捨てるのは、送信の部分だけである | 送信の実装を二度書く |
 | C | 最初からbotで作る | 送信の実装が一度で済む | 通知の中身が固まる前に、token、常時つなぐ接続、認可の作り込みが要る |
 
@@ -342,7 +342,7 @@ v0.1の通知は一方向である。人の対応が要るときに、Discordの
 
 - 通知の中身 (どの場面で何を書くか) と、送信の手段を分けて考える。長く残るのは、中身のほうである。
 - 送信のインターフェースは、botを作るときに切り出す。実装が1つの間は足さない。
-- botで受け付ける操作は、Q2の許可から始める。次に `cumin/status/ready` の付け直しを考える。後者は「`cumin/status/ready` を付けるのはMaintainerである」という原則4に触れるので、そのときに要件を見直す。
+- botで受け付ける操作は、5h枠の使い切りの許可から始める。次に `cumin/status/ready` の付け直しを考える。後者は「`cumin/status/ready` を付けるのはMaintainerである」という原則4に触れるので、そのときに要件を見直す。
 - 認可は、Operatorの1つのアカウントの発言だけを命令として受け付ける形から始める。
 - 案Bを選ぶなら、着手の前に公式ドキュメントで2つを確かめる。webhookの送信とbotのメッセージの送信が、同じ形のJSONを受け取るか。1つのメッセージの長さの上限はいくつか。前者が同じなら、文面の作り込みは差し替えのあとも残り、捨てるのは送信の呼び出しだけになる。後者は、通知を「1通で判断できる長さ」に収める制約になる。
 
@@ -354,13 +354,13 @@ botのtokenという秘密の値、常時つなぐ接続、誰の発言を命令
 
 次のどれかが起きたとき。回数を残しておくと、感覚ではなく数で決められる。
 
-- Q1で着手が止まってから再開するまでの時間が、5h枠のリセットの間隔を超えることが続くとき。使えたはずの枠を捨てている
-- weekly枠のペースの上限で止まることが増えたとき。Q2でも時間帯でも緩和できない
+- 「stop agent starts」で着手が止まってから再開するまでの時間が、5h枠のリセットの間隔を超えることが続くとき。使えたはずの枠を捨てている
+- weekly枠のペースの上限で止まることが増えたとき。使い切りの許可でも時間帯でも緩和できない
 - Maintainerが通知に応える手間のうち、ラベルの付け替えが占める割合が大きいと分かったとき
 
 #### 関連
 
 - [cumin本体の要件](cumin-core.md) の通知
-- [Issueのラベルと状態遷移](workflow/issue-states.md) のQ1からQ4まで、および原則4
+- [Issueのラベルと状態遷移](workflow/issue-states.md) の「cumin自身の状態 (Agentの起動)」の遷移、および原則4
 - [設定の一覧](../development/configuration.md) の時間帯
 - 人とのやりとりの表: 通知をまとめる、他の通知の手段
