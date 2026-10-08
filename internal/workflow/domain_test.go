@@ -352,12 +352,42 @@ func TestDecide_RequestTheAcceptanceCheckAndAskForTheAcceptance(t *testing.T) {
 		return r
 	}
 
+	// planReview is the requirement issue in
+	// cumin/status/awaiting-plan-review, the second starting state of
+	// "request the acceptance check".
+	planReview := func(checkAt time.Time, subs ...SubIssue) RequirementIssue {
+		r := requirement(checkAt, subs...)
+		r.Labels = []string{LabelRequirement, LabelAwaitingPlanReview}
+		return r
+	}
+
 	tests := []struct {
 		name     string
 		snapshot Snapshot
 		room     int
 		want     []Action
 	}{
+		{"request the acceptance check from awaiting-plan-review: all closed and no comment", Snapshot{RequirementIssues: []RequirementIssue{planReview(time.Time{}, closed)}}, 1, []Action{CheckAcceptance{Number: 6}}},
+		{"request the acceptance check from awaiting-plan-review: a comment from before the last close", Snapshot{RequirementIssues: []RequirementIssue{planReview(closedAt.Add(time.Hour), closed, later)}}, 1, []Action{CheckAcceptance{Number: 6}}},
+		{"request the acceptance check from awaiting-plan-review: no room", Snapshot{RequirementIssues: []RequirementIssue{planReview(time.Time{}, closed)}}, 0, nil},
+		{"request the acceptance check from awaiting-plan-review: no sub-issue", Snapshot{RequirementIssues: []RequirementIssue{planReview(time.Time{})}}, 1, nil},
+		{"request the acceptance check from awaiting-plan-review: an open Owner task", Snapshot{RequirementIssues: []RequirementIssue{planReview(time.Time{}, closed, SubIssue{Number: 12, Labels: []string{LabelOwnerTask}})}}, 1, nil},
+		{"request the acceptance check from awaiting-plan-review: the comments were not read", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := planReview(time.Time{}, closed)
+			r.CommentsRead = false
+			return r
+		}()}}, 1, nil},
+		{"request the acceptance check from awaiting-plan-review: a follow-up note is still missing", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := planReview(time.Time{}, closed)
+			r.FollowUpsDone = false
+			return r
+		}()}}, 1, nil},
+		{"in awaiting-plan-review, a comment after the last close stops the request", Snapshot{RequirementIssues: []RequirementIssue{planReview(closedAt.Add(3*time.Hour), closed, later)}}, 1, nil},
+		{"in awaiting-acceptance, every sub-issue closed requests nothing", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := requirement(time.Time{}, closed)
+			r.Labels = []string{LabelRequirement, LabelAwaitingAcceptance}
+			return r
+		}()}}, 1, nil},
 		{"request the acceptance check: all closed and no comment", Snapshot{RequirementIssues: []RequirementIssue{requirement(time.Time{}, closed)}}, 1, []Action{CheckAcceptance{Number: 6}}},
 		{"request the acceptance check: a comment from before the last close", Snapshot{RequirementIssues: []RequirementIssue{requirement(closedAt.Add(time.Hour), closed, later)}}, 1, []Action{CheckAcceptance{Number: 6}}},
 		{"request the acceptance check: no room", Snapshot{RequirementIssues: []RequirementIssue{requirement(time.Time{}, closed)}}, 0, nil},

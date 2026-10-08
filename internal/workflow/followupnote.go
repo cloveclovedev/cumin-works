@@ -19,8 +19,9 @@ import (
 // writeFollowUpNotes writes the missing follow-up notes of the snapshot,
 // and marks each requirement issue whose closed sub-issues need no more
 // note in this poll (FollowUpsDone). "request the acceptance check" waits
-// for that mark, so that the notes come before the request for the
-// acceptance check.
+// for that mark in both of its starting states (cumin/status/implementing
+// and cumin/status/awaiting-plan-review), so that the notes come before the
+// request for the acceptance check.
 //
 // The snapshot holds open requirement issues only, so a closed requirement
 // issue gets nothing (principle 6). Whether a note exists is read from

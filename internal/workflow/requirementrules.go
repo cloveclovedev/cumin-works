@@ -86,8 +86,9 @@ func remainingNeedReview(requirement RequirementIssue) bool {
 
 // NeedsComments reports whether "request the acceptance check" or "ask for
 // the acceptance" needs the comments of the requirement issue: it is in
-// cumin/status/accepting, or it is in cumin/status/implementing and has one
-// or more sub-issues, all closed.
+// cumin/status/accepting, or it is in cumin/status/implementing or in
+// cumin/status/awaiting-plan-review and has one or more sub-issues, all
+// closed.
 func NeedsComments(requirement RequirementIssue) bool {
 	if statusLabel(requirement.Labels) == LabelAccepting {
 		return !statusOfAnother(requirement)
@@ -95,10 +96,14 @@ func NeedsComments(requirement RequirementIssue) bool {
 	return everySubIssueClosed(requirement)
 }
 
-// everySubIssueClosed reports whether the requirement issue is in
-// cumin/status/implementing with one or more sub-issues, all closed.
+// everySubIssueClosed reports whether the requirement issue is in a
+// starting state of "request the acceptance check"
+// (cumin/status/implementing or cumin/status/awaiting-plan-review) with one
+// or more sub-issues, all closed. In cumin/status/awaiting-plan-review, the
+// last open sub-issue was an Owner task, or a Maintainer closed it by hand.
 func everySubIssueClosed(requirement RequirementIssue) bool {
-	if statusLabel(requirement.Labels) != LabelImplementing || len(requirement.SubIssues) == 0 {
+	status := statusLabel(requirement.Labels)
+	if status != LabelImplementing && status != LabelAwaitingPlanReview || len(requirement.SubIssues) == 0 {
 		return false
 	}
 	for _, sub := range requirement.SubIssues {
@@ -215,10 +220,11 @@ func SplitNeedsFacts(requirement RequirementIssue, running bool) bool {
 }
 
 // acceptanceChecks returns the starts of "request the acceptance check"
-// before the limit: every sub-issue closed, the comments read, no
-// acceptance check after the last close, the follow-up notes of the closed
-// sub-issues written ("write the follow-up note"), and no agent of the
-// requirement issue running.
+// before the limit: the requirement issue in cumin/status/implementing or
+// in cumin/status/awaiting-plan-review, every sub-issue closed, the
+// comments read, no acceptance check after the last close, the follow-up
+// notes of the closed sub-issues written ("write the follow-up note"), and
+// no agent of the requirement issue running.
 func acceptanceChecks(snapshot Snapshot) []CheckAcceptance {
 	var checks []CheckAcceptance
 	for _, requirement := range snapshot.RequirementIssues {
