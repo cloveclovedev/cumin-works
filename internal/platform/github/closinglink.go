@@ -78,9 +78,22 @@ const addClosingLinkMutation = `mutation($issueId: ID!, $pullRequestIds: [ID!]!)
   }
 }`
 
+// ClosingLinkError is a failure of AddClosingLink. Answer is the answer of
+// GitHub: the request, the status, and the message of GitHub, or the
+// messages of a GraphQL answer. Err is the error of the request, and it is
+// nil for a GraphQL answer. A caller reads the answer with errors.As.
+type ClosingLinkError struct {
+	Answer string
+	Err    error
+}
+
+func (e *ClosingLinkError) Error() string { return "github: add the closing link: " + e.Answer }
+
+func (e *ClosingLinkError) Unwrap() error { return e.Err }
+
 // AddClosingLink links the pull request to the issue as a closing
-// reference. The IDs are GraphQL node IDs. An error holds the answer of
-// GitHub.
+// reference. The IDs are GraphQL node IDs. An error is a ClosingLinkError,
+// and it holds the answer of GitHub.
 func (c *AppClient) AddClosingLink(ctx context.Context, token, issueID, pullRequestID string) error {
 	request := map[string]any{
 		"query":     addClosingLinkMutation,
@@ -92,14 +105,14 @@ func (c *AppClient) AddClosingLink(ctx context.Context, token, issueID, pullRequ
 		} `json:"errors"`
 	}
 	if err := c.do(ctx, token, http.MethodPost, "/graphql", "/graphql", request, http.StatusOK, &resp); err != nil {
-		return fmt.Errorf("github: add the closing link: %w", err)
+		return &ClosingLinkError{Answer: err.Error(), Err: err}
 	}
 	if len(resp.Errors) > 0 {
 		var messages []string
 		for _, e := range resp.Errors {
 			messages = append(messages, e.Message)
 		}
-		return fmt.Errorf("github: add the closing link: %s", strings.Join(messages, "; "))
+		return &ClosingLinkError{Answer: strings.Join(messages, "; ")}
 	}
 	return nil
 }

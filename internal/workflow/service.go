@@ -1612,7 +1612,7 @@ func (s *Service) waitForChecks(ctx context.Context, log *slog.Logger, token str
 				return fmt.Errorf(string(ActionWaitForTheChecks)+": add the closing link of issue #%d: %w", a.Number, err)
 			}
 			log.Warn(string(ActionStopTheImplementation)+": the closing link was not added", "pull_request", pr, "error", err.Error())
-			stopI2(LinkFailedReason(pr, githubAnswer(err)))
+			stopI2(LinkFailedReason(pr, closingLinkAnswer(err)))
 			return nil
 		}
 		again, err := s.GitHub.ReadSubIssue(ctx, token, owner, repo, a.Number)
@@ -1727,11 +1727,14 @@ func temporary(err error) error {
 	return nil
 }
 
-// githubAnswer is the answer of GitHub in an error of AddClosingLink: the
-// request, the status, and the message of GitHub, or the messages of a
-// GraphQL answer.
-func githubAnswer(err error) string {
-	return strings.TrimPrefix(err.Error(), "github: add the closing link: ")
+// closingLinkAnswer is the answer of GitHub in an error of AddClosingLink,
+// or the whole error when it holds no answer.
+func closingLinkAnswer(err error) string {
+	var link *github.ClosingLinkError
+	if errors.As(err, &link) {
+		return link.Answer
+	}
+	return err.Error()
 }
 
 // keepSession stores the session of the run of the role, so that a request
