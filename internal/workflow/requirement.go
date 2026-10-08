@@ -164,7 +164,7 @@ func (s *Service) tellStatusOfAnother(ctx context.Context, log *slog.Logger, tar
 	log = log.With("issue", number)
 	log.Warn("the newest "+label+" is not of cumin-core or of a Maintainer: cumin does nothing until a Maintainer adds the right label again",
 		"actor", actor.Login, "actor_type", actor.Type)
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Reason:     fmt.Sprintf("%s was added by %s, which is not cumin-core and not a person with write access. cumin does nothing until a person with write access adds the right label again.", label, labelActorName(actor)),
 		Repository: target.Repository.String(),
 		Subject:    fmt.Sprintf("issue #%d", number),
@@ -188,7 +188,7 @@ func (s *Service) tellReadyOfAnother(ctx context.Context, log *slog.Logger, targ
 	log.Warn("the newest "+LabelReady+" is not of a Maintainer: nothing starts until a Maintainer adds the label again",
 		"actor", actor.Login, "actor_type", actor.Type)
 	by := labelActorName(actor)
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(action),
 		Reason:     fmt.Sprintf("%s was added by %s, which is not a person with write access. cumin starts nothing until a person with write access adds the label again.", LabelReady, by),
 		Repository: target.Repository.String(),
@@ -224,7 +224,7 @@ func (s *Service) reviewRemaining(ctx context.Context, token string, target Targ
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "action", ActionAskAboutTheRemainingSubIssues)
 	log.Info(string(ActionAskAboutTheRemainingSubIssues)+": the remaining sub-issues wait for a Maintainer", "labels", labels)
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(ActionAskAboutTheRemainingSubIssues),
 		Reason:     "The sub-issues that are left have no status label and need a review.",
 		Repository: target.Repository.String(),

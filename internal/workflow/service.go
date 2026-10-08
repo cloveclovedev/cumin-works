@@ -629,11 +629,6 @@ func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (
 
 func (s *Service) pollRepository(ctx context.Context, target Target, finishing bool) (pollResult, error) {
 	var result pollResult
-	err := s.pollRepositoryInto(ctx, target, finishing, &result)
-	return result, err
-}
-
-func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishing bool, result *pollResult) error {
 	owner, repo := target.Repository.Owner, target.Repository.Name
 	// The running set comes before every read of GitHub. A run that ends
 	// after the read of the snapshot has already decided its own end and
@@ -647,11 +642,11 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	s.forgetQuotaWaits(target.Repository.String())
 	token, err := target.Token(ctx)
 	if err != nil {
-		return err
+		return result, err
 	}
 	read, snapshot, err := s.readSnapshot(ctx, token, owner, repo)
 	if err != nil {
-		return err
+		return result, err
 	}
 	snapshot.Running = running
 	s.noteWaitingIssues(target.Repository.String(), snapshot.WaitingIssues(target.Repository.String()))
@@ -668,7 +663,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	// and this poll; the other repositories are polled by the caller.
 	settings, readAgain, err := s.settingsFor(target.Repository, read)
 	if err != nil {
-		return err
+		return result, err
 	}
 	if readAgain {
 		log.Info("the settings of the repository were read",
@@ -676,7 +671,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	}
 	// The setting of the repository decides the notification, so it comes
 	// after the read of the settings.
-	s.notifyUnreadIssues(ctx, log, target, settings.Settings.Notify.DiscordEnabled, read.Unread)
+	s.notifyUnreadIssues(ctx, log, target, settings.notificationOn(), read.Unread)
 	s.ensurePriorityLabels(ctx, log, token, target, settings, readAgain)
 	// The required checks are a REST call of their own, so the poll makes
 	// it only when an issue of this repository waits for the checks ("request
@@ -687,7 +682,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	if snapshot.HasIssueChecking() || snapshot.HasMaintainerApprovalCandidate() {
 		read, err := s.GitHub.RequiredChecks(ctx, token, owner, repo, snapshot.DefaultBranch)
 		if err != nil {
-			return err
+			return result, err
 		}
 		required = toRequiredChecks(read)
 	}
@@ -852,7 +847,7 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 			errs = append(errs, fmt.Errorf("unknown action %T", action))
 		}
 	}
-	return errors.Join(errs...)
+	return result, errors.Join(errs...)
 }
 
 // claim applies "request the implementation": replace the status label of
@@ -880,7 +875,7 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	if err := s.State.Clear(target.Repository.String(), c.Number); err != nil {
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": clear the state of issue #%d: %w", c.Number, err)
 	}
-	labels := LabelsAfterClaim(sub.Labels)
+	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, c.Number, labels); err != nil {
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": claim issue #%d: %w", c.Number, err)
 	}
@@ -1056,7 +1051,7 @@ func (s *Service) fixChecks(ctx context.Context, token string, target Target, sn
 	if err := s.State.Set(repository, a.Number, counted); err != nil {
 		return fmt.Errorf(string(ActionRequestACheckFix)+": keep the count of check fix requests of issue #%d: %w", a.Number, err)
 	}
-	labels := LabelsAfterCheckFix(sub.Labels)
+	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 		// No request starts, so the count goes back: a label that fails
 		// again must not use up the limit without a single fix.
@@ -1456,7 +1451,7 @@ func (s *Service) stopAfterBlocked(ctx context.Context, log *slog.Logger, target
 // stopBlocked is stopAfterBlocked with the labels of the issue that the
 // caller read.
 func (s *Service) stopBlocked(ctx context.Context, log *slog.Logger, target Target, settings *RepositorySettings, action ActionName, role string, number int, reason string, labels []string) {
-	question := firstLine(reason)
+	question := firstLine(strings.TrimSpace(reason))
 	log.Warn(string(action)+": the agent returned blocked", "reason", question)
 	s.stopForMaintainer(ctx, log, target, settings, stop{
 		action:     action,
@@ -1558,11 +1553,7 @@ func (s *Service) implementingNow(ctx context.Context, log *slog.Logger, token s
 		return sub, false
 	}
 	log.Debug(string(ActionWaitForTheChecks)+": read the comments", "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	asked := make([]Comment, 0, len(comments))
-	for _, c := range comments {
-		asked = append(asked, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
-	}
-	facts.QuestionAt = QuestionAt(asked, askers...)
+	facts.QuestionAt = QuestionAt(toComments(comments), askers...)
 	if facts.Branch = branch; branch == "" {
 		facts.Branch, _ = ClaimBranch(sub)
 	}
@@ -1664,7 +1655,7 @@ func (s *Service) stopImplementation(ctx context.Context, log *slog.Logger, toke
 	}
 	log = log.With("action", ActionStopTheImplementation)
 	log.Info(string(ActionStopTheImplementation)+": the Implementer asked a question; the issue waits for a Maintainer", "labels", labels)
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(ActionStopTheImplementation),
 		Reason:     "The Implementer asked a question during the implementation.",
 		Repository: target.Repository.String(),
@@ -1758,11 +1749,14 @@ func (s *Service) keepSession(log *slog.Logger, target Target, role config.Role,
 	}
 }
 
-// firstLine is the first line of s, for one log field. The first line of a
-// blocked_reason is the question that a Maintainer must answer.
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return line
+// toComments converts the comments that the REST call read. The types of the
+// platform package stop here.
+func toComments(read []github.Comment) []Comment {
+	comments := make([]Comment, 0, len(read))
+	for _, c := range read {
+		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
+	}
+	return comments
 }
 
 // toRequiredChecks converts the required checks that the REST call read.

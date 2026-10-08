@@ -1533,8 +1533,7 @@ func AcceptanceCheckAt(comments []Comment, planner string) time.Time {
 		if planner == "" || comment.Author != planner {
 			continue
 		}
-		first, _, _ := strings.Cut(strings.TrimLeft(comment.Body, " \t\r\n"), "\n")
-		if strings.TrimSpace(first) != acceptanceCheckHeading {
+		if strings.TrimSpace(firstLine(strings.TrimLeft(comment.Body, " \t\r\n"))) != acceptanceCheckHeading {
 			continue
 		}
 		if comment.CreatedAt.After(newest) {
@@ -1553,7 +1552,7 @@ func AcceptanceCheckAt(comments []Comment, planner string) time.Time {
 func QuestionAt(comments []Comment, authors ...string) time.Time {
 	var newest time.Time
 	for _, comment := range comments {
-		if comment.Author == "" || !slices.Contains(authors, comment.Author) || !strings.HasPrefix(firstBodyLine(comment.Body), DecisionRequestHeading) {
+		if comment.Author == "" || !slices.Contains(authors, comment.Author) || !strings.HasPrefix(strings.TrimSpace(firstLine(strings.TrimLeft(comment.Body, "\r\n"))), DecisionRequestHeading) {
 			continue
 		}
 		if comment.CreatedAt.After(newest) {
@@ -2036,12 +2035,6 @@ func ChecksWaitStart(awaitingChecksAt, headCommittedAt time.Time) time.Time {
 // Maintainer instead.
 func CheckFixAllowed(count, limit int) bool { return count < limit }
 
-// LabelsAfterCheckFix returns the labels of a sub-issue after "request a
-// check fix": cumin/status/implementing in place of cumin/status/checking.
-func LabelsAfterCheckFix(labels []string) []string {
-	return ReplaceStatusLabel(labels, LabelImplementing)
-}
-
 // PullRequestLabels returns the labels that a pull request has after "copy
 // the labels to the pull request": its own labels that are neither
 // cumin/status/* nor risk/*, then those two kinds from the issue.
@@ -2213,21 +2206,6 @@ func ReplaceStatusLabel(labels []string, status string) []string {
 	return append(after, status)
 }
 
-// LabelsAfterPlan returns the labels of a requirement issue after "request
-// the split": cumin/status/planning in place of cumin/status/ready.
-// cumin/type/requirement stays.
-func LabelsAfterPlan(labels []string) []string {
-	return ReplaceStatusLabel(labels, LabelPlanning)
-}
-
-// LabelsAfterClaim returns the labels of a sub-issue after "request the
-// implementation": cumin/status/implementing in place of the old status label.
-// issue-states.md says that cumin removes the old status label when it
-// starts the work.
-func LabelsAfterClaim(labels []string) []string {
-	return ReplaceStatusLabel(labels, LabelImplementing)
-}
-
 // ChecksState says what the required checks of a pull request say together.
 type ChecksState int
 
@@ -2339,12 +2317,6 @@ func checkState(check RequiredCheck, results []CheckResult) ChecksState {
 		return ChecksWaiting
 	}
 	return state
-}
-
-// LabelsAfterReview returns the labels of a sub-issue after "request the
-// review": cumin/status/reviewing in place of cumin/status/checking.
-func LabelsAfterReview(labels []string) []string {
-	return ReplaceStatusLabel(labels, LabelReviewing)
 }
 
 // VerificationFailure says which check of the pull request failed after the
@@ -2495,12 +2467,7 @@ func VerifySplit(requirement RequirementIssue) SplitVerification {
 	subs := slices.Clone(requirement.SubIssues)
 	slices.SortFunc(subs, func(a, b SubIssue) int { return a.Number - b.Number })
 	for _, sub := range subs {
-		risks := 0
-		for _, label := range sub.Labels {
-			if strings.HasPrefix(label, riskLabelPrefix) {
-				risks++
-			}
-		}
+		risks := len(riskLabels(sub.Labels))
 		switch {
 		case risks == 0:
 			return SplitVerification{Failure: SplitNoRiskLabel, SubIssue: sub.Number}
@@ -2750,7 +2717,7 @@ func ExplanationOf(comments []Comment, reviewer string, since time.Time) (Commen
 	var found Comment
 	ok := false
 	for _, c := range comments {
-		if c.Author != reviewer || c.CreatedAt.Before(since) || !strings.HasPrefix(firstBodyLine(c.Body), DecisionRequestHeading) {
+		if c.Author != reviewer || c.CreatedAt.Before(since) || !strings.HasPrefix(strings.TrimSpace(firstLine(strings.TrimLeft(c.Body, "\r\n"))), DecisionRequestHeading) {
 			continue
 		}
 		if !ok || !c.CreatedAt.Before(found.CreatedAt) {
@@ -2760,9 +2727,11 @@ func ExplanationOf(comments []Comment, reviewer string, since time.Time) (Commen
 	return found, ok
 }
 
-func firstBodyLine(body string) string {
-	line, _, _ := strings.Cut(strings.TrimLeft(body, "\r\n"), "\n")
-	return strings.TrimSpace(line)
+// firstLine is the text up to the first line break. It trims nothing: each
+// caller trims the text before, and the line after, as its rule says.
+func firstLine(text string) string {
+	line, _, _ := strings.Cut(text, "\n")
+	return line
 }
 
 // MergeDecision is what cumin does after the Reviewer approved the head
@@ -2810,12 +2779,7 @@ func (d MergeDecision) String() string {
 // without exactly one risk/* label is an unexpected state. The risk comes
 // before the checks, so that a wrong label always stops the issue.
 func DecideMerge(labels []string, required []RequiredCheck, checks []CheckResult) MergeDecision {
-	var risks []string
-	for _, label := range labels {
-		if strings.HasPrefix(label, riskLabelPrefix) {
-			risks = append(risks, label)
-		}
-	}
+	risks := riskLabels(labels)
 	switch {
 	case len(risks) == 0:
 		return MergeNoRiskLabel
@@ -2827,6 +2791,18 @@ func DecideMerge(labels []string, required []RequiredCheck, checks []CheckResult
 		return MergeNow
 	}
 	return MergeAskMaintainer
+}
+
+// riskLabels returns the risk/* labels of an issue, in their order. An issue
+// in a correct state has exactly one.
+func riskLabels(labels []string) []string {
+	var risks []string
+	for _, label := range labels {
+		if strings.HasPrefix(label, riskLabelPrefix) {
+			risks = append(risks, label)
+		}
+	}
+	return risks
 }
 
 // isBot reports whether a login is the bot of a GitHub App: the client

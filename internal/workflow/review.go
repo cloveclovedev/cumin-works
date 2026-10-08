@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
@@ -94,7 +95,7 @@ func (s *Service) startReview(ctx context.Context, token string, target Target, 
 	if err := s.State.Set(repository, a.Number, stored); err != nil {
 		return fmt.Errorf(string(ActionRequestTheReview)+": keep the start of the review of issue #%d: %w", a.Number, err)
 	}
-	labels := LabelsAfterReview(sub.Labels)
+	labels := ReplaceStatusLabel(sub.Labels, LabelReviewing)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
 		return fmt.Errorf(string(ActionRequestTheReview)+": move issue #%d to the review: %w", a.Number, err)
 	}
@@ -503,11 +504,7 @@ func (s *Service) readComments(ctx context.Context, log *slog.Logger, token stri
 		return nil, err
 	}
 	log.Debug("read the comments", "number", number, "rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	comments := make([]Comment, 0, len(read))
-	for _, c := range read {
-		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
-	}
-	return comments, nil
+	return toComments(read), nil
 }
 
 // countReviewRequest counts, in the state file, one request of this stay in
@@ -567,7 +564,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			return nil, nil
 		}
 		log.Info(string(ActionStopTheReview)+": the Reviewer asked a question; the issue waits for a Maintainer", "labels", labels)
-		s.notify(ctx, log.With("action", ActionStopTheReview), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		s.notify(ctx, log.With("action", ActionStopTheReview), settings.notificationOn(), notify.Notification{
 			Action:     string(ActionStopTheReview),
 			Reason:     "The Reviewer asked a question during the review.",
 			Repository: repository,
@@ -594,9 +591,9 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 			return nil, err
 		}
 		log.Info(string(ActionStopAtTheRoundLimit)+": the issue waits for a Maintainer", "labels", labels, "comment", a.Explanation.URL)
-		s.notify(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		s.notify(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.notificationOn(), notify.Notification{
 			Action:     string(ActionStopAtTheRoundLimit),
-			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstBodyLine(a.Explanation.Body)),
+			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, strings.TrimSpace(firstLine(strings.TrimLeft(a.Explanation.Body, "\r\n")))),
 			Repository: repository,
 			Subject:    fmt.Sprintf("issue #%d", number),
 			Link:       a.Explanation.URL,

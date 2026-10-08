@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
@@ -64,7 +65,7 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	if err := s.State.Clear(repository, p.Number); err != nil {
 		return fmt.Errorf(string(ActionRequestTheSplit)+": clear the state of issue #%d: %w", p.Number, err)
 	}
-	labels := LabelsAfterPlan(requirement.Labels)
+	labels := ReplaceStatusLabel(requirement.Labels, LabelPlanning)
 	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
 		return fmt.Errorf(string(ActionRequestTheSplit)+": move issue #%d to planning: %w", p.Number, err)
 	}
@@ -358,7 +359,7 @@ func (s *Service) runSplit(ctx context.Context, log *slog.Logger, target Target,
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 			s.quotaAfterRun(ctx, log, target, number, run)
 			if run.Result.Result != agent.ResultDone {
-				log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
+				log.Warn("the agent returned blocked", "reason", firstLine(strings.TrimSpace(run.Result.BlockedReason)))
 				if err := s.stopAfterPlannerBlocked(ctx, log, target, settings, number, req.work.stop(), run.Result.BlockedReason, true); err != nil {
 					log.Warn(string(req.work.stop())+": the stop after blocked failed for a temporary reason; the next poll decides", "reason", err.Error())
 				}
@@ -462,7 +463,7 @@ func (s *Service) runAcceptanceCheck(ctx context.Context, log *slog.Logger, targ
 			log.Info("the agent run ended", "result", run.Result.Result, "session_id", run.SessionID)
 			s.quotaAfterRun(ctx, log, target, number, run)
 			if run.Result.Result != agent.ResultDone {
-				log.Warn("the agent returned blocked", "reason", firstLine(run.Result.BlockedReason))
+				log.Warn("the agent returned blocked", "reason", firstLine(strings.TrimSpace(run.Result.BlockedReason)))
 				_ = s.stopAfterPlannerBlocked(ctx, log, target, settings, number, ActionStopTheAcceptanceCheck, run.Result.BlockedReason, false)
 				s.clearRequirementState(log, repository, number)
 				return
@@ -555,7 +556,7 @@ func (s *Service) stopAcceptance(ctx context.Context, token string, target Targe
 	}
 	log = log.With("action", ActionStopTheAcceptanceCheck)
 	log.Info(string(ActionStopTheAcceptanceCheck)+": the Planner asked a question during the acceptance check; the issue waits for a Maintainer", "labels", labels)
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(ActionStopTheAcceptanceCheck),
 		Reason:     "The Planner asked a question during the acceptance check.",
 		Repository: target.Repository.String(),
@@ -586,7 +587,7 @@ func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger,
 		log = log.With("action", action)
 		log.Error(string(action)+": the issue was not read after blocked; the issue keeps its label, and the blocked_reason was not written on the issue; the whole text is here",
 			"error", err.Error(), "comment", comment)
-		s.notify(ctx, log, settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+		s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 			Action:     string(action),
 			Reason:     PlannerQuestionNotWrittenReason,
 			Repository: target.Repository.String(),
@@ -599,7 +600,7 @@ func (s *Service) stopAfterPlannerBlocked(ctx context.Context, log *slog.Logger,
 		action:  action,
 		issue:   number,
 		labels:  labelsOf(requirement, err),
-		reason:  "the Planner returned blocked: " + firstLine(comment),
+		reason:  "the Planner returned blocked: " + firstLine(strings.TrimSpace(comment)),
 		comment: comment,
 	})
 	return nil
@@ -619,7 +620,7 @@ func (s *Service) reviewPlan(ctx context.Context, token string, target Target, s
 	log := s.logger().With("repository", target.Repository.String(), "issue", a.Number, "action", ActionAskForThePlanReview)
 	log.Info(string(ActionAskForThePlanReview)+": the split waits for a Maintainer", "sub_issues", len(requirement.SubIssues), "labels", labels)
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(ActionAskForThePlanReview),
 		Reason:     "The split of the requirement issue needs a review.",
 		Repository: target.Repository.String(),
@@ -658,7 +659,7 @@ func (s *Service) stopSplit(ctx context.Context, token string, target Target, sn
 	}
 	log = log.With("action", ActionStopTheSplit)
 	log.Info(string(ActionStopTheSplit)+": the Planner asked a question during the split; the issue waits for a Maintainer", "labels", labels)
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(ActionStopTheSplit),
 		Reason:     "The Planner asked a question during the split.",
 		Repository: target.Repository.String(),
@@ -682,7 +683,7 @@ func (s *Service) accept(ctx context.Context, token string, target Target, snaps
 	log.Info(string(ActionAskForTheAcceptance)+": the requirement issue waits for the acceptance of a Maintainer", "labels", labels)
 	s.clearRequirementState(log, target.Repository.String(), a.Number)
 	owner, repo := target.Repository.Owner, target.Repository.Name
-	s.notify(ctx, log, settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log, settings.notificationOn(), notify.Notification{
 		Action:     string(ActionAskForTheAcceptance),
 		Reason:     "The acceptance check is done; the requirement issue can be accepted.",
 		Repository: target.Repository.String(),
@@ -747,10 +748,7 @@ func (s *Service) readAcceptanceComment(ctx context.Context, log *slog.Logger, t
 	}
 	log.Info(string(ActionRequestTheAcceptanceCheck)+": read the comments", "issue", requirement.Number,
 		"rate_limit_cost", rate.Cost, "rate_limit_remaining", rate.Remaining)
-	comments := make([]Comment, 0, len(read))
-	for _, c := range read {
-		comments = append(comments, Comment{Author: c.Author, CreatedAt: c.CreatedAt, Body: c.Body, URL: c.URL})
-	}
+	comments := toComments(read)
 	requirement.CommentsRead = true
 	requirement.AcceptanceCheckAt = AcceptanceCheckAt(comments, planner)
 	requirement.QuestionAt = QuestionAt(comments, askers...)

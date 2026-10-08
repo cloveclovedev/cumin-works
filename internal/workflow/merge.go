@@ -67,7 +67,7 @@ func (s *Service) askMaintainerToMerge(ctx context.Context, log *slog.Logger, ta
 	} else {
 		log.Info(string(ActionAskForTheMergeDecision)+": requested the review of the Issue Owner", "pull_request", pr.Number, "reviewer", login)
 	}
-	s.notify(ctx, log.With("action", ActionAskForTheMergeDecision), settings != nil && settings.Settings.Notify.DiscordEnabled, notify.Notification{
+	s.notify(ctx, log.With("action", ActionAskForTheMergeDecision), settings.notificationOn(), notify.Notification{
 		Action:     string(ActionAskForTheMergeDecision),
 		Reason:     "the merge needs a decision",
 		Repository: target.Repository.String(),

@@ -165,7 +165,7 @@ func (s *Service) writeMonitorFile(stopRequested bool) {
 		Location:      s.location(),
 	}
 	if stored, ok := s.State.Quota(); ok {
-		facts.Usage, facts.UsageKept = storedUsage(stored), true
+		facts.Usage, facts.UsageKept = quota.StoredUsage(stored), true
 		facts.Allowance = s.allowance(s.logger())
 	}
 	s.monitorMu.Lock()

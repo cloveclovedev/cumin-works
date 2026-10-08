@@ -249,7 +249,7 @@ func OpenNonBlockingComments(threads []ReviewThread, reviewer string) []OpenNonB
 		if first.Author != reviewer {
 			continue
 		}
-		line := strings.TrimSpace(firstLine(first.Body))
+		line := strings.TrimSpace(firstLine(strings.TrimSpace(first.Body)))
 		m := commentLabel.FindStringSubmatch(line)
 		if m == nil || m[2] != "non-blocking" || m[1] == "praise" || m[1] == "note" {
 			continue
