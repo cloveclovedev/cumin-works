@@ -188,12 +188,12 @@ func (s Snapshot) MovesWithoutMaintainer() bool {
 		}
 	}
 	for _, plan := range requirementCandidates(s) {
-		if requirement, _ := s.RequirementIssue(plan.Number); !readyOfAnother(requirement.ReadyRead, requirement.ReadyOwner) {
+		if requirement, _ := s.RequirementIssue(plan.Number); !readyOfAnother(requirement.ReadyRead, requirement.ReadyIssueOwner) {
 			return true
 		}
 	}
 	for _, claim := range subIssueCandidates(s) {
-		if sub, _ := s.SubIssue(claim.Number); !readyOfAnother(sub.ReadyRead, sub.ReadyOwner) {
+		if sub, _ := s.SubIssue(claim.Number); !readyOfAnother(sub.ReadyRead, sub.ReadyIssueOwner) {
 			return true
 		}
 	}

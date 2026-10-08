@@ -54,9 +54,9 @@ func (s *Service) claim(ctx context.Context, token string, target Target, snapsh
 	log.Info(string(ActionRequestTheImplementation)+": claimed the issue",
 		"requirement_issue", c.RequirementIssue, "labels", labels)
 	// The poll read the Issue Owner of the newest cumin/status/ready before
-	// the decision (readReadyOwners); "request the implementation" holds only
+	// the decision (readReadyIssueOwners); "request the implementation" holds only
 	// with that Issue Owner.
-	if err := s.startImplementer(ctx, permit, target, settings, sub, sub.ReadyOwner); err != nil {
+	if err := s.startImplementer(ctx, permit, target, settings, sub, sub.ReadyIssueOwner); err != nil {
 		return fmt.Errorf(string(ActionRequestTheImplementation)+": request the work for issue #%d: %w", c.Number, err)
 	}
 	return nil

@@ -396,7 +396,7 @@ func readyRequirementIssues(snapshot Snapshot) []Plan {
 	var plans []Plan
 	for _, plan := range requirementCandidates(snapshot) {
 		requirement, _ := snapshot.RequirementIssue(plan.Number)
-		if readyOfMaintainer(requirement.ReadyRead, requirement.ReadyOwner) {
+		if readyOfMaintainer(requirement.ReadyRead, requirement.ReadyIssueOwner) {
 			plans = append(plans, plan)
 		}
 	}

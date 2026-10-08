@@ -222,11 +222,11 @@ checkの結果の読み方:
 
 ### Maintainerのreadyの確認 (request the split、request the implementation)
 
-- 「request the split」と「request the implementation」は、そのIssueに最新の `cumin/status/ready` を付けたのがMaintainerであるときだけ成り立つ ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「状態ラベルを付けたアカウント」)。そのため、判定の前に、着手の候補ごとに、付けたアカウントとその権限を読み、結果をスナップショットに入れる (`readReadyOwners`)。
+- 「request the split」と「request the implementation」は、そのIssueに最新の `cumin/status/ready` を付けたのがMaintainerであるときだけ成り立つ ([Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「状態ラベルを付けたアカウント」)。そのため、判定の前に、着手の候補ごとに、付けたアカウントとその権限を読み、結果をスナップショットに入れる (`readReadyIssueOwners`)。
 - 読むIssueは、純粋関数 `ReadyActorReads` が決める。「request the split」と「request the implementation」の候補 (開いていて、`cumin/status/ready` が付き、blocked by が全て閉じている。「request the implementation」では `cumin/type/owner-task` がない) を、着手の順 (優先度、Issueの番号) に並べて返す。同時に進めるIssueの数に空きがなければ、1つも返さない。着手の候補がない定期確認と、空きがない定期確認では、アカウントも権限も読まない。
 - 読み取りは、「Issue Ownerのログイン名の読み取り」と同じ問い合わせである。ただし、そのIssue自身のイベントだけを使い、sub-issueのイベントには頼らない (`ReadOwnLabelActor`、`RepositoryPermission`、`IsMaintainer`)。候補には `cumin/status/ready` が付いているので、読んだ100件のイベントの中にreadyのイベントがなければ、「Maintainerでない」として扱う。sub-issueから読むと、triageのアカウントが要求Issueにreadyを付け、ほかのラベルを100回付け外ししてイベントを読む範囲の外に出すだけで、sub-issueのMaintainerのreadyで分割を始められてしまうためである。Maintainerの定義は、「start the merge」と同じ `IsMaintainer` だけにある。人ではないアカウントの権限は読まない。
 - 着手の順に読み、Maintainerのreadyが空きの数だけ見つかったら、そこで止める。それよりあとの候補は、この定期確認では着手できないためである。
-- スナップショットには、Issueごとに「読んだ」(`ReadyRead`) と、Issue Ownerのログイン名 (`ReadyOwner`。Maintainerでなければ空) を入れる。判定 (`readyRequirementIssues`、`readySubIssues`) は、Maintainerのreadyと読めた候補だけを残す。Maintainerでない候補と、読んでいない候補は飛ばす。飛ばした候補は空きを使わないので、同じ定期確認で、ほかのMaintainerのreadyに着手する。
+- スナップショットには、Issueごとに「読んだ」(`ReadyRead`) と、Issue Ownerのログイン名 (`ReadyIssueOwner`。Maintainerでなければ空) を入れる。判定 (`readyRequirementIssues`、`readySubIssues`) は、Maintainerのreadyと読めた候補だけを残す。Maintainerでない候補と、読んでいない候補は飛ばす。飛ばした候補は空きを使わないので、同じ定期確認で、ほかのMaintainerのreadyに着手する。
 - Maintainerでないアカウントのreadyには、ラベルを替えず、依頼もしない。ログに1行 (warn) 残し、1回通知する。同じreadyのイベントについては、定期確認のたびに繰り返さない。伝えたイベントの時刻を、Issueごとにメモリに持つ (`readyTold`)。通知は多くても1回である: 送れなかったときも、ログにエラーを残すだけで、送り直さない。同じIssueに、Maintainerでないアカウントが新しくreadyを付けたときは、別のイベントなので、もう一度伝える。cuminが再起動すると、もう一度だけ伝える (失っても作業を失わない手元の状態)。
 - 読めなかったときは、ログにエラーを出し、そのIssueは「読んでいない」のままにする。その定期確認では着手せず、次の定期確認で読み直す。ほかの行は進める。
 - 待ち状態の通知 (「tell that cumin waits」) では、Maintainerでないreadyと読めたIssueを「Maintainerなしで進めるIssue」に数えない。読んでいないready (空きがない、読めなかった) は、これまでどおり数える (`MovesWithoutMaintainer`)。

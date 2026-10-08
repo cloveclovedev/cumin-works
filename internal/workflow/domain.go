@@ -168,14 +168,14 @@ type RequirementIssue struct {
 	// during this stay in cumin/status/planning. The count lives in the
 	// state file of the Host; a lost file reads as not requested again.
 	SplitRequestedAgain bool
-	// ReadyRead says that ReadyOwner was read. The poll reads it only for
+	// ReadyRead says that ReadyIssueOwner was read. The poll reads it only for
 	// a candidate of a start, and only when a slot is free
 	// (ReadyActorReads).
 	ReadyRead bool
-	// ReadyOwner is the login of the account that added the newest
+	// ReadyIssueOwner is the login of the account that added the newest
 	// cumin/status/ready, when that account is a Maintainer (IsMaintainer). It is
 	// empty when another account added it, and when it was not read.
-	ReadyOwner string
+	ReadyIssueOwner string
 	// StatusRead says that StatusCounts was read. The poll reads it only
 	// when cumin is about to act from the status label (StatusActorReads).
 	StatusRead bool
@@ -220,14 +220,14 @@ type SubIssue struct {
 	AwaitingMergeDecisionAt time.Time
 	// ClosedAt is when a closed sub-issue closed.
 	ClosedAt time.Time
-	// ReadyRead says that ReadyOwner was read. The poll reads it only for
+	// ReadyRead says that ReadyIssueOwner was read. The poll reads it only for
 	// a candidate of a start, and only when a slot is free
 	// (ReadyActorReads).
 	ReadyRead bool
-	// ReadyOwner is the login of the account that added the newest
+	// ReadyIssueOwner is the login of the account that added the newest
 	// cumin/status/ready, when that account is a Maintainer (IsMaintainer). It is
 	// empty when another account added it, and when it was not read.
-	ReadyOwner string
+	ReadyIssueOwner string
 	// Implementing are the facts that decide the way out of
 	// cumin/status/implementing (ImplementationEnd). It is nil when they
 	// were not read: the issue is in another state, its Implementer runs,
@@ -1042,7 +1042,7 @@ func readySubIssues(snapshot Snapshot) []Claim {
 	var claims []Claim
 	for _, claim := range subIssueCandidates(snapshot) {
 		sub, _ := snapshot.SubIssue(claim.Number)
-		if readyOfMaintainer(sub.ReadyRead, sub.ReadyOwner) {
+		if readyOfMaintainer(sub.ReadyRead, sub.ReadyIssueOwner) {
 			claims = append(claims, claim)
 		}
 	}

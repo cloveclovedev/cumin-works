@@ -51,7 +51,7 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 	}
 }
 
-// readReadyOwners reads, for the candidates of "request the split" and of
+// readReadyIssueOwners reads, for the candidates of "request the split" and of
 // "request the implementation", who added the newest cumin/status/ready,
 // and stores in the snapshot whether that account is a Maintainer
 // (issue-states.md, the ready of a Maintainer). It reads only when a slot
@@ -61,7 +61,7 @@ func (s *Service) readLabelTimes(ctx context.Context, log *slog.Logger, token st
 // ready event among the events that are read means "not a Maintainer". A
 // failed read is logged and leaves ReadyRead false, so the issue waits for
 // the next poll and the other rules go on.
-func (s *Service) readReadyOwners(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
+func (s *Service) readReadyIssueOwners(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, snapshot *Snapshot) {
 	numbers, room := ReadyActorReads(*snapshot, s.Settings.MaxIssuesInProgress, settings.Settings.PriorityLabelNames())
 	for _, number := range numbers {
 		if room == 0 {
@@ -82,11 +82,11 @@ func (s *Service) readReadyOwners(ctx context.Context, log *slog.Logger, token s
 		for i := range snapshot.RequirementIssues {
 			requirement := &snapshot.RequirementIssues[i]
 			if requirement.Number == number {
-				requirement.ReadyRead, requirement.ReadyOwner = true, login
+				requirement.ReadyRead, requirement.ReadyIssueOwner = true, login
 			}
 			for j := range requirement.SubIssues {
 				if sub := &requirement.SubIssues[j]; sub.Number == number {
-					sub.ReadyRead, sub.ReadyOwner = true, login
+					sub.ReadyRead, sub.ReadyIssueOwner = true, login
 				}
 			}
 		}

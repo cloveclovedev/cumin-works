@@ -297,7 +297,7 @@ func TestMerging_ALabelOfAnAccountWithTriagePermissionDoesNothing(t *testing.T) 
 // work: with a limit of one, a ready issue does not start.
 func TestMerging_AnIssueInMergingCountsTowardTheLimit(t *testing.T) {
 	merging := workflow.SubIssue{Number: 10, Labels: []string{"risk/low", workflow.LabelMerging}}
-	ready := workflow.SubIssue{Number: 11, Labels: []string{workflow.LabelReady}, ReadyRead: true, ReadyOwner: theMaintainer}
+	ready := workflow.SubIssue{Number: 11, Labels: []string{workflow.LabelReady}, ReadyRead: true, ReadyIssueOwner: theMaintainer}
 	snapshot := workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{{
 		Number: 6, Labels: []string{workflow.LabelImplementing}, SubIssues: []workflow.SubIssue{merging, ready},
 	}}}

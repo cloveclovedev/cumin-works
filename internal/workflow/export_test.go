@@ -19,16 +19,16 @@ func KeepUsage(s *Service, read agent.QuotaUsage) quota.Usage { return s.keepUsa
 
 // decideReadyOfMaintainer is Decide on a snapshot where the Maintainer added every
 // cumin/status/ready, as the poll stores it after its read
-// (readReadyOwners). A test of another condition of "request the split" or of
+// (readReadyIssueOwners). A test of another condition of "request the split" or of
 // "request the implementation" uses it.
 func decideReadyOfMaintainer(snapshot Snapshot, maxInProgress int, required []RequiredCheck, priority []string, now time.Time, checksWait time.Duration) []Action {
 	copied := Snapshot{RequirementIssues: slices.Clone(snapshot.RequirementIssues), Running: snapshot.Running}
 	for i := range copied.RequirementIssues {
 		requirement := &copied.RequirementIssues[i]
-		requirement.ReadyRead, requirement.ReadyOwner = true, "the-owner"
+		requirement.ReadyRead, requirement.ReadyIssueOwner = true, "the-owner"
 		requirement.SubIssues = slices.Clone(requirement.SubIssues)
 		for j := range requirement.SubIssues {
-			requirement.SubIssues[j].ReadyRead, requirement.SubIssues[j].ReadyOwner = true, "the-owner"
+			requirement.SubIssues[j].ReadyRead, requirement.SubIssues[j].ReadyIssueOwner = true, "the-owner"
 		}
 	}
 	return Decide(copied, maxInProgress, required, priority, now, checksWait)
