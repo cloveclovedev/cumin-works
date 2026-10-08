@@ -62,7 +62,8 @@
 | | `labeltimes.go` | 要求Issueとsub-issueに、ラベルが付いた時刻の読み取り (「mark the requirement as in work」: sub-issueに `cumin/status/ready` が付いたか) |
 | | `labelactor.go` | Issueにラベルを付けたアカウントの読み取り。答えるイベントの決まりは `labeltimes.go` の `puttingLabelEvents` にある。Issueにイベントがなければsub-issueから読む (「request the split」と「request the implementation」のMaintainerのreadyの確認、起動の依頼の事実: Issue Ownerのログイン名) |
 | | `closer.go` | Issueに結び付いたPull Requestの一覧と、1つのPull Requestの説明とレビューのスレッドの読み取り (「write the follow-up note」) |
-| | `snapshot.go` | 定期確認の1回のGraphQLの問い合わせと、その結果の型。既定のブランチの `.cumin/` のファイルも読む。実行終了のあとに1つのIssueだけを読む問い合わせも、同じ項目で持つ |
+| | `snapshot.go` | 定期確認の読み取り (`Read...`) と、その結果の型。既定のブランチの `.cumin/` のファイルも読む。実行終了のあとに1つのIssueだけを読む読み取りも持つ |
+| | `snapshotquery.go` | `snapshot.go` が送るGraphQLの問い合わせの文と、応答のノードの型。ノードを結果の型に変える。1つのIssueだけを読む問い合わせも、同じ項目で持つ |
 | | `checks.go` | 必須のcheckの一覧の読み取り (`rules/branches`) |
 | | `closinglink.go` | ブランチの開いているPull Requestの一覧と、閉じるリンクの追加 (「wait for the checks」) |
 | | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (「start the merge」のMaintainerの判定、起動の依頼のIssue Ownerのログイン名) |
@@ -106,7 +107,8 @@
 | | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、Issue Ownerのログイン名、保護されたパスと照合の決まり、実行時間の上限、実行が終わる時刻。Plannerには、ImplementerとReviewerの時間の上限も) |
 | | `skills.go` | テンプレートを、roleごとのディレクトリにskillとして書き出す |
 | | `service.go` | 1回の依頼の入口 `Start` (指示の合成、token、身元、実行)、使用率の読み取りの入口 `ReadQuota`、Hostの警告 |
-| | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、起動の記録の確認、時間の上限 |
+| | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、時間の上限 |
+| | `startrecord.go` | 起動の記録の確認 (作業ディレクトリの外のコンテキスト、cuminのskill) と、JSONの形を値なしで表す補助の関数 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |
 | | `quota.go` | 使用率を読む最小の実行 |
 | | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け (閉じたIssueのものも)、先頭のコミットの読み取り |
@@ -136,13 +138,15 @@
 
 テストは、動作か話題ごとに1つのファイルに置く。上の表は、テストのファイルを、置き場所に理由があるものだけ載せる。`internal/workflow` の定期確認のテストと、`internal/setup` の `cumin setup github-apps` のテストは、次の図のように分かれる。図は、偽GitHub (`githubtest`) のファイルも示す。
 
-![定期確認のテスト、cumin setup github-appsのテスト、偽GitHubのファイル](code-layout-files.svg)
+![定期確認のテスト、cumin setup github-appsのテスト、偽GitHub、Claude Codeの接続部分、snapshotのファイル](code-layout-files.svg)
 
 図の元ファイル: [code-layout-files.puml](code-layout-files.puml)
 
 矢印は「使う」を表す。`scene_test.go` と `fakes_test.go` は、テストを持たず、他のファイルが使う偽物と補助の関数だけを持つ。`internal/workflow` の新しいテストは、その動作のファイルに足す。動作のファイルがなければ、新しいファイルを作る。`service_test.go` には、定期確認のループのテストだけを置く。
 
 偽GitHubは、endpointのグループごとに1つのファイルを持つ。`fake.go` が要求を振り分け、他のファイルが答える。新しいendpointは、そのグループのファイルに足し、`fake.go` の振り分けに1行を足す。
+
+同じ図は、2つに分けた接続部分のファイルも示す。`claudecode.go` はCLIを実行し、`startrecord.go` の確認を呼ぶ。`snapshot.go` は読み取りを持ち、`snapshotquery.go` の問い合わせの文と応答のノードを使う。
 
 ## まだ決めていないこと
 
