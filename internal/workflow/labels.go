@@ -10,21 +10,21 @@ import "github.com/cloveclovedev/cumin-works/internal/platform/github"
 func RepositoryLabels() []github.Label {
 	return []github.Label{
 		{Name: LabelRequirement, Color: "5319E7", Description: "This is a requirement issue"},
-		{Name: LabelOwnerTask, Color: "5319E7", Description: "The Owner does this work by hand; cumin does not start it"},
-		{Name: LabelReady, Color: "0E8A16", Description: "The Owner says: this issue can start"},
+		{Name: LabelOwnerTask, Color: "5319E7", Description: "A Maintainer does this work by hand; cumin does not start it"},
+		{Name: LabelReady, Color: "0E8A16", Description: "A Maintainer says: this issue can start"},
 		{Name: LabelPlanning, Color: "1D76DB", Description: "The Planner splits the requirement"},
 		{Name: LabelImplementing, Color: "1D76DB", Description: "The Implementer works on the issue, or the sub-issues are in progress"},
 		{Name: LabelReviewing, Color: "1D76DB", Description: "The Reviewer works on the pull request"},
 		{Name: LabelChecking, Color: "BFD4F2", Description: "GitHub runs the required checks"},
 		{Name: LabelAccepting, Color: "1D76DB", Description: "The Planner checks the merged work against the requirement"},
 		{Name: LabelMerging, Color: "1D76DB", Description: "cumin merges the pull request and closes the issue"},
-		{Name: LabelAwaitingPlanReview, Color: "FBCA04", Description: "Waiting for the Owner to review the plan and the sub-issues"},
-		{Name: LabelAwaitingMergeDecision, Color: "FBCA04", Description: "Waiting for the Owner to review the pull request and decide the merge"},
-		{Name: LabelAwaitingAcceptance, Color: "FBCA04", Description: "Waiting for the Owner to accept the requirement or send work back"},
-		{Name: LabelAwaitingDecision, Color: "D93F0B", Description: "cumin cannot go on; waiting for an answer of the Owner"},
+		{Name: LabelAwaitingPlanReview, Color: "FBCA04", Description: "Waiting for a Maintainer to review the plan and the sub-issues"},
+		{Name: LabelAwaitingMergeDecision, Color: "FBCA04", Description: "Waiting for a Maintainer to review the pull request and decide the merge"},
+		{Name: LabelAwaitingAcceptance, Color: "FBCA04", Description: "Waiting for a Maintainer to accept the requirement or send work back"},
+		{Name: LabelAwaitingDecision, Color: "D93F0B", Description: "cumin cannot go on; waiting for an answer of a Maintainer"},
 		{Name: "risk/low", Color: "C2E0C6", Description: "A few lines with an obvious effect; cumin merges"},
-		{Name: "risk/medium", Color: "FEF2C0", Description: "Everything else; the Owner merges"},
-		{Name: "risk/high", Color: "F9D0C4", Description: "Cannot be undone by a revert; the Owner merges"},
+		{Name: "risk/medium", Color: "FEF2C0", Description: "Everything else; a Maintainer merges"},
+		{Name: "risk/high", Color: "F9D0C4", Description: "Cannot be undone by a revert; a Maintainer merges"},
 	}
 }
 
@@ -36,7 +36,7 @@ func RepositoryLabels() []github.Label {
 func DefaultPriorityLabels(names []string) []github.Label {
 	labels := make([]github.Label, 0, len(names))
 	for _, name := range names {
-		labels = append(labels, github.Label{Name: name, Color: "D4C5F9", Description: "The Owner says: start this before a lower priority"})
+		labels = append(labels, github.Label{Name: name, Color: "D4C5F9", Description: "A Maintainer says: start this before a lower priority"})
 	}
 	return labels
 }
