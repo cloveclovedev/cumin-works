@@ -58,9 +58,9 @@
 | `last_poll.errors[].repository` | 文字列 | `<owner>/<repo>` |
 | `last_poll.errors[].message` | 文字列 | 失敗の理由を1行にしたもの。定期確認が続けて失敗したときの通知 ([定期確認の設計](poll.md)) に載せる文章と同じである |
 | `stop_requested` | 真偽 | 実行を待ってから止まる途中か ([cumin本体の設計メモ](cumin-core.md) の「実行を待ってから止める」) |
-| `quota.state` | 文字列 | `open` (Agentの起動を進める)、`stopped` (上限に達して止めている、Q1)、`unread` (使用率を読み取れず止めている、Q1) |
+| `quota.state` | 文字列 | `open` (Agentの起動を進める)、`stopped` (上限に達して止めている、「stop agent starts」)、`unread` (使用率を読み取れず止めている、「stop agent starts」) |
 | `quota.stopped_windows` | 配列 | 上限に達した枠の名前。`5h` と `weekly`。`stopped` のときだけ要素を持つ |
-| `quota.next_try_at` | 時刻 | 次にAgentの起動を試す時刻 (Q3)。ないときは、キーを書かない |
+| `quota.next_try_at` | 時刻 | 次にAgentの起動を試す時刻 (「resume agent starts」)。ないときは、キーを書かない |
 | `agents` | 配列 | `cumin run` が実行中として持つAgentの実行。1つの実行が1つの要素 |
 | `agents[].repository` | 文字列 | `<owner>/<repo>` |
 | `agents[].issue` | 整数 | Issueの番号 |

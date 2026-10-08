@@ -24,8 +24,8 @@
 
 | ファイル | 場所 | 書く人 |
 |---|---|---|
-| 設定 | `~/.config/cumin/config.toml`。`--config` で変えられる | Owner と `cumin setup` |
-| riskの基準 (任意) | 設定ファイルと同じディレクトリの `risk-criteria.md`。決まりは cumin本体の要件にある | Owner |
+| 設定 | `~/.config/cumin/config.toml`。`--config` で変えられる | Operator と `cumin setup` |
+| riskの基準 (任意) | 設定ファイルと同じディレクトリの `risk-criteria.md`。決まりは cumin本体の要件にある | Maintainer |
 | 手元の状態 | `~/.local/state/cumin/state.json` | `cumin run` だけ |
 | 使い切りの許可 | `~/.local/state/cumin/quota-allowance.json` | `cumin quota allow` だけ |
 | 止める予約 | `~/.local/state/cumin/stop-request.json` | `cumin stop --after-current-runs` が書き、`cumin run` が消す |
@@ -38,7 +38,7 @@
 - 手元の状態に入れるのは、要件が認めたものだけである: Issueごとの Agent のセッションの番号と check の修正を依頼した回数、`cumin/status/accepting` の要求Issueごとの Planner のセッションの番号と受け入れの確認を依頼し直した回数、`cumin/status/planning` の要求Issueごとの分割を依頼し直した回数、枠ごとの最新の使用率とリセット時刻。使い切りの許可のファイルには、許可した5h枠のリセット時刻だけを入れる。止める予約のファイルには、予約した時刻だけを入れる。
 - 形式はJSONで、先頭に `version` を持つ。書くときは、同じディレクトリの一時ファイルに書いてから rename する。途中で止まっても、壊れたファイルが残らない。
 - 1つのファイルを書くプロセスは1つだけにする。`cumin quota allow` と `cumin status` は `cumin run` とは別のプロセスなので、ファイルを介してやりとりする。書く人を分ければ、ロックが要らない。`cumin run` は、定期確認のたびに許可のファイルを読む。止める予約のファイルだけは、`cumin stop` が書き、`cumin run` が消す。書くのも消すのも1回の操作 (rename と unlink) なので、ここでもロックは要らない。
-- ファイルを失っても、作業は失われない。セッションは新しく始まり、回数は0に戻り、使用率は次の着手の前に読み直す。使い切りの許可は、Ownerがもう一度出す。止める予約は、Ownerがもう一度コマンドを実行する。モニターファイルは、`cumin run` が次の定期確認で書き直す。読めないファイルは、ないものとして扱い、警告をログに出す。
+- ファイルを失っても、作業は失われない。セッションは新しく始まり、回数は0に戻り、使用率は次の着手の前に読み直す。使い切りの許可は、Operatorがもう一度出す。止める予約は、Operatorがもう一度コマンドを実行する。モニターファイルは、`cumin run` が次の定期確認で書き直す。読めないファイルは、ないものとして扱い、警告をログに出す。
 - 採らなかった案: データベース。持つものが少なく、失ってもよいためである。
 - ログのファイルは、cuminが開くのではなく、launchdが標準出力と標準エラー出力を向ける先である。cuminは、要件のとおり標準出力にJSONを出すだけで、ターミナルから動かしたときの見え方は変わらない。入れ替え (ローテーション) は行わないので、ファイルは増え続ける。
 
@@ -61,7 +61,7 @@
 - 要件のとおり、`cumin run` の起動時に読み、メモリにだけ持つ。値をログ、エラーの文章、手元の状態に入れない。
 - Keychain に触れるコードは `internal/platform/keychain` に閉じ込める。
 
-### Ownerへの通知
+### 通知
 
 - 通知は `internal/notify` の1か所を通る。ほかのパッケージが渡すのは、動作の名前 (`stop the implementation` など。下の「動作の名前」)、理由の1行、リポジトリ、対象 (`issue #12`)、リンクだけで、どの手段で届くかを知らない。
 - 手段は `internal/platform/discord` が受け持つ。webhookのアドレス、JSONの本文、応答、1つのメッセージの上限 (2000文字。公式: Execute Webhook) は、ここで止まる。
@@ -71,7 +71,7 @@
 - 通知を出すかどうかは、設定 `notify.discord.enabled` で決まる。対象のリポジトリの `.cumin/config.toml` で上書きできる。リポジトリが選べるのは出すかどうかだけで、宛先はHostのもの1つである。
 - Keychainに項目がなくても、`cumin run` は起動する。起動時に、項目の名前と設定のキーを警告に出す。通知を出す場面で足りなければ、そのときにerrorのログに出す。リポジトリが設定で通知を入れられる以上、起動を止めると、Discordを使わないHostが動かせなくなる。
 - 通知の失敗は、errorのログに出すだけである。コメントもラベルも巻き戻さない。判定に使うのはGitHub上の事実であり、通知は「見に来てほしい」と伝えるだけだからである。
-- 理由は500文字までにして、超えた分は `...` で切る。切るのは `internal/notify` の側である。手段の上限で切ると、最後の行にあるリンクが落ちて、Ownerが見に行けなくなる。通知は要約で、詳しい理由はIssueのコメントにある。手段の側の上限は、最後の備えとして残す。
+- 理由は500文字までにして、超えた分は `...` で切る。切るのは `internal/notify` の側である。手段の上限で切ると、最後の行にあるリンクが落ちて、読む人が見に行けなくなる。通知は要約で、詳しい理由はIssueのコメントにある。手段の側の上限は、最後の備えとして残す。
 - メッセージの中の `@everyone` や利用者への言及を、Discordに解釈させない (`allowed_mentions` の `parse` を空にする。公式: Allowed Mentions Object)。通知の文章にはAgentが書いた部分が入るので、そのままだとチャンネル全体を呼び出せてしまう。
 - 採らなかった案: `internal/notify` からDiscordを直接呼ぶ。手段を差し替えるときに、featureのパッケージを書き換えることになる。
 - 採らなかった案: Discordのbotで双方向にする。[要求のbacklog](../requirements/backlog.md) にある。
@@ -83,11 +83,11 @@
 赤い箱が、動作の名前の一覧である。
 
 - cuminの動作の名前は、`internal/workflow/action.go` の1か所にある。[Issueの状態と遷移](../requirements/workflow/issue-states.md) の表の「名前」の列の遷移1つにつき、定数が1つあり、値はその名前そのもの (小文字) である。一覧は純粋で、標準ライブラリの外を読まない。
-- コードは、動作をこの定数で指す。どの定数を使うかは、コードの経路の条件で決める。同じ実行の終わりでも、checkを待つ経路は `wait for the checks`、Ownerに戻す経路は `stop the implementation` である。
+- コードは、動作をこの定数で指す。どの定数を使うかは、コードの経路の条件で決める。同じ実行の終わりでも、checkを待つ経路は `wait for the checks`、Maintainerに戻す経路は `stop the implementation` である。
 - ログのフィールド `action` の値、コードが定数から組み立てるログの文の先頭、通知の1行目、停止のノートの `Step:` の行の値は、この名前である。
 - 表に名前のない経路は、その経路が失敗させた遷移か、同じ場面の停止の名前を使う。`awaiting-merge-decision` でriskのラベルがちょうど1つでないときは `start the merge`、原因の整理が得られないまま止めるときは `stop at the round limit` である。
 - テストが、一覧に空の名前と重複がないことを確かめる。
-- 採らなかった案: 表の行の番号 (`I2` など) の定数。1つの番号が複数の遷移を指すので、ログを読む人が表を引かないと、何が起きたか分からない。
+- 採らなかった案: 表の旧番号の定数。1つの番号が複数の遷移を指すので、ログを読む人が表を引かないと、何が起きたか分からない。
 
 ### launchd
 
@@ -107,7 +107,7 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 - 採らなかった案: 置き換える場所を持つテンプレートをリポジトリに置く。手で置き換える値が3つあり、さらにテンプレートに書けない値が1つある (上の `PATH`)。間違えても launchd は静かに失敗する。サブコマンドなら、4つとも実行中のプロセスから取れる。
 - `go run` が作った一時的なバイナリは、`Program` にできない。コマンドは、実行ファイルのパスが一時ディレクトリの下にあれば、何も書かずに止まる。
 - 既にある plist が違う内容なら、差分を見せて上書きしない。`--force` で置き換える。
-- Keychain は、ログイン中のユーザの LaunchAgent から、確認の画面なしで読める (実測 67)。ログインしていない間は動かないので、Hostが再起動したあとはOwnerのログインが起動のきっかけになる。
+- Keychain は、ログイン中のユーザの LaunchAgent から、確認の画面なしで読める (実測 67)。ログインしていない間は動かないので、Hostが再起動したあとはOperatorのログインが起動のきっかけになる。
 
 ### 止め方
 
@@ -121,12 +121,12 @@ cuminは、Hostのユーザの LaunchAgent として常駐する。plistはHost�
 - 待ち切れなくても、そこで終わる。プロセスが終わるところなので、残った待ちは捨てる。
 - 終わるときに、`stopped` のログを1行出す。入れるのは、止まった理由、進行中だったIssueの一覧 (`<owner>/<repo>#<番号>`)、猶予の中で終わったかどうかである。
 - 終了コードは0である。LaunchAgentの `KeepAlive` は `SuccessfulExit = false` なので、手で止めたcuminは起動し直されない。
-- ラベルは変えない。進行中だったIssueは `cumin/status/implementing` のまま残り、Ownerが `cumin/status/ready` を付け直して再開する (Issueのラベルと状態遷移の「v0.1では実装しないこと」)。作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。
+- ラベルは変えない。進行中だったIssueは `cumin/status/implementing` のまま残り、Maintainerが `cumin/status/ready` を付け直して再開する (Issueのラベルと状態遷移の「v0.1では実装しないこと」)。作業中のラベルのまま残ったIssueを自動で回収する機能は、v0.1では作らない。
 - LaunchAgentの `ExitTimeOut` (60秒) は、この猶予より長くしてある。launchdがSIGKILLを送る前に、cuminが自分で終われる。
 
 ### 実行を待ってから止める
 
-Ownerが `cumin stop --after-current-runs` を実行すると、動いている `cumin run` は、新しい依頼を始めずに、実行中のAgentの実行が終わるのを待ってから終わる。バイナリを入れ替える前に使う。
+Operatorが `cumin stop --after-current-runs` を実行すると、動いている `cumin run` は、新しい依頼を始めずに、実行中のAgentの実行が終わるのを待ってから終わる。バイナリを入れ替える前に使う。
 
 ![実行を待ってから止める](cumin-stop-after-runs.svg)
 
@@ -142,10 +142,10 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 
     図の元ファイル: [agent-start-single-caller.puml](agent-start-single-caller.puml)
 
-- 依頼は、ラベルを替える前、依頼し直しを数える前に、許可を取る。許可がないときは、ラベルも数も変えずに戻る。Issueは今の状態のまま残り、次の起動の定期確認が同じ依頼を1回だけ決める。対象は、Agentへの依頼の全てである。分割、受け入れの確認、着手、レビュー、checkの修正、衝突の解消 (checkを待つ間と、mergeの拒否のあと)、指摘の修正、Ownerのレビューへの対応、上限での原因の整理と、分割、受け入れの確認、実装、レビュー、原因の整理の依頼し直しである。
-- Agentの要らない動作は、許可を取らないので、続ける。要求Issueのラベルの付け替え、Pull Requestへのラベルのコピー、Ownerの承認のあとのmerge、mergeのあとにIssueを閉じること、必須のcheckが結果を返さないときの停止 (I15)、checkの修正が上限に達したときの停止、フォローアップノート、閉じたIssueの片付けである。mergeをGitHubが衝突で拒否したときは、衝突の解消の許可がないので、ラベルも替えない。Issueは `cumin/status/merging` のまま、次の起動を待つ ([定期確認の設計](poll.md) のmergeの手順)。
-- 実行中の実行は、最後まで進める。実行の終わりに続く動作のうち、Agentの要らないもの (ラベルの付け替え、mergeの手順、Ownerに戻す道) は行う。Agentへの依頼は、許可がないので始めない。Plannerの実行の終わりは、分割の依頼し直し、受け入れの確認、受け入れの確認の依頼し直しを始めない。Implementerの実行の終わりは、実装の依頼し直しを始めない。Reviewerの実行の終わりは、指摘の修正、レビューの依頼し直し、上限での原因の整理を始めない。Issueは、今の状態ラベルのまま残る。どの出口も、定期確認がGitHubの事実から決めるので、次の起動の定期確認が同じ依頼を1回だけ決める ([定期確認の設計](poll.md) の「実行終了の判定」と「Reviewerへの依頼 (request the review、stop the review)」)。
-- 「待ち状態になった」の通知 (Q4) は出さない。Agentの起動を止めているので、することがないのは知らせることではない。
+- 依頼は、ラベルを替える前、依頼し直しを数える前に、許可を取る。許可がないときは、ラベルも数も変えずに戻る。Issueは今の状態のまま残り、次の起動の定期確認が同じ依頼を1回だけ決める。対象は、Agentへの依頼の全てである。分割、受け入れの確認、着手、レビュー、checkの修正、衝突の解消 (checkを待つ間と、mergeの拒否のあと)、指摘の修正、Maintainerのレビューへの対応、上限での原因の整理と、分割、受け入れの確認、実装、レビュー、原因の整理の依頼し直しである。
+- Agentの要らない動作は、許可を取らないので、続ける。要求Issueのラベルの付け替え、Pull Requestへのラベルのコピー、Maintainerの承認のあとのmerge、mergeのあとにIssueを閉じること、必須のcheckが結果を返さないときの停止 (「stop for missing checks」)、checkの修正が上限に達したときの停止、フォローアップノート、閉じたIssueの片付けである。mergeをGitHubが衝突で拒否したときは、衝突の解消の許可がないので、ラベルも替えない。Issueは `cumin/status/merging` のまま、次の起動を待つ ([定期確認の設計](poll.md) のmergeの手順)。
+- 実行中の実行は、最後まで進める。実行の終わりに続く動作のうち、Agentの要らないもの (ラベルの付け替え、mergeの手順、Maintainerに戻す道) は行う。Agentへの依頼は、許可がないので始めない。Plannerの実行の終わりは、分割の依頼し直し、受け入れの確認、受け入れの確認の依頼し直しを始めない。Implementerの実行の終わりは、実装の依頼し直しを始めない。Reviewerの実行の終わりは、指摘の修正、レビューの依頼し直し、上限での原因の整理を始めない。Issueは、今の状態ラベルのまま残る。どの出口も、定期確認がGitHubの事実から決めるので、次の起動の定期確認が同じ依頼を1回だけ決める ([定期確認の設計](poll.md) の「実行終了の判定」と「Reviewerへの依頼 (request the review、stop the review)」)。
+- 「待ち状態になった」の通知 (「tell that cumin waits」) は出さない。Agentの起動を止めているので、することがないのは知らせることではない。
 - 終わるのは、定期確認の前にもあとにも実行中のものがなく、その定期確認が何も始めなかったときである。この最後の定期確認が、終わった実行の結果を、Agentなしで進める先まで運ぶ。待っている間は、実行が終わるたびに、間隔を待たずに定期確認を行う。最後の定期確認が失敗しても終わる。残りはGitHubの事実から決まるので、次の起動が続ける。
 - 終わるときに、予約のファイルを消し、`stopped` のログを1行出す (理由は、止める予約のあとに実行が終わったこと、進行中のIssueは空)。終了コードは0なので、launchdは起動し直さない。
 - `cumin run` は、起動時に、予約した時刻が起動より前の予約のファイルを消す。起動と同時に書かれた予約は、この起動へのものなので残す。予約は、頼んだときに動いていたプロセスへのものである。`cumin run` が動いていないときに書かれた予約も、ここで消える。消せなかった予約 (状態のディレクトリに書けないときなど) は、警告をログに出して、読み飛ばす。予約した時刻が起動より前の予約は、数えない。数えると、起動のたびにその予約を読んですぐ終わり、終了コードが0なのでlaunchdも起動し直さない。
@@ -159,7 +159,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 | 層 | 走らせ方 | 使うもの |
 |---|---|---|
 | 受け入れテスト | `go test ./...`。CIでも走る。ネットワークも利用枠も使わない | 偽GitHub (`httptest`) と、偽CLI (テストが用意する実行ファイル) |
-| 実機の場面 | 環境変数 `CUMIN_LIVE=1` を付けたときだけ走る。何時間もかかる実行だけ、先にOwnerに確かめる | sandbox のリポジトリ、本物の GitHub App、本物の Claude Code |
+| 実機の場面 | 環境変数 `CUMIN_LIVE=1` を付けたときだけ走る。何時間もかかる実行だけ、先にOperatorに確かめる | sandbox のリポジトリ、本物の GitHub App、本物の Claude Code |
 
 - 受け入れテストは、各要件文書の「上位要件のテスト」の行から作り、`TestReadyIssueIsRequestedOnce` のように、何を証明するかを名前にする。行の番号は名前に入れない。
 - 本物のGitHubクライアントを、偽GitHubに向けて動かす。クライアントの要求の組み立て方の間違いも、受け入れテストで見つけるためである。偽GitHubは、テストが使うendpointだけを持つ。
@@ -178,7 +178,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 
 ### GitHubクライアント
 
-- cuminは、GitHub App としてだけ認証する。GitHubへの操作には installation token を使う。installation token の発行にだけ、Appの秘密鍵で署名したJWTを使う (公式: Generating an installation access token for a GitHub App)。Ownerの認証情報と、リポジトリの管理者の権限 (Administration) は使わない。
+- cuminは、GitHub App としてだけ認証する。GitHubへの操作には installation token を使う。installation token の発行にだけ、Appの秘密鍵で署名したJWTを使う (公式: Generating an installation access token for a GitHub App)。Operatorの認証情報と、リポジトリの管理者の権限 (Administration) は使わない。
 - クライアントは、標準ライブラリ (`net/http`、`encoding/json`) で書く。JWTの署名だけは、ライブラリ `github.com/golang-jwt/jwt/v5` (MIT) に任せる (`signJWT`)。
   - 理由: 署名は、セキュリティに関わる部分である。手で書いたものより、保守されているライブラリのほうが、間違いが入りにくく、直しも届く。
   - JWTの中身は、ヘッダーの `alg` (`RS256`) と `typ` (`JWT`)、クレームの `iat` (今の60秒前)、`exp` (今の9分後)、`iss` (AppのクライアントID) だけである。
@@ -222,7 +222,7 @@ Ownerが `cumin stop --after-current-runs` を実行すると、動いている 
 図の元ファイル: [github-call-deadline.puml](github-call-deadline.puml)
 
 - 読み取りは、定期確認の1回分を、リポジトリごとに2つのGraphQLの問い合わせで読む。1つ目は要求Issueとsub-issueを読み、2つ目は選んだsub-issueのPull Requestを読む。Issue、sub-issue、ラベル、blocked by、Pull Request、レビュー、checkは入れ子の関係にあり、RESTだとIssueの数に比例して要求が増えるためである。2つの読み取りから1つのスナップショットを作る。読む時点が2つでも判定が正しい理由は、[定期確認の設計](poll.md) の「2つの問い合わせ」にある。
-- Agentの実行が終わった直後には、その実行のIssueだけを、番号で指定する1つのGraphQLの問い合わせで読み直す。項目と上限は、定期確認の問い合わせと同じである。実行終了をきっかけにする判定 (R2、I2、I5〜I8、I10) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。リポジトリの全ページは読み直さない。これらの判定が使うのは、1つのIssueの事実だけだからである ([定期確認の設計](poll.md) の「実行終了の判定」)。
+- Agentの実行が終わった直後には、その実行のIssueだけを、番号で指定する1つのGraphQLの問い合わせで読み直す。項目と上限は、定期確認の問い合わせと同じである。実行終了をきっかけにする判定 (「ask for the plan review」、「wait for the checks」、「request a review fix」、「stop the review」など) は、前の定期確認の結果ではなく、この読み直しの結果で行う。Agentが終了の直前に作ったPull Requestやレビューを、見落とさないためである。リポジトリの全ページは読み直さない。これらの判定が使うのは、1つのIssueの事実だけだからである ([定期確認の設計](poll.md) の「実行終了の判定」)。
 - 書き込みは、全てRESTで行う。ラベル、コメント、merge、sub-issue、tokenの発行がこれに当たる。GitHub App に要る権限が、RESTのendpointごとに公式ドキュメントに書かれているためである (実測 10、33)。
 - 例外として、必須のcheckの一覧はRESTで読む (`GET /repos/{owner}/{repo}/rules/branches/{branch}`、実測 53)。
 - 上限: GraphQLは、installation token ごとに毎時5,000ポイントで、`first` と `last` は1〜100である (公式: Rate limits and node limits for the GraphQL API)。定期確認は、2つの問い合わせで読む ([定期確認の設計](poll.md) の「2つの問い合わせ」)。1つ目は、要求Issueを10件ずつページで読み、sub-issueは15件までを1回で読む。2つ目は、開いていて状態ラベルのあるsub-issueだけについて、Issueを閉じるPull Requestを2件まで読む。コストを変えない接続 (ラベル、blocked by のIssue、checkの結果、レビュー) は、GraphQLの上限の100件にする。上限を超えるとそのリポジトリの定期確認が止まるのに、広げてもコストが増えないためである。sub-issue、ラベル、blocked by、Pull Request、check、レビューが上限を超えたIssueがあれば、そのリポジトリの定期確認は、Issueの番号を示すエラーで止まる。要求の上限 (sub-issueは12個まで) の中では起きない。
@@ -251,10 +251,10 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 - 最小の実行のオプション (公式: CLI reference、Model configuration): `--model haiku` (最も小さいモデルの別名)、`--tools ""` (ツールを使わせない)、`--setting-sources project` (Agentの起動と同じ)、`--no-session-persistence` (使い捨ての実行なので、セッションの記録をHostに残さない)。`--json-schema` と `--permission-mode` は付けない。
 - 作業ディレクトリは、実行のたびに作る空の一時ディレクトリにする。リポジトリの `CLAUDE.md` を読ませないためである。環境変数は、Agentの環境 ([Agentの実行の設計](agent-run.md) の「Agentの環境」) の土台と同じで、tokenと作者は入れない。時間の上限は60秒で、超えたら打ち切る。
 - モデル、指示、上限は接続部分の定数にする。要件の設定の表にないためである。
-- 採らなかった案: `--bare` で、設定も指示も一切読まずに実行する方法。bare modeはサブスクリプションのログインを使わず、Keychainの認証情報も読まないので、`ANTHROPIC_API_KEY` が要る (公式: headless の "Start faster with bare mode"、実測 6a)。`CLAUDE_CODE_OAUTH_TOKEN` (長寿命のOAuthのtoken) で動くかは文書になく未確認で、動いてもOwnerの秘密が1つ増える。空の一時ディレクトリと `--setting-sources project` で、リポジトリの設定、MCPサーバ、skill、ユーザの設定は読まれないので、この実行では同じ結果になる。`--bare` が `-p` の既定になったとき (実測 6b) に見直す。
+- 採らなかった案: `--bare` で、設定も指示も一切読まずに実行する方法。bare modeはサブスクリプションのログインを使わず、Keychainの認証情報も読まないので、`ANTHROPIC_API_KEY` が要る (公式: headless の "Start faster with bare mode"、実測 6a)。`CLAUDE_CODE_OAUTH_TOKEN` (長寿命のOAuthのtoken) で動くかは文書になく未確認で、動いてもOperatorの秘密が1つ増える。空の一時ディレクトリと `--setting-sources project` で、リポジトリの設定、MCPサーバ、skill、ユーザの設定は読まれないので、この実行では同じ結果になる。`--bare` が `-p` の既定になったとき (実測 6b) に見直す。
 - 採らなかった案: `/usage` の文章を解析する方法。人間向けの形式は、予告なく変わりうる。使用率を返す内部の endpoint は、この文章を出すときにも呼ばれていて、上限に当たる報告がある。
-- 採らなかった案: Claude Codeが `/usage` のために呼ぶ endpoint を、cuminが直接呼ぶ方法。公式ドキュメントになく、OwnerのOAuthのtokenをKeychainから読む必要がある。cuminはOwnerの認証情報を使わない。
-- `rate_limit_event` の項目の一部は Agent SDK の文書にある (`status`、`utilization`、`resetsAt`、`rateLimitType`)。cuminが読む `unifiedWindows` は文書にない (実測 2)。イベントがない、または形が違うときは「読み取れなかった」として、理由を付けたエラーを返す。cuminのほかの部分は、着手せずにOwnerに通知する (Q1)。安全な側に倒す。
+- 採らなかった案: Claude Codeが `/usage` のために呼ぶ endpoint を、cuminが直接呼ぶ方法。公式ドキュメントになく、OperatorのOAuthのtokenをKeychainから読む必要がある。cuminはOperatorの認証情報を使わない。
+- `rate_limit_event` の項目の一部は Agent SDK の文書にある (`status`、`utilization`、`resetsAt`、`rateLimitType`)。cuminが読む `unifiedWindows` は文書にない (実測 2)。イベントがない、または形が違うときは「読み取れなかった」として、理由を付けたエラーを返す。cuminのほかの部分は、着手せずに通知する (「stop agent starts」)。安全な側に倒す。
 - 2026-09-21 の最小の実機実行 (Claude Code 2.1.267) では、`rate_limit_info` に `status`、`resetsAt`、`rateLimitType`、`unifiedWindows` と overage の3項目があり、`status` は `allowed` だった。枠の上限に当たったときの値は、意図して当てられないので未確認である (「まだ決めていないこと」)。
 - この確認は Claude Code に固有なので、Claude Code の接続部分 (`internal/agent`) に置く。`internal/quota` が受け取るのは、枠ごとの使用率とリセット時刻だけである。
 - 読んだ使用率から着手を止めるかどうかの判定と、最小の実行をいつ行うかは、[利用枠の設計](quota.md) にある。

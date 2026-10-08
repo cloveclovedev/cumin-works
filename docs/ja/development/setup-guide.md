@@ -17,7 +17,7 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 
 分けた理由:
 
-- cumin は、Owner の認証情報も、リポジトリの管理者の権限 (Administration) も使わない ([cumin本体の要件](../requirements/cumin-core.md) の「受け持たないこと」)。管理者の権限が要る手順3は、管理者が自分の `gh` で実行する。
+- cumin は、Operator の認証情報も、リポジトリの管理者の権限 (Administration) も使わない ([cumin本体の要件](../requirements/cumin-core.md) の「受け持たないこと」)。管理者の権限が要る手順3は、管理者が自分の `gh` で実行する。
 - 手順3には、Host も cumin も要らない。Organization の owner、Host を動かす人、リポジトリの管理者が別の人でも、それぞれが自分の持ち場で実行できる。
 - 手順3が当てる内容は、読めるファイル (ruleset の JSON と workflow) である。管理者は、中身を確かめてから、自分の権限で当てられる。画面から手で当てることもできる。
 - 手順1を cumin のコマンドにしているのは、秘密鍵をプロセスの中だけで扱うためと、権限の表を App の登録と token の絞り込みで1つにするためである。
@@ -26,7 +26,7 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 ## 前提
 
 - 対象のリポジトリで ruleset を使える。Free プランでは、公開リポジトリだけで使える。
-- 対象のリポジトリのCI (`.github/workflows`) は、cumin を導入する前に、Owner が用意する。Implementer の GitHub App には Workflows の権限がなく、workflow を足すことも変えることもできないためである。同じ理由で、保護されたパスの workflow は、管理者が手順3のスクリプトで入れる。
+- 対象のリポジトリのCI (`.github/workflows`) は、cumin を導入する前に、Maintainer が用意する。Implementer の GitHub App には Workflows の権限がなく、workflow を足すことも変えることもできないためである。同じ理由で、保護されたパスの workflow は、管理者が手順3のスクリプトで入れる。
 - 手順3を実行する人は、対象のリポジトリの管理者である。
 - 手順3を実行するマシンに `gh` があり、ログインしてある。`gh` の token には `workflow` の scope が要る。workflow のファイルを push するためである。足りないときは、次を実行する。
 
@@ -99,8 +99,8 @@ GitHub には App の権限を変える API がない。変えられるのは Ap
 
 1. 権限の表を変える Pull Request を merge し、新しいバイナリを入れる (`scripts/install.sh`)。
 2. `cumin setup github-apps --org <Organizationの名前>` を実行する。表と違う App ごとに、次を行う。
-   1. 変える権限を表示し (例: `contents: read -> write`)、その App の権限の画面を開く。Owner は、表示どおりに変えて "Save changes" を押す。コマンドは `GET /app` を読み直し、表と同じになるまで待つ。
-   2. 権限を足したときだけ、インストールの画面を開く。Owner は、新しい権限の確認を承認する。コマンドは `GET /orgs/{org}/installation` を読み直し、承認された権限が表と同じになるまで待つ。インストールしていない App は、インストールの画面で新しい権限を求めるので、ここは飛ばす。
+   1. 変える権限を表示し (例: `contents: read -> write`)、その App の権限の画面を開く。Maintainer は、表示どおりに変えて "Save changes" を押す。コマンドは `GET /app` を読み直し、表と同じになるまで待つ。
+   2. 権限を足したときだけ、インストールの画面を開く。Maintainer は、新しい権限の確認を承認する。コマンドは `GET /orgs/{org}/installation` を読み直し、承認された権限が表と同じになるまで待つ。インストールしていない App は、インストールの画面で新しい権限を求めるので、ここは飛ばす。
 3. 待つのは、1つの画面につき10分までである。過ぎると、その App の名前を表示して止まる。もう一度実行すれば、続きから案内する。
 
 何も変えることがなければ、画面は開かない。権限が別の role の表と同じ App は、表が変わったのではなく Client ID の入れ替わりなので、何も変えずに止まる。
@@ -216,16 +216,16 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 
 - 2つに分けてあるのは、bypass list にいる cumin本体の App が、必須のcheckまで回避できないようにするためである。
 - `cumin-protected-paths` は、GitHub Actions が出したものだけを有効にする。他の App が同じ名前のcheckを出しても、通らない。
-- 2つめの ruleset の bypass list が空なので、既定のブランチへの直接の push は、Owner でも通らない。変更は Pull Request で行う。
+- 2つめの ruleset の bypass list が空なので、既定のブランチへの直接の push は、Maintainer でも通らない。変更は Pull Request で行う。
 - merge の前にブランチが最新であること (strict) は、求めない。
 
-Owner が Pull Request を merge するとき:
+Maintainer が Pull Request を merge するとき:
 
 - `cumin-protect-main` の「更新の制限」があるので、GitHub は既定のブランチへの merge を、常に「rule に止められている」と表示する (APIでは `mergeable_state` が `blocked`)。bypass list にいる人と App は、それでも merge できる。
 - 画面では、merge のボタンの近くにある、rule を回避して merge する選択肢を選ぶ。`gh` では `gh pr merge --admin` を使う。`--admin` なしの `gh pr merge` は、表示を見て止まる。
 - 必須のcheckの ruleset には bypass がないので、回避できるのは「更新の制限」だけである。必須のcheckが通っていなければ、merge は止まる。
 - Pull Request を作った直後は、必須のcheckがまだ現れていないので、merge は "required status checks are expected" で拒否される。数秒待って、check が現れてから merge する。人の Pull Request では、保護されたパスの check は飛ばされて (skipped) 通る。
-- 保護されたパスのcheckは、Owner の Pull Request では飛ばされる。飛ばされたcheckは、必須のcheckとして通った扱いになる (2026-09-20に実機で確かめた)。
+- 保護されたパスのcheckは、Maintainer の Pull Request では飛ばされる。飛ばされたcheckは、必須のcheckとして通った扱いになる (2026-09-20に実機で確かめた)。
 
 もう一度実行したとき:
 
@@ -236,11 +236,11 @@ Owner が Pull Request を merge するとき:
 
 ## 手順4: cumin を常駐させる (launchd)
 
-Host で、Owner 自身のアカウントで実行する。設定ファイルと Keychain の鍵がそろってから行う。
+Host で、Operator 自身のアカウントで実行する。設定ファイルと Keychain の鍵がそろってから行う。
 
 ### 通知のアドレスを Keychain に入れる
 
-cumin は、Owner の対応が要るときに Discord の webhook で知らせる。webhook のアドレスは秘密なので、設定ファイルではなく Keychain に置く ([cumin本体の設計メモ](../designs/cumin-core.md) の「Ownerへの通知」)。
+cumin は、人の対応が要るときに Discord の webhook で知らせる。webhook のアドレスは秘密なので、設定ファイルではなく Keychain に置く ([cumin本体の設計メモ](../designs/cumin-core.md) の「通知」)。
 
 1. Discord で、通知を受けるチャンネルの "Integrations" から webhook を1つ作り、そのアドレスを控える。
 2. Host で、次を実行する。
@@ -279,7 +279,7 @@ security find-generic-password -s cumin-works -a discord-webhook-url "$KEYCHAIN"
 scripts/install.sh
 ```
 
-スクリプトは、cumin をビルドして `~/.local/bin/cumin` に置く。Owner 自身のユーザのディレクトリなので、`sudo` は要らない。別の場所に置くなら `--prefix <ディレクトリ>` を付ける。
+スクリプトは、cumin をビルドして `~/.local/bin/cumin` に置く。Operator 自身のユーザのディレクトリなので、`sudo` は要らない。別の場所に置くなら `--prefix <ディレクトリ>` を付ける。
 
 置いた先が `PATH` に入っていないと、スクリプトが警告を出す。そのときは、先に `PATH` に足すか、これ以降の `cumin` をフルパスで実行する。
 
@@ -320,8 +320,8 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 
 - 0以外の終了コードで終わったときだけ、launchd が起動し直す。`launchctl kill SIGTERM` で止めた cumin も、`cumin stop --after-current-runs` で止めた cumin も 0 で終わるので、止めたままになる。
 - `cumin stop --after-current-runs` は、予約を書いてすぐ終わる。cumin は、次の定期確認から新しい依頼を始めず、実行中のAgentの実行と、その終わりに続く動作を済ませてから終わる。Agent の実行は1時間近くかかることがある。止まる途中かどうかは `cumin status` の `Stop:` の行で分かり、終わるとその行が消える。ログには `stopped` (理由は、止める予約のあとに実行が終わったこと) が出る。待てないときは、「すぐに止める」のコマンドを使う。
-- 「すぐに止める」は、実行中のAgentを取り消す。作業中のラベルのまま残ったIssueは、Owner が `cumin/status/ready` を付け直して再開する。
-- Host が再起動したあとは、Owner がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
+- 「すぐに止める」は、実行中のAgentを取り消す。作業中のラベルのまま残ったIssueは、Maintainer が `cumin/status/ready` を付け直して再開する。
+- Host が再起動したあとは、Operator がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
 - ログのファイルは入れ替わらない。大きくなったら、止めてから消す。
 - plist を書き直したら、`launchctl bootout` してから `launchctl bootstrap` し直す。
 - `cumin setup launchd --remove` は、job が読み込まれていれば止めて、plist を消す。消すのは plist だけで、ログ、設定ファイル、作業ディレクトリ、Keychain の項目、実行ファイルは残る。何が残るかはコマンドが表示する。`--dry-run` を付けると、何をするかだけを表示する。
@@ -360,7 +360,7 @@ App を登録済みの Host に、同じ Organization のリポジトリを足�
 cumin-worksを、cumin自身で開発するときの決まり。cumin-worksをforkして、cuminで手を入れるときも同じである。手順は上の「対象のリポジトリを足す」と同じで、次の2つが違う。
 
 - 保護されたパスに、Agentの指示 (`roles/`、`disciplines/`、`templates/`) を入れない。開発の対象だからである。動いているcuminは、これらをバイナリに埋め込んで使うので、リポジトリで変わっても、バイナリを入れ替えるまで指示は変わらない。要件の文書 (`docs/ja/requirements/`) は入れる。
-- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Ownerが、mergeされた変更を確かめてから、`cumin stop --after-current-runs` で実行中のAgentが終わるのを待ち、`scripts/install.sh --restart` で入れ替える (手順4)。cuminは自分のリポジトリでAgentを動かしているので、待たずに入れ替えると、その実行が取り消される。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
+- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Operatorが、mergeされた変更を確かめてから、`cumin stop --after-current-runs` で実行中のAgentが終わるのを待ち、`scripts/install.sh --restart` で入れ替える (手順4)。cuminは自分のリポジトリでAgentを動かしているので、待たずに入れ替えると、その実行が取り消される。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
 
 ## セットアップのあとの確認
 
@@ -399,7 +399,7 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
 | `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
-| `no Discord webhook URL in the Keychain` | `cumin setup notify --discord-webhook` を実行する。Discord を使わないなら、設定ファイルに `notify.discord.enabled = false` を書く |
+| `no Discord webhook URL: the Keychain item ... is missing` | `cumin setup notify --discord-webhook` を実行する。Discord を使わないなら、設定ファイルに `notify.discord.enabled = false` を書く |
 | `... is a temporary build` | `go run` で実行している。`scripts/install.sh` で置いたバイナリから実行する |
 | `... holds a different job` | 同じ名前の plist が、違う内容で既にある。表示された差分を見て、置き換えてよければ `--force` を付ける |
 | launchd の job が動かない | `launchctl print gui/$(id -u)/dev.cloveclove.cumin` で最後の終了コードを見る。`~/.local/state/cumin/cumin.err.log` に設定の誤りが出る |

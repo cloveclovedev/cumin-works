@@ -3,7 +3,7 @@
 cuminは、閉じたsub-issueのworktreeを自動で消す ([Agentの実行の設計](../designs/agent-run.md) の「作業場所」)。次のworktreeは、自動では消えない。
 
 - 閉じた要求Issueのsub-issueのもの。cuminは閉じた要求Issueを読まない。
-- Ownerが要求Issueから外したsub-issueのもの。
+- Maintainerが要求Issueから外したsub-issueのもの。
 - GitHubにない作業を持っていたので、cuminが残したもの。ログに `cleanup: the worktree of a closed issue holds work that is not on GitHub; it stays` が出ている。
 
 worktreeが残っても、動作には影響しない。使うのはディスクだけである。ビルドの成果物があると、1つで数GBになることがある。
@@ -39,4 +39,4 @@ git -C <work_dir>/<owner>/<repo>/clone worktree remove --force <work_dir>/<owner
 git -C <work_dir>/<owner>/<repo>/clone branch -D cumin/<Issue番号>-<短い説明>
 ```
 
-Hostの状態ファイル (`~/.local/state/cumin/state.json`) にそのIssueの項目が残っていても、消さなくてよい。項目は小さく、Ownerが `cumin/status/ready` を付け直したときに、cuminが消す。
+Hostの状態ファイル (`~/.local/state/cumin/state.json`) にそのIssueの項目が残っていても、消さなくてよい。項目は小さく、Maintainerが `cumin/status/ready` を付け直したときに、cuminが消す。
