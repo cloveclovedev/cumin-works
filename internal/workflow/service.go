@@ -161,6 +161,10 @@ type Service struct {
 	readyMu      sync.Mutex
 	readyTold    map[string]time.Time
 	pollFailures map[string]*repeatedFailure
+	// unreadTold holds, for each repository, the issues over a read limit
+	// that cumin already notified about, each with its requirement issue
+	// (unreadissue.go). failureMu guards it.
+	unreadTold map[string]map[toldUnreadIssue]int
 
 	// quota keeps which notifications of "stop agent starts" cumin already sent
 	// (quota.go). The polls and the ends of the runs share it.
@@ -670,6 +674,9 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 		log.Info("the settings of the repository were read",
 			"from_repository", settings.FromRepository, "risk_criteria", settings.RiskCriteriaSource)
 	}
+	// The setting of the repository decides the notification, so it comes
+	// after the read of the settings.
+	s.notifyUnreadIssues(ctx, log, target, settings.Settings.Notify.DiscordEnabled, read.Unread)
 	s.ensurePriorityLabels(ctx, log, token, target, settings, readAgain)
 	// The required checks are a REST call of their own, so the poll makes
 	// it only when an issue of this repository waits for the checks ("request
