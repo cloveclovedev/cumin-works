@@ -76,7 +76,7 @@ var everyRequestRows = []everyRequest{
 	},
 	{
 		request: "acceptance check at a poll", logged: "acceptance check",
-		call: "plan.go: checkAcceptance: acceptance check",
+		call: "acceptance.go: checkAcceptance: acceptance check",
 		scene: func(t *testing.T, _ bool) *scene {
 			sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl"})
 			return sc
@@ -95,7 +95,7 @@ var everyRequestRows = []everyRequest{
 	},
 	{
 		request: "acceptance check again", logged: "acceptance check again", afterRun: true,
-		call: "plan.go: runAcceptanceCheck: acceptance check again",
+		call: "acceptance.go: runAcceptanceCheck: acceptance check again",
 		// The acceptance check run ends with no comment of the Planner.
 		scene: func(t *testing.T, holds bool) *scene {
 			sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: holds})
@@ -104,23 +104,23 @@ var everyRequestRows = []everyRequest{
 	},
 	{
 		request: "claim", logged: "claim", needsReadyOfMaintainer: true,
-		call:  "service.go: claim: claim",
+		call:  "implement.go: claim: claim",
 		scene: func(t *testing.T, _ bool) *scene { return newScene(t) },
 	},
 	{
 		request: "implementation again at the end of the run", logged: "implementation again", afterRun: true,
-		call: "service.go: runImplementer: implementation again",
+		call: "implement.go: runImplementer: implementation again",
 		// The Implementer run ends with no pull request.
 		scene: func(t *testing.T, holds bool) *scene { return newScene(t, cliOptions{holds: holds}) },
 	},
 	{
 		request: "implementation again at a poll", logged: "implementation again",
-		call:  "service.go: requestImplementationAgain: implementation again",
+		call:  "implement.go: requestImplementationAgain: implementation again",
 		scene: func(t *testing.T, _ bool) *scene { return implementingWithoutAnAgent(t, implementingByCumin()) },
 	},
 	{
 		request: "check fix", logged: "check fix",
-		call:  "service.go: fixChecks: check fix",
+		call:  "implement.go: fixChecks: check fix",
 		scene: func(t *testing.T, _ bool) *scene { return newScene(t) },
 		prepare: func(t *testing.T, sc *scene, service *workflow.Service) {
 			sc.failingCheck(t, service, 1)
