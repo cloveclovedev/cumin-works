@@ -396,7 +396,7 @@ func TestReadyActorReads_NamesTheStartCandidatesOnlyWithAFreeSlot(t *testing.T) 
 	if snapshot.MovesWithoutMaintainer() {
 		t.Error("MovesWithoutMaintainer = true, want false when every ready is of another account")
 	}
-	snapshot.RequirementIssues[0].SubIssues[1].ReadyOwner = theMaintainer
+	snapshot.RequirementIssues[0].SubIssues[1].ReadyIssueOwner = theMaintainer
 	actions := workflow.Decide(snapshot, 3, nil, nil, sceneNow, time.Hour)
 	if len(actions) != 1 || actions[0] != (workflow.Claim{Number: 11, RequirementIssue: 1}) {
 		t.Errorf("Decide = %v, want only the claim of #11, whose ready is of the Maintainer", actions)

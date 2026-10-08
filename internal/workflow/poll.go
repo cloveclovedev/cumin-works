@@ -314,7 +314,7 @@ func (s *Service) pollRepository(ctx context.Context, target Target, finishing b
 	s.readStatusActors(ctx, log, token, target, settings, &snapshot)
 	s.readLabelTimes(ctx, log, token, target, &snapshot)
 	if !finishing {
-		s.readReadyOwners(ctx, log, token, target, settings, &snapshot)
+		s.readReadyIssueOwners(ctx, log, token, target, settings, &snapshot)
 	}
 	s.readAcceptanceComments(ctx, log, token, target, &snapshot)
 	s.readImplementingFacts(ctx, log, token, target, settings, &snapshot)

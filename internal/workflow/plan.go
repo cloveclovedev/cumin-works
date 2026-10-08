@@ -45,9 +45,9 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 		return nil
 	}
 	// The poll read the Issue Owner of the newest cumin/status/ready before
-	// the decision (readReadyOwners); "request the split" holds only with
+	// the decision (readReadyIssueOwners); "request the split" holds only with
 	// that Issue Owner.
-	req.issueOwnerLogin = requirement.ReadyOwner
+	req.issueOwnerLogin = requirement.ReadyIssueOwner
 	repository := target.Repository.String()
 	if p.Again {
 		var err error
