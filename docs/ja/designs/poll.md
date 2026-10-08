@@ -106,6 +106,7 @@
 - 上限を超えたIssueは、定期確認のエラーにしない。1つ目の問い合わせの上限は、要求Issueかそのsub-issueの、sub-issue (36件)、ラベル (100件)、blocked by のIssue (100件) である。2つ目の問い合わせの上限は、sub-issueの開いているPull Request (2件) と、Pull Requestのラベル、check、レビュー (100件ずつ) である。
 - `ReadSnapshot` は、全部を読めた要求Issueだけを返す。上限を超えたIssueは、別の一覧 (`RepositorySnapshot.Unread`) に入れる。一覧の1件は、要求Issueの番号、上限を超えたIssueの番号、上限の文章 (例: `more than 36 sub-issues`) である。`ReadPullRequests` も、上限を超えたsub-issueを同じ形で返す (`PullRequestsRead.Unread`)。
 - sub-issueの1つが上限を超えたら、その要求Issueを、全てのsub-issueと一緒にスナップショットから外す (`Snapshot.WithoutRequirementIssues`)。外すのは、2つの読み取りから1つのスナップショットを作るところ (`readSnapshot`) である。判定も、そのあとの読み取り (ラベルの時刻、ラベルを付けたアカウント、コメント) も、そのIssueを見ない。だから、ラベルは替わらず、Agentも起動しない。
+- 外した要求Issueの作業は、同時に進めるIssueの数に数え続ける。判定はそのIssueを動かさないが、作業は続いているためである。数えないと、着手が `max_issues_in_progress` を超える。読めた分 (`Snapshot.Unread`) を、`inProgress` だけが読む。数え方はほかのIssueと同じで、状態ラベルで数える。ラベルが上限を超えたIssueは、状態ラベルを読めていないかもしれないので、進めている1件として数える。36件を超えた分のsub-issueは、読んでいないので数えない。
 - 定期確認は、全部を読めないIssueごとにログに1行 (warn) 出す。行には、Issueの番号 (`issue`)、要求Issueの番号 (`requirement_issue`)、上限 (`limit`) が入る。定期確認はエラーを返さないので、「定期確認が続けて失敗したとき」の数にも入らない。ほかのIssueは、同じ定期確認で今までどおり進む。
 - 上限のほかの読み取りの失敗は、今までどおり、そのリポジトリの定期確認のエラーである。GraphQLのエラー、次のページの読み取りの失敗、知らない値 (`mergeable`、checkの種類、Issueの状態)、誤った `.cumin/config.toml` がこれに当たる。
 - Agentの実行が終わった直後の1つのIssueの読み取りでは、上限を超えたIssueは、Issueの番号を示すエラーのままである (「実行終了の判定」)。
@@ -114,7 +115,7 @@
 2つ目の問い合わせの上限とポイント:
 
 - sub-issueは、1つ目の問い合わせで読んだidで指定する (`nodes(ids:)`)。1回に100件までで、101件ではGitHubがエラーを返す (2026-10-03 にcumin-worksで実測)。選んだsub-issueが100件を超えるときは、100件ごとに分けて送る。
-- Pull Requestは1つのsub-issueに2件まで、その下のラベル、check、レビューは100件までである。超えたsub-issueは、全部を読めないIssueである (下の「全部を読めないIssue」)。上限は、1つのIssueの読み取りと同じ値である。
+- Pull Requestは1つのsub-issueに2件まで、その下のラベル、check、レビューは100件までである。超えたsub-issueは、全部を読めないIssueである (上の「全部を読めないIssue」)。上限は、1つのIssueの読み取りと同じ値である。
 - ポイント (2026-10-03 にcumin-worksで `rateLimit { cost }` を実測)。1つ目の問い合わせは1ページ3ポイントである。2つ目の問い合わせは、sub-issueが1件でも9件でも1ポイント、100件で9ポイントである。
 
 Pull Requestの読み方:
@@ -580,7 +581,7 @@ checkの結果の読み方:
 - 実行終了のあとの読み直しは、1つのIssueを番号で指定する問い合わせである (`ReadSubIssue`、`ReadRequirementIssue`)。リポジトリの全ページは読まない。「ask for the plan review」、「stop the split」、「wait for the checks」、「request a review fix」、「start the merge」、「ask for the merge decision」、「request the cause」、「stop at the round limit」、「stop the review」の判定が使うのは、1つのIssueの事実だけだからである。
   - 実装Issueでは、ラベル、blocked by、そのIssueを閉じる開いているPull Request (check、レビュー、先頭のコミット、`mergeable`)、親の要求Issueの状態とラベル、既定のブランチの名前を読む。要求Issueでは、ラベル、blocked by、sub-issueを読む。sub-issueの項目は、定期確認と同じである。
   - Issueの項目は、定期確認の問い合わせと同じ2つのfragment (`requirementIssueFields`、`subIssueFields`) と、2つ目の問い合わせと同じfragment (`closingPullRequestFields`) から作る。上限も同じ値を渡す。そのため、どちらで読んでも、判定は同じ事実を受け取る。
-  - 上限を超えたIssueは、定期確認と同じく、Issueの番号を入れたエラーにする。読めなければ、ラベルを替えずにログに出す。Plannerの `blocked` のあとの読み直しが一時的な失敗で終わったときも、ラベルを替えない。このときは、`blocked_reason` の全文をログに出し、1回通知する (下の「Plannerの実行のあとの手順」)。
+  - 上限を超えたIssueは、Issueの番号を入れたエラーにする。エラーにするのは、この読み取りだけである。定期確認は、エラーにせず、そのIssueを外して進む (「全部を読めないIssue」)。読めなければ、ラベルを替えずにログに出す。Plannerの `blocked` のあとの読み直しが一時的な失敗で終わったときも、ラベルを替えない。このときは、`blocked_reason` の全文をログに出し、1回通知する (下の「Plannerの実行のあとの手順」)。
   - 読むのは1回の問い合わせなので、判定が見る事実の時点は1つのままである。
   - ポイントは、実装Issueで1、要求Issueで2である (cumin-worksで実測、2026-10-03、`rateLimit.cost`、[#454](https://github.com/cloveclovedev/cumin-works/pull/454))。全ページを読み直すと、cumin-worksでは34ポイントだった ([#421](https://github.com/cloveclovedev/cumin-works/pull/421))。
   - 読み直しがIssueを返すのは、定期確認がそのIssueを読むときだけである (原則6: 閉じた要求Issueと、そのsub-issueは読まない)。要求Issueは、開いていて、`cumin/type/requirement` のラベルを持つこと。実装Issueは、親がそのような要求Issueであること。そのために、実装Issueの問い合わせは、親の状態とラベルも読む (`parent`)。

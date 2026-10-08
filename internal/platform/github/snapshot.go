@@ -99,6 +99,10 @@ type RepositorySnapshot struct {
 	// Unread are the issues over a limit of the query. RequirementIssues
 	// holds no requirement issue of them: no rule decides on a partial issue.
 	Unread []UnreadIssue
+	// UnreadRequirementIssues are the requirement issues of Unread, as much
+	// as the query returned of them. They are partial: the caller reads
+	// them only to count the issues in progress.
+	UnreadRequirementIssues []Issue
 	// DefaultBranch is the name of the default branch, and DefaultBranchOID
 	// is the commit at its head. A repository without a commit has neither.
 	DefaultBranch    string
@@ -170,10 +174,13 @@ type RepositoryFile struct {
 // SubIssues and BlockedBy ("request the split"). A sub-issue has
 // BlockedBy and PullRequests.
 type Issue struct {
-	Number    int
-	Closed    bool
-	Labels    []string
-	SubIssues []Issue
+	Number int
+	Closed bool
+	Labels []string
+	// LabelsOverLimit is true when the issue has more labels than Labels
+	// holds. Only an issue of UnreadRequirementIssues can have it.
+	LabelsOverLimit bool
+	SubIssues       []Issue
 	// Title is the title of the issue. The branch name of a request is made
 	// from the title of a sub-issue, and the monitor file shows the title
 	// of both. The field is a scalar, so it does not change the cost.
@@ -889,6 +896,7 @@ func (c *AppClient) ReadSnapshot(ctx context.Context, token, owner, repo string)
 				for _, limit := range limits {
 					snapshot.Unread = append(snapshot.Unread, UnreadIssue{Requirement: node.Number, Issue: limit.issue, Limit: limit.limit})
 				}
+				snapshot.UnreadRequirementIssues = append(snapshot.UnreadRequirementIssues, node.partialIssue())
 				continue
 			}
 			if err != nil {
@@ -1088,6 +1096,21 @@ func (n issueNode) issue() (Issue, error) {
 	}
 	issue.PullRequests = pullRequests
 	return issue, errors.Join(errs...)
+}
+
+// partialIssue converts as much of one node as the query returned, for an
+// issue over a limit: the number, the state, the labels, and the sub-issues
+// that were read. No rule decides on it; the caller counts the issues in
+// progress from it.
+func (n issueNode) partialIssue() Issue {
+	issue := Issue{Number: n.Number, Title: n.Title, NodeID: n.ID, Closed: n.State == "CLOSED", LabelsOverLimit: n.Labels.PageInfo.HasNextPage}
+	for _, label := range n.Labels.Nodes {
+		issue.Labels = append(issue.Labels, label.Name)
+	}
+	for _, sub := range n.SubIssues.Nodes {
+		issue.SubIssues = append(issue.SubIssues, sub.partialIssue())
+	}
+	return issue
 }
 
 // pullRequests converts the open closing pull requests of the node. More

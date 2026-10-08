@@ -49,6 +49,10 @@ type Snapshot struct {
 	// DefaultBranch is the branch whose rules name the required checks.
 	DefaultBranch     string
 	RequirementIssues []RequirementIssue
+	// Unread are the requirement issues that cumin cannot read in full, as
+	// much as was read of them. Only the count of the issues in progress
+	// reads them (inProgress): no rule decides on a partial issue.
+	Unread []RequirementIssue
 	// Running are the issues whose agent runs in this cumin now. The rules
 	// of a working label skip a running issue: its run decides its own end.
 	Running map[int]bool
@@ -116,14 +120,22 @@ func (s Snapshot) RequirementOf(subIssue int) int {
 // WithoutRequirementIssues returns the snapshot without the requirement
 // issues of the numbers, and so without their sub-issues. The poll removes
 // the requirement issue of an issue that cumin cannot read in full: no rule
-// decides on a partial issue.
+// decides on a partial issue. The removed issues go to Unread, so that
+// their work still fills the limit of the issues in progress.
 func (s Snapshot) WithoutRequirementIssues(numbers map[int]bool) Snapshot {
 	if len(numbers) == 0 {
 		return s
 	}
-	s.RequirementIssues = slices.DeleteFunc(slices.Clone(s.RequirementIssues), func(requirement RequirementIssue) bool {
-		return numbers[requirement.Number]
-	})
+	var read []RequirementIssue
+	unread := slices.Clone(s.Unread)
+	for _, requirement := range s.RequirementIssues {
+		if numbers[requirement.Number] {
+			unread = append(unread, requirement)
+		} else {
+			read = append(read, requirement)
+		}
+	}
+	s.RequirementIssues, s.Unread = read, unread
 	return s
 }
 
@@ -194,9 +206,12 @@ func (s Snapshot) HasMaintainerApprovalCandidate() bool { return len(maintainerA
 type RequirementIssue struct {
 	Number int
 	// Title is for the monitor file only. No rule reads it.
-	Title     string
-	Labels    []string
-	SubIssues []SubIssue
+	Title  string
+	Labels []string
+	// LabelsUnread is true when the issue has more labels than Labels
+	// holds. Only an issue of Snapshot.Unread can have it.
+	LabelsUnread bool
+	SubIssues    []SubIssue
 	// BlockedBy are the issues that block the requirement issue. A Maintainer
 	// links requirement issues to each other, and "request the split" waits
 	// for them.
@@ -258,11 +273,14 @@ type SubIssue struct {
 	Number int
 	// NodeID is the GraphQL ID of the issue. "wait for the checks" adds the
 	// closing link with it.
-	NodeID    string
-	Title     string
-	Closed    bool
-	Labels    []string
-	BlockedBy []BlockedBy
+	NodeID string
+	Title  string
+	Closed bool
+	Labels []string
+	// LabelsUnread is true when the issue has more labels than Labels
+	// holds. Only a sub-issue of Snapshot.Unread can have it.
+	LabelsUnread bool
+	BlockedBy    []BlockedBy
 	// PullRequests are the open pull requests that close the issue (the
 	// closing link). Every rule reads the pull request of the issue here.
 	// Only the check of the pull request after the Implementer ends finds
@@ -2061,14 +2079,23 @@ func sameLabels(a, b []string) bool {
 // implementing ("mark the requirement as in work") has no agent of its own,
 // so it does not count. An issue with cumin/status/ready never counts, also
 // when the running set names it.
+//
+// The requirement issues that cumin cannot read in full (Snapshot.Unread)
+// count in the same way, by what was read of them: no rule moves them, but
+// their work goes on. An issue of them whose labels were not read in full
+// counts as in progress, so that the limit never fails on the open side.
 func inProgress(snapshot Snapshot) int {
 	n := 0
-	for _, requirement := range snapshot.RequirementIssues {
-		if slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting) {
+	for _, requirement := range slices.Concat(snapshot.RequirementIssues, snapshot.Unread) {
+		if requirement.LabelsUnread || slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting) {
 			n++
 		}
 		for _, sub := range requirement.SubIssues {
 			if sub.Closed {
+				continue
+			}
+			if sub.LabelsUnread {
+				n++
 				continue
 			}
 			for _, label := range []string{LabelImplementing, LabelChecking, LabelReviewing, LabelMerging} {

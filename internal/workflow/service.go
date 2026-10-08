@@ -586,7 +586,9 @@ func (s *Service) noteRunEnded(repository string) {
 // The snapshot holds only the requirement issues that both reads read in
 // full. An issue over a limit of a query takes its requirement issue out,
 // with all its sub-issues, and the unread list of the result names the issue
-// and the limit. Every other failure of a read is an error.
+// and the limit. Every other failure of a read is an error. The snapshot
+// keeps what was read of the removed requirement issues in Snapshot.Unread,
+// for the count of the issues in progress only.
 func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (github.RepositorySnapshot, Snapshot, error) {
 	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
 	if err != nil {
@@ -1802,13 +1804,16 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 	for _, issue := range read.RequirementIssues {
 		snapshot.RequirementIssues = append(snapshot.RequirementIssues, toRequirementIssue(issue))
 	}
+	for _, issue := range read.UnreadRequirementIssues {
+		snapshot.Unread = append(snapshot.Unread, toRequirementIssue(issue))
+	}
 	return snapshot
 }
 
 // toRequirementIssue converts one requirement issue of the GitHub client,
 // from the poll or from the read of one issue.
 func toRequirementIssue(issue github.Issue) RequirementIssue {
-	requirement := RequirementIssue{Number: issue.Number, Title: issue.Title, Labels: issue.Labels}
+	requirement := RequirementIssue{Number: issue.Number, Title: issue.Title, Labels: issue.Labels, LabelsUnread: issue.LabelsOverLimit}
 	for _, blocker := range issue.BlockedBy {
 		requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 	}
@@ -1821,7 +1826,7 @@ func toRequirementIssue(issue github.Issue) RequirementIssue {
 // toSubIssue converts one sub-issue of the GitHub client, from the poll or
 // from the read of one issue.
 func toSubIssue(sub github.Issue) SubIssue {
-	subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
+	subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels, LabelsUnread: sub.LabelsOverLimit}
 	for _, blocker := range sub.BlockedBy {
 		subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 	}

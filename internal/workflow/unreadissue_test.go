@@ -35,13 +35,13 @@ var unreadIssues = []unreadIssue{
 	{
 		name: "a sub-issue with more labels than cumin reads",
 		add: func(sc *scene) {
-			labels := []string{"cumin/status/ready", "risk/low"}
-			for i := range 99 {
+			// An open sub-issue whose labels are not read in full fills the
+			// limit of the issues in progress, so this one is closed.
+			labels := []string{"risk/low"}
+			for i := range 100 {
 				labels = append(labels, fmt.Sprintf("area/%d", i))
 			}
-			if err := sc.fake.SetLabels(sc.repo, 31, labels); err != nil {
-				panic(err)
-			}
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 31, Parent: 30, Closed: true, Labels: labels})
 		},
 		issue: 31, limit: "more than 100 labels",
 	},
@@ -59,7 +59,9 @@ var unreadIssues = []unreadIssue{
 	{
 		name: "a sub-issue with more open closing pull requests than cumin reads",
 		add: func(sc *scene) {
-			if err := sc.fake.SetLabels(sc.repo, 31, []string{"cumin/status/checking", "risk/low"}); err != nil {
+			// The label gives the sub-issue to the second query, and does
+			// not fill the limit of the issues in progress.
+			if err := sc.fake.SetLabels(sc.repo, 31, []string{"cumin/status/awaiting-decision", "risk/low"}); err != nil {
 				panic(err)
 			}
 			for n := 40; n <= 42; n++ {
@@ -129,6 +131,57 @@ func TestPoll_AnIssueOverAReadLimitIsLeftOutAndTheOtherIssuesGoOn(t *testing.T) 
 				if !strings.Contains(line, want) {
 					t.Errorf("the log line of the unread issue has no %s:\n%s", want, line)
 				}
+			}
+		})
+	}
+}
+
+// The work of an unread requirement issue still fills the limit of the
+// issues in progress (max_issues_in_progress is 1 in the scene): no rule
+// moves it, but it goes on. A sub-issue whose labels were not read in full
+// counts too. The poll starts no ready issue beside it, and returns no error.
+func TestPoll_TheWorkOfAnUnreadIssueFillsTheLimitOfIssuesInProgress(t *testing.T) {
+	manyLabels := []string{"risk/low"}
+	for i := range 100 {
+		manyLabels = append(manyLabels, fmt.Sprintf("area/%d", i))
+	}
+	cases := map[string]func(sc *scene){
+		"a sub-issue in checking with too many open closing pull requests": func(sc *scene) {
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 31, Parent: 30, Labels: []string{"cumin/status/checking", "risk/low"}})
+			for n := 40; n <= 42; n++ {
+				sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{Number: n, Author: implementerSlug, AuthorIsBot: true, Closes: []int{31}})
+			}
+		},
+		"a sub-issue in checking under a requirement issue with 37 sub-issues": func(sc *scene) {
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 31, Parent: 30, Labels: []string{"cumin/status/checking", "risk/low"}})
+			for n := 32; n <= 67; n++ {
+				sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: n, Parent: 30, Closed: true})
+			}
+		},
+		"a sub-issue whose labels are not read in full": func(sc *scene) {
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 31, Parent: 30, Labels: manyLabels})
+		},
+	}
+	for name, add := range cases {
+		t.Run(name, func(t *testing.T) {
+			sc := newScene(t)
+			sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 30, Labels: []string{githubtest.RequirementLabel, "cumin/status/implementing"}})
+			add(sc)
+			service := sc.service()
+
+			if err := service.Poll(context.Background()); err != nil {
+				t.Fatalf("poll: %v", err)
+			}
+			service.Wait()
+
+			if n := sc.agentRuns(t); n != 0 {
+				t.Errorf("%d agent runs, want none: the unread issue fills the limit", n)
+			}
+			if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, []string{"cumin/status/ready", "risk/low"}) {
+				t.Errorf("labels of #10 = %v, want it to stay ready", got)
+			}
+			if n := sc.labelChanges(); n != 0 {
+				t.Errorf("%d label changes, want none", n)
 			}
 		})
 	}
