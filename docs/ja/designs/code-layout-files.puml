@@ -38,4 +38,19 @@ manifest --> fakes
 settingsfile --> fakes
 install --> fakes
 permissions --> fakes
+
+package "internal/platform/github/githubtest (the fake GitHub)" {
+  file "fake.go\nthe Fake type, New, the routing,\nthe planned failures" as fake
+  file "graphql.go\nthe GraphQL snapshot\nand the other GraphQL reads" as fakegraphql
+  file "issues.go\nREST issues, labels, comments" as fakeissues
+  file "pulls.go\npull requests, reviews, the merge" as fakepulls
+  file "checks.go\nchecks and rulesets" as fakechecks
+  file "apps.go\nApps and tokens" as fakeapps
+}
+
+fake --> fakegraphql
+fake --> fakeissues
+fake --> fakepulls
+fake --> fakechecks
+fake --> fakeapps
 @enduml
