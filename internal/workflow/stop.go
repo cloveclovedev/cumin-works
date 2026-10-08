@@ -79,8 +79,8 @@ func (s *Service) stopForMaintainer(ctx context.Context, log *slog.Logger, targe
 			case len(st.labels) == 0:
 				log.Error(string(st.action) + ": the labels of the issue were not read; the label was not changed")
 			default:
-				labels := ReplaceStatusLabel(st.labels, LabelAwaitingDecision)
-				if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, st.issue, labels); err != nil {
+				labels, err := s.moveIssue(ctx, token, target, st.issue, st.labels, LabelAwaitingDecision)
+				if err != nil {
 					log.Error(string(st.action)+": the label was not changed", "error", err.Error())
 				} else {
 					log.Info(string(st.action)+": the issue waits for a Maintainer", "labels", labels)

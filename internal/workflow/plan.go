@@ -32,7 +32,6 @@ import (
 // start (runPlanner), so that the request is sent once for each stay in
 // cumin/status/planning, and a start that failed does not use it up.
 func (s *Service) plan(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, p Plan) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	action := ActionRequestTheSplit
 	if p.Again {
 		action = ActionRequestTheSplitAgain
@@ -65,9 +64,9 @@ func (s *Service) plan(ctx context.Context, token string, target Target, snapsho
 	if err := s.State.Clear(repository, p.Number); err != nil {
 		return fmt.Errorf(string(ActionRequestTheSplit)+": clear the state of issue #%d: %w", p.Number, err)
 	}
-	labels := ReplaceStatusLabel(requirement.Labels, LabelPlanning)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, p.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionRequestTheSplit)+": move issue #%d to planning: %w", p.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, p.Number, requirement.Labels, LabelPlanning)
+	if err != nil {
+		return fmt.Errorf(string(ActionRequestTheSplit)+": %w", err)
 	}
 	s.logger().Info(string(ActionRequestTheSplit)+": moved the requirement issue to planning",
 		"repository", target.Repository.String(), "issue", p.Number, "labels", labels)
@@ -154,9 +153,9 @@ func (s *Service) moveToAccepting(ctx context.Context, token string, target Targ
 	if err := s.State.Clear(repository, requirement.Number); err != nil {
 		return fmt.Errorf(string(ActionRequestTheAcceptanceCheck)+": clear the state of issue #%d: %w", requirement.Number, err)
 	}
-	labels := ReplaceStatusLabel(requirement.Labels, LabelAccepting)
-	if err := s.GitHub.SetIssueLabels(ctx, token, target.Repository.Owner, target.Repository.Name, requirement.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionRequestTheAcceptanceCheck)+": move issue #%d to accepting: %w", requirement.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, requirement.Number, requirement.Labels, LabelAccepting)
+	if err != nil {
+		return fmt.Errorf(string(ActionRequestTheAcceptanceCheck)+": %w", err)
 	}
 	s.logger().Info(string(ActionRequestTheAcceptanceCheck)+": moved the requirement issue to accepting", "repository", repository, "issue", requirement.Number, "labels", labels)
 	return nil

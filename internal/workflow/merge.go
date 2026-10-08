@@ -55,9 +55,9 @@ func (s *Service) askMaintainerToMerge(ctx context.Context, log *slog.Logger, ta
 	if err != nil {
 		return fmt.Errorf(string(ActionAskForTheMergeDecision)+": read the Issue Owner login of issue #%d: %w", sub.Number, err)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingMergeDecision)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionAskForTheMergeDecision)+": move issue #%d to awaiting-merge-decision: %w", sub.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, sub.Number, sub.Labels, LabelAwaitingMergeDecision)
+	if err != nil {
+		return fmt.Errorf(string(ActionAskForTheMergeDecision)+": %w", err)
 	}
 	log.Info(string(ActionAskForTheMergeDecision)+": the merge waits for a Maintainer", "labels", labels, "pull_request", pr.Number)
 	if login == "" {
@@ -176,13 +176,12 @@ func (s *Service) mergingNow(ctx context.Context, log *slog.Logger, token string
 // decided (MergeEnd). sent counts the merges that this poll sent before
 // for the repository.
 func (s *Service) mergeEndAtPoll(ctx context.Context, log *slog.Logger, token string, target Target, snapshot Snapshot, settings *RepositorySettings, action Action, sent *int) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	switch a := action.(type) {
 	case LeaveMerge:
 		sub, _ := snapshot.SubIssue(a.Number)
-		labels := ReplaceStatusLabel(sub.Labels, LabelChecking)
-		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-			return fmt.Errorf("go back to the checks: move issue #%d to %s: %w", a.Number, LabelChecking, err)
+		labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelChecking)
+		if err != nil {
+			return fmt.Errorf("go back to the checks: %w", err)
 		}
 		log.Info("go back to the checks: the conditions of the merge do not hold; no merge is sent", "issue", a.Number, "labels", labels)
 		return nil
@@ -244,9 +243,8 @@ func (s *Service) sendMerge(ctx context.Context, log *slog.Logger, token string,
 	}
 	log.Warn("the pull request was not merged", "pull_request", pr.Number, "error", err.Error())
 	stopIssue := func(reason string) error {
-		labels := ReplaceStatusLabel(sub.Labels, LabelAwaitingDecision)
-		if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-			return fmt.Errorf("stop the merge for a Maintainer: move issue #%d to %s: %w", a.Number, LabelAwaitingDecision, err)
+		if _, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelAwaitingDecision); err != nil {
+			return fmt.Errorf("stop the merge for a Maintainer: %w", err)
 		}
 		s.stopForMaintainer(ctx, log, target, settings, stop{
 			action: ActionStopTheMerge, issue: a.Number, labelDone: true, reason: reason,
@@ -341,7 +339,6 @@ func statusAnswer(err error) string {
 // cumin/status/merging, and the next poll decides again. The same holds
 // while the start waits for its permit (permitStart).
 func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token string, target Target, settings *RepositorySettings, sub SubIssue, pr PullRequest, defaultBranch string) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	permit, ok := s.permitStart(ctx, log, "conflict resolution", config.RoleImplementer, target, sub.Number)
 	if !ok {
@@ -354,9 +351,9 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 	if err := s.startStay(repository, sub.Number, true); err != nil {
 		return fmt.Errorf("request a conflict resolution: keep the start of the stay of issue #%d in cumin/status/implementing: %w", sub.Number, err)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, sub.Number, labels); err != nil {
-		return fmt.Errorf("request a conflict resolution: move issue #%d back to the Implementer: %w", sub.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, sub.Number, sub.Labels, LabelImplementing)
+	if err != nil {
+		return fmt.Errorf("request a conflict resolution: %w", err)
 	}
 	log.Info("the merge conflicts; the issue goes back to the Implementer", "pull_request", pr.Number, "labels", labels)
 	branch := pr.HeadBranch
@@ -393,7 +390,6 @@ func (s *Service) resolveConflict(ctx context.Context, log *slog.Logger, token s
 // label that does not change are errors of the poll: nothing is requested,
 // the issue keeps its label, and the next poll tries again.
 func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a ResolveConflict) error {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	log := s.logger().With("repository", repository, "issue", a.Number, "pull_request", a.PullRequest)
 	sub, ok := snapshot.SubIssue(a.Number)
@@ -415,9 +411,9 @@ func (s *Service) resolveConflictAtPoll(ctx context.Context, token string, targe
 	if err := s.startStay(repository, a.Number, true); err != nil {
 		return fmt.Errorf(string(ActionRequestAConflictResolution)+": keep the start of the stay of issue #%d in cumin/status/implementing: %w", a.Number, err)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return fmt.Errorf(string(ActionRequestAConflictResolution)+": move issue #%d back to the Implementer: %w", a.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelImplementing)
+	if err != nil {
+		return fmt.Errorf(string(ActionRequestAConflictResolution)+": %w", err)
 	}
 	log.Info(string(ActionRequestAConflictResolution)+": the pull request conflicts with the default branch; the issue goes back to the Implementer", "labels", labels)
 	branch := pr.HeadBranch
@@ -486,9 +482,9 @@ func (s *Service) mergeMaintainerApproval(ctx context.Context, token string, tar
 		})
 		return true, nil
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelMerging)
-	if err := s.GitHub.SetIssueLabels(ctx, token, target.Repository.Owner, target.Repository.Name, a.Number, labels); err != nil {
-		return false, fmt.Errorf(string(ActionStartTheMerge)+": move issue #%d to %s: %w", a.Number, LabelMerging, err)
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelMerging)
+	if err != nil {
+		return false, fmt.Errorf(string(ActionStartTheMerge)+": %w", err)
 	}
 	log.Info(string(ActionStartTheMerge)+": a Maintainer approved the head commit", "pull_request", pr.Number, "head_commit", pr.HeadCommit, "labels", labels)
 	return true, nil
@@ -532,7 +528,6 @@ func (s *Service) readMaintainers(ctx context.Context, token string, target Targ
 // does not change, are errors of the poll: nothing is requested, the issue
 // keeps cumin/status/awaiting-merge-decision, and the next poll tries again.
 func (s *Service) fixMaintainerReview(ctx context.Context, token string, target Target, snapshot Snapshot, settings *RepositorySettings, a FixMaintainerReview) (acted, waits bool, err error) {
-	owner, repo := target.Repository.Owner, target.Repository.Name
 	repository := target.Repository.String()
 	log := s.logger().With("repository", repository, "issue", a.Number)
 	sub, ok := snapshot.SubIssue(a.Number)
@@ -563,9 +558,9 @@ func (s *Service) fixMaintainerReview(ctx context.Context, token string, target 
 	if err := s.startStay(repository, a.Number, false); err != nil {
 		return false, false, fmt.Errorf(string(ActionSendBackForChanges)+": keep the start of the stay of issue #%d in cumin/status/implementing: %w", a.Number, err)
 	}
-	labels := ReplaceStatusLabel(sub.Labels, LabelImplementing)
-	if err := s.GitHub.SetIssueLabels(ctx, token, owner, repo, a.Number, labels); err != nil {
-		return false, false, fmt.Errorf(string(ActionSendBackForChanges)+": move issue #%d back to the Implementer: %w", a.Number, err)
+	labels, err := s.moveIssue(ctx, token, target, a.Number, sub.Labels, LabelImplementing)
+	if err != nil {
+		return false, false, fmt.Errorf(string(ActionSendBackForChanges)+": %w", err)
 	}
 	log.Info(string(ActionSendBackForChanges)+": a Maintainer requested changes; the issue goes back to the Implementer",
 		"pull_request", pr.Number, "review", review.URL, "labels", labels)
