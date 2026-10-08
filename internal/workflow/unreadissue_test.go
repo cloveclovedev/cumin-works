@@ -328,6 +328,77 @@ func TestPoll_AnotherLimitOfTheSameIssueIsToldOnItsOwn(t *testing.T) {
 	if !strings.Contains(messages[0], "more than 36 sub-issues") || !strings.Contains(messages[1], "more than 100 labels") {
 		t.Errorf("the notifications do not name one limit each: %v", messages)
 	}
+
+	// The read names the limit of the sub-issues again. No poll read #30 in
+	// full in between, so that limit stays silent.
+	if err := sc.fake.SetLabels(sc.repo, 30, []string{githubtest.RequirementLabel, "cumin/status/implementing"}); err != nil {
+		t.Fatal(err)
+	}
+	pollTimes(t, service, 2, false)
+	if n := len(sc.unreadNotifications()); n != 2 {
+		t.Errorf("%d notifications after the first limit shows again, want 2", n)
+	}
+}
+
+// A limit of the requirement issue hides the limit of its sub-issue: the
+// read stops at the first limit. The sub-issue that was told stays told
+// while its requirement issue is unread, because no poll read it in full.
+func TestPoll_AnIssueHiddenByAnotherLimitOfItsRequirementIssueIsNotToldAgain(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	sc.addUnread(unreadIssues[1])
+	service := sc.service()
+
+	pollTimes(t, service, 2, false)
+	if messages := sc.unreadNotifications(); len(messages) != 1 || !strings.Contains(messages[0], "issue #31 in full") {
+		t.Fatalf("notifications = %v, want one about #31", messages)
+	}
+
+	// The requirement issue passes a limit of its own. The read names only
+	// that limit now.
+	labels := []string{githubtest.RequirementLabel, "cumin/status/implementing"}
+	for i := range 100 {
+		labels = append(labels, fmt.Sprintf("area/%d", i))
+	}
+	if err := sc.fake.SetLabels(sc.repo, 30, labels); err != nil {
+		t.Fatal(err)
+	}
+	pollTimes(t, service, 2, false)
+	if messages := sc.unreadNotifications(); len(messages) != 2 || !strings.Contains(messages[1], "issue #30 in full") {
+		t.Fatalf("notifications = %v, want a second one about #30", messages)
+	}
+
+	// The requirement issue is under its limit again, and the read names
+	// the sub-issue again. No poll read the sub-issue in full.
+	if err := sc.fake.SetLabels(sc.repo, 30, []string{githubtest.RequirementLabel, "cumin/status/implementing"}); err != nil {
+		t.Fatal(err)
+	}
+	pollTimes(t, service, 2, false)
+	if messages := sc.unreadNotifications(); len(messages) != 2 {
+		t.Errorf("%d notifications, want 2: no poll read #31 in full: %v", len(messages), messages)
+	}
+}
+
+// A notification that the channel did not take is sent again at the next
+// poll, and then no more.
+func TestPoll_AnUnreadIssueIsToldAgainAfterAFailedSend(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	sc.addUnread(unreadIssues[1])
+	service := sc.service()
+
+	sc.webhook.fails(http.StatusInternalServerError)
+	pollTimes(t, service, 1, false)
+	failed := len(sc.unreadNotifications())
+	if failed == 0 {
+		t.Fatal("the webhook received nothing, want the send that fails")
+	}
+
+	sc.webhook.fails(0)
+	pollTimes(t, service, 3, false)
+	if n := len(sc.unreadNotifications()); n != failed+1 {
+		t.Errorf("%d messages after the webhook works again, want %d: one more", n, failed+1)
+	}
 }
 
 // With notify.discord.enabled = false in the file of the repository, an

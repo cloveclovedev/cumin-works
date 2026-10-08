@@ -162,9 +162,9 @@ type Service struct {
 	readyTold    map[string]time.Time
 	pollFailures map[string]*repeatedFailure
 	// unreadTold holds, for each repository, the issues over a read limit
-	// that cumin already notified about (unreadissue.go). failureMu
-	// guards it.
-	unreadTold map[string]map[toldUnreadIssue]bool
+	// that cumin already notified about, each with its requirement issue
+	// (unreadissue.go). failureMu guards it.
+	unreadTold map[string]map[toldUnreadIssue]int
 
 	// quota keeps which notifications of "stop agent starts" cumin already sent
 	// (quota.go). The polls and the ends of the runs share it.
