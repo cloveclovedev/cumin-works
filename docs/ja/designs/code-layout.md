@@ -127,6 +127,16 @@
 | | `Tests/CuminStatusBarTests/` | 純粋な型のテスト (XCTest)。Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) も読む |
 | | `dev.cloveclove.cumin-status-bar.plist` | アプリをログインのときに起動するLaunchAgentのplistのテンプレート。`__REPO__` をcheckoutのパスに置き換えて使う ([メニューバーのアプリを作って起動する](../guides/status-menu-bar.md)) |
 
+### テストのファイル
+
+テストは、動作か話題ごとに1つのファイルに置く。上の表は、テストのファイルを、置き場所に理由があるものだけ載せる。`internal/workflow` の定期確認のテストと、`internal/setup` の `cumin setup github-apps` のテストは、次の図のように分かれる。
+
+![定期確認のテストと、cumin setup github-appsのテストのファイル](code-layout-files.svg)
+
+図の元ファイル: [code-layout-files.puml](code-layout-files.puml)
+
+矢印は「使う」を表す。`scene_test.go` と `fakes_test.go` は、テストを持たず、他のファイルが使う偽物と補助の関数だけを持つ。`internal/workflow` の新しいテストは、その動作のファイルに足す。動作のファイルがなければ、新しいファイルを作る。`service_test.go` には、定期確認のループのテストだけを置く。
+
 ## まだ決めていないこと
 
 なし
