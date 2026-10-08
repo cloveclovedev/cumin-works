@@ -399,7 +399,7 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
 | `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
-| `no Discord webhook URL in the Keychain` | `cumin setup notify --discord-webhook` を実行する。Discord を使わないなら、設定ファイルに `notify.discord.enabled = false` を書く |
+| `no Discord webhook URL: the Keychain item ... is missing` | `cumin setup notify --discord-webhook` を実行する。Discord を使わないなら、設定ファイルに `notify.discord.enabled = false` を書く |
 | `... is a temporary build` | `go run` で実行している。`scripts/install.sh` で置いたバイナリから実行する |
 | `... holds a different job` | 同じ名前の plist が、違う内容で既にある。表示された差分を見て、置き換えてよければ `--force` を付ける |
 | launchd の job が動かない | `launchctl print gui/$(id -u)/dev.cloveclove.cumin` で最後の終了コードを見る。`~/.local/state/cumin/cumin.err.log` に設定の誤りが出る |
