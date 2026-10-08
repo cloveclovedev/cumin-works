@@ -776,12 +776,3 @@ func (s *Service) requirementIssueNow(ctx context.Context, log *slog.Logger, tar
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
 	return toRequirementIssue(read.Issue), nil
 }
-
-// labelsOf is the labels of the requirement issue that requirementIssueNow
-// read, or none when it could not be read.
-func labelsOf(requirement RequirementIssue, err error) []string {
-	if err != nil {
-		return nil
-	}
-	return requirement.Labels
-}

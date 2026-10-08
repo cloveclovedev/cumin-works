@@ -310,13 +310,6 @@ func (s *Service) tellQuotaLimit(ctx context.Context, log *slog.Logger, target T
 	}
 }
 
-func limitReason(window quota.Name) string {
-	if window == quota.Weekly {
-		return "The weekly quota window reached its pace limit. cumin starts no agent until the pace limit rises above the usage or the window resets. The agent runs that are going on end as usual."
-	}
-	return fmt.Sprintf("The %s quota window reached its limit. cumin starts no agent until the window resets, a time band with a higher limit starts, or the command cumin quota allow runs. The agent runs that are going on end as usual.", window)
-}
-
 // notifyQuota sends one notification of "stop agent starts". The quota belongs to the account
 // of the Host, and the marks against a second notification are shared by
 // every repository, so the Host setting decides, as for a poll that keeps

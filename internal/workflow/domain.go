@@ -2967,3 +2967,40 @@ func latestMaintainerReview(reviews []Review, maintainers map[string]bool) (Revi
 func IsMaintainer(permission, userType string) bool {
 	return userType == "User" && (permission == "admin" || permission == "write")
 }
+
+// labelsOf is the labels of the requirement issue that requirementIssueNow
+// read, or none when it could not be read.
+func labelsOf(requirement RequirementIssue, err error) []string {
+	if err != nil {
+		return nil
+	}
+	return requirement.Labels
+}
+
+// labelsNow is the labels of the sub-issue that subIssueNow read, or none
+// when it could not be read.
+func labelsNow(sub SubIssue, ok bool) []string {
+	if !ok {
+		return nil
+	}
+	return sub.Labels
+}
+
+// stopOfReviewerRequest is the action that stops the review after a request
+// to the Reviewer that failed: "stop at the round limit" for the request of
+// the cause, which only exists at the limit of rounds, and "stop the
+// review" for a review request.
+func stopOfReviewerRequest(req reviewerRequest) ActionName {
+	if req.cause != nil {
+		return ActionStopAtTheRoundLimit
+	}
+	return ActionStopTheReview
+}
+
+// settingsSource names where the settings of a poll came from, for the log.
+func settingsSource(fromRepository bool) string {
+	if fromRepository {
+		return "repository"
+	}
+	return "host"
+}

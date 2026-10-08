@@ -278,17 +278,6 @@ func (r reviewerRequest) kind() string {
 	return "review"
 }
 
-// stopOfReviewerRequest is the action that stops the review after a request
-// to the Reviewer that failed: "stop at the round limit" for the request of
-// the cause, which only exists at the limit of rounds, and "stop the
-// review" for a review request.
-func stopOfReviewerRequest(req reviewerRequest) ActionName {
-	if req.cause != nil {
-		return ActionStopAtTheRoundLimit
-	}
-	return ActionStopTheReview
-}
-
 // stopForReviewerStart stops the review for a Maintainer when the second
 // request of this stay did not start: the work directory was not prepared,
 // or the agent was not started. A third request would fail the same way.
