@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "last_poll": {
+    "at": "2026-10-04T07:00:05Z",
+    "errors": [
+      {
+        "repository": "example/app",
+        "message": "read the snapshot: GitHub returned 502"
+      }
+    ]
+  },
+  "stop_requested": true,
+  "quota": {
+    "state": "stopped",
+    "stopped_windows": [
+      "5h"
+    ],
+    "next_try_at": "2026-10-04T09:00:00Z"
+  }
+}

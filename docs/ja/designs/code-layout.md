@@ -32,7 +32,7 @@
 | パッケージ | ファイル | 受け持ち |
 |---|---|---|
 | `cmd/cumin` | `main.go` | サブコマンドの一覧と振り分け。終了コード |
-| | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、Hostの状態ファイルを開き、`agent.Service` と `workflow.Service` を組み立てて動かす |
+| | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、Hostの状態ファイルを開き、`agent.Service` と `workflow.Service` を組み立てて動かす。モニターファイルのパス (状態のディレクトリの `monitor.json`) を渡す |
 | | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
 | | `status.go` | `cumin status` (GitHubのラベル、最新の使用率、今の上限、止める予約の表示) と `cumin --version` (Goのビルド情報)。表示の中身は `writeStatus` にまとめ、Keychainなしでテストする |
 | | `quota.go` | `cumin quota allow` (「resume agent starts」)。状態ファイルの最新の5h枠のリセット時刻を、許可のファイルに書く |
@@ -46,6 +46,7 @@
 | `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、受け入れの確認を依頼し直した回数、分割を依頼し直した回数、実装を依頼し直した回数と依頼が衝突の解消かどうか、レビューを依頼し直した回数と原因の整理を依頼した回数と依頼した先頭のコミット、最新の使用率 (「resume agent starts」)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (「resume agent starts」) |
 | | `stopafterruns.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
+| | `monitorfile.go` | モニターファイル (`monitor.json`) の形と書き込み。書くのは `cumin run` だけで、cuminのコードは読まない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `retry.go` | 一時的な失敗 (ネットワークの誤り、5xxの応答) をした読み取りのやり直し。`TemporaryError` と `IsTemporary` |
@@ -80,6 +81,7 @@
 | | `labels.go` | cuminが対象のリポジトリに作るラベルの一覧。初期値の優先度のラベルは、設定が名前を決めていないリポジトリにだけ作る |
 | | `service.go` | 定期確認のループ。スナップショットと必須のcheckを読み、判定を適用し、Implementerを起動し、実行終了を判定する。Agentの起動の許可を取る関数と、Agentを起動するただ1つの関数 (`startAgent`) を持つ。必須のcheckが待ち時間を過ぎても結果を返さないIssueをMaintainerに戻す (「stop for missing checks」)。実行のセッションをHostの状態に残し、着手で消す。止める合図を受けたら、実行中の依頼を取り消して終わる (I/O) |
 | | `stopafterruns.go` | 実行を待ってから止める。止める予約を読み、起動時と終わるときに消す |
+| | `monitorfile.go` | モニターファイルの中身を、定期確認が既に持っている事実 (最後の定期確認の時刻とエラー、止める予約、利用枠の状態) から作る純粋関数と、定期確認の1回りの終わりの書き込み。書き込みの失敗は警告のログだけにする |
 | | `plan.go` | Plannerの依頼と実行の終わり。分割の開始 (「request the split」)、`cumin/status/planning` の出口 (「ask for the plan review」、「request the acceptance check」、依頼し直し、「stop the split」) 、受け入れの確認の依頼 (「request the acceptance check」) と、`cumin/status/accepting` の出口 (「ask for the acceptance」、依頼し直し、Maintainerに戻すこと) |
 | | `requirement.go` | 要求Issueのラベルの付け替え。sub-issueの着手で `cumin/status/implementing` に移す (「mark the requirement as in work」)、残りのsub-issueの確認を求める (「ask about the remaining sub-issues」)。「mark the requirement as in work」と、checkを待つsub-issueと、Maintainerのレビューへの対応 (「send back for changes」) のための、ラベルの時刻の読み取り。「request the split」と「request the implementation」のための、Maintainerのreadyの確認と、Maintainerでないreadyのログと通知。状態から決める要求Issueのための、状態ラベルを付けたアカウントの確認と、数えないラベルのログと通知 |
 | | `review.go` | Reviewerの依頼と、`cumin/status/reviewing` の出口。レビューの開始 (「request the review」)、出口の事実の読み取りと適用 (定期確認と実行の終わりが共に使う)、指摘の修正の依頼 (「request a review fix」)、レビューの依頼し直し、原因の説明の依頼 (「request the cause」)、`blocked` (「stop the review」) |

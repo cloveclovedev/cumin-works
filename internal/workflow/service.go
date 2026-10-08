@@ -98,6 +98,10 @@ type Service struct {
 	// --after-current-runs` writes (stopafterruns.go). Each poll reads it. Empty
 	// means that cumin never stops that way.
 	StopRequestPath string
+	// MonitorPath is the monitor file that a tool outside cumin reads
+	// (monitorfile.go). Each poll writes it at its end, and nothing reads
+	// it. Empty means that cumin writes no monitor file.
+	MonitorPath string
 
 	// running counts the agent runs that the polls started. Each run has
 	// its own goroutine, so that the poll goes on while an agent works.
@@ -443,6 +447,7 @@ func (s *Service) Poll(ctx context.Context) error {
 		all.waitsForQuota = s.startWaitsForQuota()
 		s.waitingCheck(ctx, all, len(errs) == 0)
 	}
+	s.writeMonitorFile(finishing)
 	return errors.Join(errs...)
 }
 

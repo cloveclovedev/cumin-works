@@ -127,6 +127,11 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "cumin run: %v\n", err)
 		return exitFailure
 	}
+	monitorPath, err := monitorFile()
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin run: %v\n", err)
+		return exitFailure
+	}
 	service := &workflow.Service{
 		GitHub:           client,
 		Agents:           agents,
@@ -144,6 +149,9 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		AllowancePath: allowancePath,
 		// cumin stop --after-current-runs writes it; each poll reads it.
 		StopRequestPath: stopRequestPath,
+		// Each poll writes it for a tool that shows cumin from outside;
+		// cumin never reads it.
+		MonitorPath: monitorPath,
 	}
 	var names []string
 	for _, repo := range settings.Repositories {
@@ -233,6 +241,15 @@ func openState(logger *slog.Logger) (*state.Store, error) {
 		return nil, err
 	}
 	return state.Open(filepath.Join(dir, stateFileName), logger), nil
+}
+
+// monitorFile is the path of the monitor file in the state directory.
+func monitorFile() (string, error) {
+	dir, err := config.DefaultStateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, state.MonitorFileName), nil
 }
 
 // appClientIDs returns the Client ID of every GitHub App of cumin
