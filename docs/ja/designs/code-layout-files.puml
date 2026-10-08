@@ -1,12 +1,32 @@
 @startuml code-layout-files
 ' cumin works - the files of a package, where the table of code-layout.md
 ' cannot show which file uses which.
-' Document: code-layout.md, topics on the files of the tests and on the
-' files of the two adapters.
+' Document: code-layout.md, topics on the files of the workflow, on the
+' files of the tests and on the files of the two adapters.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
 left to right direction
+
+package "internal/workflow (the poll and the steps)" {
+  file "service.go\nthe Service type, Run, the stop,\nthe issues in work, the steps\nthat every role uses" as wfservice
+  file "poll.go\none poll: the labels, the snapshot,\nthe actions (pollRepository)" as wfpoll
+  file "implement.go\nthe Implementer and the way out\nof cumin/status/implementing" as wfimplement
+  file "plan.go\nthe Planner and the way out\nof cumin/status/planning" as wfplan
+  file "acceptance.go\nthe acceptance check and the way out\nof cumin/status/accepting" as wfacceptance
+  file "review.go\nthe Reviewer and the way out\nof cumin/status/reviewing" as wfreview
+  file "merge.go\nthe merge decision and the steps\nof cumin/status/merging" as wfmerge
+  file "convert.go\nthe types of the GitHub client\nto the types of the rules" as wfconvert
+}
+
+wfservice --> wfpoll
+wfpoll --> wfimplement
+wfpoll --> wfplan
+wfpoll --> wfacceptance
+wfpoll --> wfreview
+wfpoll --> wfmerge
+wfpoll --> wfconvert
+wfacceptance --> wfplan
 
 package "internal/workflow (tests of the poll)" {
   file "scene_test.go\nthe scene: fake GitHub, fake CLI,\nlocal remote, webhook, clock, log" as scene
