@@ -582,6 +582,13 @@ func (s *Service) noteRunEnded(repository string) {
 // second query reads the pull requests of the sub-issues that a rule reads
 // them for; no such sub-issue means no second query (poll.md, the topic on
 // the two queries). The rate limit of the result is the one of both reads.
+//
+// The snapshot holds only the requirement issues that both reads read in
+// full. An issue over a limit of a query takes its requirement issue out,
+// with all its sub-issues, and the unread list of the result names the issue
+// and the limit. Every other failure of a read is an error. The snapshot
+// keeps what was read of the removed requirement issues in Snapshot.Unread,
+// for the count of the issues in progress only.
 func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (github.RepositorySnapshot, Snapshot, error) {
 	read, err := s.GitHub.ReadSnapshot(ctx, token, owner, repo)
 	if err != nil {
@@ -606,7 +613,14 @@ func (s *Service) readSnapshot(ctx context.Context, token, owner, repo string) (
 	}
 	read.RateLimit.Cost += pullRequests.RateLimit.Cost
 	read.RateLimit.Remaining = pullRequests.RateLimit.Remaining
-	return read, snapshot.WithPullRequests(byIssue), nil
+	snapshot = snapshot.WithPullRequests(byIssue)
+	unread := map[int]bool{}
+	for _, issue := range pullRequests.Unread {
+		issue.Requirement = snapshot.RequirementOf(issue.Issue)
+		unread[issue.Requirement] = true
+		read.Unread = append(read.Unread, issue)
+	}
+	return read, snapshot.WithoutRequirementIssues(unread), nil
 }
 
 func (s *Service) pollRepository(ctx context.Context, target Target, finishing bool) (pollResult, error) {
@@ -638,6 +652,13 @@ func (s *Service) pollRepositoryInto(ctx context.Context, target Target, finishi
 	snapshot.Running = running
 	s.noteWaitingIssues(target.Repository.String(), snapshot.WaitingIssues(target.Repository.String()))
 	log := s.logger().With("repository", target.Repository.String())
+	// An issue over a limit of a read is no failure of the poll. The
+	// snapshot does not hold its requirement issue, so no rule and no later
+	// read of this poll sees it, and no label of it changes.
+	for _, issue := range read.Unread {
+		log.Warn("cumin cannot read the issue in full: the poll leaves its requirement issue out and goes on",
+			"issue", issue.Issue, "requirement_issue", issue.Requirement, "limit", issue.Limit)
+	}
 
 	// The settings of this repository. A wrong file skips this repository
 	// and this poll; the other repositories are polled by the caller.
@@ -1783,13 +1804,16 @@ func toSnapshot(read github.RepositorySnapshot) Snapshot {
 	for _, issue := range read.RequirementIssues {
 		snapshot.RequirementIssues = append(snapshot.RequirementIssues, toRequirementIssue(issue))
 	}
+	for _, issue := range read.UnreadRequirementIssues {
+		snapshot.Unread = append(snapshot.Unread, toRequirementIssue(issue))
+	}
 	return snapshot
 }
 
 // toRequirementIssue converts one requirement issue of the GitHub client,
 // from the poll or from the read of one issue.
 func toRequirementIssue(issue github.Issue) RequirementIssue {
-	requirement := RequirementIssue{Number: issue.Number, Title: issue.Title, Labels: issue.Labels}
+	requirement := RequirementIssue{Number: issue.Number, Title: issue.Title, Labels: issue.Labels, LabelsUnread: issue.LabelsOverLimit}
 	for _, blocker := range issue.BlockedBy {
 		requirement.BlockedBy = append(requirement.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 	}
@@ -1802,7 +1826,7 @@ func toRequirementIssue(issue github.Issue) RequirementIssue {
 // toSubIssue converts one sub-issue of the GitHub client, from the poll or
 // from the read of one issue.
 func toSubIssue(sub github.Issue) SubIssue {
-	subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels}
+	subIssue := SubIssue{Number: sub.Number, NodeID: sub.NodeID, Title: sub.Title, Closed: sub.Closed, ClosedAt: sub.ClosedAt, Labels: sub.Labels, LabelsUnread: sub.LabelsOverLimit}
 	for _, blocker := range sub.BlockedBy {
 		subIssue.BlockedBy = append(subIssue.BlockedBy, BlockedBy{Number: blocker.Number, Closed: blocker.Closed})
 	}

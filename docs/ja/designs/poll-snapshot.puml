@@ -35,8 +35,10 @@ note left of sub
 end note
 note right of sub
   When an issue exceeds a limit
-  of either query,
-  the poll of that repository stops
-  with an error that names the issue.
+  of either query, the poll leaves
+  its requirement issue out, with all
+  its sub-issues, logs the issue and
+  the limit, and goes on with the
+  other issues. It is no error.
 end note
 @enduml

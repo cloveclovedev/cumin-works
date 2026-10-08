@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -165,16 +166,17 @@ func TestReadSnapshot_APullRequestWithoutAnyCheckHasNoChecks(t *testing.T) {
 	}
 }
 
-// TestReadSnapshot_TooManyChecksOrLabelsOnAPullRequestIsAnError: a rule must
-// never decide on a part of the facts, as it must not for an issue.
-func TestReadSnapshot_TooManyChecksOrLabelsOnAPullRequestIsAnError(t *testing.T) {
+// TestReadPullRequests_AnIssueWithTooManyChecksOrLabelsOnAPullRequestIsUnread:
+// a rule must never decide on a part of the facts, as it must not for an
+// issue. The read names the issue and the limit, and is no error.
+func TestReadPullRequests_AnIssueWithTooManyChecksOrLabelsOnAPullRequestIsUnread(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		pull    githubtest.PullRequest
-		message string
+		name  string
+		pull  githubtest.PullRequest
+		limit string
 	}{
-		{name: "checks", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Checks: manyChecks(101)}, message: "more than 100 checks"},
-		{name: "labels", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Labels: manyLabels(101)}, message: "more than 100 labels"},
+		{name: "checks", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Checks: manyChecks(101)}, limit: "more than 100 checks on pull request #21"},
+		{name: "labels", pull: githubtest.PullRequest{Number: 21, Closes: []int{10}, Labels: manyLabels(101)}, limit: "more than 100 labels on pull request #21"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fake, server := githubtest.New(t)
@@ -185,12 +187,13 @@ func TestReadSnapshot_TooManyChecksOrLabelsOnAPullRequestIsAnError(t *testing.T)
 			fake.AddPullRequest(repo, &pull)
 			client := github.NewAppClient(server.URL, server.Client())
 
-			_, err := readTwoQueries(client)
-			if err == nil || !strings.Contains(err.Error(), tc.message) {
-				t.Fatalf("err = %v, want %q", err, tc.message)
+			ids := []string{githubtest.IssueNodeID(repo, 10)}
+			read, err := client.ReadPullRequests(context.Background(), githubtest.Token, "example-org", "example-repo", ids)
+			if err != nil {
+				t.Fatalf("ReadPullRequests: %v", err)
 			}
-			if !strings.Contains(err.Error(), "issue #10") || !strings.Contains(err.Error(), "pull request #21") {
-				t.Errorf("err = %v, want the issue and the pull request", err)
+			if want := []github.UnreadIssue{{Issue: 10, Limit: tc.limit}}; !reflect.DeepEqual(read.Unread, want) {
+				t.Errorf("unread = %+v, want %+v", read.Unread, want)
 			}
 		})
 	}

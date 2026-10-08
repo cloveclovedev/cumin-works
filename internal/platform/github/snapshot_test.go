@@ -195,10 +195,14 @@ func TestReadSnapshot_ANextPageOfSubIssuesCostsOneCall(t *testing.T) {
 	}
 }
 
-func TestReadSnapshot_TooManySubIssuesIsAnError(t *testing.T) {
+// An issue over a limit is no error of the read: the snapshot holds the
+// other requirement issues, and names the unread issue and the limit.
+func TestReadSnapshot_AnIssueWithTooManySubIssuesIsUnread(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 100, Labels: []string{"cumin/type/requirement"}})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 101, Parent: 100})
 	// One more than three pages. The requirement allows 12 sub-issues for
 	// one split (requirement-sizing.md), so this needs more than three
 	// splits of one requirement issue.
@@ -207,12 +211,53 @@ func TestReadSnapshot_TooManySubIssuesIsAnError(t *testing.T) {
 	}
 	client := github.NewAppClient(server.URL, server.Client())
 
-	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
-	if err == nil || !strings.Contains(err.Error(), "issue #1 has more than 36 sub-issues") {
-		t.Errorf("err = %v, want an error that names issue #1", err)
+	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	if want := []github.UnreadIssue{{Requirement: 1, Issue: 1, Limit: "more than 36 sub-issues"}}; !reflect.DeepEqual(snapshot.Unread, want) {
+		t.Errorf("unread = %+v, want %+v", snapshot.Unread, want)
+	}
+	if len(snapshot.RequirementIssues) != 1 || snapshot.RequirementIssues[0].Number != 100 || len(snapshot.RequirementIssues[0].SubIssues) != 1 {
+		t.Errorf("requirement issues = %+v, want #100 with its sub-issue only", snapshot.RequirementIssues)
 	}
 	if n := fake.CountRequests(http.MethodPost, "/graphql"); n != 3 {
 		t.Errorf("%d GraphQL requests, want 3: no fourth page is read", n)
+	}
+}
+
+// A sub-issue over a limit makes its whole requirement issue unread. Every
+// sub-issue over a limit is named.
+func TestReadSnapshot_ASubIssueOverALimitMakesItsRequirementIssueUnread(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	labels := make([]string, 101)
+	for i := range labels {
+		labels[i] = fmt.Sprintf("area/%d", i)
+	}
+	blockedBy := make([]int, 101)
+	for i := range blockedBy {
+		blockedBy[i] = 200 + i
+	}
+	fake.AddIssue(repo, &githubtest.Issue{Number: 2, Parent: 1, Labels: labels})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 3, Parent: 1, BlockedBy: blockedBy})
+	fake.AddIssue(repo, &githubtest.Issue{Number: 4, Parent: 1})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	snapshot, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	want := []github.UnreadIssue{
+		{Requirement: 1, Issue: 2, Limit: "more than 100 labels"},
+		{Requirement: 1, Issue: 3, Limit: "more than 100 blocked-by issues"},
+	}
+	if !reflect.DeepEqual(snapshot.Unread, want) {
+		t.Errorf("unread = %+v, want %+v", snapshot.Unread, want)
+	}
+	if len(snapshot.RequirementIssues) != 0 {
+		t.Errorf("requirement issues = %+v, want none", snapshot.RequirementIssues)
 	}
 }
 
@@ -253,12 +298,14 @@ func TestReadSnapshot_PullRequestWithoutAuthorHasAnEmptyAuthor(t *testing.T) {
 	}
 }
 
-func TestReadSnapshot_TooManyPullRequestsIsAnError(t *testing.T) {
+// More open closing pull requests than one read holds make the sub-issue
+// unread: it is no error of the second query.
+func TestReadPullRequests_AnIssueWithTooManyPullRequestsIsUnread(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
 	fake.AddIssue(repo, &githubtest.Issue{Number: 2, Parent: 1})
-	// Three open pull requests are an error. Closed ones do not count.
+	// Three open pull requests are over the limit. Closed ones do not count.
 	for n := 10; n <= 12; n++ {
 		fake.AddPullRequest(repo, &githubtest.PullRequest{Number: n, Author: "octocat", Closes: []int{2}})
 	}
@@ -267,15 +314,23 @@ func TestReadSnapshot_TooManyPullRequestsIsAnError(t *testing.T) {
 	}
 	client := github.NewAppClient(server.URL, server.Client())
 
-	_, err := readTwoQueries(client)
-	if err == nil || !strings.Contains(err.Error(), "issue #2 has more than 2 open closing pull requests") {
-		t.Errorf("err = %v, want an error that names issue #2", err)
+	ids := []string{githubtest.IssueNodeID(repo, 2)}
+	read, err := client.ReadPullRequests(context.Background(), githubtest.Token, "example-org", "example-repo", ids)
+	if err != nil {
+		t.Fatalf("ReadPullRequests: %v", err)
+	}
+	if want := []github.UnreadIssue{{Issue: 2, Limit: "more than 2 open closing pull requests"}}; !reflect.DeepEqual(read.Unread, want) {
+		t.Errorf("unread = %+v, want %+v", read.Unread, want)
+	}
+	if _, ok := read.PullRequests[2]; ok {
+		t.Errorf("pull requests = %+v, want no entry for the unread issue #2", read.PullRequests)
 	}
 	if err := fake.ClosePullRequest(repo, 12); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readTwoQueries(client); err != nil {
-		t.Errorf("with two open pull requests: %v", err)
+	read, err = client.ReadPullRequests(context.Background(), githubtest.Token, "example-org", "example-repo", ids)
+	if err != nil || len(read.Unread) != 0 || len(read.PullRequests[2]) != 2 {
+		t.Errorf("with two open pull requests: read = %+v, err = %v, want two pull requests and no unread issue", read, err)
 	}
 }
 
@@ -420,9 +475,9 @@ func TestReadSnapshot_ReadsTheReviewsOfAPullRequest(t *testing.T) {
 	}
 }
 
-// More reviews than one read holds are an error, as for every other
-// connection: a rule never counts the rounds on a part of the reviews.
-func TestReadSnapshot_TooManyReviewsIsAnError(t *testing.T) {
+// More reviews than one read holds make the sub-issue unread, as for every
+// other connection: a rule never counts the rounds on a part of the reviews.
+func TestReadPullRequests_AnIssueWithTooManyReviewsIsUnread(t *testing.T) {
 	fake, server := githubtest.New(t)
 	repo := fake.AddRepository("example-org", "example-repo")
 	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
@@ -434,9 +489,13 @@ func TestReadSnapshot_TooManyReviewsIsAnError(t *testing.T) {
 	fake.AddPullRequest(repo, &githubtest.PullRequest{Number: 3, Closes: []int{2}, Reviews: reviews})
 	client := github.NewAppClient(server.URL, server.Client())
 
-	_, err := readTwoQueries(client)
-	if err == nil || !strings.Contains(err.Error(), "pull request #3 has more than 100 reviews") {
-		t.Errorf("err = %v, want an error that names pull request #3", err)
+	ids := []string{githubtest.IssueNodeID(repo, 2)}
+	read, err := client.ReadPullRequests(context.Background(), githubtest.Token, "example-org", "example-repo", ids)
+	if err != nil {
+		t.Fatalf("ReadPullRequests: %v", err)
+	}
+	if want := []github.UnreadIssue{{Issue: 2, Limit: "more than 100 reviews on pull request #3"}}; !reflect.DeepEqual(read.Unread, want) {
+		t.Errorf("unread = %+v, want %+v", read.Unread, want)
 	}
 }
 
