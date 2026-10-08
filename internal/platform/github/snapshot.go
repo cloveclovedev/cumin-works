@@ -20,9 +20,10 @@ import (
 // connections (checks, labels) change nothing.
 //
 // Only the sub-issues and the pull requests change the cost, so only those
-// two are small; they stay above the limits of the requirement, which allows
-// 12 sub-issues for a requirement issue (requirement-sizing.md) and leaves an
-// implementation issue with one open closing pull request in normal use.
+// two are small. The sub-issues are read in pages of 12, the limit of the
+// requirement for one split (requirement-sizing.md), up to 36. The pull
+// requests stay above normal use, which leaves an implementation issue with
+// one open closing pull request.
 // Every other size is at the maximum of GraphQL (100), because a connection
 // over its size stops the poll of that repository and costs nothing to widen:
 // a matrix workflow can put more than twenty checks on a commit, and another

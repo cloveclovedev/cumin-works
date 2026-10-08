@@ -216,6 +216,24 @@ func TestReadSnapshot_TooManySubIssuesIsAnError(t *testing.T) {
 	}
 }
 
+// A next page that fails is an error of the read that names the issue: the
+// first page alone is a partial issue.
+func TestReadSnapshot_AFailedNextPageOfSubIssuesIsAnError(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddIssue(repo, &githubtest.Issue{Number: 1, Labels: []string{"cumin/type/requirement"}})
+	for n := 10; n < 30; n++ {
+		fake.AddIssue(repo, &githubtest.Issue{Number: n, Parent: 1})
+	}
+	fake.FailAfter(http.MethodPost, "/graphql", 1, http.StatusNotFound)
+	client := github.NewAppClient(server.URL, server.Client())
+
+	_, err := client.ReadSnapshot(context.Background(), githubtest.Token, "example-org", "example-repo")
+	if err == nil || !strings.Contains(err.Error(), "read the next sub-issues of issue #1") {
+		t.Errorf("err = %v, want an error that names issue #1", err)
+	}
+}
+
 // A pull request whose author account is gone has an empty author.
 func TestReadSnapshot_PullRequestWithoutAuthorHasAnEmptyAuthor(t *testing.T) {
 	fake, server := githubtest.New(t)
