@@ -121,7 +121,8 @@ func TestMonitorFile_EmptyArraysAreWrittenAndAMissingNextTryIsNot(t *testing.T) 
     "state": "open",
     "stopped_windows": []
   },
-  "agents": []
+  "agents": [],
+  "waiting": []
 }
 `
 	if string(raw) != want {
