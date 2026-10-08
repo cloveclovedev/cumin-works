@@ -152,13 +152,24 @@ func (s *Service) readSubIssueNow(ctx context.Context, log *slog.Logger, target 
 		log.Error("the issue was not read again: no token", "error", err.Error())
 		return SubIssue{}, err
 	}
-	read, err := s.GitHub.ReadSubIssue(ctx, token, target.Repository.Owner, target.Repository.Name, number)
+	sub, _, err := s.readSubIssueAgain(ctx, log, token, target, number)
 	if err != nil {
 		log.Error("the issue was not read again", "error", err.Error())
 		return SubIssue{}, err
 	}
+	return sub, nil
+}
+
+// readSubIssueAgain reads one sub-issue again with the given token, and
+// only that issue. The string is the default branch of the repository. The
+// caller logs a failed read, in the words of its own step.
+func (s *Service) readSubIssueAgain(ctx context.Context, log *slog.Logger, token string, target Target, number int) (SubIssue, string, error) {
+	read, err := s.GitHub.ReadSubIssue(ctx, token, target.Repository.Owner, target.Repository.Name, number)
+	if err != nil {
+		return SubIssue{}, "", err
+	}
 	log.Debug("read the issue again", "issue", number, "rate_limit_cost", read.RateLimit.Cost, "rate_limit_remaining", read.RateLimit.Remaining)
-	return toSubIssue(read.Issue), nil
+	return toSubIssue(read.Issue), read.DefaultBranch, nil
 }
 
 // StopNote is the comment that cumin writes when the reason is its own: a
