@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -450,6 +451,39 @@ func TestAFailedNoteKeepsTheAcceptanceCheckWaiting(t *testing.T) {
 	sc.pollAndWait(t, service)
 	if n := sc.agentRuns(t); n != 0 {
 		t.Fatalf("%d agent runs with the note missing, want none", n)
+	}
+	if !strings.Contains(sc.logs.String(), "request the acceptance check: waits for the follow-up notes") {
+		t.Error("the log does not say that the acceptance check waits")
+	}
+
+	sc.pollAndWait(t, service)
+	if n := len(followUpNotes(sc)); n != 1 {
+		t.Errorf("%d follow-up notes, want 1", n)
+	}
+	// The fake Planner leaves no comment, so the acceptance check runs a
+	// second time.
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs, want 2", n)
+	}
+}
+
+// "request the acceptance check" from cumin/status/awaiting-plan-review
+// waits for the follow-up notes too: a note that cannot be written keeps
+// the label. The next poll writes the note, then asks.
+func TestAwaitingPlanReview_AFailedNoteKeepsTheAcceptanceCheckWaiting(t *testing.T) {
+	sc := newFollowUpScene(t, followUpBody, nil)
+	waiting := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	if err := sc.fake.SetLabels(sc.repo, 6, waiting); err != nil {
+		t.Fatal(err)
+	}
+	sc.fake.FailNext("POST", "/repos/example-org/example-repo/issues/6/comments", 500)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs with the note missing, want none", n)
+	}
+	if got := requirementLabels(t, sc); !slices.Equal(got, waiting) {
+		t.Fatalf("labels of #6 = %v, want %v with the note missing", got, waiting)
 	}
 	if !strings.Contains(sc.logs.String(), "request the acceptance check: waits for the follow-up notes") {
 		t.Error("the log does not say that the acceptance check waits")

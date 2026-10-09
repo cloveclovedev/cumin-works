@@ -511,3 +511,137 @@ func pushCommit(t *testing.T, bare string) string {
 	git(t, work, "push", "--quiet", "origin", "main")
 	return git(t, work, "rev-parse", "HEAD")
 }
+
+// planReviewScene is the scene of "request the acceptance check" from
+// cumin/status/awaiting-plan-review: the requirement issue #6 waits for the
+// plan review, and its sub-issue #10 closed an hour ago. The options say how
+// the fake CLI answers as the Planner.
+func planReviewScene(t *testing.T, options cliOptions) (*scene, time.Time) {
+	t.Helper()
+	sc, closedAt := newAcceptanceScene(t, options)
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 6, Labels: []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}})
+	return sc, closedAt
+}
+
+// The test of a top-level requirement in cumin-core.md (the Owner task
+// closes, the check starts): a requirement issue in
+// cumin/status/awaiting-plan-review with an open cumin/type/owner-task
+// sub-issue keeps its label, and nothing is requested. When the Maintainer
+// closes the Owner task, the issue gets cumin/status/accepting before the
+// Planner starts, and the acceptance check is requested exactly once across
+// polls and a restart.
+func TestAwaitingPlanReview_TheAcceptanceCheckIsRequestedOnceWhenTheOwnerTaskCloses(t *testing.T) {
+	sc, closedAt := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 9, Parent: 6, Title: "Change a workflow", Labels: []string{"cumin/type/owner-task", "risk/high"}})
+	service := sc.service()
+
+	// The Owner task is open.
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs with an open Owner task, want none", n)
+	}
+	waiting := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, waiting) {
+		t.Fatalf("labels of #6 = %v, want %v with an open Owner task", got, waiting)
+	}
+	if n := sc.labelChanges(); n != 0 {
+		t.Errorf("%d label changes with an open Owner task, want none", n)
+	}
+
+	// The Maintainer closes the Owner task.
+	ownerTask := sc.fake.Issue(sc.repo, 9)
+	ownerTask.Closed, ownerTask.ClosedAt = true, closedAt.Add(10*time.Minute)
+	sc.fake.AddIssue(sc.repo, ownerTask)
+	before := len(sc.fake.Requests())
+	if err := service.Poll(t.Context()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	waitForAgentRun(t, sc)
+	accepting := []string{githubtest.RequirementLabel, "cumin/status/accepting"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, accepting) {
+		t.Errorf("labels of #6 = %v, want %v while the check runs", got, accepting)
+	}
+	requests := sc.fake.Requests()
+	label := indexOf(requests, before, "PUT", "/issues/6/labels")
+	token := indexOf(requests, before, "POST", "/access_tokens")
+	if label < 0 || token < 0 || token < label {
+		t.Errorf("the label change (request %d) does not come before the token of the Planner (request %d)", label, token)
+	}
+	text := promptOf(t, sc.record(t, "agent.args"))
+	if !strings.Contains(text, "Request: acceptance check") || !strings.Contains(text, "#6") {
+		t.Errorf("the request text is not an acceptance check of #6:\n%s", text)
+	}
+
+	// A poll while the Planner runs requests nothing more.
+	if err := service.Poll(t.Context()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	// The Planner writes the comment during its run, and the run ends.
+	acceptanceComment(sc, closedAt.Add(30*time.Minute), plannerLogin)
+	sc.release(t)
+	service.Wait()
+
+	// A restart polls again.
+	restarted := sc.service()
+	sc.pollAndWait(t, restarted)
+	sc.pollAndWait(t, restarted)
+
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want 1", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-acceptance"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+}
+
+// "request the acceptance check" from cumin/status/awaiting-plan-review
+// shares the free slots: with no free slot, the requirement issue keeps its
+// label and nothing is requested. With a free slot, the next poll requests
+// the acceptance check.
+func TestAwaitingPlanReview_NoFreeSlotKeepsTheAcceptanceCheckWaiting(t *testing.T) {
+	sc, _ := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	service := sc.service()
+	service.Settings.MaxIssuesInProgress = 0
+
+	sc.pollAndWait(t, service)
+	if n := sc.agentRuns(t); n != 0 {
+		t.Fatalf("%d agent runs with no free slot, want none", n)
+	}
+	waiting := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, waiting) {
+		t.Fatalf("labels of #6 = %v, want %v with no free slot", got, waiting)
+	}
+
+	service.Settings.MaxIssuesInProgress = 1
+	sc.pollAndWait(t, service)
+	// The fake Planner leaves no comment, so the acceptance check runs a
+	// second time.
+	if n := sc.agentRuns(t); n != 2 {
+		t.Errorf("%d agent runs with a free slot, want 2", n)
+	}
+	if got := requirementLabels(t, sc); slices.Equal(got, waiting) {
+		t.Errorf("labels of #6 = %v with a free slot, want the label changed", got)
+	}
+}
+
+// An acceptance check comment that is newer than the last close stops
+// "request the acceptance check" in cumin/status/awaiting-plan-review, as
+// in cumin/status/implementing: the check of this round exists.
+func TestAwaitingPlanReview_AnAcceptanceCommentAfterTheLastCloseRequestsNothing(t *testing.T) {
+	sc, closedAt := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	acceptanceComment(sc, closedAt.Add(time.Minute), plannerLogin)
+	service := sc.service()
+	sc.pollAndWait(t, service)
+	sc.pollAndWait(t, service)
+
+	if n := sc.agentRuns(t); n != 0 {
+		t.Errorf("%d agent runs, want none", n)
+	}
+	want := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, want) {
+		t.Errorf("labels of #6 = %v, want %v", got, want)
+	}
+}

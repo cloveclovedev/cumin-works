@@ -21,9 +21,10 @@ import (
 )
 
 // checkAcceptance applies "request the acceptance check" (from
-// cumin/status/implementing, and from cumin/status/planning with every
-// sub-issue closed): replace the status label of the requirement issue
-// with cumin/status/accepting, and only then request the acceptance check.
+// cumin/status/implementing and from cumin/status/awaiting-plan-review,
+// and from cumin/status/planning with every sub-issue closed): replace the
+// status label of the requirement issue with cumin/status/accepting, and
+// only then request the acceptance check.
 // When the label change fails, nothing is requested; the next poll decides
 // again. No ready of a Maintainer is needed.
 //

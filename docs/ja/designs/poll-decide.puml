@@ -71,6 +71,13 @@ partition "Decision (pure function, no I/O)" {
   - every blocked-by issue closed
   - a Maintainer added the newest cumin/status/ready
     (not a Maintainer, or not read: skipped);
+  :Collect candidates of request the acceptance check
+  - open requirement issues
+  - with cumin/status/implementing
+    or cumin/status/awaiting-plan-review
+  - one or more sub-issues, all closed
+  - no acceptance check comment after the last close
+  - the follow-up notes written;
   :Collect candidates of request the implementation
   - open sub-issues
   - with cumin/status/ready
