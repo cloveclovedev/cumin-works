@@ -4,7 +4,7 @@ MaintainerやOperatorが、Claude Codeなしで端末から使う道具の使い
 
 ## 一般の道具とは何か
 
-![MaintainerとClaude Codeのセッションが、scripts/ の3つの一般の道具を呼ぶ。cumin-health.sh は、cumin run が書くモニターファイルとログを読む。replace-binary.sh は、cuminを止め、新しいバイナリを入れ、起動し直し、cumin-health.sh を呼ぶ。live-scenario.sh は、あとのIssueで加わる](host-tools.svg)
+![MaintainerとClaude Codeのセッションが、scripts/ の3つの一般の道具を呼ぶ。cumin-health.sh は、cumin run が書くモニターファイルとログを読む。replace-binary.sh は、cuminを止め、新しいバイナリを入れ、起動し直し、cumin-health.sh を呼ぶ。live-scenario.sh は、sandboxの開いているIssueを読み、cuminを止め、Hostの設定ファイルをsandboxのものに替えて戻し、cumin-health.sh を呼ぶ](host-tools.svg)
 
 図の元ファイル: [host-tools.puml](host-tools.puml)
 
@@ -12,9 +12,9 @@ MaintainerやOperatorが、Claude Codeなしで端末から使う道具の使い
 |---|---|---|
 | `scripts/cumin-health.sh` | cuminが動いているかを言う。最後の定期確認、起動してからのエラー、実行中のAgent | ある (この文書の「cuminが動いているか確かめる」) |
 | `scripts/replace-binary.sh` | 実行を待ってcuminを止め、新しいバイナリを入れ、起動し直し、定期確認を2回確かめる | ある (この文書の「バイナリを入れ替える」) |
-| `scripts/live-scenario.sh` | Hostの設定をsandboxに向けて実機のシナリオを実行し、結果にかかわらず設定を戻す | まだない。あとのIssueで加わる (図の点線の矢印) |
+| `scripts/live-scenario.sh` | Hostの設定をsandboxに向けて実機のシナリオを実行し、結果にかかわらず設定を戻す | ある (この文書の「実機の場面 E2E-1 を実行する」) |
 
-- 道具は、cuminの判断を変えない。`cumin-health.sh` は読むだけで、何も書かず、GitHubに問い合わせない。`replace-binary.sh` は、Hostのcuminを止めて入れ替えるが、GitHubのラベルやIssueには触れない。
+- 道具は、cuminの判断を変えない。`cumin-health.sh` は読むだけで、何も書かず、GitHubに問い合わせない。`replace-binary.sh` は、Hostのcuminを止めて入れ替えるが、GitHubのラベルやIssueには触れない。`live-scenario.sh` は、Hostの設定ファイルを替えて戻す。GitHubからは読むだけで、sandboxに書くのは、それが実行するテスト `TestLiveE2E` である。
 - 道具は、1つのOrganizationの事実 (リポジトリ、App、人の名前) を持たない。
 
 ## cuminが動いているか確かめる
@@ -154,3 +154,80 @@ scripts/replace-binary.sh
 | `0` | 5つの手順がすべて通った。`--dry-run` では、読むだけの確認が通った |
 | `1` | 手順のどれかが失敗した。手順3が上限で終わった。必要な道具 (`git`、`cumin`、`launchctl`、`plutil`) がない |
 | `2` | オプションの誤り。知らないオプション、値のないオプション、数でない `--stop-timeout` |
+
+## 実機の場面 E2E-1 を実行する
+
+実機の場面 E2E-1 ([実機テスト](../development/live-tests.md) の「実機の場面 E2E-1」) は、Hostのcuminをsandboxに向けて実行する。`scripts/live-scenario.sh` は、sandboxを確かめ、Hostの設定ファイルをsandboxのものに替え、テスト `TestLiveE2E` を実行し、結果にかかわらずHostを元のリポジトリに戻す。どの待ちにも上限がある。
+
+### 必要なもの
+
+- macOS。スクリプトは、`gh`、`go`、`cumin`、macOSに入っている道具 (`sh`、`launchctl`、`plutil`、`date`、`sed`、`sleep`、`dirname`、`id`、`cp`、`mv`) だけを使う。手順5は `scripts/cumin-health.sh` を呼ぶ。
+- cuminのリポジトリのチェックアウト。テストは、スクリプトの置かれたチェックアウトから実行する。
+- LaunchAgentが読み込まれていて、plistの `ProgramArguments` に `--config <Hostの設定ファイル>` があること ([セットアップの手順](../development/setup-guide.md) の手順4)。スクリプトは、Hostの設定ファイルの場所をここから読む。
+- sandbox用のHostの設定ファイル。Hostの設定ファイルとは別のファイルで、`repositories` をsandboxだけにし、`work_dir` を捨ててよいディレクトリにしたもの ([実機テスト](../development/live-tests.md) の「Host の準備」)。
+- `gh` のログイン。sandboxにwrite以上の権限を持つ、人のアカウント。スクリプトはIssueを読むだけで、テストがMaintainerの操作に使う。
+
+### 実行する
+
+どのディレクトリからでもよい。sandboxとその設定ファイルは引数で渡す。スクリプトは、リポジトリの名前を持たない。
+
+```sh
+scripts/live-scenario.sh --repo <owner>/<sandbox> --config <sandbox用のHostの設定ファイル>
+```
+
+スクリプトは、次の5つをこの順に行う。
+
+| 手順 | すること | 失敗したとき |
+|---|---|---|
+| 1 | sandboxがきれいかを確かめる。`cumin/status/ready`、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` のどれかが付いた、開いているIssueがない。読めなかったら、きれいとは見なさず失敗にする。LaunchAgent、Hostの設定ファイル、前の実行の写しも、ここで確かめる | cuminは動いたままで、何も変わらない |
+| 2 | `cumin stop --after-current-runs` を実行し、cuminが終わるのを待つ | 上限で終わったら、cuminはそのままで、設定も変わらない |
+| 3 | Hostの設定ファイルの写しを `<Hostの設定ファイル>.before-live-scenario` に取り、sandbox用の設定ファイルの内容をHostの設定ファイルに置き、cuminを起動する (`launchctl kickstart`) | 手順5を行う |
+| 4 | `CUMIN_LIVE=1` と `CUMIN_LIVE_REPO=<owner>/<sandbox>` を付けて、`go test -count=1 -timeout 0 -run TestLiveE2E -v ./cmd/cumin/` を実行する | 手順5を行う |
+| 5 | 写しをHostの設定ファイルに戻し、cuminを起動し直し (`launchctl kickstart -k`)、`scripts/cumin-health.sh --wait-polls 2` で定期確認を2回確かめる | `host:` の行が、何が残っているかと、実行するコマンドを言う |
+
+- 手順1は、cuminを止める前に行う。sandboxにIssueが残っているときに、Hostを止めたり、sandboxに向けたりしないためである。
+- 手順5は、テストが通ったときも、落ちたときも、手順3が失敗したときも、手順3か手順4でシグナル (`INT`、`TERM`、`HUP`) を受けたときも行う。写しは名前の付け替え (`mv`) で戻すので、ファイルは全体が戻るか、何も変わらないかである。
+- 手順2の待ちの間にシグナルを受けたら、`error: signal: ...` と出して `1` で終わる。設定は変わっていない。止める予約は残るので、cuminは実行を待ってから止まる。止まったあとに、表示されたコマンド (`launchctl kickstart`) で起動する。
+- Hostの設定ファイルがシンボリックリンクのときは、手順1で止まる。手順5の名前の付け替えが、リンクを通常のファイルに置き換えてしまうからである。
+- 手順5は、sandboxの設定で動いているcuminを、実行を待たずに置き換える。テストが落ちたりシグナルを受けたりしたときは、sandboxのAgentが途中で終わることがある。sandboxに残ったIssueは、次の実行の手順1が見つける。[実機テスト](../development/live-tests.md) の「後片付け」に従って閉じる。
+- 手順4の上限は、スクリプトが持つ。テストは自分のプロセスグループで動き、上限かシグナルで、テストのバイナリごと止まる。そのため `go test` には `-timeout 0` を渡す。
+- `<Hostの設定ファイル>.before-live-scenario` が既にあるときは、手順1で止まる。前の実行が設定を戻せなかった印である。写しとHostの設定ファイルを比べ、写しがHostの設定なら戻してから、もう一度実行する。スクリプトを `kill -9` で止めたときに、こうなる。
+
+### 結果の2行
+
+手順3より先に進んだ実行は、最後に2行を出す。テストの結果と、手順5の結果である。
+
+```text
+test: passed
+host: the Host settings are back, cumin runs, and two polls have no error
+```
+
+| 行 | 内容 |
+|---|---|
+| `test: passed` | テストが通った |
+| `test: failed (exit code <n>)` | テストが落ちた。理由は、上に出たテストの出力にある |
+| `test: time limit: the test has not ended in <n>s, and the script stopped it` | テストが `--test-timeout` までに終わらず、スクリプトが止めた |
+| `test: stopped by a signal` | シグナルを受けて、スクリプトがテストを止めた |
+| `test: not run` | 手順3が失敗した |
+| `host: the Host settings are back, cumin runs, and two polls have no error` | 手順5が通った |
+| `host: failed: ...` | 手順5のどこかが失敗した。設定を戻せなかった、cuminが起動しなかった、定期確認にエラーがあった、のどれかを言う |
+
+### オプション
+
+| オプション | 意味 | 初期値 |
+|---|---|---|
+| `--repo <owner>/<sandbox>` | sandboxのリポジトリ。必須 | なし |
+| `--config <file>` | sandbox用のHostの設定ファイル。必須 | なし |
+| `--stop-timeout <seconds>` | 手順2の待つ時間の上限 (秒)。上限で終わると `error: time limit: cumin has not ended in <n>s. ...` と出る | `3600` |
+| `--test-timeout <seconds>` | 手順4のテストの時間の上限 (秒) | `14400` |
+
+- 手順5の定期確認の待ちの上限は、`cumin-health.sh` の `--timeout` の初期値 (300秒) である。
+- `--test-timeout` の初期値の14400秒 (4時間) は、1回の実行が1時間ほどかかり、利用枠の待ちで延びることがあるからである。
+
+### 終了コード
+
+| 終了コード | いつ |
+|---|---|
+| `0` | テストが通り、手順5も通った |
+| `1` | それ以外。手順1か手順2で止まった。テストが落ちたか、上限かシグナルで止まった。手順5が失敗した。必要な道具 (`gh`、`go`、`cumin`、`launchctl`、`plutil`) がない |
+| `2` | オプションの誤り。知らないオプション、値のないオプション、`--repo` か `--config` がない、`<owner>/<repository>` の形でない `--repo`、数でない `--stop-timeout` か `--test-timeout` |
