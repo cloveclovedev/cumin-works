@@ -12,7 +12,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 |---|---|---|
 | セッション | 対象のリポジトリで起動したClaude Code | Maintainerと話し、skillの手順に従う |
 | plugin | cumin-worksのリポジトリの `plugins/cumin-maintainer/` | skillと、全てのskillが繰り返すセッションの決まり (`rules.md`) を持つ。skillは、自分のスクリプトを、自分のディレクトリに持てる |
-| 一般の道具 | `cumin status` と `scripts/` | Claude Codeなしでも端末から使える。skillは道具を呼ぶだけで、自分の手順を足さない。今ある道具は、Hostの設定とGitHubを読む `cumin status` と、モニターファイルを読む `scripts/cumin-health.sh` と、バイナリを入れ替える `scripts/replace-binary.sh` である ([Hostの一般の道具](host-tools.md)) |
+| 一般の道具 | `cumin status` と `scripts/` | Claude Codeなしでも端末から使える。skillは道具を呼ぶだけで、自分の手順を足さない。今ある道具は、Hostの設定とGitHubを読む `cumin status` と、モニターファイルを読む `scripts/cumin-health.sh` と、バイナリを入れ替える `scripts/replace-binary.sh` と、実機の場面 E2E-1 を実行する `scripts/live-scenario.sh` である ([Hostの一般の道具](host-tools.md)) |
 | モニターファイル | `~/.local/state/cumin/monitor.json` | `cumin run` が書く。skill `session-start` が、セッションの始めに読む。ファイルがないときと古いときは、そう報告して、GitHubを読む。`scripts/cumin-health.sh` も、最後の定期確認と実行中のAgentを、GitHubに問い合わせ直さずにこのファイルから読む。cuminのコードは、このファイルを読まない。待つIssueは、skill `watch` のスクリプトが、このファイルから読む (「`watch` のスクリプト」、[モニターファイルとメニューバーのアプリの設計](../designs/status-menu-bar.md)) |
 | 引き継ぎのメモ | `~/.local/state/cumin/hand-over.md` | skill `hand-over` が、Maintainerに聞いてから書く。次のセッションのskill `session-start` が読む。Hostの手元のファイルで、cuminは読まず、どのリポジトリにも入れない |
 

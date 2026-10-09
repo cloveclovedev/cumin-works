@@ -11,7 +11,7 @@ rectangle "Claude Code session\nplugin cumin-maintainer" as session
 rectangle "general tools\nscripts/" as tools {
   rectangle "cumin-health.sh\nis cumin running" as health
   rectangle "replace-binary.sh\nreplace the binary" as replace
-  rectangle "live-scenario.sh\n(later issue)" as live
+  rectangle "live-scenario.sh\nrun the live scenario E2E-1" as live
 }
 
 rectangle "cumin run\nLaunchAgent dev.cloveclove.cumin" as run
@@ -31,7 +31,10 @@ health --> monitor : read: last poll, its errors,\nagents at work, waiting issue
 health --> log : read: errors since\nthe last start
 replace --> run : stop after the runs,\ninstall, restart
 replace --> health : call: check two polls
-live ..> settings : switch to the sandbox,\nand back
+live --> run : stop after the runs,\nstart, start again
+live --> settings : switch to the sandbox,\nand back
+live --> health : call: check two polls
+live --> github : read: open issues\nof the sandbox
 
 note bottom of health
   Reads only. Asks GitHub nothing.

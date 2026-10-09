@@ -33,7 +33,7 @@ CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive
 # 本物の Claude Code に commit、push、Pull Request をさせる確認 (利用枠を使う)
 CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -race -count=1 -run TestLive_AgentRunOnSandbox -v ./internal/agent/
 # 場面 E2E-1 (利用枠を使い、1時間ほどかかる。先に「実機の場面 E2E-1」の準備をする)
-CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run TestLiveE2E -v ./cmd/cumin/
+scripts/live-scenario.sh --repo <owner>/<repo> --config <sandbox 用の Host の設定ファイル>
 ```
 
 | 環境変数 | 内容 |
@@ -754,7 +754,7 @@ Maintainer が merge した Pull Request の残りの作業が、フォローア
 
 ### Host の準備
 
-1. Host の設定ファイル (LaunchAgent に `--config` で渡したもの。テストは plist からそのパスを読む) の `repositories` を sandbox だけにし、`work_dir` を捨ててよいディレクトリにする。`poll_interval` は初期値のままでよい。
+1. sandbox 用の Host の設定ファイルを、Host の設定ファイル (LaunchAgent に `--config` で渡したもの。テストは plist からそのパスを読む) とは別のファイルとして用意する。`repositories` を sandbox だけにし、`work_dir` を捨ててよいディレクトリにする。`poll_interval` は初期値のままでよい。`scripts/live-scenario.sh` が、実行の間だけ、この内容を Host の設定ファイルに置く。
 2. webhook のアドレスを Keychain に入れ、`notify.discord.enabled` を `true` のままにする (場面 Fail-1 の手順2)。
 3. cumin を置き、launchd で起動する ([セットアップの手順](setup-guide.md) の手順4)。
 
@@ -765,11 +765,21 @@ Maintainer が merge した Pull Request の残りの作業が、フォローア
    ```
 
    既に動いているなら、`scripts/replace-binary.sh` で新しいバイナリに入れ替える ([Hostの一般の道具](../guides/host-tools.md) の「バイナリを入れ替える」)。実行中のAgentがないと分かっているときは、`scripts/install.sh --restart` でもよい。
-4. sandbox に、`cumin/status/ready`、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の付いた開いている Issue がないことを確かめる。あれば、テストは何も作らずに止まる。
+4. sandbox に、`cumin/status/ready`、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の付いた開いている Issue がないようにする。`scripts/live-scenario.sh` は、最初にこれを確かめ、あれば cumin を止める前に終わる。テストも、あれば何も作らずに止まる。
 
-テストは launchd の job を入れることも、止めることもしない。動いていることを確かめるだけである。
+テストは launchd の job を入れることも、止めることもしない。動いていることを確かめるだけである。cumin を止め、Host の設定ファイルを替え、起動し直すのは、`scripts/live-scenario.sh` である。
 
 ### 実行
+
+`scripts/live-scenario.sh` で実行する ([Hostの一般の道具](../guides/host-tools.md) の「実機の場面 E2E-1 を実行する」)。
+
+```sh
+scripts/live-scenario.sh --repo <owner>/<repo> --config <sandbox 用の Host の設定ファイル>
+```
+
+スクリプトは、sandbox を確かめ、実行を待って cumin を止め、Host の設定ファイルを sandbox 用のものに替えて cumin を起動し、下のテストを実行する。テストが通っても、落ちても、シグナルを受けても、Host の設定ファイルを戻して cumin を起動し直し、定期確認を2回確かめる。最後に、テストの結果 (`test:`) と Host の結果 (`host:`) を1行ずつ出す。
+
+スクリプトが実行するテストは、次のコマンドと同じである。時間の上限はスクリプトが持つ (`--test-timeout`、初期値は4時間)。Host の設定ファイルが既に sandbox だけを向いている Host では、このコマンドを直接実行してもよい。
 
 ```sh
 CUMIN_LIVE=1 CUMIN_LIVE_REPO=<owner>/<repo> go test -count=1 -timeout 4h -run TestLiveE2E -v ./cmd/cumin/
