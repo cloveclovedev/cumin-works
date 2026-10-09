@@ -56,6 +56,11 @@ partition "The way out of cumin/status/reviewing: every poll, and the end of a R
   if (A question comment after the label?) then (yes)
     :stop the review: change the label to cumin/status/awaiting-decision;
     :Notify;
+  elseif (No open pull request closes the issue?) then (yes)
+    :Hand back to a Maintainer (stop the review):
+    the reason is the risk label when the issue
+    has not exactly one, else the pull request
+    that is no longer open (Pull request: None);
   elseif (The head commit moved?) then (yes)
     :Change the label to cumin/status/checking
     (the old review still counts as a round);

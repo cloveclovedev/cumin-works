@@ -296,6 +296,86 @@ func TestReviewing_ARestartWithNoReviewSendsOneSecondRequestThenStops(t *testing
 	}
 }
 
+// assertReviewStoppedWithoutAPullRequest checks that #10 waits for a
+// Maintainer with the labels, one stop note of "stop the review" that holds
+// the reason and no pull request, and one notification.
+func assertReviewStoppedWithoutAPullRequest(t *testing.T, sc *scene, labels []string, reason string) {
+	t.Helper()
+	if got := sc.fake.Issue(sc.repo, 10).Labels; !slices.Equal(got, labels) {
+		t.Errorf("labels of #10 = %v, want %v", got, labels)
+	}
+	comments := sc.fake.Comments(sc.repo, 10)
+	if len(comments) != 1 {
+		t.Fatalf("%d comments on #10, want 1: %+v", len(comments), comments)
+	}
+	for _, want := range []string{"Step: stop the review", "Reason: " + reason + "\n", "Pull request: None", "Retried: no"} {
+		if !strings.Contains(comments[0].Body, want) {
+			t.Errorf("the comment has no %q:\n%s", want, comments[0].Body)
+		}
+	}
+	messages := sc.messagesExceptWaiting()
+	if len(messages) != 1 || !strings.Contains(messages[0], string(workflow.ActionStopTheReview)+": ") || !strings.Contains(messages[0], reason) {
+		t.Errorf("notifications = %v, want one of stop the review with the reason", messages)
+	}
+	if n := sc.agentRuns(t); n != 1 {
+		t.Errorf("%d agent runs, want only the review: no second request without a pull request", n)
+	}
+}
+
+// The pull request of an issue in cumin/status/reviewing is closed: the
+// poll stops the review for a Maintainer once, and a second poll writes
+// nothing more. The reason is the pull request with exactly one risk label,
+// and the risk label otherwise.
+func TestReviewing_APollWithNoOpenPullRequestStopsTheReviewOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		risks  []string
+		reason string
+	}{
+		{"one risk label", []string{"risk/low"}, workflow.NoOpenPullRequestReason},
+		{"no risk label", nil, workflow.RiskLabelReason(workflow.MergeNoRiskLabel)},
+		{"two risk labels", []string{"risk/low", "risk/high"}, workflow.RiskLabelReason(workflow.MergeTwoRiskLabels)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sc, service := reviewerScene(t, cliOptions{}, "risk/low")
+			afterReviewerRun(t, sc, service, failEveryRead(sc))
+			assertStillReviewing(t, sc, service, "risk/low")
+			if err := sc.fake.SetLabels(sc.repo, 10, append(slices.Clone(tc.risks), workflow.LabelReviewing)); err != nil {
+				t.Fatal(err)
+			}
+			if err := sc.fake.ClosePullRequest(sc.repo, 21); err != nil {
+				t.Fatal(err)
+			}
+
+			stopped := append(slices.Clone(tc.risks), workflow.LabelAwaitingDecision)
+			for minute := 1; minute <= 2; minute++ {
+				if err := pollAtMinute(sc, service, minute); err != nil {
+					t.Fatalf("Poll at minute %d: %v", minute, err)
+				}
+				assertReviewStoppedWithoutAPullRequest(t, sc, stopped, tc.reason)
+			}
+		})
+	}
+}
+
+// The pull request is closed while the Reviewer runs: the end of the run
+// stops the review for a Maintainer, and the next poll writes nothing more.
+func TestReviewing_TheEndOfAReviewerRunWithNoOpenPullRequestStopsTheReviewOnce(t *testing.T) {
+	sc, service := reviewerScene(t, cliOptions{}, "risk/low")
+	afterReviewerRun(t, sc, service, func() {
+		if err := sc.fake.ClosePullRequest(sc.repo, 21); err != nil {
+			t.Error(err)
+		}
+	})
+	stopped := []string{"risk/low", workflow.LabelAwaitingDecision}
+	assertReviewStoppedWithoutAPullRequest(t, sc, stopped, workflow.NoOpenPullRequestReason)
+
+	if err := pollAtMinute(sc, service, 1); err != nil {
+		t.Fatalf("Poll after the stop: %v", err)
+	}
+	assertReviewStoppedWithoutAPullRequest(t, sc, stopped, workflow.NoOpenPullRequestReason)
+}
+
 // A restart of cumin after the head commit moved during the review: the
 // state file holds the head commit of the request, so the poll sends the
 // issue back to cumin/status/checking, and requests no review of a head

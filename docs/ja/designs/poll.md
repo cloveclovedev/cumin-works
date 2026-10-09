@@ -451,6 +451,7 @@ checkの結果の読み方:
 - ラベルを付けたのが `cumin-core` でもMaintainerでもなければ、何もしない。Agentを起動せず、mergeせず、ラベルも替えない。そのラベルのイベントにつき1回だけ通知する。
 - `ReviewEnd` は、次の順に確かめ、最初に成り立つ動作を返す。
   - Reviewerか `cumin-core` の質問のコメント (1行目が `## Decision needed`) が、`cumin/status/reviewing` より後にある: 「stop the review」。ラベルを `cumin/status/awaiting-decision` に替えて通知する。理由はそのコメントにあるので、cuminは書かない。
+  - 実装Issueを閉じる開いているPull Requestがない (閉じられた、または閉じるリンクが外れた): 動作の名前 `stop the review` でMaintainerに戻す。riskのラベルがちょうど1つでなければ、理由はriskのラベルである (`RiskLabelReason`)。ちょうど1つなら、理由は、開いているPull Requestがないことである (`NoOpenPullRequestReason`)。コメントの `Pull request` の行は `None` である。依頼し直しても結果は変わらないので、依頼し直さない。
   - 先頭のコミットが、依頼したときのコミット (状態ファイルの `review_head`) と違う: 「go back to the checks」。ラベルを `cumin/status/checking` に戻す。必須のcheckが通ったのは古いコミットだけだからである。古いコミットに出たレビューは、GitHubにあるとおりにラウンドに数える。状態ファイルを失ったときは、この条件は成り立たない。
   - 先頭のコミットに `APPROVE` がある (純粋関数 `CheckReview`): `DecideMerge` で決める。`risk/low` はmergeの手順 (「start the merge」)、`risk/medium` と `risk/high` は「ask for the merge decision」、必須のcheckが通っていなければ「go back to the checks」、riskのラベルがちょうど1つでなければ、動作の名前 `stop the review` でMaintainerに戻す。
   - 先頭のコミットに `REQUEST_CHANGES` がある: ラウンドが上限未満なら「request a review fix」。上限に達していれば、Reviewerの原因の整理のコメントがあるときは「stop at the round limit」、ないときは「request the cause」である。原因の整理を依頼した回数は、Hostの状態ファイル (`cause_requests`) に持つ。この `cumin/status/reviewing` の間に2回依頼してもコメントがなければ、動作の名前 `stop at the round limit` でMaintainerに戻し、依頼し直したこと (`Retried: once`) を書く。この条件を先に確かめる。1回目の原因の整理の実行が `done` で終わってコメントを残さなかったときは、その実行の終わりが、すぐに同じ動作の名前で戻す。
@@ -611,7 +612,7 @@ checkの結果の読み方:
 
 ### うまくいかなかったときに、Maintainerに戻す道
 
-- 先に進めないときは、1か所の手順でMaintainerに戻す。動作の名前 (`stop the implementation`、`stop the split` など。`internal/workflow/action.go` の一覧) を引数で受け取り、順に、止まったIssue (「stop the implementation」では実装Issue、「stop the split」では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-decision` に替え、通知する。「stop for failed checks」、「stop for missing checks」 (必須のcheckが結果を返さない)、「stop the review」 (Reviewerへの依頼が2回とも起動できない、Reviewerのレビューが2回とも見つからない (異常終了を含む)、Reviewerの `blocked`) も、同じ手順を、その経路の動作の名前で呼ぶ。あとの「stop at the round limit」も同じである。コメントの `Step` の行と通知の1行目は、その名前を示す。
+- 先に進めないときは、1か所の手順でMaintainerに戻す。動作の名前 (`stop the implementation`、`stop the split` など。`internal/workflow/action.go` の一覧) を引数で受け取り、順に、止まったIssue (「stop the implementation」では実装Issue、「stop the split」では要求Issue) にコメントを書き、状態ラベルを `cumin/status/awaiting-decision` に替え、通知する。「stop for failed checks」、「stop for missing checks」 (必須のcheckが結果を返さない)、「stop the review」 (Reviewerへの依頼が2回とも起動できない、Reviewerのレビューが2回とも見つからない (異常終了を含む)、実装Issueを閉じる開いているPull Requestがない、Reviewerの `blocked`) も、同じ手順を、その経路の動作の名前で呼ぶ。あとの「stop at the round limit」も同じである。コメントの `Step` の行と通知の1行目は、その名前を示す。
 - 順番に意味がある。理由がGitHubに残ってからラベルが替わり、最後に「見に来てほしい」と伝える。`blocked` の道だけは、ラベルを先に替えてからコメントを書く。コメントを書けなかったときに、次の定期確認が同じ作業を依頼し直さないためである。定期確認が決める停止も、ラベルを先に替える。
 - 途中で1つ失敗しても、次を止めない。コメントを書けなくてもラベルは替え、ラベルを替えられなくても通知は出す。巻き戻しもしない。止まったIssueがあることは、どれか1つが落ちても伝わるほうがよい。失敗はログに出す。
 - 通知のリンクは、書いたコメントのアドレスにする。理由の全文がそこにあるためである。コメントを書けなかったときは、Issueのアドレスにする。tokenを取れなかったときも同じである。そのときは、コメントの全文をHostのログに error で出し、通知の理由に、コメントを書けなかったことと、全文がHostのログにあることを足す。

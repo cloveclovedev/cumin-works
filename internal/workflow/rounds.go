@@ -21,6 +21,9 @@ import (
 //     cumin/status/reviewing: stop the review for a Maintainer. cumin-core
 //     posts the blocked_reason of the Reviewer, so its decision request
 //     counts too.
+//   - No open pull request closes the issue: stop the review for a
+//     Maintainer. The reason is the risk label when the issue has not
+//     exactly one, and the pull request that is no longer open otherwise.
 //   - The head commit is not the one of the request: go back to the checks.
 //   - APPROVE on the head commit: by DecideMerge, the merge of risk/low, ask
 //     for the merge decision, go back to the checks, or stop the review for
@@ -36,20 +39,26 @@ import (
 //     a Maintainer.
 //
 // It returns nil while the Reviewer runs, in every other state, for a
-// closed issue, for an issue with no open pull request, while the facts
-// were not read, and while the status label does not count: the next poll
-// decides.
+// closed issue, while the facts were not read, and while the status label
+// does not count: the next poll decides.
 func ReviewEnd(sub SubIssue, running bool) Action {
 	facts := sub.Reviewing
 	if !ReviewNeedsFacts(sub, running) || facts == nil || !facts.StatusCounts || facts.ReviewingAt.IsZero() {
 		return nil
 	}
-	pr, ok := sub.LatestPullRequest()
-	if !ok {
-		return nil
-	}
+	// Without an open pull request, the number is 0: the stop has none.
+	pr, open := sub.LatestPullRequest()
 	if !facts.QuestionAt.IsZero() && !facts.QuestionAt.Before(facts.ReviewingAt) {
 		return StopReview{Number: sub.Number, Question: true, Action: ActionStopTheReview, PullRequest: pr.Number}
+	}
+	if !open {
+		reason := NoOpenPullRequestReason
+		if risks := len(riskLabels(sub.Labels)); risks == 0 {
+			reason = RiskLabelReason(MergeNoRiskLabel)
+		} else if risks > 1 {
+			reason = RiskLabelReason(MergeTwoRiskLabels)
+		}
+		return StopReview{Number: sub.Number, Action: ActionStopTheReview, Reason: reason}
 	}
 	if facts.RequestedHead != "" && facts.RequestedHead != pr.HeadCommit {
 		return BackToChecks{Number: sub.Number, HeadMoved: true}

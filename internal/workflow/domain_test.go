@@ -1413,6 +1413,39 @@ func TestReviewEnd_DecidesFromTheFacts(t *testing.T) {
 	}
 }
 
+// Without an open pull request, the review stops for a Maintainer. A
+// question comes first, then the risk label, then the pull request.
+func TestReviewEnd_NoOpenPullRequestStopsTheReview(t *testing.T) {
+	question := ReviewingFacts{QuestionAt: time.Date(2026, 1, 2, 4, 0, 0, 0, time.UTC)}
+	tests := []struct {
+		name   string
+		facts  ReviewingFacts
+		labels []string
+		want   StopReview
+	}{
+		{"one risk label", ReviewingFacts{RequestedHead: "new", RequestedAgain: true}, []string{"risk/medium", LabelReviewing},
+			StopReview{Number: 10, Action: ActionStopTheReview, Reason: NoOpenPullRequestReason}},
+		{"no risk label", ReviewingFacts{}, []string{LabelReviewing},
+			StopReview{Number: 10, Action: ActionStopTheReview, Reason: RiskLabelReason(MergeNoRiskLabel)}},
+		{"two risk labels", ReviewingFacts{}, []string{"risk/low", "risk/high", LabelReviewing},
+			StopReview{Number: 10, Action: ActionStopTheReview, Reason: RiskLabelReason(MergeTwoRiskLabels)}},
+		{"a question after the label", question, []string{LabelReviewing},
+			StopReview{Number: 10, Question: true, Action: ActionStopTheReview}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sub := reviewingSub(tt.facts)
+			sub.Labels, sub.PullRequests = tt.labels, nil
+			if got := ReviewEnd(sub, false); got != tt.want {
+				t.Errorf("ReviewEnd = %#v, want %#v", got, tt.want)
+			}
+			if running := ReviewEnd(sub, true); running != nil {
+				t.Errorf("ReviewEnd while the Reviewer runs = %#v, want nil", running)
+			}
+		})
+	}
+}
+
 // A review of the old head commit stays on GitHub after the head commit
 // moved, and counts as a round.
 func TestReviewEnd_AReviewOfTheOldHeadStillCountsAsARound(t *testing.T) {
