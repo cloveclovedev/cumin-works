@@ -554,6 +554,10 @@ type skillCommand struct {
 	askedFirst bool
 }
 
+// pluginDirectory stands in the rules of the guide for the directory where
+// Claude Code installed the plugin.
+const pluginDirectory = "<plugin directory>"
+
 var backticks = regexp.MustCompile("`([^`]+)`")
 
 // skillCommands returns the commands of the list items under "## Commands"
@@ -562,6 +566,8 @@ var backticks = regexp.MustCompile("`([^`]+)`")
 // "--" is an option of the command before it. Claude Code replaces
 // ${CLAUDE_SKILL_DIR} in the text of a skill with the directory of the skill
 // ("Extend Claude with skills", read 2026-10-09), so the rule sees that path.
+// The guide writes the part of the path before "/skills/" as the placeholder
+// pluginDirectory, which the Operator fills.
 func skillCommands(name, text string) []skillCommand {
 	list, _ := section(text, "Commands")
 	var commands []skillCommand
@@ -578,7 +584,7 @@ func skillCommands(name, text string) []skillCommand {
 			if strings.HasPrefix(c, "--") {
 				continue
 			}
-			c = strings.ReplaceAll(c, "${CLAUDE_SKILL_DIR}", "/plugin/skills/"+name)
+			c = strings.ReplaceAll(c, "${CLAUDE_SKILL_DIR}", pluginDirectory+"/skills/"+name)
 			commands = append(commands, skillCommand{c, strings.HasPrefix(c, "~/"), askedFirst})
 		}
 	}
@@ -589,7 +595,9 @@ func skillCommands(name, text string) []skillCommand {
 //   - the guide holds a row of a table for each skill directory;
 //   - every command under "## Commands" of a skill has a rule in the list;
 //   - a command that a skill asks first has a rule with a mark, and no rule
-//     without a mark: the Operator who leaves the marked rules out is asked.
+//     without a mark: the Operator who leaves the marked rules out is asked;
+//   - no rule starts with "*": such a rule matches any program ("Configure
+//     permissions": in Bash(* --version), "the * stands in for the program").
 func checkGuide(root string) ([]string, error) {
 	data, err := os.ReadFile(filepath.Join(root, guidePath))
 	if err != nil {
@@ -603,6 +611,11 @@ func checkGuide(root string) ([]string, error) {
 		return nil, err
 	}
 	var problems []string
+	for _, r := range rules {
+		if strings.HasPrefix(r.pattern, "*") {
+			problems = append(problems, fmt.Sprintf("the rule `%s(%s)` of the guide starts with \"*\": it matches any program", r.tool, r.pattern))
+		}
+	}
 	for _, skill := range skills {
 		if !skill.IsDir() {
 			continue
@@ -672,7 +685,8 @@ func TestGuideRule_MatchesAsClaudeCodeDoes(t *testing.T) {
 		{"ls:*", "ls -la", true},
 		{"git log * main", "git log main", false},
 		{"* --help *", "npm --help", false},
-		{"*/skills/watch/wait.sh *", "/plugin/skills/watch/wait.sh --seen x", true},
+		{"<plugin directory>/skills/watch/wait.sh *", "<plugin directory>/skills/watch/wait.sh --seen x", true},
+		{"*/skills/watch/wait.sh *", "rm -rf x/skills/watch/wait.sh y", true},
 		{"gh api repos/*", "gh api --method POST repos/o/r/issues", false},
 	}
 	for _, tt := range tests {
@@ -690,7 +704,7 @@ func TestCheckGuide_FindsEachProblem(t *testing.T) {
 		"Recorded by GitHub, so ask first:\n\n- `gh pr merge <number>`, with `--merge` or `--squash`\n\n" +
 		"Changes the Host, so ask first:\n\n- The write of the draft to `~/note.tmp`\n\nThe text below names `no command`.\n"
 	row := "| `good` | When a test needs a skill. |\n"
-	read := "| `Bash(gh issue view *)` | - | `good` |\n| `Bash(*/skills/good/check.sh *)` | - | `good` |\n"
+	read := "| `Bash(gh issue view *)` | - | `good` |\n| `Bash(<plugin directory>/skills/good/check.sh *)` | - | `good` |\n"
 	merge := "| `Bash(gh pr merge *)` | GitHub | `good` |\n"
 	write := "| `Edit(~/note.tmp)` | Host | `good` |\n"
 	tests := []struct {
@@ -702,7 +716,10 @@ func TestCheckGuide_FindsEachProblem(t *testing.T) {
 		{"the guide lacks the row of a skill", read + merge + write, []string{"no row of a table for the skill `good`"}},
 		{"the guide lacks the rule of a command",
 			row + "| `Bash(gh issue view *)` | - | `good` |\n" + merge + write,
-			[]string{"the command `/plugin/skills/good/check.sh <number>` has no rule Bash(...)"}},
+			[]string{"the command `<plugin directory>/skills/good/check.sh <number>` has no rule Bash(...)"}},
+		{"a rule starts with a wildcard",
+			row + "| `Bash(gh issue view *)` | - | `good` |\n| `Bash(*/skills/good/check.sh *)` | - | `good` |\n" + merge + write,
+			[]string{"the rule `Bash(*/skills/good/check.sh *)` of the guide starts with \"*\"", "the command `<plugin directory>/skills/good/check.sh <number>` has no rule Bash(...)"}},
 		{"the guide lacks the rule of a written file",
 			row + read + merge,
 			[]string{"the command `~/note.tmp` has no rule Edit(...)"}},

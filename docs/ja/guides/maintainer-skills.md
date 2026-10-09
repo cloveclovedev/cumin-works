@@ -227,8 +227,8 @@ Claude Codeは、shellのコマンドとファイルの書き込みの前に、�
 | `Bash(git show origin/*)` | - | `requirement-change` |
 | `Bash(git diff --merge-base *)` | - | `requirement-change` |
 | `Bash(git status --short)` | - | `requirement-change` |
-| `Bash(*/skills/merge-decision/check-pull-request.sh *)` | - | `merge-decision` |
-| `Bash(*/skills/watch/wait-for-waiting.sh *)` | - | `watch` |
+| `Bash(<plugin directory>/skills/merge-decision/check-pull-request.sh *)` | - | `merge-decision` |
+| `Bash(<plugin directory>/skills/watch/wait-for-waiting.sh *)` | - | `watch` |
 | `Bash("$CUMIN_SOURCE_DIR"/scripts/cumin-health.sh *)` | - | `host` |
 | `Bash("$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh --dry-run)` | - | `host` |
 | `Bash(gh issue create *)` | GitHub | `acceptance-leftovers` |
@@ -264,12 +264,12 @@ Claude Codeは、shellのコマンドとファイルの書き込みの前に、�
 | 順序は、`deny`、`ask`、`allow` である。先に合ったものが決める | 下の `ask` のルールは、`allow` より先に効く |
 | 出力をファイルに向けるコマンド (`> file`) は、向けた先を `Edit` のルールでも確かめる | `plan-review` が本文を一時ファイルに書き出すとき、作業ディレクトリの外の先は、Claude Codeが聞く |
 | ファイルの道具のルールは `Edit(path)` と `Read(path)` だけである。`~/` は、ホームからのパスである | 引き継ぎのメモの下書きは、`Edit(~/...)` で許す |
-| `cat`、`grep`、`diff`、読むだけの `git` などは、ルールがなくても聞かずに実行する | 一覧は、skillが挙げたコマンドを全て持つので、これらのルールも持つ。入れなくても同じである |
+| `cat`、`grep`、`diff`、読むだけの `git` などは、ルールがなくても聞かずに実行する | 一覧は、skillが挙げたコマンドを全て持つので、これらのルールも持つ。ただし、ルールは、読むだけの形より広い。`Bash(git grep *)` は、プログラムを実行する `--open-files-in-pager` にも合い、`Bash(git log *)` と `Bash(git diff --merge-base *)` は、ファイルに書く `--output` にも合う。`cat`、`grep`、`diff`、`git` のルールは、入れないことを勧める。入れなくても、Claude Codeは読むだけの形を聞かずに実行する |
 
 ここからは、公式のページにない、このガイドの判断である。
 
-- `gh api` は、`-X`、`--method`、`-f`、`-F`、`--input` があると、読み取りではなくなる (GitHub CLIの手引き `gh api`、2026-10-09に読んだ)。`Bash(gh api repos/*)` は、パスのあとにこれらを書いたコマンドにも合う。skillはその形を書かないが、確かにするには、次を `permissions.ask` に入れる: `Bash(gh api * -X *)`、`Bash(gh api * --method *)`、`Bash(gh api * -f *)`、`Bash(gh api * -F *)`、`Bash(gh api * --input *)`。
-- skillのスクリプト (`check-pull-request.sh`、`wait-for-waiting.sh`) は、pluginを入れた場所の絶対パスで呼ばれる。Claude Codeが、skillの文章の `${CLAUDE_SKILL_DIR}` をそのパスに置き換えるからである。パスは更新のたびに変わるので、ルールは `*` で始まる。Claude Codeは、コマンドの前に `*` のあるルールに、起動のときに警告を出すことがある。
+- `gh api` は、`-X`、`--method`、`-f`、`--raw-field`、`-F`、`--field`、`--input` があると、読み取りではなくなる (GitHub CLIの手引き `gh api`、2026-10-09に読んだ)。`Bash(gh api repos/*)` と `Bash(gh api --paginate repos/*)` は、パスのあとにこれらを書いたコマンドにも合う。skillは、その形を書かない。次を `permissions.ask` に入れると、普通の書き方 (`-X DELETE`、`-XDELETE`、`--method=POST` など) は、Claude Codeが聞く: `Bash(gh api * -X*)`、`Bash(gh api * --method*)`、`Bash(gh api * -f*)`、`Bash(gh api * --raw-field*)`、`Bash(gh api * -F*)`、`Bash(gh api * --field*)`、`Bash(gh api * --input*)`。これは、普通の書き方だけを止める。公式のページは、引数を縛るルールは壊れやすいと言う。書き込みを必ず聞かせたいOperatorは、`gh api` の2つのルールを入れない。
+- skillのスクリプト (`check-pull-request.sh`、`wait-for-waiting.sh`) は、pluginを入れた場所の絶対パスで呼ばれる。Claude Codeが、skillの文章の `${CLAUDE_SKILL_DIR}` をそのパスに置き換えるからである。一覧の `<plugin directory>` は、その場所の代わりである。Operatorが、Claude Codeが最初に聞いたときのコマンドのパスから、`/skills/` の前までを書き入れる。パスは更新のたびに変わるので、更新のあとで書き直す。書き入れなければ、Claude Codeが毎回聞く。`<plugin directory>` を `*` に置き換えない。`*` で始まるルールは、どのプログラムにも合う (`Bash(* --version)` の例)。パスを引数に持つだけの別のコマンドも許してしまう。
 - `host` のコマンドは、変数 `"$CUMIN_SOURCE_DIR"` を書いたままの文字である。ルールも、同じ文字で書く。変数を含むコマンドにルールが合うかは、公式のページからは読めない。合わなければ、Claude Codeが聞く。
 - `requirement-change` の、図を書き出すコマンドと、テスト、ビルド、lintのコマンドは、対象のリポジトリごとに違う。一覧は持たない。対象のリポジトリで足す。
 - 一覧のルールが実機で合うことは、確かめていない。Operatorが、インストールのあとで1回確かめる。
