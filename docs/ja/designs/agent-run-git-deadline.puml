@@ -1,0 +1,34 @@
+@startuml agent-run-git-deadline
+' cumin works - every git command of the work directory ends after a
+' deadline.
+' Document: agent-run.md, topic on the work directory.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+rectangle "request the split,\nthe implementation, the review\n(internal/workflow)" as request
+rectangle "cleanup of closed issues\n(internal/workflow)" as cleanup
+rectangle "Workspace\ninternal/agent/worktree.go\nPrepare, Remove, Head, ..." as workspace
+rectangle "git\n(clone, fetch, worktree, rev-parse, ...)" as git
+
+request --> workspace
+cleanup --> workspace
+workspace -[#red,bold]-> git : <color:red>every git command ends\n<color:red>after 5 minutes</color>
+
+note right of workspace
+  A command that does not end
+  is killed at the deadline.
+  The error names the command and says
+  that the deadline passed.
+  The caller handles it
+  as any failed git command.
+end note
+
+note right of git
+  A child process of git
+  can keep the output pipe open.
+  2 seconds after the deadline,
+  the pipe is closed
+  and the command returns.
+end note
+@enduml

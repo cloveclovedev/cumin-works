@@ -8,8 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
@@ -569,5 +572,119 @@ func TestWorktree_RemoveIfPushedWithoutAWorktree(t *testing.T) {
 	removed, err := w.RemoveIfPushed(context.Background(), checkout(3, config.RoleImplementer, "cumin/3-continue"))
 	if err != nil || !removed {
 		t.Errorf("RemoveIfPushed = %v, %v; want true, nil", removed, err)
+	}
+}
+
+// stallingGit puts a fake git first in PATH. The fake git writes its
+// process ID to the returned file and runs stall when its first argument is
+// subcommand. Every other command goes to the real git.
+func stallingGit(t *testing.T, subcommand, stall string) (pidFile string) {
+	t.Helper()
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	pidFile = filepath.Join(dir, "pid")
+	script := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = %q ]; then\n  echo $$ > %q\n  %s\nfi\nexec %q \"$@\"\n", subcommand, pidFile, stall, realGit)
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return pidFile
+}
+
+// requireProcessGone fails when the process of the pid file still exists.
+func requireProcessGone(t *testing.T, pidFile string) {
+	t.Helper()
+	pid := readPID(t, pidFile)
+	// Signal 0 only asks whether the process exists (kill(2)).
+	if err := syscall.Kill(pid, 0); err != syscall.ESRCH {
+		t.Errorf("the git process %d is not gone: kill(pid, 0) = %v", pid, err)
+	}
+}
+
+func readPID(t *testing.T, pidFile string) int {
+	t.Helper()
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("the fake git did not start: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pid
+}
+
+// A git command that does not end returns an error after the deadline, and
+// its process is gone. The second case covers a child process of git that
+// keeps the output pipe open after git is gone.
+func TestWorktree_GitCommandEndsAfterTheDeadline(t *testing.T) {
+	tests := []struct {
+		name  string
+		stall string
+	}{
+		{"git itself stalls", "exec sleep 60"},
+		{"a child process of git keeps the output pipe open", "sleep 60 &\n  echo $! > \"$0.child\"\n  wait"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pidFile := stallingGit(t, "rev-parse", tt.stall)
+			t.Cleanup(func() {
+				// The child process outlives git. Do not leave it behind.
+				child := filepath.Join(filepath.Dir(pidFile), "git.child")
+				if _, err := os.Stat(child); err == nil {
+					_ = syscall.Kill(readPID(t, child), syscall.SIGKILL)
+				}
+			})
+			w := newWorkspace(t, &bytes.Buffer{})
+			w.GitTimeout = time.Second
+
+			start := time.Now()
+			_, err := w.Head(context.Background(), t.TempDir())
+			elapsed := time.Since(start)
+
+			if err == nil {
+				t.Fatal("Head returned no error for a git command that does not end")
+			}
+			for _, want := range []string{"git rev-parse HEAD", "the deadline of 1s passed"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error = %q, want it to contain %q", err, want)
+				}
+			}
+			if elapsed > 30*time.Second {
+				t.Errorf("Head returned after %s, want the deadline of 1s", elapsed)
+			}
+			requireProcessGone(t, pidFile)
+		})
+	}
+}
+
+// Prepare returns the error of a stalled git fetch, as of any failed git
+// command.
+func TestWorktree_PrepareReturnsTheErrorOfAStalledFetch(t *testing.T) {
+	r := newRemote(t)
+	w := newWorkspace(t, &bytes.Buffer{})
+	// The clone exists, so the next Prepare starts with git fetch.
+	if _, err := w.Prepare(context.Background(), r.path, checkout(1, config.RoleImplementer, "cumin/1-first")); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	pidFile := stallingGit(t, "fetch", "exec sleep 60")
+	w.GitTimeout = time.Second
+
+	c := checkout(2, config.RoleImplementer, "cumin/2-second")
+	_, err := w.Prepare(context.Background(), r.path, c)
+	if err == nil {
+		t.Fatal("Prepare returned no error for a git fetch that does not end")
+	}
+	for _, want := range []string{"prepare worktree: git fetch --quiet --prune origin", "the deadline of 1s passed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
+	}
+	requireProcessGone(t, pidFile)
+	if _, statErr := os.Stat(w.Dir(c)); statErr == nil {
+		t.Error("Prepare created the worktree after a git fetch that did not end")
 	}
 }
