@@ -5,7 +5,9 @@ package github
 // measured-constraints.md holds what an installation token can read of a
 // failed GitHub Actions check in a public repository: the annotations of
 // the check run, and the log of its job, whose id is the last part of the
-// details address of the check run.
+// details address of the check run. The read lists the check runs of every
+// attempt, and reads a job log only for a details address of GitHub Actions
+// in the repository itself.
 
 import (
 	"context"
@@ -85,9 +87,8 @@ func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, 
 		run, ok := pickRun(runs, check)
 		if !ok {
 			// A commit status has no check run, so it has neither
-			// annotations nor a job log. A run that passed is not the
-			// failure either: a rerun can land between the snapshot and
-			// this read.
+			// annotations nor a job log. A check with no attempt that
+			// failed has no failure to read either.
 			logger.Warn("a failed check has no failed check run to read",
 				"check", check.Name, "commit", short(sha))
 			content = append(content, FailedCheck{Check: check, Content: contentNotRead(check.Name)})
@@ -105,8 +106,9 @@ func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, 
 // names an App is met only by that App, as it is in the decision on the
 // checks, so the content never comes from the run of another App. Only a run
 // that failed is read: a name can have two runs, and a rerun can pass
-// between the snapshot and this read. Among the runs that failed, the
-// newest one (the highest id) is the one to read.
+// between the snapshot and this read. checkRuns lists every attempt, so the
+// attempt that failed is there beside the rerun that passed. Among the runs
+// that failed, the newest one (the highest id) is the one to read.
 func pickRun(runs []checkRun, check RequiredCheck) (checkRun, bool) {
 	var found checkRun
 	ok := false
@@ -161,8 +163,13 @@ type checkRun struct {
 	AppID int64 `json:"-"`
 }
 
-// checkRuns returns every check run of a commit. Two Apps can report a
-// check of the same name, so the caller picks by name and App.
+// checkRuns returns every check run of a commit, of every attempt. Two Apps
+// can report a check of the same name, so the caller picks by name and App.
+//
+// Official: REST "List check runs for a Git reference", parameter filter.
+// The default "latest" answers only the most recent check run of a name, so
+// a rerun that passed hides the attempt that failed; "all" answers every
+// attempt.
 func (c *AppClient) checkRuns(ctx context.Context, token, owner, repo, sha string) ([]checkRun, error) {
 	base := fmt.Sprintf("/repos/%s/%s/commits/%s/check-runs",
 		url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(sha))
@@ -171,7 +178,7 @@ func (c *AppClient) checkRuns(ctx context.Context, token, owner, repo, sha strin
 		var answer struct {
 			CheckRuns []checkRun `json:"check_runs"`
 		}
-		path := fmt.Sprintf("%s?per_page=%d&page=%d", base, checkRunPage, page)
+		path := fmt.Sprintf("%s?filter=all&per_page=%d&page=%d", base, checkRunPage, page)
 		if err := c.do(ctx, token, http.MethodGet, path, base, nil, http.StatusOK, &answer); err != nil {
 			return nil, fmt.Errorf("github: read the check runs of %s/%s@%s: %w", owner, repo, short(sha), err)
 		}
@@ -261,10 +268,11 @@ func (c *AppClient) annotations(ctx context.Context, token, owner, repo string, 
 
 // jobLogTail returns the end of the log of the job of a check run. The job
 // id is the last part of the details address of the check run
-// (measured-constraints.md row 54). A check run of another kind of App has
-// no job, and then the tail is empty.
+// (measured-constraints.md row 54). A check run whose details address is
+// not one of GitHub Actions in this repository has no job that cumin reads,
+// and then the tail is empty.
 func (c *AppClient) jobLogTail(ctx context.Context, token, owner, repo, detailsURL string) (string, error) {
-	id := jobID(detailsURL)
+	id := jobID(detailsURL, owner, repo)
 	if id == "" {
 		return "", nil
 	}
@@ -274,22 +282,33 @@ func (c *AppClient) jobLogTail(ctx context.Context, token, owner, repo, detailsU
 	return c.text(ctx, token, path, label)
 }
 
-// actionsJobPath is the path of the details address of a check run of
-// GitHub Actions: ".../actions/runs/<run id>/job/<job id>"
+// actionsJobPath is the end of the path of the details address of a check
+// run of GitHub Actions, after the repository:
+// "/<owner>/<repo>/actions/runs/<run id>/job/<job id>"
 // (measured-constraints.md row 54).
-var actionsJobPath = regexp.MustCompile(`/actions/runs/\d+/job/(\d+)$`)
+var actionsJobPath = regexp.MustCompile(`^/actions/runs/\d+/job/(\d+)$`)
 
-// jobID is the job of a check run of GitHub Actions, or an empty string
-// for a check run of another App. The whole shape of the path must match:
-// the details address of another App is its own, and a number at its end
-// would otherwise send cumin to read the log of a job that has nothing to
-// do with the check.
-func jobID(detailsURL string) string {
+// jobID is the job of a check run of GitHub Actions in the repository, or
+// an empty string for any other check run. The address must be on GitHub
+// (webHost), and its whole path must be the one of a job of this
+// repository. An App writes its own details address: a path that only ends
+// like a job, on another host or in another repository, would otherwise
+// send cumin to read the log of a job that has nothing to do with the
+// check. GitHub compares the names of an owner and of a repository without
+// case, and so does this.
+func jobID(detailsURL, owner, repo string) string {
 	parsed, err := url.Parse(detailsURL)
 	if err != nil {
 		return ""
 	}
-	match := actionsJobPath.FindStringSubmatch(parsed.Path)
+	if parsed.Scheme+"://"+parsed.Host != webHost {
+		return ""
+	}
+	prefix := "/" + owner + "/" + repo
+	if len(parsed.Path) < len(prefix) || !strings.EqualFold(parsed.Path[:len(prefix)], prefix) {
+		return ""
+	}
+	match := actionsJobPath.FindStringSubmatch(parsed.Path[len(prefix):])
 	if match == nil {
 		return ""
 	}

@@ -1,0 +1,47 @@
+@startuml poll-failed-check
+' cumin works - how cumin reads the content of one failed required check, for "request a check fix".
+' Document: poll.md, the reading of the content of a failed check.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:Read the check runs of the commit,
+every attempt (filter=all);
+:Keep the runs of the name of the check,
+and of the App of the rule;
+if (a run that failed?) then (no)
+  :Text: the name of the check,
+  "could not read its content";
+  stop
+else (yes)
+endif
+:Take the newest run that failed
+(the highest id);
+:Read the failure annotations of the run;
+if (details_url: https://github.com,
+and the path is
+/<owner>/<repo>/actions/runs/<n>/job/<job id>
+of this repository?) then (yes)
+  :Read the end of the log of the job;
+else (no)
+  :Read no job log;
+endif
+if (a failure annotation,
+or a job log?) then (yes)
+  :Text: the annotations,
+  then the end of the job log;
+  stop
+else (no)
+  :Text: the name of the check,
+  "could not read its content";
+  stop
+endif
+
+note right
+  Without filter=all, GitHub lists only
+  the latest attempt of a name. A rerun
+  that passed then hides the attempt
+  that failed.
+end note
+@enduml
