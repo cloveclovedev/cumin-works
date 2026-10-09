@@ -168,7 +168,7 @@ MaintainerがPlannerを通さずに、自分でsub-issueを書いてもよい。
 | ask for the merge decision | `reviewing` → `awaiting-merge-decision` | `reviewing` の「start the merge」と同じ。ただしriskが `risk/medium` または `risk/high` である | Pull Requestに、実装IssueのIssue Ownerのレビューを依頼する。「mergeの判断が必要」と通知する |
 | request the cause | `reviewing` → `reviewing` | Reviewerが動いていない。最新のレビューが今の先頭のコミットに対する `REQUEST_CHANGES` で、ラウンドが上限に達している。Reviewerの原因の整理のコメントが、まだない | Reviewerに、「何が決まっていないことが原因か」の整理を依頼する |
 | stop at the round limit | `reviewing` → `awaiting-decision` | Reviewerの原因の整理のコメントが、Pull Requestに書かれている | 通知する |
-| stop the review | `reviewing` → `awaiting-decision` | Reviewerが動いていない。次のどれかである。Reviewerの質問のコメントが、`reviewing` になったあとに書かれている。今の先頭のコミットにレビューがなく、「request the review again」を1回済ませている。riskのラベルがちょうど1つでない | 質問でなければ、理由をコメントに書く。通知する |
+| stop the review | `reviewing` → `awaiting-decision` | Reviewerが動いていない。次のどれかである。上から順に確かめ、最初に成り立ったものを理由にする。riskのラベルがちょうど1つでない。実装Issueを閉じる開いているPull Requestがない。Reviewerの質問のコメントが、`reviewing` になったあとに書かれている。今の先頭のコミットにレビューがなく、「request the review again」を1回済ませている | 質問でなければ、理由をコメントに書く。Pull Requestがないときは、そのことを書く。通知する |
 | go back to the checks | `reviewing` → `checking` | Reviewerが動いていない。次のどちらかである。レビューの間に、先頭のコミットが変わった。`APPROVE` が出ているが、必須のcheckのどれかが今の先頭のコミットで通っていない | ラベルを替える。古いコミットへのレビューは、ラウンドに数えたまま残る |
 | request the review again | `reviewing` → `reviewing` | Reviewerが動いていない。今の先頭のコミットに、Reviewerのレビューがない。Reviewerの質問のコメントがない。この `reviewing` の間に、まだ依頼し直していない | Reviewerにレビューをもう一度依頼する |
 | start the merge | `awaiting-merge-decision` → `merging` | Maintainerが出したレビューのうち最新のもの (コメントだけのレビューは除く) が、今の先頭のコミットに対する `APPROVE` である。必須のcheckが全て通っている | ラベルを替える |
