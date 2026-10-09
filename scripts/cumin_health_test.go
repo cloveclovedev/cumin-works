@@ -254,8 +254,10 @@ func TestCuminHealth_ShowsTheErrorsSinceTheStart(t *testing.T) {
 		"  2026-10-04T06:20:00Z the poll failed",
 		`  2026-10-04T06:30:00Z the run \"implement\" failed`,
 	)
-	for _, absent := range []string{"before the last start", "a warning", "93"} {
-		if strings.Contains(out, absent) {
+	// The name of the temporary directory holds digits of its own.
+	withoutPaths := strings.ReplaceAll(out, h.dir, "")
+	for _, absent := range []string{"before the last start", "a warning", "used_percent", "93"} {
+		if strings.Contains(withoutPaths, absent) {
 			t.Errorf("the output holds %q:\n%s", absent, out)
 		}
 	}
