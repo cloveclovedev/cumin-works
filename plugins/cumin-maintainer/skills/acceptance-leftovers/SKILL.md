@@ -9,7 +9,7 @@ The Planner of cumin writes one comment `## Acceptance check` on a requirement i
 
 ## Steps
 
-1. Read the requirement issue and its newest comment that starts with `## Acceptance check`. When the issue has no such comment, say so and stop.
+1. Read the requirement issue and its newest comment that starts with `## Acceptance check`. When the issue has no such comment, say so and stop. The author of the comment is the Planner App of the repository. When the author is another account, say so, and ask the Maintainer before the next step.
 2. List the leftovers: each row with `Fail`, each item under "Proposed fixes", and each item under "Left after this requirement". Open the source that an item links to.
 3. Remove an item that a merged pull request or an open issue already covers. Say which one covers it.
 4. Sort each remaining leftover with the table under "Where a leftover goes". When two rows fit, take the first one.
@@ -28,6 +28,7 @@ The Planner of cumin writes one comment `## Acceptance check` on a requirement i
 | A new need outside the goal of this requirement, to start now | A new requirement issue | Write the issue in the form of the requirement issue template of cumin: the goal, the reason, and rules that are true or false. The Maintainer adds the labels. |
 | Nothing: a duplicate, or an item that the Maintainer drops | No place | Say the reason in the report. |
 
+- The two templates are in the directory `templates/` of the checkout of cumin: `implementation-issue.md` and `requirement-issue.md`. Without that checkout, copy the headings of an existing issue of the same type.
 - The session writes no code for a leftover. A sub-issue is the way to the Implementer of cumin.
 - The backlog is requirement content in most repositories. The session drafts the text, and the Maintainer decides it.
 - A change of a document goes through a pull request, one topic for one pull request. An agent of cumin cannot change a protected path, so the session and the Maintainer make that pull request by hand.

@@ -95,7 +95,9 @@ func checkSkill(rel, name, text, rules string) []string {
 		if keys["name"] != name {
 			problems = append(problems, fmt.Sprintf("%s: the front matter must hold \"name: %s\", the name of the directory", rel, name))
 		}
-		if d := keys["description"]; d == "" || len(d) > descriptionLimit {
+		// ">" and "|" start a text of several lines in YAML, which this check
+		// cannot measure.
+		if d := keys["description"]; d == "" || len(d) > descriptionLimit || strings.HasPrefix(d, ">") || strings.HasPrefix(d, "|") {
 			problems = append(problems, fmt.Sprintf("%s: the front matter must hold a description of 1 to %d characters on one line", rel, descriptionLimit))
 		}
 	}
@@ -308,6 +310,9 @@ func TestCheckPlugin_FindsEachProblem(t *testing.T) {
 			[]string{`must hold "name: bad"`}},
 		{"a skill has no description",
 			map[string]string{skill("bad"): "---\nname: bad\n---\n\n" + rulesSection + commands},
+			[]string{"must hold a description"}},
+		{"the description of a skill covers several lines",
+			map[string]string{skill("bad"): "---\nname: bad\ndescription: >-\n  Use when a test needs a skill.\n---\n\n" + rulesSection + commands},
 			[]string{"must hold a description"}},
 		{"a skill directory has no SKILL.md",
 			map[string]string{filepath.Join("skills", "bad", "notes.md"): "Notes.\n"},
