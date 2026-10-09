@@ -150,7 +150,7 @@
 | `plugins/cumin-maintainer` | `.claude-plugin/plugin.json` | MaintainerやOperatorのClaude Codeのセッションのためのplugin。cuminのバイナリには入らず、cuminのコードは読まない。1つのOrganizationの事実を持たない |
 | | `rules.md` | セッションの決まり。全てのskillが、同じ文面を `## Rules of the session` の節に持つ |
 | | `skills/<skill>/SKILL.md` | 1つのskill。front matter、手順、セッションの決まり、実行するコマンドの一覧 (`## Commands`) |
-| | `plugin_test.go` | pluginの形のテスト。marketplaceのファイル、全てのskillのfront matterと2つの節、Organizationの事実がないことを確かめる。このパッケージのGoのファイルは、これだけである |
+| | `plugin_test.go` | pluginの形のテスト。marketplaceのファイル、全てのskillのfront matterと2つの節、Organizationの事実がないこと、skill `session-start` と `hand-over` が持つ引き継ぎのメモの4つの見出しが同じであることを確かめる。このパッケージのGoのファイルは、これだけである |
 
 ### テストのファイル
 

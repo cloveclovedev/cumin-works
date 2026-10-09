@@ -13,7 +13,7 @@ The next session starts with no memory of this one. This skill writes one note t
 2. Read the old note `~/.local/state/cumin/hand-over.md` when the file exists. Keep an item of it only when the item is still true.
 3. Draft the note with the four headings under "Headings of the hand-over note". Follow "What the note holds".
 4. Show the draft to the Maintainer, and ask before the write. The write changes a file on the Host.
-5. Write the whole draft to a new file in a temporary directory. Check that the file is not empty. Then move the file to `~/.local/state/cumin/hand-over.md`.
+5. Check that the directory `~/.local/state/cumin/` exists. Without it, cumin never ran on this Host: say so, show the draft in the conversation, and stop. Write the whole draft to the temporary file `~/.local/state/cumin/hand-over.md.tmp`. Check that the file is not empty. Then rename it to `~/.local/state/cumin/hand-over.md`.
 6. Say where the note is, and that the next session reads it with the skill `session-start`.
 
 ## Headings of the hand-over note
@@ -79,15 +79,16 @@ Read, without asking:
 - `cumin status`
 - `date -u`
 - `cat ~/.local/state/cumin/hand-over.md`
-- `gh pr list --repo <owner>/<repository> --state open`
+- `test -d ~/.local/state/cumin`
+- `test -s ~/.local/state/cumin/hand-over.md.tmp`
+- `gh pr list --repo <owner>/<repository> --state open --limit 200`
 - `gh issue view <number> --repo <owner>/<repository>`
 - `gh api repos/<owner>/<repository>/issues/<number>/parent`
-- `gh api repos/<owner>/<repository>/issues/<number>/sub_issues`
+- `gh api --paginate repos/<owner>/<repository>/issues/<number>/sub_issues`
 
 Changes the Host, so ask first:
 
-- `mktemp -d`, then the write of the draft to `<directory>/hand-over.md`
-- `test -s <directory>/hand-over.md`
-- `mv <directory>/hand-over.md ~/.local/state/cumin/hand-over.md`
+- The write of the draft to `~/.local/state/cumin/hand-over.md.tmp`
+- `mv ~/.local/state/cumin/hand-over.md.tmp ~/.local/state/cumin/hand-over.md`
 
 This skill runs no command that GitHub records. `<owner>/<repository>` comes from the output of `cumin status`.
