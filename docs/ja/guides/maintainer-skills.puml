@@ -23,7 +23,8 @@ session --> skills : load at local scope
 rules .right.> skills : same text in every skill\n(plugin_test.go)
 session --> tools : call
 session --> github : gh, after the question
-tools --> monitor : read
+tools --> github : cumin status:\nread
+tools ..> monitor : read\n(tools of later issues)
 run --> monitor : write after every poll
 run -right-> github : poll
 
