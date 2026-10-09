@@ -40,6 +40,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | `hand-over` | `/cumin-maintainer:hand-over` | セッションの終わりに、状態、開いている判断、Maintainerを待つもの、セッションが学んだことの4つの見出しで、引き継ぎのメモを書く |
 | `merge-decision` | `/cumin-maintainer:merge-decision` | mergeの判断を待つPull Requestを1つ確かめて、決まった形で報告する。スクリプト `check-pull-request.sh` が、先頭のコミットへの承認、必須のcheck、保護されたパスの変更を、GitHubから1回読んで確かめる。差分はテスト以外を全部読む。承認は、Pull Requestの番号を入れた決まった質問のあとか、セッションが許された範囲の中だけで、1つずつ行う |
 | `watch` | `/cumin-maintainer:watch` | Maintainerを待つIssueが新しく現れるのを待つ。スクリプト `wait-for-waiting.sh` を裏で動かし、モニターファイルの `waiting` に新しい項目が出たら、その項目だけを報告して、種類 (`kind`) ごとのskillを示す。GitHubは読まない |
+| `host` | `/cumin-maintainer:host` | Hostの3つの一般の道具 (`scripts/cumin-health.sh`、`scripts/replace-binary.sh`、`scripts/live-scenario.sh`) を呼ぶ。道具ごとに、いつ呼ぶか、コマンド、終了コードの読み方を持ち、自分の手順を足さない。道具のあるチェックアウトは、環境変数 `CUMIN_SOURCE_DIR` から読み、なければMaintainerに聞く。`replace-binary.sh` と `live-scenario.sh` はHostを変えるので、呼ぶ前に聞く。テスト以外のコードを変えるmergeのあとは、次の承認の前にバイナリを入れ替える。スクリプト `wait-for-merge.sh` は、Pull Requestのmergeを待ってから `replace-binary.sh` を呼ぶ |
 | `requirement-change` | `/cumin-maintainer:requirement-change` | Agentが書けない保護されたパスの文書 (要件の文書) を、Maintainerと手で変える。内容は、ファイルを変える前に会話の中でMaintainerが決める。1つの話題を1つのPull Requestにし、既定のブランチからブランチを作る。複数のファイルの置き換えは、新しい文章を全て計算してから書き込む。差分の大きさ (`git diff --stat`) を、Pull Requestを開く前とmergeの前に確かめ、空になったファイルや予定にないファイルがあれば止まる。図は、リポジトリが文書に書いた道具で書き出す。mergeは、Maintainerの言葉があるときか、セッションが許された範囲の中だけで行う |
 
 ### セッションの始めの質問
@@ -104,6 +105,29 @@ skill `session-start` は、次の4つを聞かずにしてよいかを、1回�
 - GitHubもネットワークも読まず、モニターファイルを変えない。書くのは、`--seen` のファイルだけである。
 - 要るものは、macOSの標準の道具 (`sh`、`perl` とその標準のモジュール `JSON::PP` と `Time::Local`、`awk`、`cmp`、`date`、`mktemp`、`mv`、`sleep`) だけである。`jq` は、古いmacOSにないので使わない。
 - テスト (`plugins/cumin-maintainer/watch_test.go`) は、Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) でスクリプトを動かす。
+
+### `host` のスクリプト
+
+`plugins/cumin-maintainer/skills/host/wait-for-merge.sh <owner>/<repo> <number>` は、セッションのためのスクリプトである。Pull Requestを間隔を空けて `gh` で読み、mergeされたら、`$CUMIN_SOURCE_DIR/scripts/replace-binary.sh` をオプションなしで1回呼ぶ ([Hostの一般の道具](host-tools.md) の「バイナリを入れ替える」)。モニターファイルはPull Requestのmergeを持たないので、このスクリプトはGitHubを読む。
+
+| 終了コード | 意味 |
+|---|---|
+| 0 | Pull Requestがmergeされ、`replace-binary.sh` が通った |
+| 1 | Pull Requestがmergeされずに閉じられた。何も入れ替えない。または、mergeされたが、`replace-binary.sh` が失敗した |
+| 2 | 引数が違う。`CUMIN_SOURCE_DIR` がない。または、そこに `scripts/replace-binary.sh` がない。GitHubを読む前に終わる |
+| 124 | 時間の上限まで、mergeを示す読み取りがなかった。標準エラー出力の文が「time limit」と最後の読み取りを含む。何も入れ替えない |
+
+| 引数 | 初期値 | 意味 |
+|---|---|---|
+| `--timeout <seconds>` | 1800 | mergeを待つ時間の上限。`replace-binary.sh` の待ちは、道具が自分の上限を持つ |
+| `--interval <seconds>` | 30 | 読む間隔 |
+
+- mergeと数えるのは、`state` が `closed` で `merged` が `true` の答えだけである。失敗した読み取り、空の読み取り、それ以外の答えは飛ばし、mergeとは数えない。
+- 1回の読み取りは、30秒か、時間の上限の早いほうで打ち切る。`gh` が止まっても、スクリプトは上限で終わる。
+- GitHubからは、`gh api` のGETで読むだけである。Hostを変えるのは、呼ばれた `replace-binary.sh` である。そのため、skillは、スクリプトを始める前に聞く。
+- スクリプトは、チェックアウトを更新しない。mergeのあとでチェックアウトが古いと、`replace-binary.sh` は手順1で止まり、cuminは動いたままである。セッションはそう報告し、Maintainerに聞いてから `git pull --ff-only` と `replace-binary.sh` を実行する。
+- 要るものは、`gh` と標準の道具 (`sh`、`date`、`grep`、`head`、`mktemp`、`sleep`) だけである。
+- テスト (`plugins/cumin-maintainer/host_test.go`) は、偽の `gh` を `PATH` に、偽の `replace-binary.sh` をテストのチェックアウトに置いてスクリプトを動かす。
 
 ## インストールする
 
