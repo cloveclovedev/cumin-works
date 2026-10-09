@@ -4,18 +4,25 @@
 #   check-pull-request.sh <owner>/<repo> <number>
 #
 # The script reads GitHub once and does not wait. It prints the head commit,
-# each APPROVED review with its author and its commit, each required check of
-# the base branch with its state on the head commit, and each changed file
-# under a protected path.
+# the latest deciding review (APPROVED or CHANGES_REQUESTED) of each author
+# with its commit, each required check of the base branch with its state on
+# the head commit, and each changed file under a protected path.
 #
 # Exit code:
-#   0    an approval is on the head commit, and every required check passed
+#   0    the pull request is open and not a draft, an approval is on the head
+#        commit, no author requests changes on the head commit, and every
+#        required check passed
 #   1    the pull request is not ready: the last line says why
 #   2    a wrong argument, a failed read, or an empty read; nothing is decided
 #   124  the time limit ended; nothing is decided
 #
+# Only the latest deciding review of an author counts, as in cumin. GitHub
+# keeps the state APPROVED of an older review, so an approval that the same
+# author replaced with a change request is not an approval.
+#
 # A required check passes only with the conclusion "success". A cancelled, a
-# queued, a skipped, and a missing check are not a pass. A branch whose rules
+# queued, a skipped, a neutral, and a missing check are not a pass. cumin and
+# GitHub count "skipped" and "neutral" as passed; this script does not. A branch whose rules
 # require no check is not a pass either, because an empty list once counted
 # as "passed".
 #
@@ -68,6 +75,10 @@ on_limit() {
 	exit 124
 }
 trap on_limit TERM
+# A shell does not always run the EXIT trap after a signal, so a signal stops
+# the watchdog here.
+trap 'cleanup; trap - EXIT; exit 129' HUP
+trap 'cleanup; trap - EXIT; exit 130' INT
 
 # The watchdog ends the script at the time limit. Its output is closed, so
 # that a caller that reads the output of the script does not wait for it.
@@ -109,16 +120,16 @@ read_list() {
 
 # 1. The pull request: head commit, base branch, number of changed files.
 read_gh pull api "repos/$repo/pulls/$number" \
-	--jq '[.head.sha, .base.ref, (.changed_files | tostring), .state] | join("\t")' ||
+	--jq '[.head.sha, .base.ref, (.changed_files | tostring), (if .draft then "draft" else .state end)] | join("\t")' ||
 	fail "gh could not read the pull request: $(cat "$work/pull.err")"
 IFS=$TAB read -r head base changed state <"$work/pull" || true
 printf '%s\n' "${head:-}" | grep -Eq '^[0-9a-f]{40,64}$' || fail "gh returned no head commit for the pull request"
 [ -n "${base:-}" ] || fail "gh returned no base branch for the pull request"
 printf '%s\n' "${changed:-}" | grep -Eq '^[0-9]+$' || fail "gh returned no number of changed files for the pull request"
 
-# 2. The APPROVED reviews.
+# 2. The deciding reviews, oldest first, as GitHub lists them.
 read_list reviews "the reviews" api --paginate "repos/$repo/pulls/$number/reviews?per_page=100" \
-	--jq '"page", (.[] | select(.state == "APPROVED") | [(.user.login // "unknown"), .commit_id] | join("\t"))'
+	--jq '"page", (.[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED") | [(.user.login // "unknown"), .commit_id, .state] | join("\t"))'
 
 # 3. The checks that the rules of the base branch require.
 branch=$(printf '%s' "$base" | sed -e 's/%/%25/g' -e 's|/|%2F|g' -e 's/#/%23/g' -e 's/?/%3F/g' -e 's/ /%20/g')
@@ -140,7 +151,11 @@ if read_gh config api -H "Accept: application/vnd.github.raw+json" "repos/$repo/
 	END {
 		if (failed) exit 2
 		n = split(text, lines, "\n")
-		for (i = 1; i <= n; i++) if (lines[i] ~ /^[ \t]*protected_paths[ \t]*=/) { start = i; break }
+		# The key is a top-level key: the search ends at the first table header.
+		for (i = 1; i <= n; i++) {
+			if (lines[i] ~ /^[ \t]*\[/) break
+			if (lines[i] ~ /^[ \t]*protected_paths[ \t]*=/) { start = i; break }
+		}
 		if (!start) exit 4
 		rest = lines[start]
 		sub(/^[^=]*=/, "", rest)
@@ -183,7 +198,23 @@ read_list files "the changed files" api --paginate "repos/$repo/pulls/$number/fi
 listed=$(grep -c . "$work/files")
 [ "$listed" -eq "$changed" ] || fail "gh listed $listed of $changed changed files; the check cannot see every file"
 
-# Every read is done. The rest decides and prints.
+# 7. The head commit once more. A push during the reads would mix the facts
+# of two commits.
+read_gh pull.again api "repos/$repo/pulls/$number" --jq '.head.sha' ||
+	fail "gh could not read the pull request again: $(cat "$work/pull.again.err")"
+[ "$(cat "$work/pull.again")" = "$head" ] || fail "the head commit changed during the reads; run the script again"
+
+# Every read is done. The rest decides and prints, so the watchdog stops.
+kill "$watchdog" 2>/dev/null
+watchdog=
+trap '' TERM
+
+# The latest deciding review of each author, in the order of the first one.
+awk -F '\t' '
+!($1 in latest) { order[++authors] = $1 }
+{ latest[$1] = $0 }
+END { for (i = 1; i <= authors; i++) print latest[order[i]] }' "$work/reviews" >"$work/reviews.latest" || fail "awk could not sort the reviews"
+
 awk -F '\t' '
 function bad(entry, why) { print "error: protected_paths: \"" entry "\" " why > "/dev/stderr"; failed = 1; exit 2 }
 # matches applies the rules of matching of the cumin-protected-paths check.
@@ -263,20 +294,26 @@ add_reason() {
 }
 
 echo "Pull request $number of $repo (${state:-unknown})"
+[ "${state:-}" = open ] || add_reason "the pull request is ${state:-unknown}, not open"
 echo "Head commit: $head"
 echo
-echo "Approvals:"
+echo "Reviews (the latest APPROVED or CHANGES_REQUESTED review of each author):"
+approvals=0
 approved=0
-while IFS=$TAB read -r login commit; do
-	if [ "$commit" = "$head" ]; then
-		approved=1
-		echo "- $login on $commit (the head commit)"
+while IFS=$TAB read -r login commit review; do
+	where="not the head commit"
+	[ "$commit" = "$head" ] && where="the head commit"
+	if [ "$review" = APPROVED ]; then
+		approvals=1
+		[ "$commit" = "$head" ] && approved=1
+		echo "- $login approves ${commit:-unknown} ($where)"
 	else
-		echo "- $login on ${commit:-unknown} (not the head commit)"
+		echo "- $login requests changes on ${commit:-unknown} ($where)"
+		[ "$commit" = "$head" ] && add_reason "$login requests changes on the head commit"
 	fi
-done <"$work/reviews"
-if [ ! -s "$work/reviews" ]; then
-	echo "- none"
+done <"$work/reviews.latest"
+[ -s "$work/reviews.latest" ] || echo "- none"
+if [ "$approvals" -eq 0 ]; then
 	add_reason "no approval"
 elif [ "$approved" -eq 0 ]; then
 	add_reason "no approval is on the head commit"
@@ -306,7 +343,7 @@ fi
 
 echo
 if [ -z "$reasons" ]; then
-	echo "Result: an approval is on the head commit, and every required check passed."
+	echo "Result: an approval is on the head commit, no author requests changes on it, and every required check passed."
 	exit 0
 fi
 echo "Result: not ready. $reasons."

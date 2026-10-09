@@ -22,14 +22,17 @@ cumin asks a Maintainer for the merge decision of a pull request with `risk/medi
 
 | Exit code | Meaning | What the session does |
 |---|---|---|
-| 0 | An approval is on the head commit, and every required check passed | Go on with step 4 |
+| 0 | The pull request is open, an approval is on the head commit, no author requests changes on it, and every required check passed | Go on with step 4 |
 | 1 | Not ready: the last line names each reason | Report the reasons. Recommend no approval |
 | 2 | A failed read, an empty read, or a wrong argument | Say so. Run the script again once. Decide nothing from this run |
 | 124 | The time limit of 60 seconds ended | Say so. Decide nothing from this run |
 
 - An approval on an older commit does not count. The Reviewer of cumin reviews the new head commit first.
+- Only the latest review of an author counts. A change request on the head commit after an approval is a reason for the exit code 1.
+- The script accepts an approval of any account. Name the author of each approval in the report, and say when the author is not the Reviewer App of the repository.
+- A draft, a closed, or a merged pull request is not ready.
 - A cancelled check is not a failed check. The Implementer cannot fix it. Propose to run it again with `gh run rerun <run id> --failed`, and ask first.
-- A queued, a skipped, or a missing check is not a pass. Say which check it is, and that the pull request is not ready.
+- A queued, a skipped, a neutral, or a missing check is not a pass. Say which check it is, and that the pull request is not ready.
 - The script lists each changed file under a protected path. An agent of cumin must not change such a file. Name each one under the third heading.
 - The script reads the protected paths from `.cumin/config.toml` of the default branch. It folds the case of ASCII letters only.
 
@@ -109,4 +112,4 @@ Recorded by GitHub, so ask first:
 - `gh pr review <number> --request-changes --body-file <file>`
 - `gh run rerun <run id> --failed`
 
-The script runs only `gh api` with the method GET. It reads the pull request, its reviews, its changed files, the rules of the base branch, the check runs and the commit statuses of the head commit, and `.cumin/config.toml`. It writes nothing on GitHub.
+The script runs only `gh api` with the method GET. It reads the pull request (two times, to see a push during the reads), its reviews, its changed files, the rules of the base branch, the check runs and the commit statuses of the head commit, and `.cumin/config.toml`. It writes nothing on GitHub.

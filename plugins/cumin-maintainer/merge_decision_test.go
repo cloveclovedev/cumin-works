@@ -22,7 +22,8 @@ const (
 // for what the script reads. The file holds the text after the jq filter,
 // because the fake runs no jq. A file <name>.fail makes that read fail with
 // its text. A missing file gives an empty read with the exit code 0. The
-// fake records its arguments in the file "calls".
+// second read of the pull request takes the file "head". The fake records
+// its arguments in the file "calls".
 const fakeGh = `#!/bin/sh
 echo "$*" >>"$FAKE_GH_DIR/calls"
 name=unknown
@@ -37,6 +38,13 @@ for arg in "$@"; do
 	repos/*/contents/*) name=config ;;
 	esac
 done
+if [ "$name" = pull ]; then
+	if [ -f "$FAKE_GH_DIR/pull.seen" ]; then
+		name=head
+	else
+		: >"$FAKE_GH_DIR/pull.seen"
+	fi
+fi
 if [ -f "$FAKE_GH_DIR/sleep" ]; then
 	sleep "$(cat "$FAKE_GH_DIR/sleep")"
 fi
@@ -56,7 +64,8 @@ exit 0
 func readyPullRequest() map[string]string {
 	return map[string]string{
 		"pull":     headCommit + "\tmain\t2\topen\n",
-		"reviews":  "page\nthe-reviewer\t" + headCommit + "\n",
+		"head":     headCommit + "\n",
+		"reviews":  "page\nthe-reviewer\t" + headCommit + "\tAPPROVED\n",
 		"rules":    "page\nci\t7\npaths\t7\n",
 		"runs":     "page\nci\t7\tcompleted\tsuccess\npaths\t7\tcompleted\tsuccess\nlint\t7\tcompleted\tfailure\n",
 		"statuses": "page\n",
@@ -116,11 +125,11 @@ func TestCheckPullRequest_ExitsZeroForAnApprovalOnTheHeadWithAllChecksPassed(t *
 	}
 	for _, want := range []string{
 		"Head commit: " + headCommit,
-		"- the-reviewer on " + headCommit + " (the head commit)",
+		"- the-reviewer approves " + headCommit + " (the head commit)",
 		"- ci: success",
 		"- paths: success",
 		"Changed files under a protected path (2 changed files):\n- none",
-		"Result: an approval is on the head commit, and every required check passed.",
+		"Result: an approval is on the head commit, no author requests changes on it, and every required check passed.",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the output lacks %q\n%s", want, out)
@@ -136,8 +145,8 @@ func TestCheckPullRequest_ExitsZeroForAnApprovalOnTheHeadWithAllChecksPassed(t *
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	if len(lines) != 7 {
-		t.Errorf("gh ran %d times, want one read for each of 7 facts\n%s", len(lines), calls)
+	if len(lines) != 8 {
+		t.Errorf("gh ran %d times, want 7 reads and the second read of the head commit\n%s", len(lines), calls)
 	}
 	for _, line := range lines {
 		words := strings.Fields(line)
@@ -160,11 +169,23 @@ func TestCheckPullRequest_ExitsNonZeroWhenThePullRequestIsNotReady(t *testing.T)
 		want    []string
 	}{
 		{"the approval is on an older commit",
-			map[string]string{"reviews": "page\nthe-reviewer\t" + olderCommit + "\n"},
-			[]string{"- the-reviewer on " + olderCommit + " (not the head commit)", "no approval is on the head commit"}},
+			map[string]string{"reviews": "page\nthe-reviewer\t" + olderCommit + "\tAPPROVED\n"},
+			[]string{"- the-reviewer approves " + olderCommit + " (not the head commit)", "no approval is on the head commit"}},
 		{"no approval",
 			map[string]string{"reviews": "page\n"},
-			[]string{"Approvals:\n- none", "not ready. no approval."}},
+			[]string{"of each author):\n- none", "not ready. no approval."}},
+		{"an approval, then a change request of the same author, on the head commit",
+			map[string]string{"reviews": "page\nthe-reviewer\t" + headCommit + "\tAPPROVED\nthe-reviewer\t" + headCommit + "\tCHANGES_REQUESTED\n"},
+			[]string{"- the-reviewer requests changes on " + headCommit + " (the head commit)", "not ready. the-reviewer requests changes on the head commit; no approval."}},
+		{"an approval of one author, and a change request of another author, on the head commit",
+			map[string]string{"reviews": "page\nthe-reviewer\t" + headCommit + "\tAPPROVED\na-maintainer\t" + headCommit + "\tCHANGES_REQUESTED\n"},
+			[]string{"- the-reviewer approves " + headCommit, "not ready. a-maintainer requests changes on the head commit."}},
+		{"a draft pull request",
+			map[string]string{"pull": headCommit + "\tmain\t2\tdraft\n"},
+			[]string{"not ready. the pull request is draft, not open."}},
+		{"a closed pull request",
+			map[string]string{"pull": headCommit + "\tmain\t2\tclosed\n"},
+			[]string{"not ready. the pull request is closed, not open."}},
 		{"a cancelled check",
 			map[string]string{"runs": "page\nci\t7\tcompleted\tcancelled\npaths\t7\tcompleted\tsuccess\n"},
 			[]string{"- ci: cancelled", "Propose to run it again.", "the check ci is cancelled"}},
@@ -212,6 +233,22 @@ func TestCheckPullRequest_ExitsNonZeroWhenThePullRequestIsNotReady(t *testing.T)
 	}
 }
 
+// Only the latest deciding review of an author counts. A change request on
+// an older commit does not stop an approval on the head commit.
+func TestCheckPullRequest_CountsTheLatestReviewOfEachAuthor(t *testing.T) {
+	out, code, _ := runCheck(t, map[string]string{"reviews": "page\n" +
+		"the-reviewer\t" + olderCommit + "\tCHANGES_REQUESTED\n" +
+		"a-maintainer\t" + olderCommit + "\tCHANGES_REQUESTED\n" +
+		"the-reviewer\t" + headCommit + "\tAPPROVED\n"})
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0\n%s", code, out)
+	}
+	want := "of each author):\n- the-reviewer approves " + headCommit + " (the head commit)\n- a-maintainer requests changes on " + olderCommit + " (not the head commit)\n\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("the output lacks %q\n%s", want, out)
+	}
+}
+
 // A commit status meets a rule that names no App.
 func TestCheckPullRequest_CountsASuccessfulCommitStatus(t *testing.T) {
 	out, code, _ := runCheck(t, map[string]string{
@@ -245,6 +282,8 @@ func TestCheckPullRequest_TakesAFailedOrEmptyReadForAnError(t *testing.T) {
 		{"gh returns nothing for the check runs", map[string]string{"runs": "-"}, "gh returned nothing for the check runs"},
 		{"gh returns nothing for the commit statuses", map[string]string{"statuses": "-"}, "gh returned nothing for the commit statuses"},
 		{"gh returns nothing for the changed files", map[string]string{"files": "-"}, "gh returned nothing for the changed files"},
+		{"gh fails for the second read of the head commit", map[string]string{"head.fail": "gh: Server Error (HTTP 502)\n"}, "gh could not read the pull request again"},
+		{"the head commit changes during the reads", map[string]string{"head": olderCommit + "\n"}, "the head commit changed during the reads"},
 		{"gh lists fewer files than the pull request changes", map[string]string{"files": "page\nmodified\tsrc/main.go\t\n"}, "gh listed 1 of 2 changed files"},
 		{"an entry of the settings is a wildcard", map[string]string{"config": "protected_paths = [\"*.md\"]\n"}, "uses a wildcard"},
 		{"the list of the settings is not an array", map[string]string{"config": "protected_paths = \"CLAUDE.md\"\n"}, "the value must be an array of strings"},
@@ -370,6 +409,10 @@ func TestCheckPullRequest_ReadsTheProtectedPathsOfTheSettings(t *testing.T) {
 		{"settings without the list give the default list",
 			map[string]string{"config": "merge_method = \"squash\"\n"},
 			[]string{"- AGENTS.md (modified) matches \"AGENTS.md\"", "- .claude/notes.md (renamed) matches \".claude/\""}, nil},
+		{"a list inside a table is not the list, so the default list holds",
+			map[string]string{"config": "[workflow]\nprotected_paths = [\"docs/notes.md\"]\n"},
+			[]string{"- AGENTS.md (modified) matches \"AGENTS.md\"", "- .claude/notes.md (renamed) matches \".claude/\""},
+			[]string{"- docs/notes.md"}},
 		{"a repository without the settings gives the default list",
 			map[string]string{"config": "-", "config.fail": "gh: Not Found (HTTP 404)\n"},
 			[]string{"- AGENTS.md (modified) matches \"AGENTS.md\"", "- .claude/notes.md (renamed) matches \".claude/\""}, nil},
@@ -442,6 +485,7 @@ func TestMergeDecisionSkill_HoldsTheFourHeadingsAndTheFixedQuestion(t *testing.T
 		"`Approve pull request <number> (<meaning>) at commit <first 7 characters of the head commit>?`",
 		"`${CLAUDE_SKILL_DIR}/check-pull-request.sh <owner>/<repository> <number>`",
 		"Approve one pull request at a time.",
+		"Name the author of each approval",
 		"only inside the allowance that the Maintainer gave this session",
 		"Propose to run it again",
 		"Read the whole diff outside the tests",
