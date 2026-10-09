@@ -146,6 +146,11 @@
 | | `Sources/CuminStatusBar/main.swift` | アプリの入口。AppKitを使う唯一のファイル。5秒ごとにモニターファイルと設定を読み、区画の画像とメニューを作り、音を鳴らし、区画を点滅させ、行のURLをブラウザで開く。ファイルを書かず、ネットワークを使わない |
 | | `Tests/CuminStatusBarTests/` | 純粋な型のテスト (XCTest)。Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) も読む |
 | | `dev.cloveclove.cumin-status-bar.plist` | アプリをログインのときに起動するLaunchAgentのplistのテンプレート。`__REPO__` をcheckoutのパスに置き換えて使う ([メニューバーのアプリを作って起動する](../guides/status-menu-bar.md)) |
+| `.claude-plugin` | `marketplace.json` | このリポジトリを、Claude Codeのpluginのmarketplace (`cumin-works`) にする。pluginの場所を相対パスで持つ ([Maintainerのセッションにskillを入れる](../guides/maintainer-skills.md)) |
+| `plugins/cumin-maintainer` | `.claude-plugin/plugin.json` | MaintainerやOperatorのClaude Codeのセッションのためのplugin。cuminのバイナリには入らず、cuminのコードは読まない。1つのOrganizationの事実を持たない |
+| | `rules.md` | セッションの決まり。全てのskillが、同じ文面を `## Rules of the session` の節に持つ |
+| | `skills/<skill>/SKILL.md` | 1つのskill。front matter、手順、セッションの決まり、実行するコマンドの一覧 (`## Commands`) |
+| | `plugin_test.go` | pluginの形のテスト。marketplaceのファイル、全てのskillのfront matterと2つの節、Organizationの事実がないことを確かめる。このパッケージのGoのファイルは、これだけである |
 
 ### テストのファイル
 

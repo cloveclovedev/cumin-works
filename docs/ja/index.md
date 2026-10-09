@@ -22,6 +22,7 @@
 
 - [既存のプロダクトにcuminを入れる](guides/adoption.md): 入れる前とあとで決めること
 - [メニューバーのアプリを作って起動する](guides/status-menu-bar.md): ビルド、起動、ログインのときの起動、メニューの見方、設定
+- [Maintainerのセッションにskillを入れる](guides/maintainer-skills.md): cuminと並んで働くClaude Codeのセッションのplugin。インストール、scope、更新
 
 ## 開発の手順
 

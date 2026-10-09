@@ -1,0 +1,35 @@
+@startuml maintainer-skills
+' cumin works - the plugin of the Maintainer session: the session loads the skills, the skills call the general tools.
+' Document: maintainer-skills.md, topic on what the plugin is.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+actor "Maintainer /\nOperator" as person
+cloud "GitHub" as github
+
+rectangle "Claude Code session\nin the target repository" as session
+rectangle "plugin cumin-maintainer\nplugins/cumin-maintainer/" as plugin {
+  file "rules.md\nrules of the session" as rules
+  rectangle "skills/<skill>/SKILL.md\nsteps, rules of the session, commands" as skills
+}
+rectangle "general tools\ncumin status, scripts/" as tools
+file "monitor.json\n&#126;/.local/state/cumin/" as monitor
+rectangle "cumin run" as run
+
+person --> session : talk, decide, allow
+person --> tools : from a terminal
+session --> skills : load at local scope
+rules .right.> skills : same text in every skill\n(plugin_test.go)
+session --> tools : call
+session --> github : gh, after the question
+tools --> monitor : read
+run --> monitor : write after every poll
+run -right-> github : poll
+
+note bottom of plugin
+  Not part of the cumin binary.
+  Holds no name of an Organization,
+  a repository, an App, or a person.
+end note
+@enduml

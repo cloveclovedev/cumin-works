@@ -66,3 +66,7 @@ cuminは、必須のcheckが先頭のコミットで全て通るのを待って�
 - 最初は、小さく、結果を確かめやすいものにする。Plannerの分割、Implementerの実装、Reviewerのレビュー、mergeまでの流れを、1回通して見るためである。
 - 要求Issueどうしの順番は、blocked by で決める。先の要求Issueが閉じるまで、後の分割は始まらない。
 - 依存のないIssueのうち、先に進めたいものには、優先度のラベルを付ける。Organizationが既に優先度のラベルを使っているなら、その名前を `.cumin/config.toml` の `priority_labels` に書く ([設定の一覧](../development/configuration.md) の「優先度のラベル」)。
+
+## 7. Maintainerのセッションにskillを入れる
+
+cuminと並んで、自分のClaude Codeのセッションで計画やPull Requestを見るMaintainerは、対象のリポジトリにplugin `cumin-maintainer` を入れる。セッションが、cuminの代わりに動かないための決まりと、cuminとの働き方を知る。手順は [Maintainerのセッションにskillを入れる](maintainer-skills.md) にある。入れなくても、cuminは同じように動く。
