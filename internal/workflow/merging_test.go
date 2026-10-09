@@ -187,6 +187,67 @@ func TestMerging_ABaseBranchThatWasModifiedIsMergedAtTheNextPoll(t *testing.T) {
 	assertMergedAndClosedOnce(t, sc, service, 2)
 }
 
+// One poll merges the pull requests of two issues in cumin/status/merging.
+// Before the second merge cumin waits (MergeWait), so that GitHub updates
+// the default branch in between. The test checks only the least time
+// between the two merges, so a slow machine does not fail it.
+func TestMerging_TheSecondMergeOfOnePollWaits(t *testing.T) {
+	const wait = 100 * time.Millisecond
+	sc := mergingScene(t, "risk/low")
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{
+		Number: 11, Parent: 6, Title: subIssueTitle,
+		Labels:      []string{"risk/low", workflow.LabelMerging},
+		LabelEvents: []githubtest.LabelEvent{{Label: workflow.LabelMerging, At: sceneNow.Add(-10 * time.Minute), Actor: cuminSlug, ActorType: "Bot"}},
+	})
+	sc.fake.AddPullRequest(sc.repo, &githubtest.PullRequest{
+		Number: 22, HeadCommit: sc.remoteHead, HeadBranch: "cumin/11-add-the-logout-screen",
+		Author: implementerSlug, AuthorIsBot: true, Closes: []int{11},
+		Checks: []githubtest.Check{{Name: "ci", Conclusion: "SUCCESS"}},
+		Reviews: []githubtest.Review{{Author: implementerSlug, AuthorIsBot: true, State: "APPROVED", Commit: sc.remoteHead,
+			SubmittedAt: sceneNow.Add(-30 * time.Minute)}},
+	})
+	service := sc.service()
+	service.MergeWait = wait
+
+	sc.pollAndWait(t, service)
+
+	for _, number := range []int{21, 22} {
+		if !sc.repo.PullRequests[number].Merged {
+			t.Errorf("pull request #%d is not merged by the poll", number)
+		}
+	}
+	times := sc.fake.MergeTimes()
+	if len(times) != 2 {
+		t.Fatalf("%d merge requests in one poll, want 2", len(times))
+	}
+	if between := times[1].Sub(times[0]); between < wait {
+		t.Errorf("the second merge came %v after the first one, want at least %v", between, wait)
+	}
+}
+
+// A poll with one merge does not wait: the wait is only before the second
+// and each later merge. With a wait of an hour, the poll still ends; the
+// deadline is only there against a hang.
+func TestMerging_APollWithOneMergeDoesNotWait(t *testing.T) {
+	sc := mergingScene(t, "risk/low")
+	service := sc.service()
+	service.MergeWait = time.Hour
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	if err := service.Poll(ctx); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	service.Wait()
+
+	if n := len(sc.fake.MergeTimes()); n != 1 {
+		t.Errorf("%d merge requests, want 1", n)
+	}
+	if !sc.repo.PullRequests[21].Merged {
+		t.Error("pull request #21 is not merged: the poll waited before its only merge")
+	}
+}
+
 // A temporary failure of the merge (502) changes nothing: the issue keeps
 // cumin/status/merging, and the next poll sends the merge again.
 func TestMerging_AMergeThatFailsWith502IsSentAgainAtTheNextPoll(t *testing.T) {

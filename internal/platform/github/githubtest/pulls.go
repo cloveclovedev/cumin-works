@@ -107,6 +107,15 @@ func (f *Fake) RefuseMergesForBaseBranch(times int) {
 	f.baseModified = times
 }
 
+// MergeTimes returns the time at which the fake received each merge
+// request, oldest first, on the clock of the machine. The clock of SetClock
+// does not move during a poll, so it cannot show a wait between two merges.
+func (f *Fake) MergeTimes() []time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.mergeTimes)
+}
+
 // AddPullRequest adds a pull request to the repository. The fake keeps the
 // pointer, so a test can change the pull request later.
 func (f *Fake) AddPullRequest(r *Repository, pr *PullRequest) {
@@ -369,6 +378,7 @@ func (f *Fake) serveMerge(w http.ResponseWriter, body []byte, owner, name string
 	_ = json.Unmarshal(body, &request)
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.mergeTimes = append(f.mergeTimes, time.Now())
 	repo, ok := f.repositories[key(owner, name)]
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
