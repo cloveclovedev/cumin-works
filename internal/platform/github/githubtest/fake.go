@@ -92,6 +92,9 @@ type Fake struct {
 	// baseModified is how many merges the fake still refuses with 405
 	// "Base branch was modified", as RefuseMergesForBaseBranch set it.
 	baseModified int
+	// mergeTimes holds the time of each merge request, as MergeTimes
+	// returns them.
+	mergeTimes []time.Time
 	// permissions are the answers of the permission endpoint, by login, as
 	// SetPermission set them.
 	permissions map[string]Permission
