@@ -47,7 +47,7 @@ Reviewing --> Merging : start the merge\n[no Reviewer runs, the Reviewer approve
 Reviewing --> MergeDecision : ask for the merge decision\n[no Reviewer runs, the Reviewer approved the\nhead commit, the checks passed,\nrisk/medium or risk/high]\n/ cumin requests the Issue Owner's review\nand notifies
 Reviewing --> Reviewing : request the cause\n[no Reviewer runs, the Reviewer requested changes,\nthe rounds are at the limit, no explanation yet]\n/ cumin requests the cause from the Reviewer
 Reviewing --> Decision : stop at the round limit\n[the Reviewer wrote the explanation of the cause]\n/ cumin notifies
-Reviewing --> Decision : stop the review\n[no Reviewer runs, and: the Reviewer asked a question,\nor the Reviewer left no review the second time]\n/ cumin notifies
+Reviewing --> Decision : stop the review\n[no Reviewer runs, and: no open pull request,\nthe Reviewer asked a question,\nor the Reviewer left no review the second time]\n/ cumin notifies
 Reviewing --> Checks : go back to the checks\n[no Reviewer runs, and: the head commit moved,\nor a required check does not pass]\n/ cumin changes the label
 Reviewing --> Reviewing : request the review again\n[no Reviewer runs, the Reviewer left no review\non the head commit, first time]\n/ cumin requests the review again
 MergeDecision --> Merging : start the merge\n[a Maintainer approved the head commit,\nthe checks passed]\n/ cumin changes the label

@@ -1,0 +1,41 @@
+@startuml host-tools
+' cumin works - the general tools of the Host: who calls them, and what each one reads or changes.
+' Document: host-tools.md, topic on what the general tools are.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+actor "Maintainer /\nOperator" as person
+rectangle "Claude Code session\nplugin cumin-maintainer" as session
+
+rectangle "general tools\nscripts/" as tools {
+  rectangle "cumin-health.sh\nis cumin running" as health
+  rectangle "replace-binary.sh\n(later issue)" as replace
+  rectangle "live-scenario.sh\n(later issue)" as live
+}
+
+rectangle "cumin run\nLaunchAgent dev.cloveclove.cumin" as run
+file "monitor.json\n&#126;/.local/state/cumin/" as monitor
+file "cumin.log\nStandardOutPath of the plist" as log
+file "config.toml\nHost settings" as settings
+cloud "GitHub" as github
+
+person --> tools : from a terminal
+session --> tools : call
+
+run --> monitor : write after every poll
+run --> log : write
+run -right-> github : poll
+
+health --> monitor : read: last poll, its errors,\nagents at work, waiting issues
+health --> log : read: errors since\nthe last start
+replace ..> run : stop, install, restart
+replace ..> health : check two polls
+live ..> settings : switch to the sandbox,\nand back
+
+note bottom of health
+  Reads only. Asks GitHub nothing.
+  Exit code 0: the last poll is fresh
+  and has no error.
+end note
+@enduml
