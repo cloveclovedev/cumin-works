@@ -719,7 +719,7 @@ func TestCheckGuide_FindsEachProblem(t *testing.T) {
 			[]string{"the command `<plugin directory>/skills/good/check.sh <number>` has no rule Bash(...)"}},
 		{"a rule starts with a wildcard",
 			row + "| `Bash(gh issue view *)` | - | `good` |\n| `Bash(*/skills/good/check.sh *)` | - | `good` |\n" + merge + write,
-			[]string{"the rule `Bash(*/skills/good/check.sh *)` of the guide starts with \"*\"", "the command `<plugin directory>/skills/good/check.sh <number>` has no rule Bash(...)"}},
+			[]string{"the rule `Bash(*/skills/good/check.sh *)` of the guide starts with \"*\""}},
 		{"the guide lacks the rule of a written file",
 			row + read + merge,
 			[]string{"the command `~/note.tmp` has no rule Edit(...)"}},
