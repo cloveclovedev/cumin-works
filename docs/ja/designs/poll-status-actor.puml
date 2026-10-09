@@ -7,7 +7,7 @@ skinparam defaultFontName sans-serif
 
 start
 :read the snapshot;
-if (requirement issue in planning or accepting,\nand no Planner runs? (StatusActorReads)) then (no)
+if (requirement issue in planning or accepting,\nor in implementing or awaiting-plan-review\nwith one or more sub-issues, all closed,\nand no Planner runs? (StatusActorReads)) then (no)
   :no read of the account;
   :decide as before;
   stop
@@ -20,7 +20,7 @@ else (no)
 endif
 if (cumin-core App or a Maintainer?\n(StatusLabelCounts)) then (yes)
   :read the label times and the comments;
-  :decide from the state\n(SplitEnd, AcceptanceEnd);
+  :decide from the state\n(SplitEnd, AcceptanceEnd, acceptanceChecks);
   stop
 else (no)
   :no agent, no merge, no label change;

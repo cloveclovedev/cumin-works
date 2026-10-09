@@ -76,6 +76,8 @@ partition "Decision (pure function, no I/O)" {
   - with cumin/status/implementing
     or cumin/status/awaiting-plan-review
   - one or more sub-issues, all closed
+  - cumin-core or a Maintainer added that status label
+    (another account, or not read: skipped)
   - no acceptance check comment after the last close
   - the follow-up notes written;
   :Collect candidates of request the implementation
