@@ -1,0 +1,40 @@
+@startuml poll-follow-up-section
+' cumin works - where the "## Follow-up" section of a pull request description ends, for "write the follow-up note".
+' Document: poll.md, section on the follow-up note.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:Find the line "## Follow-up";
+while (next line?) is (yes)
+  if (starts with "# " or "## "?) then (yes)
+    :End the section before the line;
+    stop
+  elseif (only hyphens, three or more,\noutside a code block?) then (yes)
+    if (the line before is a paragraph line?) then (yes)
+      :Setext heading:
+      keep the line in the section;
+    else (no)
+      :Horizontal rule:
+      end the section before the line;
+      stop
+    endif
+  else (no)
+    :Keep the line in the section;
+  endif
+endwhile (no)
+:End the section at the end of the description;
+stop
+
+note right
+  No paragraph line:
+  * an empty line, or the line "## Follow-up"
+  * a line of a code block
+  * a line of an HTML comment or of an HTML block
+  * a line of a list item or of a block quote;
+    a list item goes on after an empty line
+    while the lines are indented
+  * a heading, a table row, another rule
+end note
+@enduml
