@@ -4,7 +4,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 
 ## pluginとは何か
 
-![MaintainerのClaude Codeのセッションがpluginのskillを読み込み、skillが一般の道具を呼ぶ。セッションは、モニターファイルを読み、引き継ぎのメモを読み書きする。今の道具はGitHubを読み、モニターファイルを読む道具はあとで加わる](maintainer-skills.svg)
+![MaintainerのClaude Codeのセッションがpluginのskillを読み込み、skillが一般の道具を呼ぶ。セッションは、モニターファイルを読み、引き継ぎのメモを読み書きする。道具は、GitHubか、モニターファイルを読む](maintainer-skills.svg)
 
 図の元ファイル: [maintainer-skills.puml](maintainer-skills.puml)
 
@@ -12,8 +12,8 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 |---|---|---|
 | セッション | 対象のリポジトリで起動したClaude Code | Maintainerと話し、skillの手順に従う |
 | plugin | cumin-worksのリポジトリの `plugins/cumin-maintainer/` | skillと、全てのskillが繰り返すセッションの決まり (`rules.md`) を持つ。skillは、自分のスクリプトを、自分のディレクトリに持てる |
-| 一般の道具 | `cumin status` と `scripts/` | Claude Codeなしでも端末から使える。skillは道具を呼ぶだけで、自分の手順を足さない。今ある道具は `cumin status` で、Hostの設定とGitHubを読む |
-| モニターファイル | `~/.local/state/cumin/monitor.json` | `cumin run` が書く。skill `session-start` が、セッションの始めに読む。ファイルがないときと古いときは、そう報告して、GitHubを読む。このファイルを読む道具は、まだない。cuminのコードも読まない。待つIssueや最後の定期確認を、GitHubに問い合わせ直さずにこのファイルから読む道具 (図の点線の矢印) は、あとのIssueで `scripts/` に加わる ([モニターファイルとメニューバーのアプリの設計](../designs/status-menu-bar.md)) |
+| 一般の道具 | `cumin status` と `scripts/` | Claude Codeなしでも端末から使える。skillは道具を呼ぶだけで、自分の手順を足さない。今ある道具は、Hostの設定とGitHubを読む `cumin status` と、モニターファイルを読む `scripts/cumin-health.sh` である ([Hostの一般の道具](host-tools.md)) |
+| モニターファイル | `~/.local/state/cumin/monitor.json` | `cumin run` が書く。skill `session-start` が、セッションの始めに読む。ファイルがないときと古いときは、そう報告して、GitHubを読む。`scripts/cumin-health.sh` も、最後の定期確認と実行中のAgentを、GitHubに問い合わせ直さずにこのファイルから読む。cuminのコードは、このファイルを読まない。待つIssueをこのファイルから読む道具は、あとのIssueで `scripts/` に加わる ([モニターファイルとメニューバーのアプリの設計](../designs/status-menu-bar.md)) |
 | 引き継ぎのメモ | `~/.local/state/cumin/hand-over.md` | skill `hand-over` が、Maintainerに聞いてから書く。次のセッションのskill `session-start` が読む。Hostの手元のファイルで、cuminは読まず、どのリポジトリにも入れない |
 
 - cumin-worksのリポジトリが、そのままpluginのmarketplaceである。`.claude-plugin/marketplace.json` が、marketplaceの名前 `cumin-works` と、pluginの場所を相対パスで持つ。

@@ -138,6 +138,7 @@
 | `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
 | | `setup-repo.sh`、`setup-repo/` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) |
 | | `install.sh` | cuminをビルドしてHostに置き、LaunchAgentを新しいバイナリに入れ替える |
+| | `cumin-health.sh`、`cumin_health_test.go` | cuminが動いているかを言う一般の道具 (最後の定期確認、起動してからのエラー、実行中のAgent) と、そのテスト。テストはGoのpackage `scripts` で、スクリプトを実行する。macOSの `plutil` が要るので、ほかのOSでは飛ばす ([Hostの一般の道具](../guides/host-tools.md)) |
 | `tools/status-bar` | `Package.swift` | メニューバーのアプリのSwiftのpackage。Goのモジュールとは別で、`swift build` と `swift test` で作って試す ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) |
 | | `Sources/CuminStatusBar/MonitorFile.swift` | 純粋。モニターファイルの形と読み取り。知らないフィールドを読み飛ばし、新しすぎる `version` を見分ける |
 | | `Sources/CuminStatusBar/MonitorModel.swift` | 純粋。ファイルのバイト列と今の時刻から、メニューバーの区画、メニューの行、状態の行、止まったと表示する理由を決める |
