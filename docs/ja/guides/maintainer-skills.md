@@ -1,6 +1,6 @@
 # Maintainerのセッションにskillを入れる
 
-cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに、cuminとの働き方を教えるplugin `cumin-maintainer` の、インストールと更新の手順。cuminがAgentに渡すskill ([Agentの実行の設計](../designs/agent-run.md)) とは別のものである。cuminは、このpluginを読まない。
+cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに、cuminとの働き方を教えるplugin `cumin-maintainer` の、インストール、更新、使い方、権限のルールの手順。cuminがAgentに渡すskill ([Agentの実行の設計](../designs/agent-run.md)) とは別のものである。cuminは、このpluginを読まない。
 
 ## pluginとは何か
 
@@ -35,6 +35,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | skill | 呼び方 | すること |
 |---|---|---|
 | `acceptance-leftovers` | `/cumin-maintainer:acceptance-leftovers` | 受け入れの確認のコメントに残った作業を、1つずつ、sub-issue、backlog、調査・実測で確定した制約の一覧、新しい要求Issueのどれかに振り分ける |
+| `plan-review` | `/cumin-maintainer:plan-review` | レビューを待つ計画を、Maintainerが `cumin/status/ready` を付ける前に確かめる。要求Issueの決まり、Plannerの前提、Owner task、riskのラベル、Agentの実行の制限時間、要件の文書の行を、sub-issueと比べる。sub-issueの文章は、要るときだけ、聞いてから直し、何を変えたかを言う。計画そのものの変更は、推奨としてMaintainerに渡す |
 | `decision-request` | `/cumin-maintainer:decision-request` | `cumin/status/awaiting-decision` のIssueの判断依頼か、cuminが止めた理由のコメントを1つ読み、2種類に分ける。要件も方針も範囲も変えない、運用か技術の質問には、`templates/decision-request.md` が求める形 (止まったIssueへのコメント、そのあと `cumin/status/ready`) で答える。答えるのは、セッションが許された範囲の中か、Maintainerの言葉があるときだけである。それ以外の質問と、どちらか分からない質問は、GitHubに何も書かず、質問、選択肢、推奨をMaintainerに渡す |
 | `session-start` | `/cumin-maintainer:session-start` | セッションの始めに、`cumin status` の出力、モニターファイル、開いているPull Request、作業中の要求Issueの木、引き継ぎのメモを読んで、状態を報告する。そのあと、聞かずにしてよいことを1回だけ聞く |
 | `hand-over` | `/cumin-maintainer:hand-over` | セッションの終わりに、状態、開いている判断、Maintainerを待つもの、セッションが学んだことの4つの見出しで、引き継ぎのメモを書く |
@@ -152,6 +153,127 @@ claude plugin update cumin-maintainer@cumin-works
 | pluginを外す | `claude plugin uninstall cumin-maintainer@cumin-works --scope local` |
 | marketplaceごと外す | `claude plugin marketplace remove cumin-works`。そこから入れたpluginも外れる |
 
+## skillを使う
+
+skillは、セッションの中で `/cumin-maintainer:<skill>` と打って呼ぶ。Claude Codeが、会話に合うskillを自分で選ぶこともある。それぞれの中身は「今あるskill」にある。
+
+| skill | いつ使う | 先に聞くこと | しないこと |
+|---|---|---|---|
+| `session-start` | セッションの始め。ほかのskillより先 | 聞かずにしてよいこと (4つの項目) を1回 | cuminの起動、停止、再起動。GitHubへの書き込み。許しをファイルに残すこと |
+| `watch` | Maintainerを待つIssueが現れるのを待つとき | なし。スクリプトを1つ、裏で動かす | GitHubの読み取り。モニターファイルの変更。待つ項目への対応 (種類ごとのskillを示すだけ) |
+| `plan-review` | 要求Issueが計画のレビューを待つとき | sub-issueの本文の修正、`cumin/status/ready`、riskのラベルの付け替え | 計画そのものの変更 (Issueを足す、消す、分け直す、順序を変える)。要求Issueの本文とPlannerのコメントの変更 |
+| `merge-decision` | Pull Requestがmergeの判断を待つとき | 承認 (番号を入れた決まった質問)、変更の依頼、checkのやり直し | `risk/high` の承認。2つ以上のまとめての承認。merge |
+| `decision-request` | Issueが判断の依頼で止まったとき | 止まったIssueへの答えのコメント、`cumin/status/ready`、checkのやり直し | 要件、方針、範囲を変える質問への答え。その質問は、推奨を付けてMaintainerに渡す |
+| `acceptance-leftovers` | 要求Issueが受け入れを待ち、確認のコメントに作業が残るとき | Issueの作成、sub-issueへの追加、ブランチのpush、Pull Requestの作成 | 要求Issueを閉じること。受け入れは、Maintainerが決める |
+| `requirement-change` | 保護されたパスの文書を手で変えるとき | 下書きの内容 (ファイルを変える前)、push、Pull Requestの作成と更新、merge | Maintainerが決めていない内容の変更。2つの話題を1つのPull Requestにすること。差分の大きさを確かめないmerge |
+| `host` | cuminが動いているかを知りたいとき、mergeのあとでバイナリを入れ替えるとき、実機の場面 E2E-1 を実行するとき | `git pull --ff-only`、`replace-binary.sh`、`live-scenario.sh` | 道具にない手順を足すこと。道具の中身は [Hostの一般の道具](host-tools.md) にある |
+| `hand-over` | セッションの終わり、またはMaintainerが引き継ぎを頼んだとき | 引き継ぎのメモの書き込み | 許しをメモに書くこと。メモをリポジトリに入れること。GitHubへの書き込み |
+
+- 全てのskillは、「セッションの決まり」に従う。Claude Codeの権限の確認が断ったら、セッションは止まり、別の方法を探さない。
+- 「先に聞くこと」は、Maintainerが会話の中で許したものだけ、聞かずに行う (「セッションの始めの質問」)。
+
+### 1日の順序
+
+| 順序 | すること | skill |
+|---|---|---|
+| 1 | 対象のリポジトリで `claude` を起動し、状態を読む。聞かずにしてよいことを答える | `session-start` |
+| 2 | 待つIssueが現れるのを待たせる。人は、メニューバーのアプリでも分かる | `watch` |
+| 3 | 現れた項目を、種類 (`kind`) ごとのskillで片づける (下の表) | 下の表 |
+| 4 | テスト以外のコードを変えるmergeのあとは、次の承認の前に、バイナリを入れ替える。動いているかは、いつでも確かめられる | `host` |
+| 5 | セッションの終わりに、引き継ぎのメモを書く。次のセッションが、1で読む | `hand-over` |
+
+`watch` が報告する種類は、モニターファイルの `waiting` の `kind` である ([モニターファイルとメニューバーのアプリの設計](../designs/status-menu-bar.md))。
+
+| 種類 (`kind`) | 待っているもの | skill |
+|---|---|---|
+| `plan-review` | 計画のレビュー | `plan-review` |
+| `merge-decision` | mergeの判断 | `merge-decision` |
+| `decision` | 判断の依頼への答え | `decision-request` |
+| `acceptance` | 要求Issueの受け入れ | 受け入れるskillはない。確認のコメントをMaintainerに報告する。作業が残るときは `acceptance-leftovers` |
+
+要件の文書を変える必要が出たときは、順序に関係なく `requirement-change` を使う。
+
+## 権限のルール
+
+Claude Codeは、shellのコマンドとファイルの書き込みの前に、許すかを聞く。下の一覧のルールを設定の `permissions.allow` に1回入れると、skillが名前を挙げたコマンドを、聞かずに実行する。ルールの形は、公式のページ「Configure permissions」(https://code.claude.com/docs/en/permissions) を2026-10-09に読んで確かめた。
+
+- ルールを入れる場所は、pluginのscopeと同じに選ぶ。既定は、自分の、このリポジトリだけに効く `.claude/settings.local.json` である。セッションの中の `/permissions` でも足せる。このリポジトリは、設定のファイルを配らない (`.claude/` は保護されたパスである)。
+- 「記録・変更」の列が `GitHub` のルールは、GitHubに記録が残るコマンドである。`Host` のルールは、Hostかチェックアウトを変える。この2つは、入れなくてよい。入れなければ、Claude Codeが毎回聞く。このガイドは、入れないことを勧める。
+- 印のあるルールを入れても、skillは「聞いてから行う」の決まりに従う。ただし、決まりは文章であり、Claude Codeが強制するのは権限のルールだけである。
+- テスト (`plugins/cumin-maintainer/plugin_test.go`) が、全てのskillの `## Commands` のコマンドに一覧のルールがあることと、skillが先に聞くコマンドのルールに印があることを確かめる。
+
+| ルール | 記録・変更 | 使うskill |
+|---|---|---|
+| `Bash(cumin status)` | - | `session-start`、`hand-over`、`watch`、`decision-request`、`acceptance-leftovers` |
+| `Bash(date -u)` | - | `session-start`、`hand-over` |
+| `Bash(cat ~/.local/state/cumin/monitor.json)` | - | `session-start` |
+| `Bash(cat ~/.local/state/cumin/hand-over.md)` | - | `session-start`、`hand-over` |
+| `Bash(test -d ~/.local/state/cumin)` | - | `hand-over` |
+| `Bash(test -s ~/.local/state/cumin/hand-over.md.tmp)` | - | `hand-over` |
+| `Bash(gh issue view *)` | - | `session-start`、`hand-over`、`plan-review`、`merge-decision`、`decision-request`、`acceptance-leftovers` |
+| `Bash(gh issue list *)` | - | `decision-request`、`acceptance-leftovers` |
+| `Bash(gh pr view *)` | - | `session-start`、`merge-decision`、`decision-request`、`acceptance-leftovers`、`requirement-change` |
+| `Bash(gh pr list *)` | - | `session-start`、`hand-over`、`merge-decision`、`decision-request`、`acceptance-leftovers` |
+| `Bash(gh pr diff *)` | - | `merge-decision`、`requirement-change` |
+| `Bash(gh pr checks *)` | - | `merge-decision`、`decision-request`、`requirement-change` |
+| `Bash(gh repo view *)` | - | `requirement-change` |
+| `Bash(gh api repos/*)` | - | `session-start`、`hand-over`、`plan-review`、`acceptance-leftovers` |
+| `Bash(gh api --paginate repos/*)` | - | `session-start`、`hand-over`、`decision-request` |
+| `Bash(grep -n -E *)` | - | `plan-review` |
+| `Bash(diff -u *)` | - | `plan-review` |
+| `Bash(git fetch origin)` | - | `requirement-change` |
+| `Bash(git log *)` | - | `requirement-change` |
+| `Bash(git grep *)` | - | `requirement-change` |
+| `Bash(git show origin/*)` | - | `requirement-change` |
+| `Bash(git diff --merge-base *)` | - | `requirement-change` |
+| `Bash(git status --short)` | - | `requirement-change` |
+| `Bash(*/skills/merge-decision/check-pull-request.sh *)` | - | `merge-decision` |
+| `Bash(*/skills/watch/wait-for-waiting.sh *)` | - | `watch` |
+| `Bash("$CUMIN_SOURCE_DIR"/scripts/cumin-health.sh *)` | - | `host` |
+| `Bash("$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh --dry-run)` | - | `host` |
+| `Bash(gh issue create *)` | GitHub | `acceptance-leftovers` |
+| `Bash(gh issue comment *)` | GitHub | `decision-request` |
+| `Bash(gh issue edit *)` | GitHub | `plan-review`、`decision-request` |
+| `Bash(gh pr create *)` | GitHub | `acceptance-leftovers`、`requirement-change` |
+| `Bash(gh pr edit *)` | GitHub | `requirement-change` |
+| `Bash(gh pr review *)` | GitHub | `merge-decision` |
+| `Bash(gh pr merge *)` | GitHub | `requirement-change` |
+| `Bash(gh run rerun *)` | GitHub | `merge-decision`、`decision-request` |
+| `Bash(gh api --method POST repos/*)` | GitHub | `acceptance-leftovers` |
+| `Bash(git push -u origin *)` | GitHub | `acceptance-leftovers`、`requirement-change` |
+| `Bash(git switch -c *)` | Host | `acceptance-leftovers`、`requirement-change` |
+| `Bash(git add *)` | Host | `requirement-change` |
+| `Bash(git commit *)` | Host | `acceptance-leftovers`、`requirement-change` |
+| `Bash(git restore --source *)` | Host | `requirement-change` |
+| `Bash(git -C "$CUMIN_SOURCE_DIR" pull --ff-only)` | Host | `host` |
+| `Bash("$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh)` | Host | `host` |
+| `Bash("$CUMIN_SOURCE_DIR"/scripts/live-scenario.sh *)` | Host | `host` |
+| `Bash(mv ~/.local/state/cumin/hand-over.md.tmp ~/.local/state/cumin/hand-over.md)` | Host | `hand-over` |
+| `Edit(~/.local/state/cumin/hand-over.md.tmp)` | Host | `hand-over` |
+
+### ルールの読み方
+
+公式のページから読んだこと。
+
+| 決まり | 一覧での意味 |
+|---|---|
+| ルールは `Tool` か `Tool(specifier)` の形である。`*` のないBashのルールは、その1つのコマンドだけに合う | `Bash(cumin status)` は、引数のない `cumin status` だけを許す |
+| `*` は、空白を含むどんな文字にも合う。最後の ` *` は、引数のないコマンドにも合う | `Bash(git commit *)` は、`git commit` にも合う |
+| Claude Codeは、`&&`、`\|\|`、`;`、`\|` でコマンドを分け、それぞれにルールを当てる | ルールにないコマンドをつないでも、許されない |
+| ルールは、Claudeが書いたコマンドの文字に当てる。同じプログラムの別の書き方には合わない。ルールは、プログラムを囲む安全の境界ではない | skillは、`## Commands` に書いた形でコマンドを書く。別の形は、Claude Codeが聞く |
+| 順序は、`deny`、`ask`、`allow` である。先に合ったものが決める | 下の `ask` のルールは、`allow` より先に効く |
+| 出力をファイルに向けるコマンド (`> file`) は、向けた先を `Edit` のルールでも確かめる | `plan-review` が本文を一時ファイルに書き出すとき、作業ディレクトリの外の先は、Claude Codeが聞く |
+| ファイルの道具のルールは `Edit(path)` と `Read(path)` だけである。`~/` は、ホームからのパスである | 引き継ぎのメモの下書きは、`Edit(~/...)` で許す |
+| `cat`、`grep`、`diff`、読むだけの `git` などは、ルールがなくても聞かずに実行する | 一覧は、skillが挙げたコマンドを全て持つので、これらのルールも持つ。入れなくても同じである |
+
+ここからは、公式のページにない、このガイドの判断である。
+
+- `gh api` は、`-X`、`--method`、`-f`、`-F`、`--input` があると、読み取りではなくなる (GitHub CLIの手引き `gh api`、2026-10-09に読んだ)。`Bash(gh api repos/*)` は、パスのあとにこれらを書いたコマンドにも合う。skillはその形を書かないが、確かにするには、次を `permissions.ask` に入れる: `Bash(gh api * -X *)`、`Bash(gh api * --method *)`、`Bash(gh api * -f *)`、`Bash(gh api * -F *)`、`Bash(gh api * --input *)`。
+- skillのスクリプト (`check-pull-request.sh`、`wait-for-waiting.sh`) は、pluginを入れた場所の絶対パスで呼ばれる。Claude Codeが、skillの文章の `${CLAUDE_SKILL_DIR}` をそのパスに置き換えるからである。パスは更新のたびに変わるので、ルールは `*` で始まる。Claude Codeは、コマンドの前に `*` のあるルールに、起動のときに警告を出すことがある。
+- `host` のコマンドは、変数 `"$CUMIN_SOURCE_DIR"` を書いたままの文字である。ルールも、同じ文字で書く。変数を含むコマンドにルールが合うかは、公式のページからは読めない。合わなければ、Claude Codeが聞く。
+- `requirement-change` の、図を書き出すコマンドと、テスト、ビルド、lintのコマンドは、対象のリポジトリごとに違う。一覧は持たない。対象のリポジトリで足す。
+- 一覧のルールが実機で合うことは、確かめていない。Operatorが、インストールのあとで1回確かめる。
+
 ## 確かめた公式の文書
 
 Claude Codeの公式の文書 (https://code.claude.com/docs/) を、2026-10-09に読んだ。
@@ -162,6 +284,7 @@ Claude Codeの公式の文書 (https://code.claude.com/docs/) を、2026-10-09�
 | Plugins overview | pluginは `.claude-plugin/plugin.json` を持つディレクトリである。`.claude-plugin/marketplace.json` を持つリポジトリがmarketplaceである。有効なpluginは、skillの名前と説明を毎回の文脈に足す |
 | Install and manage plugins | 3つのscopeと、それぞれが書き込む設定のファイル。`/plugin install <name> --marketplace <owner>/<repository>` (v2.1.275 以降)。`claude plugin update <plugin>@<marketplace>`。公式ではないmarketplaceの自動の更新は、初めは切ってある |
 | Create a marketplace | `marketplace.json` は `name`、`owner`、`plugins` が必須である。相対パスの `source` は、`.claude-plugin/` を持つディレクトリから書く。項目の名前と `plugin.json` の名前を同じにする |
+| Configure permissions | ルールの形 `Tool(specifier)`。Bashのルールの `*` の合い方。つないだコマンドの分け方。`deny`、`ask`、`allow` の順序。`Edit` と `Read` のパスの形。ルールがなくても実行する読むだけのコマンド (「権限のルール」) |
 | Host and maintain a marketplace | `version` を持たないpluginは、コミットを追う。`version` を持つpluginは、その文字列が変わるまで更新されない |
 
 実機では、`claude plugin validate .` と `claude plugin validate ./plugins/cumin-maintainer` が通ることを確かめた。`version` と `author` がないという警告が出る。`version` は上の理由で、`author` は1つのOrganizationの事実を持たないために、書いていない。対象のリポジトリへの実際のインストールは、Maintainerが1回行って確かめる。

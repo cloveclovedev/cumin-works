@@ -495,3 +495,249 @@ func TestCheckPlugin_ComparesTheHeadingsOfTheHandOverNote(t *testing.T) {
 		})
 	}
 }
+
+// guidePath is the guide that holds the table of the skills and the list of
+// the permission rules of Claude Code.
+var guidePath = filepath.Join("docs", "ja", "guides", "maintainer-skills.md")
+
+// The marks of a rule in the list of the guide: GitHub records the command,
+// or the command changes the Host. The Operator may leave such a rule out.
+var ruleMarks = map[string]bool{"GitHub": true, "Host": true}
+
+// guideRule is one row of the list of the permission rules: the tool, the
+// text between the parentheses, and whether the row has a mark.
+type guideRule struct {
+	tool, pattern string
+	marked        bool
+}
+
+// ruleRow matches a row of a table whose first cell is a permission rule
+// ("Configure permissions", read 2026-10-09: a rule is "Tool(specifier)").
+// It also takes the second cell, the mark.
+var ruleRow = regexp.MustCompile("^\\| `(Bash|Edit)\\((.+)\\)` \\| ([^|]*) \\|")
+
+// guideRules returns the rules of the list of the guide.
+func guideRules(guide string) []guideRule {
+	var rules []guideRule
+	for _, line := range strings.Split(guide, "\n") {
+		if m := ruleRow.FindStringSubmatch(line); m != nil {
+			rules = append(rules, guideRule{m[1], m[2], ruleMarks[strings.TrimSpace(m[3])]})
+		}
+	}
+	return rules
+}
+
+// matches reports whether a rule covers a text, as the page "Configure
+// permissions" says: "*" stands for any text, a rule without "*" matches one
+// exact text, the suffix ":*" is the same as " *", and a rule whose only "*"
+// is at the end after a space also matches the text without that part.
+func (r guideRule) matches(text string) bool {
+	pattern := r.pattern
+	if strings.HasSuffix(pattern, ":*") {
+		pattern = strings.TrimSuffix(pattern, ":*") + " *"
+	}
+	if strings.Count(pattern, "*") == 1 && strings.HasSuffix(pattern, " *") && text == strings.TrimSuffix(pattern, " *") {
+		return true
+	}
+	parts := strings.Split(pattern, "*")
+	for i, p := range parts {
+		parts[i] = regexp.QuoteMeta(p)
+	}
+	return regexp.MustCompile("(?s)^" + strings.Join(parts, ".*") + "$").MatchString(text)
+}
+
+// skillCommand is one command that a skill names under "## Commands". A file
+// is a path that the session writes with its own tool, not a shell command.
+type skillCommand struct {
+	text       string
+	file       bool
+	askedFirst bool
+}
+
+var backticks = regexp.MustCompile("`([^`]+)`")
+
+// skillCommands returns the commands of the list items under "## Commands"
+// of a skill. The line before a list names its group: only the group "Read,
+// without asking" is not asked first. A text in backticks that starts with
+// "--" is an option of the command before it. Claude Code replaces
+// ${CLAUDE_SKILL_DIR} in the text of a skill with the directory of the skill
+// ("Extend Claude with skills", read 2026-10-09), so the rule sees that path.
+func skillCommands(name, text string) []skillCommand {
+	list, _ := section(text, "Commands")
+	var commands []skillCommand
+	var askedFirst bool
+	for _, line := range strings.Split(list, "\n") {
+		if !strings.HasPrefix(line, "- ") {
+			if strings.HasSuffix(strings.TrimSpace(line), ":") {
+				askedFirst = !strings.HasPrefix(line, "Read, without asking")
+			}
+			continue
+		}
+		for _, m := range backticks.FindAllStringSubmatch(line, -1) {
+			c := m[1]
+			if strings.HasPrefix(c, "--") {
+				continue
+			}
+			c = strings.ReplaceAll(c, "${CLAUDE_SKILL_DIR}", "/plugin/skills/"+name)
+			commands = append(commands, skillCommand{c, strings.HasPrefix(c, "~/"), askedFirst})
+		}
+	}
+	return commands
+}
+
+// checkGuide returns one problem for each broken rule of the guide of root:
+//   - the guide holds a row of a table for each skill directory;
+//   - every command under "## Commands" of a skill has a rule in the list;
+//   - a command that a skill asks first has a rule with a mark, and no rule
+//     without a mark: the Operator who leaves the marked rules out is asked.
+func checkGuide(root string) ([]string, error) {
+	data, err := os.ReadFile(filepath.Join(root, guidePath))
+	if err != nil {
+		return nil, err
+	}
+	guide := strings.ReplaceAll(string(data), "\r\n", "\n")
+	rules := guideRules(guide)
+	dir := filepath.Join(root, "plugins", pluginName, "skills")
+	skills, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var problems []string
+	for _, skill := range skills {
+		if !skill.IsDir() {
+			continue
+		}
+		name := skill.Name()
+		if !strings.Contains(guide, "\n| `"+name+"` | ") {
+			problems = append(problems, fmt.Sprintf("the guide holds no row of a table for the skill `%s`", name))
+		}
+		text, err := os.ReadFile(filepath.Join(dir, name, "SKILL.md"))
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range skillCommands(name, string(text)) {
+			tool := "Bash"
+			if c.file {
+				tool = "Edit"
+			}
+			var marked, unmarked []string
+			for _, r := range rules {
+				if r.tool != tool || !r.matches(c.text) {
+					continue
+				}
+				rule := r.tool + "(" + r.pattern + ")"
+				if r.marked {
+					marked = append(marked, rule)
+				} else {
+					unmarked = append(unmarked, rule)
+				}
+			}
+			switch {
+			case len(marked)+len(unmarked) == 0:
+				problems = append(problems, fmt.Sprintf("skills/%s/SKILL.md: the command `%s` has no rule %s(...) in the list of the guide", name, c.text, tool))
+			case c.askedFirst && len(unmarked) > 0:
+				problems = append(problems, fmt.Sprintf("skills/%s/SKILL.md: the skill asks before `%s`, but the rule `%s` of the guide has no mark", name, c.text, unmarked[0]))
+			case c.askedFirst && len(marked) == 0:
+				problems = append(problems, fmt.Sprintf("skills/%s/SKILL.md: the skill asks before `%s`, but no rule with a mark covers it", name, c.text))
+			}
+		}
+	}
+	return problems, nil
+}
+
+// TestGuide_HoldsEverySkillAndARuleForEveryCommand checks the committed
+// guide against the committed skills.
+func TestGuide_HoldsEverySkillAndARuleForEveryCommand(t *testing.T) {
+	problems, err := checkGuide(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range problems {
+		t.Error(p)
+	}
+}
+
+func TestGuideRule_MatchesAsClaudeCodeDoes(t *testing.T) {
+	tests := []struct {
+		pattern, text string
+		want          bool
+	}{
+		{"npm run build", "npm run build", true},
+		{"npm run build", "npm run build --watch", false},
+		{"npm run *", "npm run test --watch", true},
+		{"npm run *", "npm run", true},
+		{"npm run *", "npm install", false},
+		{"ls *", "lsof", false},
+		{"ls*", "lsof", true},
+		{"ls:*", "ls -la", true},
+		{"git log * main", "git log main", false},
+		{"* --help *", "npm --help", false},
+		{"*/skills/watch/wait.sh *", "/plugin/skills/watch/wait.sh --seen x", true},
+		{"gh api repos/*", "gh api --method POST repos/o/r/issues", false},
+	}
+	for _, tt := range tests {
+		if got := (guideRule{tool: "Bash", pattern: tt.pattern}).matches(tt.text); got != tt.want {
+			t.Errorf("the rule Bash(%s) matches %q = %v, want %v", tt.pattern, tt.text, got, tt.want)
+		}
+	}
+}
+
+// TestCheckGuide_FindsEachProblem proves that the check fails when the guide
+// lacks a skill, lacks the rule of a command, or holds a rule without a mark
+// for a command that a skill asks first.
+func TestCheckGuide_FindsEachProblem(t *testing.T) {
+	skill := "## Commands\n\nRead, without asking:\n\n- `gh issue view <number> --comments`\n- `${CLAUDE_SKILL_DIR}/check.sh <number>`\n\n" +
+		"Recorded by GitHub, so ask first:\n\n- `gh pr merge <number>`, with `--merge` or `--squash`\n\n" +
+		"Changes the Host, so ask first:\n\n- The write of the draft to `~/note.tmp`\n\nThe text below names `no command`.\n"
+	row := "| `good` | When a test needs a skill. |\n"
+	read := "| `Bash(gh issue view *)` | - | `good` |\n| `Bash(*/skills/good/check.sh *)` | - | `good` |\n"
+	merge := "| `Bash(gh pr merge *)` | GitHub | `good` |\n"
+	write := "| `Edit(~/note.tmp)` | Host | `good` |\n"
+	tests := []struct {
+		name  string
+		guide string
+		want  []string
+	}{
+		{"a good guide has no problem", row + read + merge + write, nil},
+		{"the guide lacks the row of a skill", read + merge + write, []string{"no row of a table for the skill `good`"}},
+		{"the guide lacks the rule of a command",
+			row + "| `Bash(gh issue view *)` | - | `good` |\n" + merge + write,
+			[]string{"the command `/plugin/skills/good/check.sh <number>` has no rule Bash(...)"}},
+		{"the guide lacks the rule of a written file",
+			row + read + merge,
+			[]string{"the command `~/note.tmp` has no rule Edit(...)"}},
+		{"a rule of another tool does not cover a command",
+			row + read + "| `Edit(gh pr merge *)` | GitHub | `good` |\n" + write,
+			[]string{"the command `gh pr merge <number>` has no rule Bash(...)"}},
+		{"the rule of a command that is asked first has no mark",
+			row + read + "| `Bash(gh pr merge *)` | - | `good` |\n" + write,
+			[]string{"the skill asks before `gh pr merge <number>`, but the rule `Bash(gh pr merge *)` of the guide has no mark"}},
+		{"a wide rule without a mark covers a command that is asked first",
+			row + read + merge + "| `Bash(gh *)` | - | `good` |\n" + write,
+			[]string{"the rule `Bash(gh *)` of the guide has no mark"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writePlugin(t, map[string]string{filepath.Join("skills", "good", "SKILL.md"): testSkill("good", skill)})
+			path := filepath.Join(root, guidePath)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("# A guide\n\n| skill | Use |\n|---|---|\n"+tt.guide), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			problems, err := checkGuide(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(problems) != len(tt.want) {
+				t.Fatalf("problems = %q, want one for each of %q", problems, tt.want)
+			}
+			for i, w := range tt.want {
+				if !strings.Contains(problems[i], w) {
+					t.Errorf("problem %d = %q, want %q", i, problems[i], w)
+				}
+			}
+		})
+	}
+}
