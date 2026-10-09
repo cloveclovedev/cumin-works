@@ -160,7 +160,9 @@ func HasFollowUpNote(marks []FollowUpMark, pullRequest int) bool {
 
 // FollowUpSection returns the text of the "## Follow-up" section of a pull
 // request description, as it is, up to the next heading or horizontal
-// rule, without the HTML comments of the template. It is empty when the section is missing, empty, or "None".
+// rule, without the HTML comments of the template. A line of hyphens directly
+// under a paragraph line is a Setext heading, and it stays in the text. It is
+// empty when the section is missing, empty, or "None".
 func FollowUpSection(body string) string {
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	start := -1
@@ -177,17 +179,25 @@ func FollowUpSection(body string) string {
 	// "Follow-up" is the last section of the template, so the rule is the
 	// only mark between its text and what a CLI adds at the end of the
 	// description, such as a signature. A rule inside a fenced code block is
-	// part of the text.
+	// part of the text. A line of hyphens directly under a paragraph line is
+	// no rule: Markdown reads the two lines as a Setext heading (CommonMark,
+	// "Setext headings"). The template puts a blank line before its rule.
 	end := len(lines)
-	fence := "" // the marker that opened the code block, or empty outside one
+	fence := ""        // the marker that opened the code block, or empty outside one
+	paragraph := false // the line before is a paragraph line
+	container := false // the lines since the last blank line are in a list item or a block quote
+	comment := false   // an HTML comment is open
 	for i := start; i < len(lines); i++ {
 		// Markdown allows up to three spaces before a fence; with four, the
 		// line is indented code.
 		line := strings.TrimRight(lines[i], " \t")
-		if indent := len(line) - len(strings.TrimLeft(line, " ")); indent <= 3 {
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if indent <= 3 {
 			line = line[indent:]
 		}
+		code := fence != "" // the line is in a fenced code block, or is its fence
 		if marker := codeFence.FindString(line); marker != "" {
+			code = true
 			switch {
 			case fence == "":
 				fence = marker
@@ -197,9 +207,42 @@ func FollowUpSection(body string) string {
 				fence = ""
 			}
 		}
-		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") || (fence == "" && horizontalRule.MatchString(lines[i])) {
+		if strings.HasPrefix(lines[i], "# ") || strings.HasPrefix(lines[i], "## ") {
 			end = i
 			break
+		}
+		if !code && horizontalRule.MatchString(lines[i]) {
+			if !paragraph {
+				end = i
+				break
+			}
+			// The underline of a Setext heading. The heading ends the
+			// paragraph, so a second line of hyphens is a rule.
+			paragraph = false
+			continue
+		}
+		switch {
+		case code:
+			paragraph, container = false, false
+		case comment:
+			comment = !strings.Contains(line, "-->")
+			paragraph = false
+		case line == "":
+			paragraph, container = false, false
+		case strings.HasPrefix(line, "<!--"):
+			comment = !strings.Contains(line, "-->")
+			paragraph = false
+		case container:
+			// A line of hyphens is no Setext underline after a line that
+			// only continues a list item or a block quote.
+			paragraph = false
+		case indent > 3:
+			// An indented line continues a paragraph; without one, it is
+			// indented code.
+		case containerStart.MatchString(line):
+			paragraph, container = false, true
+		default:
+			paragraph = !otherBlock.MatchString(line)
 		}
 	}
 	text := strings.TrimSpace(htmlComment.ReplaceAllString(strings.Join(lines[start:end], "\n"), ""))
@@ -213,6 +256,15 @@ func FollowUpSection(body string) string {
 // templates/pull-request.md puts after the "Follow-up" section. Markdown
 // allows up to three spaces before it; with four, the line is code.
 var horizontalRule = regexp.MustCompile(`^ {0,3}-{3,}[ \t]*$`)
+
+// containerStart matches the start of a list item or of a block quote, on a
+// line without its indent. A line of hyphens under such a line is a rule.
+var containerStart = regexp.MustCompile(`^(>|[-+*]([ \t]|$)|\d{1,9}[.)]([ \t]|$))`)
+
+// otherBlock matches a line without its indent that is no paragraph line and
+// opens no container: an ATX heading ("#" to "######"), a table row, the
+// underline of a Setext heading with "=", and a rule of "*" or "_".
+var otherBlock = regexp.MustCompile(`^(#{1,6}([ \t]|$)|\||=+$|(\*[ \t]*){3,}$|(_[ \t]*){3,}$)`)
 
 // codeFence matches the marker of a fenced code block at the start of a
 // line: three or more backticks or tildes.

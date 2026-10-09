@@ -192,6 +192,26 @@ func TestNothingLeftGivesNoNote(t *testing.T) {
 	}
 }
 
+// A text line with a line of hyphens under it is a Setext heading, so the
+// note copies it and the text after it. The rule after a blank line still
+// keeps the signature of the CLI out of the note.
+func TestASetextHeadingInFollowUpIsCopiedUpToTheSignatureRule(t *testing.T) {
+	body := "## What\nAdd the login screen.\n\n## Follow-up\nLater\n---\n- Add the password reset.\n\n---\nGenerated with a CLI\n"
+	sc := newFollowUpScene(t, body, nil)
+	sc.pollAndWait(t, sc.service())
+
+	notes := followUpNotes(sc)
+	if len(notes) != 1 {
+		t.Fatalf("%d follow-up notes, want 1", len(notes))
+	}
+	if !strings.Contains(notes[0].Body, "Later\n---\n- Add the password reset.\n") {
+		t.Errorf("the note misses the Setext heading or the text after it:\n%s", notes[0].Body)
+	}
+	if strings.Contains(notes[0].Body, "Generated with a CLI") {
+		t.Errorf("the note copies the signature:\n%s", notes[0].Body)
+	}
+}
+
 // Principle 6 (issue-states.md): cumin does nothing on a closed
 // requirement issue. It writes no note and reads none of its sub-issues.
 func TestAClosedRequirementIssueGetsNoNote(t *testing.T) {
@@ -340,6 +360,19 @@ func TestFollowUpSection(t *testing.T) {
 		{"a fence in indented code opens no block", "## Follow-up\nOne.\n\n    ```\n\nTwo.\n\n---\nSigned.\n", "One.\n\n    ```\n\nTwo."},
 		{"a signature without a rule is copied, as before", "## Follow-up\nOne.\n\nGenerated with a CLI\n", "One.\n\nGenerated with a CLI"},
 		{"a list item is no rule", "## Follow-up\n- One.\n-- Two.\n", "- One.\n-- Two."},
+		{"a Setext heading stays", "## Follow-up\nLater\n---\nOne.\n\n---\nSigned.\n", "Later\n---\nOne."},
+		{"a Setext heading with three spaces stays", "## Follow-up\nLater\n   -----  \nOne.\n\n---\nSigned.\n", "Later\n   -----  \nOne."},
+		{"a Setext heading of two lines stays", "## Follow-up\nLater\n    and more\n---\nOne.\n\n---\nSigned.\n", "Later\n    and more\n---\nOne."},
+		{"a Setext heading at the end stays", "## Follow-up\nOne.\n\nLater\n---\n", "One.\n\nLater\n---"},
+		{"a rule directly after the section heading ends the section", "## Follow-up\n---\nSigned.\n", ""},
+		{"a rule after a Setext heading ends the section", "## Follow-up\nLater\n---\n---\nSigned.\n", "Later\n---"},
+		{"a rule directly after the hint ends the section", "## Follow-up\n<!-- a hint\nof two lines -->\n---\nSigned.\n", ""},
+		{"a rule directly after a code block ends the section", "## Follow-up\n```\ncode\n```\n---\nSigned.\n", "```\ncode\n```"},
+		{"a rule directly after indented code ends the section", "## Follow-up\nOne.\n\n    code\n---\nSigned.\n", "One.\n\n    code"},
+		{"a rule directly after a list item ends the section", "## Follow-up\n- One.\ncontinued\n---\nSigned.\n", "- One.\ncontinued"},
+		{"a rule directly after a block quote ends the section", "## Follow-up\n> One.\n---\nSigned.\n", "> One."},
+		{"a rule directly after a deeper heading ends the section", "## Follow-up\n### Later\n---\nSigned.\n", "### Later"},
+		{"a rule directly after a table row ends the section", "## Follow-up\n| a |\n|---|\n| 1 |\n---\nSigned.\n", "| a |\n|---|\n| 1 |"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
