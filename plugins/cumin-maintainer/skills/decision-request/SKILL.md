@@ -9,9 +9,9 @@ An issue with the label `cumin/status/awaiting-decision` waits for an answer of 
 
 ## Steps
 
-1. Take one stopped issue. When several issues wait, show the list, and start with the one that the Maintainer names.
-2. Read the stopped issue with its comments, and find the newest request. The table under "Where the request is" names its form and its place.
-3. When the issue holds no such comment, say so and stop. When the author of the request is not cumin or an agent App of the repository, say so, and ask the Maintainer before the next step.
+1. Take one stopped issue. When several issues wait, show the list, and start with the one that the Maintainer names. An issue that also holds `cumin/status/ready` has its answer already: leave it out of the list, and write nothing on it.
+2. Read the stopped issue and its pull request, both with their comments, and find the newest request. The table under "Where the request is" names its form and its place. Take only a request that is newer than the last time the issue got `cumin/status/awaiting-decision`. The events of the issue show that time.
+3. When neither place holds such a request, find the reason as the last rule under "Where the request is" says. Stop only when that rule finds no reason, and say so. When the author of the request is not cumin or an agent App of the repository, say so, and ask the Maintainer before the next step.
 4. Read what the request links to: the pull request, the failed check, the parent requirement issue, and the document that "Not decided" names.
 5. Read the options of the request. A stop note has no options: its line `To continue:` names what a Maintainer does.
 6. Sort the request with the questions under "The two kinds".
@@ -23,12 +23,12 @@ An issue with the label `cumin/status/awaiting-decision` waits for an answer of 
 | The request | Its form | Its place |
 |---|---|---|
 | A decision request of an agent that returned `blocked` | `templates/decision-request.md`: the first line starts with `## Decision needed:`, and the type is `Blocked` | A comment on the stopped issue |
-| A decision request of the Reviewer after 3 review rounds | The same template, with the type `Unresolved after 3 review rounds` | A comment on the pull request of the stopped issue |
+| A decision request of the Reviewer at the limit of the review rounds | The same template, with the type `Unresolved after <limit> review rounds`. The limit is a setting of cumin, and 3 is its default | A comment on the pull request of the stopped issue |
 | A stop note of cumin | `templates/stop-note.md`: the heading `## Stopped for a Maintainer`, then the lines `Step:`, `Reason:`, and `To continue:` | A comment on the stopped issue |
 
 - The two templates are in the directory `templates/` of the checkout of cumin. Without that checkout, read the request itself: it holds the headings.
 - The line `Work stopped:` of a decision request names the stopped issue. The answer and the label go to that issue.
-- Some stops write no comment and only notify. Then read the labels, the pull request, and its checks to find the reason, and say that no comment holds it.
+- Some stops write no comment and only notify, for example a required check that failed or that gave no result. Then read the labels, the pull request, and its checks to find the reason, and say that no comment holds it.
 
 ## The two kinds
 
@@ -50,7 +50,7 @@ When the kind is not clear, treat the request as the kind of the Maintainer. Nev
 
 Examples of the operational or technical kind:
 
-- The Host slept during a review, and the token of the agent ran out. The stop note names the step "stop the review". The answer: start the review again.
+- The Host slept during a review, and the token of the agent ran out. The stop note names the step "stop the review". The answer: start the work again. The Implementer starts first, and the review follows the checks.
 - An agent run ended without a result two times, and the cause is gone: a network failure, or a quota that is free again. The answer: start the work again.
 - A required check was cancelled during an incident of GitHub. The answer: run the check again, then start the work again.
 - An agent stopped because a blocking issue was open, and that issue is closed now. The answer: start the work again.
@@ -73,7 +73,7 @@ The form of the answer comes from the section "Next step" of `templates/decision
 2. Write the comment in English, in a few lines:
    - The first line holds the decision. For a decision request, name the option by its letter in the table under "Options" and by its words.
    - The next line holds the reason in one sentence, with the fact that the session checked.
-   - The last line says what cumin does next, by the name of its action, for example "request the review".
+   - The last line says what cumin does next, by the name of its action: "request the implementation" for an implementation issue, and "request the split" for a requirement issue. The label leads to no other action.
 3. Write the comment with `gh issue comment <number> --body-file <file>` on the stopped issue. For a request on a pull request, the comment still goes to the stopped issue.
 4. Add the label with `gh issue edit <number> --add-label cumin/status/ready`. Do not remove `cumin/status/awaiting-decision`: cumin removes the old label when it starts the work.
 5. Report the link of the comment, and say that the label is set.
@@ -81,7 +81,7 @@ The form of the answer comes from the section "Next step" of `templates/decision
 - Ask before the comment and before the label, as the rules of the session say. The question names the action and the stopped issue with its meaning.
 - Without the question, answer only inside the allowance that the Maintainer gave this session at its start. The allowance names the operational decision request. A request of the other kind is never inside it.
 - An allowance of an earlier session does not hold.
-- Answer one request at a time. Read the labels of the stopped issue again directly before the comment. When `cumin/status/awaiting-decision` is gone, write nothing, and say so.
+- Answer one request at a time. Read the labels of the stopped issue again directly before the comment. When `cumin/status/awaiting-decision` is gone, or when the issue already holds `cumin/status/ready`, write nothing, and say so. cumin removes the old label only when it starts the work, so an answered issue can hold both labels.
 - Add the label only after the comment is on GitHub. A label without an answer starts the agent with the same question.
 - Do not edit the body of the stopped issue, and do not change another label.
 
@@ -96,7 +96,7 @@ The session writes nothing on GitHub for this kind: no comment and no label. It 
 | A recommendation | One option, with the reason in one sentence. Say what the session did not read or could not check |
 
 - Say where the decision belongs: the requirement issue, the stopped issue, or a document.
-- The Maintainer writes the decision and adds `cumin/status/ready`. The session writes the comment or the label for this kind only when the Maintainer says so in this conversation, with the words of the Maintainer.
+- The Maintainer writes the decision and adds `cumin/status/ready`.
 - A change of a requirement document goes through a pull request of the Maintainer, not through the answer.
 
 ## Rules of the session
@@ -133,6 +133,7 @@ Read, without asking:
 - `cumin status`
 - `gh issue list --label cumin/status/awaiting-decision`
 - `gh issue view <number> --comments`
+- `gh api --paginate repos/{owner}/{repo}/issues/<number>/events`
 - `gh pr view <number> --comments`
 - `gh pr list --search <text> --state all`
 - `gh pr checks <number>`
@@ -143,4 +144,4 @@ Recorded by GitHub, so ask first:
 - `gh issue edit <number> --add-label cumin/status/ready`
 - `gh run rerun <run id> --failed`
 
-The session runs these commands in the repository of the stopped issue.
+The session runs these commands in the repository of the stopped issue. `gh` fills `{owner}` and `{repo}` from that repository. Each event `labeled` holds the name of its label and its time.
