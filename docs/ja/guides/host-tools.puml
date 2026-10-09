@@ -10,7 +10,7 @@ rectangle "Claude Code session\nplugin cumin-maintainer" as session
 
 rectangle "general tools\nscripts/" as tools {
   rectangle "cumin-health.sh\nis cumin running" as health
-  rectangle "replace-binary.sh\n(later issue)" as replace
+  rectangle "replace-binary.sh\nreplace the binary" as replace
   rectangle "live-scenario.sh\n(later issue)" as live
 }
 
@@ -29,8 +29,8 @@ run -right-> github : poll
 
 health --> monitor : read: last poll, its errors,\nagents at work, waiting issues
 health --> log : read: errors since\nthe last start
-replace ..> run : stop, install, restart
-replace ..> health : check two polls
+replace --> run : stop after the runs,\ninstall, restart
+replace --> health : call: check two polls
 live ..> settings : switch to the sandbox,\nand back
 
 note bottom of health
