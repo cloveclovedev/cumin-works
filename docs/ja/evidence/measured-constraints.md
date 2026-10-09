@@ -125,6 +125,7 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 123 | Pull Requestのmergeで、`sha` に先頭でないコミットを渡すと、409 ("Head branch was modified") が返り、何もmergeされない | 公式: Merge a pull request。#293 の M2 | 公式文書 + 実測 | 2026-10-01 |
 | 124 | 衝突するPull Requestのmergeは、405 ("Pull Request has merge conflicts") になる。rulesetに止められたmergeも405である (62)。mergeの直前に読んだ `mergeable` は、mainが動いた直後だと古い `true` のことがある | #293 の M4 | 実測 | 2026-10-01 |
 | 125 | mergeが405で失敗した直後に読み直すと、衝突のときだけ `mergeable` が `false`、`mergeable_state` が `dirty` になる。衝突とrulesetの拒否は、これで見分けられる | 公式: Get a pull request。#293 の M5 | 公式文書 + 実測 | 2026-10-01 |
+| 145 | 別のPull Requestのmergeが既定のブランチを動かした直後のmergeは、405になることがある。メッセージは「Base branch was modified. Review and try the merge again.」である。cumin-coreが1つのPull Requestをmergeし、2秒後に別のPull Requestのmergeを送ると、この答えが返った。124の2つの場合 (衝突、rulesetの拒否) とは、メッセージで見分けられる。衝突のメッセージは "Pull Request has merge conflicts"、rulesetの拒否のメッセージは `Repository rule violations found` である (62)。この答えのPull Requestは、衝突もrulesetの違反も持たない。Pull Requestを変えずに、約4分後に送った同じ先頭のコミットのmergeは通った | cumin-worksで実測 (#316。#354 のmergeの直後の #355 のmerge) | 実測 | 2026-10-03 |
 
 ## git
 
