@@ -151,7 +151,7 @@
 | | `rules.md` | セッションの決まり。全てのskillが、同じ文面を `## Rules of the session` の節に持つ |
 | | `skills/<skill>/SKILL.md` | 1つのskill。front matter、手順、セッションの決まり、実行するコマンドの一覧 (`## Commands`) |
 | | `skills/merge-decision/check-pull-request.sh` | skill `merge-decision` のスクリプト。1つのPull Requestについて、先頭のコミットへの承認、必須のcheck、保護されたパスの変更を、`gh` でGitHubから1回読んで確かめる。`gh` と標準の道具だけを使う |
-| | `plugin_test.go` | pluginの形のテスト。marketplaceのファイル、全てのskillのfront matterと2つの節、Organizationの事実がないことを確かめる。このパッケージのGoのファイルは、テストだけである |
+| | `plugin_test.go` | pluginの形のテスト。marketplaceのファイル、全てのskillのfront matterと2つの節、Organizationの事実がないこと、skill `session-start` と `hand-over` が持つ引き継ぎのメモの4つの見出しが同じであることを確かめる。このパッケージのGoのファイルは、テストだけである |
 | | `merge_decision_test.go` | skill `merge-decision` のテスト。偽の `gh` を `PATH` に置いて `check-pull-request.sh` を動かす。`SKILL.md` の4つの見出しと、承認の決まった質問も確かめる |
 
 ### テストのファイル
