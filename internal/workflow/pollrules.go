@@ -17,11 +17,13 @@ import (
 // cumin/status/planning, or cumin/status/accepting, or an open sub-issue with cumin/status/ready,
 // cumin/status/implementing, cumin/status/checking,
 // cumin/status/reviewing, or cumin/status/merging. An issue that waits for
-// a Maintainer is not in work.
+// a Maintainer is not in work. A requirement issue in
+// cumin/status/awaiting-plan-review with every sub-issue closed is in work:
+// cumin moves it on with "request the acceptance check".
 func (s Snapshot) HasIssueInWork() bool {
 	for _, requirement := range s.RequirementIssues {
 		if slices.Contains(requirement.Labels, LabelReady) || slices.Contains(requirement.Labels, LabelPlanning) ||
-			slices.Contains(requirement.Labels, LabelAccepting) {
+			slices.Contains(requirement.Labels, LabelAccepting) || planReviewMovesOn(requirement) {
 			return true
 		}
 		for _, sub := range requirement.SubIssues {
@@ -159,6 +161,8 @@ func sameLabels(a, b []string) bool {
 // table under "tell that cumin waits"): an open sub-issue that waits for
 // the required checks,
 // an issue in planning, implementing, reviewing, accepting, or merging,
+// a requirement issue in cumin/status/awaiting-plan-review with every
+// sub-issue closed ("request the acceptance check" moves it on),
 // or a ready issue that can start and waits only for room under the limit.
 // A ready issue with an open blocked-by issue, a ready issue whose ready
 // another account than a Maintainer added, a status label that another
@@ -174,6 +178,9 @@ func (s Snapshot) MovesWithoutMaintainer() bool {
 	for _, requirement := range s.RequirementIssues {
 		if (slices.Contains(requirement.Labels, LabelPlanning) || slices.Contains(requirement.Labels, LabelAccepting)) &&
 			!statusOfAnother(requirement) {
+			return true
+		}
+		if planReviewMovesOn(requirement) {
 			return true
 		}
 		for _, sub := range requirement.SubIssues {

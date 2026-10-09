@@ -78,6 +78,45 @@ func TestIdlePoll_ARepositoryInWorkIsPolledAtEveryPollInterval(t *testing.T) {
 	}
 }
 
+// A requirement issue in cumin/status/awaiting-plan-review with every
+// sub-issue closed is in work: cumin moves it on with "request the
+// acceptance check". With no free slot it keeps its label, and the
+// repository is still polled at every poll interval.
+func TestIdlePoll_APlanReviewWithEverySubIssueClosedIsPolledAtEveryPollInterval(t *testing.T) {
+	sc, _ := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	service := idlePollService(sc)
+	service.Settings.MaxIssuesInProgress = 0
+
+	for minute := range 7 {
+		if n := pollAt(t, sc, service, minute, "example-repo"); n == 0 {
+			t.Errorf("minute %d: the poll sent no GraphQL query, want a poll at every poll interval", minute)
+		}
+	}
+	waiting := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, waiting) {
+		t.Fatalf("labels of #6 = %v, want %v: the test would pass for a wrong reason", got, waiting)
+	}
+}
+
+// A requirement issue in cumin/status/awaiting-plan-review with an open
+// sub-issue waits for the Maintainer: the repository is polled once in
+// each idle poll interval, as before.
+func TestIdlePoll_APlanReviewWithAnOpenSubIssueIsPolledOnceInEachIdlePollInterval(t *testing.T) {
+	sc, _ := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Register the account",
+		Labels: []string{workflow.LabelOwnerTask}})
+	service := idlePollService(sc)
+
+	for minute := range 11 {
+		n := pollAt(t, sc, service, minute, "example-repo")
+		if polled := minute%5 == 0; polled && n == 0 {
+			t.Errorf("minute %d: the poll sent no GraphQL query, want the poll of the idle poll interval", minute)
+		} else if !polled && n != 0 {
+			t.Errorf("minute %d: the poll sent %d GraphQL queries, want none before the idle poll interval is over", minute, n)
+		}
+	}
+}
+
 // A repository with no issue in work is polled once in each idle
 // poll interval, and sends no GraphQL query between.
 func TestIdlePoll_ARepositoryWithNoIssueInWorkIsPolledOnceInEachIdlePollInterval(t *testing.T) {

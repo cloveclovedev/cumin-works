@@ -562,6 +562,52 @@ func TestMonitorFile_TheKindComesFromTheStatusLabelAlone(t *testing.T) {
 	}
 }
 
+// A requirement issue in cumin/status/awaiting-plan-review with one or more
+// sub-issues, all closed, is not listed: cumin moves it on with "request
+// the acceptance check". With an open sub-issue, or with no sub-issue, it
+// is listed with the kind plan-review as before.
+func TestMonitorFile_APlanReviewWithEverySubIssueClosedIsNotListed(t *testing.T) {
+	closed := workflow.SubIssue{Number: 1, Title: "closed", Closed: true, Labels: []string{"risk/low"}}
+	listed := []state.MonitorWaiting{
+		{Repository: "example/app", Issue: 2, Kind: "plan-review", Title: "requirement", URL: "https://github.com/example/app/issues/2"},
+	}
+	tests := []struct {
+		name string
+		subs []workflow.SubIssue
+		want []state.MonitorWaiting
+	}{
+		{"every sub-issue closed", []workflow.SubIssue{closed}, nil},
+		{"one open sub-issue", []workflow.SubIssue{closed, {Number: 3, Title: "open", Labels: []string{workflow.LabelOwnerTask}}}, listed},
+		{"no sub-issue", nil, listed},
+	}
+	for _, tt := range tests {
+		snapshot := workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{{
+			Number: 2, Title: "requirement", Labels: []string{githubtest.RequirementLabel, workflow.LabelAwaitingPlanReview}, SubIssues: tt.subs,
+		}}}
+		if got := snapshot.WaitingIssues("example/app"); !slices.Equal(got, tt.want) {
+			t.Errorf("%s: waiting = %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+}
+
+// The monitor file of a poll does not list such an issue while it keeps
+// its label: with no free slot, "request the acceptance check" waits.
+func TestMonitorFile_APlanReviewThatCuminMovesOnIsNotInTheFile(t *testing.T) {
+	sc, _ := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl"})
+	service := sc.service()
+	service.Settings.MaxIssuesInProgress = 0
+	path := withMonitorFile(t, service)
+	sc.pollAndWait(t, service)
+
+	waiting := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	if got := requirementLabels(t, sc); !slices.Equal(got, waiting) {
+		t.Fatalf("labels of #6 = %v, want %v: the test would pass for a wrong reason", got, waiting)
+	}
+	if read, raw := readMonitorFile(t, path); len(*read.Waiting) != 0 {
+		t.Errorf("the file lists an issue that cumin moves on:\n%s", raw)
+	}
+}
+
 // An issue leaves the list at the first poll after its label changes. A
 // poll whose read fails keeps the items of the last read, and names the
 // failure.

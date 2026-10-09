@@ -114,6 +114,15 @@ func everySubIssueClosed(requirement RequirementIssue) bool {
 	return true
 }
 
+// planReviewMovesOn reports whether the requirement issue is in
+// cumin/status/awaiting-plan-review with one or more sub-issues, all
+// closed. cumin moves such an issue on with "request the acceptance check",
+// so it does not wait for a Maintainer (issue-states.md, the table under
+// "tell that cumin waits").
+func planReviewMovesOn(requirement RequirementIssue) bool {
+	return statusLabel(requirement.Labels) == LabelAwaitingPlanReview && everySubIssueClosed(requirement)
+}
+
 // lastClose is when the last sub-issue closed.
 func lastClose(requirement RequirementIssue) time.Time {
 	var last time.Time

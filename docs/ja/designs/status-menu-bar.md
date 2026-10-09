@@ -106,7 +106,7 @@
 
 | 値 | いつ | 今のメニューバーの区画 |
 |---|---|---|
-| `plan-review` | `cumin/status/awaiting-plan-review` の要求Issue | 承認を待つ |
+| `plan-review` | `cumin/status/awaiting-plan-review` の要求Issue。sub-issueが1つ以上あり、全て閉じているものは載せない。cuminが「request the acceptance check」で進めるためである | 承認を待つ |
 | `merge-decision` | `cumin/status/awaiting-merge-decision` の実装Issue | 承認を待つ |
 | `acceptance` | `cumin/status/awaiting-acceptance` の要求Issue | 承認を待つ |
 | `decision` | `cumin/status/awaiting-decision` のIssue (要求Issueでも実装Issueでも) | 答えを待つ |

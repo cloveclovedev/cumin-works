@@ -34,6 +34,7 @@
   - そのリポジトリでAgentの実行が進んでいる。または、前回の定期確認のあとに実行が終わった。
   - 前回のスナップショットに、`cumin/status/ready` か `cumin/status/planning` の開いている要求Issueがある。
   - 前回のスナップショットに、`cumin/status/ready`、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の開いているsub-issueがある。
+  - 前回のスナップショットに、`cumin/status/awaiting-plan-review` で、sub-issueが1つ以上あり、全て閉じている要求Issueがある。Maintainerを待つIssueではなく、cuminが「request the acceptance check」で進めるIssueである。空きがない間も、フォローアップノートを書けない間も、作業中である。判定は1つの純粋関数 (`planReviewMovesOn`) で、待ち状態の通知 (`Snapshot.MovesWithoutMaintainer`) と監視用のファイル (`Snapshot.WaitingIssues`) も同じ関数を読む。開いているsub-issueがある要求Issueと、sub-issueのない要求Issueは、Maintainerを待つ。
 - 判定は `internal/workflow` の純粋関数である。`Snapshot.HasIssueInWork` がスナップショットからIssueを見て、`RepositoryInWork` が前回の定期確認の結果と実行の有無から作業中かを返し、`PollIsDue` が前回からの時間と2つの間隔から、今回確かめるかを返す。時計を読むのは `Service.Poll` である。
 - 前回の定期確認の時刻と結果は、リポジトリごとにメモリに持つ。GitHub上の事実ではないが、失っても作業を失わない。cuminが起動し直すと、全てのリポジトリを1回確かめるだけである。
 - 作業中でないリポジトリが気付く速さ。Maintainerが `cumin/status/ready` を付ける、Pull Requestを承認する、レビューで差し戻す、のどれにも、最長で `idle_poll_interval` (初期値は5分) のうちに気付く。気付いた定期確認は動作をするか、作業中のIssueを読むので、次の定期確認は `poll_interval` のあとに来る。
@@ -41,8 +42,8 @@
 - 時間の比べ方。`poll_interval` の刻みは、わずかに早く来ることがある。前回からの時間が `idle_poll_interval` に `poll_interval` の半分だけ足りなくても、確かめる。足りないからと次の刻みまで待つと、5分のはずが6分になるためである。`idle_poll_interval` が `poll_interval` の倍数でないときは、いちばん近い刻みで確かめる。
 - リポジトリは、それぞれ別に判定する。作業中でないリポジトリを飛ばしても、他のリポジトリの定期確認は `poll_interval` のままである。
 - 実行を待ってから止める間 ([cumin本体の設計メモ](cumin-core.md) の「実行を待ってから止める」) は、どのリポジトリも飛ばさない。最後の定期確認が全てのリポジトリを読む、という止め方を変えないためである。
-- フォローアップノートを書けなかった定期確認 (コメントの読み取りの失敗) は、失敗に数えない。動作も作業中のIssueもなければ、次に試すのは `idle_poll_interval` のあとである。受け入れの確認が遅れるだけで、作業は失われない。
-- 待ち状態の通知 (「tell that cumin waits」) は変わらない。飛ばしたリポジトリは、動作もなく、cuminがMaintainerなしで進めるIssueもないリポジトリだからである。Agentの起動が利用枠だけで待っているという記録は、飛ばした定期確認では消えず、そのリポジトリを次に読むまで残る ([利用枠の設計](quota.md) の「通知の重複の防ぎ方」)。
+- フォローアップノートを書けなかった定期確認 (コメントの読み取りの失敗) は、失敗に数えない。動作も作業中のIssueもなければ、次に試すのは `idle_poll_interval` のあとである。受け入れの確認が遅れるだけで、作業は失われない。`cumin/status/awaiting-plan-review` でsub-issueが全て閉じた要求Issueは作業中のIssueなので、次に試すのは `poll_interval` のあとである。
+- 待ち状態の通知 (「tell that cumin waits」) は変わらない。飛ばしたリポジトリは、動作もなく、cuminがMaintainerなしで進めるIssueもないリポジトリだからである。sub-issueが全て閉じた `cumin/status/awaiting-plan-review` の要求Issueは、cuminがMaintainerなしで進めるIssueに数えるので、そのリポジトリは飛ばさず、通知も出さない。Agentの起動が利用枠だけで待っているという記録は、飛ばした定期確認では消えず、そのリポジトリを次に読むまで残る ([利用枠の設計](quota.md) の「通知の重複の防ぎ方」)。
 - ログ。作業中でなくなったときと、作業中に戻ったときに、リポジトリごとに1行ずつ出す。飛ばすたびには出さない。
 - `idle_poll_interval` が0のとき (テストが `Service` を直に作るとき) は、飛ばさない。設定ファイルからは、`poll_interval` より短い値を指定できない。
 

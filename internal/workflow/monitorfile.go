@@ -84,7 +84,9 @@ func monitorWaitingKind(labels []string) (kind string, ok bool) {
 // WaitingIssues returns the issues of the snapshot that wait for a
 // Maintainer, by the number of the issue: the requirement issues and the
 // open sub-issues with one of the four status labels that wait for a
-// person. repository is "<owner>/<repo>". The URL of a merge decision is
+// person. A requirement issue in cumin/status/awaiting-plan-review with
+// every sub-issue closed is left out: cumin moves it on with "request the
+// acceptance check". repository is "<owner>/<repo>". The URL of a merge decision is
 // the URL of the open pull request that the poll read, because a Maintainer
 // decides there; without one, and for the other kinds, it is the URL of the
 // issue. It is pure.
@@ -102,7 +104,9 @@ func (s Snapshot) WaitingIssues(repository string) []state.MonitorWaiting {
 		waiting = append(waiting, state.MonitorWaiting{Repository: repository, Issue: number, Kind: kind, Title: title, URL: url})
 	}
 	for _, requirement := range s.RequirementIssues {
-		add(requirement.Number, requirement.Title, requirement.Labels, nil)
+		if !planReviewMovesOn(requirement) {
+			add(requirement.Number, requirement.Title, requirement.Labels, nil)
+		}
 		for _, sub := range requirement.SubIssues {
 			if !sub.Closed {
 				add(sub.Number, sub.Title, sub.Labels, sub.PullRequests)

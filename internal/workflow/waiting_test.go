@@ -238,6 +238,70 @@ func TestAnIssueInMergingOrAcceptingWithNoAgentIsNotWaiting(t *testing.T) {
 	})
 }
 
+// "tell that cumin waits": a requirement issue in
+// cumin/status/awaiting-plan-review with every sub-issue closed is one
+// that cumin moves on with "request the acceptance check". While it keeps
+// its label, with no free slot or with a follow-up note that is not
+// written, no notification that cumin waits goes out. With an open
+// sub-issue, or with no sub-issue, the issue waits for the Maintainer as
+// before.
+func TestAPlanReviewWithEverySubIssueClosedIsNotWaiting(t *testing.T) {
+	waiting := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
+	keepsItsLabel := func(t *testing.T, sc *scene) {
+		t.Helper()
+		if got := requirementLabels(t, sc); !slices.Equal(got, waiting) {
+			t.Fatalf("labels of #6 = %v, want %v: the test would pass for a wrong reason", got, waiting)
+		}
+	}
+	t.Run("no free slot", func(t *testing.T) {
+		sc, _ := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl"})
+		service := sc.service()
+		service.Settings.MaxIssuesInProgress = 0
+		sc.pollTimes(t, service, 3)
+		keepsItsLabel(t, sc)
+		if got := sc.waitingMessages(); len(got) != 0 {
+			t.Errorf("notifications that cumin waits = %q, want none while cumin moves the plan review on", got)
+		}
+	})
+	t.Run("a follow-up note that is not written", func(t *testing.T) {
+		sc := newFollowUpScene(t, followUpBody, nil)
+		if err := sc.fake.SetLabels(sc.repo, 6, waiting); err != nil {
+			t.Fatal(err)
+		}
+		sc.fake.FailTimes("POST", "/repos/example-org/example-repo/issues/6/comments", 0, 100, 500)
+		sc.pollTimes(t, sc.service(), 3)
+		keepsItsLabel(t, sc)
+		if n := len(followUpNotes(sc)); n != 0 {
+			t.Fatalf("%d follow-up notes, want none: the test would pass for a wrong reason", n)
+		}
+		if got := sc.waitingMessages(); len(got) != 0 {
+			t.Errorf("notifications that cumin waits = %q, want none while cumin moves the plan review on", got)
+		}
+	})
+	t.Run("an open sub-issue still waits", func(t *testing.T) {
+		sc, _ := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl"})
+		sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 11, Parent: 6, Title: "Register the account",
+			Labels: []string{workflow.LabelOwnerTask}})
+		sc.pollTimes(t, sc.service(), 3)
+		keepsItsLabel(t, sc)
+		if got := len(sc.waitingMessages()); got != 1 {
+			t.Errorf("%d notifications that cumin waits, want 1 with an open sub-issue", got)
+		}
+	})
+	t.Run("no sub-issue still waits", func(t *testing.T) {
+		sc := newScene(t)
+		sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 10, Title: "Another issue"})
+		if err := sc.fake.SetLabels(sc.repo, 6, waiting); err != nil {
+			t.Fatal(err)
+		}
+		sc.pollTimes(t, sc.service(), 3)
+		keepsItsLabel(t, sc)
+		if got := len(sc.waitingMessages()); got != 1 {
+			t.Errorf("%d notifications that cumin waits, want 1 with no sub-issue", got)
+		}
+	})
+}
+
 // "tell that cumin waits": when every issue waits for the Maintainer, the Maintainer hears once across
 // polls. A ready issue behind an open blocked-by issue and an issue that
 // is stopped for a decision both wait for the Maintainer.
