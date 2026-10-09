@@ -1,6 +1,6 @@
 ---
 name: host
-description: Call the general tools of the Host of cumin. Use when the Maintainer asks whether cumin is running, asks to replace the binary of cumin after a merge, asks to wait for the merge of a pull request and then replace the binary, or asks to run the live scenario E2E-1 on the sandbox.
+description: Call the general tools of the Host of cumin. Use when the Maintainer asks whether cumin is running, asks to replace the binary of cumin after a merge, or asks to run the live scenario E2E-1 on the sandbox.
 ---
 
 # Call the general tools of the Host
@@ -48,26 +48,6 @@ A merged change of code outside the tests does not reach the Host by itself: cum
 - A merge that changes only tests or only documents needs no new binary.
 - When the binary is not replaced, say so in the report of the next pull request. cumin would check and merge that pull request with the old rules.
 
-## Wait for a merge, then replace the binary
-
-`${CLAUDE_SKILL_DIR}/wait-for-merge.sh <owner>/<repository> <number>` waits until the pull request is merged, then calls `replace-binary.sh` one time. The session types no loop of its own.
-
-1. Ask before the start, because the script ends in `replace-binary.sh`. The question names the pull request and says that cumin stops and gets a new binary after the merge.
-2. Start the script in the background, with the background option of the shell tool. Start one script at a time.
-3. When the script ends, read its exit code with the table below, and report.
-
-| Exit code | Meaning | What the session does |
-|---|---|---|
-| 0 | The pull request is merged, and `replace-binary.sh` passed | Report that the new binary runs |
-| 1 | The pull request is closed without a merge, or `replace-binary.sh` failed | Report the `error:` lines. Nothing is replaced in the first case. In the second case, read the output as for `replace-binary.sh` |
-| 2 | A wrong argument, `CUMIN_SOURCE_DIR` is not set, or the tool is missing | Say so. Correct the call, and ask again before the next start |
-| 124 | The time limit ended before a read showed the merge. The message holds "time limit" | Report the last read of the message. Nothing is replaced. Ask before a new wait |
-
-- The default time limit is 1800 seconds. `--timeout <seconds>` changes it. One read of GitHub takes at most 30 seconds, so the script can end 30 seconds after the limit.
-- The script skips a read of GitHub that fails or that is empty. Such a read is never "merged".
-- The script does not update the checkout. When `replace-binary.sh` fails at step 1 because the checkout is behind, cumin still runs the old binary. Report it, then go on as under "The three tools".
-- The script approves nothing and merges nothing. The approval belongs to the skill `merge-decision`.
-
 ## Rules of the session
 
 These rules hold in every skill of this plugin. The session helps a Maintainer or the Operator who is there. cumin and its agents do the work of cumin.
@@ -108,7 +88,5 @@ Changes the Host, so ask first:
 - `git -C "$CUMIN_SOURCE_DIR" pull --ff-only`
 - `"$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh`
 - `"$CUMIN_SOURCE_DIR"/scripts/live-scenario.sh --repo <owner>/<sandbox> --config <file>`
-- `${CLAUDE_SKILL_DIR}/wait-for-merge.sh <owner>/<repository> <number>`
-- `${CLAUDE_SKILL_DIR}/wait-for-merge.sh <owner>/<repository> <number> --timeout <seconds>`
 
-The script `wait-for-merge.sh` runs only `gh api` with the method GET for the pull request, then `replace-binary.sh` with no option. This skill runs no command that GitHub records. The options of the three tools are in `$CUMIN_SOURCE_DIR/docs/ja/guides/host-tools.md`.
+This skill runs no command that GitHub records. The options of the three tools are in `$CUMIN_SOURCE_DIR/docs/ja/guides/host-tools.md`.
