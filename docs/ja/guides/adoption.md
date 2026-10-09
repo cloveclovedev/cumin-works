@@ -57,7 +57,7 @@ cuminは、必須のcheckが先頭のコミットで全て通るのを待って�
 ## 5. Hostに足して動かす
 
 1. 4つのAppのインストールに、リポジトリを足す。これは画面で行う。リポジトリを足すAPIは、classic personal access tokenでしか使えず、`gh` のtokenでは使えない ([調査・実測で確定した制約](../evidence/measured-constraints.md) の126)。
-2. Hostの設定の `repositories` に足し、cuminを再起動する。設定だけを変えたときは、`launchctl kickstart -k` で足りる。`scripts/install.sh --restart` は、バイナリを作り直して入れ替えてから再起動する。
+2. Hostの設定の `repositories` に足し、cuminを再起動する。設定だけを変えたときは、`launchctl kickstart -k` で足りる。`scripts/install.sh --restart` は、バイナリを作り直して入れ替えてから再起動する。実行中のAgentを取り消さずにバイナリを入れ替えるときは、`scripts/replace-binary.sh` を使う ([Hostの一般の道具](host-tools.md) の「バイナリを入れ替える」)。
 3. ログに、そのリポジトリの `poll` が出ることを確かめる。
 
 ## 6. 最初の要求Issue
