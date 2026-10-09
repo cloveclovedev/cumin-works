@@ -118,11 +118,69 @@ func checkSkill(rel, name, text, rules string) []string {
 	return problems
 }
 
+// The skill hand-over writes the note that the skill session-start reads. Both
+// list the headings of the note under the same section.
+const (
+	startSkill         = "session-start"
+	handOverSkill      = "hand-over"
+	noteHeadingSection = "Headings of the hand-over note"
+	noteHeadingCount   = 4
+)
+
+// noteHeading matches one heading of the hand-over note in a list item of a
+// skill: "1. `## State`".
+var noteHeading = regexp.MustCompile("(?m)^[0-9]+\\. `(## [^`]+)`$")
+
+// noteHeadings returns the headings of the hand-over note that a skill lists,
+// in their order.
+func noteHeadings(text string) []string {
+	list, _ := section(text, noteHeadingSection)
+	var headings []string
+	for _, m := range noteHeading.FindAllStringSubmatch(list, -1) {
+		headings = append(headings, m[1])
+	}
+	return headings
+}
+
+// checkNoteHeadings returns the problems of the headings of the hand-over
+// note. texts holds the SKILL.md of every skill by its name. A plugin with
+// neither of the two skills has no note.
+func checkNoteHeadings(texts map[string]string) []string {
+	start, hasStart := texts[startSkill]
+	handOver, hasHandOver := texts[handOverSkill]
+	if !hasStart && !hasHandOver {
+		return nil
+	}
+	var problems []string
+	read, written := noteHeadings(start), noteHeadings(handOver)
+	for _, skill := range []struct {
+		name     string
+		headings []string
+	}{{startSkill, read}, {handOverSkill, written}} {
+		if len(skill.headings) != noteHeadingCount {
+			problems = append(problems, fmt.Sprintf("skills/%s/SKILL.md: the section \"## %s\" lists %d headings of the note, want %d", skill.name, noteHeadingSection, len(skill.headings), noteHeadingCount))
+		}
+	}
+	// The skill hand-over names each heading again in the table of what goes
+	// under it.
+	for _, h := range written {
+		if !strings.Contains(handOver, "\n| `"+h+"` |") {
+			problems = append(problems, fmt.Sprintf("skills/%s/SKILL.md: no row of a table starts with the heading `%s` of the note", handOverSkill, h))
+		}
+	}
+	if strings.Join(read, "\n") != strings.Join(written, "\n") {
+		problems = append(problems, fmt.Sprintf("the headings of the hand-over note differ: %s reads %q, %s writes %q", startSkill, read, handOverSkill, written))
+	}
+	return problems
+}
+
 // checkPlugin returns one problem for each broken rule of the plugin under
 // root/plugins/cumin-maintainer and of the marketplace file of root:
 //   - the marketplace lists the plugin under its name, with a relative source;
 //   - every skill has a front matter, the rules of the session as rules.md
 //     has them, and the commands that it runs;
+//   - the skills session-start and hand-over list the same four headings of
+//     the hand-over note;
 //   - no file of the plugin holds a fact of one Organization.
 func checkPlugin(root string) ([]string, error) {
 	var problems []string
@@ -171,6 +229,7 @@ func checkPlugin(root string) ([]string, error) {
 		return nil, err
 	}
 	var count int
+	texts := map[string]string{}
 	for _, skill := range skills {
 		if !skill.IsDir() {
 			continue
@@ -185,11 +244,13 @@ func checkPlugin(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		texts[skill.Name()] = string(text)
 		problems = append(problems, checkSkill(rel, skill.Name(), string(text), rules)...)
 	}
 	if count == 0 {
 		return nil, errors.New("found no skill under skills/")
 	}
+	problems = append(problems, checkNoteHeadings(texts)...)
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		// This file names the facts that it looks for, and it is not a file
@@ -369,5 +430,68 @@ func TestCheckPlugin_ChecksTheMarketplaceFile(t *testing.T) {
 	}
 	if len(problems) != 2 || !strings.Contains(problems[0], `name = "other"`) || !strings.Contains(problems[1], "plugins must hold one entry") {
 		t.Errorf("problems = %q, want the name and the source of the marketplace", problems)
+	}
+}
+
+// TestCheckPlugin_ComparesTheHeadingsOfTheHandOverNote proves that the note
+// which the skill hand-over writes has the four headings that the skill
+// session-start reads.
+func TestCheckPlugin_ComparesTheHeadingsOfTheHandOverNote(t *testing.T) {
+	rest := "## Rules of the session\n\n" + testRules + "\n\n## Commands\n\n- `cumin status`\n"
+	four := []string{"State", "Open decisions", "Waiting for the Maintainer", "What the session learned"}
+	withHeadings := func(name string, headings ...string) string {
+		body := "## " + noteHeadingSection + "\n\n"
+		for i, h := range headings {
+			body += fmt.Sprintf("%d. `## %s`\n", i+1, h)
+		}
+		// The table of the skill hand-over, with one row for each heading.
+		for _, h := range headings {
+			body += "\n| `## " + h + "` | Text. |"
+		}
+		return testSkill(name, body+"\n\n"+rest)
+	}
+	skill := func(name string) string { return filepath.Join("skills", name, "SKILL.md") }
+	tests := []struct {
+		name    string
+		changed map[string]string
+		want    []string
+	}{
+		{"both skills list the same four headings",
+			map[string]string{skill(startSkill): withHeadings(startSkill, four...), skill(handOverSkill): withHeadings(handOverSkill, four...)},
+			nil},
+		{"one heading differs",
+			map[string]string{skill(startSkill): withHeadings(startSkill, four...), skill(handOverSkill): withHeadings(handOverSkill, "State", "Decisions", "Waiting for the Maintainer", "What the session learned")},
+			[]string{"the headings of the hand-over note differ"}},
+		{"the order differs",
+			map[string]string{skill(startSkill): withHeadings(startSkill, four...), skill(handOverSkill): withHeadings(handOverSkill, four[1], four[0], four[2], four[3])},
+			[]string{"the headings of the hand-over note differ"}},
+		{"the table of the skill hand-over lacks a heading of its list",
+			map[string]string{skill(startSkill): withHeadings(startSkill, four...), skill(handOverSkill): strings.Replace(withHeadings(handOverSkill, four...), "| `## Open decisions` |", "| `## Decisions` |", 1)},
+			[]string{"no row of a table starts with the heading `## Open decisions`"}},
+		{"both skills list three headings",
+			map[string]string{skill(startSkill): withHeadings(startSkill, four[:3]...), skill(handOverSkill): withHeadings(handOverSkill, four[:3]...)},
+			[]string{"session-start/SKILL.md", "hand-over/SKILL.md"}},
+		{"the skill hand-over is missing",
+			map[string]string{skill(startSkill): withHeadings(startSkill, four...)},
+			[]string{"hand-over/SKILL.md", "the headings of the hand-over note differ"}},
+		{"the skill session-start lacks the section",
+			map[string]string{skill(startSkill): testSkill(startSkill, rest), skill(handOverSkill): withHeadings(handOverSkill, four...)},
+			[]string{"session-start/SKILL.md", "the headings of the hand-over note differ"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			problems, err := checkPlugin(writePlugin(t, tt.changed))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(problems) != len(tt.want) {
+				t.Fatalf("problems = %q, want one for each of %q", problems, tt.want)
+			}
+			for i, w := range tt.want {
+				if !strings.Contains(problems[i], w) {
+					t.Errorf("problem %d = %q, want %q", i, problems[i], w)
+				}
+			}
+		})
 	}
 }

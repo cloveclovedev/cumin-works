@@ -15,6 +15,7 @@ rectangle "plugin cumin-maintainer\nplugins/cumin-maintainer/" as plugin {
 }
 rectangle "general tools\ncumin status, scripts/" as tools
 file "monitor.json\n&#126;/.local/state/cumin/" as monitor
+file "hand-over.md\n&#126;/.local/state/cumin/" as note
 rectangle "cumin run" as run
 
 person --> session : talk, decide, allow
@@ -23,6 +24,8 @@ session --> skills : load at local scope
 rules .right.> skills : same text in every skill\n(plugin_test.go)
 session --> tools : call
 session --> github : gh, after the question
+session --> monitor : session-start:\nread
+session --> note : hand-over: write\nsession-start: read
 tools --> github : cumin status:\nread
 tools ..> monitor : read\n(tools of later issues)
 run --> monitor : write after every poll
