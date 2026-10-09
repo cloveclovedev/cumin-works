@@ -1,0 +1,14 @@
+{
+  "name": "cumin-works",
+  "description": "Plugins for the people who work with cumin",
+  "owner": {
+    "name": "cumin-works"
+  },
+  "plugins": [
+    {
+      "name": "cumin-maintainer",
+      "source": "./plugins/cumin-maintainer",
+      "description": "Skills for the Claude Code session of a Maintainer or the Operator who works with cumin"
+    }
+  ]
+}

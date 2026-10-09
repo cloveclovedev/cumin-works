@@ -1,0 +1,368 @@
+// Package cuminmaintainer holds the plugin of Claude Code for the session of
+// a Maintainer or the Operator, and a test of the form of its files.
+package cuminmaintainer
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+// The names of the plugin and of the marketplace are part of the install
+// command in docs/ja/guides/maintainer-skills.md.
+const (
+	pluginName      = "cumin-maintainer"
+	marketplaceName = "cumin-works"
+)
+
+// descriptionLimit is the length after which Claude Code cuts the description
+// of a skill in its listing ("Extend Claude with skills", read 2026-10-09).
+const descriptionLimit = 1536
+
+// organizationFacts match a fact of one Organization: the name of an
+// Organization or of its product, a repository, an App, a person, or the
+// number of an issue. A placeholder such as <owner>/<repository> or
+// {owner}/{repo} matches none of them.
+var organizationFacts = []struct {
+	what    string
+	pattern *regexp.Regexp
+}{
+	{"the name of an Organization", regexp.MustCompile(`(?i)cloveclove|peppercheck`)},
+	{"a repository", regexp.MustCompile(`(?i)github\.com[/:][a-z0-9][a-z0-9-]*/[a-z0-9._-]+`)},
+	{"an issue of a repository", regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*/[a-z0-9._-]+#[0-9]+`)},
+	{"the number of an issue", regexp.MustCompile(`(^|[\s(])#[0-9]+\b`)},
+	{"an App", regexp.MustCompile(`(?i)\[bot\]`)},
+	{"a person", regexp.MustCompile(`(^|[\s(])@[A-Za-z0-9][A-Za-z0-9-]*`)},
+}
+
+// section returns the text under the heading "## <title>" of a Markdown
+// text, up to the next heading of the same level, and whether the heading
+// exists. A "## " line inside a code block ends the section too: a skill
+// keeps such lines out of these two sections.
+func section(text, title string) (string, bool) {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "## "+title {
+			continue
+		}
+		end := len(lines)
+		for j := i + 1; j < len(lines); j++ {
+			if strings.HasPrefix(lines[j], "## ") {
+				end = j
+				break
+			}
+		}
+		return strings.TrimSpace(strings.Join(lines[i+1:end], "\n")), true
+	}
+	return "", false
+}
+
+// frontMatter returns the keys of the front matter of a skill: the lines
+// "key: value" between the first line "---" and the next one. Claude Code
+// reads the front matter only when "---" is the first line of the file.
+func frontMatter(text string) (map[string]string, bool) {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	if lines[0] != "---" {
+		return nil, false
+	}
+	keys := map[string]string{}
+	for _, line := range lines[1:] {
+		if line == "---" {
+			return keys, true
+		}
+		if key, value, ok := strings.Cut(line, ":"); ok {
+			keys[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		}
+	}
+	return nil, false
+}
+
+// checkSkill returns the problems of one SKILL.md. rules is the text that the
+// section "Rules of the session" must hold.
+func checkSkill(rel, name, text, rules string) []string {
+	var problems []string
+	keys, ok := frontMatter(text)
+	switch {
+	case !ok:
+		problems = append(problems, fmt.Sprintf("%s: the file must start with a front matter between two lines \"---\"", rel))
+	default:
+		if keys["name"] != name {
+			problems = append(problems, fmt.Sprintf("%s: the front matter must hold \"name: %s\", the name of the directory", rel, name))
+		}
+		if d := keys["description"]; d == "" || len(d) > descriptionLimit {
+			problems = append(problems, fmt.Sprintf("%s: the front matter must hold a description of 1 to %d characters on one line", rel, descriptionLimit))
+		}
+	}
+	got, ok := section(text, "Rules of the session")
+	switch {
+	case !ok:
+		problems = append(problems, fmt.Sprintf("%s: the section \"## Rules of the session\" is missing", rel))
+	case got != rules:
+		problems = append(problems, fmt.Sprintf("%s: the section \"## Rules of the session\" differs from rules.md: copy the text below the title of rules.md", rel))
+	}
+	commands, ok := section(text, "Commands")
+	switch {
+	case !ok:
+		problems = append(problems, fmt.Sprintf("%s: the section \"## Commands\" is missing", rel))
+	case !strings.Contains(commands, "`"):
+		problems = append(problems, fmt.Sprintf("%s: the section \"## Commands\" names no command in backticks", rel))
+	}
+	return problems
+}
+
+// checkPlugin returns one problem for each broken rule of the plugin under
+// root/plugins/cumin-maintainer and of the marketplace file of root:
+//   - the marketplace lists the plugin under its name, with a relative source;
+//   - every skill has a front matter, the rules of the session as rules.md
+//     has them, and the commands that it runs;
+//   - no file of the plugin holds a fact of one Organization.
+func checkPlugin(root string) ([]string, error) {
+	var problems []string
+	dir := filepath.Join(root, "plugins", pluginName)
+
+	var manifest struct {
+		Name string `json:"name"`
+	}
+	if err := readJSON(filepath.Join(dir, ".claude-plugin", "plugin.json"), &manifest); err != nil {
+		return nil, err
+	}
+	if manifest.Name != pluginName {
+		problems = append(problems, fmt.Sprintf("plugin.json: name = %q, want %q", manifest.Name, pluginName))
+	}
+	var marketplace struct {
+		Name    string `json:"name"`
+		Plugins []struct {
+			Name   string `json:"name"`
+			Source any    `json:"source"`
+		} `json:"plugins"`
+	}
+	if err := readJSON(filepath.Join(root, ".claude-plugin", "marketplace.json"), &marketplace); err != nil {
+		return nil, err
+	}
+	if marketplace.Name != marketplaceName {
+		problems = append(problems, fmt.Sprintf("marketplace.json: name = %q, want %q", marketplace.Name, marketplaceName))
+	}
+	// A relative source is a path from the root of the marketplace, the
+	// directory that holds .claude-plugin/ ("Create a marketplace").
+	source := "./plugins/" + pluginName
+	if len(marketplace.Plugins) != 1 || marketplace.Plugins[0].Name != pluginName || marketplace.Plugins[0].Source != source {
+		problems = append(problems, fmt.Sprintf("marketplace.json: plugins must hold one entry with the name %q and the source %q", pluginName, source))
+	}
+
+	title, rules, ok := strings.Cut(strings.ReplaceAll(readText(dir, "rules.md"), "\r\n", "\n"), "\n")
+	if !ok || title != "# Rules of the session" {
+		return nil, errors.New("rules.md must start with the line \"# Rules of the session\"")
+	}
+	rules = strings.TrimSpace(rules)
+	if strings.Contains(rules, "\n## ") {
+		problems = append(problems, "rules.md: a heading \"## \" would end the section of a skill: use \"### \"")
+	}
+
+	skills, err := os.ReadDir(filepath.Join(dir, "skills"))
+	if err != nil {
+		return nil, err
+	}
+	var count int
+	for _, skill := range skills {
+		if !skill.IsDir() {
+			continue
+		}
+		count++
+		rel := filepath.Join("skills", skill.Name(), "SKILL.md")
+		text, err := os.ReadFile(filepath.Join(dir, rel))
+		if errors.Is(err, fs.ErrNotExist) {
+			problems = append(problems, fmt.Sprintf("%s is missing", rel))
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		problems = append(problems, checkSkill(rel, skill.Name(), string(text), rules)...)
+	}
+	if count == 0 {
+		return nil, errors.New("found no skill under skills/")
+	}
+
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		// This file names the facts that it looks for, and it is not a file
+		// that a session reads.
+		if err != nil || d.IsDir() || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		text, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, path)
+		for n, line := range strings.Split(string(text), "\n") {
+			for _, fact := range organizationFacts {
+				if found := fact.pattern.FindString(line); found != "" {
+					problems = append(problems, fmt.Sprintf("%s:%d holds %s (%q): a file of the plugin holds no fact of one Organization", rel, n+1, fact.what, strings.TrimSpace(found)))
+				}
+			}
+		}
+		return nil
+	})
+	return problems, err
+}
+
+func readJSON(path string, v any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, v); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	return nil
+}
+
+// readText returns the text of a file of the plugin, or "" when it cannot be
+// read: the caller reports the missing first line.
+func readText(dir, name string) string {
+	data, _ := os.ReadFile(filepath.Join(dir, name))
+	return string(data)
+}
+
+// TestPlugin_EverySkillFollowsTheForm checks the committed plugin.
+func TestPlugin_EverySkillFollowsTheForm(t *testing.T) {
+	problems, err := checkPlugin(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range problems {
+		t.Error(p)
+	}
+}
+
+const testRules = "### One part\n\n- Ask before an action."
+
+// writePlugin writes a plugin with one good skill under a new root, then the
+// files of changed, and returns the root.
+func writePlugin(t *testing.T, changed map[string]string) string {
+	t.Helper()
+	root := t.TempDir()
+	plugin := filepath.Join("plugins", pluginName)
+	files := map[string]string{
+		filepath.Join(".claude-plugin", "marketplace.json"):        `{"name":"cumin-works","owner":{"name":"x"},"plugins":[{"name":"cumin-maintainer","source":"./plugins/cumin-maintainer"}]}`,
+		filepath.Join(plugin, ".claude-plugin", "plugin.json"):     `{"name":"cumin-maintainer"}`,
+		filepath.Join(plugin, "rules.md"):                          "# Rules of the session\n\n" + testRules + "\n",
+		filepath.Join(plugin, "skills", "good", "SKILL.md"):        testSkill("good", "## Rules of the session\n\n"+testRules+"\n\n## Commands\n\n- `gh issue view <number>`\n"),
+		filepath.Join(plugin, "skills", "good", "scripts", "x.sh"): "#!/bin/sh\ngh api repos/{owner}/{repo}/issues/\"$1\"\necho \"<plugin>@<marketplace>\"\n",
+		filepath.Join(plugin, "skills", "README.md"):               "A file next to the skills is not a skill.\n",
+		filepath.Join(plugin, "skills", "good", "reference.md"):    "Install from <owner>/<repository>. See https://github.com/<owner>/<repository>.\n",
+		filepath.Join(plugin, "skills", "good", "colors.md"):       "Take step 1. The color is #1D76DB.\n",
+	}
+	for name, text := range changed {
+		files[filepath.Join(plugin, name)] = text
+	}
+	for name, text := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func testSkill(name, body string) string {
+	return "---\nname: " + name + "\ndescription: Use when a test needs a skill.\n---\n\n# A skill\n\n" + body
+}
+
+func TestCheckPlugin_FindsEachProblem(t *testing.T) {
+	rulesSection := "## Rules of the session\n\n" + testRules + "\n\n"
+	commands := "## Commands\n\n- `gh issue view <number>`\n"
+	skill := func(name string) string { return filepath.Join("skills", name, "SKILL.md") }
+	tests := []struct {
+		name    string
+		changed map[string]string
+		want    []string
+	}{
+		{"a good plugin has no problem", nil, nil},
+		{"a skill lacks the rules section",
+			map[string]string{skill("bad"): testSkill("bad", commands)},
+			[]string{`the section "## Rules of the session" is missing`}},
+		{"a skill holds other rules than rules.md",
+			map[string]string{skill("bad"): testSkill("bad", "## Rules of the session\n\n### One part\n\n- Act without asking.\n\n"+commands)},
+			[]string{`the section "## Rules of the session" differs from rules.md`}},
+		{"a skill lacks the commands section",
+			map[string]string{skill("bad"): testSkill("bad", rulesSection)},
+			[]string{`the section "## Commands" is missing`}},
+		{"a skill names no command",
+			map[string]string{skill("bad"): testSkill("bad", rulesSection+"## Commands\n\nNone.\n")},
+			[]string{`the section "## Commands" names no command`}},
+		{"a skill has no front matter",
+			map[string]string{skill("bad"): "# A skill\n\n" + rulesSection + commands},
+			[]string{"must start with a front matter"}},
+		{"the name of a skill differs from its directory",
+			map[string]string{skill("bad"): testSkill("other", rulesSection+commands)},
+			[]string{`must hold "name: bad"`}},
+		{"a skill has no description",
+			map[string]string{skill("bad"): "---\nname: bad\n---\n\n" + rulesSection + commands},
+			[]string{"must hold a description"}},
+		{"a skill directory has no SKILL.md",
+			map[string]string{filepath.Join("skills", "bad", "notes.md"): "Notes.\n"},
+			[]string{"SKILL.md is missing"}},
+		{"a skill holds an organization name",
+			map[string]string{skill("bad"): testSkill("bad", "Ask the team of cloveclovedev.\n\n"+rulesSection+commands)},
+			[]string{"holds the name of an Organization"}},
+		{"a script holds a repository",
+			map[string]string{filepath.Join("skills", "good", "scripts", "y.sh"): "git clone https://github.com/some-org/some-repo\n"},
+			[]string{"holds a repository"}},
+		{"a file holds an issue of a repository",
+			map[string]string{"notes.md": "See some-org/some-repo#12.\n"},
+			[]string{"holds an issue of a repository"}},
+		{"a file holds the number of an issue",
+			map[string]string{"notes.md": "This follows #385.\n"},
+			[]string{"holds the number of an issue"}},
+		{"a file holds an App",
+			map[string]string{"notes.md": "The author is some-app[bot].\n"},
+			[]string{"holds an App"}},
+		{"a file holds a person",
+			map[string]string{"notes.md": "Ask @someone first.\n"},
+			[]string{"holds a person"}},
+		{"the rules hold a heading of the level of a section",
+			map[string]string{"rules.md": "# Rules of the session\n\n" + testRules + "\n\n## More\n\n- A rule.\n"},
+			[]string{`rules.md: a heading "## "`, `differs from rules.md`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			problems, err := checkPlugin(writePlugin(t, tt.changed))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(problems) != len(tt.want) {
+				t.Fatalf("problems = %q, want one for each of %q", problems, tt.want)
+			}
+			for i, w := range tt.want {
+				if !strings.Contains(problems[i], w) {
+					t.Errorf("problem %d = %q, want %q", i, problems[i], w)
+				}
+			}
+		})
+	}
+}
+
+func TestCheckPlugin_ChecksTheMarketplaceFile(t *testing.T) {
+	root := writePlugin(t, nil)
+	path := filepath.Join(root, ".claude-plugin", "marketplace.json")
+	if err := os.WriteFile(path, []byte(`{"name":"other","plugins":[{"name":"cumin-maintainer","source":"../plugins/cumin-maintainer"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	problems, err := checkPlugin(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(problems) != 2 || !strings.Contains(problems[0], `name = "other"`) || !strings.Contains(problems[1], "plugins must hold one entry") {
+		t.Errorf("problems = %q, want the name and the source of the marketplace", problems)
+	}
+}
