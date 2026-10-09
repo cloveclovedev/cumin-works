@@ -40,6 +40,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | `hand-over` | `/cumin-maintainer:hand-over` | セッションの終わりに、状態、開いている判断、Maintainerを待つもの、セッションが学んだことの4つの見出しで、引き継ぎのメモを書く |
 | `merge-decision` | `/cumin-maintainer:merge-decision` | mergeの判断を待つPull Requestを1つ確かめて、決まった形で報告する。スクリプト `check-pull-request.sh` が、先頭のコミットへの承認、必須のcheck、保護されたパスの変更を、GitHubから1回読んで確かめる。差分はテスト以外を全部読む。承認は、Pull Requestの番号を入れた決まった質問のあとか、セッションが許された範囲の中だけで、1つずつ行う |
 | `watch` | `/cumin-maintainer:watch` | Maintainerを待つIssueが新しく現れるのを待つ。スクリプト `wait-for-waiting.sh` を裏で動かし、モニターファイルの `waiting` に新しい項目が出たら、その項目だけを報告して、種類 (`kind`) ごとのskillを示す。GitHubは読まない |
+| `host` | `/cumin-maintainer:host` | Hostの3つの一般の道具 (`scripts/cumin-health.sh`、`scripts/replace-binary.sh`、`scripts/live-scenario.sh`) を呼ぶ。道具ごとに、いつ呼ぶか、コマンド、終了コードの読み方を持ち、自分の手順を足さない。道具のあるチェックアウトは、環境変数 `CUMIN_SOURCE_DIR` から読み、なければMaintainerに聞く。`replace-binary.sh` と `live-scenario.sh` はHostを変えるので、呼ぶ前に聞く。テスト以外のコードを変えるmergeのあとは、次の承認の前にバイナリを入れ替える。mergeのあとは、Maintainerに聞いてから、チェックアウトを `git pull --ff-only` で合わせて、道具を呼ぶ |
 | `requirement-change` | `/cumin-maintainer:requirement-change` | Agentが書けない保護されたパスの文書 (要件の文書) を、Maintainerと手で変える。内容は、ファイルを変える前に会話の中でMaintainerが決める。1つの話題を1つのPull Requestにし、既定のブランチからブランチを作る。複数のファイルの置き換えは、新しい文章を全て計算してから書き込む。差分の大きさ (`git diff --stat`) を、Pull Requestを開く前とmergeの前に確かめ、空になったファイルや予定にないファイルがあれば止まる。図は、リポジトリが文書に書いた道具で書き出す。mergeは、Maintainerの言葉があるときか、セッションが許された範囲の中だけで行う |
 
 ### セッションの始めの質問

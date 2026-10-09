@@ -158,6 +158,7 @@
 | | `plugin_test.go` | pluginの形のテスト。marketplaceのファイル、全てのskillのfront matterと2つの節、Organizationの事実がないこと、skill `session-start` と `hand-over` が持つ引き継ぎのメモの4つの見出しが同じであることを確かめる。このパッケージのGoのファイルは、テストだけである |
 | | `merge_decision_test.go` | skill `merge-decision` のテスト。偽の `gh` を `PATH` に置いて `check-pull-request.sh` を動かす。`SKILL.md` の4つの見出しと、承認の決まった質問も確かめる |
 | | `watch_test.go` | skill `watch` のテスト。golden file (`internal/workflow/testdata/monitor-file.json`) と、テストが書くモニターファイルで `wait-for-waiting.sh` を動かす。`SKILL.md` が、種類ごとのskillを挙げることも確かめる |
+| | `host_test.go` | skill `host` のテスト。`SKILL.md` が、呼ぶコマンドを全て `## Commands` に持ち、Hostを変えるコマンドを聞いてから行うものに分け、道具のオプションを `host-tools.md` に任せることを確かめる |
 | | `decision_request_test.go` | skill `decision-request` のテスト。`SKILL.md` が、2種類の見分け方、分からないときの決まり、答えの形の出どころを持つこと、`templates/` にない見出しを挙げないこと、文中のコマンドが全て `## Commands` にあることを確かめる |
 
 ### テストのファイル
