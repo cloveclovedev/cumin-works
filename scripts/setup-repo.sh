@@ -173,7 +173,7 @@ replace_text "$here/ruleset-main-required-checks.json" "{ \"context\": \"$protec
 # --- The two files --------------------------------------------------------------
 
 # put_file <path in the repository> <local file> <keep|report>
-# "keep": an existing file is the Owner's. "report": say when it differs.
+# "keep": an existing file is a Maintainer's. "report": say when it differs.
 put_file() {
   # gh encodes the branch name as a query parameter. A branch name can hold "#" or "&".
   if gh api --method GET -H "Accept: application/vnd.github.raw+json" "repos/$repo/contents/$1" -f ref="$branch" >"$work/current" 2>"$work/read-error"; then
@@ -275,7 +275,7 @@ if [ -s "$work/priority-labels" ]; then
         y|Y|yes|YES|Yes)
           while IFS= read -r label; do
             gh api -X POST "repos/$repo/labels" -f name="$label" -f color="D4C5F9" \
-              -f description="The Owner says: start this before a lower priority" >/dev/null ||
+              -f description="A Maintainer says: start this before a lower priority" >/dev/null ||
               die "cannot create the label $label"
             echo "created    label $label"
           done <"$work/missing-labels"
@@ -295,21 +295,21 @@ fi
 repository_labels() {
   cat <<'LABELS'
 cumin/type/requirement|5319E7|This is a requirement issue
-cumin/type/owner-task|5319E7|The Owner does this work by hand; cumin does not start it
-cumin/status/ready|0E8A16|The Owner says: this issue can start
+cumin/type/owner-task|5319E7|A Maintainer does this work by hand; cumin does not start it
+cumin/status/ready|0E8A16|A Maintainer says: this issue can start
 cumin/status/planning|1D76DB|The Planner splits the requirement
 cumin/status/implementing|1D76DB|The Implementer works on the issue, or the sub-issues are in progress
 cumin/status/reviewing|1D76DB|The Reviewer works on the pull request
 cumin/status/checking|BFD4F2|GitHub runs the required checks
 cumin/status/accepting|1D76DB|The Planner checks the merged work against the requirement
 cumin/status/merging|1D76DB|cumin merges the pull request and closes the issue
-cumin/status/awaiting-plan-review|FBCA04|Waiting for the Owner to review the plan and the sub-issues
-cumin/status/awaiting-merge-decision|FBCA04|Waiting for the Owner to review the pull request and decide the merge
-cumin/status/awaiting-acceptance|FBCA04|Waiting for the Owner to accept the requirement or send work back
-cumin/status/awaiting-decision|D93F0B|cumin cannot go on; waiting for an answer of the Owner
+cumin/status/awaiting-plan-review|FBCA04|Waiting for a Maintainer to review the plan and the sub-issues
+cumin/status/awaiting-merge-decision|FBCA04|Waiting for a Maintainer to review the pull request and decide the merge
+cumin/status/awaiting-acceptance|FBCA04|Waiting for a Maintainer to accept the requirement or send work back
+cumin/status/awaiting-decision|D93F0B|cumin cannot go on; waiting for an answer of a Maintainer
 risk/low|C2E0C6|A few lines with an obvious effect; cumin merges
-risk/medium|FEF2C0|Everything else; the Owner merges
-risk/high|F9D0C4|Cannot be undone by a revert; the Owner merges
+risk/medium|FEF2C0|Everything else; a Maintainer merges
+risk/high|F9D0C4|Cannot be undone by a revert; a Maintainer merges
 LABELS
 }
 
