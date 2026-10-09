@@ -4,7 +4,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 
 ## pluginとは何か
 
-![MaintainerのClaude Codeのセッションがpluginのskillを読み込み、skillが一般の道具を呼ぶ。セッションは、モニターファイルを読み、引き継ぎのメモを読み書きする。今の道具はGitHubを読み、モニターファイルを読む道具はあとで加わる](maintainer-skills.svg)
+![MaintainerのClaude Codeのセッションがpluginのskillを読み込み、skillが一般の道具を呼ぶ。セッションは、モニターファイルを読み、引き継ぎのメモを読み書きする。skill watchのスクリプトは、モニターファイルを読む。今の一般の道具はGitHubを読み、モニターファイルを読む一般の道具はあとで加わる](maintainer-skills.svg)
 
 図の元ファイル: [maintainer-skills.puml](maintainer-skills.puml)
 
@@ -13,7 +13,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | セッション | 対象のリポジトリで起動したClaude Code | Maintainerと話し、skillの手順に従う |
 | plugin | cumin-worksのリポジトリの `plugins/cumin-maintainer/` | skillと、全てのskillが繰り返すセッションの決まり (`rules.md`) を持つ。skillは、自分のスクリプトを、自分のディレクトリに持てる |
 | 一般の道具 | `cumin status` と `scripts/` | Claude Codeなしでも端末から使える。skillは道具を呼ぶだけで、自分の手順を足さない。今ある道具は `cumin status` で、Hostの設定とGitHubを読む |
-| モニターファイル | `~/.local/state/cumin/monitor.json` | `cumin run` が書く。skill `session-start` が、セッションの始めに読む。ファイルがないときと古いときは、そう報告して、GitHubを読む。このファイルを読む道具は、まだない。cuminのコードも読まない。待つIssueや最後の定期確認を、GitHubに問い合わせ直さずにこのファイルから読む道具 (図の点線の矢印) は、あとのIssueで `scripts/` に加わる ([モニターファイルとメニューバーのアプリの設計](../designs/status-menu-bar.md)) |
+| モニターファイル | `~/.local/state/cumin/monitor.json` | `cumin run` が書く。skill `session-start` が、セッションの始めに読む。ファイルがないときと古いときは、そう報告して、GitHubを読む。skill `watch` のスクリプトが、待つIssueをこのファイルから読む (「`watch` のスクリプト」)。このファイルを読む一般の道具は、まだない。cuminのコードも読まない。待つIssueや最後の定期確認を、GitHubに問い合わせ直さずにこのファイルから読む道具 (図の点線の矢印) は、あとのIssueで `scripts/` に加わる ([モニターファイルとメニューバーのアプリの設計](../designs/status-menu-bar.md)) |
 | 引き継ぎのメモ | `~/.local/state/cumin/hand-over.md` | skill `hand-over` が、Maintainerに聞いてから書く。次のセッションのskill `session-start` が読む。Hostの手元のファイルで、cuminは読まず、どのリポジトリにも入れない |
 
 - cumin-worksのリポジトリが、そのままpluginのmarketplaceである。`.claude-plugin/marketplace.json` が、marketplaceの名前 `cumin-works` と、pluginの場所を相対パスで持つ。
@@ -39,6 +39,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | `session-start` | `/cumin-maintainer:session-start` | セッションの始めに、`cumin status` の出力、モニターファイル、開いているPull Request、作業中の要求Issueの木、引き継ぎのメモを読んで、状態を報告する。そのあと、聞かずにしてよいことを1回だけ聞く |
 | `hand-over` | `/cumin-maintainer:hand-over` | セッションの終わりに、状態、開いている判断、Maintainerを待つもの、セッションが学んだことの4つの見出しで、引き継ぎのメモを書く |
 | `merge-decision` | `/cumin-maintainer:merge-decision` | mergeの判断を待つPull Requestを1つ確かめて、決まった形で報告する。スクリプト `check-pull-request.sh` が、先頭のコミットへの承認、必須のcheck、保護されたパスの変更を、GitHubから1回読んで確かめる。差分はテスト以外を全部読む。承認は、Pull Requestの番号を入れた決まった質問のあとか、セッションが許された範囲の中だけで、1つずつ行う |
+| `watch` | `/cumin-maintainer:watch` | Maintainerを待つIssueが新しく現れるのを待つ。スクリプト `wait-for-waiting.sh` を裏で動かし、モニターファイルの `waiting` に新しい項目が出たら、その項目だけを報告して、種類 (`kind`) ごとのskillを示す。GitHubは読まない |
 | `requirement-change` | `/cumin-maintainer:requirement-change` | Agentが書けない保護されたパスの文書 (要件の文書) を、Maintainerと手で変える。内容は、ファイルを変える前に会話の中でMaintainerが決める。1つの話題を1つのPull Requestにし、既定のブランチからブランチを作る。複数のファイルの置き換えは、新しい文章を全て計算してから書き込む。差分の大きさ (`git diff --stat`) を、Pull Requestを開く前とmergeの前に確かめ、空になったファイルや予定にないファイルがあれば止まる。図は、リポジトリが文書に書いた道具で書き出す。mergeは、Maintainerの言葉があるときか、セッションが許された範囲の中だけで行う |
 
 ### セッションの始めの質問
@@ -78,6 +79,31 @@ skill `session-start` は、次の4つを聞かずにしてよいかを、1回�
 - 保護されたパスは、既定のブランチの `.cumin/config.toml` から読む。照合の決まりは、`cumin-protected-paths` のcheckと同じである。ただし、大文字と小文字を同じに扱うのはASCIIの文字だけで、Unicodeの正規化はしない。保護されたパスの変更は、一覧に出すだけで、終了コードを変えない。
 - 要るものは、`gh` と標準の道具 (`sh`、`awk`、`grep`、`sed`、`sort`、`mktemp`、`sleep`) だけである。
 - テスト (`plugins/cumin-maintainer/merge_decision_test.go`) は、偽の `gh` を `PATH` に置いてスクリプトを動かす。
+
+### `watch` のスクリプト
+
+`plugins/cumin-maintainer/skills/watch/wait-for-waiting.sh --seen <path>` は、セッションのためのスクリプトである。人には、メニューバーのアプリがある ([メニューバーのアプリを作って起動する](status-menu-bar.md))。モニターファイルを間隔を空けて読み、前に報告していない `waiting` の項目が出たら、新しい項目だけを1行ずつ (種類、リポジトリ、Issueの番号、題名、URL。タブ区切り) 標準出力に出して終わる。
+
+| 終了コード | 意味 |
+|---|---|
+| 0 | 新しい項目を1つ以上出した |
+| 2 | 引数が違う。または、`--seen` のファイルに書けない |
+| 124 | 時間の上限まで、新しい項目がなかった。標準エラー出力の文が「time limit」を含む。最後の読み取りが失敗していれば、その理由を言う。`last_poll.at` が古ければ、その時刻と古さを言う |
+
+| 引数 | 初期値 | 意味 |
+|---|---|---|
+| `--seen <path>` | なし (必須) | 報告した項目を持つファイル。skillは `~/.local/state/cumin/watch-seen` を渡す |
+| `--timeout <seconds>` | 1500 | 時間の上限 |
+| `--interval <seconds>` | 10 | 読む間隔 |
+| `--stale <seconds>` | 180 | `last_poll.at` を古いとする上限。メニューバーのアプリの初期値と同じである |
+| `--file <path>` | `~/.local/state/cumin/monitor.json` | モニターファイル |
+
+- 項目は、メニューバーのアプリと同じく、`repository`、`issue`、`kind` の組で見分ける。
+- 失敗した読み取りは、飛ばす。ファイルがない、空である、JSONではない、`version` が1ではない、`waiting` の配列がない、のどれでも同じである。「待つものがない」とは数えず、`--seen` のファイルも変えない。
+- 読めたときは、`--seen` のファイルを、そのときの `waiting` の項目に書き換える。`waiting` から消えて、また現れた項目は、新しい項目として報告する。
+- GitHubもネットワークも読まず、モニターファイルを変えない。書くのは、`--seen` のファイルだけである。
+- 要るものは、macOSの標準の道具 (`sh`、`perl` とその標準のモジュール `JSON::PP` と `Time::Local`、`awk`、`cmp`、`date`、`mktemp`、`mv`、`sleep`) だけである。`jq` は、古いmacOSにないので使わない。
+- テスト (`plugins/cumin-maintainer/watch_test.go`) は、Goの受け入れテストのgolden file (`internal/workflow/testdata/monitor-file.json`) でスクリプトを動かす。
 
 ## インストールする
 

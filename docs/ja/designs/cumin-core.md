@@ -31,6 +31,7 @@
 | 止める予約 | `~/.local/state/cumin/stop-request.json` | `cumin stop --after-current-runs` が書き、`cumin run` が消す |
 | モニターファイル | `~/.local/state/cumin/monitor.json`。cuminを外から見る道具 (メニューバーのアプリ) が読む。cuminは読まない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) | `cumin run` だけ |
 | 引き継ぎのメモ | `~/.local/state/cumin/hand-over.md`。Maintainerのセッションが、次のセッションのために書く。cuminは読まない ([Maintainerのセッションにskillを入れる](../guides/maintainer-skills.md)) | Maintainerのセッションのskill `hand-over` だけ |
+| 報告した待つIssue | `~/.local/state/cumin/watch-seen`。Maintainerのセッションのskill `watch` のスクリプトが、報告した `waiting` の項目を持つ。cuminは読まない ([Maintainerのセッションにskillを入れる](../guides/maintainer-skills.md)) | Maintainerのセッションのskill `watch` のスクリプトだけ |
 | ログ | `~/.local/state/cumin/cumin.log` (標準出力) と `cumin.err.log` (標準エラー出力) | launchd |
 | LaunchAgent | `~/Library/LaunchAgents/dev.cloveclove.cumin.plist` | `cumin setup launchd` |
 | Agentのskill | `~/.local/state/cumin/skills/.claude/skills/<名前>/SKILL.md`。起動時に毎回上書きする ([Agentの実行の設計](agent-run.md) の「Claude Codeの起動」) | `cumin run` だけ |
