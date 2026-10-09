@@ -87,9 +87,8 @@ func (c *AppClient) FailedCheckContent(ctx context.Context, token, owner, repo, 
 		run, ok := pickRun(runs, check)
 		if !ok {
 			// A commit status has no check run, so it has neither
-			// annotations nor a job log. A run that passed is not the
-			// failure either: a rerun can land between the snapshot and
-			// this read.
+			// annotations nor a job log. A check with no attempt that
+			// failed has no failure to read either.
 			logger.Warn("a failed check has no failed check run to read",
 				"check", check.Name, "commit", short(sha))
 			content = append(content, FailedCheck{Check: check, Content: contentNotRead(check.Name)})

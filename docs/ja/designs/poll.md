@@ -162,7 +162,7 @@ checkの結果の読み方:
 ![失敗したcheckの内容の読み方](poll-failed-check.svg)
 
 - 落ちた必須のcheckごとに、RESTで2つ読む。check runのannotation (`GET /repos/{owner}/{repo}/check-runs/{id}/annotations`) と、そのjobのログの終わり (`GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`) である。check runのidとjobのidは、先に読む `GET /repos/{owner}/{repo}/commits/{sha}/check-runs` から取る。jobのidは `details_url` の最後の部分である (実測 54)。
-- check runの一覧は、`filter=all` を付けて、全ての試行を読む。GitHubの既定 (`latest`) は、同じ名前のcheck runのうち最新の1つだけを返す (公式文書: REST "List check runs for a Git reference" の `filter`)。既定のままだと、定期確認のあとにやり直されて通ったcheckは、通ったcheck runだけが返り、落ちた試行の内容を読めない。
+- check runの一覧は、`filter=all` を付けて、全ての試行を読む。GitHubの既定 (`latest`) は、同じ名前のcheck runのうち最新の1つだけを返す (公式文書: REST "List check runs for a Git reference" の `filter`)。やり直したjobの前の試行は、`filter=all` でだけ返る (実測 144)。既定のままだと、定期確認のあとにやり直されて通ったcheckは、通ったcheck runだけが返り、落ちた試行の内容を読めない。
 - 落ちたcheckだけを読む。通ったcheckには呼び出しを出さない。annotationは `failure` のものだけを採る。
 - ログは終わりだけを採る。jobが失敗した理由は終わりにあるためである。読みながら末尾の2,000バイトだけを残すので、ログが長くてもメモリは増えない。上限の64MiBに達したときは、そこで読むのをやめ、「ここで読むのをやめた。jobの終わりではない」と文章の先頭に書く。1つのcheckの文章は4,000バイトまでにし、切ったことを文章に書く。切る位置は文字の切れ目に合わせる。この3つの数は、要件の設定の表にないので、コードの定数にする。
 - 必須のcheckがAppを指定しているときは、そのAppのcheck runの内容だけを読む。判定 (「request the review」、「request a check fix」、「stop for failed checks」) と同じ決まりである。同じ名前のcheckを2つのAppが出していても、別のAppの内容が混ざらない。結果は、落ちた必須のcheckの並びで返す。同じ名前を2つのrulesetが別のAppで求めていても、それぞれの文章が残る。

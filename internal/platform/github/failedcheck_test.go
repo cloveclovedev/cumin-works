@@ -175,6 +175,36 @@ func TestFailedCheckContent_ARunThatPassedIsNotTheFailure(t *testing.T) {
 	}
 }
 
+// TestFailedCheckContent_TheNewestFailedAttemptIsTheOneToRead: with every
+// attempt in the list, a check can have two attempts that failed beside a
+// rerun that passed. The text comes from the failed attempt with the
+// highest id, whatever the order of the list.
+func TestFailedCheckContent_TheNewestFailedAttemptIsTheOneToRead(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 8, Name: "ci", Conclusion: "failure", JobID: 43, JobLog: "the newer attempt that failed\n",
+	})
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 7, Name: "ci", Conclusion: "failure", JobID: 42, JobLog: "the older attempt that failed\n",
+	})
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 9, Name: "ci", Conclusion: "success", JobID: 44, JobLog: "the rerun that passed\n",
+	})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	content := client.FailedCheckContent(context.Background(), githubtest.Token,
+		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, nil)
+
+	text := contentOf(t, content, "ci")
+	if !strings.Contains(text, "the newer attempt that failed") {
+		t.Errorf("the text does not hold the log of the newest attempt that failed:\n%s", text)
+	}
+	if strings.Contains(text, "older") || strings.Contains(text, "passed") {
+		t.Errorf("the text holds the log of another attempt:\n%s", text)
+	}
+}
+
 // TestFailedCheckContent_ADetailsAddressOfAnotherAppIsNoJob: the details
 // address of another App is its own, and a number at its end is not a job
 // of GitHub Actions.

@@ -27,9 +27,16 @@ of this repository?) then (yes)
 else (no)
   :Read no job log;
 endif
-:Text: the annotations,
-then the end of the job log;
-stop
+if (a failure annotation,
+or a job log?) then (yes)
+  :Text: the annotations,
+  then the end of the job log;
+  stop
+else (no)
+  :Text: the name of the check,
+  "could not read its content";
+  stop
+endif
 
 note right
   Without filter=all, GitHub lists only
