@@ -430,7 +430,7 @@ func (s *Service) reviewingNow(ctx context.Context, log *slog.Logger, token stri
 	facts.CauseRequestedAgain = stored.CauseRequests > 1
 	pr, ok := sub.LatestPullRequest()
 	if !ok {
-		log.Error(string(ActionRequestTheReview) + ": the pull request of the review is no longer open")
+		// ReviewEnd stops the review: no open pull request closes the issue.
 		return sub, defaultBranch, true, nil
 	}
 	if CheckReview(pr, facts.Reviewer) == ReviewApprovedOnHead {
@@ -666,6 +666,11 @@ func (s *Service) reviewEndAtPoll(ctx context.Context, log *slog.Logger, token s
 // without a review on the head commit, for the comment and the
 // notification alike.
 const MissingReviewReason = "cumin requested the review twice, but the latest review of the Reviewer is not on the head commit of the pull request with APPROVE or REQUEST_CHANGES."
+
+// NoOpenPullRequestReason is the sentence of "stop the review" when no open
+// pull request closes the issue any more, for the comment and the
+// notification alike.
+const NoOpenPullRequestReason = "No open pull request closes this issue, so the review cannot go on."
 
 // MissingCauseReason is the sentence of "stop at the round limit" after the
 // second request of the cause of one stay that left no decision request, for
