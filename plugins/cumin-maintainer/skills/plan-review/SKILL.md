@@ -5,7 +5,7 @@ description: Review a plan of the Planner of cumin before the Maintainer adds `c
 
 # Review a plan before `ready`
 
-The Planner of cumin splits a requirement issue into sub-issues, and writes one comment `## Plan for approval` on it. The requirement issue then has the label `cumin/status/awaiting-plan-review` (waits for a Maintainer). This skill checks the plan in six fixed steps, so that no check depends on habit. The Maintainer approves the plan: the label `cumin/status/ready` on a sub-issue starts the work.
+The Planner of cumin splits a requirement issue into sub-issues, and writes one comment `## Plan for approval` on it. The requirement issue then has the label `cumin/status/awaiting-plan-review` (waits for a Maintainer). This skill checks the plan in six fixed checks, so that no check depends on habit. The Maintainer approves the plan: the label `cumin/status/ready` on a sub-issue starts the work.
 
 ## Steps
 
@@ -13,16 +13,27 @@ The Planner of cumin splits a requirement issue into sub-issues, and writes one 
 2. Check each rule under "Requirements" of the requirement issue. Find the rule under "Requirement coverage" of the plan, then read the sub-issues that the plan names for it. The rule is covered when their acceptance criteria, taken together, make the rule true. Note a rule that the list lacks, and a rule that the list names but no criterion meets.
 3. Check each item under "Assumptions" of the plan. Compare it with the requirement issue, the answers of the Maintainer in its comments, and the documents of the repository. Sort it: agrees, contradicts a source, or decides a thing that only the Maintainer can decide.
 4. Check each Owner task: a sub-issue with the label `cumin/type/owner-task` (the Maintainer does it by hand). Say what the Maintainer must do, why the Implementer cannot do it, and which issues wait for it through "blocked by". cumin never starts an Owner task. Note an Owner task that "Please check" of the plan does not name.
-5. Check each risk label against the risk criteria of the repository. The criteria are in `.cumin/risk-criteria.md` of the repository. Without that file, the built-in criteria of cumin apply: `disciplines/software-engineering/risk-criteria.md` in the checkout of cumin. Every sub-issue has exactly one `risk/*` label. Note a label that is lower than the criteria ask for, with the row of the criteria. When two rows fit, the higher risk applies.
+5. Check each risk label against the risk criteria of the repository. Find the criteria as "The risk criteria" below says. Every sub-issue has exactly one `risk/*` label. Note a label that is lower than the criteria ask for, with the row of the criteria. When two rows fit, the higher risk applies.
 6. Check each acceptance criterion against the time limit of an agent run. Read the limit as "The time limit" below says. For each criterion and each command under "How to verify", estimate how long the check takes: a repeated test run, a wait, a live run. Note a criterion whose check does not fit in one run together with the work itself. Note also a criterion that no command of an agent run can check. When no estimate is possible, say so; do not guess.
 7. Check the rows of the requirement documents that the plan touches. The instructions of the repository and its document index name the requirement documents. For each sub-issue, open the documents under "Related documents" and "Where this fits", and find the rows on the behavior that the issue changes. Note an issue whose behavior differs from a row, and an issue that needs a new row or a changed row. Such a change is requirement content: the Maintainer decides it, and an Owner task or a pull request by hand carries it. Say "no requirement change is needed" only after this step read the rows.
 8. Show the report in the form under "The report".
 9. Correct the text of a sub-issue when a check found an error in it, as "A correction of a sub-issue" says.
 10. Add `cumin/status/ready` as "The label `cumin/status/ready`" says. End with the state: which sub-issues have the label now, and which points wait for the Maintainer.
 
+## The risk criteria
+
+cumin gives the Planner and the Reviewer one file of risk criteria. The session reads the same file. The first file that exists applies, and it replaces the later ones as a whole:
+
+1. `.cumin/risk-criteria.md` on the default branch of the repository.
+2. `risk-criteria.md` in the directory of the Host settings file of cumin.
+3. The built-in criteria of cumin: `disciplines/software-engineering/risk-criteria.md` in the checkout of cumin.
+
+- Read the first file from the default branch, not from the checkout of the session: another branch can hold another text.
+- When the session can read none of the three, ask the Maintainer for the criteria. The session does not check a risk label from memory.
+
 ## The time limit
 
-- The limit is the key `roles.<role>.time_limit` of the Host settings file of cumin. `<role>` is the role that does the work of the sub-issue: `implementer` for an implementation issue.
+- The limit is the key `roles.<role>.time_limit` of the Host settings file of cumin. Two roles run the checks of an implementation issue: `implementer` does the work, and `reviewer` runs the checks again. Read the limit of both roles, and compare each criterion with the lower one.
 - The Host settings file is `~/.config/cumin/config.toml`, or the file that the Maintainer gives to `cumin run --config <path>`.
 - When the file does not hold the key, the default of cumin applies. Read the default in the row of the key in `docs/ja/development/configuration.md` of the checkout of cumin.
 - When the session can read neither the file nor the default, ask the Maintainer for the limit. This skill holds no value of the limit, and the session does not take one from memory.
@@ -105,6 +116,7 @@ Read, without asking:
 - `gh issue view <number> --json number,title,body,labels,state`
 - `gh api repos/{owner}/{repo}/issues/<number>/sub_issues`
 - `gh api repos/{owner}/{repo}/issues/<number>/dependencies/blocked_by`
+- `gh api repos/{owner}/{repo}/contents/.cumin/risk-criteria.md -H "Accept: application/vnd.github.raw"`
 - `grep -n -E '^\[roles\.|time_limit' <Host settings file>`
 - `gh issue view <number> --json body --jq .body > <file>`
 - `diff -u <file of the old body> <file of the new body>`
