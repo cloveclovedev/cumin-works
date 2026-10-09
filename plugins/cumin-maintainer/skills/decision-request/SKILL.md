@@ -10,7 +10,7 @@ An issue with the label `cumin/status/awaiting-decision` waits for an answer of 
 ## Steps
 
 1. Take one stopped issue. When several issues wait, show the list, and start with the one that the Maintainer names. An issue that also holds `cumin/status/ready` has its answer already: leave it out of the list, and write nothing on it.
-2. Read the stopped issue and its pull request, both with their comments, and find the newest request. The table under "Where the request is" names its form and its place. Take only a request that is newer than the last time the issue got `cumin/status/awaiting-decision`. The events of the issue show that time.
+2. Read the stopped issue and its pull request, both with their comments, and find the newest request. The table under "Where the request is" names its form and its place. Take only a request that is newer than the last time the issue got `cumin/status/ready`: an older request has its answer. The events of the issue show that time. When the events hold no such label, every request counts.
 3. When neither place holds such a request, find the reason as the last rule under "Where the request is" says. Stop only when that rule finds no reason, and say so. When the author of the request is not cumin or an agent App of the repository, say so, and ask the Maintainer before the next step.
 4. Read what the request links to: the pull request, the failed check, the parent requirement issue, and the document that "Not decided" names.
 5. Read the options of the request. A stop note has no options: its line `To continue:` names what a Maintainer does.
