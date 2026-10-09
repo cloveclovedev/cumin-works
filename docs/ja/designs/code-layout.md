@@ -69,7 +69,7 @@
 | | `permission.go` | アカウントのリポジトリでの権限と種類の読み取り (「start the merge」のMaintainerの判定、起動の依頼のIssue Ownerのログイン名) |
 | | `merge.go` | Pull Requestのmerge (衝突、先頭のコミットの移動、既定のブランチの変更の見分け)、mergeが済んだかの読み取り、Issueの開閉の読み取りと、完了として閉じること (「start the merge」) |
 | | `reviewrequest.go` | Pull RequestへのIssue Ownerのレビューの依頼 (「ask for the merge decision」。`POST .../pulls/{n}/requested_reviewers`) |
-| | `failedcheck.go` | 失敗したcheckの内容の読み取り (check runのannotationと、jobのログの終わり) |
+| | `failedcheck.go` | 失敗したcheckの内容の読み取り (全ての試行のcheck run、そのannotationと、このリポジトリのGitHub Actionsのjobのログの終わり) |
 | | `githubtest/fake.go` | 受け入れテストの偽GitHub。テストが使うendpointだけを持つ。このファイルは、`Fake` の型、`New`、リポジトリとそのファイル、要求の振り分け、決めた失敗を持つ。要求を、決めた回数だけ失敗させられる (status、接続の切断、応答なし、一次のレート制限の使い切り、書き込みを処理してから答えを落とす)。`internal/workflow` と `internal/agent` の受け入れテストが使う |
 | | `githubtest/graphql.go` | 偽GitHubのGraphQL。定期確認のsnapshotと、他の読み取り (1つのIssue、sub-issueのページ、Pull Requestの追記、Issueのコメント、ラベルの時刻)、閉じるリンクの追加 |
 | | `githubtest/issues.go` | 偽GitHubのRESTのIssue、ラベル、コメント。その型と、テストが状態を置く関数、読む関数 |

@@ -65,7 +65,8 @@ type RequiredCheck struct {
 }
 
 // AddCheckRun adds one check run on a commit of the repository, for the
-// REST endpoints that read what a failed check says.
+// REST endpoints that read what a failed check says. A second check run of
+// the same name and App on the commit is a later attempt of the first.
 func (f *Fake) AddCheckRun(r *Repository, sha string, run CheckRun) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -76,7 +77,9 @@ func (f *Fake) AddCheckRun(r *Repository, sha string, run CheckRun) {
 }
 
 // serveCommitCheckRuns answers GET .../commits/{sha}/check-runs. Official:
-// "List check runs for a Git reference". The answer is paginated.
+// "List check runs for a Git reference". The answer is paginated. With
+// filter=all the answer holds every attempt; without it (the default,
+// "latest") it holds only the latest attempt of each name and App.
 func (f *Fake) serveCommitCheckRuns(w http.ResponseWriter, r *http.Request, owner, name, sha string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -84,8 +87,21 @@ func (f *Fake) serveCommitCheckRuns(w http.ResponseWriter, r *http.Request, owne
 	if !ok {
 		return
 	}
+	all := repo.CheckRuns[sha]
+	type attempt struct {
+		name string
+		app  int64
+	}
+	latest := map[attempt]int{}
+	for i, run := range all {
+		latest[attempt{run.Name, run.AppID}] = i
+	}
+	everyAttempt := r.URL.Query().Get("filter") == "all"
 	runs := []map[string]any{}
-	for _, run := range repo.CheckRuns[sha] {
+	for i, run := range all {
+		if !everyAttempt && latest[attempt{run.Name, run.AppID}] != i {
+			continue
+		}
 		details := run.DetailsURL
 		if details == "" && run.JobID != 0 {
 			details = fmt.Sprintf("https://github.com/%s/%s/actions/runs/1/job/%d", owner, name, run.JobID)

@@ -82,6 +82,34 @@ func TestAFailedCheckGivesOneFixRequestInTheSameSession(t *testing.T) {
 	}
 }
 
+// "request a check fix" after a rerun: the check failed at the poll, and a
+// rerun of it passed before cumin read the content. GitHub then lists only
+// the rerun by default. The request still holds the content of the attempt
+// that failed, and nothing of the attempt that passed.
+func TestACheckFixRequestHoldsTheFailedAttemptAfterARerunPassed(t *testing.T) {
+	sc := newScene(t)
+	service := sc.service()
+	sc.failingCheck(t, service, 0)
+	sc.fake.AddCheckRun(sc.repo, sc.remoteHead, githubtest.CheckRun{
+		ID: 9, Name: "ci", Conclusion: "success", JobID: 43, JobLog: "ok\texample/login\n",
+	})
+
+	if err := service.Poll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	service.Wait()
+
+	text := promptOf(t, sc.record(t, "agent.args"))
+	for _, want := range []string{`Check "ci" failed.`, "login.go: login_test.go:12: want 2, got 1", "FAIL\texample/login"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the request text has no %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "ok\texample/login") {
+		t.Errorf("the request text holds the log of the attempt that passed:\n%s", text)
+	}
+}
+
 // "request a check fix", then "wait for the checks": a fix that ends with done is verified
 // again, and a verified pull request returns to cumin/status/checking.
 func TestADoneCheckFixIsVerifiedAgain(t *testing.T) {

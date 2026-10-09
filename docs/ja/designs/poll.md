@@ -159,14 +159,17 @@ checkの結果の読み方:
 
 失敗したcheckの内容の読み方 (「request a check fix」の依頼に入れる):
 
+![失敗したcheckの内容の読み方](poll-failed-check.svg)
+
 - 落ちた必須のcheckごとに、RESTで2つ読む。check runのannotation (`GET /repos/{owner}/{repo}/check-runs/{id}/annotations`) と、そのjobのログの終わり (`GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`) である。check runのidとjobのidは、先に読む `GET /repos/{owner}/{repo}/commits/{sha}/check-runs` から取る。jobのidは `details_url` の最後の部分である (実測 54)。
+- check runの一覧は、`filter=all` を付けて、全ての試行を読む。GitHubの既定 (`latest`) は、同じ名前のcheck runのうち最新の1つだけを返す (公式文書: REST "List check runs for a Git reference" の `filter`)。既定のままだと、定期確認のあとにやり直されて通ったcheckは、通ったcheck runだけが返り、落ちた試行の内容を読めない。
 - 落ちたcheckだけを読む。通ったcheckには呼び出しを出さない。annotationは `failure` のものだけを採る。
 - ログは終わりだけを採る。jobが失敗した理由は終わりにあるためである。読みながら末尾の2,000バイトだけを残すので、ログが長くてもメモリは増えない。上限の64MiBに達したときは、そこで読むのをやめ、「ここで読むのをやめた。jobの終わりではない」と文章の先頭に書く。1つのcheckの文章は4,000バイトまでにし、切ったことを文章に書く。切る位置は文字の切れ目に合わせる。この3つの数は、要件の設定の表にないので、コードの定数にする。
 - 必須のcheckがAppを指定しているときは、そのAppのcheck runの内容だけを読む。判定 (「request the review」、「request a check fix」、「stop for failed checks」) と同じ決まりである。同じ名前のcheckを2つのAppが出していても、別のAppの内容が混ざらない。結果は、落ちた必須のcheckの並びで返す。同じ名前を2つのrulesetが別のAppで求めていても、それぞれの文章が残る。
 - annotationは全てのページを読む。失敗のannotationが、警告100件の次のページにあることがあるためである。集めた失敗が文章の上限を超えたら、そこで読むのをやめる。
 - 読めなかったときは、エラーにしない。文章はcheckの名前と「内容を読めなかった」だけになり、警告をログに出す。名前だけでも依頼を出す価値があるためである。commit statusにはcheck runがないので、この道に入る。
-- 読むのは、落ちたcheck runだけである。同じ名前のcheck runが2つあり、あとの1つが通っている (定期確認のあとにやり直された) ときに、通ったほうの内容を「失敗の内容」として渡さないためである。
-- jobのログを読むのは、`details_url` が `/actions/runs/<番号>/job/<番号>` の形のときだけである。GitHub Actions以外のAppの `details_url` は、そのAppのものであり、末尾の数字はjobの番号ではない。
+- 読むのは、落ちたcheck runだけである。同じ名前のcheck runが2つあり、あとの1つが通っている (定期確認のあとにやり直された) ときに、通ったほうの内容を「失敗の内容」として渡さないためである。落ちたcheck runが複数あるときは、最も新しいもの (idが最も大きいもの) を読む。
+- jobのログを読むのは、`details_url` が、このリポジトリのGitHub Actionsのものであるときだけである。条件は2つある。アドレスが `https://github.com` のものであること。パスの全体が `/<owner>/<repo>/actions/runs/<番号>/job/<番号>` で、`<owner>/<repo>` がこのリポジトリであること (大文字と小文字は区別しない)。`details_url` はcheck runを出したAppが書くので、別のホストや別のリポジトリのアドレスの末尾がjobの形であっても、その数字はこのリポジトリのjobの番号ではない。条件に合わないときは、jobのログを読まず、annotationだけを文章にする。
 - 公開リポジトリでは、Checks と Actions の権限がなくても読める (実測 54)。privateリポジトリでは読めないことがあるが、v0.1の対象は公開リポジトリである。
 
 フォローアップノート (write the follow-up note) で使うものは、閉じたsub-issueについてだけ、別に読む (「フォローアップノート (write the follow-up note)」)。
