@@ -74,9 +74,11 @@ func TestAnApprovalOfTheMaintainerOnTheHeadIsMergedOnce(t *testing.T) {
 	}
 	// Only the person is read: the bot of the Reviewer App is never an
 	// Maintainer. "start the merge" reads the Maintainer once, and the merge reads the Maintainer again
-	// for its conditions.
-	if n := permissionReads(sc); n != 2 {
-		t.Errorf("%d permission reads, want 2 (the Maintainer, for 'start the merge' and for the merge)", n)
+	// for its conditions. The merge closes the last sub-issue, so "request
+	// the acceptance check" reads once the person who added the status label
+	// of the requirement issue.
+	if n := permissionReads(sc); n != 3 {
+		t.Errorf("%d permission reads, want 3 (the Maintainer, for 'start the merge' and for the merge; the account of the status label, for 'request the acceptance check')", n)
 	}
 	for _, want := range []string{`"msg":"start the merge: a Maintainer approved the head commit"`, `"msg":"merged the pull request"`} {
 		if !strings.Contains(sc.logs.String(), want) {

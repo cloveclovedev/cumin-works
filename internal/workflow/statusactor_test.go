@@ -2,6 +2,7 @@ package workflow_test
 
 import (
 	"context"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -62,14 +63,23 @@ func TestStatusLabelCounts(t *testing.T) {
 }
 
 // The poll reads the account of a status label only for an issue that
-// cumin is about to act from: in cumin/status/planning or in
-// cumin/status/accepting, with no Planner running.
+// cumin is about to act from, with no Planner running: in
+// cumin/status/planning or in cumin/status/accepting, or in
+// cumin/status/implementing or cumin/status/awaiting-plan-review with one
+// or more sub-issues, all closed ("request the acceptance check").
 func TestStatusActorReads(t *testing.T) {
-	requirement := func(number int, status string) workflow.RequirementIssue {
-		return workflow.RequirementIssue{Number: number, Labels: []string{"cumin/type/requirement", status}}
+	requirement := func(number int, status string, subs ...workflow.SubIssue) workflow.RequirementIssue {
+		return workflow.RequirementIssue{Number: number, Labels: []string{"cumin/type/requirement", status}, SubIssues: subs}
 	}
+	closed, open := workflow.SubIssue{Number: 100, Closed: true}, workflow.SubIssue{Number: 101}
 	snapshot := workflow.Snapshot{
 		RequirementIssues: []workflow.RequirementIssue{
+			requirement(16, workflow.LabelAwaitingAcceptance, closed),
+			requirement(15, workflow.LabelImplementing, closed),
+			requirement(14, workflow.LabelAwaitingPlanReview, closed, open),
+			requirement(13, workflow.LabelImplementing, closed, open),
+			requirement(12, workflow.LabelAwaitingPlanReview, closed, closed),
+			requirement(11, workflow.LabelImplementing, closed),
 			requirement(9, workflow.LabelAccepting),
 			requirement(8, workflow.LabelPlanning),
 			requirement(7, workflow.LabelPlanning),
@@ -78,9 +88,9 @@ func TestStatusActorReads(t *testing.T) {
 			requirement(4, workflow.LabelReady),
 			requirement(3, workflow.LabelAccepting),
 		},
-		Running: map[int]bool{8: true, 3: true},
+		Running: map[int]bool{8: true, 3: true, 15: true},
 	}
-	if got, want := workflow.StatusActorReads(snapshot), []int{7, 9}; !slices.Equal(got, want) {
+	if got, want := workflow.StatusActorReads(snapshot), []int{7, 9, 11, 12}; !slices.Equal(got, want) {
 		t.Errorf("StatusActorReads = %v, want %v", got, want)
 	}
 }
@@ -108,6 +118,33 @@ var statusScenes = []struct {
 	}},
 }
 
+// acceptanceStarts are the two starting states of "request the acceptance
+// check": a requirement issue in cumin/status/implementing and one in
+// cumin/status/awaiting-plan-review, every sub-issue closed. The Planner
+// holds its run until the test releases it.
+var acceptanceStarts = []struct {
+	label string
+	scene func(*testing.T) *scene
+}{
+	{label: "cumin/status/implementing", scene: func(t *testing.T) *scene {
+		sc, _ := newAcceptanceScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+		return sc
+	}},
+	{label: "cumin/status/awaiting-plan-review", scene: func(t *testing.T) *scene {
+		sc, _ := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
+		return sc
+	}},
+}
+
+// endAcceptanceCheck lets the held Planner write its acceptance check
+// comment and end its run.
+func endAcceptanceCheck(t *testing.T, sc *scene, service *workflow.Service) {
+	t.Helper()
+	acceptanceComment(sc, sceneNow.Add(-time.Minute), plannerLogin)
+	sc.release(t)
+	service.Wait()
+}
+
 // A status label of an account that is not cumin-core or a Maintainer
 // (cumin-core.md, test 30): no agent starts and no label changes. Across
 // three polls, cumin logs it once and tells the Maintainer once.
@@ -125,7 +162,7 @@ func TestStatusLabel_ALabelOfAnotherAccountDoesNothingAndIsToldOnce(t *testing.T
 			return githubtest.LabelEvent{Label: label, At: sceneNow.Add(-time.Hour)}
 		}},
 	}
-	for _, s := range statusScenes {
+	for _, s := range slices.Concat(statusScenes, acceptanceStarts) {
 		for _, tt := range others {
 			t.Run(s.label+"/"+tt.name, func(t *testing.T) {
 				sc := s.scene(t)
@@ -198,6 +235,93 @@ func TestStatusLabel_ALabelOfCuminCoreOrOfAMaintainerDecidesAsBefore(t *testing.
 				}
 			})
 		}
+	}
+}
+
+// "request the acceptance check" from each of its two starting states: a
+// status label of cumin-core or of a Maintainer moves the requirement issue
+// to cumin/status/accepting and starts the Planner once.
+func TestStatusLabel_ALabelThatCountsRequestsTheAcceptanceCheck(t *testing.T) {
+	actors := []githubtest.LabelEvent{
+		{At: sceneNow.Add(-2 * time.Hour), Actor: cuminSlug, ActorType: "Bot"},
+		{At: sceneNow.Add(-2 * time.Hour), Actor: theMaintainer, ActorType: "User"},
+	}
+	for _, s := range acceptanceStarts {
+		for _, event := range actors {
+			t.Run(s.label+"/"+event.Actor, func(t *testing.T) {
+				sc := s.scene(t)
+				event.Label = s.label
+				sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{event}
+				setNotMaintainerPermissions(sc)
+				service := sc.service()
+
+				for i := range 3 {
+					if err := service.Poll(t.Context()); err != nil {
+						t.Fatalf("poll %d: %v", i+1, err)
+					}
+				}
+				waitForAgentRun(t, sc)
+
+				accepting := []string{githubtest.RequirementLabel, workflow.LabelAccepting}
+				if got := requirementLabels(t, sc); !slices.Equal(got, accepting) {
+					t.Errorf("labels of #6 = %v, want %v", got, accepting)
+				}
+				endAcceptanceCheck(t, sc, service)
+				if n := sc.agentRuns(t); n != 1 {
+					t.Errorf("%d agent runs, want 1", n)
+				}
+				if strings.Contains(sc.logs.String(), "is not of cumin-core or of a Maintainer") {
+					t.Errorf("a label that counts was logged as one of another account:\n%s", sc.logs.String())
+				}
+			})
+		}
+	}
+}
+
+// A failed read of the account gives no start of "request the acceptance
+// check" and no label change. The next poll reads again and starts.
+func TestStatusLabel_AFailedReadKeepsTheAcceptanceCheckForTheNextPoll(t *testing.T) {
+	for _, s := range acceptanceStarts {
+		t.Run(s.label, func(t *testing.T) {
+			sc := s.scene(t)
+			sc.repo.Issues[6].LabelEvents = []githubtest.LabelEvent{statusBy(s.label, theMaintainer)}
+			sc.fake.SetPermission(theMaintainer, "admin", "User")
+			permission := "/repos/example-org/example-repo/collaborators/" + theMaintainer + "/permission"
+			sc.fake.FailTimes(http.MethodGet, permission, 0, everyTry, http.StatusBadGateway)
+			service := sc.service()
+
+			sc.pollAndWait(t, service)
+
+			if n := sc.agentRuns(t); n != 0 {
+				t.Errorf("%d agent runs, want none after a failed read", n)
+			}
+			if n := sc.labelChanges(); n != 0 {
+				t.Errorf("%d label changes, want none after a failed read", n)
+			}
+			if !strings.Contains(sc.logs.String(), "the actor of the newest "+s.label+" was not read") {
+				t.Errorf("the log does not name the failed read:\n%s", sc.logs.String())
+			}
+			if strings.Contains(sc.logs.String(), "is not of cumin-core or of a Maintainer") {
+				t.Errorf("a failed read is logged as a label of another account:\n%s", sc.logs.String())
+			}
+
+			if err := service.Poll(t.Context()); err != nil {
+				t.Fatalf("Poll: %v", err)
+			}
+			waitForAgentRun(t, sc)
+
+			if n := sc.fake.CountRequests(http.MethodGet, permission); n != everyTry+1 {
+				t.Errorf("%d reads of the permission, want %d: the second poll reads again", n, everyTry+1)
+			}
+			accepting := []string{githubtest.RequirementLabel, workflow.LabelAccepting}
+			if got := requirementLabels(t, sc); !slices.Equal(got, accepting) {
+				t.Errorf("labels of #6 = %v after the second poll, want %v", got, accepting)
+			}
+			endAcceptanceCheck(t, sc, service)
+			if n := sc.agentRuns(t); n != 1 {
+				t.Errorf("%d agent runs after the second poll, want 1", n)
+			}
+		})
 	}
 }
 
@@ -276,8 +400,11 @@ func TestStatusLabel_APollWithNothingToDecideReadsNoAccount(t *testing.T) {
 // another account added waits for the Maintainer, so it is not an issue that
 // cumin moves on without the Maintainer. A label that was not read counts.
 func TestStatusLabel_ALabelOfAnotherAccountDoesNotMoveOnWithoutTheMaintainer(t *testing.T) {
-	for _, label := range []string{workflow.LabelPlanning, workflow.LabelAccepting} {
-		requirement := workflow.RequirementIssue{Number: 6, Labels: []string{"cumin/type/requirement", label}}
+	// cumin/status/awaiting-plan-review moves on only with every sub-issue
+	// closed ("request the acceptance check").
+	for _, label := range []string{workflow.LabelPlanning, workflow.LabelAccepting, workflow.LabelAwaitingPlanReview} {
+		requirement := workflow.RequirementIssue{Number: 6, Labels: []string{"cumin/type/requirement", label},
+			SubIssues: []workflow.SubIssue{{Number: 10, Closed: true}}}
 		snapshot := func(read, counts bool) workflow.Snapshot {
 			requirement.StatusRead, requirement.StatusCounts = read, counts
 			return workflow.Snapshot{RequirementIssues: []workflow.RequirementIssue{requirement}}

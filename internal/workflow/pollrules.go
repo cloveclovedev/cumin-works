@@ -180,7 +180,7 @@ func (s Snapshot) MovesWithoutMaintainer() bool {
 			!statusOfAnother(requirement) {
 			return true
 		}
-		if planReviewMovesOn(requirement) {
+		if planReviewMovesOn(requirement) && !statusOfAnother(requirement) {
 			return true
 		}
 		for _, sub := range requirement.SubIssues {

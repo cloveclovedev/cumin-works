@@ -88,12 +88,13 @@ func remainingNeedReview(requirement RequirementIssue) bool {
 // the acceptance" needs the comments of the requirement issue: it is in
 // cumin/status/accepting, or it is in cumin/status/implementing or in
 // cumin/status/awaiting-plan-review and has one or more sub-issues, all
-// closed.
+// closed. A status label that another account than cumin-core or a
+// Maintainer added needs no comments.
 func NeedsComments(requirement RequirementIssue) bool {
-	if statusLabel(requirement.Labels) == LabelAccepting {
+	if statusLabel(requirement.Labels) == LabelAccepting || everySubIssueClosed(requirement) {
 		return !statusOfAnother(requirement)
 	}
-	return everySubIssueClosed(requirement)
+	return false
 }
 
 // everySubIssueClosed reports whether the requirement issue is in a
@@ -230,14 +231,15 @@ func SplitNeedsFacts(requirement RequirementIssue, running bool) bool {
 
 // acceptanceChecks returns the starts of "request the acceptance check"
 // before the limit: the requirement issue in cumin/status/implementing or
-// in cumin/status/awaiting-plan-review, every sub-issue closed, the
+// in cumin/status/awaiting-plan-review, every sub-issue closed, the status
+// label read and of cumin-core or of a Maintainer (statusCounts), the
 // comments read, no acceptance check after the last close, the follow-up
 // notes of the closed sub-issues written ("write the follow-up note"), and
 // no agent of the requirement issue running.
 func acceptanceChecks(snapshot Snapshot) []CheckAcceptance {
 	var checks []CheckAcceptance
 	for _, requirement := range snapshot.RequirementIssues {
-		if everySubIssueClosed(requirement) && requirement.CommentsRead && !checked(requirement) &&
+		if everySubIssueClosed(requirement) && statusCounts(requirement) && requirement.CommentsRead && !checked(requirement) &&
 			requirement.FollowUpsDone && !snapshot.Running[requirement.Number] {
 			checks = append(checks, CheckAcceptance{Number: requirement.Number})
 		}
@@ -321,15 +323,17 @@ func StatusLabelCounts(label string, actor StatusActor, core string) bool {
 
 // StatusActorReads names the requirement issues whose newest status label
 // the poll must read the actor of: the ones that cumin is about to act
-// from, in cumin/status/planning or in cumin/status/accepting with no
-// Planner running. While the Planner runs, and in every other state,
-// nothing is decided from the label, so a poll with no such issue makes no
-// read.
+// from, with no Planner running: in cumin/status/planning or in
+// cumin/status/accepting, or in a starting state of "request the acceptance
+// check" (cumin/status/implementing or cumin/status/awaiting-plan-review)
+// with one or more sub-issues, all closed. While the Planner runs, and in
+// every other state, nothing is decided from the label, so a poll with no
+// such issue makes no read.
 func StatusActorReads(snapshot Snapshot) []int {
 	var numbers []int
 	for _, requirement := range snapshot.RequirementIssues {
 		status := statusLabel(requirement.Labels)
-		if (status == LabelPlanning || status == LabelAccepting) && !snapshot.Running[requirement.Number] {
+		if (status == LabelPlanning || status == LabelAccepting || everySubIssueClosed(requirement)) && !snapshot.Running[requirement.Number] {
 			numbers = append(numbers, requirement.Number)
 		}
 	}

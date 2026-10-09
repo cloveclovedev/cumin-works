@@ -570,10 +570,11 @@ func TestNoNoteNeededDoesNotKeepTheAcceptanceCheckWaiting(t *testing.T) {
 func TestAFailedReadOfTheCommentsKeepsTheAcceptanceCheckWaiting(t *testing.T) {
 	sc := newFollowUpScene(t, followUpBody, nil)
 	service := sc.service()
-	// The poll queries GraphQL three times: the snapshot, the comments for
+	// The poll queries GraphQL four times: the snapshot, the account of the
+	// status label for "request the acceptance check", the comments for
 	// "request the acceptance check" and "ask for the acceptance", then the
-	// comments for "write the follow-up note". The third query fails.
-	sc.fake.FailTimes("POST", "/graphql", 2, everyTry, 502)
+	// comments for "write the follow-up note". The fourth query fails.
+	sc.fake.FailTimes("POST", "/graphql", 3, everyTry, 502)
 	sc.pollAndWait(t, service)
 	if n := sc.agentRuns(t); n != 0 {
 		t.Errorf("%d agent runs, want none", n)

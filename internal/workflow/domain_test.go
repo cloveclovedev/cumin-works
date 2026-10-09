@@ -334,12 +334,13 @@ func TestDecide_ClaimsWaitForTheLabelTimes(t *testing.T) {
 // "request the acceptance check" and "ask for the acceptance": every
 // sub-issue closed; an acceptance check
 // comment after the last close moves the requirement issue to the Maintainer,
-// otherwise the Planner is asked.
+// otherwise the Planner is asked. The Planner is asked only when the status
+// label was read and is of cumin-core or of a Maintainer.
 func TestDecide_RequestTheAcceptanceCheckAndAskForTheAcceptance(t *testing.T) {
 	closedAt := time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)
 	requirement := func(checkAt time.Time, subs ...SubIssue) RequirementIssue {
 		return RequirementIssue{Number: 6, Labels: []string{LabelRequirement, LabelImplementing}, SubIssues: subs,
-			CommentsRead: true, AcceptanceCheckAt: checkAt, FollowUpsDone: true}
+			StatusRead: true, StatusCounts: true, CommentsRead: true, AcceptanceCheckAt: checkAt, FollowUpsDone: true}
 	}
 	closed := SubIssue{Number: 10, Closed: true, ClosedAt: closedAt, Labels: []string{"risk/low"}}
 	later := SubIssue{Number: 11, Closed: true, ClosedAt: closedAt.Add(2 * time.Hour), Labels: []string{"risk/low"}}
@@ -348,7 +349,6 @@ func TestDecide_RequestTheAcceptanceCheckAndAskForTheAcceptance(t *testing.T) {
 	accepting := func(checkAt time.Time, subs ...SubIssue) RequirementIssue {
 		r := requirement(checkAt, subs...)
 		r.Labels = []string{LabelRequirement, LabelAccepting}
-		r.StatusRead, r.StatusCounts = true, true
 		return r
 	}
 
@@ -377,6 +377,16 @@ func TestDecide_RequestTheAcceptanceCheckAndAskForTheAcceptance(t *testing.T) {
 			r.CommentsRead = false
 			return r
 		}()}}, 1, nil},
+		{"request the acceptance check from awaiting-plan-review: the status label is of another account", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := planReview(time.Time{}, closed)
+			r.StatusCounts = false
+			return r
+		}()}}, 1, nil},
+		{"request the acceptance check from awaiting-plan-review: the account of the status label was not read", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := planReview(time.Time{}, closed)
+			r.StatusRead, r.StatusCounts = false, false
+			return r
+		}()}}, 1, nil},
 		{"request the acceptance check from awaiting-plan-review: a follow-up note is still missing", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
 			r := planReview(time.Time{}, closed)
 			r.FollowUpsDone = false
@@ -397,6 +407,16 @@ func TestDecide_RequestTheAcceptanceCheckAndAskForTheAcceptance(t *testing.T) {
 		{"request the acceptance check: the comments were not read", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
 			r := requirement(time.Time{}, closed)
 			r.CommentsRead = false
+			return r
+		}()}}, 1, nil},
+		{"request the acceptance check: the status label is of another account", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := requirement(time.Time{}, closed)
+			r.StatusCounts = false
+			return r
+		}()}}, 1, nil},
+		{"request the acceptance check: the account of the status label was not read", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
+			r := requirement(time.Time{}, closed)
+			r.StatusRead, r.StatusCounts = false, false
 			return r
 		}()}}, 1, nil},
 		{"request the acceptance check: a follow-up note is still missing", Snapshot{RequirementIssues: []RequirementIssue{func() RequirementIssue {
