@@ -10,8 +10,8 @@ The checkout of cumin holds three general tools under `scripts/`. A person runs 
 ## The checkout that holds the tools
 
 - The environment variable `CUMIN_SOURCE_DIR` names the checkout of cumin that holds `scripts/`.
-- When `CUMIN_SOURCE_DIR` is not set, ask the Maintainer for the path, and pass it in the command: `CUMIN_SOURCE_DIR=<path>` before the command. Do not search the disk for a checkout.
-- The binary is built from that checkout. The session changes no file there.
+- When `CUMIN_SOURCE_DIR` is not set, ask the Maintainer for the path, and set the variable first in the same command: `export CUMIN_SOURCE_DIR=<path>; <command>`. An assignment in front of the command alone does not work, because the shell expands the variable in the words of the command before it applies the assignment. Do not search the disk for a checkout.
+- The binary is built from that checkout. The session edits no file there. The only change is `git -C "$CUMIN_SOURCE_DIR" pull --ff-only`, after the Maintainer agrees.
 
 ## The three tools
 
@@ -33,11 +33,11 @@ The checkout of cumin holds three general tools under `scripts/`. A person runs 
 |---|---|---|---|
 | `cumin-health.sh` | The last poll is new and has no error | cumin may not run: the last line starts with `error:` and says why | A wrong option |
 | `replace-binary.sh` | All five steps passed: the new binary runs, and two polls have no error | A step failed. The last `step <n> of 5` line names the step, and the `error:` line says the state of cumin | A wrong option |
-| `live-scenario.sh` | The test passed, and the Host is back | Anything else. Read the two last lines, `test:` and `host:` | A wrong option |
+| `live-scenario.sh` | The test passed, and the Host is back | Anything else. Read the lines `test:` and `host:` when they are there, else the `error:` line | A wrong option |
 
 - Report the exit code and the last lines as they are. Only the exit code 0 is a success. Empty output is not a success.
 - A message that holds "time limit" means that a wait of the tool ended at its limit. Say so, and do not start the tool again without the Maintainer.
-- After the exit code 1 of `replace-binary.sh` or of `live-scenario.sh`, the message names the command that brings cumin back. Show that command to the Maintainer. Run it only on their word.
+- After the exit code 1 of `replace-binary.sh` or of `live-scenario.sh`, a message can name the command that brings cumin back. Show that command to the Maintainer. Run it only on their word.
 - A `host: failed` line of `live-scenario.sh` means that the Host may still point at the sandbox. Tell the Maintainer in the first line of the report.
 
 ## The new binary before the next approval
@@ -63,7 +63,7 @@ A merged change of code outside the tests does not reach the Host by itself: cum
 | 2 | A wrong argument, `CUMIN_SOURCE_DIR` is not set, or the tool is missing | Say so. Correct the call, and ask again before the next start |
 | 124 | The time limit ended before a read showed the merge. The message holds "time limit" | Report the last read of the message. Nothing is replaced. Ask before a new wait |
 
-- The default time limit is 1800 seconds. `--timeout <seconds>` changes it.
+- The default time limit is 1800 seconds. `--timeout <seconds>` changes it. One read of GitHub takes at most 30 seconds, so the script can end 30 seconds after the limit.
 - The script skips a read of GitHub that fails or that is empty. Such a read is never "merged".
 - The script does not update the checkout. When `replace-binary.sh` fails at step 1 because the checkout is behind, cumin still runs the old binary. Report it, then go on as under "The three tools".
 - The script approves nothing and merges nothing. The approval belongs to the skill `merge-decision`.

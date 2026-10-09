@@ -19,14 +19,18 @@ import (
 // "answer.<n>" of $FAKE_DIR, or from the file "answer" when that file is
 // missing. The file holds the text after the jq filter, because the fake
 // runs no jq. A file "fail" makes every read fail with its text, and a file
-// "sleep" makes every read last that many seconds. A missing file gives an
-// empty read with the exit code 0. The fake records its arguments in the
+// "sleep" makes every read last that many seconds. A file "delay" makes every
+// read answer after that many seconds. A missing file gives an empty read
+// with the exit code 0. The fake records its arguments in the
 // file "gh-calls".
 const fakeMergeGh = `#!/bin/sh
 echo "$*" >>"$FAKE_DIR/gh-calls"
 n=$(grep -c '' "$FAKE_DIR/gh-calls")
 if [ -f "$FAKE_DIR/sleep" ]; then
 	exec sleep "$(cat "$FAKE_DIR/sleep")"
+fi
+if [ -f "$FAKE_DIR/delay" ]; then
+	sleep "$(cat "$FAKE_DIR/delay")"
 fi
 if [ -f "$FAKE_DIR/fail" ]; then
 	cat "$FAKE_DIR/fail" >&2
@@ -202,7 +206,9 @@ func TestWaitForMerge_EndsAtTheTimeLimitWithNoCallOfTheTool(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			m := newMergeWait(t, tt.files)
-			out, code := m.run("--timeout", "2")
+			// The limit is far above a slow start of the fake on a busy
+			// machine, so the wait holds at least two reads.
+			out, code := m.run("--timeout", "10")
 			if code != exitTimeLimit {
 				t.Fatalf("exit code = %d, want %d\n%s", code, exitTimeLimit, out)
 			}
@@ -237,12 +243,30 @@ func TestWaitForMerge_FailsForAPullRequestClosedWithoutAMerge(t *testing.T) {
 	}
 }
 
-// A gh that hangs does not hold the script after its time limit.
+// A read at the end of the wait has its full time, so the message at the
+// limit names what that read saw, and not a read that the script cut.
+func TestWaitForMerge_NamesTheLastReadOfASlowGhAtTheTimeLimit(t *testing.T) {
+	t.Parallel()
+	m := newMergeWait(t, map[string]string{"delay": "2", "answer": "open false\n"})
+	out, code := m.run("--timeout", "5")
+	if code != exitTimeLimit || !strings.Contains(out, "time limit") || !strings.Contains(out, "(the last read: the pull request is open)") {
+		t.Errorf("exit code = %d, want %d and the open pull request as the last read\n%s", code, exitTimeLimit, out)
+	}
+	if strings.Contains(out, "gh did not end") {
+		t.Errorf("the script cut a read before its limit\n%s", out)
+	}
+	if calls := m.lines("tool-calls"); calls != nil {
+		t.Errorf("replace-binary.sh ran: %q", calls)
+	}
+}
+
+// A gh that hangs does not hold the script: each read ends at the limit of
+// one read, which the test sets to one second.
 func TestWaitForMerge_EndsAtTheTimeLimitWhenGhHangs(t *testing.T) {
 	t.Parallel()
 	m := newMergeWait(t, map[string]string{"sleep": "60"})
 	start := time.Now()
-	out, code := m.run("--timeout", "1")
+	out, code := m.runWith(append(m.env(m.source), "CUMIN_MERGE_READ_LIMIT=1"), "some-owner/some-repo", "12", "--interval", "1", "--timeout", "1")
 	if code != exitTimeLimit || !strings.Contains(out, "time limit") || !strings.Contains(out, "gh did not end in 1 seconds") {
 		t.Errorf("exit code = %d, want %d and the read that did not end\n%s", code, exitTimeLimit, out)
 	}
@@ -309,6 +333,9 @@ func TestHostSkill_NamesEveryCommandAndLinksToTheGuide(t *testing.T) {
 	for _, want := range []string{
 		"The skill adds no step of its own",
 		"When `CUMIN_SOURCE_DIR` is not set, ask the Maintainer for the path",
+		// The shell expands "$CUMIN_SOURCE_DIR" before an assignment in front
+		// of the command, so the skill sets the variable first.
+		"set the variable first in the same command: `export CUMIN_SOURCE_DIR=<path>; <command>`",
 		"| `replace-binary.sh` | A merge changed code outside the tests, and cumin must run the new binary | Yes.",
 		"| `live-scenario.sh` | The Maintainer asks for the live scenario E2E-1 | Yes.",
 		"## The new binary before the next approval\n",
@@ -319,6 +346,10 @@ func TestHostSkill_NamesEveryCommandAndLinksToTheGuide(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("SKILL.md lacks %q", want)
 		}
+	}
+
+	if strings.Contains(text, "`CUMIN_SOURCE_DIR=<path>") {
+		t.Error("SKILL.md gives the assignment in front of the command, which the shell applies after it expands the command")
 	}
 
 	commands, _ := section(text, "Commands")

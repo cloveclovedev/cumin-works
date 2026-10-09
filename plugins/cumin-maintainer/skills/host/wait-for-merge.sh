@@ -20,8 +20,10 @@
 #
 # Only the answer "closed" with "merged: true" is a merge. A read that fails,
 # an empty read, and any other answer are skipped: such a read never counts
-# as "merged". One read ends after 30 seconds, or at the time limit when that
-# comes first, so a gh that hangs does not hold the script.
+# as "merged". One read ends after 30 seconds, so a gh that hangs does not
+# hold the script. The time limit is checked after each read, so the script
+# ends at most 30 seconds after the limit, and the message names a last read
+# that had its full time.
 #
 # The script only reads GitHub: it runs gh api with the method GET. The tool
 # changes the Host (docs/ja/guides/host-tools.md of the checkout). The time
@@ -42,8 +44,8 @@ repo=
 number=
 timeout=1800
 interval=30
-# The longest time of one read (seconds).
-read_limit=30
+# The longest time of one read (seconds). The tests set this.
+read_limit=${CUMIN_MERGE_READ_LIMIT:-30}
 positional=0
 while [ $# -gt 0 ]; do
 	case $1 in
@@ -70,7 +72,7 @@ done
 [ "$positional" -eq 2 ] || fail "$usage"
 printf '%s\n' "$repo" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' || fail "the repository must be <owner>/<repo>, got '$repo'"
 printf '%s\n' "$number" | grep -Eq '^[1-9][0-9]*$' || fail "the number of the pull request must be a number, got '$number'"
-for pair in "--timeout=$timeout" "--interval=$interval"; do
+for pair in "--timeout=$timeout" "--interval=$interval" "CUMIN_MERGE_READ_LIMIT=$read_limit"; do
 	printf '%s\n' "${pair#*=}" | grep -Eq '^[1-9][0-9]*$' || fail "${pair%%=*} must be a number of seconds, got '${pair#*=}'"
 done
 
@@ -96,7 +98,7 @@ trap 'cleanup; trap - EXIT; exit 143' TERM
 
 # read_pull writes one read of the pull request to $work/read: the line
 # "<state> <merged>". It fails, with the reason in $work/reason, when gh
-# fails or when gh does not end within $1 seconds.
+# fails or when gh does not end within $read_limit seconds.
 read_pull() {
 	: >"$work/read"
 	: >"$work/reason"
@@ -104,7 +106,7 @@ read_pull() {
 	child=$!
 	(
 		trap 'kill "$sleeper" 2>/dev/null; exit 0' TERM
-		sleep "$1" &
+		sleep "$read_limit" &
 		sleeper=$!
 		wait "$sleeper" && : >"$work/stopped" && kill "$child" 2>/dev/null
 	) >/dev/null 2>&1 &
@@ -117,7 +119,7 @@ read_pull() {
 	watchdog=
 	if [ -f "$work/stopped" ]; then
 		rm -f "$work/stopped"
-		echo "gh did not end in $1 seconds" >"$work/reason"
+		echo "gh did not end in $read_limit seconds" >"$work/reason"
 		return 1
 	fi
 	return "$status"
@@ -125,12 +127,9 @@ read_pull() {
 
 start=$(date +%s)
 deadline=$((start + timeout))
-left=$timeout
 last=
 while :; do
-	limit=$read_limit
-	[ "$left" -ge "$limit" ] || limit=$left
-	if read_pull "$limit"; then
+	if read_pull; then
 		answer=$(head -n 1 "$work/read")
 		case $answer in
 		"closed true") break ;;
@@ -155,8 +154,6 @@ while :; do
 	pause=$interval
 	[ "$left" -ge "$pause" ] || pause=$left
 	sleep "$pause"
-	left=$((deadline - $(date +%s)))
-	[ "$left" -ge 1 ] || left=1
 done
 
 echo "the pull request $number of $repo is merged. Calling $tool"
