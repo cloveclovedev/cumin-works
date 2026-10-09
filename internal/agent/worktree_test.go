@@ -575,6 +575,10 @@ func TestWorktree_RemoveIfPushedWithoutAWorktree(t *testing.T) {
 	}
 }
 
+// gitTestTimeout is the deadline of the tests with a git command that does
+// not end. It leaves the fake git time to start on a busy machine.
+const gitTestTimeout = 3 * time.Second
+
 // stallingGit puts a fake git first in PATH. The fake git writes its
 // process ID to the returned file and runs stall when its first argument is
 // subcommand. Every other command goes to the real git.
@@ -639,7 +643,7 @@ func TestWorktree_GitCommandEndsAfterTheDeadline(t *testing.T) {
 				}
 			})
 			w := newWorkspace(t, &bytes.Buffer{})
-			w.GitTimeout = time.Second
+			w.GitTimeout = gitTestTimeout
 
 			start := time.Now()
 			_, err := w.Head(context.Background(), t.TempDir())
@@ -648,13 +652,13 @@ func TestWorktree_GitCommandEndsAfterTheDeadline(t *testing.T) {
 			if err == nil {
 				t.Fatal("Head returned no error for a git command that does not end")
 			}
-			for _, want := range []string{"git rev-parse HEAD", "the deadline of 1s passed"} {
+			for _, want := range []string{"git rev-parse HEAD", "the deadline of 3s passed"} {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("error = %q, want it to contain %q", err, want)
 				}
 			}
 			if elapsed > 30*time.Second {
-				t.Errorf("Head returned after %s, want the deadline of 1s", elapsed)
+				t.Errorf("Head returned after %s, want the deadline of 3s", elapsed)
 			}
 			requireProcessGone(t, pidFile)
 		})
@@ -671,14 +675,14 @@ func TestWorktree_PrepareReturnsTheErrorOfAStalledFetch(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 	pidFile := stallingGit(t, "fetch", "exec sleep 60")
-	w.GitTimeout = time.Second
+	w.GitTimeout = gitTestTimeout
 
 	c := checkout(2, config.RoleImplementer, "cumin/2-second")
 	_, err := w.Prepare(context.Background(), r.path, c)
 	if err == nil {
 		t.Fatal("Prepare returned no error for a git fetch that does not end")
 	}
-	for _, want := range []string{"prepare worktree: git fetch --quiet --prune origin", "the deadline of 1s passed"} {
+	for _, want := range []string{"prepare worktree: git fetch --quiet --prune origin", "the deadline of 3s passed"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error = %q, want it to contain %q", err, want)
 		}
