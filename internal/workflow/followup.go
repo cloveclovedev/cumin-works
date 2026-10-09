@@ -185,13 +185,17 @@ func FollowUpSection(body string) string {
 	end := len(lines)
 	fence := ""        // the marker that opened the code block, or empty outside one
 	paragraph := false // the line before is a paragraph line
-	container := false // the lines since the last blank line are in a list item or a block quote
+	container := false // the lines are in a list item, a block quote, a table, or an HTML block
+	blank := false     // the line before is empty
 	comment := false   // an HTML comment is open
 	for i := start; i < len(lines); i++ {
 		// Markdown allows up to three spaces before a fence; with four, the
 		// line is indented code.
 		line := strings.TrimRight(lines[i], " \t")
 		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if strings.HasPrefix(line[indent:], "\t") {
+			indent = 4 // a tab indents like four spaces
+		}
 		if indent <= 3 {
 			line = line[indent:]
 		}
@@ -221,14 +225,20 @@ func FollowUpSection(body string) string {
 			paragraph = false
 			continue
 		}
+		// An empty line does not end a list item: an indented line after it
+		// is a next paragraph of the item. A line with no indent ends it.
+		if container && blank && indent == 0 && line != "" && !code {
+			container = false
+		}
+		blank = line == ""
 		switch {
 		case code:
-			paragraph, container = false, false
+			paragraph = false
 		case comment:
 			comment = !strings.Contains(line, "-->")
 			paragraph = false
 		case line == "":
-			paragraph, container = false, false
+			paragraph = false
 		case strings.HasPrefix(line, "<!--"):
 			comment = !strings.Contains(line, "-->")
 			paragraph = false
@@ -239,7 +249,7 @@ func FollowUpSection(body string) string {
 		case indent > 3:
 			// An indented line continues a paragraph; without one, it is
 			// indented code.
-		case containerStart.MatchString(line):
+		case containerStart.MatchString(line), tableDelimiter.MatchString(line):
 			paragraph, container = false, true
 		default:
 			paragraph = !otherBlock.MatchString(line)
@@ -257,9 +267,14 @@ func FollowUpSection(body string) string {
 // allows up to three spaces before it; with four, the line is code.
 var horizontalRule = regexp.MustCompile(`^ {0,3}-{3,}[ \t]*$`)
 
-// containerStart matches the start of a list item or of a block quote, on a
-// line without its indent. A line of hyphens under such a line is a rule.
-var containerStart = regexp.MustCompile(`^(>|[-+*]([ \t]|$)|\d{1,9}[.)]([ \t]|$))`)
+// containerStart matches the start of a list item, of a block quote, or of an
+// HTML block, on a line without its indent. A line of hyphens under such a
+// line, or under a line that continues it, is a rule.
+var containerStart = regexp.MustCompile(`^(>|<|[-+*]([ \t]|$)|\d{1,9}[.)]([ \t]|$))`)
+
+// tableDelimiter matches the delimiter row of a table, with or without the
+// outer pipes. The lines under it are rows of the table.
+var tableDelimiter = regexp.MustCompile(`^\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)+\|?$|^\|[ \t]*:?-+:?[ \t]*\|$`)
 
 // otherBlock matches a line without its indent that is no paragraph line and
 // opens no container: an ATX heading ("#" to "######"), a table row, the

@@ -31,8 +31,10 @@ note right
   No paragraph line:
   * an empty line, or the line "## Follow-up"
   * a line of a code block
-  * a line of an HTML comment
-  * a line of a list item or of a block quote
+  * a line of an HTML comment or of an HTML block
+  * a line of a list item or of a block quote;
+    a list item goes on after an empty line
+    while the lines are indented
   * a heading, a table row, another rule
 end note
 @enduml
