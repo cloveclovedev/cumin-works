@@ -44,6 +44,12 @@ while [ $# -gt 0 ]; do
 done
 [ "$label" != "${FAKE_OPEN_LABEL:-}" ] || echo 12
 `,
+	// With FAKE_START_FAILS, the start of step 3 fails: "kickstart"
+	// without -k. The start of step 5 passes.
+	"launchctl": `#!/bin/sh
+echo "launchctl $*" >>"$CALLS"
+[ "$1" != "kickstart" ] || [ "$2" = "-k" ] || [ -z "${FAKE_START_FAILS:-}" ] || exit 1
+`,
 	// The fake go stands for TestLiveE2E. With FAKE_TEST=hang it starts a
 	// child and waits for it, as the go command waits for the test binary.
 	"go": `#!/bin/sh
@@ -251,6 +257,42 @@ func TestLiveScenario_AFailedTestPutsTheHostBack(t *testing.T) {
 		t.Errorf("the last two lines = %q, want %q\n%s", got, want, out)
 	}
 	l.wantSandboxDuringTest()
+	l.wantHostSettings()
+}
+
+func TestLiveScenario_AFailedStartOfStep3PutsTheHostBack(t *testing.T) {
+	l := newLive(t)
+	l.env = []string{"FAKE_START_FAILS=1"}
+
+	run := l.scenario()
+	l.endCumin(run)
+	l.twoPolls(run)
+	out, code := run.end()
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1\n%s", code, out)
+	}
+	if got, want := lastLines(out), "test: not run\n"+hostIsBack; got != want {
+		t.Errorf("the last two lines = %q, want %q\n%s", got, want, out)
+	}
+	l.wantNoCall("go ")
+	l.wantHostSettings()
+}
+
+func TestLiveScenario_ASignalDuringTheStopSaysThatCuminStops(t *testing.T) {
+	l := newLive(t)
+
+	run := l.scenario()
+	run.until("waiting until cumin has ended")
+	if err := run.command.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	out, code := run.end()
+
+	if code != 1 || !strings.Contains(out, "error: signal: the Host settings are not changed, and cumin is left as it is: it still stops after the current runs") {
+		t.Errorf("exit code = %d, want 1 and the advice on the signal\n%s", code, out)
+	}
+	l.wantNoCall("go ", "launchctl kickstart")
 	l.wantHostSettings()
 }
 

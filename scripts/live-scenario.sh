@@ -20,8 +20,8 @@
 #   5. put the Host settings file back, start cumin again, and run
 #      scripts/cumin-health.sh --wait-polls 2.
 #
-# Step 5 runs when step 3 or step 4 fails, and on a signal (INT, TERM,
-# HUP), too. The copy of step 3 is "<Host settings file>.before-live-scenario".
+# Step 5 runs when step 3 or step 4 fails, and on a signal (INT, TERM, HUP)
+# in them, too. The copy of step 3 is "<Host settings file>.before-live-scenario".
 #
 # The wait of step 2 ends with "time limit" after --stop-timeout seconds
 # (3600 by default). Nothing is changed then. The test of step 4 is stopped
@@ -124,6 +124,10 @@ while argument="$(plutil -extract "ProgramArguments.$index" raw -o - "$plist" 2>
 done
 [ -n "$host_config" ] || die "the plist $plist has no --config argument, so the Host settings file is unknown. Write the plist again with \"cumin setup launchd --force\", then reload the job"
 [ -f "$host_config" ] || die "the Host settings file $host_config is missing"
+# Step 5 puts the file back with a rename, which would replace a link by a
+# regular file.
+[ ! -L "$host_config" ] ||
+  die "the Host settings file $host_config is a symbolic link. Name the real file in the plist with \"cumin setup launchd --config <file> --force\", then reload the job"
 [ ! "$sandbox_config" -ef "$host_config" ] ||
   die "--config names the Host settings file itself. Give a separate file with the settings of the sandbox"
 backup="$host_config.before-live-scenario"
@@ -135,6 +139,9 @@ backup="$host_config.before-live-scenario"
 # request: the wait then ends at the limit.
 echo "step 2 of 5: stop cumin after the current runs"
 cumin stop --after-current-runs || die "cumin stop failed. cumin is left as it is, and the Host settings are not changed"
+# A signal in this wait leaves the stop request, so cumin still stops, and
+# launchd does not start it again after a clean end.
+trap 'echo "error: signal: the Host settings are not changed, and cumin is left as it is: it still stops after the current runs. When it has ended, start it with \"launchctl kickstart $target\"" >&2; exit 1' INT TERM HUP
 echo "waiting until cumin has ended, for at most ${stop_timeout}s"
 started="$(date +%s)"
 while [ -e "$stop_request" ]; do
