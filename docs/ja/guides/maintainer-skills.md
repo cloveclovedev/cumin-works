@@ -38,6 +38,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | `session-start` | `/cumin-maintainer:session-start` | セッションの始めに、`cumin status` の出力、モニターファイル、開いているPull Request、作業中の要求Issueの木、引き継ぎのメモを読んで、状態を報告する。そのあと、聞かずにしてよいことを1回だけ聞く |
 | `hand-over` | `/cumin-maintainer:hand-over` | セッションの終わりに、状態、開いている判断、Maintainerを待つもの、セッションが学んだことの4つの見出しで、引き継ぎのメモを書く |
 | `merge-decision` | `/cumin-maintainer:merge-decision` | mergeの判断を待つPull Requestを1つ確かめて、決まった形で報告する。スクリプト `check-pull-request.sh` が、先頭のコミットへの承認、必須のcheck、保護されたパスの変更を、GitHubから1回読んで確かめる。差分はテスト以外を全部読む。承認は、Pull Requestの番号を入れた決まった質問のあとか、セッションが許された範囲の中だけで、1つずつ行う |
+| `requirement-change` | `/cumin-maintainer:requirement-change` | Agentが書けない保護されたパスの文書 (要件の文書) を、Maintainerと手で変える。内容は、ファイルを変える前に会話の中でMaintainerが決める。1つの話題を1つのPull Requestにし、既定のブランチからブランチを作る。複数のファイルの置き換えは、新しい文章を全て計算してから書き込む。差分の大きさ (`git diff --stat`) を、Pull Requestを開く前とmergeの前に確かめ、空になったファイルや予定にないファイルがあれば止まる。図は、リポジトリが文書に書いた道具で書き出す。mergeは、Maintainerの言葉があるときか、セッションが許された範囲の中だけで行う |
 
 ### セッションの始めの質問
 
