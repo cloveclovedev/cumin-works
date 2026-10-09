@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -690,5 +691,65 @@ func TestWorktree_PrepareReturnsTheErrorOfAStalledFetch(t *testing.T) {
 	requireProcessGone(t, pidFile)
 	if _, statErr := os.Stat(w.Dir(c)); statErr == nil {
 		t.Error("Prepare created the worktree after a git fetch that did not end")
+	}
+}
+
+// silentRemote is a git:// URL of a server on the loopback interface that
+// accepts a connection and never answers. A git clone of it does not end.
+func silentRemote(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var conns []net.Conn
+		defer func() {
+			for _, conn := range conns {
+				conn.Close()
+			}
+		}()
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			conns = append(conns, conn)
+		}
+	}()
+	t.Cleanup(func() {
+		listener.Close()
+		<-done
+	})
+	return "git://" + listener.Addr().String() + "/example-org/example-repo"
+}
+
+// A git clone that ends at the deadline leaves no directory of the clone,
+// so the next Prepare of the repository clones again and succeeds.
+func TestWorktree_PrepareSucceedsAfterACloneThatEndedAtTheDeadline(t *testing.T) {
+	r := newRemote(t)
+	w := newWorkspace(t, &bytes.Buffer{})
+	w.GitTimeout = gitTestTimeout
+	c := checkout(1, config.RoleImplementer, "cumin/1-first")
+
+	_, err := w.Prepare(context.Background(), silentRemote(t), c)
+	if err == nil {
+		t.Fatal("Prepare returned no error for a git clone that does not end")
+	}
+	for _, want := range []string{"prepare worktree: git clone", "the deadline of 3s passed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err, want)
+		}
+	}
+	if _, statErr := os.Stat(w.CloneDir(c)); statErr == nil {
+		// Stop here: the next Prepare would fetch from the silent server.
+		t.Fatal("the directory of the clone remains after a git clone that ended at the deadline")
+	}
+
+	w.GitTimeout = 0
+	if _, err := w.Prepare(context.Background(), r.path, c); err != nil {
+		t.Errorf("Prepare after a git clone that ended at the deadline: %v", err)
 	}
 }

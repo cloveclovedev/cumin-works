@@ -17,7 +17,9 @@ workspace -[#red,bold]-> git : <color:red>every git command ends\n<color:red>aft
 
 note right of workspace
   A command that does not end
-  is killed at the deadline.
+  gets SIGTERM at the deadline.
+  git then removes its lock files and
+  the directory of an unfinished clone.
   The error names the command and says
   that the deadline passed.
   The caller handles it
@@ -28,7 +30,9 @@ note right of git
   A child process of git
   can keep the output pipe open.
   2 seconds after the deadline,
-  the pipe is closed
+  git is killed, the pipe is closed,
   and the command returns.
+  Prepare removes the directory
+  of a clone that failed.
 end note
 @enduml

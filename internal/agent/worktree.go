@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
@@ -32,8 +33,9 @@ const (
 	// stalled git fetch or git clone holds the start of a run until cumin
 	// restarts.
 	gitTimeout = 5 * time.Minute
-	// gitWaitDelay is how long the output pipe may stay open after the
-	// deadline ends git: a child process of git can still hold it.
+	// gitWaitDelay is how long git has to end after the SIGTERM of the
+	// deadline. Then git is killed and the output pipe is closed: a child
+	// process of git can still hold it.
 	gitWaitDelay = 2 * time.Second
 )
 
@@ -192,6 +194,12 @@ func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (s
 		}
 		// --no-checkout: the clone holds no files of its own.
 		if _, err := w.git(ctx, w.repoDir(c), "clone", "--quiet", "--no-checkout", "--", remoteURL, cloneDirName); err != nil {
+			// git removes the directory of a clone that fails. A git that
+			// was killed leaves it, and the next Prepare would take the
+			// unfinished directory for the clone.
+			if rmErr := os.RemoveAll(clone); rmErr != nil {
+				return "", fmt.Errorf("prepare worktree: %w", errors.Join(err, rmErr))
+			}
 			return "", fmt.Errorf("prepare worktree: %w", err)
 		}
 		log.Info("clone created")
@@ -450,15 +458,21 @@ func (w Workspace) git(ctx context.Context, dir string, args ...string) (string,
 	cmd.Dir = dir
 	// Never wait for a credential prompt. cumin runs without a terminal.
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	// When the context is done, os/exec kills git. A child process of git
-	// can keep the output pipe open: after WaitDelay, os/exec closes the
-	// pipe and the command returns (os/exec: CommandContext, Cmd.WaitDelay).
+	// When the context is done, Cancel sends SIGTERM, so that git removes
+	// its lock files and the directory of an unfinished clone. After
+	// WaitDelay, os/exec kills git and closes the output pipe, which a
+	// child process of git can keep open (os/exec: Cmd.Cancel,
+	// Cmd.WaitDelay).
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = gitWaitDelay
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
 		// The deadline of this command passed, not the context of the caller.
 		if errors.Is(runCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			if text != "" {
+				return "", fmt.Errorf("git %s: the deadline of %s passed: %w: %s", strings.Join(args, " "), timeout, err, text)
+			}
 			return "", fmt.Errorf("git %s: the deadline of %s passed: %w", strings.Join(args, " "), timeout, err)
 		}
 		if text != "" {

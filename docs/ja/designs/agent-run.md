@@ -42,10 +42,12 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - スナップショットに出てこないIssue (閉じた要求Issueのsub-issue、Maintainerが要求Issueから外したsub-issue) のworktreeは、消さない。閉じた要求Issueは読まない (原則6) うえ、外しただけのIssueは開いていることがある。Operatorが [作業場所の片付け](../development/work-directory.md) の手順で消す。
 - PlannerのworktreeはPlannerの実行が終わるたびに消す (done、blocked、異常終了のどれでも。同じ実行の中の依頼し直しと、分割に続く受け入れの確認が終わったあとである)。Plannerは読むだけで何も持たず、次の依頼で作り直すためである。こうすると、要求Issueが閉じたあとにPlannerのworktreeが残らない。cuminを止めるときも消す。
 - gitは `os/exec` で呼ぶ。認証の入力待ちで止まらないように `GIT_TERMINAL_PROMPT=0` を付ける (公式: git の環境変数)。gitの出力はエラーの文章にだけ含め、infoのログには出さない。
-- gitのコマンドは、どれも5分で打ち切る (定数 `gitTimeout`)。`Workspace` がgitを呼ぶ場所は1つ (`Workspace.git`) で、そこで `context.WithTimeout` の期限を付ける。期限が来ると、`os/exec` がgitのプロセスを止める (公式: os/exec の `CommandContext`)。
-  - 理由: 期限がないと、応答の返らない `git fetch` や `git clone` が1つあるだけで、cuminを起動し直すまで実行の開始が止まる。用意と片付けは直列なので、ほかのIssueの着手も止まる。5分あれば、大きなリポジトリの最初のcloneも打ち切らない。
-  - gitの子プロセスが出力のパイプを開いたままでも、コマンドは終わる。期限の2秒後 (定数 `gitWaitDelay`) に、`os/exec` がパイプを閉じる (公式: os/exec の `Cmd.WaitDelay`)。
-  - 期限で終わったコマンドのエラーは、コマンドの名前と、期限が過ぎたことを持つ。呼び出し側は、失敗したほかのgitのコマンドと同じに扱う。
+- gitのコマンドは、どれも5分で打ち切る (定数 `gitTimeout`)。`Workspace` がgitを呼ぶ場所は1つ (`Workspace.git`) で、そこで `context.WithTimeout` の期限を付ける。期限が来ると、gitにSIGTERMを送る (公式: os/exec の `CommandContext` と `Cmd.Cancel`)。
+  - 理由: 期限がないと、応答の返らない `git fetch` や `git clone` が1つあるだけで、cuminを起動し直すまで実行の開始が止まる。用意と片付けは直列なので、ほかのIssueの着手も止まる。5分は、最初のcloneも終わると見込んだ値で、測った値ではない。cloneの時間は、リポジトリの大きさと回線で決まる。cloneが5分で終わらないリポジトリでは、着手のたびに、期限が過ぎたというエラー (`git clone ...: the deadline of 5m0s passed`) で用意が失敗する。
+  - SIGTERMにする理由: gitは、SIGTERMで終わるときに、ロックのファイルと、途中のcloneのディレクトリを消す。SIGKILLでは消せない。途中のcloneのディレクトリが残ると、次の用意がそれをcloneとみなし、そのリポジトリの用意が失敗し続ける。
+  - gitがSIGTERMで終わらないときと、gitの子プロセスが出力のパイプを開いたままのときも、コマンドは終わる。期限の2秒後 (定数 `gitWaitDelay`) に、`os/exec` がgitをSIGKILLで止め、パイプを閉じる (公式: os/exec の `Cmd.WaitDelay`)。
+  - `git clone` が失敗したら、cloneのディレクトリを消す。SIGKILLで止めたgitは、ディレクトリを残すためである。
+  - 期限で終わったコマンドのエラーは、コマンドの名前と、期限が過ぎたことと、それまでのgitの出力を持つ。呼び出し側は、失敗したほかのgitのコマンドと同じに扱う。
   - 5分は、設定にはしない。対象ごとに変える理由がまだないためである。`Workspace` のフィールド `GitTimeout` は、テストが期限を短くするためのものである。
   - 期限は、`Workspace` が呼ぶgitだけのものである。Agent CLIと、Agentが実行するコマンドには付けない ([実行時間の上限](#実行時間の上限) が別に決める)。
 - 採らなかった案: Issueごとにcloneする。毎回リポジトリ全体を取り直すことになり、遅いうえにディスクも使う。
