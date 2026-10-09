@@ -23,7 +23,7 @@ MaintainerやOperatorが、Claude Codeなしで端末から使う道具の使い
 
 ### 必要なもの
 
-- macOS。スクリプトは、macOSに入っている道具 (`sh`、`plutil`、`date`、`sed`、`awk`、`sleep`) だけを使う。JSONも `plutil` で読むので、`jq` は要らない。
+- macOS。スクリプトは、macOSに入っている道具 (`sh`、`plutil`、`date`、`sed`、`awk`、`sleep`、`tr`) だけを使う。JSONも `plutil` で読むので、`jq` は要らない。
 - `cumin run` が1回以上定期確認を終えていること。モニターファイル (`~/.local/state/cumin/monitor.json`) は、そのときにできる。
 - 起動してからのエラーを見るには、LaunchAgentのplist (`~/Library/LaunchAgents/dev.cloveclove.cumin.plist`、[セットアップの手順](../development/setup-guide.md))。plistがなくても、ほかの行は出る。
 
@@ -70,11 +70,13 @@ error: the last poll has 1 error(s)
 |---|---|
 | `0` | 最後の定期確認が新しく、エラーがない |
 | `1` | 最後の定期確認が古い。最後の定期確認にエラーがある。モニターファイルがない、または読めない。`--wait-polls` が上限で終わった、または待った定期確認にエラーがあった |
-| `2` | オプションの誤り |
+| `2` | オプションの誤り。知らないオプション、値のないオプション、数でない値 |
 
 - 「新しい」とは、今の時刻から `last_poll.at` を引いた値が上限以下であることである。上限の初期値は180秒で、メニューバーのアプリの `stale_after_sec` の初期値と同じである。`poll_interval` を長くしたHostでは、`--stale-after` で上限も長くする。
 - 古いときは、cuminが止まったか、Hostがスリープしたかである。`launchctl print gui/$(id -u)/dev.cloveclove.cumin` で、jobの状態を確かめる。
 - 起動してからのエラーは、表示するだけで、終了コードを変えない。前の定期確認のエラーは、次の定期確認が成功すれば済んだことだからである。
+- モニターファイルの `last_poll.errors`、`agents`、`waiting` のどれかがない、または配列でないときも、読めないものとして `1` で終わる。エラーも実行中のAgentもないとは見なさない。
+- 題名とメッセージは、制御文字を除いて、そのまま出す。
 - モニターファイルの `version` が、スクリプトの知る版より新しいときも、読めないものとして `1` で終わる。
 
 ### オプション

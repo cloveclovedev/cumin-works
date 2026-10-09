@@ -11,8 +11,8 @@
 # (~/.local/state/cumin/monitor.json), and the log that the plist of the
 # LaunchAgent names. It reads no setting of cumin and does not ask GitHub.
 #
-# The exit code is 0 when the last poll is fresh and has no error, and 1
-# otherwise. The last poll is fresh when it is at most --stale-after seconds
+# The exit code is 0 when the last poll is fresh and has no error, 2 for a
+# wrong option or a wrong value of an option, and 1 otherwise. The last poll is fresh when it is at most --stale-after seconds
 # old (180 by default). A monitor file that is missing or unreadable is a
 # failure. The errors since the start are shown only: they do not change
 # the exit code.
@@ -63,9 +63,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-is_number "$stale_after" || die "--stale-after needs a number of seconds"
-is_number "$wait_polls" || die "--wait-polls needs a number of polls"
-is_number "$timeout" || die "--timeout needs a number of seconds"
+# A wrong value is a wrong call, like an unknown option: exit code 2, so
+# that a caller can tell it from "cumin is not running".
+bad_value() {
+  echo "error: $*" >&2
+  exit 2
+}
+
+is_number "$stale_after" || bad_value "--stale-after needs a number of seconds"
+is_number "$wait_polls" || bad_value "--wait-polls needs a number of polls"
+is_number "$timeout" || bad_value "--timeout needs a number of seconds"
 command -v plutil >/dev/null 2>&1 || die "plutil is not on PATH: this script works on macOS only"
 
 # plutil reads JSON as well as a plist (man plutil), so no other tool is
@@ -74,13 +81,29 @@ field() {
   plutil -extract "$1" raw -o - "$monitor" 2>/dev/null
 }
 
+# A text of the monitor file (a title, a message) for the report, without
+# its control characters, so that none of them reaches the terminal.
+text() {
+  field "$1" | tr -d '[:cntrl:]'
+}
+
+# The length of a list of the monitor file. A field that is missing, or
+# that is not a list, makes the file unreadable: the report would count
+# no error and no agent where the file says nothing.
+count() {
+  [ "$(plutil -type "$1" "$monitor" 2>/dev/null)" = "array" ] ||
+    die "the monitor file $monitor is unreadable: $1 is missing, or is not a list"
+  field "$1"
+}
+
 # The seconds since the epoch of a time in the form of last_poll.at
 # (RFC 3339, UTC), with or without a fraction of a second.
 epoch() {
   date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$(printf '%s' "$1" | sed 's/\.[0-9]*Z$/Z/')" +%s 2>/dev/null
 }
 
-# Stop when the monitor file cannot say anything about the last poll.
+# Stop when the monitor file cannot say anything about the last poll, and
+# set "errors", "agents", and "waiting" to the lengths of its three lists.
 check_monitor() {
   [ -f "$monitor" ] || die "the monitor file $monitor is missing. cumin run writes it after its first poll, so cumin did not run on this Host, or runs with another home directory"
   [ -r "$monitor" ] || die "the monitor file $monitor is unreadable"
@@ -88,6 +111,9 @@ check_monitor() {
   is_number "$version" || die "the monitor file $monitor is unreadable: its version is not a number"
   [ "$version" -le "$known_version" ] || die "the monitor file $monitor has version $version, and this script knows version $known_version. Use the script of the cumin that runs"
   field last_poll.at >/dev/null || die "the monitor file $monitor is unreadable: it has no last_poll.at"
+  errors="$(count last_poll.errors)" || exit 1
+  agents="$(count agents)" || exit 1
+  waiting="$(count waiting)" || exit 1
 }
 
 # The errors since the start: the lines of level ERROR in the log of the
@@ -139,25 +165,22 @@ report() {
   age=$((now_epoch - at_epoch))
   echo "last poll: $at (${age}s ago)"
 
-  errors="$(field last_poll.errors)" || errors=0
   echo "errors of the last poll: $errors"
   i=0
   while [ "$i" -lt "$errors" ]; do
-    echo "  $(field "last_poll.errors.$i.repository"): $(field "last_poll.errors.$i.message")"
+    printf '  %s: %s\n' "$(text "last_poll.errors.$i.repository")" "$(text "last_poll.errors.$i.message")"
     i=$((i + 1))
   done
 
   print_log_errors
 
-  agents="$(field agents)" || agents=0
   echo "agents at work: $agents"
   i=0
   while [ "$i" -lt "$agents" ]; do
-    echo "  $(field "agents.$i.repository")#$(field "agents.$i.issue") $(field "agents.$i.role") ($(field "agents.$i.request")): $(field "agents.$i.title")"
+    printf '  %s#%s %s (%s): %s\n' "$(text "agents.$i.repository")" "$(text "agents.$i.issue")" "$(text "agents.$i.role")" "$(text "agents.$i.request")" "$(text "agents.$i.title")"
     i=$((i + 1))
   done
 
-  waiting="$(field waiting)" || waiting=0
   echo "waiting issues: $waiting"
 
   if [ "$age" -gt "$stale_after" ]; then
@@ -185,7 +208,6 @@ if [ "$wait_polls" -gt 0 ]; then
     [ "$at" != "$last" ] || continue
     last="$at"
     seen=$((seen + 1))
-    errors="$(field last_poll.errors)" || errors=0
     if [ "$errors" -gt 0 ]; then
       echo "poll $seen of $wait_polls: $at, $errors error(s)"
       report

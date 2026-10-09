@@ -98,7 +98,7 @@ func (h *health) write(path, content string) {
 // standardTools are the tools of macOS that the script may call. Every run
 // of the tests has only these on PATH, so a call of another tool (jq, gh,
 // python3) fails the tests.
-var standardTools = []string{"plutil", "date", "sed", "awk", "sleep"}
+var standardTools = []string{"plutil", "date", "sed", "awk", "sleep", "tr"}
 
 // command returns the script with the files of the Host, a fixed "now",
 // and a PATH that holds only the standard tools.
@@ -224,6 +224,13 @@ func TestCuminHealth_AMissingOrUnreadableMonitorFileFails(t *testing.T) {
 	for name, content := range map[string]string{
 		"not JSON":           "cumin",
 		"no last poll":       `{"version":1}`,
+		"no errors":          `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z"},"agents":[],"waiting":[]}`,
+		"errors not a list":  `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":"boom"},"agents":[],"waiting":[]}`,
+		"errors a number":    `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":0},"agents":[],"waiting":[]}`,
+		"no agents":          `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":[]},"waiting":[]}`,
+		"agents not a list":  `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":[]},"agents":{},"waiting":[]}`,
+		"no waiting":         `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":[]},"agents":[]}`,
+		"waiting not a list": `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":[]},"agents":[],"waiting":"none"}`,
 		"a newer version":    `{"version":2,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":[]}}`,
 		"a time with no UTC": `{"version":1,"last_poll":{"at":"2026-10-04 16:00","errors":[]}}`,
 	} {
@@ -231,6 +238,45 @@ func TestCuminHealth_AMissingOrUnreadableMonitorFileFails(t *testing.T) {
 		out, code := h.run()
 		if code != 1 || !strings.Contains(out, "error: the monitor file "+h.monitor) {
 			t.Errorf("%s: exit code = %d, want 1 and the reason\n%s", name, code, out)
+		}
+	}
+}
+
+// A title and a message are text of GitHub. The report shows a backslash
+// as it is, and lets no control character reach the terminal.
+func TestCuminHealth_PrintsATitleAndAMessageAsTheyAre(t *testing.T) {
+	h := newHealth(t)
+	h.write(h.monitor, `{"version":1,"last_poll":{"at":"2026-10-04T07:00:05Z","errors":[`+
+		`{"repository":"example/app","message":"read C:\\temp\\new: 100%s of \\t"}]},`+
+		`"agents":[{"repository":"example/tool","issue":12,"role":"implementer","request":"implement",`+
+		`"title":"fix \\n in C:\\temp \u001b[31mred\u0007 \\c end","url":"https://example.com"}],"waiting":[]}`)
+
+	out, _ := h.run()
+
+	wantLines(t, out,
+		`  example/app: read C:\temp\new: 100%s of \t`,
+		`  example/tool#12 implementer (implement): fix \n in C:\temp [31mred \c end`,
+	)
+	if strings.ContainsAny(out, "\x1b\x07\t") {
+		t.Errorf("the output holds a control character: %q", out)
+	}
+}
+
+// A wrong value of an option is a wrong call: the same exit code as an
+// unknown option, not the one of "cumin is not running".
+func TestCuminHealth_AWrongOptionGivesExitCode2(t *testing.T) {
+	h := newHealth(t)
+	h.writePoll("2026-10-04T07:00:05Z", "")
+
+	for _, args := range [][]string{
+		{"--no-such-option"},
+		{"--stale-after"},
+		{"--stale-after", "abc"},
+		{"--wait-polls", "two"},
+		{"--timeout", "1m"},
+	} {
+		if out, code := h.run(args...); code != 2 {
+			t.Errorf("%v: exit code = %d, want 2\n%s", args, code, out)
 		}
 	}
 }
