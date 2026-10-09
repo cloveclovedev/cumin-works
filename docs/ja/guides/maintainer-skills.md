@@ -35,6 +35,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | skill | 呼び方 | すること |
 |---|---|---|
 | `acceptance-leftovers` | `/cumin-maintainer:acceptance-leftovers` | 受け入れの確認のコメントに残った作業を、1つずつ、sub-issue、backlog、調査・実測で確定した制約の一覧、新しい要求Issueのどれかに振り分ける |
+| `decision-request` | `/cumin-maintainer:decision-request` | `cumin/status/awaiting-decision` のIssueの判断依頼か、cuminが止めた理由のコメントを1つ読み、2種類に分ける。要件も方針も範囲も変えない、運用か技術の質問には、`templates/decision-request.md` が求める形 (止まったIssueへのコメント、そのあと `cumin/status/ready`) で答える。答えるのは、セッションが許された範囲の中か、Maintainerの言葉があるときだけである。それ以外の質問と、どちらか分からない質問は、GitHubに何も書かず、質問、選択肢、推奨をMaintainerに渡す |
 | `session-start` | `/cumin-maintainer:session-start` | セッションの始めに、`cumin status` の出力、モニターファイル、開いているPull Request、作業中の要求Issueの木、引き継ぎのメモを読んで、状態を報告する。そのあと、聞かずにしてよいことを1回だけ聞く |
 | `hand-over` | `/cumin-maintainer:hand-over` | セッションの終わりに、状態、開いている判断、Maintainerを待つもの、セッションが学んだことの4つの見出しで、引き継ぎのメモを書く |
 | `merge-decision` | `/cumin-maintainer:merge-decision` | mergeの判断を待つPull Requestを1つ確かめて、決まった形で報告する。スクリプト `check-pull-request.sh` が、先頭のコミットへの承認、必須のcheck、保護されたパスの変更を、GitHubから1回読んで確かめる。差分はテスト以外を全部読む。承認は、Pull Requestの番号を入れた決まった質問のあとか、セッションが許された範囲の中だけで、1つずつ行う |
