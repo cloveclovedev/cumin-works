@@ -108,7 +108,7 @@ Return `blocked` instead of guessing when:
 - More than one design is reasonable, and the split differs between them. Write the options and their good and bad points.
 - The requirement is too large for one requirement issue. Write how you would divide it.
 
-Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the requirement issue, and a Maintainer answers there. cumin does not start you again until a Maintainer adds `cumin/status/ready` to the requirement issue.
+Write `blocked_reason` with the skill `cumin-decision-request`. Put the question in the first line. cumin posts the text as a comment on the requirement issue, and the Issue Owner answers there. cumin does not start you again until a Maintainer adds `cumin/status/ready` to the requirement issue.
 
 ## The result
 
