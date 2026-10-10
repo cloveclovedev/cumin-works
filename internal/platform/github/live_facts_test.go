@@ -83,7 +83,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 			fixtureStatus = s.State
 		}
 	}
-	l.record("1", "The cumin-core App (no Checks and no Commit statuses permission) reads the check runs and the commit statuses of a commit in a public repository (row 54)", "Not known",
+	l.record("1", "The cumin-core App (no Checks and no Commit statuses permission) reads the check runs and the commit statuses of a commit in a public repository (measured-constraints.md row 54)", "Not known",
 		fmt.Sprintf("`GET .../check-runs`: status %d. `GET .../status`: status %d, with the commit statuses `%s`", checkRuns.status, combined.status, strings.Join(found, "`, `")))
 	if checkRuns.status != http.StatusOK || combined.status != http.StatusOK || fixtureStatus != "success" {
 		t.Errorf("fact 1: check runs %d, status %d, the status %s of the fixture is %q (want success). If a call is refused, a permission is missing: stop and ask the Maintainer", checkRuns.status, combined.status, liveStatusContext, fixtureStatus)
@@ -91,7 +91,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 
 	// Fact 8: the rules of the default branch.
 	rulesStatus, required := l.requiredChecks(t, core)
-	l.record("8", "An installation token calls `GET /repos/{owner}/{repo}/rules/branches/{branch}` (row 53)", "Status 200 with the required checks",
+	l.record("8", "An installation token calls `GET /repos/{owner}/{repo}/rules/branches/{branch}` (measured-constraints.md row 53)", "Status 200 with the required checks",
 		fmt.Sprintf("Status %d. Required checks: `%s`", rulesStatus, strings.Join(required, "`, `")))
 	if rulesStatus != http.StatusOK || !contains(required, protectedPathsCheck) || !contains(required, skippedForBotsCheck) {
 		t.Errorf("fact 8: status %d, required checks %v", rulesStatus, required)
@@ -156,7 +156,7 @@ func TestLiveGitHubFacts(t *testing.T) {
 
 	// Fact 3: a required check that an `if` condition skipped does not stop the merge.
 	merge := l.api(t, core, http.MethodPut, fmt.Sprintf("/repos/{repo}/pulls/%d/merge", pullA.Number), map[string]any{"merge_method": "squash", "sha": shaA})
-	l.record("3", "A required check whose job an `if` condition skipped, and the merge by the cumin-core App (row 51)", "The merge works",
+	l.record("3", "A required check whose job an `if` condition skipped, and the merge by the cumin-core App (measured-constraints.md row 51)", "The merge works",
 		fmt.Sprintf("Check run `%s`: status `%s`, conclusion `%s`. Merge: status %d", skippedForBotsCheck, skipped.Status, skipped.Conclusion, merge.status))
 	if skipped.Conclusion != "skipped" || merge.status != http.StatusOK {
 		t.Errorf("fact 3: conclusion %q, merge status %d: %s", skipped.Conclusion, merge.status, merge.message())
@@ -393,7 +393,7 @@ func (l *live) recordGraphQLFact(t *testing.T, token string, parentNumber, issue
 	if s := result.Data.Repository.ParentIssue.Summary; s != nil {
 		summary = fmt.Sprintf("%d of %d completed", s.Completed, s.Total)
 	}
-	l.record("7", "An installation token of the cumin-core App reads the GraphQL fields of the design note (row 55)", "Every field is readable",
+	l.record("7", "An installation token of the cumin-core App reads the GraphQL fields of the design note (measured-constraints.md row 55)", "Every field is readable",
 		fmt.Sprintf("Status %d, errors: [%s]. `closedByPullRequestsReferences`: %d, `blockedBy`: %d, `parent`: %v, `subIssuesSummary` of the parent: %s, `closingIssuesReferences`: %d, `statusCheckRollup.state`: `%s`",
 			resp.status, strings.Join(errs, "; "), len(issue.ClosedBy.Nodes), len(issue.BlockedBy.Nodes), issue.Parent != nil, summary, len(pull.Closing.Nodes), rollup))
 	if resp.status != http.StatusOK || len(errs) > 0 || len(issue.ClosedBy.Nodes) != 1 || len(issue.BlockedBy.Nodes) != 1 || issue.Parent == nil || summary == "null" || len(pull.Closing.Nodes) != 1 || pull.Rollup == nil || pull.Rollup.State == "" {

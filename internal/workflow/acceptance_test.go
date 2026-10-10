@@ -523,33 +523,33 @@ func planReviewScene(t *testing.T, options cliOptions) (*scene, time.Time) {
 	return sc, closedAt
 }
 
-// The test of a top-level requirement in cumin-core.md (the Owner task
-// closes, the check starts): a requirement issue in
-// cumin/status/awaiting-plan-review with an open cumin/type/owner-task
-// sub-issue keeps its label, and nothing is requested. When the Maintainer
-// closes the Owner task, the issue gets cumin/status/accepting before the
-// Planner starts, and the acceptance check is requested exactly once across
-// polls and a restart.
+// The test of a top-level requirement in cumin-core.md (the sub-issue for a
+// Maintainer closes, the check starts): a requirement issue in
+// cumin/status/awaiting-plan-review with an open sub-issue for a Maintainer
+// (cumin/type/owner-task) keeps its label, and nothing is requested. When
+// the Maintainer closes the sub-issue for a Maintainer, the issue gets
+// cumin/status/accepting before the Planner starts, and the acceptance
+// check is requested exactly once across polls and a restart.
 func TestAwaitingPlanReview_TheAcceptanceCheckIsRequestedOnceWhenTheOwnerTaskCloses(t *testing.T) {
 	sc, closedAt := planReviewScene(t, cliOptions{fixture: "planner-done.jsonl", holds: true})
 	sc.fake.AddIssue(sc.repo, &githubtest.Issue{Number: 9, Parent: 6, Title: "Change a workflow", Labels: []string{"cumin/type/owner-task", "risk/high"}})
 	service := sc.service()
 
-	// The Owner task is open.
+	// The sub-issue for a Maintainer is open.
 	sc.pollAndWait(t, service)
 	sc.pollAndWait(t, service)
 	if n := sc.agentRuns(t); n != 0 {
-		t.Fatalf("%d agent runs with an open Owner task, want none", n)
+		t.Fatalf("%d agent runs with an open sub-issue for a Maintainer, want none", n)
 	}
 	waiting := []string{githubtest.RequirementLabel, "cumin/status/awaiting-plan-review"}
 	if got := requirementLabels(t, sc); !slices.Equal(got, waiting) {
-		t.Fatalf("labels of #6 = %v, want %v with an open Owner task", got, waiting)
+		t.Fatalf("labels of #6 = %v, want %v with an open sub-issue for a Maintainer", got, waiting)
 	}
 	if n := sc.labelChanges(); n != 0 {
-		t.Errorf("%d label changes with an open Owner task, want none", n)
+		t.Errorf("%d label changes with an open sub-issue for a Maintainer, want none", n)
 	}
 
-	// The Maintainer closes the Owner task.
+	// The Maintainer closes the sub-issue for a Maintainer.
 	ownerTask := sc.fake.Issue(sc.repo, 9)
 	ownerTask.Closed, ownerTask.ClosedAt = true, closedAt.Add(10*time.Minute)
 	sc.fake.AddIssue(sc.repo, ownerTask)

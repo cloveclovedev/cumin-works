@@ -101,7 +101,8 @@ func NeedsComments(requirement RequirementIssue) bool {
 // starting state of "request the acceptance check"
 // (cumin/status/implementing or cumin/status/awaiting-plan-review) with one
 // or more sub-issues, all closed. In cumin/status/awaiting-plan-review, the
-// last open sub-issue was an Owner task, or a Maintainer closed it by hand.
+// last open sub-issue was a sub-issue for a Maintainer
+// (cumin/type/owner-task), or a Maintainer closed it by hand.
 func everySubIssueClosed(requirement RequirementIssue) bool {
 	status := statusLabel(requirement.Labels)
 	if status != LabelImplementing && status != LabelAwaitingPlanReview || len(requirement.SubIssues) == 0 {
