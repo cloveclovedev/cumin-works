@@ -41,7 +41,7 @@ func toChecks(read []github.CheckResult) []CheckResult {
 	return checks
 }
 
-// toReviews folds the reviews of the client into the ones of the rules.
+// toReviews converts the reviews of one pull request.
 func toReviews(read []github.Review) []Review {
 	var reviews []Review
 	for _, r := range read {

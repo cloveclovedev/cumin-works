@@ -1,7 +1,8 @@
 package agent
 
 // This file is the adapter of Claude Code. Everything that is specific
-// to Claude Code (the options, the events of the stream) stays here. The
+// to Claude Code stays in two files: the options and the events of the
+// stream here, and the check of the start record in startrecord.go. The
 // rest of cumin sees only Request, Run, and AbnormalEnd.
 //
 // Options verified in the official documentation: "Run Claude Code

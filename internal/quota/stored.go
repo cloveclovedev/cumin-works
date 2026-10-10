@@ -1,6 +1,7 @@
 // The conversions between the usage of the rules and the usage that the
-// state file keeps. They are the only place that copies the two windows, so
-// that a new field of a window changes one file.
+// state file keeps. They are the only place that copies the two windows
+// between the rules and the state file. toUsage in
+// internal/workflow/quota.go copies them from the agent.
 
 package quota
 
