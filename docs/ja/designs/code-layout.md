@@ -114,7 +114,7 @@
 | | `quotanote.go` | 純粋。「stop agent starts」の通知の理由の文章。標準ライブラリのほかに、`internal/quota` の枠の名前の型だけを使う |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準と、保護されたパスの一覧を決める。blobのoidが変わるまで結果を持つ |
 | `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (「resume agent starts」)、残した使用率が読んだばかりかどうか |
-| | `stored.go` | 純粋。判定に使う使用率と、状態ファイルに残す使用率の間の変換。`internal/workflow` と `cmd/cumin` が使う |
+| | `stored.go` | 純粋。判定に使う使用率と、状態ファイルに残す使用率の間の変換。標準ライブラリのほかに、`internal/core/state` の型だけを使い、入出力はしない。`internal/workflow` と `cmd/cumin` が使う |
 | `internal/agent` | `domain.go` | cuminの他の部分から見える型: 依頼、結果とそのスキーマ、使用率、実行、異常終了 |
 | | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
 | | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、Issue Ownerのログイン名、保護されたパスと照合の決まり、実行時間の上限、実行が終わる時刻。Plannerには、ImplementerとReviewerの時間の上限も) |
@@ -169,7 +169,7 @@
 
 図の元ファイル: [code-layout-files.puml](code-layout-files.puml)
 
-矢印は「使う」を表す。`scene_test.go` と `fakes_test.go` は、テストを持たず、他のファイルが使う偽物と補助の関数だけを持つ。`internal/workflow` の新しいテストは、その動作のファイルに足す。動作のファイルがなければ、新しいファイルを作る。`service_test.go` には、定期確認のループのテストだけを置く。
+矢印は「使う」を表す。「the other *_test.go files that poll」は、定期確認を動かすテストのファイルである。`domain_test.go` や `checks_test.go` のように純粋な判定を試すファイルは、場面 (`scene_test.go`) を使わない。`scene_test.go` と `fakes_test.go` は、テストを持たず、他のファイルが使う偽物と補助の関数だけを持つ。`internal/workflow` の新しいテストは、その動作のファイルに足す。動作のファイルがなければ、新しいファイルを作る。`service_test.go` には、定期確認のループ、リポジトリごとの設定、cuminの停止のテストだけを置く。
 
 偽GitHubは、endpointのグループごとに1つのファイルを持つ。`fake.go` が要求を振り分け、他のファイルが答える。新しいendpointは、そのグループのファイルに足し、`fake.go` の振り分けに1行を足す。
 

@@ -53,7 +53,7 @@ package "internal/workflow (tests of the poll)" {
   file "stopimplementation_test.go\nstop the implementation" as stopimpl
   file "awaitingchecks_test.go\nthe required checks:\nrequest the review,\nstop for missing checks,\ncopy the labels to the pull request" as awaiting
   file "checkfix_test.go\nrequest a check fix,\nstop for failed checks" as checkfix
-  file "the other *_test.go files\n(one action or one topic each)" as others
+  file "the other *_test.go files that poll\n(one action or one topic each)" as others
 }
 
 loop --> scene
