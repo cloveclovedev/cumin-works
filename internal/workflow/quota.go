@@ -317,7 +317,7 @@ func (s *Service) tellQuotaLimit(ctx context.Context, log *slog.Logger, target T
 // silence the stop for every repository. The issue whose start or run met the limit is the link. It
 // reports false when the channel failed.
 func (s *Service) notifyQuota(ctx context.Context, log *slog.Logger, target Target, number int, reason string) bool {
-	return s.notify(ctx, log, notificationOn(s.Settings), notify.Notification{
+	return s.notify(ctx, log, discordEnabled(s.Settings), notify.Notification{
 		Action:     string(ActionStopAgentStarts),
 		Reason:     reason,
 		Repository: target.Repository.String(),

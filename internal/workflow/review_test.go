@@ -238,3 +238,33 @@ func TestExplanationOf_IsANewDecisionRequestOfTheReviewer(t *testing.T) {
 		})
 	}
 }
+
+// The first line with text depends on the cutset of the caller: line breaks
+// alone leave a first line of spaces empty, and white space reaches the line
+// after it.
+func TestFirstTextLine_TrimsTheCutsetBeforeTheFirstLine(t *testing.T) {
+	const (
+		lineBreaks = "\r\n"
+		whiteSpace = " \t\r\n"
+	)
+	tests := []struct {
+		name   string
+		text   string
+		cutset string
+		want   string
+	}{
+		{"a body that starts with a line break, line breaks", "\r\n\n## Heading \r\nmore", lineBreaks, "## Heading"},
+		{"a body that starts with a line break, white space", "\r\n\n## Heading \r\nmore", whiteSpace, "## Heading"},
+		{"a body that starts with spaces before a line break, line breaks", " \t\n## Heading\nmore", lineBreaks, ""},
+		{"a body that starts with spaces before a line break, white space", " \t\n## Heading\nmore", whiteSpace, "## Heading"},
+		{"a body of one line", "  ## Heading  ", lineBreaks, "## Heading"},
+		{"an empty body", "", whiteSpace, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := firstTextLine(tt.text, tt.cutset); got != tt.want {
+				t.Errorf("firstTextLine(%q, %q) = %q, want %q", tt.text, tt.cutset, got, tt.want)
+			}
+		})
+	}
+}

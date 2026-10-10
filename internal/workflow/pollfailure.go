@@ -90,7 +90,7 @@ func (s *Service) pollFailed(ctx context.Context, repository config.Repository, 
 	// the poll that failed may be the one that could not read the file of
 	// the repository, and a repository must not silence a failure that it
 	// caused.
-	s.notify(ctx, log, notificationOn(s.Settings), notify.Notification{
+	s.notify(ctx, log, discordEnabled(s.Settings), notify.Notification{
 		Reason:     fmt.Sprintf("The poll of this repository failed %d times in a row with the same reason: %s", count, oneLine(reason)),
 		Repository: repository.String(),
 		Link:       github.RepositoryURL(repository.Owner, repository.Name),
