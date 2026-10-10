@@ -22,8 +22,7 @@ const (
 type command struct {
 	name    string // may have two words, such as "quota allow"
 	summary string
-	// run gets the arguments after the name. A nil run means that the
-	// subcommand is not built yet.
+	// run gets the arguments after the name.
 	run func(args []string, stdout, stderr io.Writer) int
 }
 
@@ -76,15 +75,7 @@ func runCLI(args []string, stdout, stderr io.Writer) int {
 		return exitBadUsage
 	}
 
-	if cmd.run == nil {
-		return notBuilt(cmd.name, stderr)
-	}
 	return cmd.run(rest[len(strings.Fields(cmd.name)):], stdout, stderr)
-}
-
-func notBuilt(name string, stderr io.Writer) int {
-	fmt.Fprintf(stderr, "cumin %s: not built yet\n", name)
-	return exitFailure
 }
 
 // findCommand matches the start of args against the command names.
