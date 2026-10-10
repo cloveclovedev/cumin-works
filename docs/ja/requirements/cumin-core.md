@@ -83,7 +83,7 @@ Operatorが使うコマンド:
 | コマンド | 内容 |
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
-| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Maintainerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、Agentの起動を止めているかどうかとその原因の枠、実行が終わるのを待って止まる途中かどうか、全部を読めないIssueとその超えた上限 (「全部を読めないIssue」)。表示するのは、sub-issue、ラベル、blocked by のIssueの上限を超えたIssueである。Pull Requestについての上限を超えたIssueは、通知だけで知らせる。`cumin status` は、Pull Requestを読まないためである |
+| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Maintainerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、Agentの起動を止めているかどうかとその原因の枠、実行が終わるのを待って止まる途中かどうか、全部を読めないIssueとその超えた上限 (「全部を読めないIssue」)。表示するのは、sub-issue、ラベル、blocked by のIssueの上限を超えたIssueである。Pull Requestについての上限を超えたIssueは、通知だけで知らせる。`cumin status` は、Pull Requestを読まないためである。モニターファイルから、最後の定期確認の時刻とそこからの経過時間、その定期確認のエラーの1つずつ、cuminが実行中として持つAgent (roleと依頼の種類) も表示する。最後の定期確認が `poll_interval` の3倍より古いときと、モニターファイルがないときは、そのことを1行で示す。`--check` を付けると、最後の定期確認が新しく、エラーがないときだけ、終了コード0で終わる。`--wait-polls <n>` を付けると、定期確認がn回終わるまで待ち、そのどれかにエラーがあるとき、または `--timeout` (初期値5分) が過ぎたときは、失敗で終わる。オプションがないときの終了コードは変えない |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
 | `cumin stop --after-current-runs` | 実行中のAgentの実行が終わるのを待ってから、cuminを止める。新しい依頼は始めない。Agentの要らない動作は、止まるまで続ける |
 | `cumin --version` | cuminの版を表示する |
