@@ -109,7 +109,7 @@ func (s *Service) waitingCheck(ctx context.Context, result pollResult, complete 
 	}
 	log := s.logger()
 	log.Info(string(ActionTellThatCuminWaits) + ": no issue can go on and no agent runs; the notification goes out once")
-	sent := s.notify(ctx, log, notificationOn(s.Settings), notify.Notification{
+	sent := s.notify(ctx, log, discordEnabled(s.Settings), notify.Notification{
 		Action: string(ActionTellThatCuminWaits),
 		Reason: "No issue can go on and no agent runs. cumin waits for a new ready issue or a decision.",
 	})

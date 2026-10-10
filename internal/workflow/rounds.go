@@ -331,7 +331,7 @@ func ExplanationOf(comments []Comment, reviewer string, since time.Time) (Commen
 	var found Comment
 	ok := false
 	for _, c := range comments {
-		if c.Author != reviewer || c.CreatedAt.Before(since) || !strings.HasPrefix(strings.TrimSpace(firstLine(strings.TrimLeft(c.Body, "\r\n"))), DecisionRequestHeading) {
+		if c.Author != reviewer || c.CreatedAt.Before(since) || !strings.HasPrefix(firstTextLine(c.Body, "\r\n"), DecisionRequestHeading) {
 			continue
 		}
 		if !ok || !c.CreatedAt.Before(found.CreatedAt) {
@@ -346,6 +346,14 @@ func ExplanationOf(comments []Comment, reviewer string, since time.Time) (Commen
 func firstLine(text string) string {
 	line, _, _ := strings.Cut(text, "\n")
 	return line
+}
+
+// firstTextLine is the first line of the text, without the white space
+// around the line. It first trims the characters of the cutset from the start
+// of the text, so that a text that starts with them still gives its first
+// line with text: each caller passes the cutset that its rule says.
+func firstTextLine(text, cutset string) string {
+	return strings.TrimSpace(firstLine(strings.TrimLeft(text, cutset)))
 }
 
 // stopOfReviewerRequest is the action that stops the review after a request

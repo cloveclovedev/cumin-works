@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
@@ -549,7 +548,7 @@ func (s *Service) applyReviewEnd(ctx context.Context, log *slog.Logger, token st
 		log.Info(string(ActionStopAtTheRoundLimit)+": the issue waits for a Maintainer", "labels", labels, "comment", a.Explanation.URL)
 		s.notify(ctx, log.With("action", ActionStopAtTheRoundLimit), settings.notificationOn(), notify.Notification{
 			Action:     string(ActionStopAtTheRoundLimit),
-			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, strings.TrimSpace(firstLine(strings.TrimLeft(a.Explanation.Body, "\r\n")))),
+			Reason:     fmt.Sprintf("blocking comments remain after %d review rounds: %s", sub.Reviewing.Limit, firstTextLine(a.Explanation.Body, "\r\n")),
 			Repository: repository,
 			Subject:    fmt.Sprintf("issue #%d", number),
 			Link:       a.Explanation.URL,

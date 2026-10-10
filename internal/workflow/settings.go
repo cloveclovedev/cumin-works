@@ -101,11 +101,11 @@ func blobOID(file *github.RepositoryFile) string {
 // notificationOn reports whether the setting notify.discord.enabled of the
 // repository is on. Settings that were not read report false.
 func (r *RepositorySettings) notificationOn() bool {
-	return r != nil && notificationOn(r.Settings)
+	return r != nil && discordEnabled(r.Settings)
 }
 
-// notificationOn reports whether the setting notify.discord.enabled is on.
+// discordEnabled reports whether the setting notify.discord.enabled is on.
 // It is the only place that reads the setting.
-func notificationOn(settings *config.Settings) bool {
+func discordEnabled(settings *config.Settings) bool {
 	return settings != nil && settings.Notify.DiscordEnabled
 }

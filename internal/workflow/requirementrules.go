@@ -259,7 +259,7 @@ func AcceptanceCheckAt(comments []Comment, planner string) time.Time {
 		if planner == "" || comment.Author != planner {
 			continue
 		}
-		if strings.TrimSpace(firstLine(strings.TrimLeft(comment.Body, " \t\r\n"))) != acceptanceCheckHeading {
+		if firstTextLine(comment.Body, " \t\r\n") != acceptanceCheckHeading {
 			continue
 		}
 		if comment.CreatedAt.After(newest) {
@@ -278,7 +278,7 @@ func AcceptanceCheckAt(comments []Comment, planner string) time.Time {
 func QuestionAt(comments []Comment, authors ...string) time.Time {
 	var newest time.Time
 	for _, comment := range comments {
-		if comment.Author == "" || !slices.Contains(authors, comment.Author) || !strings.HasPrefix(strings.TrimSpace(firstLine(strings.TrimLeft(comment.Body, "\r\n"))), DecisionRequestHeading) {
+		if comment.Author == "" || !slices.Contains(authors, comment.Author) || !strings.HasPrefix(firstTextLine(comment.Body, "\r\n"), DecisionRequestHeading) {
 			continue
 		}
 		if comment.CreatedAt.After(newest) {
