@@ -341,15 +341,26 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 - 古い名前の LaunchAgent (`dev.cumin-works.cumin`) が残っている Host では、先にそれを外す。`launchctl bootout gui/$(id -u)/dev.cumin-works.cumin` と、`~/Library/LaunchAgents/dev.cumin-works.cumin.plist` の `rm` である。そのあとで `cumin setup launchd` を実行すると、新しい名前で入る。
 - macOS には、LaunchAgent を出し入れする純正の画面はない。システム設定の「ログイン項目と機能拡張」で止めることはできるが、plist のファイルは残る。
 
-cumin を新しくするときは、先に実行中のAgentが終わるのを待って止め、それからビルドして置いて、job を起動し直す。
+cumin を新しくするときは、チェックアウトを既定のブランチの先頭に合わせてから (`git pull --ff-only`)、次を実行する。実行中のAgentが終わるのを待って止め、ビルドしたバイナリを置いて、job を起動し直す。
 
 ```sh
-cumin stop --after-current-runs
-cumin status                      # "Stop:" の行が消えるまで待つ
-scripts/install.sh --restart
+scripts/install.sh --after-current-runs
 ```
 
-- 先に止めずに `scripts/install.sh --restart` を実行すると、実行中のAgentが取り消される。Agent が動いていないと分かっているときは、3行めだけでよい。
+スクリプトは、次の6つをこの順に行う。1つが失敗したら、そこで `1` で終わり、あとの手順を行わない。
+
+| 手順 | すること | 失敗したとき |
+|---|---|---|
+| 1 | チェックアウトを確かめる。既定のブランチにいる。手元の変更がない。`git fetch` のあとで、リモートの先頭と同じコミットである | cumin は動いたままである |
+| 2 | LaunchAgent を確かめる。読み込まれていて、`<prefix>/cumin` を実行する | cumin は動いたままである |
+| 3 | 捨てるディレクトリにビルドする | cumin は動いたままである |
+| 4 | `cumin stop --after-current-runs` を実行し、止める予約のファイルがなくなるのを待つ | 上限で終わったら、何も置かない。cumin はそのままで、実行を待ってから止まる途中である |
+| 5 | バイナリを置き、LaunchAgent を起動し直す | cumin は止まっている。原因を直して、表示されたコマンドを実行する |
+| 6 | `scripts/cumin-health.sh --wait-polls 2` を実行する。定期確認が2回、エラーなしで終わることを確かめる | 新しいバイナリは入っていて、cumin は起動している。スクリプトがそう表示する |
+
+- 手順4の待つ時間の上限は、`--stop-timeout <seconds>` で変える。初期値は3600秒である。数でない値は、終了コード `2` になる。
+- 上限で終わったあとにもう一度実行すると、続きを待つ。cumin が動いていない Host では、予約を消すものがいないので、手順4は上限で終わる。そのときは `scripts/install.sh --restart` で置いて起動する。
+- `scripts/install.sh --restart` は、待たずに置いて起動し直すので、実行中のAgentが取り消される。Agent が動いていないと分かっているときに使う。
 
 - plist には cumin のパスがそのまま入っているので、同じ場所に置き直すなら plist を書き直さなくてよい。
 - `--restart` は、job が読み込まれているときだけ `launchctl kickstart -k` を実行する。止まっている job は、これで起動する。読み込まれていなければ、その旨を表示して何もしない。
@@ -371,7 +382,7 @@ App を登録済みの Host に、同じ Organization のリポジトリを足�
 cumin-worksを、cumin自身で開発するときの決まり。cumin-worksをforkして、cuminで手を入れるときも同じである。手順は上の「対象のリポジトリを足す」と同じで、次の2つが違う。
 
 - 保護されたパスに、Agentの指示 (`roles/`、`disciplines/`、`templates/`) を入れない。開発の対象だからである。動いているcuminは、これらをバイナリに埋め込んで使うので、リポジトリで変わっても、バイナリを入れ替えるまで指示は変わらない。要件の文書 (`docs/ja/requirements/`) は入れる。
-- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Operatorが、mergeされた変更を確かめてから、`cumin stop --after-current-runs` で実行中のAgentが終わるのを待ち、`scripts/install.sh --restart` で入れ替える (手順4)。cuminは自分のリポジトリでAgentを動かしているので、待たずに入れ替えると、その実行が取り消される。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
+- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Operatorが、mergeされた変更を確かめてから、`scripts/install.sh --after-current-runs` で、実行中のAgentが終わるのを待ってから入れ替える (手順4)。cuminは自分のリポジトリでAgentを動かしているので、待たずに入れ替えると、その実行が取り消される。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
 
 ## セットアップのあとの確認
 
