@@ -42,9 +42,9 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - スナップショットに出てこないIssue (閉じた要求Issueのsub-issue、Maintainerが要求Issueから外したsub-issue) のworktreeは、消さない。閉じた要求Issueは読まない (原則6) うえ、外しただけのIssueは開いていることがある。Operatorが [作業場所の片付け](../development/work-directory.md) の手順で消す。
 - PlannerのworktreeはPlannerの実行が終わるたびに消す (done、blocked、異常終了のどれでも。同じ実行の中の依頼し直しと、分割に続く受け入れの確認が終わったあとである)。Plannerは読むだけで何も持たず、次の依頼で作り直すためである。こうすると、要求Issueが閉じたあとにPlannerのworktreeが残らない。cuminを止めるときも消す。
 - gitは `os/exec` で呼ぶ。認証の入力待ちで止まらないように `GIT_TERMINAL_PROMPT=0` を付ける (公式: git の環境変数)。gitの出力はエラーの文章にだけ含め、infoのログには出さない。
-- GitHubと通信するgit (`git clone`、`git fetch`、`git ls-remote`、`git remote set-head`) は、そのworktreeのroleのAppのinstallation tokenで認証する。公開のリポジトリでも非公開のリポジトリでも、同じである。非公開のリポジトリは、認証情報のないHTTPSのgitを終了コード128で断り、4つのAppのどのtokenでも、`git ls-remote`、`git clone`、`git fetch` が通る (実測 149)。`git remote set-head` が同じ認証で通ることは、測っていない。同じHTTPSの読み取りなので通る、という推論である (「まだ決めていないこと」)。
+- GitHubと通信するgit (`git clone`、`git fetch`、`git ls-remote`、`git remote set-head`) は、そのworktreeのroleのAppのinstallation tokenで認証する。公開のリポジトリでも非公開のリポジトリでも、同じである。非公開のリポジトリは、認証情報のないHTTPSのgitを終了コード128で断り、4つのAppのどのtokenでも、`git ls-remote`、`git clone`、`git fetch` が通る (実測 149)。`git remote set-head origin --auto` も、同じ認証で通る (実測 149)。
   - 使うApp: Implementerのworktreeの用意と片付けにはImplementerのApp、Reviewerのworktreeには ReviewerのApp、Plannerのworktreeには PlannerのAppを使う。cloneは3つのroleが共有するので、最初に用意したroleのtokenで作られる。`cumin-core` のtokenと、OperatorやMaintainerの認証情報は、gitに渡さない。
-  - tokenは、GitHubと通信するgitを実行する直前にだけ、対象のリポジトリ1つと `contents: read` に絞って発行する。用意では、1回の用意に1つである。片付けでは、worktreeがあって、GitHubにないものを確かめるときにだけ発行する。worktreeのない閉じたsub-issueと、再起動まで確かめ直さないworktreeには、発行しない。Appより狭い権限のtokenを発行できる (実測 57)。絞ったtokenでgitが通ることは、測っていない。実測 57 は公開のリポジトリのAPIの事実で、実測 149 はAppの全ての権限のtokenで測った。公式のページと2つの行からの推論である (「まだ決めていないこと」)。4つのroleのAppは、どれも Contents の読み取りを持つ ([GitHub Appの登録手順](../development/github-app-setup.md) の権限の表)。gitでHTTPSを使うには Contents の権限が要る (公式: Authenticating as a GitHub App installation)。Agentの実行に渡すtoken (「1回の依頼の手順」) とは別のtokenである。実行のtokenは、起動の直前に発行して、1時間の期限を実行に残すためである。
+  - tokenは、GitHubと通信するgitを実行する直前にだけ、対象のリポジトリ1つと `contents: read` に絞って発行する。用意では、1回の用意に1つである。片付けでは、worktreeがあって、GitHubにないものを確かめるときにだけ発行する。worktreeのない閉じたsub-issueと、再起動まで確かめ直さないworktreeには、発行しない。Appより狭い権限のtokenを発行できる (実測 57)。絞ったtokenで、非公開のリポジトリのgitが通る (実測 149)。4つのroleのAppは、どれも Contents の読み取りを持つ ([GitHub Appの登録手順](../development/github-app-setup.md) の権限の表)。gitでHTTPSを使うには Contents の権限が要る (公式: Authenticating as a GitHub App installation)。Agentの実行に渡すtoken (「1回の依頼の手順」) とは別のtokenである。実行のtokenは、起動の直前に発行して、1時間の期限を実行に残すためである。
   - 渡し方は、Agentの環境と同じ3つの環境変数である (`GIT_CONFIG_COUNT=1`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>`。公式: git-config の環境変数。実測 149 は、この渡し方で測った)。tokenがあるのは、そのgitのプロセスの環境だけである。remoteのアドレスは `https://github.com/<owner>/<repo>.git` のままで、cloneの `.git/config`、引数、ログ、Hostの状態ファイルには、tokenが入らない。gitは `GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` で呼び、Hostのcredential helperを読ませない。
   - `GIT_CONFIG_KEY_0` の名前は、remoteのアドレスのスキームとホストから作る (`http.<スキーム>://<ホスト>/.extraheader`)。ヘッダが届くのは、そのホストだけである (公式: git-config の `http.<url>.*`)。GitHubでは、上の名前になる。用意では、呼び出し処理が渡すアドレスから作る。片付けでは、cloneの設定だけから読んだアドレス (`git config --local --get remote.origin.url`) から作る。`git remote get-url` は使わない。Hostのユーザの `url.<base>.insteadOf` がアドレスを書き換え、GitHubと通信するgitが読まない設定で、tokenを渡すかどうかが決まってしまうためである (公式: git-config の `--local` と `url.<base>.insteadOf`)。HTTPでないアドレス (テストが使うローカルのリポジトリ) には、ヘッダがないので、tokenを発行しない。
   - GitHubと通信するgitには、`GIT_SSH_COMMAND=false`、空の `GIT_ASKPASS` と `SSH_ASKPASS`、`GIT_TERMINAL_PROMPT=0` も付ける。Hostの鍵も、パスワードを尋ねるプログラムも使わない (公式: git の環境変数)。tokenを渡す前に `GIT_CONFIG_COUNT=0` を置くので、cuminの環境にある `GIT_CONFIG_*` の設定は、このgitに届かない。
@@ -187,10 +187,7 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 ## まだ決めていないこと
 
-| 決める、または確かめること | どこで |
-|---|---|
-| 非公開のリポジトリで、対象のリポジトリ1つと `contents: read` に絞ったinstallation tokenで、`git clone`、`git fetch`、`git ls-remote` が通ること (未確認。実測 57 と実測 149 からの推論) | #794 の実装と、#799 の実機の確認 |
-| 非公開のリポジトリで、`git remote set-head origin --auto` が同じ認証で通ること (未確認。実測 149 は測っていない) | #794 の実装と、#799 の実機の確認 |
+なし。
 
 ## 後回しにしたこと
 

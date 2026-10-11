@@ -306,7 +306,7 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 
 - 対象は、rulesetを使えるプランのリポジトリである。Teamプランの Organization の非公開のリポジトリでは、`scripts/setup-repo.sh` の5つのrulesetが全て作られ、有効になる (実測 146。公式: About rulesets)。cuminは、既定のブランチの保護を全てrulesetに頼るので、rulesetのないリポジトリは対象にしない (実測 13)。
 - GitHub Appの権限の表は、公開と非公開で1つにする。非公開のリポジトリのために足す権限は、全てのインストールに足す。表が2つあると、準備の手順と `cumin setup` の権限の確認が、リポジトリの種類で分かれるためである。
-- 足す権限は、`cumin-core` の3つだけである。Checks: Read-only、Commit statuses: Read-only、Actions: Read-only (公式: Permissions required for GitHub Apps。実測 148)。checkを読むのは `cumin-core` だけで、読み方は [定期確認の設計](poll.md) の「定期確認で読む内容」にある。
+- 足す権限は、`cumin-core` の3つだけである。Checks: Read-only、Commit statuses: Read-only、Actions: Read-only (公式: Permissions required for GitHub Apps。実測 148、155)。checkを読むのは `cumin-core` だけで、読み方は [定期確認の設計](poll.md) の「定期確認で読む内容」にある。
   - Planner、Implementer、Reviewer のAppには、何も足さない。失敗したcheckの内容は、cuminが読んで依頼に入れる。cloneとfetchに要る Contents は、4つのAppがもう持っている (実測 149)。rulesetと必須のcheckの一覧は、今の権限で読める (実測 146)。
   - 権限を変える道は、1つである。表を変え、Maintainerが `cumin setup` の案内に従ってAppの権限を変え、Organizationで新しい権限を承認する ([セットアップの手順](../development/setup-guide.md))。
   - 受け入れた不利益: 公開のリポジトリだけを使うOrganizationも、読むために要らない3つの権限を承認する。
@@ -314,7 +314,7 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
   - 採らなかった案: 非公開のリポジトリのインストールにだけ足す。権限はAppごとに1つで、インストールごとには変えられない。別のAppを登録することになる。
 - cloneとfetchは、worktreeのroleのAppのtokenで認証する。[Agentの実行の設計](agent-run.md) の「作業場所」にある。
 - 実機の確認は、Teamプランの Organization の、非公開の使い捨てのリポジトリ (`cumin-sandbox-private`) で行う (Maintainerの決定: #792)。公開のsandboxとは別のリポジトリである。手順は [実機の確認 (live test)](../development/live-tests.md) にある。
-- 保護されたパスのcheck (workflow `cumin-protected-paths`) は、変えない。非公開のリポジトリでは、GitHub Actionsの時間はプランに含まれる分から引かれる (公式: GitHub Actions billing。公開のリポジトリは無料である。実測 79)。このjobは、AppのPull Requestでだけ動き、人のPull Requestでは飛ばされて時間を使わない (#792 の測定)。1回のpushで1つのjobが動き、5分で打ち切られる。これは公式のページと測定からの推論で、AppのPull Requestで使う時間は測っていない (「まだ決めていないこと」)。
+- 保護されたパスのcheck (workflow `cumin-protected-paths`) は、変えない。非公開のリポジトリでは、GitHub Actionsの時間はプランに含まれる分から引かれる (公式: GitHub Actions billing。公開のリポジトリは無料である。実測 79)。このjobは、AppのPull Requestでだけ動き、人のPull Requestでは飛ばされて時間を使わない (#792 の測定)。1回のpushで1つのjobが動き、5分で打ち切られる。AppのPull Requestでは、jobは1回のpushに3〜4秒で終わった (#799 の実機の確認)。課金された分数は読めていない (「まだ決めていないこと」)。
 - 図の画像のアドレスは、リポジトリが公開か非公開かで決まる (Maintainerの決定: #793)。
 
   | リポジトリ | 画像のアドレス | 読める人に表示される場所 |
@@ -359,9 +359,9 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 
 | 決める、または確かめること | どこで |
 |---|---|
-| 3つの読み取りの権限を足した `cumin-core` のtokenが、非公開のリポジトリでcheckを読めること。GraphQLの `statusCheckRollup` を含む (未確認 148) | #795 の受け入れテストと、#799 の実機の確認 |
-| 非公開のリポジトリで、保護されたパスのcheckがAppのPull Requestに使うGitHub Actionsの時間 (未確認 151) | #799 の実機の確認 |
-| Freeプランの Organization の非公開のリポジトリで、`GET /repos/{owner}/{repo}/rulesets` が返すステータス (未確認 152)。プランについての文面が出るのは、403のときだけである | #797 の実装 |
+| 非公開のリポジトリで、保護されたパスのcheckがAppのPull Requestに使う、課金されるGitHub Actionsの時間 (未確認 151)。jobは1回のpushに3〜4秒で終わるが、課金された分数は読めていない | Organizationの課金の画面で、Maintainerが確かめたとき |
+| Freeプランの Organization の非公開のリポジトリで、`GET /repos/{owner}/{repo}/rulesets` が返すステータス (未確認 152)。プランについての文面が出るのは、403のときだけである | Freeプランの Organization で `scripts/setup-repo.sh --dry-run` を実行したとき |
+| 非公開のリポジトリで、PlannerのAppが、受け入れの確認とフォローアップのためにPull Requestとcheckを読めないこと (未確認 156)。Plannerは、rulesetとmergeの事実から間接に確かめた | 新しい要求Issue |
 | 枠の上限に当たったときの、headless実行の終わり方と `rate_limit_info.status` の値 (実測 6)。意図して上限に当てられないので、実際に当たったときの記録で埋める | 上限に当たった実行の記録が残ったとき |
 
 ## 後回しにしたこと

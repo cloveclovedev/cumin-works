@@ -109,6 +109,55 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 テストの最後に出る結果の表は、1つの事実が1行である。その行を、[調査・実測で確定した制約](../evidence/measured-constraints.md) の行の元にする。表には、token も、リポジトリの名前も、画像のアドレスも出ない。テストは、表に token が現れたら失敗し、その部分を `[redacted]` に置き換える。
 
+### 実機の確認の記録 (2026-10-12)
+
+非公開のリポジトリで、要求Issueを1つ、分割から受け入れの確認まで通した記録である (#799)。
+
+- リポジトリ: Teamプランの Organization の、非公開の使い捨てのリポジトリ (`cumin-sandbox-private`)。4つの App をインストールし、`scripts/setup-repo.sh` を実行してある。fixture の workflow があり、`live-skipped-for-bots` と `live-check-1-required-line` が必須のcheckである。
+- cumin: `main` の 9034e4b を組み込んだバイナリ。Host の LaunchAgent で動かし、Host の設定の `repositories` に、公開のリポジトリと並べて足した。`scripts/live-scenario.sh` は使っていない。Maintainer の操作 (要求Issueの作成、分割の承認、受け入れ) は、別のマシンの `gh` で行った。
+- 版: macOS 27.0.1、Claude Code 2.1.296、git 2.54.0、Go 1.27.2。
+
+1回目の実行 (要求: `live/check-1.md` を足す)。分割の依頼から受け入れの依頼まで、11分だった。
+
+| 段階 | cumin のログの行 | 結果 |
+|---|---|---|
+| 分割 | `request the split: requested the Planner`、`ask for the plan review: the split waits for a Maintainer` | Planner が実装Issueを1つ作った。図は、非公開のリポジトリの形 (`../blob/<commit>/<path>.svg?raw=true`) で貼られた |
+| 実装 | `request the implementation: requested the work` | Implementer が Pull Request を開いた |
+| checkの待ち | `wait for the checks: verified the pull request`、`request the review: the pull request is ready for review` | cumin-core の token が必須のcheckを読み、全て通ったか飛ばされたことを確かめた |
+| レビュー | `request the review: requested the review` | Reviewer が approve した |
+| merge | `start the merge: the Reviewer approved the head commit`、`merged the pull request` | `risk/low` なので、cumin が merge した |
+| 受け入れの確認 | `request the acceptance check: requested the Planner`、`ask for the acceptance: the requirement issue waits for the acceptance of a Maintainer` | Planner が3つの要件を Pass とした。Maintainer が受け入れて、要求Issueを閉じた |
+
+- この回では、「request a check fix」は起きなかった。Implementer が、1回の実行の中で2回 push して、cumin が読む前にcheckを通した (場面 Check-1 の手順11と同じ)。
+- フォローアップノートは書かれなかった。Pull Request の「Follow-up」も、開いている指摘もなかった。
+
+2回目の実行 (要求: `live/fail-marker` を足す。`live-fail-on-marker` を必須のcheckに足して、必ず落ちるようにした)。
+
+| 段階 | cumin のログの行 | 結果 |
+|---|---|---|
+| checkの待ち | `request a check fix: a required check failed; the issue goes back to the Implementer` | `failed` に `live-fail-on-marker`、`check_fix_requests` が1 |
+| 修正の依頼 | `request a check fix: requested the work` | `kind` が `check fix`、`resumed` が `true`。Implementer は、checkの annotation の文 (「the live test expects this failure」) を引いて、blocked を返した。失敗したcheckの内容が依頼に載った |
+| 止める | `stop the implementation: the agent returned blocked`、`stop the implementation: wrote the reason on the issue` | 実装Issueが `cumin/status/awaiting-decision` になり、判断の依頼が書かれた。Maintainer が、Issue と Pull Request を閉じた |
+
+確かめたこと:
+
+| 確かめること | 結果 |
+|---|---|
+| cumin のログに、非公開のリポジトリの各段階が出ている | 出ている (上の2つの表) |
+| cumin が、失敗したcheckを、内容と一緒に読んだ | 読んだ (2回目)。内容を読めなかったという警告は、ログにない |
+| Host の clone の `.git/config` に token がない | ない。remote のアドレスは `https://github.com/<owner>/<repo>.git` のままである |
+| cumin のログに token がない | ない (`gh[pousr]_`、`github_pat_`、`x-access-token` を探した) |
+| cumin のログの、このリポジトリについての警告とエラー | 警告が1つ (2回目の blocked)。エラーはない |
+| `TestLivePrivateRepositoryFacts` を、新しい権限でもう一度実行する | PASS。P2 は、check run、commit status、annotation、`statusCheckRollup` を読めた。job のログは404だった。テストが選んだ最初の check run が、飛ばされた job のものだったためである (実測 155) |
+| リポジトリを読めない人に、図が見えない | 認証なしでは、画像のアドレスが404を返す (P4)。Issue のページも開けない |
+| 公開のリポジトリが、今までどおり動く | 同じバイナリが、公開のリポジトリで、分割、実装、checkの待ち、レビュー、merge を通した (cumin-works の #798 と、その Pull Request #808) |
+
+見つかったこと:
+
+- Planner の App は Pull requests の権限を持たない。非公開のリポジトリでは、Pull Request とcheckを読めず (403)、受け入れの確認の要件3を、ruleset と merge の事実から間接に確かめた (未確認 156)。公開のリポジトリでは読める。
+- 保護されたパスのcheckは、App の Pull Request で、1回の push に3〜4秒で終わった。課金された分数は、API からは読めなかった (未確認 151)。
+- Agent を1つずつ動かすので、ほかのリポジトリの分割が動いている間、このリポジトリの着手は待った。
+
 ## `cumin run` を sandbox で動かすとき
 
 定期確認や着手を sandbox で確かめるときは、`go build -o cumin ./cmd/cumin` で組み込んだバイナリを動かす。`go run` で動かすと、親のプロセスに送った SIGTERM が `cumin` の子プロセスに届かず、止め方の確認にならない (2026-09-21 に確かめた)。launchd は組み込んだバイナリを起動するので、Host の運用には関係しない。
