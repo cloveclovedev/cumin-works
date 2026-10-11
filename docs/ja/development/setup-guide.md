@@ -190,7 +190,7 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 
 スクリプトがすること:
 
-1. `gh` のログイン、`workflow` の scope、管理者の権限を確かめる。足りなければ、何も変えずに止まる。
+1. `gh` のログイン、`workflow` の scope、管理者の権限、ruleset を使えることを確かめる。足りなければ、何も変えずに止まる。`--dry-run` でも同じである。ruleset を使えるかは、`GET /repos/{owner}/{repo}/rulesets` を読んで確かめる。
 2. 既定のブランチに、次の2つのファイルを足す。
    - `.github/workflows/cumin-protected-paths.yml`: 保護されたパスのcheck。作成者が bot (GitHub App) の Pull Request で動き、作成者が人の Pull Request では飛ばされる。App の名前は条件に書かない。名前を間違えるとcheckが飛ばされ、飛ばされたcheckは通った扱いになるためである。
    - `.cumin/config.toml`: 保護されたパスの一覧 (`protected_paths`) のひな形。
@@ -436,6 +436,8 @@ cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そ�
 |---|---|
 | `the gh login has no "workflow" scope` | 前提にある `gh auth refresh` を実行する |
 | `the gh login is not an administrator of ...` | リポジトリの管理者のアカウントで `gh auth login` する |
+| `the private repository ... cannot use rulesets` | 非公開のリポジトリで、プランに ruleset がない。スクリプトは何も変えていない。ruleset を使えるプラン (Organization は GitHub Team) にしてから、もう一度実行する。cumin は、ruleset のないリポジトリを対象にしない。最後に、GitHub が返したメッセージが出る |
+| `... cannot use rulesets` (`private` がない)、`cannot read the rulesets of ...` | ruleset を読めなかった。スクリプトは何も変えていない。最後に出る GitHub のメッセージを見て直し、もう一度実行する |
 | `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
 | `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
 | `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
