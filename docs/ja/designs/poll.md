@@ -171,7 +171,7 @@ checkの結果の読み方:
 - 読めなかったときは、エラーにしない。文章はcheckの名前と「内容を読めなかった」だけになり、警告をログに出す。名前だけでも依頼を出す価値があるためである。commit statusにはcheck runがないので、この道に入る。
 - 読むのは、落ちたcheck runだけである。同じ名前のcheck runが2つあり、あとの1つが通っている (定期確認のあとにやり直された) ときに、通ったほうの内容を「失敗の内容」として渡さないためである。落ちたcheck runが複数あるときは、最も新しいもの (idが最も大きいもの) を読む。
 - jobのログを読むのは、`details_url` が、このリポジトリのGitHub Actionsのものであるときだけである。条件は2つある。アドレスが `https://github.com` のものであること。パスの全体が `/<owner>/<repo>/actions/runs/<番号>/job/<番号>` で、`<owner>/<repo>` がこのリポジトリであること (大文字と小文字は区別しない)。`details_url` はcheck runを出したAppが書くので、別のホストや別のリポジトリのアドレスの末尾がjobの形であっても、その数字はこのリポジトリのjobの番号ではない。条件に合わないときは、jobのログを読まず、annotationだけを文章にする。
-- 公開リポジトリでは、Checks と Actions の権限がなくても読める (実測 54)。privateリポジトリでは読めないことがあるが、v0.1の対象は公開リポジトリである。
+- 読むのは `cumin-core` のtokenである。`cumin-core` のAppは、Checks: Read-only (check runの一覧とannotation)、Commit statuses: Read-only (commit status)、Actions: Read-only (jobのログ) を持つ (公式: Permissions required for GitHub Apps)。非公開のリポジトリでは、この3つのないtokenは、どの読み取りでも403を受ける (実測 148)。公開のリポジトリでは、なくても読める (実測 54) が、権限の表は公開と非公開で1つにする ([cumin本体の設計メモ](cumin-core.md) の「非公開のリポジトリ」)。
 
 フォローアップノート (write the follow-up note) で使うものは、閉じたsub-issueについてだけ、別に読む (「フォローアップノート (write the follow-up note)」)。
 
