@@ -44,7 +44,7 @@ go build -o cumin ./cmd/cumin
 ./cumin --help
 ```
 
-Hostに置いて使うときは、`scripts/install.sh` を使う。ビルドして `~/.local/bin/cumin` に置く (`--prefix` で場所を変えられる)。`--restart` を付けると、launchd で動いている cumin を新しいバイナリに入れ替える。
+Hostに置いて使うときは、`scripts/install.sh` を使う。ビルドして `~/.local/bin/cumin` に置く (`--prefix` で場所を変えられる)。`--restart` を付けると、launchd で動いている cumin を新しいバイナリに入れ替える。`--restart` は実行中のAgentを取り消す。`--after-current-runs` を付けると、実行中のAgentが終わるのを待ってから入れ替える ([セットアップの手順](development/setup-guide.md) の手順4)。
 
 ## 今できること
 
