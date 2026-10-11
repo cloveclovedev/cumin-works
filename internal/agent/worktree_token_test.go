@@ -214,6 +214,37 @@ func TestWorktree_RemoveClosedCarriesTheTokenOfTheRole(t *testing.T) {
 	requireNoTokenUnder(t, w.Root)
 }
 
+// A rule of the Host user that rewrites the address of the remote changes
+// nothing: the git commands on the remote do not read it, so the cleanup
+// must not read it either when it decides to send the token.
+func TestWorktree_CleanupCarriesTheTokenWithAnInsteadOfRuleOfTheHost(t *testing.T) {
+	r := newTokenRemote(t)
+	hostConfig := filepath.Join(t.TempDir(), "gitconfig")
+	rule := "[url \"git@example.com:\"]\n\tinsteadOf = " + strings.TrimSuffix(r.url, "remote.git") + "\n"
+	if err := os.WriteFile(hostConfig, []byte(rule), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", hostConfig)
+	calls := &tokenCalls{}
+	w := newWorkspace(t, &bytes.Buffer{})
+	w.Token = calls.token
+	c := checkout(3, config.RoleImplementer, "cumin/3-add-thing")
+
+	if _, err := w.Prepare(context.Background(), r.url, c); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	removed, err := w.RemoveIfPushed(context.Background(), c)
+	if err != nil || !removed {
+		t.Fatalf("RemoveIfPushed = %v, %v; want the worktree removed", removed, err)
+	}
+	if calls.count() != 2 {
+		t.Errorf("%d tokens, want 2: one for the prepare and one for the cleanup", calls.count())
+	}
+	if _, refused := r.requests(); refused != 0 {
+		t.Errorf("the remote refused %d requests, want every request with the token", refused)
+	}
+}
+
 func TestWorktree_RemoteRefusesGitWithoutTheToken(t *testing.T) {
 	r := newTokenRemote(t)
 	w := newWorkspace(t, &bytes.Buffer{})

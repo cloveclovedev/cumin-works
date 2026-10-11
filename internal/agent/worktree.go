@@ -509,12 +509,14 @@ func (w Workspace) auth(ctx context.Context, c Checkout, remoteURL string) (gitA
 
 // cloneAuth creates the token of c for the remote of its clone. Remove and
 // its checks do not get the address of the remote, so it is read from the
-// clone.
+// configuration of the clone only. git remote get-url would apply a
+// url.<base>.insteadOf rule of the Host user, which the git commands on
+// the remote do not read (git-config(1): --local, url.<base>.insteadOf).
 func (w Workspace) cloneAuth(ctx context.Context, c Checkout) (gitAuth, error) {
 	if w.Token == nil {
 		return gitAuth{}, nil
 	}
-	remoteURL, err := w.git(ctx, w.CloneDir(c), "remote", "get-url", "origin")
+	remoteURL, err := w.git(ctx, w.CloneDir(c), "config", "--local", "--get", "remote.origin.url")
 	if err != nil {
 		return gitAuth{}, err
 	}
