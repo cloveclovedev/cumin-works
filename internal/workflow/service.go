@@ -189,6 +189,12 @@ type Service struct {
 	// only for the quota (waiting.go). quotaMu guards it.
 	quotaWaits map[string]bool
 
+	// failedChecks holds, for each repository, the tool checks that failed
+	// at its last poll (toolchecks.go). The polls and the ends of the runs
+	// share it.
+	toolCheckMu  sync.Mutex
+	failedChecks map[string][]string
+
 	// kept are the worktrees of closed issues that the cleanup kept,
 	// because they hold work that is not on GitHub. The cleanup does not
 	// check them again until cumin restarts, so the log says so once.
@@ -426,20 +432,30 @@ func (s *Service) moveIssue(ctx context.Context, token string, target Target, nu
 // read the quota usage in a minimal run.
 //
 // While cumin stops after the current runs, no usage is read: the request
-// waits for the next start of cumin in any case.
+// waits for the next start of cumin in any case. While a tool check of the
+// repository fails, no usage is read either: the request waits for a poll
+// where every check passes.
 //
-// A start that only the quota stops is noted for the waiting notification
-// (noteQuotaWait), at a poll and at the end of a run alike.
+// A start that only the quota or only the tool checks stop is noted for the
+// waiting notification (noteQuotaWait), at a poll and at the end of a run
+// alike.
 func (s *Service) permitStart(ctx context.Context, log *slog.Logger, request string, role config.Role, target Target, number int) (StartPermit, bool) {
 	stopsAfterRuns := s.finishing.Load()
 	if stopsAfterRuns {
 		log.Info("stop after the current runs: the request waits for the next start of cumin", "request", request)
 	}
-	quotaAllows := !stopsAfterRuns && s.quotaAllowsStart(ctx, log, request, role, target, number)
-	if !stopsAfterRuns && !quotaAllows {
+	failed := s.failedToolChecks(target.Repository.String())
+	toolChecksPass := len(failed) == 0
+	if !stopsAfterRuns && !toolChecksPass {
+		log.Info(string(ActionStopAgentStarts)+": a tool check of the repository fails; the request waits for a poll where every check passes",
+			"request", request, "failed_checks", failed)
 		s.noteQuotaWait(target.Repository.String())
 	}
-	return PermitStart(stopsAfterRuns, quotaAllows)
+	quotaAllows := !stopsAfterRuns && toolChecksPass && s.quotaAllowsStart(ctx, log, request, role, target, number)
+	if !stopsAfterRuns && toolChecksPass && !quotaAllows {
+		s.noteQuotaWait(target.Repository.String())
+	}
+	return PermitStart(stopsAfterRuns, quotaAllows, toolChecksPass)
 }
 
 // startAgent starts an agent and waits for the end of its run. It is the

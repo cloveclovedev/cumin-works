@@ -51,9 +51,10 @@ func (r *pollResult) add(other pollResult) {
 func (r *pollResult) note(Action) { r.decided = true }
 
 // noteQuotaWait records that a start of an agent of the repository waits
-// only for the quota. The quota notification already named the cause, so
-// the waiting notification stays back until a poll of the repository
-// decides its starts again (forgetQuotaWaits).
+// only for the quota, or only for the tool checks of the repository
+// (issue-states.md, "tell that cumin waits"). "stop agent starts" names
+// the cause, so the waiting notification stays back until a poll of the
+// repository decides its starts again (forgetQuotaWaits).
 func (s *Service) noteQuotaWait(repository string) {
 	s.quotaMu.Lock()
 	defer s.quotaMu.Unlock()
