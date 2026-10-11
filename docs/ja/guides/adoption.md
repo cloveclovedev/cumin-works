@@ -4,8 +4,9 @@
 
 ## 前提
 
-- 対象のリポジトリの持ち主は、GitHubのOrganizationである。個人のアカウントのリポジトリは、まだ対象にしていない。
-- 対象のリポジトリは公開 (public) である。Freeプランのprivateのリポジトリでは、rulesetが使えないので、まだ動かさない。
+- 対象のリポジトリの持ち主は、GitHubのOrganizationである。個人のアカウントのリポジトリは、まだ対象にしていない (#295)。
+- 対象のリポジトリは、公開 (public) か、rulesetを使えるプランの非公開 (private) である。Organization の非公開のリポジトリには、GitHub Team以上のプランが要る (公式: [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)、[GitHub's plans](https://docs.github.com/en/get-started/learning-about-github/githubs-plans))。Freeプランの非公開のリポジトリでは、rulesetが使えないので、まだ動かさない (#296)。
+- 非公開のリポジトリでは、GitHub Actionsの時間が、プランに含まれる分から引かれる。公開のリポジトリでは、標準のrunnerは無料である (公式: [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions))。対象のリポジトリのCIと、cuminが入れる保護されたパスのcheckが、この時間を使う。詳しくは [セットアップの手順](../development/setup-guide.md) の「前提」にある。
 - cumin本体を動かすHostは、macOSのマシンである。
 
 ## 1. どのリポジトリで動かすか

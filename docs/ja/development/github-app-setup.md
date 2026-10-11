@@ -100,7 +100,17 @@ openssl rsa -in PATH_TO_PEM_FILE -pubout -outform DER | openssl sha256 -binary |
 
 ## 手順4: mainをrulesetで守る (リポジトリごとに1回)
 
-mainを更新できるのをMaintainerと `cumin-core` だけにする。rulesetは、Freeプランでは公開リポジトリでだけ使える。
+mainを更新できるのをMaintainerと `cumin-core` だけにする。
+
+rulesetを使えるリポジトリは、プランで決まる (公式: [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)、[GitHub's plans](https://docs.github.com/en/get-started/learning-about-github/githubs-plans))。
+
+| リポジトリ | 要るプラン |
+|---|---|
+| 公開 | どのプランでもよい (GitHub Free for organizationsを含む) |
+| Organization の非公開 | GitHub Team以上 (GitHub TeamかGitHub Enterprise Cloud) |
+
+- Freeプランの非公開のリポジトリ (#296) と、個人アカウントのリポジトリ (#295) は、まだ対象にしていない。
+- 非公開のリポジトリでは、GitHub Actionsの時間が、プランに含まれる分から引かれる。公開のリポジトリでは、標準のrunnerは無料である (公式: [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions))。手順5のcheckと、保護されたパスのcheckが、この時間を使う。詳しくは [セットアップの手順](setup-guide.md) の「前提」にある。
 
 1. リポジトリの "Settings" タブを開く。
 2. 左のサイドバーの "Code and automation" の下で "Rulesets" をクリックする。
@@ -168,6 +178,9 @@ cuminは、mainに適用されるrulesetに登録された必須のcheckが全�
 - Appの登録: https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
 - 秘密鍵: https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps
 - 自分のAppのインストール: https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app
+- rulesetを使えるプラン: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets
+- プランの違い: https://docs.github.com/en/get-started/learning-about-github/githubs-plans
+- GitHub Actionsの課金: https://docs.github.com/en/billing/concepts/product-billing/github-actions
 - rulesetの作成: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository
 - rulesetで使えるrule: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
 - ブランチに適用されるruleの取得: https://docs.github.com/en/rest/repos/rules
