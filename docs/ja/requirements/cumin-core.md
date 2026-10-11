@@ -192,7 +192,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 | mergeの判断が必要 | 「ask for the merge decision」 |
 | Agentが先に進めない。指摘が残った。mergeできない、またはmergeのあとに実装Issueを閉じられない | 「stop the implementation」、「stop for failed checks」、「stop the merge」、「stop at the round limit」、「stop the review」、「stop the split」、「stop the acceptance check」 |
 | 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、Agentの起動を止めた | 「stop agent starts」 |
-| リポジトリの道具の確認が失敗し始めたので、そのリポジトリのAgentの起動を止めた。リポジトリの名前と、失敗した確認の1つずつを入れる。次に知らせるのは、確認が全部通ったあとに、また失敗したときである | 「stop agent starts of a repository」 |
+| リポジトリの道具の確認が失敗し始めたので、そのリポジトリのAgentの起動を止めた。リポジトリの名前と、失敗した確認の1つずつを入れる。次に知らせるのは、確認が全部通ったあとに、また失敗したときである | 「stop agent starts」 |
 | Maintainerが動かなければ何も進まない (進められるIssueがなく、動いているAgentもなく、check待ちのIssueもない) | 「tell that cumin waits」 |
 | Maintainerでないアカウントが `cumin/status/ready` を付けたので、着手しなかった | 「request the split」、「request the implementation」 (Maintainerのready) |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
@@ -259,7 +259,7 @@ Agentが使う道具 (例: 図を描くためのDocker) がHostで使えない�
 - cuminは、そのリポジトリの定期確認のたびに、Agentを起動するかどうかを決める前に、確認を書いた順に全部実行する。結果は、次の定期確認まで使う
 - 確認は、Agentに渡すのと同じHostの環境変数 (`PATH`、`HOME` など) で実行する。GitHub Appのtokenは渡さない。実行するディレクトリは作業場所で、リポジトリのファイルはそこにない。確認は、リポジトリのファイルに頼らないコマンドにする
 - 時間の上限を60秒以下にするのは、確認が定期確認を長く止めないためである
-- 止めるのは、そのリポジトリのAgentの起動だけである。ほかのリポジトリと、Agentを起動しない動作は続く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「リポジトリの道具の確認」)
+- 止めるのは、そのリポジトリのAgentの起動だけである。ほかのリポジトリと、Agentを起動しない動作は続く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「cumin自身の状態 (Agentの起動)」)
 - cuminは、道具を入れず、起動もしない。直すのはOperatorである
 
 riskの基準は、TOMLの値ではなく、Markdownのファイルで上書きする。Hostでは、設定ファイルと同じディレクトリの `risk-criteria.md` に書く。リポジトリでは、`.cumin/risk-criteria.md` に書く。ファイルがあれば、その内容が、それより弱い段の基準を丸ごと置き換える。優先順位は他の設定と同じで、初期値、Hostのファイル、リポジトリのファイルの順に強くなる。
