@@ -73,6 +73,8 @@ scripts/render-diagrams.sh --check <base>
 | 1 | 違うSVGか、ないSVGがある。そのSVGのパスを標準エラーに1行ずつ書く |
 | 2 | 引数が違う |
 
+CIのジョブ `diagrams` ([ci.yml](../../../.github/workflows/ci.yml)) が、Pull Requestごとにこの確認を実行する。`<base>` は、Pull Requestのbaseのブランチである。変わった図がなければ、書き出さずに通る。
+
 全ての図を書き出し直すと時間がかかるので、変わった図だけを比べる。Issueの図 (ブランチ `cumin/diagrams`) は `.puml` を持たないので、対象ではない。
 
 2つの確認が見つけるもの:

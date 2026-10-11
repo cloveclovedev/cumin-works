@@ -78,3 +78,33 @@ jobs:
         run: swift build
       - name: swift test
         run: swift test
+
+  # The job renders again the diagrams under docs/ that the change touches
+  # (a .puml or its SVG) and fails when a committed SVG differs from the
+  # render. With no such diagram, the script ends before it starts Docker, so
+  # the job passes in seconds. It starts for every pull request and is never
+  # skipped, so a ruleset may require it by its name.
+  diagrams:
+    name: diagrams
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The whole history: the script compares with the base commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # For a pull request, the checkout is the merge with the base branch, so
+      # the difference from the tip of the base branch is the change of the
+      # pull request. For a push to main, the base is the commit before it.
+      - name: check the changed diagrams
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="origin/$BASE_REF"
+          else
+            base="$BEFORE"
+          fi
+          scripts/render-diagrams.sh --check "$base"
