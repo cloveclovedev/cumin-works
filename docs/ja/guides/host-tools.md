@@ -19,7 +19,7 @@ MaintainerやOperatorが、Claude Codeなしで端末から使う道具の使い
 
 ## cuminが動いているか確かめる
 
-「cuminが動いているか」には、3つの部分がある。最後の定期確認、起動してからのエラー、実行中のAgentである。`cumin status` は実行中のAgentを、メニューバーのアプリ ([メニューバーのアプリを作って起動する](status-menu-bar.md)) は最後の定期確認を示す。`scripts/cumin-health.sh` は、3つをまとめて1回で出し、終了コードで答える。
+「cuminが動いているか」には、3つの部分がある。最後の定期確認、起動してからのエラー、実行中のAgentである。`cumin status` は実行中のAgentと最後の定期確認を、メニューバーのアプリ ([メニューバーのアプリを作って起動する](status-menu-bar.md)) は最後の定期確認を示す。`scripts/cumin-health.sh` は、3つをまとめて1回で出し、終了コードで答える。
 
 ### 必要なもの
 

@@ -1,5 +1,5 @@
 @startuml status-menu-bar
-' cumin works - the monitor file and the menu bar app: cumin run writes the file, the app only reads it.
+' cumin works - the monitor file and the menu bar app: cumin run writes the file, the app and cumin status only read it.
 ' Document: status-menu-bar.md, topic on the two parts and the contract.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
@@ -14,10 +14,13 @@ file "monitor.json\n&#126;/.local/state/cumin/" as status
 file "status-bar.json\n&#126;/.config/cumin/" as config
 rectangle "menu bar app (Swift)\ntools/status-bar/" as app
 rectangle "macOS menu bar" as bar
+rectangle "cumin status (Go)" as statuscmd
 
 run -left-> github : poll
 run --> status : write a temporary file,\nthen rename:\nafter every poll,\nat the end of a run
 app -up-> status : read every 5 s
+statuscmd -up-> status : read at every call:\nlast poll, its errors,\nagents
+Operator -up-> statuscmd : run
 app -left-> config : read every 5 s
 app --> bar : three segments (glyph and count),\nlist with links, old file,\nsound and blink
 Maintainer -up-> bar : look, open a link
@@ -26,7 +29,8 @@ Operator -up-> config : edit
 note bottom of status
   The only contract between the two parts.
   cumin run is the only writer.
-  cumin never reads the file.
+  cumin run never reads the file.
+  cumin status reads it for its report only.
   No token, key, webhook address,
   or usage number.
 end note

@@ -99,8 +99,8 @@ Agentの起動を止めるかどうかを、使用率からどう決めるかを
 
 図の元ファイル: [quota-status.puml](quota-status.puml)
 
-- `cumin status` は、状態ファイルと許可のファイルを読むだけで、最小の実行をしない。表示する使用率は、最後に読んだ値とその時刻である。時刻は、上限の計算と同じHostのタイムゾーンで表示する。
-- 実行中のAgentとMaintainerの対応を待つIssueは、GitHubのラベルから読む。`cumin run` とプロセスが違い、手元に実行中の一覧を持たないためである。Agentが動くのは、`cumin/status/planning` と `cumin/status/accepting` の要求Issueと、`cumin/status/implementing` と `cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issueは、Agentが動いていないので数えない (「mark the requirement as in work」)。
+- `cumin status` は、利用枠については、状態ファイルと許可のファイルを読むだけで、最小の実行をしない。表示する使用率は、最後に読んだ値とその時刻である。時刻は、上限の計算と同じHostのタイムゾーンで表示する。
+- 実行中のAgentとMaintainerの対応を待つIssueは、GitHubのラベルから読む。`cumin run` とプロセスが違い、手元に実行中の一覧を持たないためである。`cumin run` が持つ実行の一覧は、モニターファイルから読んで、別の一覧として表示する ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md) の「`cumin status` の読み方」)。Agentが動くのは、`cumin/status/planning` と `cumin/status/accepting` の要求Issueと、`cumin/status/implementing` と `cumin/status/reviewing` の開いている実装Issueである。`cumin/status/implementing` の要求Issueは、Agentが動いていないので数えない (「mark the requirement as in work」)。
 - 全部を読めないIssue (スナップショットの `Unread`) は、見出し `Issues that cumin cannot read in full:` の一覧に、リポジトリ、Issueの番号、超えた上限 (たとえば `more than 36 sub-issues`) を1行ずつ表示する。通知は1回だけなので、Operatorがあとから確かめられるようにするためである。上限を超えたIssueがなければ、見出しごと表示しない。スナップショットは、そのIssueの要求Issueを `RequirementIssues` に入れないので、その要求Issueとsub-issueは、ほかの一覧に出ない。終了コードは0のままである。Pull Request、check、レビューの上限は表示しない。`cumin status` は、それらを読む2つ目の問い合わせを送らないためである。
 - 使用率を読んだあとは、Agentの起動を止めているかどうかを1行で表示する。`agent starts: go on` または `agent starts: stopped by the <枠> window` で、止めているときは次に試す時刻を添える。止めるのは、新しい着手だけでなく、すべてのAgentの起動である。
 - 使用率を最初に読む前は、使用率をまだ読んでいないことを `not read yet` の1行で表示する。このときは、枠の行も `agent starts` の行もない。状態ファイルに使用率がないので、止めているかどうかを計算できないためである。
