@@ -12,7 +12,7 @@ import (
 
 // live is one run of scripts/live-scenario.sh on a Host that the test
 // builds in a temporary directory: the Host of the tests of
-// scripts/replace-binary.sh, with a fake gh, a fake go that stands for
+// scripts/install.sh, with a fake gh, a fake go that stands for
 // TestLiveE2E, and the two settings files.
 type live struct {
 	*replace
