@@ -2,8 +2,9 @@ package workflow
 
 // This file builds the monitor file and writes it at the end of every poll
 // and at the end of every agent run.
-// A tool that shows cumin from outside reads the file; cumin never reads it
-// and decides nothing from it. The content comes from facts that the poll
+// A tool that shows cumin from outside reads the file, and `cumin status`
+// reads it for its report; `cumin run` never reads it, and cumin decides
+// nothing from it. The content comes from facts that the poll
 // already has: no query and no minimal run is added for it.
 // docs/ja/designs/status-menu-bar.md, the topic on the monitor file.
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -220,6 +221,145 @@ func TestStatusNamesARepositoryThatWasNotRead(t *testing.T) {
 	err := writeStatus(t.Context(), &out, statusSettings(), t.TempDir(), statusAt, statusZone, fail)
 	if err == nil || !strings.Contains(out.String(), "example-org/example-repo: not read: no token") {
 		t.Errorf("err = %v, report:\n%s", err, out.String())
+	}
+}
+
+// monitorSettings are the settings of a Host that polls every minute, so
+// the last poll is old after three minutes.
+func monitorSettings() *config.Settings {
+	settings := statusSettings()
+	settings.PollInterval = time.Minute
+	return settings
+}
+
+// writeMonitor writes the monitor file of the tests into dir, as cumin run
+// does: a last poll at the given time with one error, and two agents.
+func writeMonitor(t *testing.T, dir string, lastPoll time.Time) {
+	t.Helper()
+	if err := state.WriteMonitorFile(filepath.Join(dir, state.MonitorFileName), state.MonitorFile{
+		Version: state.MonitorFileVersion,
+		LastPoll: state.MonitorLastPoll{At: lastPoll, Errors: []state.MonitorPollError{
+			{Repository: "example-org/example-repo", Message: "read the snapshot: \x1b[31mGitHub returned 502"},
+		}},
+		Quota: state.MonitorQuota{State: state.MonitorQuotaOpen},
+		Agents: []state.MonitorAgent{
+			{Repository: "example-org/example-repo", Issue: 6, Role: "planner", Request: "plan", Title: "a requirement"},
+			{Repository: "example-org/example-repo", Issue: 10, Role: "reviewer", Request: "review", Title: "a \x1b]0;title\a\r\nwith control characters"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// cumin status shows whether cumin polls: the time of the last poll, its
+// age, and each error of the last poll, from the monitor file.
+func TestStatusShowsTheLastPollWithItsAgeAndItsErrors(t *testing.T) {
+	dir := t.TempDir()
+	writeMonitor(t, dir, statusAt.Add(-45*time.Second))
+	var out bytes.Buffer
+	if err := writeStatus(t.Context(), &out, monitorSettings(), dir, statusAt, statusZone, readFake(t)); err != nil {
+		t.Fatalf("writeStatus: %v", err)
+	}
+	text := out.String()
+	want := "\nLast poll:\n  at " + stamp(statusAt.Add(-45*time.Second), statusZone) + " (45s ago)\n" +
+		"  errors of the last poll: 1\n    example-org/example-repo: read the snapshot: [31mGitHub returned 502\n"
+	if !strings.Contains(text, want) {
+		t.Errorf("the report has no %q:\n%s", want, text)
+	}
+	if strings.Contains(text, "the last poll is old") {
+		t.Errorf("a last poll of 45s is named old:\n%s", text)
+	}
+}
+
+// A last poll older than three times poll_interval gives a line that says
+// so, with the limit. A last poll at the limit does not.
+func TestStatusSaysThatTheLastPollIsOld(t *testing.T) {
+	const old = "the last poll is old: over the limit of 3m0s (3 times poll_interval)"
+	for age, wantOld := range map[time.Duration]bool{3 * time.Minute: false, 3*time.Minute + time.Second: true} {
+		dir := t.TempDir()
+		writeMonitor(t, dir, statusAt.Add(-age))
+		var out bytes.Buffer
+		if err := writeStatus(t.Context(), &out, monitorSettings(), dir, statusAt, statusZone, readFake(t)); err != nil {
+			t.Fatalf("writeStatus: %v", err)
+		}
+		if got := strings.Contains(out.String(), old); got != wantOld {
+			t.Errorf("a last poll %s ago: the line that it is old is there = %v, want %v:\n%s", age, got, wantOld, out.String())
+		}
+		if !strings.Contains(out.String(), "("+age.String()+" ago)") {
+			t.Errorf("the report has no age %s:\n%s", age, out.String())
+		}
+	}
+}
+
+// A monitor file that is missing or unreadable costs its own lines only:
+// the report says so, shows the rest, and does not fail.
+func TestStatusGoesOnWithoutAMonitorFile(t *testing.T) {
+	missing := t.TempDir()
+	unreadable := t.TempDir()
+	if err := os.WriteFile(filepath.Join(unreadable, state.MonitorFileName), []byte(`{"version": 2}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for dir, want := range map[string]string{
+		missing:    "Last poll:\n  no monitor file (" + filepath.Join(missing, state.MonitorFileName) + "): cumin run writes it after its first poll",
+		unreadable: "Last poll:\n  the monitor file was not read: monitor file: read " + filepath.Join(unreadable, state.MonitorFileName) + ": version 2, and this cumin knows version 1\n",
+	} {
+		var out bytes.Buffer
+		if err := writeStatus(t.Context(), &out, monitorSettings(), dir, statusAt, statusZone, readFake(t)); err != nil {
+			t.Fatalf("writeStatus: %v", err)
+		}
+		text := out.String()
+		for _, part := range []string{want, "Quota:\n", "  example-org/example-repo #10 cumin/status/reviewing\n", "Waiting for a Maintainer:\n"} {
+			if !strings.Contains(text, part) {
+				t.Errorf("the report has no %q:\n%s", part, text)
+			}
+		}
+		if strings.Contains(text, "as cumin run holds them") {
+			t.Errorf("the report lists held agents without a monitor file:\n%s", text)
+		}
+	}
+}
+
+// cumin status lists each agent that cumin run holds with its role and its
+// request, beside the list from the labels. No control character of a title
+// reaches the terminal.
+func TestStatusListsTheAgentsThatCuminHoldsBesideTheLabels(t *testing.T) {
+	dir := t.TempDir()
+	writeMonitor(t, dir, statusAt.Add(-45*time.Second))
+	var out bytes.Buffer
+	if err := writeStatus(t.Context(), &out, monitorSettings(), dir, statusAt, statusZone, readFake(t)); err != nil {
+		t.Fatalf("writeStatus: %v", err)
+	}
+	text := out.String()
+	for _, want := range []string{
+		"Agents at work (as cumin run holds them, from the monitor file):\n" +
+			"  example-org/example-repo #6 planner (plan): a requirement\n" +
+			"  example-org/example-repo #10 reviewer (review): a ]0;titlewith control characters\n",
+		"Agents at work (from the labels on GitHub):\n" + agentsAtWorkNote + "\n  example-org/example-repo #6 cumin/status/planning\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the report has no %q:\n%s", want, text)
+		}
+	}
+	if strings.ContainsAny(text, "\x1b\a\r") {
+		t.Errorf("a control character of the monitor file reached the report:\n%q", text)
+	}
+}
+
+// The monitor file changes no exit code: a report with an old last poll and
+// an error of the last poll still fails only for a repository that was not
+// read.
+func TestStatusKeepsItsResultWhateverTheMonitorFileSays(t *testing.T) {
+	dir := t.TempDir()
+	writeMonitor(t, dir, statusAt.Add(-time.Hour))
+	var out bytes.Buffer
+	if err := writeStatus(t.Context(), &out, monitorSettings(), dir, statusAt, statusZone, readFake(t)); err != nil {
+		t.Errorf("writeStatus with an old last poll that has an error: %v, want no error", err)
+	}
+	fail := func(context.Context, config.Repository) (github.RepositorySnapshot, error) {
+		return github.RepositorySnapshot{}, errors.New("no token")
+	}
+	if err := writeStatus(t.Context(), &out, monitorSettings(), dir, statusAt, statusZone, fail); err == nil {
+		t.Error("writeStatus with a repository that was not read: no error")
 	}
 }
 
