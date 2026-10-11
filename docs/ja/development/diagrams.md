@@ -20,6 +20,23 @@ SVGを埋め込んだ直後に、元ファイルへのリンクを必ず書く�
 図の元ファイル: [requirement-issue-states.puml](requirement-issue-states.puml)
 ```
 
+## IssueとPull Requestに貼る画像のアドレス
+
+AgentがIssueとPull Requestに図を貼るときのアドレスは、リポジトリが公開か非公開かで決まる。設計は [cumin-core.md](../designs/cumin-core.md) の「非公開のリポジトリ」にある。
+
+| リポジトリ | 画像のアドレス | 読める人に表示される場所 |
+|---|---|---|
+| 公開 | `https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.svg` | WebとGitHubアプリ (実測 115) |
+| 非公開 | 相対リンク `../blob/<commit>/<path>.svg?raw=true` | Webだけ (実測 153) |
+
+- どちらも、コミットを指定する。図はあとから変わらない。
+- 公開か非公開かは、Agentが `gh api repos/<owner>/<repo> --jq .private` で読む。
+- 非公開のリポジトリでは、GitHubアプリに図が表示されない。図を見るには、Webで開く。リポジトリを読めない人には、何も見えない。
+- Agentへの指示は、[templates/writing-rules.md](../../../templates/writing-rules.md) の13、[roles/planner.md](../../../roles/planner.md)、[templates/implementation-issue.md](../../../templates/implementation-issue.md)、[templates/pull-request.md](../../../templates/pull-request.md) にある。
+- テスト `TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign` ([internal/agent/instruction_test.go](../../../internal/agent/instruction_test.go)) は、roleの指示、スキル、テンプレートが、この2つ以外の形のアドレスを書くと失敗する。片方の形だけを書いても失敗する。テンプレートは、決まりと例 (`## Example` から下) を別々に確かめる。
+
+実測の番号は、[measured-constraints.md](../evidence/measured-constraints.md) の行である。
+
 ## SVGの書き出し
 
 リポジトリの直下で次を実行する。`docs/` の下にある全ての `.puml` を、同じディレクトリにSVGとして書き出す。

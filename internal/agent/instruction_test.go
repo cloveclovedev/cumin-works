@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"fmt"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -518,6 +521,150 @@ func TestRoleFiles_DoNotCorrectTheDecisionRequest(t *testing.T) {
 		}
 		if want := "adds `cumin/status/ready` to the stopped issue"; !strings.Contains(text, want) {
 			t.Errorf("the %s instruction does not say: %s", role, want)
+		}
+	}
+}
+
+// The two forms of the address of a diagram image, as the design of the
+// private repository decides (docs/ja/designs/cumin-core.md): the address
+// at raw.githubusercontent.com on a public repository, and the relative
+// link on a private repository.
+var (
+	publicImageAddress  = regexp.MustCompile(`^https://raw\.githubusercontent\.com/<owner>/<repo>/<commit>/[\w<>./-]+\.svg$`)
+	privateImageAddress = regexp.MustCompile(`^\.\./blob/<commit>/[\w<>./-]+\.svg\?raw=true$`)
+	// anyImageAddress finds every address that could show a file of a
+	// repository as an image, in one of the two forms or in another.
+	anyImageAddress = regexp.MustCompile("[^\\s()`\"]*(?:githubusercontent\\.com|/blob/|/raw/|raw=true)[^\\s()`\"]*")
+)
+
+// imageAddressErrors returns what is wrong with the image addresses of a
+// text: an address in another form than the two, or one form without the
+// other, which would leave an agent without the form of its repository.
+func imageAddressErrors(text string) []string {
+	var errs []string
+	public, private := 0, 0
+	for _, address := range anyImageAddress.FindAllString(text, -1) {
+		switch {
+		case publicImageAddress.MatchString(address):
+			public++
+		case privateImageAddress.MatchString(address):
+			private++
+		default:
+			errs = append(errs, "another form of the image address: "+address)
+		}
+	}
+	if (public == 0) != (private == 0) {
+		errs = append(errs, fmt.Sprintf("%d addresses of a public repository and %d of a private repository, want both forms or none", public, private))
+	}
+	return errs
+}
+
+// Every text that an agent receives names the image address in the two
+// forms of the design only: the instruction of every role (the role file,
+// the file of the discipline, the writing rules, the risk criteria) and
+// every skill. A text that names one form names the other too. The writing
+// rules name the measured row that proves the form of a private repository.
+func TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign(t *testing.T) {
+	criteria, err := disciplines.RiskCriteria(disciplines.Default)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, problem := range imageAddressErrors(criteria) {
+		t.Errorf("the risk criteria: %s", problem)
+	}
+	for _, role := range config.AllRoles() {
+		text, err := instruction(role, criteria)
+		if err != nil {
+			t.Fatalf("instruction(%s): %v", role, err)
+		}
+		for _, problem := range imageAddressErrors(text) {
+			t.Errorf("the instruction of %s: %s", role, problem)
+		}
+		file, err := roles.File(role)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, problem := range imageAddressErrors(file) {
+			t.Errorf("the role file of %s: %s", role, problem)
+		}
+		if discipline, ok := disciplineFile(t, role); ok {
+			for _, problem := range imageAddressErrors(discipline) {
+				t.Errorf("the discipline file of %s: %s", role, problem)
+			}
+		}
+	}
+	for _, skill := range Skills() {
+		text, err := templates.Read(skill.Template)
+		if err != nil {
+			t.Fatalf("Read(%s): %v", skill.Template, err)
+		}
+		for _, problem := range imageAddressErrors(text) {
+			t.Errorf("the skill %s: %s", skill.Name, problem)
+		}
+	}
+	// The templates that cumin writes itself reach no agent as a skill, and
+	// a Maintainer reads them on GitHub, so every file of the directory is
+	// checked.
+	const templatesDir = "../../templates"
+	entries, err := os.ReadDir(templatesDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		text, err := templates.Read(entry.Name())
+		if err != nil {
+			t.Fatalf("Read(%s): %v", entry.Name(), err)
+		}
+		// The rules and the example are checked apart, so that the address
+		// of the example cannot stand in for a form that the rules lost, and
+		// the example says which kind of repository it shows.
+		rules, example, _ := strings.Cut(text, "\n## Example\n")
+		for _, problem := range imageAddressErrors(rules) {
+			t.Errorf("the rules of the template %s: %s", entry.Name(), problem)
+		}
+		for _, problem := range imageAddressErrors(example) {
+			t.Errorf("the example of the template %s: %s", entry.Name(), problem)
+		}
+	}
+	rules := writingRules(t)
+	if len(anyImageAddress.FindAllString(rules, -1)) != 2 {
+		t.Error("the writing rules must name the image address of a public and of a private repository, once each")
+	}
+	for _, want := range []string{
+		"gh api repos/<owner>/<repo> --jq .private",
+		"row 153 (image addresses on a private repository) of its `docs/ja/evidence/measured-constraints.md`",
+	} {
+		if !strings.Contains(rules, want) {
+			t.Errorf("the writing rules do not say: %s", want)
+		}
+	}
+}
+
+// The check of the image address fails on every other form: the forms that
+// the design did not take, a moving ref, and one form without the other.
+func TestImageAddress_AnotherFormFails(t *testing.T) {
+	const both = "![a](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/issue-1/a.svg) ![a](../blob/<commit>/issue-1/a.svg?raw=true)"
+	if problems := imageAddressErrors(both); len(problems) != 0 {
+		t.Errorf("the two forms of the design fail: %v", problems)
+	}
+	if problems := imageAddressErrors("A text without an image.\n"); len(problems) != 0 {
+		t.Errorf("a text without an image fails: %v", problems)
+	}
+	for _, text := range []string{
+		both + " ![a](https://github.com/<owner>/<repo>/blob/<commit>/issue-1/a.svg?raw=true)",
+		both + " ![a](https://github.com/<owner>/<repo>/raw/<commit>/issue-1/a.svg)",
+		both + " ![a](https://raw.githubusercontent.com/<owner>/<repo>/main/issue-1/a.svg)",
+		both + " ![a](../blob/main/issue-1/a.svg?raw=true)",
+		both + " ![a](../blob/<commit>/issue-1/a.svg)",
+		both + " `raw.githubusercontent.com`",
+		"![a](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/issue-1/a.svg)",
+		"![a](../blob/<commit>/issue-1/a.svg?raw=true)",
+	} {
+		if len(imageAddressErrors(text)) == 0 {
+			t.Errorf("no failure for: %s", text)
 		}
 	}
 }
