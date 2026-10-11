@@ -33,7 +33,7 @@ AgentがIssueとPull Requestに図を貼るときのアドレスは、リポジ�
 - 公開か非公開かは、Agentが `gh api repos/<owner>/<repo> --jq .private` で読む。
 - 非公開のリポジトリでは、GitHubアプリに図が表示されない。図を見るには、Webで開く。リポジトリを読めない人には、何も見えない。
 - Agentへの指示は、[templates/writing-rules.md](../../../templates/writing-rules.md) の13、[roles/planner.md](../../../roles/planner.md)、[templates/implementation-issue.md](../../../templates/implementation-issue.md)、[templates/pull-request.md](../../../templates/pull-request.md) にある。
-- テスト `TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign` ([internal/agent/instruction_test.go](../../../internal/agent/instruction_test.go)) は、roleの指示、スキル、テンプレートが、この2つ以外の形のアドレスを書くと失敗する。片方の形だけを書いても失敗する。
+- テスト `TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign` ([internal/agent/instruction_test.go](../../../internal/agent/instruction_test.go)) は、roleの指示、スキル、テンプレートが、この2つ以外の形のアドレスを書くと失敗する。片方の形だけを書いても失敗する。テンプレートは、決まりと例 (`## Example` から下) を別々に確かめる。
 
 実測の番号は、[measured-constraints.md](../evidence/measured-constraints.md) の行である。
 

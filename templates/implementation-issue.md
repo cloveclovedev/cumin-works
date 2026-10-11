@@ -52,6 +52,8 @@ Out of scope:
 
 ## Example
 
+The example is of a public repository: `![...](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.svg)`. On a private repository, the image is `![...](../blob/<commit>/<path>.svg?raw=true)`.
+
 ````markdown
 ## Where this fits
 ![implementation issue states, "request a check fix" and "stop for failed checks" in red](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/issue-156/check-fix.svg)

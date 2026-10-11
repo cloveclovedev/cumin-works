@@ -324,7 +324,7 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 
   - 相対リンクは、IssueとPull Requestのページから見て、同じリポジトリの `blob/<commit>/<path>` を指す (公式: Basic writing and formatting syntax の "Images")。コミットを指定するので、今のアドレスと同じく、図はあとから変わらない。
   - リポジトリを読めない人には、何も見えない。その人はIssueのページを開けず、認証なしでは画像のアドレスが404を返す (実測 153)。
-  - 公開か非公開かは、画像を書くAgentが、自分のAppのtokenで読む。`GET /repos/{owner}/{repo}` の `private` である (公式: REST API の "Get a repository"。`private` は必ず返る真偽値である)。指示は、画像のアドレスを書いている場所に置く: `templates/writing-rules.md` の13、`roles/planner.md`、`templates/implementation-issue.md` と `templates/pull-request.md` の決まり。どの文面も2つの形を並べて書き、テスト `TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign` が、ほかの形と片方だけの形を見つける。cuminのコードと依頼の文面は、変わらない。
+  - 公開か非公開かは、画像を書くAgentが、自分のAppのtokenで読む。`GET /repos/{owner}/{repo}` の `private` である (公式: REST API の "Get a repository"。`private` は必ず返る真偽値である)。指示は、画像のアドレスを書いている場所に置く: `templates/writing-rules.md` の13、`roles/planner.md`、`templates/` の決まりと例 (`implementation-issue.md` と `pull-request.md`)。例は公開のリポジトリのものであり、例の前の文が非公開のリポジトリの形を示す。どの文面も2つの形を並べて書き、テスト `TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign` が、ほかの形と片方だけの形を見つける。テンプレートは、決まりと例を別々に確かめる。cuminのコードと依頼の文面は、変わらない。
   - cuminは、画像のアドレスを読まず、判定に使わない。完了の判定は、画像のアドレスに頼らない。Agentがアドレスを誤ると、図が表示されないだけである。Reviewerと読む人が気づき、やり直しで直る。
   - 受け入れた不利益: 非公開のリポジトリでは、GitHubアプリに図が表示されない。測った4つのアドレスのどれでも、表示されなかった (実測 153)。Maintainerが受け入れた (#793)。図を見るには、Webで開く。
   - 受け入れた不利益: 相対リンクは、開いているページのアドレスから解決される。`/<owner>/<repo>/issues/<n>` と `/<owner>/<repo>/pull/<n>` のページでは、表示される (実測 153)。深さの違うページ (`/pull/<n>/files`、Projectの横の枠) では、別のパスを指すはずである。これは推論で、測っていない。

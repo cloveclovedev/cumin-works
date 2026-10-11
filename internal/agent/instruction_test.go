@@ -569,6 +569,9 @@ func TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, problem := range imageAddressErrors(criteria) {
+		t.Errorf("the risk criteria: %s", problem)
+	}
 	for _, role := range config.AllRoles() {
 		text, err := instruction(role, criteria)
 		if err != nil {
@@ -583,6 +586,11 @@ func TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign(t *testing
 		}
 		for _, problem := range imageAddressErrors(file) {
 			t.Errorf("the role file of %s: %s", role, problem)
+		}
+		if discipline, ok := disciplineFile(t, role); ok {
+			for _, problem := range imageAddressErrors(discipline) {
+				t.Errorf("the discipline file of %s: %s", role, problem)
+			}
 		}
 	}
 	for _, skill := range Skills() {
@@ -610,8 +618,15 @@ func TestImageAddress_EveryInstructionAndSkillUsesTheFormsOfTheDesign(t *testing
 		if err != nil {
 			t.Fatalf("Read(%s): %v", entry.Name(), err)
 		}
-		for _, problem := range imageAddressErrors(text) {
-			t.Errorf("the template %s: %s", entry.Name(), problem)
+		// The rules and the example are checked apart, so that the address
+		// of the example cannot stand in for a form that the rules lost, and
+		// the example says which kind of repository it shows.
+		rules, example, _ := strings.Cut(text, "\n## Example\n")
+		for _, problem := range imageAddressErrors(rules) {
+			t.Errorf("the rules of the template %s: %s", entry.Name(), problem)
+		}
+		for _, problem := range imageAddressErrors(example) {
+			t.Errorf("the example of the template %s: %s", entry.Name(), problem)
 		}
 	}
 	rules := writingRules(t)

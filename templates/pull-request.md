@@ -62,6 +62,8 @@ $ go test -race ./...
 
 ## Example
 
+The example is of a public repository: `![...](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.svg)`. On a private repository, the image is `![...](../blob/<commit>/<path>.svg?raw=true)`.
+
 ````markdown
 ## Where this fits
 ![the verification of the pull request after done](https://raw.githubusercontent.com/<owner>/<repo>/<commit>/docs/ja/designs/poll-verify.svg)
