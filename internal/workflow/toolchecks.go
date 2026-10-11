@@ -28,6 +28,11 @@ func (s *Service) runToolChecks(ctx context.Context, log *slog.Logger, target Ta
 			failed = append(failed, name)
 		}
 	}
+	// A check that the end of cumin stopped says nothing about its tool:
+	// the earlier result of the repository stays.
+	if ctx.Err() != nil {
+		return
+	}
 	repository := target.Repository.String()
 	s.toolCheckMu.Lock()
 	stopped := len(s.failedChecks[repository]) > 0
