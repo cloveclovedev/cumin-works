@@ -1,0 +1,30 @@
+@startuml private-repository
+' cumin works - what cumin and the agents need on a private repository.
+' Document: cumin-core.md, the topic of the private repository.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+actor "Maintainer\n(admin, own gh)" as admin
+actor "Reader of an issue\nor a pull request" as reader
+
+node "Host" as host {
+  component "cumin" as cumin
+  component "git of the work directory\n(clone, fetch, ls-remote)" as git
+  component "Agent\n(Planner, Implementer, Reviewer)" as agent
+}
+
+cloud "GitHub: private repository\nof an Organization on the Team plan" as github {
+  component "rulesets of\nscripts/setup-repo.sh" as rulesets
+  component "git over HTTPS" as https
+  component "check runs, commit statuses,\nannotations, job logs" as checks
+  component "issues and pull requests\nwith diagram images" as text
+}
+
+admin --> rulesets : scripts/setup-repo.sh\nchecks that the plan has rulesets,\nbefore any change
+cumin --> git : token of the App of the role\n(contents: read), in the environment only
+git --> https : Authorization header\nno token in .git/config
+cumin --> checks : token of cumin-core\nChecks, Commit statuses, Actions: read
+agent --> text : image address that only\na reader with access sees
+reader --> text : with access: sees the image\nwithout access: sees nothing
+@enduml

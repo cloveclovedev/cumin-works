@@ -42,6 +42,17 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 - スナップショットに出てこないIssue (閉じた要求Issueのsub-issue、Maintainerが要求Issueから外したsub-issue) のworktreeは、消さない。閉じた要求Issueは読まない (原則6) うえ、外しただけのIssueは開いていることがある。Operatorが [作業場所の片付け](../development/work-directory.md) の手順で消す。
 - PlannerのworktreeはPlannerの実行が終わるたびに消す (done、blocked、異常終了のどれでも。同じ実行の中の依頼し直しと、分割に続く受け入れの確認が終わったあとである)。Plannerは読むだけで何も持たず、次の依頼で作り直すためである。こうすると、要求Issueが閉じたあとにPlannerのworktreeが残らない。cuminを止めるときも消す。
 - gitは `os/exec` で呼ぶ。認証の入力待ちで止まらないように `GIT_TERMINAL_PROMPT=0` を付ける (公式: git の環境変数)。gitの出力はエラーの文章にだけ含め、infoのログには出さない。
+- GitHubと通信するgit (`git clone`、`git fetch`、`git ls-remote`、`git remote set-head`) は、そのworktreeのroleのAppのinstallation tokenで認証する。公開のリポジトリでも非公開のリポジトリでも、同じである。非公開のリポジトリは、認証情報のないHTTPSのgitを終了コード128で断り、4つのAppのどのtokenでも、3つのコマンドが通る (実測 149)。
+  - 使うApp: Implementerのworktreeの用意と片付けにはImplementerのApp、Reviewerのworktreeには ReviewerのApp、Plannerのworktreeには PlannerのAppを使う。cloneは3つのroleが共有するので、最初に用意したroleのtokenで作られる。`cumin-core` のtokenと、OperatorやMaintainerの認証情報は、gitに渡さない。
+  - tokenは、呼び出し処理が、用意か片付けのたびに、対象のリポジトリ1つと `contents: read` に絞って発行する。Appより狭い権限のtokenを発行できる (実測 57)。4つのroleのAppは、どれも Contents の読み取りを持つ ([GitHub Appの登録手順](../development/github-app-setup.md) の権限の表)。gitでHTTPSを使うには Contents の権限が要る (公式: Authenticating as a GitHub App installation)。Agentの実行に渡すtoken (「1回の依頼の手順」) とは別のtokenである。実行のtokenは、起動の直前に発行して、1時間の期限を実行に残すためである。
+  - 渡し方は、Agentの環境と同じ3つの環境変数である (`GIT_CONFIG_COUNT=1`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>`。公式: git-config の環境変数。実測 149 は、この渡し方で測った)。tokenがあるのは、そのgitのプロセスの環境だけである。remoteのアドレスは `https://github.com/<owner>/<repo>.git` のままで、cloneの `.git/config`、引数、ログ、Hostの状態ファイルには、tokenが入らない。gitは `GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` で呼び、Hostのcredential helperを読ませない。
+  - GitHubと通信しないgit (`git worktree`、`git status`、`git rev-list`、`git rev-parse`) には、tokenを渡さない。
+  - tokenを発行できないときは、用意を失敗にする。呼び出し側は、失敗したgitのコマンドと同じに扱う。認証なしでやり直さない。
+  - 受け入れた不利益: 着手のたびに、tokenの発行が1つ増える (RESTの書き込み1回。GraphQLのポイントは使わない)。
+  - 採らなかった案: tokenをremoteのアドレスに入れる (`https://x-access-token:<token>@github.com/...`。公式が示す形)。アドレスはcloneの `.git/config` に残り、tokenがHostに残る。
+  - 採らなかった案: credential helperにtokenを持たせる。Hostにファイルかプロセスが増え、片付けが要る。
+  - 採らなかった案: `cumin-core` のtokenでcloneとfetchをする。`cumin-core` は Contents の書き込みを持ち、mainを更新できる。roleの作業場所には、そのroleのAppの権限だけを使う。
+  - 採らなかった案: 非公開のリポジトリのときだけ認証する。道が2つになり、公開のリポジトリでは新しい道が試されない。
 - gitのコマンドは、どれも5分で打ち切る (定数 `gitTimeout`)。`Workspace` がgitを呼ぶ場所は1つ (`Workspace.git`) で、そこで `context.WithTimeout` の期限を付ける。期限が来ると、gitにSIGTERMを送る (公式: os/exec の `CommandContext` と `Cmd.Cancel`)。
   - 理由: 期限がないと、応答の返らない `git fetch` や `git clone` が1つあるだけで、cuminを起動し直すまで実行の開始が止まる。用意と片付けは直列なので、ほかのIssueの着手も止まる。5分は、最初のcloneも終わると見込んだ値で、測った値ではない。cloneの時間は、リポジトリの大きさと回線で決まる。cloneが5分で終わらないリポジトリでは、着手のたびに、期限が過ぎたというエラー (`git clone ...: the deadline of 5m0s passed`) で用意が失敗する。
   - SIGTERMにする理由: gitは、SIGTERMで終わるときに、ロックのファイルと、途中のcloneのディレクトリを消す。SIGKILLでは消せない。途中のcloneのディレクトリが残ると、次の用意がそれをcloneとみなし、そのリポジトリの用意が失敗し続ける。
@@ -176,4 +187,4 @@ Agentを1回起動して結果を受け取るまでの、Host側の設計をま�
 
 ## 後回しにしたこと
 
-- privateリポジトリのcloneとfetchに使う認証情報。v0.1では、認証なしのHTTPSでcloneする。きっかけ: 対象にprivateリポジトリが加わったとき。
+なし。

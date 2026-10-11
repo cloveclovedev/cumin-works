@@ -296,6 +296,27 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 - 通知を出すかどうかは、そのリポジトリの設定 `notify.discord.enabled` で決める。利用枠の「stop agent starts」([利用枠の設計](quota.md) の「通知の重複の防ぎ方」) がHostの設定で決めるのと違うのは、確認も印もそのリポジトリだけのものだからである。通知を止めたリポジトリでは、印を付けたままにする。
 - 道具の確認だけで待っているIssueには、「tell that cumin waits」を出さない (上の「道具の確認の実行」)。原因は、この通知が知らせている。
 
+### 非公開のリポジトリ
+
+![非公開のリポジトリで要るもの](private-repository.svg)
+
+図の元ファイル: [private-repository.puml](private-repository.puml)
+
+図は、非公開のリポジトリでcuminとAgentがGitHubに触れる4つの場所を示す。矢印のラベルは、その場所で使う認証と権限である。
+
+- 対象は、rulesetを使えるプランのリポジトリである。Teamプランの Organization の非公開のリポジトリでは、`scripts/setup-repo.sh` の5つのrulesetが全て作られ、有効になる (実測 146。公式: About rulesets)。cuminは、既定のブランチの保護を全てrulesetに頼るので、rulesetのないリポジトリは対象にしない (実測 13)。
+- GitHub Appの権限の表は、公開と非公開で1つにする。非公開のリポジトリのために足す権限は、全てのインストールに足す。表が2つあると、準備の手順と `cumin setup` の権限の確認が、リポジトリの種類で分かれるためである。
+- 足す権限は、`cumin-core` の3つだけである。Checks: Read-only、Commit statuses: Read-only、Actions: Read-only (公式: Permissions required for GitHub Apps。実測 148)。checkを読むのは `cumin-core` だけで、読み方は [定期確認の設計](poll.md) の「定期確認で読む内容」にある。
+  - Planner、Implementer、Reviewer のAppには、何も足さない。失敗したcheckの内容は、cuminが読んで依頼に入れる。cloneとfetchに要る Contents は、4つのAppがもう持っている (実測 149)。rulesetと必須のcheckの一覧は、今の権限で読める (実測 146)。
+  - 権限を変える道は、今と同じである。表を変え、Maintainerが `cumin setup` の案内に従ってAppの権限を変え、Organizationで新しい権限を承認する ([セットアップの手順](../development/setup-guide.md))。
+  - 受け入れた不利益: 公開のリポジトリだけを使うOrganizationも、読むために要らない3つの権限を承認する。
+  - 採らなかった案: 3つの権限を4つのAppの全てに足す。Agentは、checkをGitHubから読まなくても仕事ができる。使わない権限は持たせない。
+  - 採らなかった案: 非公開のリポジトリのインストールにだけ足す。権限はAppごとに1つで、インストールごとには変えられない。別のAppを登録することになる。
+- cloneとfetchは、worktreeのroleのAppのtokenで認証する。[Agentの実行の設計](agent-run.md) の「作業場所」にある。
+- 実機の確認は、Teamプランの Organization の、非公開の使い捨てのリポジトリ (`cumin-sandbox-private`) で行う。Maintainerが2026-10-11に決めた (#792)。公開のsandboxとは別のリポジトリである。手順は [実機の確認 (live test)](../development/live-tests.md) にある。
+- 保護されたパスのcheck (workflow `cumin-protected-paths`) は、変えない。非公開のリポジトリでは、GitHub Actionsの時間はプランに含まれる分から引かれる (公式: GitHub Actions billing。公開のリポジトリは無料である。実測 79)。このjobは、AppのPull Requestでだけ動き、人のPull Requestでは飛ばされて時間を使わない (#792 の測定)。1回のpushで1つのjobが動き、5分で打ち切られる。これは公式のページと測定からの推論で、AppのPull Requestで使う時間は測っていない (「まだ決めていないこと」)。
+- 図の画像のアドレスと、`scripts/setup-repo.sh` がrulesetのないプランを見分ける方法は、まだ決めていない (「まだ決めていないこと」)。
+
 ### 起動前の使用率の確認
 
 - `claude -p "/usage"` は利用枠を使わないが、人間向けの文章しか返さない。機械可読の使用率は、モデルを呼ぶ実行の `rate_limit_event` にだけ出る (実測 1、29)。使用率を返すサブコマンドや、非対話で使えるAPIは、公式ドキュメントにない (2026-09-21 に CLI reference、headless、statusline、hooks、Agent SDK の文書を確かめた)。
@@ -315,6 +336,10 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 
 | 決める、または確かめること | どこで |
 |---|---|
+| 非公開のリポジトリで、リポジトリを読める人に図が表示される画像のアドレス。今のアドレス (`raw.githubusercontent.com`) は、読める人にも表示されない (実測 150)。公式文書が示す相対リンク `../blob/<commit>/<path>?raw=true` は、測っていない (未確認 150) | #793 の decision request |
+| `scripts/setup-repo.sh` が、rulesetのないプランの非公開のリポジトリを、変更の前に見分ける方法。そのリポジトリで `GET /repos/{owner}/{repo}/rulesets` が何を返すかを、測っていない (未確認 152) | #793 の decision request |
+| 3つの読み取りの権限を足した `cumin-core` のtokenが、非公開のリポジトリでcheckを読めること。GraphQLの `statusCheckRollup` を含む (未確認 148) | #795 の受け入れテストと、#799 の実機の確認 |
+| 非公開のリポジトリで、保護されたパスのcheckがAppのPull Requestに使うGitHub Actionsの時間 (未確認 151) | #799 の実機の確認 |
 | 枠の上限に当たったときの、headless実行の終わり方と `rate_limit_info.status` の値 (実測 6)。意図して上限に当てられないので、実際に当たったときの記録で埋める | 上限に当たった実行の記録が残ったとき |
 
 ## 後回しにしたこと
