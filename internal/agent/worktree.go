@@ -6,12 +6,17 @@ package agent
 // directory) records the layout and the rules. The git commands come from
 // the official git documentation (git-clone, git-fetch, git-remote,
 // git-worktree, git-branch).
+//
+// A git command that talks to the remote (clone, fetch, remote set-head,
+// ls-remote) carries the token of the App of the role of the worktree, in
+// the environment of that one command only. No other git command gets it.
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,6 +58,12 @@ type Workspace struct {
 	// GitTimeout shortens the deadline of each git command, for tests. Zero
 	// means gitTimeout.
 	GitTimeout time.Duration
+	// Token creates the token of the git commands of one prepare or one
+	// cleanup that talk to the remote: a token of the App of the role of c,
+	// limited to the repository of c and to the read of its contents. cumin
+	// run passes the GitToken method of the Service. Nil sends no token, for
+	// a test with a remote that needs none.
+	Token func(ctx context.Context, c Checkout) (string, error)
 }
 
 // Checkout names one worktree: the repository, the issue, and the role.
@@ -152,7 +163,9 @@ func (w Workspace) Dir(c Checkout) string {
 // Prepare returns the worktree of c, and creates it when it does not exist.
 //
 // The clone is created on the first call for the repository, from
-// remoteURL, and is fetched before each new worktree. A new worktree with
+// remoteURL, and is fetched before each new worktree. The clone and the
+// fetch carry one token of the App of the role of c, which Prepare creates
+// only when it has to talk to the remote. A new worktree with
 // a branch starts from origin/<branch> when that exists, and from
 // origin/HEAD otherwise. A new worktree without a branch is a detached
 // checkout of the commit of c, or of origin/HEAD when c has no commit. An
@@ -187,13 +200,17 @@ func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (s
 		}
 	}
 
+	auth, err := w.auth(ctx, c, remoteURL)
+	if err != nil {
+		return "", fmt.Errorf("prepare worktree: %w", err)
+	}
 	clone := w.CloneDir(c)
 	if _, err := os.Stat(clone); err != nil {
 		if err := os.MkdirAll(w.repoDir(c), 0o755); err != nil {
 			return "", fmt.Errorf("prepare worktree: %w", err)
 		}
 		// --no-checkout: the clone holds no files of its own.
-		if _, err := w.git(ctx, w.repoDir(c), "clone", "--quiet", "--no-checkout", "--", remoteURL, cloneDirName); err != nil {
+		if _, err := w.remoteGit(ctx, w.repoDir(c), auth, "clone", "--quiet", "--no-checkout", "--", remoteURL, cloneDirName); err != nil {
 			// git removes the directory of a clone that fails. A git that
 			// was killed leaves it, and the next Prepare would take the
 			// unfinished directory for the clone.
@@ -211,12 +228,14 @@ func (w Workspace) Prepare(ctx context.Context, remoteURL string, c Checkout) (s
 	steps := [][]string{
 		{"fetch", "--quiet", "--prune", "origin"},
 		{"remote", "set-head", "origin", "--auto"},
-		{"worktree", "prune"},
 	}
 	for _, args := range steps {
-		if _, err := w.git(ctx, clone, args...); err != nil {
+		if _, err := w.remoteGit(ctx, clone, auth, args...); err != nil {
 			return "", fmt.Errorf("prepare worktree: %w", err)
 		}
+	}
+	if _, err := w.git(ctx, clone, "worktree", "prune"); err != nil {
+		return "", fmt.Errorf("prepare worktree: %w", err)
 	}
 
 	var add []string
@@ -361,7 +380,11 @@ func (w Workspace) closedWork(ctx context.Context, c Checkout) (bool, string, er
 	if err != nil {
 		return false, "", fmt.Errorf("check the worktree: %w", err)
 	}
-	if _, err := w.git(ctx, w.CloneDir(c), "fetch", "--quiet", "--prune", "origin"); err != nil {
+	auth, err := w.cloneAuth(ctx, c)
+	if err != nil {
+		return false, "", fmt.Errorf("check the worktree: %w", err)
+	}
+	if _, err := w.remoteGit(ctx, w.CloneDir(c), auth, "fetch", "--quiet", "--prune", "origin"); err != nil {
 		return false, "", fmt.Errorf("check the worktree: %w", err)
 	}
 	status, err := w.git(ctx, dir, "status", "--porcelain")
@@ -382,7 +405,7 @@ func (w Workspace) closedWork(ctx context.Context, c Checkout) (bool, string, er
 	if err != nil {
 		return false, "", fmt.Errorf("check the worktree: %w", err)
 	}
-	heads, err := w.git(ctx, w.CloneDir(c), "ls-remote", "origin", "refs/pull/*/head")
+	heads, err := w.remoteGit(ctx, w.CloneDir(c), auth, "ls-remote", "origin", "refs/pull/*/head")
 	if err != nil {
 		return false, "", fmt.Errorf("check the worktree: %w", err)
 	}
@@ -406,7 +429,11 @@ func (w Workspace) onlyPushedWork(ctx context.Context, c Checkout) (bool, error)
 		// Nothing of value: Prepare creates the worktree again.
 		return true, nil
 	}
-	if _, err := w.git(ctx, w.CloneDir(c), "fetch", "--quiet", "--prune", "origin"); err != nil {
+	auth, err := w.cloneAuth(ctx, c)
+	if err != nil {
+		return false, fmt.Errorf("check the worktree: %w", err)
+	}
+	if _, err := w.remoteGit(ctx, w.CloneDir(c), auth, "fetch", "--quiet", "--prune", "origin"); err != nil {
 		return false, fmt.Errorf("check the worktree: %w", err)
 	}
 	status, err := w.git(ctx, dir, "status", "--porcelain")
@@ -443,10 +470,97 @@ func (w Workspace) refExists(ctx context.Context, clone, ref string) bool {
 	return err == nil
 }
 
+// gitAuth is the token of the git commands of one prepare or one cleanup
+// that talk to the remote, as git reads it from its environment. The zero
+// value sends no token.
+type gitAuth struct {
+	env []string
+	// secrets are the forms of the token. They never leave run.
+	secrets []string
+}
+
+// auth creates the token of c for the remote at remoteURL. It sends no
+// token when the Workspace has no Token, and when the remote is not an
+// HTTP address: only HTTP has the header that carries the token.
+func (w Workspace) auth(ctx context.Context, c Checkout, remoteURL string) (gitAuth, error) {
+	key := extraHeaderKey(remoteURL)
+	if w.Token == nil || key == "" {
+		return gitAuth{}, nil
+	}
+	token, err := w.Token(ctx, c)
+	if err != nil {
+		return gitAuth{}, fmt.Errorf("create the token of git: %w", err)
+	}
+	if token == "" {
+		return gitAuth{}, errors.New("create the token of git: the token is empty")
+	}
+	cred := Credentials{Token: token}
+	return gitAuth{
+		// The same three variables as the environment of an agent (env.go;
+		// git-config(1): GIT_CONFIG_COUNT).
+		env: []string{
+			"GIT_CONFIG_COUNT=1",
+			"GIT_CONFIG_KEY_0=" + key,
+			"GIT_CONFIG_VALUE_0=Authorization: Basic " + cred.basicHeader(),
+		},
+		secrets: cred.secrets(),
+	}, nil
+}
+
+// cloneAuth creates the token of c for the remote of its clone. Remove and
+// its checks do not get the address of the remote, so it is read from the
+// clone.
+func (w Workspace) cloneAuth(ctx context.Context, c Checkout) (gitAuth, error) {
+	if w.Token == nil {
+		return gitAuth{}, nil
+	}
+	remoteURL, err := w.git(ctx, w.CloneDir(c), "remote", "get-url", "origin")
+	if err != nil {
+		return gitAuth{}, err
+	}
+	return w.auth(ctx, c, remoteURL)
+}
+
+// extraHeaderKey is the name of the git setting that adds a header to the
+// requests to the host of remoteURL only: for GitHub,
+// "http.https://github.com/.extraheader" (git-config(1): http.<url>.*,
+// http.extraHeader). It is empty when remoteURL is not an HTTP address.
+func extraHeaderKey(remoteURL string) string {
+	u, err := url.Parse(remoteURL)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+		return ""
+	}
+	return "http." + u.Scheme + "://" + u.Host + "/.extraheader"
+}
+
 // git runs one git command in dir and returns its output. An error names
 // the command and has the output of git. The command ends after the
 // deadline of the Workspace: then the error says that the deadline passed.
 func (w Workspace) git(ctx context.Context, dir string, args ...string) (string, error) {
+	return w.run(ctx, dir, gitAuth{}, args...)
+}
+
+// remoteGit runs one git command that talks to the remote, as git does.
+// git reads no configuration file of the Host user or of the system, so no
+// credential helper answers, and it has no SSH and no program that asks
+// for a password (git(1): GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM,
+// GIT_SSH_COMMAND, GIT_ASKPASS). GIT_CONFIG_COUNT=0 drops a setting that
+// the environment of cumin holds. The token of auth is the only credential.
+func (w Workspace) remoteGit(ctx context.Context, dir string, auth gitAuth, args ...string) (string, error) {
+	auth.env = append([]string{
+		"GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_SSH_COMMAND=false",
+		"GIT_ASKPASS=",
+		"SSH_ASKPASS=",
+		"GIT_CONFIG_COUNT=0",
+	}, auth.env...)
+	return w.run(ctx, dir, auth, args...)
+}
+
+// run runs one git command with the environment of auth added to the
+// environment of cumin. The output of git in an error holds no token.
+func (w Workspace) run(ctx context.Context, dir string, auth gitAuth, args ...string) (string, error) {
 	timeout := w.GitTimeout
 	if timeout <= 0 {
 		timeout = gitTimeout
@@ -457,7 +571,7 @@ func (w Workspace) git(ctx context.Context, dir string, args ...string) (string,
 	cmd := exec.CommandContext(runCtx, "git", args...)
 	cmd.Dir = dir
 	// Never wait for a credential prompt. cumin runs without a terminal.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(append(os.Environ(), "GIT_TERMINAL_PROMPT=0"), auth.env...)
 	// When the context is done, Cancel sends SIGTERM, so that git removes
 	// its lock files and the directory of an unfinished clone. After
 	// WaitDelay, os/exec kills git and closes the output pipe, which a
@@ -466,7 +580,7 @@ func (w Workspace) git(ctx context.Context, dir string, args ...string) (string,
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = gitWaitDelay
 	out, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(out))
+	text := redact(strings.TrimSpace(string(out)), auth.secrets)
 	if err != nil {
 		// The deadline of this command passed, not the context of the caller.
 		if errors.Is(runCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
