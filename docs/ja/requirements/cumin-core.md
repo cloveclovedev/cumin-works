@@ -58,6 +58,7 @@ Operator:
 | フォローアップノート | Pull Requestがmergeされたら、その説明の `Follow-up` と、対応されなかった `(non-blocking)` の指摘を、フォローアップノートとして要求Issueに転記する。フォローアップノートは、要求Issueに付ける1つのコメントである。AIの判断は使わず、決まった形式から機械的に拾う |
 | 通知 | 人の対応が要るとき、Discordのwebhookで知らせる |
 | 利用枠の管理 | 使用率を読み、上限に達している間はAgentの起動を止める。weekly枠は週を通して配分し、5h枠はOperatorの分を時間帯ごとに残す |
+| 道具の確認 | リポジトリが決めた道具の確認 (コマンド) を、定期確認のたびに実行する。1つでも失敗している間は、そのリポジトリのAgentの起動を止める (「道具の確認」) |
 | Operatorからの操作の受け付け | Host上のコマンドで、状態の表示と、利用枠の使い切りの許可を受け付ける |
 
 cuminの動作ごとのきっかけと、動く前に確かめることは、[Issueのラベルと状態遷移](workflow/issue-states.md) の表に書いてある。この文書では繰り返さない。
@@ -83,11 +84,12 @@ Operatorが使うコマンド:
 | コマンド | 内容 |
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
-| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Maintainerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、Agentの起動を止めているかどうかとその原因の枠、実行が終わるのを待って止まる途中かどうか、全部を読めないIssueとその超えた上限 (「全部を読めないIssue」)。表示するのは、sub-issue、ラベル、blocked by のIssueの上限を超えたIssueである。Pull Requestについての上限を超えたIssueは、通知だけで知らせる。`cumin status` は、Pull Requestを読まないためである。モニターファイルから、最後の定期確認の時刻とそこからの経過時間、その定期確認のエラーの1つずつ、cuminが実行中として持つAgent (roleと依頼の種類) も表示する。最後の定期確認が `poll_interval` の3倍より古いときと、モニターファイルがないときは、そのことを1行で示す。モニターファイルの中身で、終了コードは変えない |
+| `cumin status` | 今の状態を表示する。実行中のAgent (`cumin/status/planning`、`cumin/status/accepting`、`cumin/status/implementing`、`cumin/status/reviewing` のIssue)、Maintainerの対応を待っているIssue、両方の枠の最新の使用率とそれを読んだ時刻、今の上限、Agentの起動を止めているかどうかとその原因の枠、実行が終わるのを待って止まる途中かどうか、全部を読めないIssueとその超えた上限 (「全部を読めないIssue」)。表示するのは、sub-issue、ラベル、blocked by のIssueの上限を超えたIssueである。Pull Requestについての上限を超えたIssueは、通知だけで知らせる。`cumin status` は、Pull Requestを読まないためである。モニターファイルから、失敗している道具の確認 (リポジトリごとに、コマンドの1つずつ。そのリポジトリのAgentの起動を止めていることも示す)、最後の定期確認の時刻とそこからの経過時間、その定期確認のエラーの1つずつ、cuminが実行中として持つAgent (roleと依頼の種類) も表示する。最後の定期確認が `poll_interval` の3倍より古いときと、モニターファイルがないときは、そのことを1行で示す。モニターファイルの中身で、終了コードは変えない |
 | `cumin quota allow` | 今の5h枠を使い切ってよいと許可する。許可は、その5h枠がリセットされるまで有効。weekly枠には効かない |
 | `cumin stop --after-current-runs` | 実行中のAgentの実行が終わるのを待ってから、cuminを止める。新しい依頼は始めない。Agentの要らない動作は、止まるまで続ける |
 | `cumin --version` | cuminの版を表示する |
 | `cumin setup github-apps` | 導入のときに、Hostで実行する。roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないroleだけを登録する |
+| `cumin setup launchd` | 導入のときと、Agentが使う道具を足したときに、Hostで実行する。launchdの定義 (plist) を書く。書く前に、cumin自身が起動するコマンド (roleごとのAgentのCLI、`git`) が、plistに書く `PATH` にあるかを確かめる。1つでもなければ、そのコマンドの名前を示して、何も書かずに失敗で終わる。リポジトリの道具の確認は実行しない。GitHubもKeychainも読まない |
 
 ## 利用枠の守り方
 
@@ -190,6 +192,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 | mergeの判断が必要 | 「ask for the merge decision」 |
 | Agentが先に進めない。指摘が残った。mergeできない、またはmergeのあとに実装Issueを閉じられない | 「stop the implementation」、「stop for failed checks」、「stop the merge」、「stop at the round limit」、「stop the review」、「stop the split」、「stop the acceptance check」 |
 | 利用枠の使用率が上限に達した、または使用率を読み取れなかったので、Agentの起動を止めた | 「stop agent starts」 |
+| リポジトリの道具の確認が失敗し始めたので、そのリポジトリのAgentの起動を止めた。リポジトリの名前と、失敗した確認の1つずつを入れる。次に知らせるのは、確認が全部通ったあとに、また失敗したときである | 「stop agent starts of a repository」 |
 | Maintainerが動かなければ何も進まない (進められるIssueがなく、動いているAgentもなく、check待ちのIssueもない) | 「tell that cumin waits」 |
 | Maintainerでないアカウントが `cumin/status/ready` を付けたので、着手しなかった | 「request the split」、「request the implementation」 (Maintainerのready) |
 | 同じリポジトリの定期確認が、同じ理由で続けて失敗した (3回)。次に知らせるのは、その間に定期確認が成功したあとである | — |
@@ -207,7 +210,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 
 - Hostに属する設定は、Hostの設定ファイルにだけ書ける。利用枠はアカウントのものであり、作業場所や秘密の値はHostのものなので、リポジトリからは変えられない
 - リポジトリごとに変えてよい設定は、Hostの設定ファイルに書いた値を、対象のリポジトリの `.cumin/` で上書きできる。優先順位は、初期値、Hostの設定ファイル、リポジトリの `.cumin/` の順に強くなる
-- 保護されたパスと優先度のラベルは、リポジトリの `.cumin/config.toml` だけで決める。保護されたパスは、強制するのがGitHub Actionsのcheckであり、Hostの設定ファイルはそこから見えないためである。優先度のラベルは、ラベルがリポジトリにあり、足りないラベルを作るスクリプトがリポジトリのファイルを読むためである
+- 保護されたパス、優先度のラベル、道具の確認は、リポジトリの `.cumin/config.toml` だけで決める。保護されたパスは、強制するのがGitHub Actionsのcheckであり、Hostの設定ファイルはそこから見えないためである。優先度のラベルは、ラベルがリポジトリにあり、足りないラベルを作るスクリプトがリポジトリのファイルを読むためである。道具の確認は、cuminがHostで実行するコマンドなので、保護されたパスである `.cumin/` をMaintainerが承認したものだけにするためである
 
 | 設定 | 内容 | 初期値 | リポジトリで上書き |
 |---|---|---|---|
@@ -228,6 +231,7 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 | mergeの方法 | cuminがPull Requestをmergeするときの方法。squash、merge、rebaseのどれか | squash | できる |
 | 優先度のラベル | 着手の順番を決めるラベルの一覧。優先度の高い順に書く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「着手の順番」)。設定に書いたラベルはOrganizationのものなので、cuminは作らず、変えない。足りないラベルは、リポジトリの準備のスクリプトが、実行した人に尋ねてから作る。設定に書かなければ初期値のラベルを使い、足りないものをcuminが作る | `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` | リポジトリだけで決める |
 | 保護されたパス | Agentに変更させないパスの一覧 | `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/` | リポジトリだけで決める |
+| 道具の確認 | このリポジトリのAgentが使う道具が、Hostで使えることを確かめるコマンドの一覧 (「道具の確認」) | なし (確認しない) | リポジトリだけで決める |
 | riskの基準 | riskの基準を書いたMarkdownの文章。cuminは中身を解釈せず、PlannerとReviewerへの指示にそのまま入れる | `disciplines/software-engineering/risk-criteria.md` | できる |
 
 保護されたパスは、`.cumin/config.toml` の `protected_paths` に、文字列の配列で書く。照合の決まりは、`.gitignore` の一部と同じである。cuminは、この一覧を読み、照合の決まりとともに、起動の依頼のデータとしてAgentに渡す ([Agentに共通の要件](agents/common.md) の「起動の依頼の事実」)。
@@ -239,6 +243,24 @@ Implementerが範囲の外だと判断した作業と、Reviewerの提案のう�
 - 大文字と小文字は区別しない。Hostの macOS のファイルシステムが区別しないので、`claude.md` という名前のファイルも、Agentには `CLAUDE.md` として読まれるためである
 
 どの階層でも当たるようにするのは、Claude Codeが、サブディレクトリの `CLAUDE.md` も読むためである。リポジトリの直下だけを守ると、Implementerがサブディレクトリに `CLAUDE.md` を足して、あとに続くAgentへの指示を変えられる。
+
+### 道具の確認
+
+Agentが使う道具 (例: 図を描くためのDocker) がHostで使えないと、Agentは別の方法を探したり、道具なしで作った結果を出したりする。どのIssueがどの道具を使うかは判断なので、cuminは決めない。決まった規則として、リポジトリの確認が1つでも失敗している間は、そのリポジトリのAgentを起動しない。
+
+道具の確認は、`.cumin/config.toml` の `tool_checks` に、確認の配列で書く。1つの確認は、次の2つを持つ。
+
+| キー | 内容 | 初期値 |
+|---|---|---|
+| `command` | 実行するコマンド。文字列の配列で、1つめがプログラムの名前、残りが引数である (例: `["docker", "info"]`)。シェルは通さない。空の配列と、空のプログラムの名前は、設定の誤りである | なし (必須) |
+| `time_limit` | 待つ時間の上限。0より大きく、60秒以下 | 10秒 |
+
+- 確認は、終了コードが0で、時間の上限の中に終わったときだけ通る。コマンドが見つからないとき、時間の上限を過ぎたとき、0でない終了コードは、失敗である
+- cuminは、そのリポジトリの定期確認のたびに、Agentを起動するかどうかを決める前に、確認を書いた順に全部実行する。結果は、次の定期確認まで使う
+- 確認は、Agentに渡すのと同じHostの環境変数 (`PATH`、`HOME` など) で実行する。GitHub Appのtokenは渡さない。実行するディレクトリは作業場所で、リポジトリのファイルはそこにない。確認は、リポジトリのファイルに頼らないコマンドにする
+- 時間の上限を60秒以下にするのは、確認が定期確認を長く止めないためである
+- 止めるのは、そのリポジトリのAgentの起動だけである。ほかのリポジトリと、Agentを起動しない動作は続く ([Issueのラベルと状態遷移](workflow/issue-states.md) の「リポジトリの道具の確認」)
+- cuminは、道具を入れず、起動もしない。直すのはOperatorである
 
 riskの基準は、TOMLの値ではなく、Markdownのファイルで上書きする。Hostでは、設定ファイルと同じディレクトリの `risk-criteria.md` に書く。リポジトリでは、`.cumin/risk-criteria.md` に書く。ファイルがあれば、その内容が、それより弱い段の基準を丸ごと置き換える。優先順位は他の設定と同じで、初期値、Hostのファイル、リポジトリのファイルの順に強くなる。
 
@@ -291,3 +313,9 @@ GitHub上では `cumin-core` として振る舞う。持っている権限は、
 | 37 | 全部を読めないIssueがあるまま、定期確認を3回行う | 通知は1回だけである。通知に、Issueと超えた上限がある。`cumin status` が、そのIssueと上限を表示する |
 | 38 | 全部を読めなかったIssueのsub-issueを減らして、36件以下にする | 次の定期確認から、そのIssueも今までどおり動く |
 | 39 | `cumin/type/owner-task` のsub-issueだけが開いていて、要求Issueが `cumin/status/awaiting-plan-review` である。Maintainerがそのsub-issueを閉じる | 次の定期確認で、要求Issueが `cumin/status/accepting` に替わり、受け入れの確認が1回だけ依頼される。Maintainerはラベルを替えない |
+| 40 | リポジトリの `.cumin/config.toml` に、失敗する道具の確認が1つある。そのリポジトリに `cumin/status/ready` の実装Issueと、mergeできるPull Requestがある。別のリポジトリにも `cumin/status/ready` の実装Issueがある | 確認が失敗するリポジトリでは、Agentを起動せず、readyのIssueのラベルも替えない。mergeは行う。別のリポジトリでは、Agentを起動する |
+| 41 | 道具の確認が失敗したまま、定期確認を3回行う | 通知は1回だけである。通知に、リポジトリの名前と、失敗した確認がある。`cumin status` が、そのリポジトリと失敗した確認を表示する |
+| 42 | 失敗していた道具の確認が、通るようになる | 次の定期確認で、人の操作なしに、readyのIssueに着手する。そのあとにまた失敗すると、もう一度通知する |
+| 43 | 道具の確認のコマンドが、見つからない。時間の上限を過ぎる。0でない終了コードを返す | どれも失敗として扱う。確認のプロセスには、Agentと同じ `PATH` があり、GitHub Appのtokenはない |
+| 44 | Agentの CLIか `git` が、plistに書く `PATH` にない状態で、`cumin setup launchd` を実行する | ないコマンドの名前を示して、plistを書かずに失敗で終わる。全部あれば、今までどおりplistを書く |
+| 45 | Hostの設定ファイルに `tool_checks` を書く。または、リポジトリの `.cumin/config.toml` の確認に、空の `command` か、60秒を超える `time_limit` がある | 設定の誤りとして、キーと項目を示す |
