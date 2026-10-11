@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,8 +18,10 @@ var setupRepoTools = []string{"cat", "tr", "grep", "awk"}
 // The fake gh holds the labels of the repository in the file LABELS, one
 // line for each label, in the form that the script asks of gh: name, color,
 // and description with a tab between them. It writes every call to the file
-// CALLS, and a PATCH or a POST changes LABELS, so that a second run of the
-// script reads what the first run wrote.
+// CALLS, and a PATCH, a POST, or a DELETE changes LABELS, so that a second
+// run of the script reads what the first run wrote. The file ISSUES holds one
+// line for each issue or pull request that carries a label: the label, the
+// state, and the number, with a tab between them.
 const setupRepoFakeGh = `#!/bin/sh
 echo "gh $*" >>"$CALLS"
 case "$*" in
@@ -31,6 +34,15 @@ case "$*" in
     cat "$LABELS.new" >"$LABELS" ;;
   "api -X POST repos/acme/app/labels "*)
     printf '%s\t%s\t%s\n' "${6#name=}" "${8#color=}" "${10#description=}" >>"$LABELS" ;;
+  "api --paginate --method GET repos/acme/app/issues -f labels="*)
+    NAME="${7#labels=}" STATE="${9#state=}" awk -F '\t' '
+      $1 == ENVIRON["NAME"] && $2 == ENVIRON["STATE"] { print $3 }
+    ' "$ISSUES" ;;
+  "api -X DELETE repos/acme/app/labels/"*)
+    NAME="${4#repos/acme/app/labels/}" awk -F '\t' '
+      tolower($1) != ENVIRON["NAME"] { print }
+    ' "$LABELS" >"$LABELS.new"
+    cat "$LABELS.new" >"$LABELS" ;;
   *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
 esac
 `
@@ -43,7 +55,10 @@ type setupRepo struct {
 	work   string
 	calls  string
 	labels string
+	issues string
 	dryRun bool
+	// input is what the person who runs the script types. Empty is no input.
+	input string
 }
 
 // newSetupRepo returns a repository with the given labels, each one as
@@ -57,6 +72,7 @@ func newSetupRepo(t *testing.T, labels ...string) *setupRepo {
 		work:   filepath.Join(dir, "work"),
 		calls:  filepath.Join(dir, "calls"),
 		labels: filepath.Join(dir, "labels"),
+		issues: filepath.Join(dir, "issues"),
 	}
 	for _, d := range []string{s.bin, s.work} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
@@ -81,8 +97,23 @@ func newSetupRepo(t *testing.T, labels ...string) *setupRepo {
 	}
 	s.write(s.labels, lines.String())
 	s.write(s.calls, "")
+	s.write(s.issues, "")
 	s.namePriorityLabels()
 	return s
+}
+
+// carry puts the label on that many open and closed issues and pull requests.
+func (s *setupRepo) carry(label string, open, closed int) {
+	s.t.Helper()
+	var lines strings.Builder
+	for i := range open + closed {
+		state := "open"
+		if i >= open {
+			state = "closed"
+		}
+		fmt.Fprintf(&lines, "%s\t%s\t%d\n", label, state, i+1)
+	}
+	s.write(s.issues, lines.String())
 }
 
 func (s *setupRepo) write(path, content string) {
@@ -113,7 +144,7 @@ func (s *setupRepo) run() string {
 		s.t.Fatal(err)
 	}
 	program := "set -eu\nrepo=acme/app\nconfig_path=.cumin/config.toml\nwork=\"$WORK\"\ndry_run=\"$DRY_RUN\"\n"
-	for _, name := range []string{"die", "repository_labels", "default_priority_labels", "update_labels", "apply_repository_labels"} {
+	for _, name := range []string{"die", "repository_labels", "default_priority_labels", "update_labels", "retired_labels", "count_carriers", "delete_retired_labels", "apply_repository_labels"} {
 		function := regexp.MustCompile(`(?ms)^` + name + `\(\) \{\n.*?^\}\n`).Find(script)
 		if function == nil {
 			s.t.Fatalf("scripts/setup-repo.sh has no function %s", name)
@@ -129,7 +160,8 @@ func (s *setupRepo) run() string {
 		dryRun = "1"
 	}
 	command := exec.Command(sh, "-c", program+"apply_repository_labels")
-	command.Env = []string{"PATH=" + s.bin, "WORK=" + s.work, "CALLS=" + s.calls, "LABELS=" + s.labels, "DRY_RUN=" + dryRun}
+	command.Env = []string{"PATH=" + s.bin, "WORK=" + s.work, "CALLS=" + s.calls, "LABELS=" + s.labels, "ISSUES=" + s.issues, "DRY_RUN=" + dryRun}
+	command.Stdin = strings.NewReader(s.input)
 	out, err := command.CombinedOutput()
 	if err != nil {
 		s.t.Fatalf("the labels step failed: %v\n%s", err, out)
@@ -299,6 +331,128 @@ func TestSetupRepo_DryRunChangesNoLabel(t *testing.T) {
 		"would update the label cumin/priority/P1",
 		"would create the label cumin/type/requirement",
 		"unchanged  label risk/low",
+	} {
+		if !hasLine(out, line) {
+			t.Errorf("the output has no line %q:\n%s", line, out)
+		}
+	}
+	if writes := s.writes(); len(writes) != 0 {
+		t.Errorf("the dry run wrote %q", writes)
+	}
+}
+
+const retiredLabel = "cumin/status/awaiting-checks"
+
+// newSetupRepoWithRetiredLabel returns a repository that holds every label
+// of cumin, one retired label, and one label outside both lists.
+func newSetupRepoWithRetiredLabel(t *testing.T) *setupRepo {
+	t.Helper()
+	return newSetupRepo(t, append(labelsOfCumin(t, "repository_labels"),
+		"Cumin/Status/Awaiting-Checks|BFD4F2|GitHub runs the required checks",
+		"bug|D73A4A|Something does not work",
+	)...)
+}
+
+func TestSetupRepo_DeletesARetiredLabelAfterTheAnswerY(t *testing.T) {
+	s := newSetupRepoWithRetiredLabel(t)
+	s.carry(retiredLabel, 0, 2)
+	s.input = "y\n"
+	out := s.run()
+	if line := "retired    label " + retiredLabel + ": 0 open and 2 closed issues and pull requests carry it"; !hasLine(out, line) {
+		t.Errorf("the output has no line %q:\n%s", line, out)
+	}
+	// The answer comes from a file, so the question and the next line share one line.
+	if !strings.Contains(out, "removes the label from every closed issue and pull request. [y/N] deleted    label "+retiredLabel+"\n") {
+		t.Errorf("the script does not ask what the question must say, or does not say that it deleted the label:\n%s", out)
+	}
+	want := "gh api -X DELETE repos/acme/app/labels/" + retiredLabel
+	if writes := s.writes(); len(writes) != 1 || writes[0] != want {
+		t.Errorf("the writes are %q, want only\n%s", writes, want)
+	}
+	// The label is gone, so a second run asks nothing and writes nothing.
+	out = s.run()
+	if writes := s.writes(); len(writes) != 0 || strings.Contains(out, retiredLabel) {
+		t.Errorf("the second run wrote %q and printed:\n%s", writes, out)
+	}
+}
+
+func TestSetupRepo_KeepsARetiredLabelWithoutTheAnswerY(t *testing.T) {
+	for name, input := range map[string]string{
+		"the answer n":    "n\n",
+		"the answer yes":  "yes\n",
+		"an empty answer": "\n",
+		"no input":        "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newSetupRepoWithRetiredLabel(t)
+			s.carry(retiredLabel, 0, 2)
+			s.input = input
+			out := s.run()
+			if !strings.Contains(out, "Delete the label "+retiredLabel) {
+				t.Errorf("the script did not ask:\n%s", out)
+			}
+			if writes := s.writes(); len(writes) != 0 {
+				t.Errorf("the script wrote %q", writes)
+			}
+			if strings.Contains(out, "deleted") {
+				t.Errorf("the script says that it deleted a label:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestSetupRepo_NeverDeletesARetiredLabelThatAnOpenIssueCarries(t *testing.T) {
+	s := newSetupRepoWithRetiredLabel(t)
+	s.carry(retiredLabel, 1, 2)
+	s.input = "y\n"
+	out := s.run()
+	if want := "kept       label " + retiredLabel + ": 1 open issues and pull requests carry it"; !hasLine(out, want) {
+		t.Errorf("the output has no line %q:\n%s", want, out)
+	}
+	if strings.Contains(out, "Delete the label") {
+		t.Errorf("the script asked:\n%s", out)
+	}
+	if writes := s.writes(); len(writes) != 0 {
+		t.Errorf("the script wrote %q", writes)
+	}
+}
+
+func TestSetupRepo_LeavesALabelOutsideTheListsAndAMissingRetiredLabel(t *testing.T) {
+	// The repository holds no retired label, and one label outside both lists.
+	s := newSetupRepo(t, append(labelsOfCumin(t, "repository_labels"), "bug|D73A4A|Something does not work")...)
+	s.input = "y\n"
+	out := s.run()
+	if strings.Contains(out, "Delete the label") || strings.Contains(out, "retired") || strings.Contains(out, "bug") {
+		t.Errorf("the script worked on a label outside the lists, or on a label that the repository does not hold:\n%s", out)
+	}
+	if writes := s.writes(); len(writes) != 0 {
+		t.Errorf("the script wrote %q", writes)
+	}
+}
+
+func TestSetupRepo_NeverDeletesARetiredLabelThatTheSettingsNameAsAPriorityLabel(t *testing.T) {
+	s := newSetupRepoWithRetiredLabel(t)
+	s.namePriorityLabels(retiredLabel)
+	s.carry(retiredLabel, 0, 2)
+	s.input = "y\n"
+	out := s.run()
+	if want := "kept       label " + retiredLabel + " (.cumin/config.toml names it as a priority label)"; !hasLine(out, want) {
+		t.Errorf("the output has no line %q:\n%s", want, out)
+	}
+	if writes := s.writes(); len(writes) != 0 {
+		t.Errorf("the script wrote %q", writes)
+	}
+}
+
+func TestSetupRepo_DryRunAsksNothingAndDeletesNoRetiredLabel(t *testing.T) {
+	s := newSetupRepoWithRetiredLabel(t)
+	s.carry(retiredLabel, 0, 2)
+	s.dryRun = true
+	s.input = "y\n"
+	out := s.run()
+	for _, line := range []string{
+		"retired    label " + retiredLabel + ": 0 open and 2 closed issues and pull requests carry it",
+		"would ask  whether to delete the label " + retiredLabel,
 	} {
 		if !hasLine(out, line) {
 			t.Errorf("the output has no line %q:\n%s", line, out)

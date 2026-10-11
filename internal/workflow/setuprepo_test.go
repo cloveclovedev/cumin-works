@@ -65,3 +65,26 @@ func TestSetupRepoScript_UpdatesTheDefaultPriorityLabelsThatCuminCreates(t *test
 		t.Errorf("the script updates\n%s\ncumin creates\n%s", out, want.String())
 	}
 }
+
+// The script asks to delete the labels of its list retired_labels. A label
+// that cumin creates must never be in that list, or the script would ask to
+// delete a label that cumin uses.
+func TestSetupRepoScript_RetiresNoLabelThatCuminCreates(t *testing.T) {
+	out, err := exec.Command("sh", "-c", setupRepoFunctions(t, "retired_labels")+"retired_labels").CombinedOutput()
+	if err != nil {
+		t.Fatalf("the function failed: %v\n%s", err, out)
+	}
+	retired := strings.Fields(string(out))
+	if len(retired) == 0 {
+		t.Fatal("the script names no retired label")
+	}
+	labels := append(RepositoryLabels(), DefaultPriorityLabels(config.DefaultPriorityLabels())...)
+	for _, name := range retired {
+		for _, label := range labels {
+			// GitHub label names ignore case.
+			if strings.EqualFold(name, label.Name) {
+				t.Errorf("the script retires the label %s, and cumin creates it", name)
+			}
+		}
+	}
+}

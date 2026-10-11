@@ -11,6 +11,8 @@
 # The script asks before it creates a priority label, and creates none without
 # the answer "y". It creates the missing labels of cumin, and updates the color
 # and the description of the ones that differ from the list of cumin.
+# It asks before it deletes a label that cumin no longer uses, and deletes
+# none without the answer "y", and none that an open issue or pull request carries.
 # Running the script again with the same arguments changes nothing.
 # It needs only gh (logged in, with the "workflow" scope) and standard tools.
 set -eu
@@ -369,12 +371,74 @@ update_labels() {
   done <"$1"
 }
 
+# retired_labels
+# Prints the labels that cumin used in earlier versions and no longer uses,
+# one for each line. A test proves that no name is in the lists of cumin.
+retired_labels() {
+  cat <<'LABELS'
+cumin/status/awaiting-owner-review
+cumin/status/awaiting-owner-decision
+cumin/status/awaiting-checks
+LABELS
+}
+
+# count_carriers <label> <open|closed>
+# Prints how many issues and pull requests in that state carry the label.
+# The list of the issues of a repository holds the pull requests too.
+count_carriers() {
+  gh api --paginate --method GET "repos/$repo/issues" -f labels="$1" -f state="$2" -f per_page=100 \
+    --jq '.[].number' >"$work/carriers" </dev/null || die "cannot count the $2 issues and pull requests with the label $1"
+  awk 'NF { n++ } END { print n + 0 }' "$work/carriers"
+}
+
+# delete_retired_labels
+# For each label of retired_labels that the repository holds: prints how many
+# issues and pull requests carry it, keeps it when an open one carries it, and
+# asks before it deletes it otherwise. GitHub removes a deleted label from
+# every issue and pull request, so only the answer "y" deletes.
+delete_retired_labels() {
+  for label in $(retired_labels); do
+    # GitHub label names ignore case.
+    LABEL="$label" awk -F '\t' '
+      tolower($1) == ENVIRON["LABEL"] { found = 1 }
+      END { exit !found }
+    ' "$work/labels-now" || continue
+    if printf '%s\n' "$label" | grep -Fxq -f - "$work/priority-labels-lower"; then
+      echo "kept       label $label ($config_path names it as a priority label)"
+      continue
+    fi
+    open="$(count_carriers "$label" open)"
+    closed="$(count_carriers "$label" closed)"
+    echo "retired    label $label: $open open and $closed closed issues and pull requests carry it"
+    if [ "$open" -gt 0 ]; then
+      echo "kept       label $label: $open open issues and pull requests carry it"
+      continue
+    fi
+    if [ "$dry_run" -eq 1 ]; then
+      echo "would ask  whether to delete the label $label"
+      continue
+    fi
+    printf 'Delete the label %s of %s? The deletion removes the label from every closed issue and pull request. [y/N] ' "$label" "$repo"
+    answer=""
+    # No answer (the end of the input) deletes nothing.
+    IFS= read -r answer || answer=""
+    case "$answer" in
+      y)
+        gh api -X DELETE "repos/$repo/labels/$label" >/dev/null </dev/null || die "cannot delete the label $label"
+        echo "deleted    label $label"
+        ;;
+      *) echo "kept       label $label: no answer \"y\"" ;;
+    esac
+  done
+}
+
 # apply_repository_labels
 # Creates each label of repository_labels that the repository does not have,
 # and updates the ones whose color or description differs from the list.
 # cumin creates the same labels when it starts, so the script does not ask.
 # The default priority labels are only updated, and only when
 # .cumin/config.toml names no priority labels: cumin creates them itself.
+# The retired labels come last.
 apply_repository_labels() {
   # One line for each label: name, color, description. No description is an empty one.
   gh api --paginate "repos/$repo/labels" --jq '.[] | "\(.name)\t\(.color)\t\(.description // "")"' >"$work/labels-now" ||
@@ -386,6 +450,7 @@ apply_repository_labels() {
     default_priority_labels >"$work/default-priority-labels"
     update_labels "$work/default-priority-labels" keep
   fi
+  delete_retired_labels
 }
 
 apply_repository_labels
