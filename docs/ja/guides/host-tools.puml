@@ -10,7 +10,7 @@ rectangle "Claude Code session\nplugin cumin-maintainer" as session
 
 rectangle "general tools\nscripts/" as tools {
   rectangle "cumin-health.sh\nis cumin running" as health
-  rectangle "replace-binary.sh\nreplace the binary" as replace
+  rectangle "install.sh --after-current-runs\nreplace the binary" as replace
   rectangle "live-scenario.sh\nrun the live scenario E2E-1" as live
 }
 

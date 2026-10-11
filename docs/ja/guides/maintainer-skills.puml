@@ -27,7 +27,7 @@ session --> github : gh, after the question
 session --> monitor : session-start: read\nwatch (its script): read
 session --> note : hand-over: write\nsession-start: read
 tools --> github : cumin status:\nread
-tools --> monitor : cumin-health.sh:\nread
+tools --> monitor : cumin status,\ncumin-health.sh:\nread
 run --> monitor : write after every poll
 run -right-> github : poll
 

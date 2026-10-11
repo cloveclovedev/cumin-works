@@ -18,31 +18,30 @@ The checkout of cumin holds three general tools under `scripts/`. A person runs 
 | Tool | When to call it | Ask first |
 |---|---|---|
 | `cumin-health.sh` | The Maintainer asks "is it running", or a watch reports an old last poll | No. The tool only reads |
-| `replace-binary.sh` | A merge changed code outside the tests, and cumin must run the new binary | Yes. The tool stops cumin and replaces its binary |
+| `install.sh --after-current-runs` | A merge changed code outside the tests, and cumin must run the new binary | Yes. The tool stops cumin and replaces its binary |
 | `live-scenario.sh` | The Maintainer asks for the live scenario E2E-1 | Yes. The tool stops cumin and points the Host at the sandbox |
 
 - The question names the tool and what it changes on the Host. One answer covers one call.
 - `live-scenario.sh` needs the sandbox repository and the Host settings file for the sandbox. Ask the Maintainer for both. The skill holds no name of a repository.
-- `replace-binary.sh --dry-run` only reads. Offer it when the Maintainer wants to see the steps first.
-- Before `replace-binary.sh`, the checkout must be at the head of its default branch. The Maintainer confirms the merged change, then the session asks and runs `git -C "$CUMIN_SOURCE_DIR" pull --ff-only`.
-- `replace-binary.sh` and `live-scenario.sh` wait for the current runs of the agents, for up to one hour. Start them in the background, with the background option of the shell tool.
+- Before `install.sh --after-current-runs`, the checkout must be at the head of its default branch. The Maintainer confirms the merged change, then the session asks and runs `git -C "$CUMIN_SOURCE_DIR" pull --ff-only`.
+- `install.sh --after-current-runs` and `live-scenario.sh` wait for the current runs of the agents, for up to one hour. Start them in the background, with the background option of the shell tool.
 
 ## How to read the exit code
 
 | Tool | 0 | 1 | 2 |
 |---|---|---|---|
 | `cumin-health.sh` | The last poll is new and has no error | cumin may not run: the last line starts with `error:` and says why | A wrong option |
-| `replace-binary.sh` | All five steps passed: the new binary runs, and two polls have no error | A step failed. The last `step <n> of 5` line names the step, and the `error:` line says the state of cumin | A wrong option |
+| `install.sh --after-current-runs` | All six steps passed: the new binary runs, and two polls have no error | A step failed. The last `step <n> of 6` line names the step, and the `error:` line says the state of cumin | A wrong option |
 | `live-scenario.sh` | The test passed, and the Host is back | Anything else. Read the lines `test:` and `host:` when they are there, else the `error:` line | A wrong option |
 
 - Report the exit code and the last lines as they are. Only the exit code 0 is a success. Empty output is not a success.
 - A message that holds "time limit" means that a wait of the tool ended at its limit. Say so, and do not start the tool again without the Maintainer.
-- After the exit code 1 of `replace-binary.sh` or of `live-scenario.sh`, a message can name the command that brings cumin back. Show that command to the Maintainer. Run it only on their word.
+- After the exit code 1 of `install.sh --after-current-runs` or of `live-scenario.sh`, a message can name the command that brings cumin back. Show that command to the Maintainer. Run it only on their word.
 - A `host: failed` line of `live-scenario.sh` means that the Host may still point at the sandbox. Tell the Maintainer in the first line of the report.
 
 ## The new binary before the next approval
 
-A merged change of code outside the tests does not reach the Host by itself: cumin runs the old binary until `replace-binary.sh` passes.
+A merged change of code outside the tests does not reach the Host by itself: cumin runs the old binary until `install.sh --after-current-runs` passes.
 
 - After such a merge, replace the binary before the session approves the next pull request, and before it proposes an approval to the Maintainer.
 - A merge that changes only tests or only documents needs no new binary.
@@ -81,12 +80,11 @@ Read, without asking:
 
 - `"$CUMIN_SOURCE_DIR"/scripts/cumin-health.sh`
 - `"$CUMIN_SOURCE_DIR"/scripts/cumin-health.sh --wait-polls <n> --timeout <seconds>`
-- `"$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh --dry-run`
 
 Changes the Host, so ask first:
 
 - `git -C "$CUMIN_SOURCE_DIR" pull --ff-only`
-- `"$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh`
+- `"$CUMIN_SOURCE_DIR"/scripts/install.sh --after-current-runs`
 - `"$CUMIN_SOURCE_DIR"/scripts/live-scenario.sh --repo <owner>/<sandbox> --config <file>`
 
 This skill runs no command that GitHub records. The options of the three tools are in `$CUMIN_SOURCE_DIR/docs/ja/guides/host-tools.md`.
