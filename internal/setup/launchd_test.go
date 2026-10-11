@@ -411,3 +411,41 @@ func TestServiceTarget_IsTheJobInTheDomainOfTheUser(t *testing.T) {
 		t.Errorf("ServiceTarget = %q", got)
 	}
 }
+
+// The job finds a command only in the directories of its own PATH. A file
+// that may not be executed, a directory of that name, a relative directory
+// of the PATH, and a relative path do not count.
+func TestMissingCommands_LooksOnlyAtThePathOfTheJob(t *testing.T) {
+	bin, other := t.TempDir(), t.TempDir()
+	write := func(dir, name string, mode os.FileMode) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"), mode); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	write(bin, "found", 0o755)
+	write(bin, "not-executable", 0o644)
+	if err := os.Mkdir(filepath.Join(bin, "directory"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	absolute := write(other, "elsewhere", 0o755)
+	if err := os.Mkdir(filepath.Join(other, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(filepath.Join(other, "bin"), "relative", 0o755)
+	relative := filepath.Join("bin", "relative")
+	// The PATH of the test process holds every command, and the working
+	// directory holds two: neither is the PATH of the job.
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+other)
+	t.Chdir(other)
+
+	agent := testAgent(t)
+	agent.PathEnv = strings.Join([]string{"", ".", filepath.Join(bin, "absent"), bin}, string(os.PathListSeparator))
+
+	got := agent.MissingCommands([]string{"found", "not-executable", "directory", "elsewhere", absolute, relative, filepath.Join(other, "absent")})
+	want := []string{"not-executable", "directory", "elsewhere", relative, filepath.Join(other, "absent")}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("missing = %q, want %q", got, want)
+	}
+}

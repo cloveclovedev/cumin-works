@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
+	"github.com/cloveclovedev/cumin-works/internal/setup"
 )
 
 func TestHelpListsSubcommands(t *testing.T) {
@@ -255,6 +256,110 @@ func TestSetupLaunchdChecksTheArgumentsAndTheBinary(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty", stdout.String())
+	}
+}
+
+// fakeCommand puts an executable file of that name into the directory.
+func fakeCommand(t *testing.T, dir, name string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Before it writes the plist, `cumin setup launchd` looks up the commands
+// that cumin itself starts (the agent CLI of each role, git) on the PATH of
+// the plist. The PATH of the test process holds none or all of them, the
+// opposite of the PATH of the plist, so only the PATH of the plist can give
+// the result. The Keychain and GitHub have no part: the home directory is
+// empty and the settings name no GitHub App.
+func TestSetupLaunchdLooksUpTheCommandsOnThePathOfThePlist(t *testing.T) {
+	withAll, withGit, withCLI, empty := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
+	for _, dir := range []string{withAll, withGit} {
+		fakeCommand(t, dir, "git")
+	}
+	for _, dir := range []string{withAll, withCLI} {
+		fakeCommand(t, dir, "claude")
+		fakeCommand(t, dir, "reviewer-cli")
+	}
+	settings := validConfig + "[roles.reviewer]\ncli_path = \"reviewer-cli\"\n"
+
+	tests := []struct {
+		name        string
+		pathOfPlist string
+		pathOfTest  string
+		dryRun      bool
+		missing     []string
+	}{
+		{"no git", withCLI, withAll, false, []string{"git"}},
+		{"no agent CLI", withGit, withAll, false, []string{"claude", "reviewer-cli"}},
+		{"nothing", empty, withAll, false, []string{"claude", "reviewer-cli", "git"}},
+		{"nothing, dry run", empty, withAll, true, []string{"claude", "reviewer-cli", "git"}},
+		{"every command", empty + string(os.PathListSeparator) + withAll, empty, false, nil},
+		{"every command, dry run", withAll, empty, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("PATH", tt.pathOfTest)
+			agent := setup.NewLaunchAgent(home, "/usr/local/bin/cumin", writeConfig(t, settings), tt.pathOfPlist)
+
+			var stdout, stderr bytes.Buffer
+			code := writeLaunchd(agent, tt.dryRun, false, &stdout, &stderr)
+
+			_, err := os.Stat(agent.PlistPath)
+			written := err == nil
+			if len(tt.missing) > 0 {
+				if code != exitFailure {
+					t.Errorf("exit code = %d, want %d", code, exitFailure)
+				}
+				want := "not found on the PATH of the plist: " + strings.Join(tt.missing, ", ") + "\n"
+				if !strings.Contains(stderr.String(), want) {
+					t.Errorf("stderr does not say %q:\n%s", want, stderr.String())
+				}
+				if stdout.Len() != 0 {
+					t.Errorf("stdout = %q, want empty", stdout.String())
+				}
+				if written {
+					t.Errorf("the command wrote %s", agent.PlistPath)
+				}
+				if _, err := os.Stat(agent.StateDir); !os.IsNotExist(err) {
+					t.Errorf("the command created %s (err = %v)", agent.StateDir, err)
+				}
+				return
+			}
+			if code != exitOK {
+				t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr.String())
+			}
+			if written == tt.dryRun {
+				t.Errorf("plist written = %v with dry run = %v", written, tt.dryRun)
+			}
+			want := "written: " + agent.PlistPath
+			if tt.dryRun {
+				want = agent.PlistPath + " would hold:"
+			}
+			if !strings.Contains(stdout.String(), want) {
+				t.Errorf("stdout does not say %q:\n%s", want, stdout.String())
+			}
+		})
+	}
+}
+
+// The agent CLI comes from the Host settings file, so a file that does not
+// load stops the command before it writes anything.
+func TestSetupLaunchdStopsWhenTheSettingsDoNotLoad(t *testing.T) {
+	home := t.TempDir()
+	agent := setup.NewLaunchAgent(home, "/usr/local/bin/cumin", filepath.Join(home, "absent.toml"), os.Getenv("PATH"))
+
+	var stdout, stderr bytes.Buffer
+	if code := writeLaunchd(agent, false, false, &stdout, &stderr); code != exitFailure {
+		t.Errorf("exit code = %d, want %d", code, exitFailure)
+	}
+	if !strings.Contains(stderr.String(), "read the settings file") {
+		t.Errorf("stderr does not say why:\n%s", stderr.String())
+	}
+	if _, err := os.Stat(agent.PlistPath); !os.IsNotExist(err) {
+		t.Errorf("the command wrote %s (err = %v)", agent.PlistPath, err)
 	}
 }
 

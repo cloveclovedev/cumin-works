@@ -108,6 +108,44 @@ func temporaryDirs() []string {
 	return dirs
 }
 
+// MissingCommands returns the commands that the job would not find, in the
+// order given. A name with no separator is looked up in the directories of
+// PathEnv, which is the PATH that the plist gives to cumin and to every
+// agent; the PATH of the running command has no part. A name with a
+// separator is a path: an absolute path is checked as it is, and a relative
+// path is missing.
+func (a LaunchAgent) MissingCommands(commands []string) []string {
+	var missing []string
+	for _, command := range commands {
+		if !a.finds(command) {
+			missing = append(missing, command)
+		}
+	}
+	return missing
+}
+
+// finds reports whether the job would find the command. A relative path
+// and a relative directory of PathEnv do not count: the job resolves them
+// from a working directory of its own, not from the one of this command.
+func (a LaunchAgent) finds(command string) bool {
+	if strings.ContainsRune(command, filepath.Separator) {
+		return filepath.IsAbs(command) && isExecutable(command)
+	}
+	for _, dir := range filepath.SplitList(a.PathEnv) {
+		if filepath.IsAbs(dir) && isExecutable(filepath.Join(dir, command)) {
+			return true
+		}
+	}
+	return false
+}
+
+// isExecutable reports whether the path is a file that may be executed,
+// by the same test as os/exec (LookPath).
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode()&0o111 != 0
+}
+
 // LogPaths returns the files that the job writes: the standard output of
 // `cumin run`, which holds its JSON logs, and its standard error.
 func (a LaunchAgent) LogPaths() (out, err string) {

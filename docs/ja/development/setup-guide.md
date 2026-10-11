@@ -308,7 +308,16 @@ export PATH="$HOME/.local/bin:$PATH"     # ログインシェルの設定にも�
 ~/.local/bin/cumin setup launchd
 ```
 
-`PATH` は、plist にも書き込まれる。cumin が起動する Agent の CLI (`claude`)、`git`、`gh` は、ここに入っている必要がある。
+`PATH` は、plist にも書き込まれる。cumin も、cumin が起動する Agent も、この `PATH` で動く。`cumin setup launchd` を実行する前に、次のものを `PATH` に入れておく。
+
+| `PATH` に要るもの | ないとき |
+|---|---|
+| cumin 自身が起動するコマンド: role ごとの Agent の CLI (設定の `cli_path`。初期値は `claude`) と `git`。`cli_path` をパスで書くなら、絶対パスにする。相対パスは「ない」として扱われる | `cumin setup launchd` が、ないコマンドの名前を表示して、plist を書かずに失敗で終わる |
+| 対象のリポジトリの道具: `gh` と、リポジトリの設定の `tool_checks` が確かめる道具 (`docker` など) | `cumin setup launchd` は確かめない。`cumin run` が最初の定期確認で道具の確認を実行し、失敗したリポジトリではAgentを起動せずに通知する |
+
+- `cumin setup launchd` は、Host の設定ファイルと `PATH` のディレクトリだけを読む。GitHub も Keychain も読まないので、道具の確認は実行しない。
+- 道具をあとから足したときは、その道具が `PATH` に入ったシェルで `cumin setup launchd --force` を実行し直してから、job を起動し直す (下の「plist を書き直したら」)。動いている cumin の `PATH` は、plist を書き直しただけでは変わらない。
+- 起動し直したあとに、失敗している道具の確認があれば、`cumin status` がそれを表示する。
 
 次に、LaunchAgent を書き出す。
 
@@ -319,11 +328,12 @@ cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
 コマンドがすること:
 
 1. 実行中の cumin の絶対パス、設定ファイル、ホームディレクトリ、`PATH` を読み取る。
-2. `~/.local/state/cumin/` を作る。ログはこの下に出る。
-3. `~/Library/LaunchAgents/dev.cloveclove.cumin.plist` を書く。中身と各キーの理由は [cumin本体の設計メモ](../designs/cumin-core.md) の「launchd」にある。
-4. 起動、停止、再起動、削除の `launchctl` のコマンドを表示する。
+2. cumin 自身が起動するコマンド (role ごとの Agent の CLI、`git`) を、plist に書く `PATH` で探す。1つでもなければ、その名前を表示して、何も書かずに失敗で終わる。
+3. `~/.local/state/cumin/` を作る。ログはこの下に出る。
+4. `~/Library/LaunchAgents/dev.cloveclove.cumin.plist` を書く。中身と各キーの理由は [cumin本体の設計メモ](../designs/cumin-core.md) の「launchd」にある。
+5. 起動、停止、再起動、削除の `launchctl` のコマンドを表示する。
 
-`--dry-run` は、plist を表示するだけで何も書かない。既に違う内容の plist があるときは、差分を表示して上書きせずに止まる。置き換えるなら `--force` を付ける。
+`--dry-run` は、手順2のあとに plist を表示するだけで、何も書かない。既に違う内容の plist があるときは、差分を表示して上書きせずに止まる。置き換えるなら `--force` を付ける。
 
 書き出したら、起動する。
 

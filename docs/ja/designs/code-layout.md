@@ -131,7 +131,7 @@
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
 | | `permissions.go` | 登録済みのAppの権限の変更の案内。権限の表とAppの権限を比べ、Appの権限の画面とインストールの画面を開き、変わるまで待つ |
 | | `notify.go` | `cumin setup notify`。通知のアドレスの確認とKeychainへの保存 |
-| | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立て、書き出しと削除、`launchctl` のコマンドの表示 |
+| | `launchd.go` | `cumin setup launchd`。LaunchAgentのplistの組み立て、書き出しと削除、plistの `PATH` でコマンドを探すこと、`launchctl` のコマンドの表示 |
 | `roles` | `roles.go` | roleのファイルの読み出し。自分のMarkdownだけを読む |
 | | `<role>.md` | roleごとの指示の本文。cuminとAgentの約束 |
 | `disciplines` | `embed.go` | disciplineのファイルの読み出し (roleのファイル、riskの基準)。disciplineの名前を引数に取る。既定のdisciplineの名前を書く、コードで唯一の場所 |
