@@ -21,7 +21,7 @@ cloud "GitHub: private repository\nof an Organization on the Team plan" as githu
   component "issues and pull requests\nwith diagram images" as text
 }
 
-admin --> rulesets : scripts/setup-repo.sh\nreads the rulesets before any change,\nstops on 403 (plan without rulesets)
+admin --> rulesets : scripts/setup-repo.sh\nreads the rulesets before any change,\nstops when the status is not 200\n(403: plan without rulesets)
 cumin --> git : token of the App of the role\n(contents: read), in the environment only
 git --> https : Authorization header\nno token in .git/config
 cumin --> checks : token of cumin-core\nChecks, Commit statuses, Actions: read
