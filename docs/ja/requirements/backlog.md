@@ -77,6 +77,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | 2人以上のMaintainerで使うときの役割の分け方 | 今は1人がMaintainer、Issue Owner、Operatorを兼ねる ([cumin本体の要件](cumin-core.md) の「Maintainer、Issue Owner、Operator」)。2人以上になると、次の6つが食い違う。(1) 通知先はHostの設定の1か所で、Issue Ownerごとには届かない。(2) レビューを依頼する相手はIssue Ownerだが、承認はどのMaintainerのものでも数える。(3) Agentが指示として読むのはIssue Ownerのコメントだけで、ほかのMaintainerのコメントは読まない。(4) 別のMaintainerが `cumin/status/ready` を付け直すと、Issue Ownerが替わる。(5) 利用枠はOperatorのもので、MaintainerにもIssueにも分けていない。(6) 保護されたパスを変える手作業 (`cumin/type/owner-task`) は、rulesetを越えられる人にしかできない。案: Agentが読む相手を「Issue Ownerだけ」か「Maintainerの全員」かを設定で選ぶ。通知先をIssue Ownerごとに持つ | 1人で使う間は、どれも同じ人なので困らない。名前だけを先に分けた | 2人目のMaintainerを置くとき、またはOperatorとMaintainerが別の人になるとき |
 | 他の通知の手段 | ntfy、cumin専用のwebダッシュボード | 通知はDiscordのwebhookで足りる。通知の手段は差し替えられるように作る | Discordでは足りない見せ方 (一覧、履歴) が欲しくなったとき |
 | `cumin status` に表示するものの整理 | `cumin status` は、GitHubのラベルから読む一覧、利用枠、止める予約、モニターファイルから読む最後の定期確認と実行中のAgentを、1つの表示に並べる。GitHubを読む部分はKeychainの鍵が要り、SSHのセッションでは読めずに終了コードが1になる。手元のファイルだけで出せる部分と、GitHubを読む部分を、どう分けて見せるかを決めていない。cuminが動いているかを終了コードで答えるのは `scripts/cumin-health.sh` である (#729 での決定) | #729 では、最後の定期確認の表示だけを足した。表示の全体を見直すと、範囲が広がる | SSHのセッションやMaintainerのセッションのskillから `cumin status` を使って困ったとき |
+| 「古い」とみなす上限を道具で揃える | 最後の定期確認を古いとみなす上限が、道具で違う。`cumin status` は `poll_interval` の3倍、`scripts/cumin-health.sh` とメニューバーのアプリは既定で180秒である。`poll_interval` を長くしたHostでは、定期確認が正常でも、`scripts/cumin-health.sh` とメニューバーのアプリだけが「止まった」と答えうる | #729 では、`cumin status` の表示だけを決めた。3つの道具の上限を1つの決まりにすると、範囲が広がる | 道具によって答えが食い違って困ったとき。または `cumin status` に表示するものを整理するとき |
 
 ## 運用
 
@@ -95,6 +96,7 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | ログの入れ替え (rotation) | `~/.local/state/cumin/cumin.log` は、launchdが標準出力を向ける先で、増え続ける。1つのリポジトリで60秒ごとの定期確認では、25分で35行だった。`newsyslog` の設定か、cuminの中で日ごとに切り替える | v0.1では、Hostが開発機で、ファイルの大きさが問題にならない | Mac miniで常時動かすようになったとき |
 | 別のHostへの移行の手順 | Hostを別のマシンへ移す作業を一度行った。手間取った点、足りないもの、あるべき流れを、[大きな項目](#大きな項目) の「新しいHostの立ち上げと、Hostの移行」に書いた | 移行は手作業で終わった。要求Issueにする前に、経験を整理する | 大きな項目の「見直すきっかけ」を参照 |
 | `scripts/install.sh` の弱点 | `--restart` は、ディスクのplistと入れたバイナリを突き合わせるが、`launchctl kickstart` はlaunchdが読み込み済みの定義を起動する。plistを書き換えて読み込み直していないと、別のパスのバイナリを起動して成功と報告しうる。スクリプトのテストもない (偽の `go` と `launchctl` が要る) | 差し替えは手順書のとおり `bootout` と `bootstrap` で行えば起きない | 差し替えで失敗したとき。他のHostに導入するとき |
+| `scripts/install.sh` の再起動のオプションを1つにする | 再起動のしかたに `--restart` (実行中のAgentを終わらせる) と `--after-current-runs` (実行中のAgentを待つ) の2つがある。ふだん使うのは待つほうである。オプションを1つにして、待つほうを既定にする案がある。待たずに再起動する道 (cuminが止まっているとき、急ぐとき) をどう残すかは決めていない | #729 では、待ってから入れ替える手順を足すことを先にした | オプションを取り違えて、実行中のAgentを終わらせたとき。または `scripts/install.sh` を次に変えるとき |
 | `cumin setup notify` の試しの通知 | webhookのアドレスを保存したあとに、試しのメッセージを1つ送って、届く道を1回で確かめる | 通知の要求では、本物のメッセージをlive scenarioの1回だけにした | 設定したのに通知が届かない、という事故が起きたとき |
 | live scenarioの通知先を分ける | live scenarioが送る通知が、Operatorの運用のチャンネルに残る。sandbox用のwebhookをKeychainの別の項目にして、live scenarioではそれを使う | 通知を送るlive scenarioが、まだ1つしかない | 通知を送るlive scenarioが増えて、運用の通知に紛れるようになったとき |
 | Linuxへの対応 | HostとしてLinuxを使えるようにする | Hostは Mac mini を想定している | Linuxのマシンで動かしたくなったとき |
