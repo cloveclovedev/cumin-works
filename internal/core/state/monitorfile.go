@@ -2,13 +2,17 @@ package state
 
 // This file is the monitor file of the Host: `cumin run` writes it at the
 // end of every poll and at the end of every agent run, for a tool that shows cumin from outside (the menu bar
-// app). No code of cumin reads it, and cumin decides nothing from it; a
-// lost file only makes the display old until the next write
+// app, `cumin status`). `cumin status` reads it for its report only, and
+// cumin decides nothing from it; a lost file only makes the display old
+// until the next write
 // (designs/status-menu-bar.md, the topic on the monitor file).
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"time"
 )
 
@@ -140,4 +144,39 @@ func WriteMonitorFile(path string, m MonitorFile) error {
 		return fmt.Errorf("monitor file: write %s: %w", path, err)
 	}
 	return writeFile(path, append(raw, '\n'))
+}
+
+// ReadMonitorFile reads the monitor file, for `cumin status`. A missing file
+// is no file and no error: `cumin run` writes it after its first poll. A
+// file that cannot be read, of another shape, or of a version above
+// MonitorFileVersion, is an error that names the path. A list that is
+// missing is another shape, because `cumin run` writes every list: the
+// reader would count no error and no agent where the file says nothing.
+func ReadMonitorFile(path string) (MonitorFile, bool, error) {
+	raw, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return MonitorFile{}, false, nil
+	case err != nil:
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: %w", path, err)
+	}
+	var read MonitorFile
+	if err := json.Unmarshal(raw, &read); err != nil {
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: %w", path, err)
+	}
+	switch {
+	case read.Version < 1:
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no version", path)
+	case read.Version > MonitorFileVersion:
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: version %d, and this cumin knows version %d", path, read.Version, MonitorFileVersion)
+	case read.LastPoll.At.IsZero():
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no last_poll.at", path)
+	case read.LastPoll.Errors == nil:
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no last_poll.errors", path)
+	case read.Agents == nil:
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no agents", path)
+	case read.Waiting == nil:
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no waiting", path)
+	}
+	return read, true, nil
 }

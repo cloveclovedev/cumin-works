@@ -34,7 +34,7 @@
 | `cmd/cumin` | `main.go` | サブコマンドの一覧と振り分け。終了コード |
 | | `run.go` | `cumin run`。設定と4つのAppの鍵を読み、skillを書き、Hostの状態ファイルを開き、`agent.Service` と `workflow.Service` を組み立てて動かす。モニターファイルのパス (状態のディレクトリの `monitor.json`) を渡す |
 | | `setup.go` | `cumin setup github-apps` と `cumin setup launchd` の引数と起動 |
-| | `status.go` | `cumin status` (GitHubのラベル、最新の使用率、今の上限、止める予約の表示) と `cumin --version` (Goのビルド情報)。表示の中身は `writeStatus` にまとめ、Keychainなしでテストする |
+| | `status.go` | `cumin status` (GitHubのラベル、最新の使用率、今の上限、止める予約、モニターファイルから読む最後の定期確認と `cumin run` が持つAgentの表示) と `cumin --version` (Goのビルド情報)。表示の中身は `writeStatus` にまとめ、Keychainなしでテストする |
 | | `quota.go` | `cumin quota allow` (「resume agent starts」)。状態ファイルの最新の5h枠のリセット時刻を、許可のファイルに書く |
 | | `stop.go` | `cumin stop --after-current-runs`。止める予約のファイルを書く |
 | | `live_e2e_test.go` | 実機の場面 E2E-1。launchd で動く cumin を外から確かめるので、組み立てたバイナリの隣に置く。Maintainer の操作は `gh` で行う |
@@ -46,7 +46,7 @@
 | `internal/core/state` | `state.go` | Hostの状態ファイル (`state.json`)。Issueごとのセッションの番号とcheckの修正の回数、受け入れの確認を依頼し直した回数、分割を依頼し直した回数、実装を依頼し直した回数と依頼が衝突の解消かどうか、レビューを依頼し直した回数と原因の整理を依頼した回数と依頼した先頭のコミット、最新の使用率 (「resume agent starts」)。書くのは `cumin run` だけ |
 | | `allowance.go` | 許可のファイル (`quota-allowance.json`)。書くのは `cumin quota allow` だけで、`cumin run` は読むだけ (「resume agent starts」) |
 | | `stoprequest.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
-| | `monitorfile.go` | モニターファイル (`monitor.json`) の形と書き込み。書くのは `cumin run` だけで、cuminのコードは読まない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) |
+| | `monitorfile.go` | モニターファイル (`monitor.json`) の形と書き込みと読み取り。書くのは `cumin run` だけで、cuminのコードで読むのは `cumin status` だけである。読み取りは、知る版より新しい `version` を断る ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
 | `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
 | | `retry.go` | 一時的な失敗 (ネットワークの誤り、5xxの応答) をした読み取りのやり直し。`TemporaryError` と `IsTemporary` |

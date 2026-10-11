@@ -6,7 +6,9 @@ package main
 // issues that cumin cannot read in full with the limit, and the
 // latest quota usage with the limits of now, and whether cumin stops after its runs. It
 // makes no minimal run and writes no file (docs/ja/designs/quota.md, the
-// topic on cumin status).
+// topic on cumin status). It also shows whether cumin polls: the last poll
+// with its errors and the agents that cumin run holds, read from the monitor
+// file (docs/ja/designs/status-menu-bar.md, the topic on cumin status).
 // The usage numbers go to the terminal only, never to a log.
 
 import (
@@ -20,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
@@ -147,6 +150,7 @@ var maintainerLabels = []string{workflow.LabelAwaitingPlanReview, workflow.Label
 func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, stateDir string, at time.Time, loc *time.Location, read readRepository) error {
 	writeQuota(w, settings, stateDir, at, loc)
 	writeStopRequest(w, stateDir, loc)
+	held, monitorRead := writeLastPoll(w, settings, stateDir, at, loc)
 
 	var working, waiting, unread, failed []string
 	for _, repo := range settings.Repositories {
@@ -180,6 +184,9 @@ func writeStatus(ctx context.Context, w io.Writer, settings *config.Settings, st
 			}
 		}
 	}
+	if monitorRead {
+		writeList(w, "Agents at work (as cumin run holds them, from the monitor file):", held)
+	}
 	writeList(w, "Agents at work (from the labels on GitHub):\n"+agentsAtWorkNote, working)
 	writeList(w, "Waiting for a Maintainer:", waiting)
 	if len(unread) > 0 {
@@ -206,6 +213,55 @@ func writeStopRequest(w io.Writer, stateDir string, loc *time.Location) {
 		fmt.Fprintln(w)
 		fmt.Fprintf(w, "Stop:\n  stopping after the current runs, requested at %s: cumin starts no new work and exits when the agents at work have ended\n", stamp(request.RequestedAt, loc))
 	}
+}
+
+// lastPollOldAfter is how many times poll_interval the last poll may be old.
+// cumin run ends a poll every poll_interval, so one late poll is not old.
+const lastPollOldAfter = 3
+
+// writeLastPoll says whether cumin polls, from the monitor file that cumin
+// run writes: the time of the last poll with its age, and each error of that
+// poll. It returns the lines of the agents that cumin run holds, and whether
+// the file was read. A file that is missing or unreadable costs these lines
+// only: the rest of the report is still shown, and the exit code does not
+// change.
+func writeLastPoll(w io.Writer, settings *config.Settings, stateDir string, at time.Time, loc *time.Location) (held []string, read bool) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Last poll:")
+	path := filepath.Join(stateDir, state.MonitorFileName)
+	monitor, found, err := state.ReadMonitorFile(path)
+	switch {
+	case err != nil:
+		fmt.Fprintf(w, "  the monitor file was not read: %s\n", printable(err.Error()))
+		return nil, false
+	case !found:
+		fmt.Fprintf(w, "  no monitor file (%s): cumin run writes it after its first poll, so cumin did not run on this Host\n", path)
+		return nil, false
+	}
+	age := at.Sub(monitor.LastPoll.At).Round(time.Second)
+	fmt.Fprintf(w, "  at %s (%s ago)\n", stamp(monitor.LastPoll.At, loc), age)
+	if limit := lastPollOldAfter * settings.PollInterval; age > limit {
+		fmt.Fprintf(w, "  the last poll is old: over the limit of %s (%d times poll_interval). cumin stopped, or the Host slept\n", limit, lastPollOldAfter)
+	}
+	fmt.Fprintf(w, "  errors of the last poll: %d\n", len(monitor.LastPoll.Errors))
+	for _, failure := range monitor.LastPoll.Errors {
+		fmt.Fprintf(w, "    %s: %s\n", printable(failure.Repository), printable(failure.Message))
+	}
+	for _, agent := range monitor.Agents {
+		held = append(held, fmt.Sprintf("  %s #%d %s (%s): %s", printable(agent.Repository), agent.Issue, printable(agent.Role), printable(agent.Request), printable(agent.Title)))
+	}
+	return held, true
+}
+
+// printable is a text of the monitor file (a title, a message) without its
+// control characters, so that none of them reaches the terminal.
+func printable(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 func writeList(w io.Writer, heading string, lines []string) {

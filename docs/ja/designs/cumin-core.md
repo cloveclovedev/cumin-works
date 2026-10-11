@@ -29,7 +29,7 @@
 | 手元の状態 | `~/.local/state/cumin/state.json` | `cumin run` だけ |
 | 使い切りの許可 | `~/.local/state/cumin/quota-allowance.json` | `cumin quota allow` だけ |
 | 止める予約 | `~/.local/state/cumin/stop-request.json` | `cumin stop --after-current-runs` が書き、`cumin run` が消す |
-| モニターファイル | `~/.local/state/cumin/monitor.json`。cuminを外から見る道具 (メニューバーのアプリ) が読む。cuminは読まない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) | `cumin run` だけ |
+| モニターファイル | `~/.local/state/cumin/monitor.json`。cuminを外から見る道具 (メニューバーのアプリ) と `cumin status` が読む。`cumin run` は読まない ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) | `cumin run` だけ |
 | 引き継ぎのメモ | `~/.local/state/cumin/hand-over.md`。Maintainerのセッションが、次のセッションのために書く。cuminは読まない ([Maintainerのセッションにskillを入れる](../guides/maintainer-skills.md)) | Maintainerのセッションのskill `hand-over` だけ |
 | 報告した待つIssue | `~/.local/state/cumin/watch-seen`。Maintainerのセッションのskill `watch` のスクリプトが、報告した `waiting` の項目を持つ。cuminは読まない ([Maintainerのセッションにskillを入れる](../guides/maintainer-skills.md)) | Maintainerのセッションのskill `watch` のスクリプトだけ |
 | ログ | `~/.local/state/cumin/cumin.log` (標準出力) と `cumin.err.log` (標準エラー出力) | launchd |
@@ -155,7 +155,7 @@ Operatorが `cumin stop --after-current-runs` を実行すると、動いてい�
 - 待っている間にSIGTERMを受けたら、上の「止め方」のとおり、すぐに止まる。このときも、予約のファイルを消す。
 - `cumin status` は、予約のファイルがあれば、止まる途中であることと予約した時刻を表示する。待っている実行は、GitHubのラベルから読む一覧 (Agents at work) で示す。受け入れの確認は、`cumin/status/accepting` の要求Issueとして一覧に載る。mergeの手順は、`cumin/status/merging` のもとでAgentなしに進むので、一覧に載らない。
 - 採らなかった案: シグナル (SIGUSR1) で伝える。ターミナルから動かした `cumin run` に送るには、pidの記録が要る。古いpidに送ると、関係のないプロセスが、SIGUSR1の既定の動作で終わる。
-- `cumin run` が実行中として持つ実行の一覧は、モニターファイル (「Hostに置くファイル」) に載る。メニューバーのアプリが読むためのもので、`cumin status` は読まない。
+- `cumin run` が実行中として持つ実行の一覧は、モニターファイル (「Hostに置くファイル」) に載る。メニューバーのアプリと `cumin status` が読む。`cumin status` は、ラベルから読む一覧の隣に、この一覧をroleと依頼の種類とともに表示する ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md) の「`cumin status` の読み方」)。
 
 ### テストの2層
 
