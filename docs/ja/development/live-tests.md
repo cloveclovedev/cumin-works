@@ -764,7 +764,7 @@ Maintainer が merge した Pull Request の残りの作業が、フォローア
    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cloveclove.cumin.plist
    ```
 
-   既に動いているなら、`scripts/replace-binary.sh` で新しいバイナリに入れ替える ([Hostの一般の道具](../guides/host-tools.md) の「バイナリを入れ替える」)。実行中のAgentがないと分かっているときは、`scripts/install.sh --restart` でもよい。
+   既に動いているなら、`scripts/install.sh --after-current-runs` で新しいバイナリに入れ替える ([Hostの一般の道具](../guides/host-tools.md) の「バイナリを入れ替える」)。実行中のAgentがないと分かっているときは、`scripts/install.sh --restart` でもよい。
 4. sandbox に、`cumin/status/ready`、`cumin/status/planning`、`cumin/status/implementing`、`cumin/status/checking`、`cumin/status/reviewing` の付いた開いている Issue がないようにする。`scripts/live-scenario.sh` は、最初にこれを確かめ、あれば cumin を止める前に終わる。テストも、あれば何も作らずに止まる。
 
 テストは launchd の job を入れることも、止めることもしない。動いていることを確かめるだけである。cumin を止め、Host の設定ファイルを替え、起動し直すのは、`scripts/live-scenario.sh` である。

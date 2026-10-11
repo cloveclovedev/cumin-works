@@ -5,14 +5,174 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 )
 
-// install is one run of scripts/install.sh on the Host of
-// replace_binary_test.go: fake git, cumin, launchctl, plutil, and go on
+// replace is a Host that the test builds in a temporary directory, to
+// replace the binary there: fake git, cumin, launchctl, plutil, and go on
 // PATH, and the files of the LaunchAgent under a temporary home.
+type replace struct {
+	t *testing.T
+	// health writes the monitor file and the plist of the Host.
+	health      *health
+	bin         string
+	calls       string
+	prefix      string
+	stopRequest string
+	env         []string
+}
+
+// replaceTools are the tools of macOS that scripts/install.sh and
+// scripts/cumin-health.sh may call. Every run of the tests has only
+// these and the five fakes on PATH, so a call of another tool fails the
+// tests.
+var replaceTools = []string{"date", "sed", "awk", "sleep", "tr", "dirname", "id", "mktemp", "mkdir", "install", "rm"}
+
+// The fakes write every call to the file CALLS, one line for each call.
+// The fake plutil records the call and then runs the real plutil, because
+// scripts/cumin-health.sh reads the monitor file with it.
+var replaceFakes = map[string]string{
+	"git": `#!/bin/sh
+[ "$1" = "-C" ] && shift 2
+echo "git $*" >>"$CALLS"
+case "$*" in
+  "symbolic-ref --short refs/remotes/origin/HEAD") echo origin/main ;;
+  "symbolic-ref --short HEAD") echo "${FAKE_BRANCH:-main}" ;;
+  "status --porcelain") printf '%s' "${FAKE_CHANGES:-}" ;;
+  "fetch --quiet origin main") ;;
+  "rev-parse HEAD") echo 1111 ;;
+  "rev-parse origin/main") echo "${FAKE_REMOTE_COMMIT:-1111}" ;;
+  *) echo "fake git: unexpected call: $*" >&2; exit 1 ;;
+esac
+`,
+	// cumin stop writes the stop request, as the real command does. The
+	// test removes it, as cumin run does when it has ended.
+	"cumin": `#!/bin/sh
+echo "cumin $*" >>"$CALLS"
+[ "$*" = "stop --after-current-runs" ] || { echo "fake cumin: unexpected call: $*" >&2; exit 1; }
+mkdir -p "$HOME/.local/state/cumin"
+echo '{}' >"$HOME/.local/state/cumin/stop-request.json"
+`,
+	"launchctl": `#!/bin/sh
+echo "launchctl $*" >>"$CALLS"
+[ "$1" != "print" ] || exit "${FAKE_NOT_LOADED:-0}"
+`,
+	"go": `#!/bin/sh
+echo "go $*" >>"$CALLS"
+[ "$1 $2" = "build -o" ] || { echo "fake go: unexpected call: $*" >&2; exit 1; }
+echo "the new binary" >"$3"
+`,
+	"plutil": `#!/bin/sh
+echo "plutil $*" >>"$CALLS"
+exec REAL_PLUTIL "$@"
+`,
+}
+
+// newReplace returns a Host where every check passes: the checkout is on
+// main with no local change and equal to the remote, the LaunchAgent is
+// loaded and runs <prefix>/cumin, and the monitor file holds one poll.
+func newReplace(t *testing.T) *replace {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("scripts/install.sh needs launchctl and plutil, which are macOS only")
+	}
+	dir := t.TempDir()
+	r := &replace{
+		t: t,
+		health: &health{
+			t:       t,
+			dir:     dir,
+			monitor: filepath.Join(dir, ".local", "state", "cumin", "monitor.json"),
+			plist:   filepath.Join(dir, "Library", "LaunchAgents", "dev.cloveclove.cumin.plist"),
+			now:     freshNow,
+		},
+		bin:         filepath.Join(dir, "bin"),
+		calls:       filepath.Join(dir, "calls"),
+		prefix:      filepath.Join(dir, "prefix"),
+		stopRequest: filepath.Join(dir, ".local", "state", "cumin", "stop-request.json"),
+	}
+	for _, d := range []string{r.bin, filepath.Dir(r.health.monitor), filepath.Dir(r.health.plist)} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tool := range replaceTools {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(path, filepath.Join(r.bin, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plutil, err := exec.LookPath("plutil")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, script := range replaceFakes {
+		script = strings.ReplaceAll(script, "REAL_PLUTIL", plutil)
+		if err := os.WriteFile(filepath.Join(r.bin, name), []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.health.write(r.calls, "")
+	r.writePlist(filepath.Join(r.prefix, "cumin"))
+	r.health.writePoll("2026-10-04T06:58:00Z", "")
+	return r
+}
+
+// writePlist puts the plist of a LaunchAgent that runs the program on the Host.
+func (r *replace) writePlist(program string) {
+	r.t.Helper()
+	r.health.write(r.health.plist, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ProgramArguments</key>
+	<array>
+		<string>`+program+`</string>
+		<string>run</string>
+	</array>
+</dict>
+</plist>
+`)
+}
+
+// endCumin does what cumin run does when it has ended after a stop
+// request: it removes the request. The script has printed that it waits.
+func (r *replace) endCumin(run *waitRun) {
+	r.t.Helper()
+	run.until("waiting until cumin has ended")
+	if err := os.Remove(r.stopRequest); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+// called returns the calls of the fakes, one line for each call.
+func (r *replace) called() string {
+	r.t.Helper()
+	calls, err := os.ReadFile(r.calls)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return string(calls)
+}
+
+// wantNoCall fails when a fake was called with one of the prefixes.
+func (r *replace) wantNoCall(prefixes ...string) {
+	r.t.Helper()
+	calls := r.called()
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(calls, prefix) || strings.Contains(calls, "\n"+prefix) {
+			r.t.Errorf("the script called %q:\n%s", prefix, calls)
+		}
+	}
+}
+
+// install is one run of scripts/install.sh on the Host of replace.
 type install struct {
 	*replace
 }
