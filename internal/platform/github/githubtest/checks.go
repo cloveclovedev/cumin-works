@@ -76,6 +76,20 @@ func (f *Fake) AddCheckRun(r *Repository, sha string, run CheckRun) {
 	r.CheckRuns[sha] = append(r.CheckRuns[sha], run)
 }
 
+// readsChecks reports whether Token may read a part of the checks of the
+// repository. A public repository answers every token. A private repository
+// answers only a token with the permission, and refuses the others with 403
+// "Resource not accessible by integration" (measured-constraints.md row
+// 148). Official: "Permissions required for GitHub Apps". The caller holds
+// the lock.
+func (f *Fake) readsChecks(w http.ResponseWriter, repo *Repository, permission string) bool {
+	if !repo.Private || f.tokenPermissions[permission] != "" {
+		return true
+	}
+	writeJSON(w, http.StatusForbidden, map[string]any{"message": "Resource not accessible by integration"})
+	return false
+}
+
 // serveCommitCheckRuns answers GET .../commits/{sha}/check-runs. Official:
 // "List check runs for a Git reference". The answer is paginated. With
 // filter=all the answer holds every attempt; without it (the default,
@@ -84,7 +98,7 @@ func (f *Fake) serveCommitCheckRuns(w http.ResponseWriter, r *http.Request, owne
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	repo, ok := f.repository(w, owner, name)
-	if !ok {
+	if !ok || !f.readsChecks(w, repo, "checks") {
 		return
 	}
 	all := repo.CheckRuns[sha]
@@ -125,7 +139,7 @@ func (f *Fake) serveAnnotations(w http.ResponseWriter, r *http.Request, owner, n
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	repo, ok := f.repository(w, owner, name)
-	if !ok {
+	if !ok || !f.readsChecks(w, repo, "checks") {
 		return
 	}
 	run, ok := f.checkRun(repo, id)
@@ -149,7 +163,7 @@ func (f *Fake) serveJobLog(w http.ResponseWriter, owner, name string, id int64) 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	repo, ok := f.repository(w, owner, name)
-	if !ok {
+	if !ok || !f.readsChecks(w, repo, "actions") {
 		return
 	}
 	for _, runs := range repo.CheckRuns {
