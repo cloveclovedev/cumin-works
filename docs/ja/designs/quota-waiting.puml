@@ -12,7 +12,7 @@ if (cumin stops after the current runs?) then (yes)
   stop
 else (no)
 endif
-if (the poll decided an action in any repository\n(a start that only the quota stops counts, stop agent starts)\nor an agent runs?) then (yes)
+if (the poll decided an action in any repository\n(a start that only the quota or only the tool checks stop counts,\nstop agent starts)\nor an agent runs?) then (yes)
   :clear the mark:\na later wait is new;
   stop
 else (no)
@@ -22,8 +22,8 @@ if (the poll of every repository succeeded?) then (no)
   stop
 else (yes)
 endif
-if (a start of an agent waits only for the quota\nin any repository, in any state of the issue?) then (yes)
-  :no notification:\nthe notification of stop agent starts already named the cause;\nthe mark stays as it is;
+if (a start of an agent waits only for the quota,\nor only for the tool checks of its repository,\nin any repository, in any state of the issue?) then (yes)
+  :no notification:\nstop agent starts already named the cause;\nthe mark stays as it is;
   stop
 else (no)
 endif

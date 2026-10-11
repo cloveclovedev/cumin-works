@@ -109,9 +109,10 @@
 | | `followupnote.go` | フォローアップノートの読み取りと書き込み (「write the follow-up note」) |
 | | `pollfailure.go` | 定期確認が続けて失敗した回数を数え、3回目に1回だけ知らせる |
 | | `unreadissue.go` | 全部を読めないIssueを、Issueと上限の組ごとに1回だけ知らせる |
-| | `waiting.go` | Maintainerが動かなければ何も進まないときの1回だけの通知 (「tell that cumin waits」)。動作も実行中のAgentもなく、Agentの起動が利用枠だけで待っているIssueも、cuminがMaintainerなしで次に進めるIssueもないとき。利用枠だけで待っている起動の記録 |
+| | `waiting.go` | Maintainerが動かなければ何も進まないときの1回だけの通知 (「tell that cumin waits」)。動作も実行中のAgentもなく、Agentの起動が利用枠か道具の確認だけで待っているIssueも、cuminがMaintainerなしで次に進めるIssueもないとき。利用枠か道具の確認だけで待っている起動の記録 |
 | | `quota.go` | Agentの起動の前の使用率の確認と、実行の終わりの確認 (「stop agent starts」)。枠ごとに1回だけ知らせる。使用率を状態ファイルに残し、読んだばかりの使用率があれば最小の実行をせずに判定する。止めている間は次に試す時刻まで読まない (「resume agent starts」) |
 | | `quotanote.go` | 純粋。「stop agent starts」の通知の理由の文章。標準ライブラリのほかに、`internal/quota` の枠の名前の型だけを使う |
+| | `toolchecks.go` | 定期確認ごとの道具の確認の実行と、失敗した確認の記録。確認が失敗しているリポジトリでは、Agentの起動の前の1つの確認が許可を返さない (「stop agent starts」、「resume agent starts」) |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準と、保護されたパスの一覧を決める。blobのoidが変わるまで結果を持つ |
 | `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (「resume agent starts」)、残した使用率が読んだばかりかどうか |
 | | `stored.go` | 純粋。判定に使う使用率と、状態ファイルに残す使用率の間の変換。標準ライブラリのほかに、`internal/core/state` の型だけを使い、入出力はしない。`internal/workflow` と `cmd/cumin` が使う |
@@ -124,6 +125,7 @@
 | | `startrecord.go` | 起動の記録の確認 (作業ディレクトリの外のコンテキスト、cuminのskill) と、JSONの形を値なしで表す補助の関数 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |
 | | `quota.go` | 使用率を読む最小の実行 |
+| | `toolcheck.go` | 道具の確認のコマンドを1つ実行する `RunToolCheck`。Agentと同じHostの環境変数で、tokenなしで、時間の上限まで待つ |
 | | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け (閉じたIssueのものも)、先頭のコミットの読み取り |
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
 | | `permissions.go` | 登録済みのAppの権限の変更の案内。権限の表とAppの権限を比べ、Appの権限の画面とインストールの画面を開き、変わるまで待つ |

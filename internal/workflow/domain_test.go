@@ -936,19 +936,22 @@ func TestDecide_TheLabelsOfAPullRequestDecideNothing(t *testing.T) {
 }
 
 // The one check before a start of an agent: while cumin stops after the
-// current runs, or while the quota usage stops agent starts, no start gets
-// a permit; at any other time every start gets one. The zero value of the
-// permit permits nothing.
+// current runs, while the quota usage stops agent starts, or while a tool
+// check of the repository fails, no start gets a permit; at any other time
+// every start gets one. The zero value of the permit permits nothing.
 func TestPermitStart_GivesNoPermitWhileCuminStopsAfterTheCurrentRunsOrAgentStartsAreStopped(t *testing.T) {
 	t.Parallel()
-	for _, c := range []struct{ stopsAfterRuns, quotaAllows bool }{{true, true}, {false, false}, {true, false}} {
-		if permit, ok := PermitStart(c.stopsAfterRuns, c.quotaAllows); ok || permit != (StartPermit{}) {
-			t.Errorf("PermitStart(%v, %v) = %#v, %v, want no permit", c.stopsAfterRuns, c.quotaAllows, permit, ok)
+	for _, stopsAfterRuns := range []bool{false, true} {
+		for _, quotaAllows := range []bool{false, true} {
+			for _, toolChecksPass := range []bool{false, true} {
+				want := !stopsAfterRuns && quotaAllows && toolChecksPass
+				permit, ok := PermitStart(stopsAfterRuns, quotaAllows, toolChecksPass)
+				if ok != want || (permit != (StartPermit{})) != want {
+					t.Errorf("PermitStart(%v, %v, %v) = %#v, %v, want a permit that holds: %v",
+						stopsAfterRuns, quotaAllows, toolChecksPass, permit, ok, want)
+				}
+			}
 		}
-	}
-	permit, ok := PermitStart(false, true)
-	if !ok || permit == (StartPermit{}) {
-		t.Errorf("PermitStart(false, true) = %#v, %v, want a permit that holds", permit, ok)
 	}
 }
 

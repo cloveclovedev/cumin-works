@@ -892,10 +892,13 @@ type StartPermit struct{ granted bool }
 // agent starts (designs/cumin-core.md, the topic on the stop). quotaAllows
 // says what the quota usage decides: at a limit, or when the usage was not
 // read, agent starts are stopped (issue-states.md, "stop agent starts").
+// toolChecksPass says that no tool check of the repository of the request
+// failed at its last poll: while one fails, agent starts are stopped for
+// that repository only (the same action, "stop agent starts").
 // The steps that start no agent need no permit, and go on. A run that is
 // going on is never stopped.
-func PermitStart(stopsAfterRuns, quotaAllows bool) (StartPermit, bool) {
-	if stopsAfterRuns || !quotaAllows {
+func PermitStart(stopsAfterRuns, quotaAllows, toolChecksPass bool) (StartPermit, bool) {
+	if stopsAfterRuns || !quotaAllows || !toolChecksPass {
 		return StartPermit{}, false
 	}
 	return StartPermit{granted: true}, true

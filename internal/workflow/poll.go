@@ -291,6 +291,8 @@ func (s *Service) pollRepository(ctx context.Context, target Target, finishing b
 	// after the read of the settings.
 	s.notifyUnreadIssues(ctx, log, target, settings.notificationOn(), read.Unread)
 	s.ensurePriorityLabels(ctx, log, token, target, settings, readAgain)
+	// The tool checks come before every decision of a start of this poll.
+	s.runToolChecks(ctx, log, target, settings)
 	// The required checks are a REST call of their own, so the poll makes
 	// it only when an issue of this repository waits for the checks ("request
 	// the review", "request a check fix") or has an approval of a person to
