@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -210,6 +211,26 @@ model = "sonnet"
 	}
 }
 
+// The example of docs/ja/development/configuration.md, topic on the tool
+// checks.
+func TestWithRepository_TheExampleOfTheToolChecksOfTheDocumentation(t *testing.T) {
+	const example = `
+[[tool_checks]]
+command = ["docker", "info"]
+time_limit = "30s"
+
+[[tool_checks]]
+command = ["git", "--version"]
+`
+	want := []ToolCheck{
+		{Command: []string{"docker", "info"}, TimeLimit: 30 * time.Second},
+		{Command: []string{"git", "--version"}, TimeLimit: defaultToolCheckTimeLimit},
+	}
+	if s := withRepository(t, hostSettings(t, ""), example); !reflect.DeepEqual(s.ToolChecks, want) {
+		t.Errorf("tool checks = %+v, want %+v", s.ToolChecks, want)
+	}
+}
+
 func TestWithRepository_EmptyFileKeepsTheHostSettings(t *testing.T) {
 	host := hostSettings(t, "max_review_rounds = 5\nmerge_method = \"merge\"\n")
 	s := withRepository(t, host, "# nothing but a comment\n")
@@ -387,5 +408,107 @@ func TestPriorityLabels_AWrongListNamesTheKey(t *testing.T) {
 				t.Errorf("err = %v, want one that names priority_labels and says %q", err, tt.want)
 			}
 		})
+	}
+}
+
+// The tool checks of a repository: the list of tool_checks in the order of
+// the file, with the default time limit for an entry that names none, and no
+// check when the file does not hold the key.
+func TestWithRepository_ToolChecksAreTheListOfTheFileInItsOrder(t *testing.T) {
+	const two = `
+max_review_rounds = 2
+
+[[tool_checks]]
+command = ["docker", "info"]
+time_limit = "30s"
+
+[[tool_checks]]
+command = ["plantuml"]
+`
+	tests := []struct {
+		name, file string
+		want       []ToolCheck
+	}{
+		{"no key", "max_review_rounds = 2\n", nil},
+		{"an empty list", "tool_checks = []\n", nil},
+		{"two checks", two, []ToolCheck{
+			{Command: []string{"docker", "info"}, TimeLimit: 30 * time.Second},
+			{Command: []string{"plantuml"}, TimeLimit: defaultToolCheckTimeLimit},
+		}},
+		{"the longest time limit", "tool_checks = [{ command = [\"docker\", \"info\"], time_limit = \"60s\" }]\n", []ToolCheck{
+			{Command: []string{"docker", "info"}, TimeLimit: maxToolCheckTimeLimit},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host := hostSettings(t, "")
+			s := withRepository(t, host, tt.file)
+			if len(s.ToolChecks) != len(tt.want) || (len(tt.want) > 0 && !reflect.DeepEqual(s.ToolChecks, tt.want)) {
+				t.Errorf("tool checks = %+v, want %+v", s.ToolChecks, tt.want)
+			}
+			if host.ToolChecks != nil {
+				t.Errorf("the Host settings hold the tool checks %+v of a repository", host.ToolChecks)
+			}
+		})
+	}
+}
+
+// The Host file does not take tool_checks: cumin runs the commands on the
+// Host, so only the file below the protected path .cumin/ names them.
+func TestLoad_ToolChecksIsNotAKeyOfTheHostFile(t *testing.T) {
+	_, err := Load(writeFile(t, required+"\n[[tool_checks]]\ncommand = [\"docker\", \"info\"]\n"))
+	if err == nil || !strings.Contains(err.Error(), "tool_checks: unknown key") {
+		t.Errorf("err = %v, want one that names tool_checks as an unknown key", err)
+	}
+}
+
+// A tool check without a program, or with a time limit outside its limits,
+// is an error that names the key and the entry.
+func TestToolChecks_ABadEntryNamesTheKeyAndTheEntry(t *testing.T) {
+	tests := []struct {
+		name, entry, want string
+	}{
+		{"no command", `{ time_limit = "10s" }`, "tool_checks[0].command: is required"},
+		{"an empty command", `{ command = [] }`, "tool_checks[0].command: is required"},
+		{"an empty name of the program", `{ command = ["", "info"] }`, "tool_checks[0].command: must start with the name of the program"},
+		{"a time limit of zero", `{ command = ["docker"], time_limit = "0s" }`, "tool_checks[0].time_limit: must be more than 0, and 60 seconds or less"},
+		{"a time limit below zero", `{ command = ["docker"], time_limit = "-1s" }`, "tool_checks[0].time_limit: must be more than 0, and 60 seconds or less"},
+		{"a time limit over 60 seconds", `{ command = ["docker"], time_limit = "61s" }`, "tool_checks[0].time_limit: must be more than 0, and 60 seconds or less"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := hostSettings(t, "").WithRepository([]byte("tool_checks = [" + tt.entry + "]\n"))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("err = %v, want one that says %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// Every bad entry of tool_checks is reported in one error, each with its
+// place in the list, so that one correction of the file is enough.
+func TestToolChecks_AllBadEntriesAreReportedTogether(t *testing.T) {
+	const file = `
+[[tool_checks]]
+command = []
+
+[[tool_checks]]
+command = ["docker", "info"]
+
+[[tool_checks]]
+command = [""]
+time_limit = "0s"
+`
+	_, err := hostSettings(t, "").WithRepository([]byte(file))
+	if err == nil {
+		t.Fatal("WithRepository gave no error")
+	}
+	for _, want := range []string{"tool_checks[0].command: ", "tool_checks[2].command: ", "tool_checks[2].time_limit: "} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want one that names %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "tool_checks[1]") {
+		t.Errorf("err = %v, want none for the good entry tool_checks[1]", err)
 	}
 }

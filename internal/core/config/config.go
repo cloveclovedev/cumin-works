@@ -30,6 +30,9 @@ const (
 	defaultAgentTimeLimit      = 50 * time.Minute
 	// A GitHub App installation token expires one hour after it is issued.
 	maxAgentTimeLimit = 55 * time.Minute
+	// A tool check must not hold the poll of a repository for long.
+	defaultToolCheckTimeLimit = 10 * time.Second
+	maxToolCheckTimeLimit     = 60 * time.Second
 	// Notifications are on unless a Host or a repository turns them off.
 	// A forgotten setting must not hide an issue that stopped.
 	defaultNotifyDiscordEnabled = true
@@ -121,9 +124,16 @@ type Settings struct {
 	// DefaultProtectedPaths. A list of the file replaces the default list,
 	// so an empty list protects nothing.
 	ProtectedPaths []string
-	Roles          map[Role]RoleSettings
-	Quota          QuotaSettings
-	Notify         NotifySettings
+	// ToolChecks are the commands that prove that the tools of the agents
+	// work on the Host, in the order of the file. Only the
+	// .cumin/config.toml of a repository sets them (WithRepository): cumin
+	// runs them on the Host, so a Maintainer approves each one through the
+	// protected path .cumin/. Empty means that the repository checks no
+	// tool.
+	ToolChecks []ToolCheck
+	Roles      map[Role]RoleSettings
+	Quota      QuotaSettings
+	Notify     NotifySettings
 	// GitHubApps maps an organization to the Client ID of each GitHub App.
 	// The inner key is AppCuminCore or a Role. `cumin setup` writes the
 	// table, so it can be empty.
@@ -182,6 +192,14 @@ func checkPriorityLabels(labels []string) string {
 		seen[lower] = true
 	}
 	return ""
+}
+
+// ToolCheck is one tool check of a repository: a command that passes when
+// its exit code is 0 inside the time limit.
+type ToolCheck struct {
+	// Command is the program and its arguments. No shell reads it.
+	Command   []string
+	TimeLimit time.Duration
 }
 
 // Repository is a target repository.

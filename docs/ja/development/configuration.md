@@ -129,7 +129,7 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 
 対象のリポジトリは、一部の設定を自分で決められる。場所は、そのリポジトリの既定のブランチの `.cumin/config.toml` である。cuminは既定のブランチからだけ読む。Pull Requestのブランチの内容は効かない。
 
-書けるキーは、上の表で「リポジトリで上書き」ができるものと、`protected_paths`、`priority_labels` だけである。
+書けるキーは、上の表で「リポジトリで上書き」ができるものと、`protected_paths`、`priority_labels`、`tool_checks` だけである。
 
 | キー | 内容 |
 |---|---|
@@ -142,6 +142,7 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 | `roles.<role>.model` | Hostの設定と同じ |
 | `notify.discord.enabled` | Hostの設定と同じ。そのリポジトリのIssueについて通知を出すかどうかを、リポジトリが選ぶ。webhookのアドレスはHostのもの1つで、リポジトリからは変えられない |
 | `protected_paths` | Agentに変更させないパスの一覧。リポジトリの設定ファイルにだけ書ける。書かなければ、またはファイルがなければ、初期値 (`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`) になる。書いた一覧は、初期値に足されるのではなく、初期値を置き換える。cuminはこの一覧を読み、照合の決まりとともに、起動の依頼のデータとしてどのroleのAgentにも渡す。cuminは一覧の中身を確かめない。確かめて強制するのは、GitHub Actionsのcheck (`cumin-protected-paths`) だけである |
+| `tool_checks` | このリポジトリのAgentが使う道具が、Hostで使えることを確かめるコマンドの一覧。リポジトリの設定ファイルにだけ書ける。書かなければ、確認しない。下の「道具の確認」を参照 |
 
 読み込みの決まり:
 
@@ -187,3 +188,26 @@ model = "sonnet"
 [notify.discord]
 enabled = false
 ```
+
+### 道具の確認
+
+`tool_checks` は、確認の配列である。1つの確認は、1つのコマンドである。意味と、確認が通る条件は、[cumin本体の要件](../requirements/cumin-core.md) の「道具の確認」にある。cuminは、今はこのキーを読んで値を確かめるだけで、コマンドはまだ実行しない。
+
+```toml
+# 表の配列なので、表の外のキーよりあとに書く。
+[[tool_checks]]
+command = ["docker", "info"]
+time_limit = "30s"
+
+[[tool_checks]]
+command = ["git", "--version"]
+```
+
+| キー | 内容 | 初期値 | 制限 |
+|---|---|---|---|
+| `command` | 実行するコマンド。文字列の配列で、1つめがプログラムの名前、残りが引数である。シェルは通さない | なし (必須) | 空の配列にできない。1つめの文字列は、空にできない |
+| `time_limit` | 待つ時間の上限 | `"10s"` | 0より大きく、`"60s"` 以下 |
+
+- 書けるのは、リポジトリの設定ファイルだけである。Hostの設定ファイルに書くと、知らないキーのエラーになる。cuminがHostで実行するコマンドを、保護されたパスである `.cumin/` の下のファイルだけで決めるためである。
+- 確認は、ファイルに書いた順に並ぶ。
+- 制限を外れた確認は、`tool_checks[1].command` のように、キーと項目の番号で示す。番号は0から数える。誤りのある確認は、全てまとめて表示する。

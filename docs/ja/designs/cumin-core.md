@@ -247,6 +247,20 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 - 関数は `internal/core/config` に置く。3段の優先順位は設定の決まりであり、リポジトリの `.cumin/config.toml` をHostの設定に重ねる処理と同じ場所にある。初期値は `disciplines` から読む。
 - disciplineのroleのファイルは、今は埋め込みの1段だけである。同じ3段を持つようになったときも、解決はこの関数と同じ場所に置く。
 
+### 道具の確認の設定
+
+リポジトリの道具の確認 (cumin本体の要件の「道具の確認」) は、`.cumin/config.toml` の `tool_checks` から読む。今あるのは、読み込みと、値の確かめだけである。確認のコマンドを実行する処理は、まだない。
+
+![道具の確認の設定の読み込み](tool-checks-setting.svg)
+
+図の元ファイル: [tool-checks-setting.puml](tool-checks-setting.puml)
+
+- 読む場所は `internal/core/config` の `WithRepository` である。リポジトリの設定をHostの設定に重ねる処理と同じ場所にある。結果は `Settings.ToolChecks` で、ファイルに書いた順に並ぶ。キーがなければ、空である。
+- Hostの設定ファイルは、このキーを持たない。Hostの設定ファイルに書くと、`priority_labels` や `protected_paths` と同じく、知らないキーのエラーになる。cuminがHostで実行するコマンドを、保護されたパスである `.cumin/` の下のファイルだけで決めるためである。
+- 誤りは、キーと項目の番号で示す (例: `tool_checks[1].command`)。番号は、Hostの設定の `repositories[0]` と同じく、0から数える。誤りのある項目は、全てまとめて報告する。Maintainerが1回で直せるようにするためである。
+- 誤りがあるときは、リポジトリの設定のほかの誤りと同じく、そのリポジトリの定期確認を飛ばす。誤った確認を除いて残りだけを使うことはしない。確認が1つ減ると、道具がないままAgentを起動するためである。
+- `command` は文字列の配列のまま持つ。シェルを通さないので、引数を分ける処理が要らない。
+
 ### 起動前の使用率の確認
 
 - `claude -p "/usage"` は利用枠を使わないが、人間向けの文章しか返さない。機械可読の使用率は、モデルを呼ぶ実行の `rate_limit_event` にだけ出る (実測 1、29)。使用率を返すサブコマンドや、非対話で使えるAPIは、公式ドキュメントにない (2026-09-21 に CLI reference、headless、statusline、hooks、Agent SDK の文書を確かめた)。

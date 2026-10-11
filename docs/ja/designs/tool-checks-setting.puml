@@ -1,0 +1,38 @@
+@startuml tool-checks-setting
+' cumin works - reading the tool checks of a repository from .cumin/config.toml.
+' Document: cumin-core.md, topic on the setting of the tool checks.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+if (which settings file holds tool_checks?) then (the Host file)
+  :error: tool_checks: unknown key
+  (cumin run does not start);
+  stop
+else (.cumin/config.toml of a repository)
+endif
+while (next entry of tool_checks, in the order of the file?) is (yes)
+  if (command is empty, or its first string is empty?) then (yes)
+    :keep the error tool_checks[i].command;
+  else (no)
+  endif
+  if (the entry holds time_limit?) then (yes)
+    if (more than 0, and 60 seconds or less?) then (no)
+      :keep the error tool_checks[i].time_limit;
+    else (yes)
+    endif
+  else (no)
+    :time_limit = 10 seconds;
+  endif
+endwhile (no)
+if (an error was kept?) then (yes)
+  :report all the errors together;
+  :skip the poll of this repository;
+  stop
+else (no)
+  :the settings of the repository hold the tool checks
+  (no tool_checks key: an empty list);
+  stop
+endif
+@enduml
