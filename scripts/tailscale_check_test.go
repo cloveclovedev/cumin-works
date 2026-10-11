@@ -19,6 +19,8 @@ type tailscaleCheck struct {
 	answers []string
 	// status is what the fake tailscale prints for "status --json".
 	status string
+	// withoutG makes the fake nc one that does not know the option -G.
+	withoutG bool
 }
 
 // tailscaleCheckTools are the tools of macOS that the script may call.
@@ -27,11 +29,18 @@ type tailscaleCheck struct {
 var tailscaleCheckTools = []string{"plutil", "sed", "tr"}
 
 // The fakes write every call to the file CALLS, one line for each call.
-// The fake nc answers only on the ports of FAKE_ANSWERS. The fake
+// The fake nc answers only on the ports of FAKE_ANSWERS, and names -G in
+// its help as the nc of macOS does, unless FAKE_NC_WITHOUT_G is set. The fake
 // tailscale knows "status --json" only, so "tailscale ping" fails.
 var tailscaleCheckFakes = map[string]string{
 	"nc": `#!/bin/sh
 echo "nc $*" >>"$CALLS"
+if [ "$*" = "-h" ]; then
+  [ -n "$FAKE_NC_WITHOUT_G" ] || echo "	-G conntimo	Connection timeout in seconds" >&2
+  echo "	-z		Zero-I/O mode" >&2
+  exit 1
+fi
+[ -z "$FAKE_NC_WITHOUT_G" ] || { echo "nc: invalid option -- G" >&2; exit 1; }
 while [ $# -gt 2 ]; do shift; done
 for answer in $FAKE_ANSWERS; do
   [ "$answer" != "$1:$2" ] || exit 0
@@ -92,6 +101,9 @@ func (c *tailscaleCheck) run(args ...string) (string, int) {
 		"FAKE_ANSWERS=" + strings.Join(c.answers, " "),
 		"FAKE_STATUS=" + c.status,
 	}
+	if c.withoutG {
+		command.Env = append(command.Env, "FAKE_NC_WITHOUT_G=1")
+	}
 	out, err := command.CombinedOutput()
 	return string(out), exitCode(c.t, err)
 }
@@ -129,6 +141,7 @@ func TestTailscaleCheck_MemberSeesOnlyTheTwoPortsOfTheHost(t *testing.T) {
 	// Every connection attempt has a limit, and nothing but nc runs: no
 	// tailscale ping, and no command that changes the Host.
 	c.wantCalls(
+		"nc -h",
 		"nc -z -G 5 -w 5 host.example 22",
 		"nc -z -G 5 -w 5 host.example 5900",
 		"nc -z -G 5 -w 5 host.example 445",
@@ -150,6 +163,7 @@ func TestTailscaleCheck_MemberFailsWhenTheOtherPortAnswers(t *testing.T) {
 		t.Errorf("exit code = %d, want 1: the other port answers\n%s", code, out)
 	}
 	c.wantCalls(
+		"nc -h",
 		"nc -z -G 2 -w 2 host.example 22",
 		"nc -z -G 2 -w 2 host.example 5900",
 		"nc -z -G 2 -w 2 host.example 8080",
@@ -189,6 +203,7 @@ func TestTailscaleCheck_HostReachesNoPortOfTheOnlineDevices(t *testing.T) {
 	// The script reads the devices once, and never calls tailscale ping.
 	// The offline device gets no connection attempt.
 	c.wantCalls(
+		"nc -h",
 		"tailscale status --json",
 		"nc -z -G 5 -w 5 first-address 22",
 		"nc -z -G 5 -w 5 first-address 5900",
@@ -214,6 +229,30 @@ func TestTailscaleCheck_HostFailsWhenADeviceAnswersOnTheSSHPort(t *testing.T) {
 	}
 }
 
+// An nc that fails at every call gives "no answer" for every port, which is
+// what the host mode expects. So the script must stop before the first check.
+func TestTailscaleCheck_StopsWhenNcDoesNotKnowTheConnectionLimit(t *testing.T) {
+	for _, args := range [][]string{{"host"}, {"member", "host.example"}} {
+		t.Run(args[0], func(t *testing.T) {
+			c := newTailscaleCheck(t)
+			c.withoutG = true
+
+			out, code := c.run(args...)
+
+			if code != 1 {
+				t.Errorf("exit code = %d, want 1: nc does not know -G\n%s", code, out)
+			}
+			if strings.Contains(out, "ok:") {
+				t.Errorf("the output has an ok: line, and nothing was checked:\n%s", out)
+			}
+			if !strings.Contains(out, "error: the nc on PATH does not know the option -G") {
+				t.Errorf("the output does not name the reason:\n%s", out)
+			}
+			c.wantCalls("nc -h")
+		})
+	}
+}
+
 // A run that checks nothing must not look like a run where every check is ok.
 func TestTailscaleCheck_HostFailsWhenNoOtherDeviceIsOnline(t *testing.T) {
 	c := newTailscaleCheck(t)
@@ -225,7 +264,7 @@ func TestTailscaleCheck_HostFailsWhenNoOtherDeviceIsOnline(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1: the script checked nothing\n%s", code, out)
 	}
-	c.wantCalls("tailscale status --json")
+	c.wantCalls("nc -h", "tailscale status --json")
 }
 
 func TestTailscaleCheck_WrongArgumentsExitWithTwo(t *testing.T) {

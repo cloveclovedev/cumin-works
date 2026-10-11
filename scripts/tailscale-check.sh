@@ -87,6 +87,13 @@ if [ "$other_port" -eq "$ssh_port" ] || [ "$other_port" -eq "$screen_sharing_por
   bad_value "--other-port needs a port other than $ssh_port and $screen_sharing_port"
 fi
 command -v nc >/dev/null 2>&1 || die "nc is not on PATH"
+# An nc that does not know -G fails at every call, and the script would
+# read each failure as "no answer". So the script stops before the first
+# check when the help of nc does not name -G.
+case "$(nc -h 2>&1)" in
+  *"-G "*) ;;
+  *) die "the nc on PATH does not know the option -G (the limit of a connection attempt): use the nc of macOS, /usr/bin/nc" ;;
+esac
 
 failed=0
 
