@@ -9,7 +9,8 @@
 #       [--implementer-app <slug>] [--required-check <name>]... [--dry-run]
 #
 # The script asks before it creates a priority label, and creates none without
-# the answer "y". It creates the missing labels of cumin.
+# the answer "y". It creates the missing labels of cumin, and updates the color
+# and the description of the ones that differ from the list of cumin.
 # Running the script again with the same arguments changes nothing.
 # It needs only gh (logged in, with the "workflow" scope) and standard tools.
 set -eu
@@ -313,34 +314,81 @@ risk/high|F9D0C4|Cannot be undone by a revert; a Maintainer merges
 LABELS
 }
 
-# create_repository_labels
-# Creates each label of repository_labels that the repository does not have.
-# cumin creates the same labels when it starts, so the script does not ask.
-create_repository_labels() {
-  gh api --paginate "repos/$repo/labels" --jq '.[].name' >"$work/labels" || die "cannot list the labels of $repo"
-  # GitHub label names ignore case.
-  tr '[:upper:]' '[:lower:]' <"$work/labels" >"$work/labels-lower"
-  repository_labels >"$work/cumin-labels"
-  missing=0
+# default_priority_labels
+# Prints the default priority labels of cumin in the form of
+# repository_labels: the same list as DefaultPriorityLabels() of
+# internal/workflow/labels.go. A test compares the two.
+default_priority_labels() {
+  cat <<'LABELS'
+cumin/priority/P0|D4C5F9|A Maintainer says: start this before a lower priority
+cumin/priority/P1|D4C5F9|A Maintainer says: start this before a lower priority
+cumin/priority/P2|D4C5F9|A Maintainer says: start this before a lower priority
+cumin/priority/P3|D4C5F9|A Maintainer says: start this before a lower priority
+LABELS
+}
+
+# update_labels <list file> <create|keep>
+# Brings the color and the description of each label of the list to the list.
+# "create": a label that the repository does not have is created. "keep": it
+# is left out. A label that priority_labels names is never changed.
+update_labels() {
+  tab="$(printf '\t')"
   while IFS='|' read -r label color description; do
-    if printf '%s\n' "$label" | tr '[:upper:]' '[:lower:]' | grep -Fxq -f - "$work/labels-lower"; then
+    # GitHub label names ignore case.
+    lower="$(printf '%s\n' "$label" | tr '[:upper:]' '[:lower:]')"
+    if printf '%s\n' "$lower" | grep -Fxq -f - "$work/priority-labels-lower"; then
+      echo "kept       label $label ($config_path names it as a priority label)"
       continue
     fi
-    missing=1
+    # The color in lower case and the description of the label today.
+    current="$(LABEL="$lower" awk -F '\t' '
+      tolower($1) == ENVIRON["LABEL"] { print tolower($2) "\t" substr($0, length($1) + length($2) + 3); exit }
+    ' "$work/labels-now")"
+    if [ -z "$current" ]; then
+      [ "$2" = "create" ] || continue
+      if [ "$dry_run" -eq 1 ]; then
+        echo "would create the label $label"
+        continue
+      fi
+      gh api -X POST "repos/$repo/labels" -f name="$label" -f color="$color" \
+        -f description="$description" >/dev/null </dev/null || die "cannot create the label $label"
+      echo "created    label $label"
+      continue
+    fi
+    if [ "$current" = "$(printf '%s' "$color" | tr '[:upper:]' '[:lower:]')$tab$description" ]; then
+      echo "unchanged  label $label"
+      continue
+    fi
     if [ "$dry_run" -eq 1 ]; then
-      echo "would create the label $label"
+      echo "would update the label $label"
       continue
     fi
-    gh api -X POST "repos/$repo/labels" -f name="$label" -f color="$color" \
-      -f description="$description" >/dev/null </dev/null || die "cannot create the label $label"
-    echo "created    label $label"
-  done <"$work/cumin-labels"
-  if [ "$missing" -eq 0 ]; then
-    echo "unchanged  the labels of cumin exist"
+    gh api -X PATCH "repos/$repo/labels/$label" -f color="$color" \
+      -f description="$description" >/dev/null </dev/null || die "cannot update the label $label"
+    echo "updated    label $label"
+  done <"$1"
+}
+
+# apply_repository_labels
+# Creates each label of repository_labels that the repository does not have,
+# and updates the ones whose color or description differs from the list.
+# cumin creates the same labels when it starts, so the script does not ask.
+# The default priority labels are only updated, and only when
+# .cumin/config.toml names no priority labels: cumin creates them itself.
+apply_repository_labels() {
+  # One line for each label: name, color, description. No description is an empty one.
+  gh api --paginate "repos/$repo/labels" --jq '.[] | "\(.name)\t\(.color)\t\(.description // "")"' >"$work/labels-now" ||
+    die "cannot list the labels of $repo"
+  tr '[:upper:]' '[:lower:]' <"$work/priority-labels" >"$work/priority-labels-lower"
+  repository_labels >"$work/cumin-labels"
+  update_labels "$work/cumin-labels" create
+  if [ ! -s "$work/priority-labels" ]; then
+    default_priority_labels >"$work/default-priority-labels"
+    update_labels "$work/default-priority-labels" keep
   fi
 }
 
-create_repository_labels
+apply_repository_labels
 
 # --- The rulesets ---------------------------------------------------------------
 
