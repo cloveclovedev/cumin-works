@@ -116,6 +116,25 @@ func (c *AppClient) CreateInstallationToken(ctx context.Context, cred AppCredent
 	if !ok {
 		return InstallationToken{}, fmt.Errorf("github: unknown app %q", app)
 	}
+	return c.createToken(ctx, cred, app, owner, repo, permissions)
+}
+
+// CreateReadToken creates an installation access token that only reads the
+// contents of the one repository: the token of a git clone and a git fetch
+// of cumin (docs/ja/designs/agent-run.md, the topic on the work directory).
+// A token can hold fewer permissions than its App (docs.github.com, REST,
+// "Create an installation access token for an app": "permissions"). app is
+// an agent role; each role App holds the read of Contents.
+func (c *AppClient) CreateReadToken(ctx context.Context, cred AppCredentials, app, owner, repo string) (InstallationToken, error) {
+	if _, ok := AppPermissions(app); !ok {
+		return InstallationToken{}, fmt.Errorf("github: unknown app %q", app)
+	}
+	return c.createToken(ctx, cred, app, owner, repo, map[string]string{"contents": "read"})
+}
+
+// createToken creates an installation access token of one App, limited to
+// the one repository and to the permissions.
+func (c *AppClient) createToken(ctx context.Context, cred AppCredentials, app, owner, repo string, permissions map[string]string) (InstallationToken, error) {
 	if cred.ClientID == "" || cred.PrivateKey == nil {
 		return InstallationToken{}, fmt.Errorf("github: app %q has no client ID or no private key", app)
 	}
