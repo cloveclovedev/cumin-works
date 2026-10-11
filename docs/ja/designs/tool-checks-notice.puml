@@ -1,0 +1,33 @@
+@startuml tool-checks-notice
+' cumin works - the one notification when the tool checks of a repository begin to fail.
+' Document: cumin-core.md, topic on the notification of the tool checks.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:the poll of a repository ran every tool check\nand kept the failed ones;
+if (a tool check of the repository failed?) then (no)
+  :clear the mark of the repository:\na later failure is new;
+  stop
+else (yes)
+endif
+if (the mark of the repository is set?) then (yes)
+  :no notification:\nthe notification was already sent;
+  stop
+else (no)
+endif
+:set the mark of the repository;
+if (notify.discord.enabled of the repository?) then (off)
+  :no notification;\nthe mark stays;
+  stop
+else (on)
+endif
+:stop agent starts: notify\n(the repository and each failed check);
+if (the channel took the notification?) then (no)
+  :clear the mark:\nthe next poll tries again;
+  stop
+else (yes)
+endif
+stop
+@enduml

@@ -194,6 +194,10 @@ type Service struct {
 	// share it.
 	toolCheckMu  sync.Mutex
 	failedChecks map[string][]string
+	// toolChecksTold holds the repositories whose failed tool checks cumin
+	// notified about, since every check of the repository last passed
+	// (toolchecknotice.go). toolCheckMu guards it.
+	toolChecksTold map[string]bool
 
 	// kept are the worktrees of closed issues that the cleanup kept,
 	// because they hold work that is not on GitHub. The cleanup does not

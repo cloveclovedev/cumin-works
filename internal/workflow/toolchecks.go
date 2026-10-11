@@ -44,6 +44,7 @@ func (s *Service) runToolChecks(ctx context.Context, log *slog.Logger, target Ta
 	if stopped && len(failed) == 0 {
 		log.Info(string(ActionResumeAgentStarts) + ": every tool check of the repository passes")
 	}
+	s.tellFailedToolChecks(ctx, log, target, settings.notificationOn(), failed)
 }
 
 // failedToolChecks returns the tool checks of the repository that failed
