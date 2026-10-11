@@ -38,3 +38,15 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 # of this repository ends in about a minute, so ten minutes leave room for a
 # queue at GitHub Actions.
 checks_wait_time = "10m"
+
+# Commands that prove that the tools of the agents work on the Host. cumin
+# runs each of them at every poll of this repository, with the PATH of an
+# agent and without a shell. While one fails, cumin starts no agent for this
+# repository, notifies once, and shows the check in cumin status. Keep these
+# tables below every other key of the file.
+#
+# Docker: scripts/render-diagrams.sh renders the diagrams with it. Without
+# it, an agent could deliver an SVG that the script did not render.
+[[tool_checks]]
+command = ["docker", "info"]
+time_limit = "10s"
