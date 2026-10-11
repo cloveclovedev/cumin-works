@@ -169,6 +169,8 @@ func WriteMonitorFile(path string, m MonitorFile) error {
 // MonitorFileVersion, is an error that names the path. A list that is
 // missing is another shape, because `cumin run` writes every list: the
 // reader would count no error and no agent where the file says nothing.
+// The list of the failed tool checks came later within version 1, so a file
+// without it is read with no failed tool check.
 func ReadMonitorFile(path string) (MonitorFile, bool, error) {
 	raw, err := os.ReadFile(path)
 	switch {
@@ -194,8 +196,6 @@ func ReadMonitorFile(path string) (MonitorFile, bool, error) {
 		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no agents", path)
 	case read.Waiting == nil:
 		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no waiting", path)
-	case read.FailedToolChecks == nil:
-		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no failed_tool_checks", path)
 	}
 	return read, true, nil
 }

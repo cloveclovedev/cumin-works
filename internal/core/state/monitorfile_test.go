@@ -158,18 +158,35 @@ func TestMonitorFile_TheReaderReturnsWhatWasWritten(t *testing.T) {
 	}
 }
 
+// A new field does not break a reader: a file of version 1 with no list of
+// the failed tool checks, as an earlier cumin run wrote it, is read with no
+// failed tool check.
+func TestMonitorFile_TheReaderAcceptsAFileWithoutTheFailedToolChecks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), state.MonitorFileName)
+	const content = `{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	read, found, err := state.ReadMonitorFile(path)
+	if err != nil || !found {
+		t.Fatalf("ReadMonitorFile: found = %v, err = %v, want the file and no error", found, err)
+	}
+	if len(read.FailedToolChecks) != 0 || read.LastPoll.At.IsZero() {
+		t.Errorf("the reader returned %+v, want the last poll and no failed tool check", read)
+	}
+}
+
 // A file of a version above the one that this cumin knows, or of another
 // shape, is an error that names the path and the reason.
 func TestMonitorFile_TheReaderRejectsANewerVersionAndAnotherShape(t *testing.T) {
 	for name, tc := range map[string]struct{ content, want string }{
-		"a newer version":               {`{"version": 2, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "version 2, and this cumin knows version 1"},
-		"no version":                    {`{"last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "no version"},
-		"not JSON":                      {`{"version": 1,`, "unexpected end of JSON input"},
-		"no last_poll.at":               {`{"version": 1, "last_poll": {"errors": []}, "agents": [], "waiting": []}`, "no last_poll.at"},
-		"no list of errors":             {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z"}, "agents": [], "waiting": []}`, "no last_poll.errors"},
-		"no list of agents":             {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "waiting": []}`, "no agents"},
-		"no list of waits":              {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": []}`, "no waiting"},
-		"no list of failed tool checks": {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "no failed_tool_checks"},
+		"a newer version":   {`{"version": 2, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "version 2, and this cumin knows version 1"},
+		"no version":        {`{"last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "no version"},
+		"not JSON":          {`{"version": 1,`, "unexpected end of JSON input"},
+		"no last_poll.at":   {`{"version": 1, "last_poll": {"errors": []}, "agents": [], "waiting": []}`, "no last_poll.at"},
+		"no list of errors": {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z"}, "agents": [], "waiting": []}`, "no last_poll.errors"},
+		"no list of agents": {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "waiting": []}`, "no agents"},
+		"no list of waits":  {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": []}`, "no waiting"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), state.MonitorFileName)

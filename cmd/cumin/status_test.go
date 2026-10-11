@@ -283,7 +283,7 @@ func TestStatusShowsTheLastPollWithItsAgeAndItsErrors(t *testing.T) {
 // that the agent starts of that repository wait. No control character of a
 // command reaches the terminal. With no failed check, it says "none".
 func TestStatusShowsTheFailedToolChecksUnderTheirRepository(t *testing.T) {
-	const none = "  failed tool checks: none\n"
+	const none = "  failed tool checks: none at the last poll\n"
 	dir := t.TempDir()
 	writeMonitorWithFailedToolChecks(t, dir, statusAt.Add(-45*time.Second), []state.MonitorFailedToolChecks{
 		{Repository: "example-org/example-repo", Commands: []string{"docker info", "plantuml \x1b[31m-version\r\n"}},

@@ -260,7 +260,7 @@ func writeLastPoll(w io.Writer, settings *config.Settings, stateDir string, at t
 // starts"), so the line of the repository says that its agent starts wait.
 func writeFailedToolChecks(w io.Writer, failed []state.MonitorFailedToolChecks) {
 	if len(failed) == 0 {
-		fmt.Fprintln(w, "  failed tool checks: none")
+		fmt.Fprintln(w, "  failed tool checks: none at the last poll")
 		return
 	}
 	fmt.Fprintln(w, "  failed tool checks:")
