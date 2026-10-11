@@ -12,7 +12,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 |---|---|---|
 | セッション | 対象のリポジトリで起動したClaude Code | Maintainerと話し、skillの手順に従う |
 | plugin | cumin-worksのリポジトリの `plugins/cumin-maintainer/` | skillと、全てのskillが繰り返すセッションの決まり (`rules.md`) を持つ。skillは、自分のスクリプトを、自分のディレクトリに持てる |
-| 一般の道具 | `cumin status` と `scripts/` | Claude Codeなしでも端末から使える。skillは道具を呼ぶだけで、自分の手順を足さない。今ある道具は、Hostの設定とGitHubとモニターファイルを読む `cumin status` と、モニターファイルを読む `scripts/cumin-health.sh` と、バイナリを入れ替える `scripts/replace-binary.sh` と、実機の場面 E2E-1 を実行する `scripts/live-scenario.sh` である ([Hostの一般の道具](host-tools.md)) |
+| 一般の道具 | `cumin status` と `scripts/` | Claude Codeなしでも端末から使える。skillは道具を呼ぶだけで、自分の手順を足さない。今ある道具は、Hostの設定とGitHubとモニターファイルを読み、最後の定期確認とcuminが持っている実行中のAgentも示す `cumin status` と、モニターファイルを読む `scripts/cumin-health.sh` と、バイナリを入れ替える `scripts/install.sh --after-current-runs` と、実機の場面 E2E-1 を実行する `scripts/live-scenario.sh` である ([Hostの一般の道具](host-tools.md)) |
 | モニターファイル | `~/.local/state/cumin/monitor.json` | `cumin run` が書く。skill `session-start` が、セッションの始めに読む。ファイルがないときと古いときは、そう報告して、GitHubを読む。`scripts/cumin-health.sh` も、最後の定期確認と実行中のAgentを、GitHubに問い合わせ直さずにこのファイルから読む。cuminのコードでは、`cumin status` だけが、表示のためにこのファイルを読む。待つIssueは、skill `watch` のスクリプトが、このファイルから読む (「`watch` のスクリプト」、[モニターファイルとメニューバーのアプリの設計](../designs/status-menu-bar.md)) |
 | 引き継ぎのメモ | `~/.local/state/cumin/hand-over.md` | skill `hand-over` が、Maintainerに聞いてから書く。次のセッションのskill `session-start` が読む。Hostの手元のファイルで、cuminは読まず、どのリポジトリにも入れない |
 
@@ -41,7 +41,7 @@ cuminと並んで働くMaintainerやOperatorのClaude Codeのセッションに�
 | `hand-over` | `/cumin-maintainer:hand-over` | セッションの終わりに、状態、開いている判断、Maintainerを待つもの、セッションが学んだことの4つの見出しで、引き継ぎのメモを書く |
 | `merge-decision` | `/cumin-maintainer:merge-decision` | mergeの判断を待つPull Requestを1つ確かめて、決まった形で報告する。スクリプト `check-pull-request.sh` が、先頭のコミットへの承認、必須のcheck、保護されたパスの変更を、GitHubから1回読んで確かめる。差分はテスト以外を全部読む。承認は、Pull Requestの番号を入れた決まった質問のあとか、セッションが許された範囲の中だけで、1つずつ行う |
 | `watch` | `/cumin-maintainer:watch` | Maintainerを待つIssueが新しく現れるのを待つ。スクリプト `wait-for-waiting.sh` を裏で動かし、モニターファイルの `waiting` に新しい項目が出たら、その項目だけを報告して、種類 (`kind`) ごとのskillを示す。GitHubは読まない |
-| `host` | `/cumin-maintainer:host` | Hostの3つの一般の道具 (`scripts/cumin-health.sh`、`scripts/replace-binary.sh`、`scripts/live-scenario.sh`) を呼ぶ。道具ごとに、いつ呼ぶか、コマンド、終了コードの読み方を持ち、自分の手順を足さない。道具のあるチェックアウトは、環境変数 `CUMIN_SOURCE_DIR` から読み、なければMaintainerに聞く。`replace-binary.sh` と `live-scenario.sh` はHostを変えるので、呼ぶ前に聞く。テスト以外のコードを変えるmergeのあとは、次の承認の前にバイナリを入れ替える。mergeのあとは、Maintainerに聞いてから、チェックアウトを `git pull --ff-only` で合わせて、道具を呼ぶ |
+| `host` | `/cumin-maintainer:host` | Hostの3つの一般の道具 (`scripts/cumin-health.sh`、`scripts/install.sh --after-current-runs`、`scripts/live-scenario.sh`) を呼ぶ。道具ごとに、いつ呼ぶか、コマンド、終了コードの読み方を持ち、自分の手順を足さない。道具のあるチェックアウトは、環境変数 `CUMIN_SOURCE_DIR` から読み、なければMaintainerに聞く。`install.sh --after-current-runs` と `live-scenario.sh` はHostを変えるので、呼ぶ前に聞く。テスト以外のコードを変えるmergeのあとは、次の承認の前にバイナリを入れ替える。mergeのあとは、Maintainerに聞いてから、チェックアウトを `git pull --ff-only` で合わせて、道具を呼ぶ |
 | `requirement-change` | `/cumin-maintainer:requirement-change` | Agentが書けない保護されたパスの文書 (要件の文書) を、Maintainerと手で変える。内容は、ファイルを変える前に会話の中でMaintainerが決める。1つの話題を1つのPull Requestにし、既定のブランチからブランチを作る。複数のファイルの置き換えは、新しい文章を全て計算してから書き込む。差分の大きさ (`git diff --stat`) を、Pull Requestを開く前とmergeの前に確かめ、空になったファイルや予定にないファイルがあれば止まる。図は、リポジトリが文書に書いた道具で書き出す。mergeは、Maintainerの言葉があるときか、セッションが許された範囲の中だけで行う |
 
 ### セッションの始めの質問
@@ -166,7 +166,7 @@ skillは、セッションの中で `/cumin-maintainer:<skill>` と打って呼�
 | `decision-request` | Issueが判断の依頼で止まったとき | 止まったIssueへの答えのコメント、`cumin/status/ready`、checkのやり直し | 要件、方針、範囲を変える質問への答え。その質問は、推奨を付けてMaintainerに渡す |
 | `acceptance-leftovers` | 要求Issueが受け入れを待ち、確認のコメントに作業が残るとき | Issueの作成、sub-issueへの追加、ブランチのpush、Pull Requestの作成 | 要求Issueを閉じること。受け入れは、Maintainerが決める |
 | `requirement-change` | 保護されたパスの文書を手で変えるとき | 下書きの内容 (ファイルを変える前)、push、Pull Requestの作成と更新、merge | Maintainerが決めていない内容の変更。2つの話題を1つのPull Requestにすること。差分の大きさを確かめないmerge |
-| `host` | cuminが動いているかを知りたいとき、mergeのあとでバイナリを入れ替えるとき、実機の場面 E2E-1 を実行するとき | `git pull --ff-only`、`replace-binary.sh`、`live-scenario.sh` | 道具にない手順を足すこと。道具の中身は [Hostの一般の道具](host-tools.md) にある |
+| `host` | cuminが動いているかを知りたいとき、mergeのあとでバイナリを入れ替えるとき、実機の場面 E2E-1 を実行するとき | `git pull --ff-only`、`install.sh --after-current-runs`、`live-scenario.sh` | 道具にない手順を足すこと。道具の中身は [Hostの一般の道具](host-tools.md) にある |
 | `hand-over` | セッションの終わり、またはMaintainerが引き継ぎを頼んだとき | 引き継ぎのメモの書き込み | 許しをメモに書くこと。メモをリポジトリに入れること。GitHubへの書き込み |
 
 - 全てのskillは、「セッションの決まり」に従う。Claude Codeの権限の確認が断ったら、セッションは止まり、別の方法を探さない。
@@ -230,7 +230,6 @@ Claude Codeは、shellのコマンドとファイルの書き込みの前に、�
 | `Bash(<plugin directory>/skills/merge-decision/check-pull-request.sh *)` | - | `merge-decision` |
 | `Bash(<plugin directory>/skills/watch/wait-for-waiting.sh *)` | - | `watch` |
 | `Bash("$CUMIN_SOURCE_DIR"/scripts/cumin-health.sh *)` | - | `host` |
-| `Bash("$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh --dry-run)` | - | `host` |
 | `Bash(gh issue create *)` | GitHub | `acceptance-leftovers` |
 | `Bash(gh issue comment *)` | GitHub | `decision-request` |
 | `Bash(gh issue edit *)` | GitHub | `plan-review`、`decision-request` |
@@ -246,7 +245,7 @@ Claude Codeは、shellのコマンドとファイルの書き込みの前に、�
 | `Bash(git commit *)` | Host | `acceptance-leftovers`、`requirement-change` |
 | `Bash(git restore --source *)` | Host | `requirement-change` |
 | `Bash(git -C "$CUMIN_SOURCE_DIR" pull --ff-only)` | Host | `host` |
-| `Bash("$CUMIN_SOURCE_DIR"/scripts/replace-binary.sh)` | Host | `host` |
+| `Bash("$CUMIN_SOURCE_DIR"/scripts/install.sh --after-current-runs)` | Host | `host` |
 | `Bash("$CUMIN_SOURCE_DIR"/scripts/live-scenario.sh *)` | Host | `host` |
 | `Bash(mv ~/.local/state/cumin/hand-over.md.tmp ~/.local/state/cumin/hand-over.md)` | Host | `hand-over` |
 | `Edit(~/.local/state/cumin/hand-over.md.tmp)` | Host | `hand-over` |

@@ -22,7 +22,7 @@
 
 - [既存のプロダクトにcuminを入れる](guides/adoption.md): 入れる前とあとで決めること
 - [メニューバーのアプリを作って起動する](guides/status-menu-bar.md): ビルド、起動、ログインのときの起動、メニューの見方、設定
-- [Hostの一般の道具](guides/host-tools.md): 端末から使う `scripts/` の道具。cuminが動いているかを確かめる `cumin-health.sh`、バイナリを入れ替える `replace-binary.sh`、実機の場面 E2E-1 を実行する `live-scenario.sh`
+- [Hostの一般の道具](guides/host-tools.md): 端末から使う `scripts/` の道具。cuminが動いているかを確かめる `cumin-health.sh`、バイナリを入れ替える `install.sh --after-current-runs`、実機の場面 E2E-1 を実行する `live-scenario.sh`
 - [Maintainerのセッションにskillを入れる](guides/maintainer-skills.md): cuminと並んで働くClaude Codeのセッションのplugin。インストール、scope、更新、skillごとの使い方、権限のルールの一覧
 
 ## 開発の手順

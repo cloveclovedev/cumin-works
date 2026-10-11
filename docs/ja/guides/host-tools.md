@@ -4,22 +4,22 @@ MaintainerやOperatorが、Claude Codeなしで端末から使う道具の使い
 
 ## 一般の道具とは何か
 
-![MaintainerとClaude Codeのセッションが、scripts/ の3つの一般の道具を呼ぶ。cumin-health.sh は、cumin run が書くモニターファイルとログを読む。replace-binary.sh は、cuminを止め、新しいバイナリを入れ、起動し直し、cumin-health.sh を呼ぶ。live-scenario.sh は、sandboxの開いているIssueを読み、cuminを止め、Hostの設定ファイルをsandboxのものに替えて戻し、cumin-health.sh を呼ぶ](host-tools.svg)
+![MaintainerとClaude Codeのセッションが、scripts/ の3つの一般の道具を呼ぶ。cumin-health.sh は、cumin run が書くモニターファイルとログを読む。install.sh --after-current-runs は、cuminを止め、新しいバイナリを入れ、起動し直し、cumin-health.sh を呼ぶ。live-scenario.sh は、sandboxの開いているIssueを読み、cuminを止め、Hostの設定ファイルをsandboxのものに替えて戻し、cumin-health.sh を呼ぶ](host-tools.svg)
 
 図の元ファイル: [host-tools.puml](host-tools.puml)
 
 | 道具 | すること | 今あるか |
 |---|---|---|
 | `scripts/cumin-health.sh` | cuminが動いているかを言う。最後の定期確認、起動してからのエラー、実行中のAgent | ある (この文書の「cuminが動いているか確かめる」) |
-| `scripts/replace-binary.sh` | 実行を待ってcuminを止め、新しいバイナリを入れ、起動し直し、定期確認を2回確かめる | ある (この文書の「バイナリを入れ替える」) |
+| `scripts/install.sh --after-current-runs` | 実行を待ってcuminを止め、新しいバイナリを入れ、起動し直し、定期確認を2回確かめる | ある (この文書の「バイナリを入れ替える」) |
 | `scripts/live-scenario.sh` | Hostの設定をsandboxに向けて実機のシナリオを実行し、結果にかかわらず設定を戻す | ある (この文書の「実機の場面 E2E-1 を実行する」) |
 
-- 道具は、cuminの判断を変えない。`cumin-health.sh` は読むだけで、何も書かず、GitHubに問い合わせない。`replace-binary.sh` は、Hostのcuminを止めて入れ替えるが、GitHubのラベルやIssueには触れない。`live-scenario.sh` は、Hostの設定ファイルを替えて戻す。GitHubからは読むだけで、sandboxに書くのは、それが実行するテスト `TestLiveE2E` である。
+- 道具は、cuminの判断を変えない。`cumin-health.sh` は読むだけで、何も書かず、GitHubに問い合わせない。`install.sh --after-current-runs` は、Hostのcuminを止めて入れ替えるが、GitHubのラベルやIssueには触れない。`live-scenario.sh` は、Hostの設定ファイルを替えて戻す。GitHubからは読むだけで、sandboxに書くのは、それが実行するテスト `TestLiveE2E` である。
 - 道具は、1つのOrganizationの事実 (リポジトリ、App、人の名前) を持たない。
 
 ## cuminが動いているか確かめる
 
-「cuminが動いているか」には、3つの部分がある。最後の定期確認、起動してからのエラー、実行中のAgentである。`cumin status` は実行中のAgentと最後の定期確認を、メニューバーのアプリ ([メニューバーのアプリを作って起動する](status-menu-bar.md)) は最後の定期確認を示す。`scripts/cumin-health.sh` は、3つをまとめて1回で出し、終了コードで答える。
+「cuminが動いているか」には、3つの部分がある。最後の定期確認、起動してからのエラー、実行中のAgentである。`cumin status` は、ラベルから読んだ実行中のAgentに加えて、最後の定期確認 (時刻、古いかどうか、そのエラー) と、cuminが持っている実行中のAgentを、メニューバーのアプリ ([メニューバーのアプリを作って起動する](status-menu-bar.md)) は最後の定期確認を示す。`scripts/cumin-health.sh` は、3つをまとめて1回で出し、終了コードで答える。
 
 ### 必要なもの
 
@@ -104,11 +104,11 @@ scripts/cumin-health.sh --wait-polls 2 --timeout 300
 
 ## バイナリを入れ替える
 
-コードを変えるPull Requestがmergeされても、Hostのcuminは古いバイナリのまま動く ([セットアップの手順](../development/setup-guide.md) の手順4)。`scripts/replace-binary.sh` は、入れ替えの手順を1回で行う。実行中のAgentを取り消さず、どの待ちにも上限がある。
+コードを変えるPull Requestがmergeされても、Hostのcuminは古いバイナリのまま動く ([セットアップの手順](../development/setup-guide.md) の手順4)。`scripts/install.sh --after-current-runs` は、入れ替えの手順を1回で行う。実行中のAgentを取り消さず、どの待ちにも上限がある。
 
 ### 必要なもの
 
-- macOS。スクリプトは、`git`、`cumin`、macOSに入っている道具 (`sh`、`launchctl`、`plutil`、`date`、`sed`、`sleep`、`dirname`、`id`) だけを使う。手順4と手順5は `scripts/install.sh` と `scripts/cumin-health.sh` を呼ぶので、ビルドのための `go` も要る。
+- macOS。スクリプトは、`git`、`go`、`cumin`、macOSに入っている道具 (`sh`、`launchctl`、`plutil`、`date`、`sed`、`sleep`、`dirname`、`id`、`mktemp`、`install`) だけを使う。手順6は `scripts/cumin-health.sh` を呼ぶ。
 - cuminのリポジトリのチェックアウト。スクリプトは、自分の置かれたチェックアウトからビルドする。
 - LaunchAgentが読み込まれていること ([セットアップの手順](../development/setup-guide.md) の手順4)。
 
@@ -117,42 +117,43 @@ scripts/cumin-health.sh --wait-polls 2 --timeout 300
 mergeされた変更を確かめ、チェックアウトを既定のブランチの先頭に合わせてから (`git pull --ff-only`)、実行する。どのディレクトリからでもよい。
 
 ```sh
-scripts/replace-binary.sh
+scripts/install.sh --after-current-runs
 ```
 
-スクリプトは、次の5つをこの順に行う。1つが失敗したら、そこで終わり、あとの手順を行わない。
+スクリプトは、次の6つをこの順に行う。各手順の始めに `step <n> of 6: ...` の行を出す。1つが失敗したら、そこで終わり、あとの手順を行わない。
 
 | 手順 | すること | 失敗したとき |
 |---|---|---|
 | 1 | チェックアウトを確かめる。既定のブランチ (`origin/HEAD` の指すブランチ) にいる。手元の変更がない。`git fetch` のあとで、リモートの先頭と同じコミットである | cuminは動いたままである |
 | 2 | 入れ替える先を確かめる。LaunchAgentが読み込まれていて、plistの `ProgramArguments` の先頭が `<prefix>/cumin` (または同じファイル) である | cuminは動いたままである |
-| 3 | `cumin stop --after-current-runs` を実行し、cuminが終わるのを待つ | 上限で終わったら、cuminはそのままである。何も入れない |
-| 4 | `scripts/install.sh --prefix <prefix> --restart` を実行する。ビルドして置き、止まっているjobを起動する | cuminは止まっている。原因を直して、表示されたコマンドを実行する |
-| 5 | `scripts/cumin-health.sh --wait-polls 2` を実行する。定期確認が2回、エラーなしで終わることを確かめる | 新しいバイナリは入っていて、cuminは起動している。定期確認のエラーが出る |
+| 3 | 捨ててよいディレクトリにビルドする | cuminは動いたままである。何も入れない |
+| 4 | `cumin stop --after-current-runs` を実行し、cuminが終わるのを待つ | 上限で終わったら、cuminはそのままである。何も入れない |
+| 5 | ビルドしたバイナリを `<prefix>/cumin` に置き、止まっているjobを起動する (`launchctl kickstart -k`) | cuminは止まっている。原因を直して、表示されたコマンド (`scripts/install.sh --prefix <prefix> --restart`) を実行する |
+| 6 | `scripts/cumin-health.sh --wait-polls 2` を実行する。定期確認が2回、エラーなしで終わることを確かめる | 新しいバイナリは入っていて、cuminは起動している。定期確認のエラーが出る |
 
-- 手順1と手順2は、cuminを止める前に行う。ブランチや入れ替える先が違うときに、cuminを止めたままにしないためである。
-- 手順3の待ちは、止める予約のファイル (`~/.local/state/cumin/stop-request.json`) がなくなるのを待つ。`cumin run` は、止まり終えるときにこのファイルを消す ([cumin本体の設計メモ](../designs/cumin-core.md) の「実行を待ってから止める」)。スクリプトはGitHubに問い合わせない。
-- 手順3が上限で終わったら、`error: time limit: cumin has not ended in 3600s. ...` と出して、`1` で終わる。cuminは、実行を待ってから止まる途中のままである。もう一度実行すると、続きを待つ。
-- cuminが動いていないHostでは、予約を消すものがいないので、手順3は上限で終わる。そのときは、`scripts/install.sh --restart` で入れて起動する。
-- 手順5が失敗したときは、`cumin-health.sh` の出した定期確認のエラーのあとに、`error: the new binary is installed and cumin was started, but the check of the polls failed. ...` と出る。
+- 手順1から手順3は、cuminを止める前に行う。ブランチや入れ替える先が違うときや、ビルドが失敗したときに、cuminを止めたままにしないためである。
+- 手順4の待ちは、止める予約のファイル (`~/.local/state/cumin/stop-request.json`) がなくなるのを待つ。`cumin run` は、止まり終えるときにこのファイルを消す ([cumin本体の設計メモ](../designs/cumin-core.md) の「実行を待ってから止める」)。スクリプトはGitHubに問い合わせない。
+- 手順4が上限で終わったら、`error: time limit: cumin has not ended in 3600s. ...` と出して、`1` で終わる。cuminは、実行を待ってから止まる途中のままである。もう一度実行すると、続きを待つ。
+- cuminが動いていないHostでは、予約を消すものがいないので、手順4は上限で終わる。そのときは、`scripts/install.sh --restart` で入れて起動する。
+- 手順6が失敗したときは、`cumin-health.sh` の出した定期確認のエラーのあとに、`error: the new binary is installed and cumin was started, but the check of the polls failed. ...` と出る。
 
 ### オプション
 
 | オプション | 意味 | 初期値 |
 |---|---|---|
-| `--prefix <dir>` | バイナリを置くディレクトリ。`scripts/install.sh` にそのまま渡す | `~/.local/bin` |
-| `--stop-timeout <seconds>` | 手順3の待つ時間の上限 (秒) | `3600` |
-| `--dry-run` | 読むだけの確認を行い、残りの手順を表示して、何も変えない | 付けない |
+| `--after-current-runs` | 実行中のAgentを取り消さずに入れ替える。この節の6つの手順を行う | 付けない |
+| `--prefix <dir>` | バイナリを置くディレクトリ | `~/.local/bin` |
+| `--stop-timeout <seconds>` | 手順4の待つ時間の上限 (秒) | `3600` |
 
-- `--dry-run` は、手順1のブランチと手元の変更の確認と、手順2の確認を行う。`git fetch`、`cumin stop`、`scripts/install.sh`、`scripts/cumin-health.sh` は実行せず、実行するはずのコマンドを `dry run:` の行で表示する。確認が失敗したら、`1` で終わる。
-- `--stop-timeout` の初期値の3600秒は、Agentの1回の実行が1時間近くかかることがあるからである。手順5の上限は、`cumin-health.sh` の `--timeout` の初期値 (300秒) である。
+- `--after-current-runs` を付けない `scripts/install.sh` は、ビルドして置くだけである。`--restart` を付けると、置いたあとでjobを起動し直すが、実行中のAgentは途中で終わる ([セットアップの手順](../development/setup-guide.md) の手順4)。
+- `--stop-timeout` の初期値の3600秒は、Agentの1回の実行が1時間近くかかることがあるからである。手順6の上限は、`cumin-health.sh` の `--timeout` の初期値 (300秒) である。
 
 ### 終了コード
 
 | 終了コード | いつ |
 |---|---|
-| `0` | 5つの手順がすべて通った。`--dry-run` では、読むだけの確認が通った |
-| `1` | 手順のどれかが失敗した。手順3が上限で終わった。必要な道具 (`git`、`cumin`、`launchctl`、`plutil`) がない |
+| `0` | 6つの手順がすべて通った |
+| `1` | 手順のどれかが失敗した。手順4が上限で終わった。必要な道具 (`go`、`git`、`cumin`、`launchctl`、`plutil`) がない |
 | `2` | オプションの誤り。知らないオプション、値のないオプション、数でない `--stop-timeout` |
 
 ## 実機の場面 E2E-1 を実行する
