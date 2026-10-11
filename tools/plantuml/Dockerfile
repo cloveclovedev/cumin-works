@@ -10,5 +10,3 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
-
-# temporary: makes the job check every diagram once on the Linux runner
