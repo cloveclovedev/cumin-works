@@ -1,0 +1,29 @@
+{
+  "tagOwners": {
+    "tag:cumin-host": ["autogroup:admin"]
+  },
+  "grants": [
+    {
+      "src": ["autogroup:member"],
+      "dst": ["autogroup:member"],
+      "ip": ["*"]
+    },
+    {
+      "src": ["autogroup:member"],
+      "dst": ["tag:cumin-host"],
+      "ip": ["tcp:22", "tcp:5900"]
+    }
+  ],
+  "tests": [
+    {
+      "src": "__MEMBER_LOGIN__",
+      "proto": "tcp",
+      "accept": ["tag:cumin-host:22", "tag:cumin-host:5900"]
+    },
+    {
+      "src": "tag:cumin-host",
+      "proto": "tcp",
+      "deny": ["__MEMBER_LOGIN__:22", "__MEMBER_LOGIN__:5900"]
+    }
+  ]
+}
