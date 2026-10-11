@@ -113,6 +113,7 @@
 | | `quota.go` | Agentの起動の前の使用率の確認と、実行の終わりの確認 (「stop agent starts」)。枠ごとに1回だけ知らせる。使用率を状態ファイルに残し、読んだばかりの使用率があれば最小の実行をせずに判定する。止めている間は次に試す時刻まで読まない (「resume agent starts」) |
 | | `quotanote.go` | 純粋。「stop agent starts」の通知の理由の文章。標準ライブラリのほかに、`internal/quota` の枠の名前の型だけを使う |
 | | `toolchecks.go` | 定期確認ごとの道具の確認の実行と、失敗した確認の記録。確認が失敗しているリポジトリでは、Agentの起動の前の1つの確認が許可を返さない (「stop agent starts」、「resume agent starts」) |
+| | `toolchecknotice.go` | 道具の確認が失敗し始めたときの、リポジトリごとの1回だけの通知 (「stop agent starts」)。確認が全部通ると印を消す |
 | | `settings.go` | リポジトリごとの設定。Hostの設定に `.cumin/config.toml` を重ね、riskの基準と、保護されたパスの一覧を決める。blobのoidが変わるまで結果を持つ |
 | `internal/quota` | `domain.go` | 純粋。weekly枠のペースの上限、5h枠の時間帯のしきい値、枠ごとに着手を止めるかの判定、次に試す時刻 (「resume agent starts」)、残した使用率が読んだばかりかどうか |
 | | `stored.go` | 純粋。判定に使う使用率と、状態ファイルに残す使用率の間の変換。標準ライブラリのほかに、`internal/core/state` の型だけを使い、入出力はしない。`internal/workflow` と `cmd/cumin` が使う |
