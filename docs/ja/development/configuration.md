@@ -140,7 +140,7 @@ priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
 | `priority_labels` | 着手の順番を決める優先度のラベルの一覧。優先度の高い順に書く。リポジトリの設定ファイルにだけ書ける。下の「優先度のラベル」を参照 |
 | `roles.<role>.cli` | Hostの設定と同じ |
 | `roles.<role>.model` | Hostの設定と同じ |
-| `notify.discord.enabled` | Hostの設定と同じ。そのリポジトリのIssueについて通知を出すかどうかを、リポジトリが選ぶ。webhookのアドレスはHostのもの1つで、リポジトリからは変えられない |
+| `notify.discord.enabled` | Hostの設定と同じ。そのリポジトリのIssueと、そのリポジトリの道具の確認の失敗について、通知を出すかどうかを、リポジトリが選ぶ。webhookのアドレスはHostのもの1つで、リポジトリからは変えられない |
 | `protected_paths` | Agentに変更させないパスの一覧。リポジトリの設定ファイルにだけ書ける。書かなければ、またはファイルがなければ、初期値 (`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`) になる。書いた一覧は、初期値に足されるのではなく、初期値を置き換える。cuminはこの一覧を読み、照合の決まりとともに、起動の依頼のデータとしてどのroleのAgentにも渡す。cuminは一覧の中身を確かめない。確かめて強制するのは、GitHub Actionsのcheck (`cumin-protected-paths`) だけである |
 | `tool_checks` | このリポジトリのAgentが使う道具が、Hostで使えることを確かめるコマンドの一覧。リポジトリの設定ファイルにだけ書ける。書かなければ、確認しない。下の「道具の確認」を参照 |
 
