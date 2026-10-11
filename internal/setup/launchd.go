@@ -111,8 +111,9 @@ func temporaryDirs() []string {
 // MissingCommands returns the commands that the job would not find, in the
 // order given. A name with no separator is looked up in the directories of
 // PathEnv, which is the PATH that the plist gives to cumin and to every
-// agent; the PATH of the running command has no part. A path is checked as
-// it is.
+// agent; the PATH of the running command has no part. A name with a
+// separator is a path: an absolute path is checked as it is, and a relative
+// path is missing.
 func (a LaunchAgent) MissingCommands(commands []string) []string {
 	var missing []string
 	for _, command := range commands {
@@ -123,12 +124,12 @@ func (a LaunchAgent) MissingCommands(commands []string) []string {
 	return missing
 }
 
-// finds reports whether the job would find the command. A relative
-// directory of PathEnv is skipped: launchd gives the job a working
-// directory of its own, so the directory would be another one there.
+// finds reports whether the job would find the command. A relative path
+// and a relative directory of PathEnv do not count: the job resolves them
+// from a working directory of its own, not from the one of this command.
 func (a LaunchAgent) finds(command string) bool {
 	if strings.ContainsRune(command, filepath.Separator) {
-		return isExecutable(command)
+		return filepath.IsAbs(command) && isExecutable(command)
 	}
 	for _, dir := range filepath.SplitList(a.PathEnv) {
 		if filepath.IsAbs(dir) && isExecutable(filepath.Join(dir, command)) {

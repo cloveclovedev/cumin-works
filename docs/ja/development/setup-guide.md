@@ -312,7 +312,7 @@ export PATH="$HOME/.local/bin:$PATH"     # ログインシェルの設定にも�
 
 | `PATH` に要るもの | ないとき |
 |---|---|
-| cumin 自身が起動するコマンド: role ごとの Agent の CLI (設定の `cli_path`。初期値は `claude`) と `git` | `cumin setup launchd` が、ないコマンドの名前を表示して、plist を書かずに失敗で終わる |
+| cumin 自身が起動するコマンド: role ごとの Agent の CLI (設定の `cli_path`。初期値は `claude`) と `git`。`cli_path` をパスで書くなら、絶対パスにする。相対パスは「ない」として扱われる | `cumin setup launchd` が、ないコマンドの名前を表示して、plist を書かずに失敗で終わる |
 | 対象のリポジトリの道具: `gh` と、リポジトリの設定の `tool_checks` が確かめる道具 (`docker` など) | `cumin setup launchd` は確かめない。`cumin run` が最初の定期確認で道具の確認を実行し、失敗したリポジトリではAgentを起動せずに通知する |
 
 - `cumin setup launchd` は、Host の設定ファイルと `PATH` のディレクトリだけを読む。GitHub も Keychain も読まないので、道具の確認は実行しない。
