@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/cloveclovedev/cumin-works/internal/core/config"
@@ -295,7 +296,28 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	agent := setup.NewLaunchAgent(home, program, path, os.Getenv("PATH"))
-	if *dryRun {
+	return writeLaunchd(agent, *dryRun, *force, stdout, stderr)
+}
+
+// writeLaunchd checks the commands that cumin starts, then writes the
+// plist of the job, or prints it under --dry-run.
+func writeLaunchd(agent setup.LaunchAgent, dryRun, force bool, stdout, stderr io.Writer) int {
+	// The check comes before the plist and before its preview, so that a
+	// missing command is found here and not when a run fails. It reads the
+	// settings file and the directories of the PATH only: no GitHub and no
+	// Keychain.
+	started, err := startedCommands(agent.ConfigPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
+		return exitFailure
+	}
+	if missing := agent.MissingCommands(started); len(missing) > 0 {
+		fmt.Fprintf(stderr, "cumin setup launchd: not found on the PATH of the plist: %s\n", strings.Join(missing, ", "))
+		fmt.Fprintf(stderr, "the PATH of the plist is the PATH of this shell: %s\n", agent.PathEnv)
+		fmt.Fprintln(stderr, "add the directory of each command to the PATH, then run the command again. Nothing was written")
+		return exitFailure
+	}
+	if dryRun {
 		plist, err := agent.Plist()
 		if err != nil {
 			fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
@@ -305,7 +327,7 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 		return exitOK
 	}
 
-	result, err := setup.InstallLaunchAgent(agent, *force)
+	result, err := setup.InstallLaunchAgent(agent, force)
 	if err != nil {
 		fmt.Fprintf(stderr, "cumin setup launchd: %v\n", err)
 		return exitFailure
@@ -323,6 +345,26 @@ func runSetupLaunchd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "%-33s %s\n", line.what+":", line.command)
 	}
 	return exitOK
+}
+
+// startedCommands returns the commands that cumin itself starts: the agent
+// CLI of each role, as the Host settings file names it, and git. A command
+// that two roles share is listed once.
+func startedCommands(configPath string) ([]string, error) {
+	settings, err := config.Load(configPath)
+	if err != nil {
+		return nil, err
+	}
+	var commands []string
+	for _, role := range config.AllRoles() {
+		if cli := settings.Roles[role].CLIPath; !slices.Contains(commands, cli) {
+			commands = append(commands, cli)
+		}
+	}
+	if !slices.Contains(commands, "git") {
+		commands = append(commands, "git")
+	}
+	return commands, nil
 }
 
 // removeLaunchd is `cumin setup launchd --remove`: it stops the job when
