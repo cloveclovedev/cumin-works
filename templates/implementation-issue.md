@@ -7,7 +7,7 @@ One implementation issue becomes one pull request.
 ## Rules
 
 - Keep the issue within 40 lines. The Implementer reads it once; a Maintainer reads it on a phone.
-- Start with "Where this fits": the part of the product that this issue changes. Show the diagram that you drew for this issue on the branch `cumin/diagrams`, as an image at its commit, with the target in color, and name in one sentence the colored box or arrow that this issue builds. Then the rules of the documents that it implements, each with its meaning. The granularity is right when a reader can point at one place in the diagram. When no diagram shows the part, say so and add "the design document gains a diagram of this part" to the acceptance criteria.
+- Start with "Where this fits": the part of the product that this issue changes. Show the diagram that you drew for this issue on the branch `cumin/diagrams`, as an image at its commit, with the target in color, and name in one sentence the colored box or arrow that this issue builds. The address of the image follows rule 13 (diagrams as images) of the writing rules: `https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.svg` on a public repository, `../blob/<commit>/<path>.svg?raw=true` on a private repository. Then the rules of the documents that it implements, each with its meaning. The granularity is right when a reader can point at one place in the diagram. When no diagram shows the part, say so and add "the design document gains a diagram of this part" to the acceptance criteria.
 
 - Create the issue as a sub-issue of the requirement issue.
 - Make the issue body complete. The Implementer must be able to do the work from the issue body, the linked documents, and the repository. Do not rely on later comments.
