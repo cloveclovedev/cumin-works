@@ -315,7 +315,29 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 - cloneとfetchは、worktreeのroleのAppのtokenで認証する。[Agentの実行の設計](agent-run.md) の「作業場所」にある。
 - 実機の確認は、Teamプランの Organization の、非公開の使い捨てのリポジトリ (`cumin-sandbox-private`) で行う。Maintainerが2026-10-11に決めた (#792)。公開のsandboxとは別のリポジトリである。手順は [実機の確認 (live test)](../development/live-tests.md) にある。
 - 保護されたパスのcheck (workflow `cumin-protected-paths`) は、変えない。非公開のリポジトリでは、GitHub Actionsの時間はプランに含まれる分から引かれる (公式: GitHub Actions billing。公開のリポジトリは無料である。実測 79)。このjobは、AppのPull Requestでだけ動き、人のPull Requestでは飛ばされて時間を使わない (#792 の測定)。1回のpushで1つのjobが動き、5分で打ち切られる。これは公式のページと測定からの推論で、AppのPull Requestで使う時間は測っていない (「まだ決めていないこと」)。
-- 図の画像のアドレスと、`scripts/setup-repo.sh` がrulesetのないプランを見分ける方法は、まだ決めていない (「まだ決めていないこと」)。
+- 図の画像のアドレスは、リポジトリが公開か非公開かで決まる。Maintainerが2026-10-11に決めた (#793)。
+
+  | リポジトリ | 画像のアドレス | 読める人に表示される場所 |
+  |---|---|---|
+  | 公開 | `https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.svg` (今のまま) | WebとGitHubアプリ (実測 115) |
+  | 非公開 | 相対リンク `../blob/<commit>/<path>.svg?raw=true` | Webだけ (実測 153) |
+
+  - 相対リンクは、IssueとPull Requestのページから見て、同じリポジトリの `blob/<commit>/<path>` を指す (公式: Basic writing and formatting syntax の "Images")。コミットを指定するので、今のアドレスと同じく、図はあとから変わらない。
+  - リポジトリを読めない人には、何も見えない。その人はIssueのページを開けず、認証なしでは画像のアドレスが404を返す (実測 153)。
+  - 公開か非公開かは、画像を書くAgentが、自分のAppのtokenで読む。`GET /repos/{owner}/{repo}` の `private` である (公式: REST API の "Get a repository"。`private` は必ず返る真偽値である)。指示は、画像のアドレスを書いている3か所に置く: `templates/writing-rules.md` の13、`roles/planner.md`、`templates/` の例。cuminのコードと依頼の文面は、変わらない。
+  - cuminは、画像のアドレスを読まず、判定に使わない。完了の判定は、今と同じ事実だけで決まる。Agentがアドレスを誤ると、図が表示されないだけである。Reviewerと読む人が気づき、やり直しで直る。
+  - 受け入れた不利益: 非公開のリポジトリでは、GitHubアプリに図が表示されない。測った4つのアドレスのどれでも、表示されなかった (実測 153)。Maintainerが受け入れた (#793)。図を見るには、Webで開く。
+  - 受け入れた不利益: 画像を書くAgentは、1回の実行でRESTの読み取りを1つ増やす (GraphQLのポイントは使わない)。
+  - 採らなかった案: 全てのリポジトリで相対リンクを使う。公開のリポジトリのGitHubアプリで、今は表示される図が表示されなくなる (実測 153)。
+  - 採らなかった案: cuminが、公開か非公開かを依頼の事実としてAgentに渡す。要件の変更とコードが要る。Agentは、同じ事実を自分のtokenで読める。cuminの判定がこの事実を使うことはない。
+  - 採らなかった案: `https://github.com/<owner>/<repo>/blob/<commit>/<path>.svg?raw=true` か `https://github.com/<owner>/<repo>/raw/<commit>/<path>.svg` を使う。非公開のリポジトリでの表示は、相対リンクと同じである (実測 153)。公式文書が画像のために示すのは、相対リンクである。
+- `scripts/setup-repo.sh` は、何かを変える前の確認 (「Checks before any change」) で、rulesetを使えるかを確かめる。`GET /repos/{owner}/{repo}/rulesets` を読み、ステータスが403なら、何も変えずに止まる。`--dry-run` でも同じである。
+  - 根拠: rulesetを使えるプランでは、rulesetがなくても、200と空の一覧が返る (実測 146)。rulesetのないプランの非公開のリポジトリでは、403が返る (実測 154)。
+  - 見分けるのは、ステータスである。メッセージの文面では見分けない。Organization のメッセージは測っておらず、別のプランの名前を挙げるかもしれない (未確認 152)。
+  - 止まるときの文面は、3つを言う: リポジトリが非公開のときは、rulesetを使えるプラン (Organization はTeam) が要ること (実測 13)。cuminは、rulesetのないリポジトリを対象にしないこと。GitHubが返したメッセージ。リポジトリが非公開かどうかは、同じ確認がもう読んでいる `GET /repos/{owner}/{repo}` の `private` で分かる。
+  - 403は、ほかの理由でも返りうる。そのときも、rulesetを読めないスクリプトは先へ進めないので、止まるのは正しい。理由は、GitHubのメッセージが示す。
+  - 採らなかった案: プランを読んで見分ける (`GET /orgs/{org}` の `plan`)。プランの名前とrulesetの対応を、スクリプトが持つことになる。GitHubがプランを変えると、古くなる。
+  - 採らなかった案: rulesetを作るところまで進み、そこで失敗する。その前に、2つのファイルとラベルが変わっている。
 
 ### 起動前の使用率の確認
 
@@ -336,10 +358,9 @@ riskの基準は、PlannerとReviewerがそのまま受け取る文章である�
 
 | 決める、または確かめること | どこで |
 |---|---|
-| 非公開のリポジトリで、リポジトリを読める人に図が表示される画像のアドレス。今のアドレス (`raw.githubusercontent.com`) は、読める人にも表示されない (実測 150)。公式文書が示す相対リンク `../blob/<commit>/<path>?raw=true` は、測っていない (未確認 150) | #793 の decision request |
-| `scripts/setup-repo.sh` が、rulesetのないプランの非公開のリポジトリを、変更の前に見分ける方法。そのリポジトリで `GET /repos/{owner}/{repo}/rulesets` が何を返すかを、測っていない (未確認 152) | #793 の decision request |
 | 3つの読み取りの権限を足した `cumin-core` のtokenが、非公開のリポジトリでcheckを読めること。GraphQLの `statusCheckRollup` を含む (未確認 148) | #795 の受け入れテストと、#799 の実機の確認 |
 | 非公開のリポジトリで、保護されたパスのcheckがAppのPull Requestに使うGitHub Actionsの時間 (未確認 151) | #799 の実機の確認 |
+| Freeプランの Organization の非公開のリポジトリで、`GET /repos/{owner}/{repo}/rulesets` が返すステータス (未確認 152)。`scripts/setup-repo.sh` の確認は、403を前提にしている | #797 の実装 |
 | 枠の上限に当たったときの、headless実行の終わり方と `rate_limit_info.status` の値 (実測 6)。意図して上限に当てられないので、実際に当たったときの記録で埋める | 上限に当たった実行の記録が残ったとき |
 
 ## 後回しにしたこと

@@ -21,10 +21,10 @@ cloud "GitHub: private repository\nof an Organization on the Team plan" as githu
   component "issues and pull requests\nwith diagram images" as text
 }
 
-admin --> rulesets : scripts/setup-repo.sh\nchecks that the plan has rulesets,\nbefore any change
+admin --> rulesets : scripts/setup-repo.sh\nreads the rulesets before any change,\nstops on 403 (plan without rulesets)
 cumin --> git : token of the App of the role\n(contents: read), in the environment only
 git --> https : Authorization header\nno token in .git/config
 cumin --> checks : token of cumin-core\nChecks, Commit statuses, Actions: read
-agent --> text : image address that only\na reader with access sees
-reader --> text : with access: sees the image\nwithout access: sees nothing
+agent --> text : reads "private" of the repository\nprivate: ../blob/<commit>/<path>.svg?raw=true\npublic: raw.githubusercontent.com
+reader --> text : with access: sees the image on the Web\nwithout access: sees nothing
 @enduml
