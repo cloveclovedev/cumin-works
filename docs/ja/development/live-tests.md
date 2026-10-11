@@ -97,7 +97,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 |---|---|
 | P1 | cumin-core の token で読んだ、リポジトリの ruleset の一覧 (名前、対象、出どころ、enforcement) と、`GET /repos/{owner}/{repo}/rules/branches/{branch}` の返事 (rule の種類、必須のcheck) |
 | P2 | 権限の表の cumin-core の token による、check run、commit status、annotation、job のログの読み取りの、それぞれのステータス。GraphQL の `statusCheckRollup` の返事 (ステータス、エラー、check の数) も記録する。token の権限の一覧も記録する |
-| P3 | 認証なしと、Planner、Implementer、Reviewer、cumin-core の各 App の token での、`git ls-remote`、`git clone`、`git fetch` の終了コード。失敗したときは、git の出力の最後の1行も記録する |
+| P3 | 認証なしと、Planner、Implementer、Reviewer、cumin-core の各 App の token と、Planner、Implementer、Reviewer の各 App の、リポジトリ1つと `contents: read` に絞った token での、`git ls-remote`、`git clone`、`git fetch`、`git remote set-head origin --auto` の終了コード。失敗したときは、git の出力の最後の1行も記録する |
 | P4 | `cumin/diagrams` の SVG の1つの、`raw.githubusercontent.com` のアドレスのステータスと Content-Type。認証なしと、cumin-core の token を付けた場合 |
 | P5 | P2 と同じ読み取りを、Checks、Commit statuses、Actions の3つの権限のない cumin-core の token で行った結果。テストが、この3つを除いた権限で token を求める |
 

@@ -137,7 +137,7 @@ func runRun(args []string, stdout, stderr io.Writer) int {
 		Agents:           agents,
 		Notify:           notifier,
 		State:            states,
-		Workspace:        agent.Workspace{Root: settings.WorkDir, Logger: logger},
+		Workspace:        agent.Workspace{Root: settings.WorkDir, Logger: logger, Token: agents.GitToken},
 		Settings:         settings,
 		SettingsDir:      filepath.Dir(path),
 		PollInterval:     settings.PollInterval,
@@ -208,9 +208,10 @@ func (missingWebhook) Send(context.Context, string) error {
 		keychain.Service, keychain.DiscordWebhookAccount)
 }
 
-// remoteURL is the address that the clone of a target repository uses. v0.1
-// clones over HTTPS without credentials, so only public repositories are
-// supported (agent-run.md, the section on deferred work).
+// remoteURL is the address that the clone of a target repository uses. It
+// holds no credentials: each clone and fetch gets the token of the App of
+// the role through the environment of git (agent-run.md, the topic on the
+// work directory).
 func remoteURL(repo config.Repository) string {
 	return "https://github.com/" + repo.Owner + "/" + repo.Name + ".git"
 }
