@@ -248,7 +248,8 @@ func TestSignJWT_HoldsExactlyTheThreeClaimsOfGitHub(t *testing.T) {
 
 func TestAppPermissions_MatchTheSetupDocument(t *testing.T) {
 	want := map[string]map[string]string{
-		"cumin-core":  {"contents": "write", "pull_requests": "write", "issues": "write"},
+		"cumin-core": {"contents": "write", "pull_requests": "write", "issues": "write",
+			"checks": "read", "statuses": "read", "actions": "read"},
 		"planner":     {"issues": "write", "contents": "write"},
 		"implementer": {"contents": "write", "pull_requests": "write", "issues": "read"},
 		"reviewer":    {"pull_requests": "write", "contents": "read", "issues": "read"},

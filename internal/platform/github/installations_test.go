@@ -24,8 +24,9 @@ func appServer(t *testing.T, count int) (*httptest.Server, *[]string) {
 		case "/app":
 			writeJSON(w, http.StatusOK, map[string]any{
 				"slug": "acme-cumin-core", "html_url": "https://github.com/apps/acme-cumin-core",
-				"owner":       map[string]any{"login": "Example-Org"},
-				"permissions": map[string]any{"metadata": "read", "contents": "write", "issues": "write", "pull_requests": "write"},
+				"owner": map[string]any{"login": "Example-Org"},
+				"permissions": map[string]any{"metadata": "read", "contents": "write", "issues": "write", "pull_requests": "write",
+					"checks": "read", "statuses": "read", "actions": "read"},
 			})
 		case "/app/installations":
 			var page int

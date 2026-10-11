@@ -131,3 +131,50 @@ func TestDescribe_NamesEachChangedPermission(t *testing.T) {
 		t.Error("adds does not tell an added permission from a removed one")
 	}
 }
+
+// The permission table of cumin-core grew by the three read permissions of
+// the checks. An App that is registered with the table before them gets the
+// guided change: the App page, then the installation page. The command
+// writes no permission itself: GitHub holds the old ones until the person
+// changes them on each page.
+func TestSetupGitHubApps_LeadsCuminCoreThroughTheReadPermissionsOfTheChecks(t *testing.T) {
+	var out bytes.Buffer
+	service, browser, fake := installedAfterOneRun(t, &out)
+	want, _ := github.AppPermissions("cumin-core")
+	old := map[string]string{"contents": "write", "pull_requests": "write", "issues": "write"}
+	setPermissions(fake, fake.perms, "cumin-core", old)
+	setPermissions(fake, fake.approved, "cumin-core", old)
+
+	appPage := AppPermissionsURL("https://github.example", "example-org", "cumin-core")
+	pages := 0
+	browser.onPage = func(address string) {
+		fake.mu.Lock()
+		registered, approved := maps.Clone(fake.perms["cumin-core"]), maps.Clone(fake.approved["cumin-core"])
+		fake.mu.Unlock()
+		pages++
+		switch {
+		case address == appPage:
+			if !maps.Equal(registered, old) || !maps.Equal(approved, old) {
+				t.Errorf("before the App page: registered %v, approved %v, want the old permissions", registered, approved)
+			}
+			setPermissions(fake, fake.perms, "cumin-core", want)
+		case strings.Contains(address, "/settings/installations/"):
+			if !maps.Equal(approved, old) {
+				t.Errorf("before the installation page: approved %v, want the old permissions", approved)
+			}
+			setPermissions(fake, fake.approved, "cumin-core", want)
+		}
+	}
+	if err := service.Run(context.Background(), "example-org", ""); err != nil {
+		t.Fatalf("Run: %v\n%s", err, out.String())
+	}
+	if pages != 2 || len(browser.installed) != 2 || browser.installed[0] != appPage {
+		t.Errorf("opened %q, want the App page of cumin-core, then its installation page", browser.installed)
+	}
+	for _, line := range []string{"actions: none -> read, checks: none -> read, statuses: none -> read",
+		"the installation of cumin-core on example-org has the new permissions"} {
+		if !strings.Contains(out.String(), line) {
+			t.Errorf("the output does not show %q:\n%s", line, out.String())
+		}
+	}
+}
