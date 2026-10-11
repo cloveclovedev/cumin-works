@@ -3,12 +3,16 @@ package github_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"log/slog"
+	"maps"
 	"net/http"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
@@ -433,4 +437,120 @@ func contentOf(t *testing.T, content []github.FailedCheck, name string) string {
 
 func logger(out *bytes.Buffer) *slog.Logger {
 	return slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+// oldCorePermissions is the permission table of cumin-core before it held
+// the read permissions of the checks.
+var oldCorePermissions = map[string]string{"contents": "write", "pull_requests": "write", "issues": "write"}
+
+// privateRepositoryWithAFailedCheck returns a fake with a private repository
+// whose required check "ci" failed, with an annotation and a job log.
+func privateRepositoryWithAFailedCheck(t *testing.T) (*githubtest.Fake, *github.AppClient) {
+	t.Helper()
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	repo.Private = true
+	repo.RequiredChecks = []githubtest.RequiredCheck{{Name: "ci"}}
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 7, Name: "ci", Conclusion: "failure", JobID: 42,
+		Annotations: []githubtest.Annotation{{Path: "internal/a/a.go", Level: "failure", Message: "a_test.go:12: want 2, got 1"}},
+		JobLog:      "step 1\nFAIL\tinternal/a\n",
+	})
+	return fake, github.NewAppClient(server.URL, server.Client())
+}
+
+// TestFailedCheckContent_APrivateRepositoryAnswersTheTokenOfCuminCore: the
+// installation token of cumin-core holds the permissions of the permission
+// table, and a private repository answers the read of the check runs, of
+// the annotations, and of the job log to it.
+func TestFailedCheckContent_APrivateRepositoryAnswersTheTokenOfCuminCore(t *testing.T) {
+	fake, client := privateRepositoryWithAFailedCheck(t)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	token, err := client.CreateInstallationToken(ctx, github.AppCredentials{ClientID: "Iv23liEXAMPLE", PrivateKey: key},
+		config.AppCuminCore, "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("CreateInstallationToken: %v", err)
+	}
+	want := map[string]string{"contents": "write", "pull_requests": "write", "issues": "write",
+		"checks": "read", "statuses": "read", "actions": "read"}
+	if requests := fake.TokenRequests(); len(requests) != 1 || !maps.Equal(requests[0].Permissions, want) {
+		t.Fatalf("token requests = %+v, want one with exactly %v", requests, want)
+	}
+	logs := &bytes.Buffer{}
+
+	required, err := client.RequiredChecks(ctx, token.Token, "example-org", "example-repo", "main")
+	if err != nil || len(required) != 1 || required[0].Name != "ci" {
+		t.Fatalf("RequiredChecks = %+v, %v, want the check ci", required, err)
+	}
+	content := client.FailedCheckContent(ctx, token.Token, "example-org", "example-repo", headSHA, required, logger(logs))
+
+	text := contentOf(t, content, "ci")
+	for _, want := range []string{`Check "ci" failed.`, "internal/a/a.go: a_test.go:12: want 2, got 1", "FAIL\tinternal/a"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the text has no %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(logs.String(), "WARN") {
+		t.Errorf("a warning for a check that the token reads: %s", logs)
+	}
+}
+
+// TestFailedCheckContent_APrivateRepositoryRefusesATokenWithoutTheReadPermissions:
+// the same read with a token of the table before the three read permissions
+// is refused. The text then says that the content could not be read. A token
+// with Checks and without Actions reads the annotations and no job log.
+func TestFailedCheckContent_APrivateRepositoryRefusesATokenWithoutTheReadPermissions(t *testing.T) {
+	fake, client := privateRepositoryWithAFailedCheck(t)
+	fake.SetTokenPermissions(oldCorePermissions)
+	logs := &bytes.Buffer{}
+	ctx := context.Background()
+	required := []github.RequiredCheck{{Name: "ci"}}
+
+	content := client.FailedCheckContent(ctx, githubtest.Token, "example-org", "example-repo", headSHA, required, logger(logs))
+
+	text := contentOf(t, content, "ci")
+	if !strings.Contains(text, `Check "ci" failed.`) || !strings.Contains(text, "could not read its content") {
+		t.Errorf("the text does not name the check and the missing content:\n%s", text)
+	}
+	if strings.Contains(text, "a_test.go:12") || strings.Contains(text, "FAIL\tinternal/a") {
+		t.Errorf("the text holds content that the token must not read:\n%s", text)
+	}
+	if !strings.Contains(logs.String(), "WARN") {
+		t.Errorf("no warning for a check that could not be read: %s", logs)
+	}
+
+	withChecks := maps.Clone(oldCorePermissions)
+	withChecks["checks"] = "read"
+	fake.SetTokenPermissions(withChecks)
+	content = client.FailedCheckContent(ctx, githubtest.Token, "example-org", "example-repo", headSHA, required, logger(logs))
+	text = contentOf(t, content, "ci")
+	if !strings.Contains(text, "a_test.go:12: want 2, got 1") || strings.Contains(text, "FAIL\tinternal/a") {
+		t.Errorf("the text of a token with Checks and without Actions, want the annotation and no job log:\n%s", text)
+	}
+}
+
+// TestFailedCheckContent_APublicRepositoryAnswersATokenWithoutTheReadPermissions:
+// a public repository answers as before (measured-constraints.md row 54).
+func TestFailedCheckContent_APublicRepositoryAnswersATokenWithoutTheReadPermissions(t *testing.T) {
+	fake, server := githubtest.New(t)
+	repo := fake.AddRepository("example-org", "example-repo")
+	fake.SetTokenPermissions(oldCorePermissions)
+	fake.AddCheckRun(repo, headSHA, githubtest.CheckRun{
+		ID: 7, Name: "ci", Conclusion: "failure", JobID: 42,
+		Annotations: []githubtest.Annotation{{Path: "internal/a/a.go", Level: "failure", Message: "a_test.go:12: want 2, got 1"}},
+		JobLog:      "FAIL\tinternal/a\n",
+	})
+	client := github.NewAppClient(server.URL, server.Client())
+
+	content := client.FailedCheckContent(context.Background(), githubtest.Token,
+		"example-org", "example-repo", headSHA, []github.RequiredCheck{{Name: "ci"}}, logger(&bytes.Buffer{}))
+
+	text := contentOf(t, content, "ci")
+	if !strings.Contains(text, "a_test.go:12: want 2, got 1") || !strings.Contains(text, "FAIL\tinternal/a") {
+		t.Errorf("the text has no content of the check:\n%s", text)
+	}
 }

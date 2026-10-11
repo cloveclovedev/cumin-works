@@ -2,6 +2,7 @@ package githubtest
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -80,6 +81,16 @@ func (f *Fake) TokenRequests() []TokenRequest {
 	return requests
 }
 
+// SetTokenPermissions sets the repository permissions of Token, for a test
+// that hands Token to the client without a token request. A token request
+// with permissions replaces them. Only the reads of the checks of a private
+// repository look at them (Repository.Private).
+func (f *Fake) SetTokenPermissions(permissions map[string]string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tokenPermissions = maps.Clone(permissions)
+}
+
 // serveApp answers GET /app with the registered App. Official: "Get the
 // authenticated app".
 func (f *Fake) serveApp(w http.ResponseWriter) {
@@ -111,9 +122,10 @@ func (f *Fake) serveInstallation(w http.ResponseWriter, owner, name string) {
 }
 
 // serveAccessToken answers POST /app/installations/{id}/access_tokens with
-// Token, which expires in one hour. The body is recorded (TokenRequests).
+// Token, which expires in one hour. The body is recorded (TokenRequests),
+// and its permissions become the permissions of Token.
 // Official: "Create an installation access token for an app".
-func (f *Fake) serveAccessToken(w http.ResponseWriter, id int64) {
+func (f *Fake) serveAccessToken(w http.ResponseWriter, body []byte, id int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	found := false
@@ -126,6 +138,9 @@ func (f *Fake) serveAccessToken(w http.ResponseWriter, id int64) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "Not Found"})
 		return
 	}
+	var request TokenRequest
+	_ = json.Unmarshal(body, &request)
+	f.tokenPermissions = request.Permissions
 	// The client compares the expiry with the real clock and takes no clock
 	// from a test, so the expiry is one hour after the real time.
 	writeJSON(w, http.StatusCreated, map[string]any{

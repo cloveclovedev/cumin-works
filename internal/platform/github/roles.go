@@ -26,6 +26,12 @@ var appPermissions = map[string]map[string]string{
 		"contents":      permissionWrite, // merging a pull request needs contents: write
 		"pull_requests": permissionWrite,
 		"issues":        permissionWrite,
+		// Only cumin-core reads the checks. A private repository refuses
+		// these reads to a token without the three permissions
+		// (docs/ja/designs/poll.md).
+		"checks":   permissionRead, // the check runs and their annotations
+		"statuses": permissionRead, // the commit statuses
+		"actions":  permissionRead, // the job logs
 	},
 	string(config.RolePlanner): {
 		"issues": permissionWrite,

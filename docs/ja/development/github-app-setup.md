@@ -12,7 +12,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 
 | App | 使うrole | 権限 (Repository permissions) |
 |---|---|---|
-| `cumin-core` | cumin本体 | Contents: Read & write、Pull requests: Read & write、Issues: Read & write |
+| `cumin-core` | cumin本体 | Contents: Read & write、Pull requests: Read & write、Issues: Read & write、Checks: Read-only、Commit statuses: Read-only、Actions: Read-only |
 | `cumin-planner` | Planner | Issues: Read & write、Contents: Read & write |
 | `cumin-implementer` | Implementer | Contents: Read & write、Pull requests: Read & write、Issues: Read-only |
 | `cumin-reviewer` | Reviewer | Pull requests: Read & write、Contents: Read-only、Issues: Read-only |
@@ -25,6 +25,7 @@ cuminとAgentがGitHub上で使う身元を、roleごとのGitHub Appとして�
 - ブランチのpushにも Contents: Read & write が要る。つまり `cumin-implementer` は権限の上ではmainにもpushできてしまう。これを防ぐのが、後述のrulesetである。
 - `cumin-core` の Pull requests: Read & write は、Maintainerの判断を待つPull Request (「ask for the merge decision」) で、Issue Ownerのレビューを依頼するために使う (`POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers`。公式: Request reviewers for a pull request)。
 - `cumin-core` の Issues: Read & write は、状態ラベルの付け替えとコメントの投稿に使う。
+- `cumin-core` の Checks: Read-only、Commit statuses: Read-only、Actions: Read-only は、checkを読むために使う。check runの一覧とannotation、commit status、jobのログである。非公開のリポジトリは、この3つのないtokenの読み取りを403で断る。公開のリポジトリは、なくても読ませるが、権限の表は公開と非公開で1つにする ([cumin本体の設計メモ](../designs/cumin-core.md) の「非公開のリポジトリ」)。この3つを持つのは `cumin-core` だけである。
 - `cumin-planner` の Contents: Read & write は、sub-issue の図をブランチ `cumin/diagrams` に置くためだけに使う。Contents の書き込みは全てのブランチとタグに及ぶので、`scripts/setup-repo.sh` の ruleset (`cumin-branches`、`cumin-diagrams`、`cumin-tags`) で、書き込めるブランチを `cumin/diagrams` だけにし、タグを作れないようにする ([セットアップの手順](setup-guide.md) の手順3)。
 - ruleset が止めるのは、ブランチとタグへの書き込みだけである。Contents の書き込みで使える次の操作は、ruleset では止まらない: 既にあるタグへの release の作成、release と release asset の編集と削除、`repository_dispatch` (workflow の起動)、コミットへのコメントの編集と削除。`cumin-implementer` は、同じ権限で同じ操作が既にできる。Planner に同じ危険を持たせることは、#198 で Maintainer が選んだ (案A)。これらを使う必要があるリポジトリでは、導入の前に見直す。
 - `cumin-implementer` には Workflows の権限を与えない。`.github/workflows` の変更は risk/high であり、Agentに触らせないため。

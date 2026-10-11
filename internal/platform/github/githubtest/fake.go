@@ -21,7 +21,12 @@ import (
 
 // Repository is one repository of the fake.
 type Repository struct {
-	Owner, Name  string
+	Owner, Name string
+	// Private makes the repository refuse a read of its checks to a token
+	// without the permission of that read, as a private repository on
+	// GitHub does. A public repository answers every token. A test sets
+	// it before the first request.
+	Private      bool
 	Issues       map[int]*Issue
 	PullRequests map[int]*PullRequest
 	Labels       []Label
@@ -98,6 +103,9 @@ type Fake struct {
 	// permissions are the answers of the permission endpoint, by login, as
 	// SetPermission set them.
 	permissions map[string]Permission
+	// tokenPermissions are the permissions of Token: those of the token
+	// request that came last, or what SetTokenPermissions set.
+	tokenPermissions map[string]string
 	// now is the clock that stamps new comments, reviews, and label
 	// events, as SetClock set it.
 	now func() time.Time
@@ -465,7 +473,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		f.serveInstallation(w, installation[1], installation[2])
 	case r.Method == http.MethodPost && accessTokens != nil:
 		id, _ := strconv.ParseInt(accessTokens[1], 10, 64)
-		f.serveAccessToken(w, id)
+		f.serveAccessToken(w, body, id)
 	case r.Method == http.MethodGet && user != nil:
 		f.serveUser(w, user[1])
 	case r.Method == http.MethodPost && r.URL.Path == "/graphql":

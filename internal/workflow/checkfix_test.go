@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 	"github.com/cloveclovedev/cumin-works/internal/core/state"
+	"github.com/cloveclovedev/cumin-works/internal/platform/github"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 	"github.com/cloveclovedev/cumin-works/internal/workflow"
 )
@@ -232,5 +234,58 @@ func TestAStopForFailedChecksWhoseLabelFailsWritesNothingElse(t *testing.T) {
 	}
 	if n := len(sc.webhook.messagesSent()); n != 1 {
 		t.Errorf("%d notifications after the label changed, want 1", n)
+	}
+}
+
+// "request a check fix" on a private repository: the token of cumin-core
+// holds the permissions of the permission table, so cumin reads the required
+// checks, the check runs, the annotations, and the job log of the failed
+// check. With the table before the three read permissions, the private
+// repository refuses the reads, and the request says that cumin could not
+// read the content.
+func TestACheckFixRequestOnAPrivateRepositoryNeedsTheReadPermissionsOfTheChecks(t *testing.T) {
+	table, _ := github.AppPermissions(config.AppCuminCore)
+	for _, tc := range []struct {
+		name        string
+		permissions map[string]string
+		want, not   []string
+	}{
+		{
+			name:        "the permissions of the permission table",
+			permissions: table,
+			want:        []string{`Check "ci" failed.`, "login.go: login_test.go:12: want 2, got 1", "FAIL\texample/login"},
+			not:         []string{"could not read its content"},
+		},
+		{
+			name:        "no read permission of the checks",
+			permissions: map[string]string{"contents": "write", "pull_requests": "write", "issues": "write"},
+			want:        []string{`Check "ci" failed.`, "cumin could not read its content"},
+			not:         []string{"login_test.go:12", "FAIL\texample/login"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := newScene(t)
+			sc.repo.Private = true
+			sc.fake.SetTokenPermissions(tc.permissions)
+			service := sc.service()
+			sc.failingCheck(t, service, 0)
+
+			if err := service.Poll(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			service.Wait()
+
+			text := promptOf(t, sc.record(t, "agent.args"))
+			for _, want := range append([]string{"Request: check fix"}, tc.want...) {
+				if !strings.Contains(text, want) {
+					t.Errorf("the request text has no %q:\n%s", want, text)
+				}
+			}
+			for _, not := range tc.not {
+				if strings.Contains(text, not) {
+					t.Errorf("the request text holds %q:\n%s", not, text)
+				}
+			}
+		})
 	}
 }
