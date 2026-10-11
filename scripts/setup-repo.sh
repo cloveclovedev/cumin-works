@@ -84,6 +84,20 @@ if [ -n "$scopes" ] && ! echo ", $scopes," | grep -q ', workflow,'; then
 fi
 
 [ "$(gh api "repos/$repo" --jq '.permissions.admin')" = "true" ] || die "the gh login is not an administrator of $repo"
+# cumin relies on rulesets for every protection of the default branch. A
+# private repository on a plan without rulesets answers 403 here, and a plan
+# with rulesets answers 200 even when the repository has no ruleset.
+if ! rulesets_error="$(gh api "repos/$repo/rulesets" 2>&1 >/dev/null)"; then
+  case "$rulesets_error" in
+    *"HTTP 403"*)
+      if [ "$(gh api "repos/$repo" --jq '.private')" = "true" ]; then
+        die "the private repository $repo cannot use rulesets. A private repository needs a GitHub plan with rulesets (GitHub Team for an Organization). cumin does not work on a repository without rulesets. GitHub says: $rulesets_error"
+      fi
+      die "$repo cannot use rulesets. cumin does not work on a repository without rulesets. GitHub says: $rulesets_error"
+      ;;
+  esac
+  die "cannot read the rulesets of $repo: $rulesets_error"
+fi
 branch="$(gh api "repos/$repo" --jq '.default_branch')"
 
 core_app_id=""

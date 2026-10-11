@@ -462,3 +462,164 @@ func TestSetupRepo_DryRunAsksNothingAndDeletesNoRetiredLabel(t *testing.T) {
 		t.Errorf("the dry run wrote %q", writes)
 	}
 }
+
+// setupRepoScriptTools are the standard tools that the whole of
+// scripts/setup-repo.sh may call.
+var setupRepoScriptTools = []string{"cat", "tr", "grep", "awk", "sed", "dirname", "mktemp", "rm", "cp", "cmp", "diff", "head", "base64"}
+
+// The fake gh of the whole script is a new repository whose gh login is an
+// administrator: it has no file, no label, and no ruleset. PRIVATE is the
+// field "private" of the repository. RULESETS_ERROR is the message of the 403
+// that GET /repos/{owner}/{repo}/rulesets answers on a plan without rulesets;
+// empty means 200 and an empty list. It writes every call to the file CALLS.
+const setupRepoScriptFakeGh = `#!/bin/sh
+echo "gh $*" >>"$CALLS"
+case "$*" in
+  "auth status") ;;
+  "api -i user") ;;
+  "api repos/acme/app --jq .permissions.admin") echo true ;;
+  "api repos/acme/app --jq .default_branch") echo main ;;
+  "api repos/acme/app --jq .private") echo "$PRIVATE" ;;
+  "api repos/acme/app/rulesets")
+    if [ -n "$RULESETS_ERROR" ]; then
+      echo '{"message":"'"$RULESETS_ERROR"'","status":"403"}'
+      echo "gh: $RULESETS_ERROR (HTTP 403)" >&2
+      exit 1
+    fi
+    echo '[]' ;;
+  "api apps/github-actions --jq .id") echo 15368 ;;
+  "api --method GET -H Accept: application/vnd.github.raw+json repos/acme/app/contents/"*)
+    echo "gh: Not Found (HTTP 404)" >&2
+    exit 1 ;;
+  "api -X PUT repos/acme/app/contents/"*) ;;
+  "api --paginate repos/acme/app/labels --jq "*) ;;
+  "api -X POST repos/acme/app/labels "*) ;;
+  "api --paginate repos/acme/app/rulesets --jq "*) ;;
+  "api -X POST repos/acme/app/rulesets --input "*) ;;
+  *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
+esac
+`
+
+const noRulesetsMessage = "Upgrade to GitHub Team or make this repository public to enable this feature."
+
+// runSetupRepoScript runs the whole of scripts/setup-repo.sh on acme/app with
+// the fake gh. It returns what the script printed, the calls of the fake gh
+// that change the repository, with the name of the temporary file of a
+// ruleset left out, and the error of the run.
+func runSetupRepoScript(t *testing.T, private bool, rulesetsError string, args ...string) (string, []string, error) {
+	t.Helper()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	calls := filepath.Join(dir, "calls")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range setupRepoScriptTools {
+		path, err := exec.LookPath(tool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(path, filepath.Join(bin, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(setupRepoScriptFakeGh), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(sh, append([]string{"setup-repo.sh", "acme/app"}, args...)...)
+	command.Env = []string{"PATH=" + bin, "TMPDIR=" + dir, "CALLS=" + calls, fmt.Sprintf("PRIVATE=%t", private), "RULESETS_ERROR=" + rulesetsError}
+	out, runErr := command.CombinedOutput()
+	recorded, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var writes []string
+	for _, call := range strings.Split(strings.TrimSpace(string(recorded)), "\n") {
+		if strings.HasPrefix(call, "gh api -X ") {
+			if i := strings.Index(call, " --input "); i >= 0 {
+				call = call[:i]
+			}
+			writes = append(writes, call)
+		}
+	}
+	return string(out), writes, runErr
+}
+
+func TestSetupRepo_StopsBeforeAnyChangeWhenAPrivateRepositoryHasNoRulesets(t *testing.T) {
+	for name, args := range map[string][]string{"apply": nil, "dry run": {"--dry-run"}} {
+		t.Run(name, func(t *testing.T) {
+			out, writes, err := runSetupRepoScript(t, true, noRulesetsMessage, args...)
+			if err == nil {
+				t.Fatalf("the script exited with status 0:\n%s", out)
+			}
+			for _, want := range []string{
+				"error: the private repository acme/app cannot use rulesets.",
+				"A private repository needs a GitHub plan with rulesets (GitHub Team for an Organization).",
+				"cumin does not work on a repository without rulesets.",
+				"GitHub says: gh: " + noRulesetsMessage + " (HTTP 403)",
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("the message has no %q:\n%s", want, out)
+				}
+			}
+			if len(writes) != 0 {
+				t.Errorf("the script wrote %q", writes)
+			}
+			if strings.Contains(out, "would ") {
+				t.Errorf("the script went on after the check:\n%s", out)
+			}
+		})
+	}
+}
+
+// A 403 on a public repository has another reason than the plan, so the
+// message names no plan. The script stops all the same.
+func TestSetupRepo_StopsBeforeAnyChangeWhenTheRulesetsAreForbiddenOnAPublicRepository(t *testing.T) {
+	out, writes, err := runSetupRepoScript(t, false, "Resource not accessible by personal access token")
+	if err == nil {
+		t.Fatalf("the script exited with status 0:\n%s", out)
+	}
+	if !strings.Contains(out, "error: acme/app cannot use rulesets.") || strings.Contains(out, "plan") {
+		t.Errorf("the message is not the one of a public repository:\n%s", out)
+	}
+	if len(writes) != 0 {
+		t.Errorf("the script wrote %q", writes)
+	}
+}
+
+func TestSetupRepo_WorksAsBeforeWhenTheRepositoryCanUseRulesets(t *testing.T) {
+	want := []string{
+		"gh api -X PUT repos/acme/app/contents/.github/workflows/cumin-protected-paths.yml ",
+		"gh api -X PUT repos/acme/app/contents/.cumin/config.toml ",
+		"gh api -X POST repos/acme/app/labels -f name=cumin/status/ready ",
+		"gh api -X POST repos/acme/app/rulesets",
+	}
+	var public []string
+	for _, private := range []bool{false, true} {
+		out, writes, err := runSetupRepoScript(t, private, "")
+		if err != nil {
+			t.Fatalf("private=%t: the script failed: %v\n%s", private, err, out)
+		}
+		if !hasLine(out, "done: acme/app") {
+			t.Errorf("private=%t: the script did not finish:\n%s", private, out)
+		}
+		for _, prefix := range want {
+			found := false
+			for _, call := range writes {
+				found = found || strings.HasPrefix(call, prefix)
+			}
+			if !found {
+				t.Errorf("private=%t: no write %q in %q", private, prefix, writes)
+			}
+		}
+		if !private {
+			public = writes
+		} else if strings.Join(writes, "\n") != strings.Join(public, "\n") {
+			t.Errorf("the writes of a private repository are\n%q\nwant the ones of a public repository\n%q", writes, public)
+		}
+	}
+}
