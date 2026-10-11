@@ -11,9 +11,10 @@ import (
 )
 
 // This file proves the notification of "stop agent starts" of
-// issue-states.md for the tool checks of a repository (cumin-core.md, tests
-// 41 and 42 of the top-level requirements): one notification when the
-// checks begin to fail, and a new one only after every check passed.
+// issue-states.md for the tool checks of a repository (cumin-core.md, the
+// notification part of tests 41 and 42 of the top-level requirements): one
+// notification when the checks begin to fail, and a new one only after
+// every check passed.
 
 // Three polls with the same failed checks send one notification. It starts
 // with the name of the action, and names the repository and each failed
@@ -31,8 +32,9 @@ func TestFailedToolChecksNotifyOnceAndNameEachCheck(t *testing.T) {
 
 	sc.pollTimes(t, service, 3)
 
-	want := "cumin: stop agent starts: The tool checks of this repository fail: test -e " + missing + "; false. " +
-		"cumin starts no agent for this repository until every check passes. The agent runs that are going on end as usual.\n" +
+	want := "cumin: stop agent starts: A tool check of this repository fails. " +
+		"cumin starts no agent for this repository until every check passes. The agent runs that are going on end as usual. " +
+		"Failed checks: test -e " + missing + "; false\n" +
 		"example-org/example-repo\n" +
 		"https://github.com/example-org/example-repo"
 	if got := sc.webhook.messagesSent(); len(got) != 1 || got[0] != want {

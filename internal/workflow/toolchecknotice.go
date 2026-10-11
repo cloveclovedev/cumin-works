@@ -56,8 +56,10 @@ func (s *Service) tellFailedToolChecks(ctx context.Context, log *slog.Logger, ta
 }
 
 // failedToolChecksReason is the reason of the notification: each failed
-// check as its command, in the order of the settings file.
+// check as its command, in the order of the settings file. The checks come
+// last, so that the limit of a reason (internal/notify) cuts only the end
+// of their list.
 func failedToolChecksReason(failed []string) string {
-	return "The tool checks of this repository fail: " + strings.Join(failed, "; ") +
-		". cumin starts no agent for this repository until every check passes. The agent runs that are going on end as usual."
+	return "A tool check of this repository fails. cumin starts no agent for this repository until every check passes. " +
+		"The agent runs that are going on end as usual. Failed checks: " + strings.Join(failed, "; ")
 }
