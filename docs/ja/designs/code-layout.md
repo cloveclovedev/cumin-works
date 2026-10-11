@@ -135,7 +135,7 @@
 | | `software-engineering/<role>.md` | roleごとの、ソフトウェア開発の基準。roleのファイルの次に指示に入る |
 | | `software-engineering/risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
 | `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。平易な英語の決まりは指示に入り、1つの行動のためのテンプレートはskillになる。どちらも `internal/agent` が読む。cuminが自分で書くもの (`follow-up-note.md`、`stop-note.md`) は、Agentには渡らず、テストが文面との一致を確かめる |
-| `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
+| `scripts` | `render-diagrams.sh`、`render_diagrams_test.go` | `.puml` をSVGに書き出す。`--check <base>` は、`<base>` から変わった図を書き出し直して、コミットされたSVGと比べる ([図の描き方](../development/diagrams.md))。テストは、偽の `docker` をPATHに置いた一時のリポジトリで `--check` を実行する |
 | | `setup-repo.sh`、`setup-repo/`、`setup_repo_test.go` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) と、そのラベルの手順のテスト。テストは、偽の `gh` をPATHに置いて、スクリプトのラベルの関数だけを実行する |
 | | `install.sh`、`install_test.go` | cuminをビルドしてHostに置き、LaunchAgentを新しいバイナリに入れ替える。`--after-current-runs` は、チェックアウトとLaunchAgentの確認、ビルド、実行を待つ停止、置いて起動し直すこと、`cumin-health.sh --wait-polls 2` をこの順に行う。テストは、偽の `git`、`cumin`、`launchctl`、`plutil`、`go` をPATHに置いたHostでスクリプトを実行する ([Hostの一般の道具](../guides/host-tools.md)) |
 | | `cumin-health.sh`、`cumin_health_test.go` | cuminが動いているかを言う一般の道具 (最後の定期確認、起動してからのエラー、実行中のAgent) と、そのテスト。テストはGoのpackage `scripts` で、スクリプトを実行する。macOSの `plutil` が要るので、ほかのOSでは飛ばす ([Hostの一般の道具](../guides/host-tools.md)) |
