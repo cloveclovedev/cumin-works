@@ -48,6 +48,20 @@ type MonitorFile struct {
 	// Waiting are the open issues that wait for a Maintainer. It is written
 	// as [] when there is none.
 	Waiting []MonitorWaiting `json:"waiting"`
+	// FailedToolChecks are the repositories with a tool check that failed
+	// at their last poll: cumin starts no agent for them ("stop agent
+	// starts"). It is written as [] when there is none.
+	FailedToolChecks []MonitorFailedToolChecks `json:"failed_tool_checks"`
+}
+
+// MonitorFailedToolChecks is one repository with a tool check that failed
+// at its last poll.
+type MonitorFailedToolChecks struct {
+	// Repository is "<owner>/<repo>".
+	Repository string `json:"repository"`
+	// Commands are the failed checks, each as its command on one line, in
+	// the order of the settings file of the repository.
+	Commands []string `json:"commands"`
 }
 
 // MonitorAgent is one agent run that `cumin run` holds as running.
@@ -135,6 +149,9 @@ func WriteMonitorFile(path string, m MonitorFile) error {
 	if m.Waiting == nil {
 		m.Waiting = []MonitorWaiting{}
 	}
+	if m.FailedToolChecks == nil {
+		m.FailedToolChecks = []MonitorFailedToolChecks{}
+	}
 	if m.Quota.NextTryAt != nil {
 		next := m.Quota.NextTryAt.UTC()
 		m.Quota.NextTryAt = &next
@@ -177,6 +194,8 @@ func ReadMonitorFile(path string) (MonitorFile, bool, error) {
 		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no agents", path)
 	case read.Waiting == nil:
 		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no waiting", path)
+	case read.FailedToolChecks == nil:
+		return MonitorFile{}, false, fmt.Errorf("monitor file: read %s: no failed_tool_checks", path)
 	}
 	return read, true, nil
 }

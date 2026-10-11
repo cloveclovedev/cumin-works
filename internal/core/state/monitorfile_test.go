@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -123,7 +124,8 @@ func TestMonitorFile_EmptyArraysAreWrittenAndAMissingNextTryIsNot(t *testing.T) 
     "stopped_windows": []
   },
   "agents": [],
-  "waiting": []
+  "waiting": [],
+  "failed_tool_checks": []
 }
 `
 	if string(raw) != want {
@@ -141,6 +143,7 @@ func TestMonitorFile_TheReaderReturnsWhatWasWritten(t *testing.T) {
 	at := time.Date(2026, 10, 4, 7, 0, 5, 0, time.UTC)
 	written := monitorFileOf(at)
 	written.Agents = []state.MonitorAgent{{Repository: "example/app", Issue: 7, Role: "implementer", Request: "implement", Title: "a title"}}
+	written.FailedToolChecks = []state.MonitorFailedToolChecks{{Repository: "example/app", Commands: []string{"docker info"}}}
 	if err := state.WriteMonitorFile(path, written); err != nil {
 		t.Fatalf("WriteMonitorFile: %v", err)
 	}
@@ -149,7 +152,8 @@ func TestMonitorFile_TheReaderReturnsWhatWasWritten(t *testing.T) {
 		t.Fatalf("ReadMonitorFile: found = %v, err = %v", found, err)
 	}
 	if !read.LastPoll.At.Equal(at) || len(read.LastPoll.Errors) != 1 || read.LastPoll.Errors[0] != written.LastPoll.Errors[0] ||
-		len(read.Agents) != 1 || read.Agents[0] != written.Agents[0] || len(read.Waiting) != 0 {
+		len(read.Agents) != 1 || read.Agents[0] != written.Agents[0] || len(read.Waiting) != 0 ||
+		!reflect.DeepEqual(read.FailedToolChecks, written.FailedToolChecks) {
 		t.Errorf("the reader returned %+v, want what was written", read)
 	}
 }
@@ -158,13 +162,14 @@ func TestMonitorFile_TheReaderReturnsWhatWasWritten(t *testing.T) {
 // shape, is an error that names the path and the reason.
 func TestMonitorFile_TheReaderRejectsANewerVersionAndAnotherShape(t *testing.T) {
 	for name, tc := range map[string]struct{ content, want string }{
-		"a newer version":   {`{"version": 2, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "version 2, and this cumin knows version 1"},
-		"no version":        {`{"last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "no version"},
-		"not JSON":          {`{"version": 1,`, "unexpected end of JSON input"},
-		"no last_poll.at":   {`{"version": 1, "last_poll": {"errors": []}, "agents": [], "waiting": []}`, "no last_poll.at"},
-		"no list of errors": {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z"}, "agents": [], "waiting": []}`, "no last_poll.errors"},
-		"no list of agents": {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "waiting": []}`, "no agents"},
-		"no list of waits":  {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": []}`, "no waiting"},
+		"a newer version":               {`{"version": 2, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "version 2, and this cumin knows version 1"},
+		"no version":                    {`{"last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "no version"},
+		"not JSON":                      {`{"version": 1,`, "unexpected end of JSON input"},
+		"no last_poll.at":               {`{"version": 1, "last_poll": {"errors": []}, "agents": [], "waiting": []}`, "no last_poll.at"},
+		"no list of errors":             {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z"}, "agents": [], "waiting": []}`, "no last_poll.errors"},
+		"no list of agents":             {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "waiting": []}`, "no agents"},
+		"no list of waits":              {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": []}`, "no waiting"},
+		"no list of failed tool checks": {`{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`, "no failed_tool_checks"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), state.MonitorFileName)

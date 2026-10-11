@@ -45,6 +45,8 @@ type monitorFile struct {
 	} `json:"quota"`
 	Agents  *[]state.MonitorAgent   `json:"agents"`
 	Waiting *[]state.MonitorWaiting `json:"waiting"`
+
+	FailedToolChecks *[]state.MonitorFailedToolChecks `json:"failed_tool_checks"`
 }
 
 // readMonitorFile reads the monitor file, and fails the test when a field
@@ -60,7 +62,7 @@ func readMonitorFile(t *testing.T, path string) (monitorFile, string) {
 		t.Fatalf("the monitor file is not JSON: %v\n%s", err, raw)
 	}
 	if read.Version == nil || read.LastPoll == nil || read.LastPoll.At == nil || read.LastPoll.Errors == nil ||
-		read.StopRequested == nil || read.Quota == nil || read.Quota.StoppedWindows == nil || read.Agents == nil || read.Waiting == nil {
+		read.StopRequested == nil || read.Quota == nil || read.Quota.StoppedWindows == nil || read.Agents == nil || read.Waiting == nil || read.FailedToolChecks == nil {
 		t.Fatalf("the monitor file misses a field that is always written:\n%s", raw)
 	}
 	return read, string(raw)
@@ -250,6 +252,9 @@ func TestMonitorFile_MatchesTheGoldenFile(t *testing.T) {
 		Waiting: []state.MonitorWaiting{
 			{Repository: "example/tool", Issue: 9, Kind: "merge-decision", Title: "fix(api): return 404 for a missing item", URL: "https://github.com/example/tool/pull/14"},
 			{Repository: "example/app", Issue: 31, Kind: "decision", Title: "Show the history of an item", URL: "https://github.com/example/app/issues/31"},
+		},
+		FailedToolChecks: []state.MonitorFailedToolChecks{
+			{Repository: "example/tool", Commands: []string{"docker info", "plantuml -version"}},
 		},
 	})
 	path := filepath.Join(t.TempDir(), state.MonitorFileName)
@@ -753,7 +758,8 @@ func TestMonitorFile_HoldsTheWholeContentAfterAPoll(t *testing.T) {
 		waiting(13, "merge-decision", "Add the session store", "/pull/40"),
 		waiting(14, "merge-decision", "Add the session timeout", "/issues/14"),
 	}, ",\n") + `
-  ]
+  ],
+  "failed_tool_checks": []
 }
 `
 	if string(raw) != want {

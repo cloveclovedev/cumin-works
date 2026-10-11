@@ -44,6 +44,9 @@ type MonitorFacts struct {
 	// Waiting are the issues that wait for a Maintainer, in the order of
 	// the file: each repository from the snapshot of its last read.
 	Waiting []state.MonitorWaiting
+	// FailedToolChecks are the repositories with a tool check that failed
+	// at their last poll, in the order of the settings.
+	FailedToolChecks []state.MonitorFailedToolChecks
 }
 
 // BuildMonitorFile builds the content of the monitor file from the facts of
@@ -58,6 +61,8 @@ func BuildMonitorFile(facts MonitorFacts) state.MonitorFile {
 		Quota:         monitorQuota(facts),
 		Agents:        monitorAgents(facts.Running),
 		Waiting:       facts.Waiting,
+
+		FailedToolChecks: facts.FailedToolChecks,
 	}
 }
 
@@ -168,6 +173,8 @@ func (s *Service) writeMonitorFile(stopRequested bool) {
 		QuotaUnread:   s.quotaUnreadInPoll(),
 		QuotaSettings: s.quotaSettings(),
 		Location:      s.location(),
+
+		FailedToolChecks: s.repositoriesWithAFailedToolCheck(),
 	}
 	if stored, ok := s.State.Quota(); ok {
 		facts.Usage, facts.UsageKept = quota.StoredUsage(stored), true

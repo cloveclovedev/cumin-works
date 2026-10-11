@@ -17,9 +17,9 @@ rectangle "macOS menu bar" as bar
 rectangle "cumin status (Go)" as statuscmd
 
 run -left-> github : poll
-run --> status : write a temporary file,\nthen rename:\nafter every poll,\nat the end of a run
+run --> status : write a temporary file,\nthen rename:\nafter every poll\n(with the failed tool checks\nof each repository),\nat the end of a run
 app -up-> status : read every 5 s
-statuscmd -up-> status : read at every call:\nlast poll, its errors,\nagents
+statuscmd -up-> status : read at every call:\nlast poll, its errors,\nfailed tool checks,\nagents
 Operator -up-> statuscmd : run
 app -left-> config : read every 5 s
 app --> bar : three segments (glyph and count),\nlist with links, old file,\nsound and blink

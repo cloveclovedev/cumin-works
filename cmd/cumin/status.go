@@ -7,8 +7,8 @@ package main
 // latest quota usage with the limits of now, and whether cumin stops after its runs. It
 // makes no minimal run and writes no file (docs/ja/designs/quota.md, the
 // topic on cumin status). It also shows whether cumin polls: the last poll
-// with its errors and the agents that cumin run holds, read from the monitor
-// file (docs/ja/designs/status-menu-bar.md, the topic on cumin status).
+// with its errors, the failed tool checks, and the agents that cumin run
+// holds, read from the monitor file (docs/ja/designs/status-menu-bar.md, the topic on cumin status).
 // The usage numbers go to the terminal only, never to a log.
 
 import (
@@ -220,8 +220,8 @@ func writeStopRequest(w io.Writer, stateDir string, loc *time.Location) {
 const lastPollOldAfter = 3
 
 // writeLastPoll says whether cumin polls, from the monitor file that cumin
-// run writes: the time of the last poll with its age, and each error of that
-// poll. It returns the lines of the agents that cumin run holds, and whether
+// run writes: the time of the last poll with its age, each error of that
+// poll, and the failed tool checks. It returns the lines of the agents that cumin run holds, and whether
 // the file was read. A file that is missing or unreadable costs these lines
 // only: the rest of the report is still shown, and the exit code does not
 // change.
@@ -247,10 +247,29 @@ func writeLastPoll(w io.Writer, settings *config.Settings, stateDir string, at t
 	for _, failure := range monitor.LastPoll.Errors {
 		fmt.Fprintf(w, "    %s: %s\n", printable(failure.Repository), printable(failure.Message))
 	}
+	writeFailedToolChecks(w, monitor.FailedToolChecks)
 	for _, agent := range monitor.Agents {
 		held = append(held, fmt.Sprintf("  %s #%d %s (%s): %s", printable(agent.Repository), agent.Issue, printable(agent.Role), printable(agent.Request), printable(agent.Title)))
 	}
 	return held, true
+}
+
+// writeFailedToolChecks lists each tool check that failed at the last poll
+// of its repository, under the repository, from the monitor file. While a
+// check fails, cumin starts no agent for that repository ("stop agent
+// starts"), so the line of the repository says that its agent starts wait.
+func writeFailedToolChecks(w io.Writer, failed []state.MonitorFailedToolChecks) {
+	if len(failed) == 0 {
+		fmt.Fprintln(w, "  failed tool checks: none")
+		return
+	}
+	fmt.Fprintln(w, "  failed tool checks:")
+	for _, repository := range failed {
+		fmt.Fprintf(w, "    %s: agent starts of this repository wait until every tool check passes\n", printable(repository.Repository))
+		for _, command := range repository.Commands {
+			fmt.Fprintf(w, "      %s\n", printable(command))
+		}
+	}
 }
 
 // printable is a text of the monitor file (a title, a message) without its

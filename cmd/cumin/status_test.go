@@ -236,8 +236,16 @@ func monitorSettings() *config.Settings {
 // does: a last poll at the given time with one error, and two agents.
 func writeMonitor(t *testing.T, dir string, lastPoll time.Time) {
 	t.Helper()
+	writeMonitorWithFailedToolChecks(t, dir, lastPoll, nil)
+}
+
+// writeMonitorWithFailedToolChecks writes the monitor file of writeMonitor
+// with these repositories with a failed tool check.
+func writeMonitorWithFailedToolChecks(t *testing.T, dir string, lastPoll time.Time, failed []state.MonitorFailedToolChecks) {
+	t.Helper()
 	if err := state.WriteMonitorFile(filepath.Join(dir, state.MonitorFileName), state.MonitorFile{
-		Version: state.MonitorFileVersion,
+		FailedToolChecks: failed,
+		Version:          state.MonitorFileVersion,
 		LastPoll: state.MonitorLastPoll{At: lastPoll, Errors: []state.MonitorPollError{
 			{Repository: "example-org/example-repo", Message: "read the snapshot: \x1b[31mGitHub returned 502"},
 		}},
@@ -268,6 +276,44 @@ func TestStatusShowsTheLastPollWithItsAgeAndItsErrors(t *testing.T) {
 	}
 	if strings.Contains(text, "the last poll is old") {
 		t.Errorf("a last poll of 45s is named old:\n%s", text)
+	}
+}
+
+// cumin status lists each failed tool check under its repository, and says
+// that the agent starts of that repository wait. No control character of a
+// command reaches the terminal. With no failed check, it says "none".
+func TestStatusShowsTheFailedToolChecksUnderTheirRepository(t *testing.T) {
+	const none = "  failed tool checks: none\n"
+	dir := t.TempDir()
+	writeMonitorWithFailedToolChecks(t, dir, statusAt.Add(-45*time.Second), []state.MonitorFailedToolChecks{
+		{Repository: "example-org/example-repo", Commands: []string{"docker info", "plantuml \x1b[31m-version\r\n"}},
+		{Repository: "example-org/other-repo", Commands: []string{"node --version"}},
+	})
+	var out bytes.Buffer
+	if err := writeStatus(t.Context(), &out, monitorSettings(), dir, statusAt, statusZone, readFake(t)); err != nil {
+		t.Fatalf("writeStatus: %v", err)
+	}
+	text := out.String()
+	want := "  failed tool checks:\n" +
+		"    example-org/example-repo: agent starts of this repository wait until every tool check passes\n" +
+		"      docker info\n      plantuml [31m-version\n" +
+		"    example-org/other-repo: agent starts of this repository wait until every tool check passes\n" +
+		"      node --version\n"
+	if !strings.Contains(text, want) {
+		t.Errorf("the report has no %q:\n%s", want, text)
+	}
+	if strings.Contains(text, none) || strings.ContainsAny(text, "\x1b\r") {
+		t.Errorf("the report says %q beside a failed check, or a control character reached it:\n%q", none, text)
+	}
+
+	passing := t.TempDir()
+	writeMonitor(t, passing, statusAt.Add(-45*time.Second))
+	out.Reset()
+	if err := writeStatus(t.Context(), &out, monitorSettings(), passing, statusAt, statusZone, readFake(t)); err != nil {
+		t.Fatalf("writeStatus: %v", err)
+	}
+	if text := out.String(); !strings.Contains(text, none) || strings.Contains(text, "agent starts of this repository wait") {
+		t.Errorf("with no failed tool check, the report does not say %q, or names a repository:\n%s", none, text)
 	}
 }
 

@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 	"github.com/cloveclovedev/cumin-works/internal/platform/github/githubtest"
 )
 
@@ -152,5 +154,36 @@ func TestAFailedToolCheckStartsNoAgentAtTheEndOfARun(t *testing.T) {
 	}
 	if !strings.Contains(sc.logs.String(), `"request":"implementation again","failed_checks":["test -e `+tool+`"]`) {
 		t.Errorf("no log line of the refused second request with the failed check:\n%s", sc.logs.String())
+	}
+}
+
+// After a poll with a failed tool check, the monitor file holds the
+// repository and the command of the check, and only the failed check. After
+// a poll where every check passes, the list is written as [].
+func TestAFailedToolCheckIsInTheMonitorFileUntilTheCheckPassesAgain(t *testing.T) {
+	sc := newScene(t)
+	sc.addUnlinkedPullRequest(21, sc.remoteHead)
+	tool := filepath.Join(t.TempDir(), "tool")
+	sc.fake.SetFile(sc.repo, ".cumin/config.toml", githubtest.File{
+		Content: "[[tool_checks]]\ncommand = [\"true\"]\n[[tool_checks]]\ncommand = [\"test\", \"-e\", \"" + tool + "\"]\n",
+	})
+	service := sc.service()
+	path := withMonitorFile(t, service)
+
+	sc.pollTimes(t, service, 1)
+
+	read, raw := readMonitorFile(t, path)
+	want := []state.MonitorFailedToolChecks{{Repository: "example-org/example-repo", Commands: []string{"test -e " + tool}}}
+	if !reflect.DeepEqual(*read.FailedToolChecks, want) {
+		t.Errorf("failed_tool_checks = %+v, want %+v:\n%s", *read.FailedToolChecks, want, raw)
+	}
+
+	if err := os.WriteFile(tool, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sc.pollAndWait(t, service)
+
+	if _, raw := readMonitorFile(t, path); !strings.Contains(raw, `"failed_tool_checks": []`) {
+		t.Errorf("after a poll where every tool check passes, failed_tool_checks is not []:\n%s", raw)
 	}
 }

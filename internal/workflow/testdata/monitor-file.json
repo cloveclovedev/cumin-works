@@ -50,5 +50,14 @@
       "title": "Show the history of an item",
       "url": "https://github.com/example/app/issues/31"
     }
+  ],
+  "failed_tool_checks": [
+    {
+      "repository": "example/tool",
+      "commands": [
+        "docker info",
+        "plantuml -version"
+      ]
+    }
   ]
 }
