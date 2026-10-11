@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -163,6 +164,44 @@ func TestInstall_AfterCurrentRunsStopsWithTimeLimitAndInstallsNothing(t *testing
 	}
 	i.wantNoCall("launchctl kickstart")
 	i.wantBinary("the old binary\n")
+}
+
+func TestInstall_ASignalDuringTheWaitOfTheStopEndsTheScript(t *testing.T) {
+	i := newInstall(t)
+	i.writeOldBinary()
+
+	run := i.start("--after-current-runs")
+	run.until("waiting until cumin has ended")
+	if err := run.command.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	// cumin ends after the signal: a script that continued would install.
+	if err := os.Remove(i.stopRequest); err != nil {
+		t.Fatal(err)
+	}
+	out, code := run.end()
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1\n%s", code, out)
+	}
+	if strings.Contains(out, "\ncumin has ended\n") {
+		t.Errorf("the script continued after the signal:\n%s", out)
+	}
+	i.wantNoCall("launchctl kickstart")
+	i.wantBinary("the old binary\n")
+}
+
+func TestInstall_HelpPrintsTheHeaderCommentOnly(t *testing.T) {
+	i := newInstall(t)
+
+	out, code := i.start("--help").end()
+
+	if code != 2 {
+		t.Errorf("exit code = %d, want 2\n%s", code, out)
+	}
+	if !strings.HasSuffix(out, "value of --stop-timeout, and 1 otherwise.\n") || strings.Contains(out, "set -eu") {
+		t.Errorf("the usage text does not end with the header comment:\n%s", out)
+	}
 }
 
 func TestInstall_AfterCurrentRunsFailsWithTheErrorsOfThePolls(t *testing.T) {

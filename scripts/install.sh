@@ -40,7 +40,7 @@ interval="${CUMIN_INSTALL_INTERVAL:-5}"
 stopped=""
 
 usage() {
-  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -126,7 +126,10 @@ fi
 # Build first, into a directory that is thrown away. A failed build then
 # leaves the binary that is already installed in place.
 staging="$(mktemp -d)"
-trap 'rm -rf "$staging"' EXIT INT TERM
+trap 'rm -rf "$staging"' EXIT
+# A signal ends the script: the wait of step 4 must not continue without
+# the staging directory.
+trap 'exit 1' INT TERM
 (cd "$root" && go build -o "$staging/cumin" ./cmd/cumin) || die "the build failed. Nothing was installed"
 
 if [ "$after_runs" -eq 1 ]; then
