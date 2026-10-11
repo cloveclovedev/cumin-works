@@ -74,7 +74,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | `TestLiveMergeFacts` | merge (「start the merge」) が前提にする事実。cumin-core の App で、Maintainer、Implementer の bot、協力者でない人の権限 (`permission`、`user.type`) を読めること。`sha` が先頭と違う merge は 409 になること。衝突のない Pull Request の `sha` 付きの merge が 200 になること。衝突する Pull Request の merge の返事 (405) と、そのあとの `mergeable` が `false` になること。Agent も利用枠も使わない。main に小さなファイル (`live/<日時>-conflict.md`) が1つ残る |
 | `TestLiveReviewRequestFacts` | Issue Owner へのレビューの依頼 (#305) が前提にする事実。cumin-core の App が、Implementer App の Pull Request で `CUMIN_LIVE_OWNER` のレビューを依頼でき (201)、その login が `requested_reviewers` に現れること。同じ依頼をもう一度送っても失敗せず、login が1つのままであること。協力者でない人への依頼が 422 になること。Agent も利用枠も使わない。Pull Request は閉じ、ブランチは消す |
 | `TestLiveDiagramsBranch` | Planner の App が書き込めるのは `cumin/diagrams` だけであること。Planner の App が `cumin/diagrams` にファイルを足せ、ほかのブランチの作成、既定のブランチの移動、タグの作成、`cumin/diagrams` の force push と削除を拒否されること。cumin-core の App も `cumin/diagrams` を削除できないこと。Implementer の App が今までどおりブランチを作って消せること。`scripts/setup-repo.sh` を `--core-app` と `--implementer-app` 付きで実行してあり、Planner の App の Contents の書き込みがインストールで承認されている必要がある。`cumin/diagrams` に `live/<日時>.svg` が1つ残る |
-| `TestLivePrivateRepositoryFacts` | 非公開のリポジトリの設計 (#790) が前提にする4つの事実を測る。ruleset と既定のブランチの rule、cumin-core の token による check の読み取り、認証なしと各 App の token での git、図の画像のアドレス。読むだけで、何も作らない。GitHub が拒否した読み取りは、失敗にせず、ステータスと一緒に記録する。リポジトリが公開なら止まる。下の「非公開のリポジトリの測定」に従って実行する |
+| `TestLivePrivateRepositoryFacts` | 非公開のリポジトリの設計 (#790) が前提にする事実を測る。ruleset と既定のブランチの rule、cumin-core の token による check の読み取り (権限の表の token と、check を読む3つの権限のない token)、認証なしと各 App の token での git、図の画像のアドレス。読むだけで、何も作らない。GitHub が拒否した読み取りは、失敗にせず、ステータスと一緒に記録する。リポジトリが公開なら止まる。下の「非公開のリポジトリの測定」に従って実行する |
 | `TestLiveFollowUpFixture` | 場面 Follow-1 の準備だけを行う。`cumin/type/requirement` だけの要求Issue、その sub-issue、それを閉じる Implementer の App の Pull Request を作り、Reviewer の App が `(non-blocking)` の指摘を2つ書き、Implementer の App が1つに `Fixed` で返答する。何も閉じない。Maintainer が手で merge し、場面の手順で片付ける |
 | `TestLiveE2E` (`cmd/cumin`) | 場面 E2E-1 の全体。launchd で動く cumin に、1つの要求Issueを分割から受け入れの確認まで通させ、Maintainer の操作を `gh` のログインで代わりに行い、各段階を GitHub の事実と cumin のログで確かめる。利用枠を使い、1時間ほどかかる。下の「実機の場面 E2E-1」に従って実行する |
 
@@ -86,6 +86,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 - GitHub Team プランの Organization の、非公開のリポジトリである。公開のリポジトリなら、テストは最初に止まる。
 - 4つの GitHub App がインストールされている。Host の設定ファイルにその Organization の Client ID があり、Keychain に秘密鍵がある。
+- cumin-core の App が、権限の表 ([GitHub Appの登録手順](github-app-setup.md)) の権限を持ち、インストールで承認されている。Checks、Commit statuses、Actions の Read-only を含む。足りないと、GitHub は token の求めを断り、テストは最初に止まる。権限は `cumin setup github-apps` の案内で変える ([セットアップの手順](setup-guide.md) の「登録済みの App の権限を変える」)。
 - `scripts/setup-repo.sh <owner>/<repo> --core-app <slug> --implementer-app <slug>` を実行してある。ruleset が作られなければ、その結果も事実である。そのままテストを実行する。
 - GitHub Actions の workflow が動いた Pull Request が、1つ以上ある。テストは、最後に更新された Pull Request の先頭の commit の check を読む。Pull Request を読めなければ、既定のブランチの先頭の commit を読む。
 - `cumin/diagrams` のブランチに、SVG のファイルが1つ以上ある。
@@ -95,9 +96,10 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 | 番号 | 内容 |
 |---|---|
 | P1 | cumin-core の token で読んだ、リポジトリの ruleset の一覧 (名前、対象、出どころ、enforcement) と、`GET /repos/{owner}/{repo}/rules/branches/{branch}` の返事 (rule の種類、必須のcheck) |
-| P2 | cumin-core の token による、check run、commit status、annotation、job のログの読み取りの、それぞれのステータス。cumin がこの token に求める権限の一覧も記録する |
+| P2 | 権限の表の cumin-core の token による、check run、commit status、annotation、job のログの読み取りの、それぞれのステータス。GraphQL の `statusCheckRollup` の返事 (ステータス、エラー、check の数) も記録する。token の権限の一覧も記録する |
 | P3 | 認証なしと、Planner、Implementer、Reviewer、cumin-core の各 App の token での、`git ls-remote`、`git clone`、`git fetch` の終了コード。失敗したときは、git の出力の最後の1行も記録する |
 | P4 | `cumin/diagrams` の SVG の1つの、`raw.githubusercontent.com` のアドレスのステータスと Content-Type。認証なしと、cumin-core の token を付けた場合 |
+| P5 | P2 と同じ読み取りを、Checks、Commit statuses、Actions の3つの権限のない cumin-core の token で行った結果。テストが、この3つを除いた権限で token を求める |
 
 - P2 で check run の一覧が拒否されると、テストは job のIDを知ることができない。結果に `Set CUMIN_LIVE_PRIVATE_JOB` と出たら、その Pull Request の job のIDを `CUMIN_LIVE_PRIVATE_JOB` に入れて、もう一度実行する。テストは、同じIDを check run のIDとしても使う。GitHub Actions の job の check run は、job と同じIDを持つからである。
 - P3 の git は、cumin が Agent に渡すのと同じ形 (`GIT_CONFIG_*` の環境変数) で token を受け取る。ユーザと system の git の設定は読まないので、credential helper も Operator の認証情報も使われない。

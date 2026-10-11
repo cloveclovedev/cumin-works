@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -25,10 +26,10 @@ const privateRepoVariable = "CUMIN_LIVE_PRIVATE_REPO"
 // the cumin-core token cannot list the check runs.
 const privateJobVariable = "CUMIN_LIVE_PRIVATE_JOB"
 
-// TestLivePrivateRepositoryFacts measures four facts of a private repository
+// TestLivePrivateRepositoryFacts measures the facts of a private repository
 // for the design of #790: the rulesets, the reads of the checks with the
-// cumin-core token, git with and without a token, and the image address of a
-// diagram. It only reads. A read that GitHub refuses is a fact with its
+// cumin-core token and with a token without the read permissions of the
+// checks, git with and without a token, and the image address of a diagram. It only reads. A read that GitHub refuses is a fact with its
 // status, not a failure. docs/ja/development/live-tests.md says what the
 // repository needs.
 func TestLivePrivateRepositoryFacts(t *testing.T) {
@@ -37,7 +38,15 @@ func TestLivePrivateRepositoryFacts(t *testing.T) {
 
 	core := l.token(t, "cumin-core")
 	l.recordRulesetsFact(t, core)
-	l.recordCheckReadsFact(t, core)
+	// P2: the token of the permission table. P5: the same reads with a token
+	// without the three read permissions of the checks.
+	table, _ := github.AppPermissions("cumin-core")
+	l.recordCheckReadsFact(t, "P2", core, table)
+	without := maps.Clone(table)
+	for _, name := range []string{"checks", "statuses", "actions"} {
+		delete(without, name)
+	}
+	l.recordCheckReadsFact(t, "P5", l.limitedToken(t, "cumin-core", without), without)
 	l.recordGitFact(t)
 	l.recordImageFact(t, core)
 }
@@ -157,23 +166,123 @@ func (l *live) recordRulesetsFact(t *testing.T, token string) {
 			answer(rulesets), len(sets), strings.Join(names, ", "), answer(rules), strings.Join(types, "`, `"), strings.Join(required, "`, `")))
 }
 
-// recordCheckReadsFact records fact P2: what the cumin-core token reads of
-// the checks of a commit.
-func (l *live) recordCheckReadsFact(t *testing.T, token string) {
+// limitedToken asks GitHub for a token of the App with the permissions only,
+// for the one repository. The table of the results never shows it.
+func (l *live) limitedToken(t *testing.T, app string, permissions map[string]string) string {
 	t.Helper()
-	const what = "The cumin-core token reads the check runs, the commit statuses, the annotations, and the job log of a private repository (measured-constraints.md row 54)"
-	// The token holds at most the permissions that cumin asks for.
-	permissions, _ := github.AppPermissions("cumin-core")
+	jwt, err := github.SignJWTForTest(l.credentials(t, app))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var installation struct {
+		ID int64 `json:"id"`
+	}
+	l.api(t, jwt, http.MethodGet, "/repos/{repo}/installation", nil).mustJSON(t, http.StatusOK, &installation)
+	var created struct {
+		Token string `json:"token"`
+	}
+	l.api(t, jwt, http.MethodPost, fmt.Sprintf("/app/installations/%d/access_tokens", installation.ID),
+		map[string]any{"repositories": []string{l.repo}, "permissions": permissions}).mustJSON(t, http.StatusCreated, &created)
+	if created.Token == "" {
+		t.Fatalf("app %s: the response has no token", app)
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.tokens[app+" (limited)"] = created.Token
+	return created.Token
+}
+
+// rollupAnswer reads the GraphQL field statusCheckRollup of the pull request
+// that changed last, as the poll reads it, and describes the answer: the
+// status, the errors, and the checks. The fields come from the schema
+// (introspection on 2026-10-11): Repository.pullRequests(orderBy: IssueOrder),
+// IssueOrderField UPDATED_AT, PullRequest.statusCheckRollup with state and
+// contexts.
+func (l *live) rollupAnswer(t *testing.T, token string) string {
+	t.Helper()
+	const query = `query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(first: 1, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      nodes {
+        statusCheckRollup {
+          state
+          contexts(first: 100) {
+            nodes {
+              __typename
+              ... on CheckRun { name status conclusion checkSuite { app { databaseId } } }
+              ... on StatusContext { context state }
+            }
+          }
+        }
+      }
+    }
+  }
+}`
+	resp := l.api(t, token, http.MethodPost, "/graphql", map[string]any{"query": query, "variables": map[string]any{"owner": l.owner, "name": l.repo}})
+	var body struct {
+		Data struct {
+			Repository *struct {
+				PullRequests struct {
+					Nodes []struct {
+						Rollup *struct {
+							State    string `json:"state"`
+							Contexts struct {
+								Nodes []struct {
+									TypeName   string `json:"__typename"`
+									Conclusion string `json:"conclusion"`
+									State      string `json:"state"`
+								} `json:"nodes"`
+							} `json:"contexts"`
+						} `json:"statusCheckRollup"`
+					} `json:"nodes"`
+				} `json:"pullRequests"`
+			} `json:"repository"`
+		} `json:"data"`
+		Errors []struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if resp.status == http.StatusOK {
+		resp.json(t, &body)
+	}
+	var errs []string
+	for _, e := range body.Errors {
+		// An error of GitHub can name the private repository.
+		errs = append(errs, e.Type+": "+strings.ReplaceAll(e.Message, l.owner+"/"+l.repo, "<owner>/<repo>"))
+	}
+	rollup := "no pull request in the answer"
+	if body.Data.Repository != nil && len(body.Data.Repository.PullRequests.Nodes) > 0 {
+		rollup = "`statusCheckRollup` is null"
+		if r := body.Data.Repository.PullRequests.Nodes[0].Rollup; r != nil {
+			var contexts []string
+			for _, node := range r.Contexts.Nodes {
+				contexts = append(contexts, node.TypeName+" "+node.Conclusion+node.State)
+			}
+			rollup = fmt.Sprintf("`statusCheckRollup.state` `%s`, %d contexts (%s)", r.State, len(contexts), strings.Join(contexts, ", "))
+		}
+	}
+	return fmt.Sprintf("GraphQL `statusCheckRollup`: %s, errors [%s], %s", answer(resp), strings.Join(errs, "; "), rollup)
+}
+
+// recordCheckReadsFact records what a token of cumin-core with the
+// permissions reads of the checks of a commit: the four reads of REST, and
+// the GraphQL field statusCheckRollup. number is the fact: P2 for the token
+// of the permission table, P5 for a token without the read permissions of
+// the checks.
+func (l *live) recordCheckReadsFact(t *testing.T, number, token string, permissions map[string]string) {
+	t.Helper()
+	const what = "A cumin-core token with these permissions reads the check runs, the commit statuses, the annotations, the job log, and the GraphQL `statusCheckRollup` of a private repository (measured-constraints.md rows 54 and 148)"
 	var granted []string
 	for name, level := range permissions {
 		granted = append(granted, name+": "+level)
 	}
 	sort.Strings(granted)
-	asked := "Permissions that cumin asks for the token: `" + strings.Join(granted, "`, `") + "`"
+	asked := "Permissions of the token: `" + strings.Join(granted, "`, `") + "`"
 
 	sha, source := l.measuredCommit(t, token)
 	if sha == "" {
-		l.record("P2", what, "Not known", asked+". Not measured: the token reads no commit ("+source+")")
+		l.record(number, what, "Not known", asked+". Not measured: the token reads no commit ("+source+")")
 		return
 	}
 
@@ -224,9 +333,9 @@ func (l *live) recordCheckReadsFact(t *testing.T, token string) {
 		logs := l.api(t, token, http.MethodGet, "/repos/{repo}/actions/jobs/"+jobID+"/logs", nil)
 		details = fmt.Sprintf("`GET /check-runs/{id}/annotations`: %s. `GET /actions/jobs/{id}/logs`: %s. The IDs are %s", answer(annotations), answer(logs), idSource)
 	}
-	l.record("P2", what, "Not known",
-		fmt.Sprintf("%s. Commit: %s. `GET .../check-runs`: %s, %d check runs. `GET .../status`: %s, %d commit statuses. %s",
-			asked, source, answer(checkRuns), len(runs.CheckRuns), answer(statuses), len(combined.Statuses), details))
+	l.record(number, what, "Not known",
+		fmt.Sprintf("%s. Commit: %s. `GET .../check-runs`: %s, %d check runs. `GET .../status`: %s, %d commit statuses. %s. %s",
+			asked, source, answer(checkRuns), len(runs.CheckRuns), answer(statuses), len(combined.Statuses), details, l.rollupAnswer(t, token)))
 }
 
 // measuredCommit returns the commit whose checks the test reads: the head of
