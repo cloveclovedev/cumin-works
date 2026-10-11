@@ -55,26 +55,7 @@ func newLive(t *testing.T) *live {
 	if !ok || owner == "" || repo == "" {
 		t.Fatal("set CUMIN_LIVE_REPO to <owner>/<repo> of the sandbox repository")
 	}
-	path := os.Getenv("CUMIN_CONFIG")
-	if path == "" {
-		var err error
-		if path, err = config.DefaultPath(); err != nil {
-			t.Fatal(err)
-		}
-	}
-	apps, err := config.ReadGitHubApps(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var clientIDs map[string]string
-	for org, ids := range apps {
-		if strings.EqualFold(org, owner) {
-			clientIDs = ids
-		}
-	}
-	if len(clientIDs) == 0 {
-		t.Fatalf("the Host settings have no github_apps table for %s", owner)
-	}
+	clientIDs := liveClientIDs(t, owner)
 	l := &live{owner: owner, repo: repo, runID: time.Now().UTC().Format("20060102-150405"), clientIDs: clientIDs, tokens: map[string]string{}}
 
 	// The sandbox must be public. The tokens of the Apps have no Checks
@@ -95,6 +76,33 @@ func newLive(t *testing.T) *live {
 	}
 	l.branch = repository.DefaultBranch
 	return l
+}
+
+// liveClientIDs reads the client IDs of the GitHub Apps of one organization
+// from the Host settings.
+func liveClientIDs(t *testing.T, owner string) map[string]string {
+	t.Helper()
+	path := os.Getenv("CUMIN_CONFIG")
+	if path == "" {
+		var err error
+		if path, err = config.DefaultPath(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apps, err := config.ReadGitHubApps(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clientIDs map[string]string
+	for org, ids := range apps {
+		if strings.EqualFold(org, owner) {
+			clientIDs = ids
+		}
+	}
+	if len(clientIDs) == 0 {
+		t.Fatalf("the Host settings have no github_apps table for %s", owner)
+	}
+	return clientIDs
 }
 
 // credentials reads the client ID from the Host settings and the private key
