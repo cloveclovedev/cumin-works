@@ -35,6 +35,8 @@ launchctl print gui/$(id -u)/dev.cloveclove.cumin | grep -E "state|pid|last exit
 tail -f ~/.local/state/cumin/cumin.log
 ```
 
+`cumin setup launchd` は、plist を書く前に、cumin 自身が起動するコマンド (role ごとの Agent の CLI、`git`) を、実行したシェルの `PATH` で探す。ないコマンドがあれば、その名前を表示して何も書かずに終わるので、`PATH` に足してから実行し直す。sandbox の道具の確認は、ここでは実行されない。`cumin run` が最初の定期確認で実行する。
+
 `~/.local/bin` が `PATH` に入っていれば、`cumin setup launchd` と短く書ける。`scripts/install.sh` は、入っていなければ警告を出すが、実行中のシェルの `PATH` は変えない。上のようにフルパスで書けば、どちらでも動く。
 
 リポジトリの設定を変えるときは、Pull Request にして merge する。cumin は既定のブランチからしか読まない。`.cumin/` は保護されたパスなので、Bot の Pull Request では check が失敗する。人の Pull Request では飛ばされる。
