@@ -43,9 +43,9 @@ const (
 // pointer is empty when the file does not hold the key, so that the Host
 // value stays.
 //
-// priority_labels and protected_paths are keys of the repository only: the
-// Host file does not take them. The starter file of scripts/setup-repo.sh
-// holds protected_paths.
+// priority_labels, protected_paths, and tool_checks are keys of the
+// repository only: the Host file does not take them. The starter file of
+// scripts/setup-repo.sh holds protected_paths.
 type repositoryFile struct {
 	MaxReviewRounds     *int                      `toml:"max_review_rounds"`
 	MaxCheckFixRequests *int                      `toml:"max_check_fix_requests"`
@@ -55,6 +55,14 @@ type repositoryFile struct {
 	Roles               map[string]repositoryRole `toml:"roles"`
 	Notify              *repositoryNotify         `toml:"notify"`
 	ProtectedPaths      *[]string                 `toml:"protected_paths"`
+	ToolChecks          []repositoryToolCheck     `toml:"tool_checks"`
+}
+
+// repositoryToolCheck is one entry of tool_checks. The time limit is empty
+// when the entry does not hold the key, so that the default applies.
+type repositoryToolCheck struct {
+	Command   []string  `toml:"command"`
+	TimeLimit *duration `toml:"time_limit"`
 }
 
 type repositoryNotify struct {
@@ -138,6 +146,25 @@ func (s *Settings) WithRepository(data []byte) (*Settings, error) {
 	// only judge of them. An empty list is a value: it protects nothing.
 	if f.ProtectedPaths != nil {
 		effective.ProtectedPaths = *f.ProtectedPaths
+	}
+	// Every entry is checked, so that one read of the error names all the
+	// bad ones. The index counts from 0, as in repositories of the Host file.
+	for i, entry := range f.ToolChecks {
+		key := fmt.Sprintf("tool_checks[%d]", i)
+		check := ToolCheck{Command: entry.Command, TimeLimit: defaultToolCheckTimeLimit}
+		switch {
+		case len(entry.Command) == 0:
+			fail(key+".command", "is required: name the program, then its arguments")
+		case entry.Command[0] == "":
+			fail(key+".command", "must start with the name of the program: the first string is empty")
+		}
+		if entry.TimeLimit != nil {
+			check.TimeLimit = time.Duration(*entry.TimeLimit)
+			if check.TimeLimit <= 0 || check.TimeLimit > maxToolCheckTimeLimit {
+				fail(key+".time_limit", "must be more than 0, and %d seconds or less", int(maxToolCheckTimeLimit.Seconds()))
+			}
+		}
+		effective.ToolChecks = append(effective.ToolChecks, check)
 	}
 	if f.Notify != nil && f.Notify.Discord != nil && f.Notify.Discord.Enabled != nil {
 		effective.Notify.DiscordEnabled = *f.Notify.Discord.Enabled
