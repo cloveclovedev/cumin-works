@@ -1,6 +1,7 @@
 package github_test
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -27,7 +28,8 @@ const privateJobVariable = "CUMIN_LIVE_PRIVATE_JOB"
 
 // TestLivePrivateRepositoryFacts measures four facts of a private repository
 // for the design of #790: the rulesets, the reads of the checks with the
-// cumin-core token, git with and without a token, and the image address of a
+// cumin-core token, git with and without a token (also with the token of a
+// clone and a fetch of cumin), and the image address of a
 // diagram. It only reads. A read that GitHub refuses is a fact with its
 // status, not a failure. docs/ja/development/live-tests.md says what the
 // repository needs.
@@ -269,11 +271,34 @@ func (l *live) recordGitFact(t *testing.T) {
 	for _, app := range []string{"planner", "implementer", "reviewer", "cumin-core"} {
 		parts = append(parts, "Token of the "+app+" App: "+l.gitReads(t, l.token(t, app)))
 	}
-	l.record("P3", "`git ls-remote`, `git clone`, and `git fetch` of a private repository over HTTPS, without credentials and with the token of each App in the environment of git", "Not known",
+	// The token of a clone and a fetch of cumin: of the App of a role,
+	// limited to the one repository and to the read of its contents
+	// (docs/ja/designs/agent-run.md, the topic on the work directory).
+	for _, app := range []string{"planner", "implementer", "reviewer"} {
+		parts = append(parts, "Token of the "+app+" App limited to `contents: read`: "+l.gitReads(t, l.readToken(t, app)))
+	}
+	l.record("P3", "`git ls-remote`, `git clone`, `git fetch`, and `git remote set-head origin --auto` of a private repository over HTTPS, without credentials, with the token of each App, and with the token of each role App limited to `contents: read`, in the environment of git", "Not known",
 		strings.Join(parts, ". "))
 }
 
-// gitReads runs the three reads of git and returns their results. git gets
+// readToken returns a token of one role App that is limited to the one
+// repository and to the read of its contents, as cumin creates it for a
+// clone and a fetch.
+func (l *live) readToken(t *testing.T, app string) string {
+	t.Helper()
+	client := github.NewAppClient(github.DefaultBaseURL, nil)
+	created, err := client.CreateReadToken(context.Background(), l.credentials(t, app), app, l.owner, l.repo)
+	if err != nil {
+		t.Fatalf("app %s: %v", app, err)
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	// Kept so that tableWithoutTokens looks for it too.
+	l.tokens[app+" (contents: read)"] = created.Token
+	return created.Token
+}
+
+// gitReads runs the four reads of git and returns their results. git gets
 // the token as cumin gives it to an agent (internal/agent/env.go): through
 // GIT_CONFIG_*, never as an argument and never in a file. git reads no
 // settings of the user, so no credential helper answers. An empty token runs
@@ -299,10 +324,13 @@ func (l *live) gitReads(t *testing.T, token string) string {
 	lsRemote := gitResult(t, g, "ls-remote", remote, "HEAD")
 	clone := gitResult(t, g, "clone", "--quiet", "--depth", "1", remote, "clone")
 	g.mustRun(t, "init", "--quiet")
-	fetch := gitResult(t, g, "fetch", "--quiet", "--depth", "1", remote, l.branch)
+	g.mustRun(t, "remote", "add", "origin", remote)
+	fetch := gitResult(t, g, "fetch", "--quiet", "--depth", "1", "origin", l.branch)
+	// After the fetch, as Workspace.Prepare runs it (internal/agent/worktree.go).
+	setHead := gitResult(t, g, "remote", "set-head", "origin", "--auto")
 	// An error of git names the remote. The table does not name the private
 	// repository.
-	return strings.ReplaceAll(fmt.Sprintf("`ls-remote` %s, `clone` %s, `fetch` %s", lsRemote, clone, fetch), l.owner+"/"+l.repo, "<owner>/<repo>")
+	return strings.ReplaceAll(fmt.Sprintf("`ls-remote` %s, `clone` %s, `fetch` %s, `remote set-head origin --auto` %s", lsRemote, clone, fetch, setHead), l.owner+"/"+l.repo, "<owner>/<repo>")
 }
 
 // gitResult runs git and returns the exit code, with the last line of the

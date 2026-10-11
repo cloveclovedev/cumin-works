@@ -96,7 +96,7 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 |---|---|
 | P1 | cumin-core の token で読んだ、リポジトリの ruleset の一覧 (名前、対象、出どころ、enforcement) と、`GET /repos/{owner}/{repo}/rules/branches/{branch}` の返事 (rule の種類、必須のcheck) |
 | P2 | cumin-core の token による、check run、commit status、annotation、job のログの読み取りの、それぞれのステータス。cumin がこの token に求める権限の一覧も記録する |
-| P3 | 認証なしと、Planner、Implementer、Reviewer、cumin-core の各 App の token での、`git ls-remote`、`git clone`、`git fetch` の終了コード。失敗したときは、git の出力の最後の1行も記録する |
+| P3 | 認証なしと、Planner、Implementer、Reviewer、cumin-core の各 App の token と、Planner、Implementer、Reviewer の各 App の、リポジトリ1つと `contents: read` に絞った token での、`git ls-remote`、`git clone`、`git fetch`、`git remote set-head origin --auto` の終了コード。失敗したときは、git の出力の最後の1行も記録する |
 | P4 | `cumin/diagrams` の SVG の1つの、`raw.githubusercontent.com` のアドレスのステータスと Content-Type。認証なしと、cumin-core の token を付けた場合 |
 
 - P2 で check run の一覧が拒否されると、テストは job のIDを知ることができない。結果に `Set CUMIN_LIVE_PRIVATE_JOB` と出たら、その Pull Request の job のIDを `CUMIN_LIVE_PRIVATE_JOB` に入れて、もう一度実行する。テストは、同じIDを check run のIDとしても使う。GitHub Actions の job の check run は、job と同じIDを持つからである。
