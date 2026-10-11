@@ -182,6 +182,27 @@ var allApps = []string{
 	string(config.RoleReviewer),
 }
 
+func TestReadToken_IsLimitedToOneRepositoryAndToTheReadOfContents(t *testing.T) {
+	fake, server := newFakeGitHub(t)
+	client := newClientForTest(server)
+
+	token, err := client.CreateReadToken(context.Background(), testCredentials(), string(config.RoleReviewer), "example-org", "example-repo")
+	if err != nil {
+		t.Fatalf("CreateReadToken: %v", err)
+	}
+	if token.Token != testToken+"1" {
+		t.Errorf("Token = %q", token.Token)
+	}
+	want := `{"permissions":{"contents":"read"},"repositories":["example-repo"]}`
+	if got, _ := json.Marshal(fake.tokenBody); string(got) != want {
+		t.Errorf("token request body = %s, want %s", got, want)
+	}
+
+	if _, err := client.CreateReadToken(context.Background(), testCredentials(), "owner", "example-org", "example-repo"); err == nil {
+		t.Error("CreateReadToken of an unknown app succeeded")
+	}
+}
+
 func TestAppToken_IsLimitedToOneRepositoryAndToThePermissionsOfTheApp(t *testing.T) {
 	for _, app := range allApps {
 		t.Run(app, func(t *testing.T) {

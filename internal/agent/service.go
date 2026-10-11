@@ -219,6 +219,25 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (*Run, error) {
 	return run, nil
 }
 
+// GitToken creates the token of the git commands of one prepare or one
+// cleanup of the worktree of c: a token of the App of the role of c,
+// limited to the repository and to the read of its contents. It is not the
+// token of a run, which Start creates right before the run so that the run
+// has the whole hour of it (agent-run.md, the topic on the work directory).
+// The Workspace calls it through its field Token.
+func (s *Service) GitToken(ctx context.Context, c Checkout) (string, error) {
+	cred, err := s.app(c.Owner, c.Role)
+	if err != nil {
+		return "", err
+	}
+	token, err := s.GitHub.CreateReadToken(ctx, cred, string(c.Role), c.Owner, c.Repo)
+	if err != nil {
+		return "", err
+	}
+	s.logger().Info("git token created", "role", c.Role, "repository", c.Owner+"/"+c.Repo, "expires_at", token.ExpiresAt)
+	return token.Token, nil
+}
+
 // app returns the credentials of the App of the role for the owner. GitHub
 // account names are case-insensitive, so the owner matches the settings
 // key without regard to case; two keys that differ only by case are an

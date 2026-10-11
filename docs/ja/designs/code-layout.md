@@ -48,7 +48,7 @@
 | | `stoprequest.go` | 止める予約のファイル (`stop-request.json`)。`cumin stop --after-current-runs` が書き、`cumin run` が読んで消す |
 | | `monitorfile.go` | モニターファイル (`monitor.json`) の形と書き込みと読み取り。書くのは `cumin run` だけで、cuminのコードで読むのは `cumin status` だけである。読み取りは、知る版より新しい `version` を断る ([モニターファイルとメニューバーのアプリの設計](status-menu-bar.md)) |
 | `internal/core/testenv` | `testenv.go` | テストだけが使う。マシンに足りないもの (`gh`、rootでないユーザー、ディレクトリのmode) があるテストを、手元ではskipし、CI (環境変数 `CI` が `true`) では失敗させる `SkipOrFail` ([cumin本体の設計メモ](cumin-core.md) の「テストの2層」)。標準ライブラリだけを使う |
-| `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行、要求の共通部分 |
+| `internal/platform/github` | `appauth.go` | `AppClient`。JWTの署名、installation tokenの発行 (Appの権限のtokenと、cloneとfetchのための `contents: read` のtoken)、要求の共通部分 |
 | | `retry.go` | 一時的な失敗 (ネットワークの誤り、5xxの応答) をした読み取りのやり直し。`TemporaryError` と `IsTemporary` |
 | | `ratelimit.go` | 一次のレート制限の使い切りと二次のレート制限の見分けと、リセットの時刻 (二次は待ちの終わりの時刻) まで同じinstallationの呼び出しを送らないこと。`RateLimitError` |
 | | `tokensource.go` | cumin-coreのtokenの使い回し (期限の5分前まで) と、そのbotのlogin |
@@ -121,13 +121,13 @@
 | | `instruction.go` | roleの指示の合成 (roleのファイル、disciplineのファイル、平易な英語の決まり、riskの基準の順) |
 | | `facts.go` | 純粋。依頼文の先頭に置く、実行の事実のかたまり (扱うIssueの番号と種類、Issue Ownerのログイン名、保護されたパスと照合の決まり、実行時間の上限、実行が終わる時刻。Plannerには、ImplementerとReviewerの時間の上限も) |
 | | `skills.go` | テンプレートを、roleごとのディレクトリにskillとして書き出す |
-| | `service.go` | 1回の依頼の入口 `Start` (指示の合成、token、身元、実行)、使用率の読み取りの入口 `ReadQuota`、Hostの警告 |
+| | `service.go` | 1回の依頼の入口 `Start` (指示の合成、token、身元、実行)、cloneとfetchのためのtokenの発行 `GitToken`、使用率の読み取りの入口 `ReadQuota`、Hostの警告 |
 | | `claudecode.go` | Claude Codeの接続部分。引数、出力の読み取り、時間の上限 |
 | | `startrecord.go` | 起動の記録の確認 (作業ディレクトリの外のコンテキスト、cuminのskill) と、JSONの形を値なしで表す補助の関数 |
 | | `env.go` | CLIのプロセスの環境変数と、roleのtokenと作者の渡し方 |
 | | `quota.go` | 使用率を読む最小の実行 |
 | | `toolcheck.go` | 道具の確認のコマンドを1つ実行する `RunToolCheck`。Agentと同じHostの環境変数で、tokenなしで、時間の上限まで待つ |
-| | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け (閉じたIssueのものも)、先頭のコミットの読み取り |
+| | `worktree.go` | `Workspace`。cloneとworktreeの用意と片付け (閉じたIssueのものも)、先頭のコミットの読み取り。GitHubと通信するgitへの、roleのtokenの渡し方 |
 | `internal/setup` | `domain.go`、`page.go`、`service.go` | `cumin setup github-apps`。Manifest flowの手元のページと、登録の手順 |
 | | `permissions.go` | 登録済みのAppの権限の変更の案内。権限の表とAppの権限を比べ、Appの権限の画面とインストールの画面を開き、変わるまで待つ |
 | | `notify.go` | `cumin setup notify`。通知のアドレスの確認とKeychainへの保存 |
