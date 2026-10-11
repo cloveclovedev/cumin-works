@@ -9,9 +9,11 @@ package workflow
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/cloveclovedev/cumin-works/internal/agent"
+	"github.com/cloveclovedev/cumin-works/internal/core/state"
 )
 
 // runToolChecks runs every tool check of the repository in the order of
@@ -53,4 +55,21 @@ func (s *Service) failedToolChecks(repository string) []string {
 	s.toolCheckMu.Lock()
 	defer s.toolCheckMu.Unlock()
 	return s.failedChecks[repository]
+}
+
+// repositoriesWithAFailedToolCheck returns the repositories with a tool
+// check that failed at their last poll, in the order of the targets, for
+// the monitor file. A repository that this poll passed over keeps the
+// result of its last poll.
+func (s *Service) repositoriesWithAFailedToolCheck() []state.MonitorFailedToolChecks {
+	s.toolCheckMu.Lock()
+	defer s.toolCheckMu.Unlock()
+	var failed []state.MonitorFailedToolChecks
+	for _, target := range s.Targets {
+		repository := target.Repository.String()
+		if commands := s.failedChecks[repository]; len(commands) > 0 {
+			failed = append(failed, state.MonitorFailedToolChecks{Repository: repository, Commands: slices.Clone(commands)})
+		}
+	}
+	return failed
 }

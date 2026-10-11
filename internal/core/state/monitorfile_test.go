@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -123,7 +124,8 @@ func TestMonitorFile_EmptyArraysAreWrittenAndAMissingNextTryIsNot(t *testing.T) 
     "stopped_windows": []
   },
   "agents": [],
-  "waiting": []
+  "waiting": [],
+  "failed_tool_checks": []
 }
 `
 	if string(raw) != want {
@@ -141,6 +143,7 @@ func TestMonitorFile_TheReaderReturnsWhatWasWritten(t *testing.T) {
 	at := time.Date(2026, 10, 4, 7, 0, 5, 0, time.UTC)
 	written := monitorFileOf(at)
 	written.Agents = []state.MonitorAgent{{Repository: "example/app", Issue: 7, Role: "implementer", Request: "implement", Title: "a title"}}
+	written.FailedToolChecks = []state.MonitorFailedToolChecks{{Repository: "example/app", Commands: []string{"docker info"}}}
 	if err := state.WriteMonitorFile(path, written); err != nil {
 		t.Fatalf("WriteMonitorFile: %v", err)
 	}
@@ -149,8 +152,27 @@ func TestMonitorFile_TheReaderReturnsWhatWasWritten(t *testing.T) {
 		t.Fatalf("ReadMonitorFile: found = %v, err = %v", found, err)
 	}
 	if !read.LastPoll.At.Equal(at) || len(read.LastPoll.Errors) != 1 || read.LastPoll.Errors[0] != written.LastPoll.Errors[0] ||
-		len(read.Agents) != 1 || read.Agents[0] != written.Agents[0] || len(read.Waiting) != 0 {
+		len(read.Agents) != 1 || read.Agents[0] != written.Agents[0] || len(read.Waiting) != 0 ||
+		!reflect.DeepEqual(read.FailedToolChecks, written.FailedToolChecks) {
 		t.Errorf("the reader returned %+v, want what was written", read)
+	}
+}
+
+// A new field does not break a reader: a file of version 1 with no list of
+// the failed tool checks, as an earlier cumin run wrote it, is read with no
+// failed tool check.
+func TestMonitorFile_TheReaderAcceptsAFileWithoutTheFailedToolChecks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), state.MonitorFileName)
+	const content = `{"version": 1, "last_poll": {"at": "2026-10-04T07:00:05Z", "errors": []}, "agents": [], "waiting": []}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	read, found, err := state.ReadMonitorFile(path)
+	if err != nil || !found {
+		t.Fatalf("ReadMonitorFile: found = %v, err = %v, want the file and no error", found, err)
+	}
+	if len(read.FailedToolChecks) != 0 || read.LastPoll.At.IsZero() {
+		t.Errorf("the reader returned %+v, want the last poll and no failed tool check", read)
 	}
 }
 

@@ -48,6 +48,20 @@ type MonitorFile struct {
 	// Waiting are the open issues that wait for a Maintainer. It is written
 	// as [] when there is none.
 	Waiting []MonitorWaiting `json:"waiting"`
+	// FailedToolChecks are the repositories with a tool check that failed
+	// at their last poll: cumin starts no agent for them ("stop agent
+	// starts"). It is written as [] when there is none.
+	FailedToolChecks []MonitorFailedToolChecks `json:"failed_tool_checks"`
+}
+
+// MonitorFailedToolChecks is one repository with a tool check that failed
+// at its last poll.
+type MonitorFailedToolChecks struct {
+	// Repository is "<owner>/<repo>".
+	Repository string `json:"repository"`
+	// Commands are the failed checks, each as its command on one line, in
+	// the order of the settings file of the repository.
+	Commands []string `json:"commands"`
 }
 
 // MonitorAgent is one agent run that `cumin run` holds as running.
@@ -135,6 +149,9 @@ func WriteMonitorFile(path string, m MonitorFile) error {
 	if m.Waiting == nil {
 		m.Waiting = []MonitorWaiting{}
 	}
+	if m.FailedToolChecks == nil {
+		m.FailedToolChecks = []MonitorFailedToolChecks{}
+	}
 	if m.Quota.NextTryAt != nil {
 		next := m.Quota.NextTryAt.UTC()
 		m.Quota.NextTryAt = &next
@@ -152,6 +169,8 @@ func WriteMonitorFile(path string, m MonitorFile) error {
 // MonitorFileVersion, is an error that names the path. A list that is
 // missing is another shape, because `cumin run` writes every list: the
 // reader would count no error and no agent where the file says nothing.
+// The list of the failed tool checks came later within version 1, so a file
+// without it is read with no failed tool check.
 func ReadMonitorFile(path string) (MonitorFile, bool, error) {
 	raw, err := os.ReadFile(path)
 	switch {

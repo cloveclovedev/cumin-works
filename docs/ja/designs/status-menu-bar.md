@@ -36,7 +36,7 @@
 - `cumin status` も、同じファイルを読む。cuminのコードの中で、ただ1つの読み手である (「`cumin status` の読み方」)。
 - `cumin run` はアプリを知らない。アプリがなくても同じファイルを書く。同じファイルを読めば、別の表示 (CLI、ウィジェット) も作れる。
 - アプリは、cuminの設定 (`config.toml`)、手元の状態 (`state.json`)、ログ、Keychain、GitHubを読まない。ネットワークを使わない。
-- ファイルには、token、鍵、webhookのアドレス、使用率の数値を入れない。入れるのは、リポジトリの名前、Issueの番号と題名、IssueまたはPull RequestのURL、role、依頼の種類、待つものの種類、時刻、定期確認のエラーの文章、利用枠の状態と枠の名前だけである。
+- ファイルには、token、鍵、webhookのアドレス、使用率の数値を入れない。入れるのは、リポジトリの名前、Issueの番号と題名、IssueまたはPull RequestのURL、role、依頼の種類、待つものの種類、時刻、定期確認のエラーの文章、失敗した道具の確認のコマンド、利用枠の状態と枠の名前だけである。
 
 ### モニターファイル
 
@@ -76,6 +76,7 @@
 | `waiting[].kind` | 文字列 | 待つものの種類。下の表の4つの値 |
 | `waiting[].title` | 文字列 | Issueの題名 |
 | `waiting[].url` | 文字列 | `merge-decision` では、開いているPull RequestのURL。ほかの3つでは、IssueのURL |
+| `failed_tool_checks` | 配列 | 最後の定期確認で、道具の確認 ([cumin本体の要件](../requirements/cumin-core.md) の「道具の確認」) が1つでも失敗したリポジトリ。cuminは、そのリポジトリのAgentを起動しない (「stop agent starts」)。全て通っていれば空。設定のリポジトリの順に並べる。飛ばしたリポジトリは、前の結果を保つ。要素は、`repository` (`<owner>/<repo>`) と `commands` (文字列の配列) を持つ。`commands` は、失敗した確認の1つずつで、確認の `command` を空白でつないだもの (例: `docker info`) を、設定ファイルに書いた順に並べる。通った確認は載せない。表示するのは `cumin status` だけで、アプリは読み飛ばす |
 
 例:
 
@@ -100,7 +101,8 @@
   "waiting": [
     {"repository": "example/tool", "issue": 9, "kind": "merge-decision", "title": "fix(api): return 404 for a missing item", "url": "https://github.com/example/tool/pull/14"},
     {"repository": "example/app", "issue": 31, "kind": "decision", "title": "Show the history of an item", "url": "https://github.com/example/app/issues/31"}
-  ]
+  ],
+  "failed_tool_checks": [{"repository": "example/tool", "commands": ["docker info", "plantuml -version"]}]
 }
 ```
 
@@ -159,12 +161,12 @@
 ### `cumin status` の読み方
 
 - `cumin status` は、モニターファイルを読んで、cuminが定期確認をしているかを表示する。読むのは `internal/core/state` の `ReadMonitorFile` で、表示は `cmd/cumin/status.go` にある。表示する行の名前は、[cumin本体の要件](../requirements/cumin-core.md) の `cumin status` の行に従う。
-- 見出し `Last poll:` の下に、`last_poll.at` (Hostのタイムゾーン) と今までの経過時間、`last_poll.errors` の数、エラーの1つずつ (リポジトリと文章) を出す。
+- 見出し `Last poll:` の下に、`last_poll.at` (Hostのタイムゾーン) と今までの経過時間、`last_poll.errors` の数、エラーの1つずつ (リポジトリと文章) を出す。その下に、`failed_tool_checks` を出す。空のときは、`failed tool checks: none at the last poll` の1行である。`failed_tool_checks` のないファイルは、空として読む。空でないときは、`failed tool checks:` の下に、リポジトリごとに1行 (`<owner>/<repo>: agent starts of this repository wait until every tool check passes`) を出し、その下に、失敗した確認のコマンドを1行ずつ出す。readyのIssueが始まらない理由を、Maintainerがここで読める。
 - 古いファイルの判定: 経過時間が、Hostの設定の `poll_interval` の3倍を超えたら、最後の定期確認が古いことを、上限とともに1行で出す。`cumin status` はHostの設定を読むので、アプリの決まった上限 (180秒) ではなく、`poll_interval` から上限を計算する。3倍にする理由は、アプリと同じである (1回りが遅れても古いとしない)。古いときも、ほかの行はそのまま出す。
 - ファイルがないときは、そのことを1行で出す。読めないファイル (JSONでない、`version` が新しすぎる、`last_poll.at` か配列がない) は、理由を1行で出す。どちらのときも、モニターファイルからの行だけを省き、残りの表示は続ける。
 - 見出し `Agents at work (as cumin run holds them, from the monitor file):` の一覧に、`agents` の1つずつを、リポジトリ、番号、role、依頼の種類、題名で出す。GitHubのラベルから読む一覧は、そのまま残す。ラベルの一覧は、Agentなしで待つIssueも含む。`agents` の一覧は、`cumin run` が今持つ実行だけである。
 - モニターファイルの文字列 (題名、エラーの文章など) は、制御文字を除いてから出す。題名はGitHubのIssueから来るので、端末を操作する文字が入りうる。
-- 終了コードは、モニターファイルの中身で変えない。古いときも、エラーがあるときも、ファイルがないときも、今までと同じである。
+- 終了コードは、モニターファイルの中身で変えない。古いときも、エラーがあるときも、失敗した道具の確認があるときも、ファイルがないときも、今までと同じである。
 - `quota`、`stop_requested`、`waiting` は表示に使わない。`cumin status` は、同じ事実を状態ファイル、止める予約のファイル、GitHubのラベルから読んでいる。
 
 ### 新しい項目の知らせ方
