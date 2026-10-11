@@ -25,7 +25,20 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 
 ## 前提
 
-- 対象のリポジトリで ruleset を使える。Free プランでは、公開リポジトリだけで使える。
+- 対象のリポジトリで ruleset を使える。公開のリポジトリか、ruleset を使えるプランの非公開のリポジトリである。cumin は、既定のブランチの保護を全て ruleset に頼るので、ruleset のないリポジトリを対象にしない。
+
+  | リポジトリ | 要るプラン |
+  |---|---|
+  | 公開 | どのプランでもよい (GitHub Free for organizations を含む) |
+  | Organization の非公開 | GitHub Team 以上 (GitHub Team か GitHub Enterprise Cloud) |
+
+  - 公式: [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets) は、ruleset を使えるのは、GitHub Free では公開のリポジトリ、GitHub Pro、GitHub Team、GitHub Enterprise Cloud では公開と非公開のリポジトリだと書いている。プランの違いは [GitHub's plans](https://docs.github.com/en/get-started/learning-about-github/githubs-plans) にある。
+  - GitHub Team の Organization の非公開のリポジトリで、手順3の5つの ruleset が全て作られることは、確かめてある ([調査・実測で確定した制約](../evidence/measured-constraints.md) の 146)。
+  - Free プランの非公開のリポジトリ (#296) と、個人アカウントのリポジトリ (#295) は、まだ対象にしていない。Free プランの非公開のリポジトリでは、手順3のスクリプトが、何も変える前に止まる (「うまくいかないとき」)。
+- 非公開のリポジトリでは、GitHub Actions の時間が、プランに含まれる分から引かれる。含まれる分を超えると、課金される。公開のリポジトリでは、標準の GitHub-hosted runner は無料である (公式: [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions))。
+  - 時間を使うのは、対象のリポジトリのCIと、手順3が入れる保護されたパスのcheck (workflow `cumin-protected-paths`) である。
+  - 保護されたパスのcheckは、App の Pull Request でだけ動く。人の Pull Request では飛ばされ、時間を使わない。1回の push で1つの job が動き、5分で打ち切られる。
+  - App の Pull Request でこの job が使う時間は、まだ測っていない ([cumin本体の設計メモ](../designs/cumin-core.md) の「非公開のリポジトリ」と「まだ決めていないこと」)。
 - 対象のリポジトリのCI (`.github/workflows`) は、cumin を導入する前に、Maintainer が用意する。Implementer の GitHub App には Workflows の権限がなく、workflow を足すことも変えることもできないためである。同じ理由で、保護されたパスの workflow は、管理者が手順3のスクリプトで入れる。
 - 手順3を実行する人は、対象のリポジトリの管理者である。
 - 手順3を実行するマシンに `gh` があり、ログインしてある。`gh` の token には `workflow` の scope が要る。workflow のファイルを push するためである。足りないときは、次を実行する。

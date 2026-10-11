@@ -16,7 +16,7 @@
   - 4つの GitHub App が登録され、sandbox のリポジトリにインストールされている。
   - Host の設定ファイルに Client ID があり、Keychain に秘密鍵がある。
   - sandbox に `scripts/setup-repo.sh <owner>/<repo> --core-app <slug> --implementer-app <slug>` を実行してある。
-- sandbox は、公開のリポジトリである。App の token には Checks の権限がなく、check の結果を読めるのは公開のリポジトリだけだからである。テストは最初に、認証なしでリポジトリを読めることを確かめ、読めなければ止まる。
+- これらのテストの sandbox は、公開のリポジトリである。テストは、公開のリポジトリでの GitHub の振る舞いを確かめるものだからである。テストは最初に、認証なしでリポジトリを読めることを確かめ、読めなければ止まる。cumin そのものは、ruleset を使えるプランの非公開のリポジトリでも動く ([セットアップの手順](setup-guide.md) の「前提」)。非公開のリポジトリの事実は、下の「非公開のリポジトリの測定」のテストが、別のリポジトリで測る。
 - sandbox の保護されたパスの一覧 (`.cumin/config.toml` の `protected_paths`) に `CLAUDE.md` があり、`live/` を守っていない。テストは `live/CLAUDE.md` (保護されている) と `live/<日時>.md` (保護されていない) を使う。ファイルがなければ、初期値の一覧が使われるので、そのままでよい。合っていなければ、テストは Pull Request を作る前に止まる。
 - `TestLiveGitHubFacts` には、sandbox に次の2つが要る。リポジトリの管理者が用意する。
   - `internal/platform/github/testdata/cumin-live-fixture.yml` を `.github/workflows/cumin-live-fixture.yml` として、既定のブランチに置く。main は保護されているので、Pull Request で入れる。
