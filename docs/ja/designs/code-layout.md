@@ -136,7 +136,7 @@
 | | `software-engineering/risk-criteria.md` | riskの基準の初期値。cuminは読まず、指示にそのまま入れる |
 | `templates` | `embed.go`、`*.md` | GitHubに書く文章のテンプレート。平易な英語の決まりは指示に入り、1つの行動のためのテンプレートはskillになる。どちらも `internal/agent` が読む。cuminが自分で書くもの (`follow-up-note.md`、`stop-note.md`) は、Agentには渡らず、テストが文面との一致を確かめる |
 | `scripts` | `render-diagrams.sh` | `.puml` をSVGに書き出す |
-| | `setup-repo.sh`、`setup-repo/` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) |
+| | `setup-repo.sh`、`setup-repo/`、`setup_repo_test.go` | 対象のリポジトリの準備 (ラベル、ruleset、保護されたパスのcheck) と、そのラベルの手順のテスト。テストは、偽の `gh` をPATHに置いて、スクリプトのラベルの関数だけを実行する |
 | | `install.sh` | cuminをビルドしてHostに置き、LaunchAgentを新しいバイナリに入れ替える |
 | | `cumin-health.sh`、`cumin_health_test.go` | cuminが動いているかを言う一般の道具 (最後の定期確認、起動してからのエラー、実行中のAgent) と、そのテスト。テストはGoのpackage `scripts` で、スクリプトを実行する。macOSの `plutil` が要るので、ほかのOSでは飛ばす ([Hostの一般の道具](../guides/host-tools.md)) |
 | | `replace-binary.sh`、`replace_binary_test.go` | バイナリを入れ替える一般の道具 (チェックアウトと入れ替える先の確認、実行を待つ停止、`install.sh --restart`、`cumin-health.sh --wait-polls 2`) と、そのテスト。テストは、偽の `git`、`cumin`、`launchctl`、`plutil`、`go` をPATHに置いてスクリプトを実行する ([Hostの一般の道具](../guides/host-tools.md)) |

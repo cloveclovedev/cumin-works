@@ -1,0 +1,41 @@
+@startuml setup-repo-labels
+' cumin works - the labels step of scripts/setup-repo.sh: what the script does with each label.
+' Document: setup-guide.md, step 3 (prepare the repository), items 3 and 4.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:read the labels of the repository\nGET /repos/{owner}/{repo}/labels;
+partition "each label of cumin: cumin/type/*, cumin/status/*, risk/*" {
+  if (priority_labels names the label?) then (yes)
+    :print "kept";
+  elseif (the repository has the label?) then (no)
+    :create the label\nprint "created";
+  elseif (color and description equal the list of cumin?) then (yes)
+    :print "unchanged";
+  else (no)
+    :update the label\nPATCH /repos/{owner}/{repo}/labels/{name}\nprint "updated";
+  endif
+}
+if (.cumin/config.toml names priority_labels?) then (yes)
+  :change no priority label;
+else (no, or no file)
+  partition "each default priority label: cumin/priority/P0 to P3" {
+    if (the repository has the label?) then (no)
+      :create nothing\ncumin run creates the label;
+    elseif (color and description equal the list of cumin?) then (yes)
+      :print "unchanged";
+    else (no)
+      :update the label\nprint "updated";
+    endif
+  }
+endif
+stop
+
+note right
+  --dry-run prints "would create the label"
+  or "would update the label",
+  and changes nothing.
+end note
+@enduml

@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/cloveclovedev/cumin-works/internal/core/config"
 )
 
 // setupRepoFunctions returns the named shell functions of
@@ -44,5 +46,22 @@ func TestSetupRepoScript_CreatesTheLabelsThatCuminCreates(t *testing.T) {
 	}
 	if string(out) != want.String() {
 		t.Errorf("the script creates\n%s\ncumin creates\n%s", out, want.String())
+	}
+}
+
+// The script updates the default priority labels with a second list of its
+// own. The list must be the one of DefaultPriorityLabels, or the script would
+// change the labels that cumin creates.
+func TestSetupRepoScript_UpdatesTheDefaultPriorityLabelsThatCuminCreates(t *testing.T) {
+	out, err := exec.Command("sh", "-c", setupRepoFunctions(t, "default_priority_labels")+"default_priority_labels").CombinedOutput()
+	if err != nil {
+		t.Fatalf("the function failed: %v\n%s", err, out)
+	}
+	var want strings.Builder
+	for _, label := range DefaultPriorityLabels(config.DefaultPriorityLabels()) {
+		fmt.Fprintf(&want, "%s|%s|%s\n", label.Name, label.Color, label.Description)
+	}
+	if string(out) != want.String() {
+		t.Errorf("the script updates\n%s\ncumin creates\n%s", out, want.String())
 	}
 }

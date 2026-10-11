@@ -34,7 +34,7 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 gh auth refresh -h github.com -s workflow
 ```
 
-- ラベルは用意しなくてよい。手順3のスクリプトと、起動のときの cumin が、足りないラベルを作る。優先度のラベルだけは、名前を設定で決められる。Organization のラベルを使うときは、手順3のスクリプトが、足りないラベルを作るかどうかを尋ねる。
+- ラベルは用意しなくてよい。手順3のスクリプトと、起動のときの cumin が、足りないラベルを作る。既にあるラベルの色と説明を cumin の一覧に合わせるのは、手順3のスクリプトだけである。優先度のラベルだけは、名前を設定で決められる。Organization のラベルを使うときは、手順3のスクリプトが、足りないラベルを作るかどうかを尋ねる。
 - 対象のリポジトリの持ち主は、Organization である。v0.1 の `cumin setup github-apps` は、個人アカウントの GitHub App を登録しない。
 
 個人アカウントのリポジトリから始める場合:
@@ -197,9 +197,20 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
 3. 既定のブランチの `.cumin/config.toml` が `priority_labels` (優先度のラベル。[設定の一覧](configuration.md)) を持っていれば、そのうちリポジトリにないラベルを一覧にして、作るかどうかを尋ねる。
    - `y` と答えたときだけ作る。ほかの答えと、答えがないとき (入力が端末でないとき) は、何も作らない。`--dry-run` は、一覧を表示するだけで尋ねない。
    - 尋ねるのは、ラベルが Organization のものだからである。cumin は、設定に書かれたラベルを作らず、変えない。作らなかったラベルは、付けられないだけで、cumin の動きは変わらない。
-   - `priority_labels` がなければ、何も尋ねない。cumin が初期値のラベル (`cumin/priority/P0` 〜 `cumin/priority/P3`) を自分で作る。
+   - `priority_labels` がなければ、何も尋ねない。cumin が初期値のラベル (`cumin/priority/P0` 〜 `cumin/priority/P3`) を自分で作る。スクリプトは、初期値のラベルを作らない。既にある初期値のラベルの色と説明は、4と同じやり方で cumin の一覧に合わせる。`.cumin/config.toml` がないときも同じである。
+   - `priority_labels` があれば、スクリプトは、そこに書かれたラベルも、初期値のラベルも、色と説明を変えない。
    - ひな形を足したばかりのリポジトリには `priority_labels` がない。Organization のラベルを使うときは、`priority_labels` を足す Pull Request を merge してから、スクリプトをもう一度実行する。
-4. cumin のラベル (`cumin/type/*`、`cumin/status/*`、`risk/*`。[Issueの状態](../requirements/workflow/issue-states.md) の「ラベルの一覧」) のうち、リポジトリにないものを作る。色と説明は、cumin が起動のときに作るものと同じである。cumin も同じラベルを作るので、尋ねない。
+4. cumin のラベル (`cumin/type/*`、`cumin/status/*`、`risk/*`。[Issueの状態](../requirements/workflow/issue-states.md) の「ラベルの一覧」) のうち、リポジトリにないものを作り、色か説明が cumin の一覧と違うものを直す。色と説明は、cumin が起動のときに作るものと同じである。cumin も同じラベルを作るので、尋ねない。
+   - ラベルごとに1行を表示する。作ったら `created    label <名前>`、直したら `updated    label <名前>`、一覧と同じなら `unchanged  label <名前>` である。
+   - 色は、大文字と小文字を区別せずに比べる。説明のないラベルは、説明が空のラベルとして比べる。
+   - 直すときは、色と説明の両方を一覧のものにする ([`PATCH /repos/{owner}/{repo}/labels/{name}`](https://docs.github.com/en/rest/issues/labels#update-a-label))。名前は変えない。
+   - `priority_labels` に書かれたラベルは、cumin のラベルと同じ名前でも変えず、`kept       label <名前>` と表示する。
+   - `--dry-run` は、`would create the label <名前>` または `would update the label <名前>` と表示して、何も変えない。
+   - cumin の起動 (`cumin run`) は、足りないラベルを作るだけで、既にあるラベルは変えない。cumin の一覧が変わったあとは、このスクリプトをもう一度実行する。
+
+   ![スクリプトは、リポジトリのラベルを読む。cumin のラベルごとに、priority_labels に書かれていれば残し、なければ作り、色と説明が一覧と同じなら何もせず、違えば直す。.cumin/config.toml が priority_labels を持たないときだけ、既にある初期値の優先度のラベルも同じように直す。初期値の優先度のラベルは作らない](setup-repo-labels.svg)
+
+   図の元ファイル: [setup-repo-labels.puml](setup-repo-labels.puml)
 5. 次の ruleset を作る。
 
 | ruleset | 対象 | 内容 | bypass list |
