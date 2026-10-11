@@ -34,7 +34,7 @@ cumin-works を、ある Organization とそのリポジトリに導入する手
 gh auth refresh -h github.com -s workflow
 ```
 
-- ラベルは用意しなくてよい。手順3のスクリプトと、起動のときの cumin が、足りないラベルを作る。既にあるラベルの色と説明を cumin の一覧に合わせるのは、手順3のスクリプトだけである。優先度のラベルだけは、名前を設定で決められる。Organization のラベルを使うときは、手順3のスクリプトが、足りないラベルを作るかどうかを尋ねる。
+- ラベルは用意しなくてよい。手順3のスクリプトと、起動のときの cumin が、足りないラベルを作る。既にあるラベルの色と説明を cumin の一覧に合わせるのは、手順3のスクリプトだけである。cumin が使わなくなったラベルを消すのも、手順3のスクリプトだけで、消す前に尋ねる。優先度のラベルだけは、名前を設定で決められる。Organization のラベルを使うときは、手順3のスクリプトが、足りないラベルを作るかどうかを尋ねる。
 - 対象のリポジトリの持ち主は、Organization である。v0.1 の `cumin setup github-apps` は、個人アカウントの GitHub App を登録しない。
 
 個人アカウントのリポジトリから始める場合:
@@ -208,10 +208,18 @@ slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`)
    - `--dry-run` は、`would create the label <名前>` または `would update the label <名前>` と表示して、何も変えない。
    - cumin の起動 (`cumin run`) は、足りないラベルを作るだけで、既にあるラベルは変えない。cumin の一覧が変わったあとは、このスクリプトをもう一度実行する。
 
-   ![スクリプトは、リポジトリのラベルを読む。cumin のラベルごとに、priority_labels に書かれていれば残し、なければ作り、色と説明が一覧と同じなら何もせず、違えば直す。.cumin/config.toml が priority_labels を持たないときだけ、既にある初期値の優先度のラベルも同じように直す。初期値の優先度のラベルは作らない](setup-repo-labels.svg)
+   ![スクリプトは、リポジトリのラベルを読む。cumin のラベルごとに、priority_labels に書かれていれば残し、なければ作り、色と説明が一覧と同じなら何もせず、違えば直す。.cumin/config.toml が priority_labels を持たないときだけ、既にある初期値の優先度のラベルも同じように直す。初期値の優先度のラベルは作らない。最後に、cumin が使わなくなったラベルごとに、付いている Issue と Pull Request を数え、開いているものに付いていれば残し、なければ尋ねて、答えが y のときだけ消す](setup-repo-labels.svg)
 
    図の元ファイル: [setup-repo-labels.puml](setup-repo-labels.puml)
-5. 次の ruleset を作る。
+5. cumin が以前の版で使い、今は使わないラベルのうち、リポジトリにあるものを、尋ねてから消す。対象は、スクリプトの `retired_labels` の一覧 (`cumin/status/awaiting-owner-review`、`cumin/status/awaiting-owner-decision`、`cumin/status/awaiting-checks`) だけである。図は、4の図の最後の部分である。
+   - ラベルごとに、そのラベルが付いた Issue と Pull Request を、開いているものと閉じたものに分けて数え ([`GET /repos/{owner}/{repo}/issues`](https://docs.github.com/en/rest/issues/issues#list-repository-issues)。Pull Request も返る)、`retired    label <名前>: <n> open and <m> closed issues and pull requests carry it` と表示する。
+   - 開いている Issue か Pull Request に付いているラベルは、尋ねずに残し、`kept       label <名前>: <n> open issues and pull requests carry it` と表示する。先に、そのIssueからラベルを外す。
+   - それ以外のラベルは、1つずつ、消すかどうかを尋ねる。ラベルを消すと ([`DELETE /repos/{owner}/{repo}/labels/{name}`](https://docs.github.com/en/rest/issues/labels#delete-a-label))、閉じた Issue と Pull Request からもそのラベルが外れる。質問は、そのことを書く。
+   - `y` と答えたときだけ消して、`deleted    label <名前>` と表示する。ほかの答えと、答えがないとき (入力が端末でないとき) は、残して `kept       label <名前>` と表示する。
+   - `priority_labels` に書かれたラベルは、この一覧と同じ名前でも数えず、尋ねず、残す。
+   - `--dry-run` は、数を表示し、`would ask  whether to delete the label <名前>` と表示して、何も消さない。
+   - cumin の一覧にも、この一覧にもないラベルには、何もしない。
+6. 次の ruleset を作る。
 
 | ruleset | 対象 | 内容 | bypass list |
 |---|---|---|---|

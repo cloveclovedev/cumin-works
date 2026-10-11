@@ -1,6 +1,6 @@
 @startuml setup-repo-labels
 ' cumin works - the labels step of scripts/setup-repo.sh: what the script does with each label.
-' Document: setup-guide.md, step 3 (prepare the repository), items 3 and 4.
+' Document: setup-guide.md, step 3 (prepare the repository), items 3 to 5.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 skinparam shadowing false
 skinparam defaultFontName sans-serif
@@ -31,11 +31,28 @@ else (no, or no file)
     endif
   }
 endif
+partition "each retired label: a label that cumin no longer uses" {
+  if (the repository has the label?) then (no)
+    :do nothing;
+  elseif (priority_labels names the label?) then (yes)
+    :print "kept";
+  else (no)
+    :count the issues and pull requests with the label\nGET /repos/{owner}/{repo}/issues, open and closed\nprint "retired" with the two counts;
+    if (an open issue or pull request carries the label?) then (yes)
+      :print "kept" with the count;
+    elseif (the answer to the question is "y"?) then (yes)
+      :delete the label\nDELETE /repos/{owner}/{repo}/labels/{name}\nprint "deleted";
+    else (no, or no input)
+      :print "kept";
+    endif
+  endif
+}
 stop
 
 note right
-  --dry-run prints "would create the label"
-  or "would update the label",
+  --dry-run prints "would create the label",
+  "would update the label",
+  or "would ask whether to delete the label",
   and changes nothing.
 end note
 @enduml
