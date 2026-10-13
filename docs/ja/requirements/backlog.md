@@ -106,7 +106,6 @@ v0.1には入れないと決めたが、あとで要求や要件に反映した�
 | 項目 | 内容 | 後回しにした理由 | 見直すきっかけ |
 |---|---|---|---|
 | 個人のアカウントが持つリポジトリ | `cumin setup github-apps` と `scripts/setup-repo.sh` を、Organizationではなく、個人のアカウントが持つリポジトリでも使えるようにする。GitHub Appの登録の画面のアドレスが違うので、`--org` と並ぶオプションが要る。rulesetのbypassの指定が個人のリポジトリで働くかは、確かめていない | v0.1は、Organizationにだけ登録する。Organizationを持たない導入先には、無料のOrganizationを作って、リポジトリを移してもらう | Maintainerの製品か導入先のリポジトリを、個人のアカウントの下に置き続ける必要が出たとき。知られたアドレスは資産であり、あとから移すのは高くつく |
-| privateなリポジトリ | 対象のリポジトリがprivateでも、cuminが動くようにする。cumin-coreのAppに、Checks、Commit statuses、Actions の読み取りの権限が要る見込みである。rulesetには、有料のプランが要る。権限の表を、公開とprivateで1つにするか、分けるかを決める必要がある | v0.1の対象は、公開リポジトリである。実機の確認は、全て公開の使い捨てのリポジトリで行った。GitHub Appの権限の表は、そこで動く最小のものである | Maintainerの製品か導入先のリポジトリを、privateのままにする必要が出たとき |
 | Issueの管理をJiraなどに広げる | 要求Issueと実装Issueを、GitHub Issues以外で管理する。ソースコードの置き場所はGitHubのままにする | v0.1はGitHubだけで作る。抽象化は先にしない。図と文書では、Issueの管理とリポジトリを別のものとして扱ってある | 本業でcuminを使うことが決まったとき |
 | SNSの運用 | 動画の取り込みから、ショート動画の予約投稿までを、cuminのワークフローに乗せる | v0.1の対象は、ソフトウェアの開発だけである | 開発のワークフローが安定して動くようになったとき |
 
@@ -222,7 +221,7 @@ cumin本体の役割を、次のように絞る。
 | 要件管理の道具 | private | 要件文書と要求Issueのトレーサビリティ (上の項目)。対象のリポジトリに入れる workflow と、Agentに渡す指示 |
 | disciplineの拡張 | private | 広報、秘書、動画の編集者などのdiscipline。GitHub App の権限は、既存のrole (例: Implementer) を使い回せる見込み。中身は、roleに足す指示と、cuminと協調するための skill の組 |
 
-private の部品は private リポジトリに置く。GitHubのプランによって、private リポジトリでは ruleset などの機能に制約がある。着手するときに、GitHubの文書で確かめる。
+private の部品は private リポジトリに置く。private リポジトリの ruleset には、GitHubの有料のプランが要る ([セットアップの手順](../development/setup-guide.md)、[調査・実測で確定した制約](../evidence/measured-constraints.md) の実測 146、154)。
 
 #### 本体に要る拡張点
 
