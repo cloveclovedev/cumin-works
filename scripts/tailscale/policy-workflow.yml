@@ -1,0 +1,42 @@
+# scripts/tailscale-policy-repo.sh adds this file to the private repository
+# of the policy as .github/workflows/tailscale-policy.yml.
+#
+# A pull request tests policy.hujson: Tailscale checks the file and runs its
+# section "tests", and changes nothing. A push to the default branch runs
+# the same tests and then applies the file to the tailnet.
+#
+# The credentials are secrets of the repository: the name of the tailnet,
+# and the ID and the secret of an OAuth client with the scope "policy_file".
+# Source: Tailscale Docs "GitOps for Tailscale with GitHub Actions".
+name: tailscale-policy
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test the policy
+        if: github.event_name == 'pull_request'
+        uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
+        with:
+          tailnet: ${{ secrets.TS_TAILNET }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          action: test
+
+      - name: Apply the policy
+        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
+        with:
+          tailnet: ${{ secrets.TS_TAILNET }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          action: apply
