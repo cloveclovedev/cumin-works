@@ -268,7 +268,7 @@ cuminは、リポジトリの `.cumin/` を、Pull Requestのブランチでは�
 
 ## GitHub上の身元
 
-GitHub上では `cumin-core` として振る舞う。持っている権限は、コードの読み書き (mergeに要る)、Pull Requestの読み書き、Issueの読み書きである。mainを更新できるのは、rulesetによって、リポジトリの管理者と `cumin-core` だけに制限する。登録の手順は [GitHub Appの登録手順](../development/github-app-setup.md) にある。
+GitHub上では `cumin-core` として振る舞う。持っている権限は、コードの読み書き (mergeに要る)、Pull Requestの読み書き、Issueの読み書きと、check、commit status、GitHub Actions のjobのログの読み取りである。読み取りの3つは、非公開のリポジトリで、必須のcheckとその失敗の内容を読むのに要る。mainを更新できるのは、rulesetによって、リポジトリの管理者と `cumin-core` だけに制限する。登録の手順は [GitHub Appの登録手順](../development/github-app-setup.md) にある。
 
 ## 上位要件のテスト
 
