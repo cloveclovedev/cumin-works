@@ -1,0 +1,44 @@
+@startuml poll-stack
+' cumin works - the stack: an implementation issue that starts on a pull request that waits for a Maintainer.
+' Document: poll.md, section on the stack.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:The only open blocker is in
+cumin/status/awaiting-merge-decision,
+its pull request has the default branch as base,
+and deleteBranchOnMerge is true;
+:request the implementation:
+the branch starts from the branch of the blocker,
+and the pull request has that branch as base;
+repeat
+  :Checks and the review, as for any pull request
+  (a conflict with the base branch:
+  request a conflict resolution);
+  if (The base pull request is closed
+without a merge, or GitHub closed
+the stacked pull request?) then (yes)
+    #Pink:stop the implementation:
+    cumin/status/awaiting-decision and a notification;
+    stop
+  endif
+  if (The base of the pull request is
+the default branch, and every blocker is closed?) then (no)
+    #LightBlue:wait for the base:
+    cumin/status/awaiting-base;
+    :The Maintainer merges the base (squash).
+    GitHub deletes the branch of the blocker
+    and changes the base to the default branch;
+  endif
+  backward:update onto the default branch:
+  cumin/status/implementing, then the Implementer
+  merges origin/main with a merge commit;
+repeat while (The head contains the merge commit
+of the base pull request?) is (no)
+-> yes;
+:ask for the merge decision or start the merge,
+as for any pull request;
+stop
+@enduml
