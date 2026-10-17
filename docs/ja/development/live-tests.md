@@ -156,7 +156,6 @@ fixture の workflow は、sandbox の全ての Pull Request で動く。`live-f
 
 - Planner の App は Pull requests の権限を持たない。非公開のリポジトリでは、Pull Request とcheckを読めず (403)、受け入れの確認の要件3を、ruleset と merge の事実から間接に確かめた (未確認 156)。公開のリポジトリでは読める。
 - 保護されたパスのcheckは、App の Pull Request で、1回の push に3〜4秒で終わった。課金された分数は、API からは読めなかった (未確認 151)。
-- Agent を1つずつ動かすので、ほかのリポジトリの分割が動いている間、このリポジトリの着手は待った。
 
 ## `cumin run` を sandbox で動かすとき
 
