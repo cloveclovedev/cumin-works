@@ -16,7 +16,7 @@
 
 - `issue-states.md` と `planner.md` の文言。Maintainerのsub-issue (#841) で直す。
 - テンプレート、role、disciplineの文言。#843 で直す。
-- `AcceptanceEnd` のコードとテスト。#842 で直す。
+- `AcceptanceEnd` のコードとテストと、[定期確認の設計](poll.md) の「要求Issueのコメントの読み取り」 (開いているsub-issueがあるときも、`cumin/status/accepting` ではコメントを読む)。#842 で直す。
 - Reviewerが指摘をblockingとnon-blockingに分ける決まり。#839 の範囲の外である。
 
 ## 設計
@@ -54,7 +54,7 @@
 - Plannerは、要求Issueのコメントを読み、自分のAppのbot (`<slug>[bot]`) が書いた `## Acceptance check` のコメントで、閉じたsub-issueのうち最後に閉じたものより前に書かれたものを探す。
   - あれば、後の確認である。前の確認が修正のsub-issueを作ったかどうかによらない。残りの項目は Needs a decision か No action にだけ入れる。Fix に当たる項目は、理由「修正のsub-issueは1回だけ作る」を添えて Needs a decision に入れる。
   - なければ、最初の確認である。修正のsub-issueを作ってよい。
-- 同じ確認のやり直し (「request the acceptance check again」) は、最初の確認と同じ扱いになる。前の実行のコメントがあっても、最後に閉じたsub-issueより後に書かれているためである。Plannerは、最後のsub-issueが閉じたあとに自分のAppが作ったsub-issueを読み、題が同じものは作らず、足りない分だけを作る。riskのラベルがちょうど1つでないものは、ラベルを直す。分割の「やり直しに備えること」と同じ決まりである。
+- 同じ確認のやり直し (「request the acceptance check again」) は、最初の確認と同じ扱いになる。前の実行のコメントがあっても、最後に閉じたsub-issueより後に書かれているためである。Plannerは、最後のsub-issueが閉じたあとに自分のAppが作ったsub-issueを読み、本文の出どころの印 (元の指摘のコメント、`Fail` の行、または「Follow-up」の項目へのリンク) が同じものは作らず、足りない分だけを作る。やり直しは新しいセッションで始まることがあり、同じ項目を違う題で書きうるためである。riskのラベルがちょうど1つでないものは、ラベルを直す。分割の「やり直しに備えること」と同じ決まりである。
 - Plannerは、修正のsub-issueを全て作ってから、コメントを書く。コメントが、確認が終わった印だからである。途中で実行が切れても、コメントがなければcuminがやり直しを依頼し、やり直しは足りない分だけを作る。コメントには、作ったsub-issueの番号を書く。
 - 理由: 判定に使う事実 (コメントの作成者、作成の時刻、sub-issueの `closedAt`) は、cuminが今も読んでいるものである ([定期確認の設計](poll.md) の「要求Issueのコメントの読み取り」)。新しい印を持たないので、状態ファイルを失っても結果は変わらない。
 - 受け入れた不利益: 最初の確認が修正のsub-issueを作らなかったときも、2回目からは作れない。Maintainerが差し戻しで足したsub-issueのあとの確認も、後の確認になる。どちらも、Maintainerが Needs a decision から選んでsub-issueを足せる。
@@ -65,11 +65,12 @@
 
 | 遷移 | 変更 | 理由 |
 |---|---|---|
-| ask for the plan review | `accepting` → `awaiting-plan-review` を足す。条件: Plannerが動いていない。最後に閉じたsub-issueより後に書かれた受け入れの確認のコメントがある。開いているsub-issueがある。全てのsub-issueにriskのラベルがちょうど1つ付いている | 修正のsub-issueを、分割のsub-issueと同じ確認に回す |
-| ask for the acceptance | 条件に「sub-issueが全て閉じている」を足す | 修正のsub-issueが開いている間は、受け入れに進めない |
-| request the acceptance check again | 条件に「または、コメントはあるが、riskのラベルがちょうど1つでないsub-issueがある」を足す | 分割の「request the split again」と同じく、1回だけ直させる |
-| stop the acceptance check | 条件に「または、やり直しのあとも、riskのラベルがちょうど1つでないsub-issueがある」を足す | 分割の「stop the split」と同じく、Maintainerに戻す |
+| ask for the plan review | `accepting` → `awaiting-plan-review` を足す。条件: Plannerが動いていない。最後に閉じたsub-issueより後に書かれた受け入れの確認のコメントがある。開いているsub-issueがあり、開いているsub-issueの全てにriskのラベルがちょうど1つ付いている | 修正のsub-issueを、分割のsub-issueと同じ確認に回す |
+| ask for the acceptance | 条件に「sub-issueが全て閉じている」を足す。閉じたsub-issueのriskのラベルは見ない | 修正のsub-issueが開いている間は、受け入れに進めない |
+| request the acceptance check again | 条件に「または、コメントはあるが、riskのラベルがちょうど1つでない、開いているsub-issueがある」を足す | 分割の「request the split again」と同じく、1回だけ直させる |
+| stop the acceptance check | 条件に「または、やり直しのあとも、riskのラベルがちょうど1つでない、開いているsub-issueがある」を足す | 分割の「stop the split」と同じく、Maintainerに戻す |
 
+- riskのラベルを見るのは、開いているsub-issueだけである。開いているsub-issueがなければ「ask for the acceptance」だけが、あれば他の3つのどれか1つだけが成り立つ。「request the acceptance check again」と「ask for the acceptance」は、同時に成り立たない。Maintainerが差し戻しで足し、ラベルの誤ったまま閉じたsub-issueは、受け入れを止めない。
 - そのあとは、今の行のままで進む。Maintainerが修正のsub-issueに `cumin/status/ready` を付けると「mark the requirement as in work」が、全て閉じると「request the acceptance check」が成り立つ。最初の確認のコメントは最後のsub-issueが閉じるより前に書かれたので、後の確認が依頼される。
 - `planner.md` のテスト7と8 (「Issueは作られない」) は、最初の確認で修正のsub-issueを作る形に変わる。文言は #841 で直す。
 
@@ -83,7 +84,7 @@
 
 閉じた要求Issueのうち新しい5つで、mergeされたPull Requestに付いたReviewerの `(non-blocking)` の指摘を数えた (2026-10-17)。「開いたまま」は、Implementerが `Fixed` と返していない指摘である。
 
-| 要求Issue | Pull Request | non-blocking | うち `Fixed` | 開いたまま |
+| 要求Issue | mergeされたPull Requestの数 | non-blocking | うち `Fixed` | 開いたまま |
 |---|---|---|---|---|
 | #757 ツールが欠けたリポジトリでAgentを起動しない | 9 | 22 | 7 | 15 |
 | #729 `cumin status` でpollを示し、`install.sh` で置き換える | 6 | 7 | 0 | 7 |

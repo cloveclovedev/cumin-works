@@ -22,11 +22,11 @@ Decision : do / a Maintainer answers
 
 Implementing --> Accepting : request the acceptance check\n[every sub-issue is closed]
 PlanReview --> Accepting : request the acceptance check\n[every sub-issue is closed]
-PlanReview --> Implementing : mark the requirement as in work\na Maintainer adds ready to a fix sub-issue
-Accepting -[#red]-> PlanReview : <color:red>ask for the plan review</color>\n<color:red>[the Planner wrote the acceptance check,</color>\n<color:red>a sub-issue is open, every sub-issue</color>\n<color:red>has exactly one risk label]</color>\n/ cumin notifies
+PlanReview --> Implementing : mark the requirement as in work\n[a Maintainer adds ready to a fix sub-issue]
+Accepting -[#red]-> PlanReview : <color:red>ask for the plan review</color>\n<color:red>[no Planner runs, the Planner wrote the</color>\n<color:red>acceptance check after the last close,</color>\n<color:red>a sub-issue is open, every open sub-issue</color>\n<color:red>has exactly one risk label]</color>\n/ cumin notifies
 Accepting --> Acceptance : ask for the acceptance\n[the Planner wrote the acceptance check,\n<color:red>every sub-issue is closed</color>]\n/ cumin notifies
-Accepting --> Accepting : request the acceptance check again\n[no acceptance check, <color:red>or a sub-issue fails</color>\n<color:red>the split check</color>; first time]
-Accepting --> Decision : stop the acceptance check\n[a question, or the same failure\nthe second time]\n/ cumin notifies
+Accepting --> Accepting : request the acceptance check again\n[no acceptance check, <color:red>or an open sub-issue</color>\n<color:red>fails the split check</color>; first time]
+Accepting --> Decision : stop the acceptance check\n[a question, or no acceptance check the second time,\n<color:red>or an open sub-issue fails the split check</color>\n<color:red>the second time</color>]\n/ cumin notifies
 Acceptance --> [*] : a Maintainer closes the issue
 
 legend right
