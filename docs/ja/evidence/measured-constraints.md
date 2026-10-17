@@ -131,6 +131,7 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 124 | 衝突するPull Requestのmergeは、405 ("Pull Request has merge conflicts") になる。rulesetに止められたmergeも405である (62)。mergeの直前に読んだ `mergeable` は、mainが動いた直後だと古い `true` のことがある | #293 の M4 | 実測 | 2026-10-01 |
 | 125 | mergeが405で失敗した直後に読み直すと、衝突のときだけ `mergeable` が `false`、`mergeable_state` が `dirty` になる。衝突とrulesetの拒否は、これで見分けられる | 公式: Get a pull request。#293 の M5 | 公式文書 + 実測 | 2026-10-01 |
 | 145 | 別のPull Requestのmergeが既定のブランチを動かした直後のmergeは、405になることがある。メッセージは「Base branch was modified. Review and try the merge again.」である。cumin-coreが1つのPull Requestをmergeし、2秒後に別のPull Requestのmergeを送ると、この答えが返った。124の2つの場合 (衝突、rulesetの拒否) とは、メッセージで見分けられる。衝突のメッセージは "Pull Request has merge conflicts"、rulesetの拒否のメッセージは `Repository rule violations found` である (62)。この答えのPull Requestは、衝突もrulesetの違反も持たない。Pull Requestを変えずに、約4分後に送った同じ先頭のコミットのmergeは通った | cumin-worksで実測 (#316。#354 のmergeの直後の #355 のmerge) | 実測 | 2026-10-03 |
+| 157 | Pull Requestがmergeされたあとでそのheadのブランチを消すと、GitHubは、同じリポジトリで、消したブランチをbaseにしている開いたPull Requestを探し、そのbaseを、mergeされたPull Requestのbaseに自動で替える。mergeされていないブランチを消すと、そのブランチに結び付いた開いたPull Requestは閉じる。baseを替えると、一部のコミットがPull Requestのタイムラインから消えることがあり、レビューのコメントが古い扱い (outdated) になることがある。branch protectionのruleとリポジトリのruleは、mergeのあとのブランチの自動の削除を妨げることがある。確かめていない部分は「未確認 (Not confirmed)」の節の157にある | 公式: Merging a pull request ("If you delete a head branch after its pull request has been merged, ...")、Managing branches within your repository (「Deleting a branch」の手順)、Changing the base branch of a pull request、Managing the automatic deletion of branches。About pull requests には、この記述がない | 公式文書 | 2026-10-13 |
 
 ## git
 
@@ -169,7 +170,7 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 
 ## 未確認 (Not confirmed)
 
-次の行は、確かめた事実ではない。まだ試していないことと、ある日に観測しただけで、今も成り立つか分からないことである。番号は主題の表と同じ並びから付けたもので、82は確かめた部分が「rulesetとcheck」の表にある。
+次の行は、確かめた事実ではない。まだ試していないことと、ある日に観測しただけで、今も成り立つか分からないことである。番号は主題の表と同じ並びから付けたもので、82は確かめた部分が「rulesetとcheck」の表に、157は確かめた部分が「mergeと閉じるリンク」の表にある。
 
 | # | 制約 | 根拠 | 確度 | 日付と版 |
 |---|---|---|---|---|
@@ -182,6 +183,7 @@ Claude Code、GitHub、git、macOS、Discord について、公式文書と実�
 | 151 | 非公開リポジトリで、job `cumin-protected-paths` が1つのPull Requestに使う、課金されるGitHub Actionsの時間。人のPull Requestではjobが飛ばされ (2回のうち2回)、時間を使わなかった。AppのPull Requestでは、1回のpushにjobが1つ動き、3〜4秒で終わった (2回のうち2回)。`GET /repos/{owner}/{repo}/actions/runs/{id}/timing` は、実行の20分あとにも、動いたjobに、課金される時間として0 msを返した。公式文書は、jobごとに分単位に切り上げる、と書いている。課金された分数そのものは、読めていない | Teamプランの Organization の非公開の使い捨てのリポジトリで観測 (#792 のコメント、#799 の実機の確認)。公式: GitHub Actions billing | 未確認 | 2026-10-11、2026-10-12 |
 | 152 | Freeプランの Organization の非公開リポジトリで、`GET /repos/{owner}/{repo}/rulesets` が返すステータスとメッセージ。rulesetを使えないプランの非公開リポジトリで、`scripts/setup-repo.sh --dry-run` が何を出すか | 試していない。Freeプランの個人アカウントの非公開リポジトリでは、403が返る (「rulesetとcheck」の表の154)。Organization では、メッセージが別のプランの名前を挙げるかもしれない | 未確認 | 2026-10-11 |
 | 156 | 非公開リポジトリで、Pull requests の権限のないApp (Planner) のtokenが、Pull Requestとそのcheckを読めるか。実機の確認では、Plannerが受け入れの確認で、Pull Requestとcheck runの読み取りに403を受けた、と報告した。公開リポジトリでは、同じtokenで読める | Teamプランの Organization の非公開の使い捨てのリポジトリの実機の確認 (#799) で、Plannerの報告として観測した。テストでは測っていない | 未確認 | 2026-10-12 |
+| 157 | mergeのあとにブランチを自動で消す設定 (`delete_branch_on_merge`) がないリポジトリでは、誰かがブランチを消すまで、GitHubはbaseを替えない。積んだPull Requestで、baseが実際に替わること | 推論。公式文書は、ブランチを消したときに替わる、とだけ書く。試していない。公式文書で確かめた部分は「mergeと閉じるリンク」の表の157にある | 未確認 | 2026-10-13 |
 
 ## 引退した番号 (Retired numbers)
 
