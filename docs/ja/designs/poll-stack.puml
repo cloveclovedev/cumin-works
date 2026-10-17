@@ -17,9 +17,10 @@ repeat
   :Checks and the review, as for any pull request
   (a conflict with the base branch:
   request a conflict resolution);
-  if (The base pull request is closed
-without a merge, or GitHub closed
-the stacked pull request?) then (yes)
+  if (The base pull request of the blocker issue
+is closed without a merge, or GitHub closed
+the stacked pull request, or the update
+left the head without the merge commit?) then (yes)
     #Pink:stop the implementation:
     cumin/status/awaiting-decision and a notification;
     stop
@@ -31,10 +32,16 @@ the default branch, and every blocker is closed?) then (no)
     :The Maintainer merges the base (squash).
     GitHub deletes the branch of the blocker
     and changes the base to the default branch;
+    if (The base is still not the default branch
+one poll_interval after the merge?) then (yes)
+      #Pink:stop the implementation:
+      cumin/status/awaiting-decision and a notification;
+      stop
+    endif
   endif
   backward:update onto the default branch:
   cumin/status/implementing, then the Implementer
-  merges origin/main with a merge commit;
+  merges the default branch with a merge commit;
 repeat while (The head contains the merge commit
 of the base pull request?) is (no)
 -> yes;

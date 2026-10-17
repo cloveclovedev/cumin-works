@@ -552,22 +552,29 @@ checkの結果の読み方:
 
 #375 の要件1の設計である。土台のPull Requestは、blocked by のIssue (以下、土台のIssue) のPull Requestである。積んだPull Requestは、その上で始めた実装IssueのPull Requestである。設計の4つの選択は、Maintainer (Issue Owner) が決めた (#826 の [決定](https://github.com/cloveclovedev/cumin-works/issues/826#issuecomment-6228009245)。4つとも案A)。この話題の動作は、[Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) がまだ持たない。Maintainerが表を直すまで、コードにしない (話題の最後の一覧)。
 
-- 着手の条件 (問い1。「request the implementation」): blocked by のIssueのうち開いているものがちょうど1つで、それが `cumin/status/awaiting-merge-decision` である。そのPull Requestのbaseが既定のブランチである。リポジトリの `deleteBranchOnMerge` が真である。ほかの条件 (Maintainerの `cumin/status/ready`、空き) は今と同じである。理由: `awaiting-merge-decision` は、Reviewerが今の先頭のコミットを承認したことを表す。Reviewerの承認の前の土台は、要件の範囲外である。読む事実: スナップショットの blocked by のIssueの状態ラベル、そのPull Requestの `baseRefName` と `headRefName`、リポジトリの `deleteBranchOnMerge` (GraphQL の `Repository`。2026-10-17に、このリポジトリで真を返すのを確かめた)。
+- 着手の条件 (問い1。「request the implementation」): blocked by のIssueのうち開いているものがちょうど1つで、それが `cumin/status/awaiting-merge-decision` である。そのPull Requestのbaseが既定のブランチである。リポジトリの `deleteBranchOnMerge` が真である。ほかの条件 (Maintainerの `cumin/status/ready`、空き) は今と同じである。理由: `awaiting-merge-decision` は、Reviewerが今の先頭のコミットを承認したことを表す。Reviewerの承認の前の土台は、要件の範囲外である。読む事実: スナップショットの blocked by のIssueの状態ラベル、そのPull Requestの `baseRefName` と `headRefName`、リポジトリの `deleteBranchOnMerge` (GraphQL の `Repository`。値を読めることは #844 の説明にある)。
   - `deleteBranchOnMerge` を条件にするのは、ブランチを消したときにだけ、GitHubがbaseを替えるためである (実測 157)。偽のリポジトリでは積まず、今までどおり待つ。
 - 深さ (問い2): 1段である。土台のPull Requestのbaseが既定のブランチであることが、それを保つ。土台そのものが積んだPull Requestなら、条件が成り立たない。
-- ブランチとbase (問い3。決定1A): 新しいブランチは、`origin/<土台のheadRefName>` から切る。`internal/agent/worktree.go` の `Prepare` は今 `origin/HEAD` から切るので、`Checkout` に始まりのrefを足す。Pull Requestのbaseは、土台のブランチである。差分に、積んだ変更だけが出る。印は、このbaseである。「既定のブランチでないbase」が、積んだPull Requestを表す。ラベルもdraftも使わない。
+- ブランチとbase (問い3。決定1A): 新しいブランチは、`origin/<土台のheadRefName>` から切る。`internal/agent` の `Prepare` は今 `origin/HEAD` から切るので、`Checkout` に始まりのrefを足す。Pull Requestのbaseは、土台のブランチである。差分に、積んだ変更だけが出る。印は、このbaseである。「既定のブランチでないbase」が、積んだPull Requestを表す。ラベルもdraftも使わない。
   - 採らなかった案 (1B): baseを `main` にし、draftにする。差分に土台の変更も入り、cuminがdraftを扱う必要がある。
 - 必須のcheck: 一覧は、今までどおり既定のブランチのruleから読む。`ci.yml` と `cumin-protected-paths.yml` は、どの `pull_request` でも動くので、積んだPull Requestでも結果を返す。衝突の判定 (`mergeable`) は、GitHubがPull Requestのbaseに対して返す。
 - 土台への差し戻し (問い4。決定2A): Maintainerが土台に「send back for changes」を出しても、積んだ側は更新しない。土台との衝突だけを「request a conflict resolution」で解く。依頼文に入れるブランチは、既定のブランチではなく、Pull Requestの `baseRefName` である。理由: 土台が動くたびに更新すると、そのたびにImplementerの実行とレビューが1回ずつ要る。受け入れた不利益: 土台がmergeされるまで、積んだブランチは古い土台の上にある。
   - 採らなかった案 (2B): 土台の先頭のコミットが動くたびに更新する。
-- 土台の却下 (問い4。決定3A): 土台のPull Requestがmergeされずに閉じたら、「stop the implementation」で積んだIssueを `cumin/status/awaiting-decision` にし、通知する。読む事実: 積んだPull Requestの `baseRefName` をheadに持つPull Requestが閉じていて `merged` が偽である。または、GitHubが積んだPull Requestを閉じた (mergeされていないブランチを消すと閉じる。実測 157)。Agentが動いていないときだけ決める。理由: 積んだ作業のどこを残すかは、Maintainerが決める。
+- 土台の却下 (問い4。決定3A): 土台のPull Requestがmergeされずに閉じたら、「stop the implementation」で積んだIssueを `cumin/status/awaiting-decision` にし、通知する。読む事実は、次のどちらかである。Agentが動いていないときだけ決める。
+  - 積んだPull Requestのbaseが既定のブランチでなく、土台のIssueのPull Request (開いたもの。なければ、そのIssueを閉じるリンクのうち番号が最も大きいもの) が閉じていて `merged` が偽である。ブランチの名前では照合しない。`ready` のあとに同じブランチを使い直すと、古い閉じたPull Requestが合ってしまうためである。
+  - 積んだIssueに開いたPull Requestがなく、リンクのうち番号が最も大きいPull Requestが、mergeされずに閉じていて、そのbaseが既定のブランチでない。GitHubが積んだPull Requestを閉じた場合である (mergeされていないブランチを消すと閉じる。実測 157)。
+  - 理由: 積んだ作業のどこを残すかは、Maintainerが決める。却下された土台のコミットは、積んだブランチに残る。Maintainerは、`ready` を付ける前に、そのコミットを除くか、Pull Requestを閉じる。
+  - 土台がmergeされても、ブランチが残ることがある。branch protectionのruleとリポジトリのruleは自動の削除を妨げ (公式: Managing the automatic deletion of branches)、Maintainerは着手のあとに `deleteBranchOnMerge` を切れる。そこで、`cumin/status/awaiting-base` で、土台のPull Requestが `poll_interval` より前にmergeされ (`mergedAt`)、積んだPull Requestのbaseが既定のブランチでないときも、「stop the implementation」にする。`poll_interval` を待つのは、mergeとブランチの削除の間の短い時間に止めないためである。
+  - 採らなかった案: cuminがAPIでbaseを替える。cumin-coreがPull Requestを書き換える動作が1つ増える。まれな場合なので、Maintainerに回す。
   - 採らなかった案 (3B): cuminが積んだPull Requestを閉じる。問わずに作業を捨てる。
-- 土台のmerge (問い5): Maintainerがsquash mergeすると、GitHubがブランチを消し、積んだPull Requestのbaseを既定のブランチに替える (実測 157)。積んだブランチには、土台の元のコミットが残り、squashのコミットは入っていない。そこで「update onto the default branch」で、Implementerの直前のセッションに `origin/main` をmergeさせる。Implementerは強制pushをしないので、rebaseではなく、mergeのコミットにする。積んだPull Requestのsquash mergeで、`main` には1つのコミットが残る。
-  - 「update onto the default branch」の条件: 積んだIssueが `cumin/status/awaiting-base` か、「reviewing」の出口で「start the merge」か「ask for the merge decision」が成り立つ。Pull Requestのbaseが既定のブランチである。先頭のコミットが、土台のPull Requestの `mergeCommit` を含まない。含むかどうかは、`GET /repos/{owner}/{repo}/compare/{mergeCommit}...{head}` の `status` が `ahead` か `identical` かで読む (公式: Compare two commits。cumin-worksでは未実測)。読むのは、mergeされたPull Requestで閉じた blocked by のIssueごとである。土台より後に切ったブランチは、そのコミットを必ず含むので、積んでいないIssueでは何も変わらない。
-  - 適用の順は、ほかの依頼と同じである。起動の許可を取り、ラベルを `cumin/status/implementing` に替え、依頼する。`done` のあとは「wait for the checks」、必須のcheck、「request the review」を通る。
+- 土台のmerge (問い5): Maintainerがsquash mergeすると、GitHubがブランチを消し、積んだPull Requestのbaseを既定のブランチに替える (実測 157)。積んだブランチには、土台の元のコミットが残り、squashのコミットは入っていない。そこで「update onto the default branch」で、Implementerの直前のセッションに、既定のブランチ (`origin/<既定のブランチ>`) をmergeさせる。Implementerは強制pushをしないので、rebaseではなく、mergeのコミットにする。積んだPull Requestのsquash mergeで、既定のブランチには1つのコミットが残る。
+  - 「update onto the default branch」の条件: 積んだIssueが `cumin/status/awaiting-base` か、「reviewing」の出口で「start the merge」か「ask for the merge decision」が成り立つ。Pull Requestのbaseが既定のブランチである。blocked by のIssueが全て閉じている。先頭のコミットが、土台のPull Requestの `mergeCommit` を含まない。含むかどうかは、`GET /repos/{owner}/{repo}/compare/{mergeCommit}...{head}` の `status` が `ahead` か `identical` かで読む (公式: Compare two commits。cumin-worksでは未実測)。読むのは、mergeされたPull Requestで閉じた blocked by のIssueごとである。土台のmergeより後に切ったブランチは、そのコミットを含むので、何も変わらない。ブランチがあるIssueに、Maintainerがあとから blocked by を足すと、要らない更新を1回依頼する。この不利益と比較の問い合わせのコストは、受け入れる。
+  - 適用の順は、ほかの依頼と同じである。起動の許可を取り、ラベルを `cumin/status/implementing` に替え、依頼する。依頼文は、衝突の解消と同じく、先に既定のブランチをfetchするよう言う。`done` のあとは「wait for the checks」、必須のcheck、「request the review」を通る。
+  - 同時に進めるIssueの数の空きは待たない。`cumin/status/awaiting-merge-decision` からの「request a conflict resolution」と同じく、起動の許可だけを取る。続きの依頼なので、しばらく上限を超えることを受け入れる。
+  - `done` のあとも、先頭のコミットが土台の `mergeCommit` を含まないなら、`cumin/status/implementing` の出口の判定が「stop the implementation」でMaintainerに戻す。衝突の解消の停止と同じである。そのまま通すと、レビューと同じ更新の依頼が、上限なく回るためである。
   - 受け入れた不利益: 積んだ変更が土台の行を書き換えていると、mergeが衝突する。Implementerが積んだ側を残して解く。
 - merge前の禁止 (問い6): 「start the merge」の2つの行と、`cumin/status/merging` の中の `MergeConditionsHold` に、2つの事実を足す。Pull Requestのbaseが既定のブランチであること、実装Issueの blocked by のIssueが全て閉じていることである。2つ目は、Maintainerが手でbaseを替えた場合にも、土台より先のmergeを防ぐ。`risk/low` の積んだPull Requestも、土台のブランチにはmergeしない。
-- ラベル (問い7。決定4A): 新しいラベル `cumin/status/awaiting-base` (土台のmergeを待つ) を足す。「reviewing」の出口で「start the merge」か「ask for the merge decision」が成り立つが、Pull Requestのbaseが既定のブランチでないとき、「wait for the base」でこのラベルにする。Agentも人の判断も待たないので、同時に進めるIssueの数に数えず、「tell that cumin waits」では人の番として扱う。Maintainerの番は土台のほうにある。ラベルを作るのは `scripts/setup-repo.sh` で、その変更は `risk/high` である。
+- ラベル (問い7。決定4A): 新しいラベル `cumin/status/awaiting-base` (土台のmergeを待つ) を足す。「reviewing」の出口で「start the merge」か「ask for the merge decision」が成り立つが、Pull Requestのbaseが既定のブランチでないとき、「wait for the base」でこのラベルにする。条件は、Pull Requestのbaseが既定のブランチでないか、blocked by のIssueに開いたものがあることである。Maintainerが土台の開いている間に手でbaseを既定のブランチに替えても、`reviewing` のまま黙って止まらない。Agentも人の判断も待たないので、同時に進めるIssueの数に数えず、「tell that cumin waits」では人の番として扱う。Maintainerの番は土台のほうにある。ラベルを作るのは `scripts/setup-repo.sh` で、その変更は `risk/high` である。
   - 採らなかった案 (4B): `cumin/status/awaiting-merge-decision` を使う。Maintainerが、まだ動けない依頼を見ることになる。
 - 利用枠 (問い8): 積むごとに、Implementerの実行1回 (「update onto the default branch」) とレビュー1回が増える。土台との衝突では、衝突の解消が1回ずつ増える。土台が却下されると、積んだ実装1回分とそのレビューが無駄になる。決定2Aにより、土台の変更のたびの実行はない。GitHubへの問い合わせは、「reviewing」の出口と `awaiting-base` で、閉じた blocked by のIssueごとに比較が1回増える。
 
@@ -579,9 +586,9 @@ Maintainerが直す要件の行 (この設計を実装する前に、`cumin/type
 | issue-states.md | request the implementation | 開いた blocked by のIssueが1つで `awaiting-merge-decision`、そのbaseが既定のブランチ、`deleteBranchOnMerge` が真、でも成り立つ。ブランチとbaseは土台のもの |
 | issue-states.md | start the merge (`reviewing` → `merging`)、ask for the merge decision | baseが既定のブランチ、blocked by のIssueが全て閉じている、先頭のコミットが土台の `mergeCommit` を含む |
 | issue-states.md | start the merge (`awaiting-merge-decision` → `merging`)、`merging` の中のmergeの条件 | baseが既定のブランチ、blocked by のIssueが全て閉じている |
-| issue-states.md | 新しい行 wait for the base | `reviewing` → `awaiting-base` |
-| issue-states.md | 新しい行 update onto the default branch | `awaiting-base` → `implementing`、`reviewing` → `implementing` |
-| issue-states.md | stop the implementation | 土台がmergeされずに閉じた、または積んだPull Requestが閉じられた、を足す。どの作業中の状態と `awaiting-base` からも |
+| issue-states.md | 新しい行 wait for the base | `reviewing` → `awaiting-base`。baseが既定のブランチでないか、開いた blocked by のIssueがある |
+| issue-states.md | 新しい行 update onto the default branch | `awaiting-base` → `implementing`、`reviewing` → `implementing`。baseが既定のブランチ、blocked by のIssueが全て閉じている、先頭のコミットが `mergeCommit` を含まない |
+| issue-states.md | stop the implementation | 次を足す。土台のIssueのPull Requestがmergeされずに閉じた。積んだPull Requestが閉じられた (どの作業中の状態と `awaiting-base` からも)。`awaiting-base` で、土台が `poll_interval` より前にmergeされたのに、baseが既定のブランチでない。更新の依頼のあとも、先頭のコミットが `mergeCommit` を含まない (`implementing` から) |
 | issue-states.md | request a conflict resolution (3つの行) | 「既定のブランチと衝突」を「Pull Requestのbaseと衝突」にする |
 | issue-states.md | `—` (Maintainerが `ready` を付けた) | 出発の状態に `awaiting-base` を足す |
 | issue-states.md | 「tell that cumin waits」の数え方の表 | `cumin/status/awaiting-base` を「数えない」に足す |
