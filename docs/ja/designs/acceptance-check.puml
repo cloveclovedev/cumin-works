@@ -1,0 +1,38 @@
+@startuml acceptance-check
+' cumin works - the states of a requirement issue around the acceptance check.
+' Document: acceptance-check.md, section on the changed rows of issue-states.md.
+' The red arrow and the red guards are the change. Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "implementing" as Implementing
+Implementing : do / the agents work on the sub-issues
+
+state "awaiting-plan-review" as PlanReview
+PlanReview : do / a Maintainer reviews the plan and the sub-issues
+
+state "accepting" as Accepting
+Accepting : do / the Planner checks the merged work\nand creates the fix sub-issues once
+
+state "awaiting-acceptance" as Acceptance
+Acceptance : do / a Maintainer decides the acceptance
+
+state "awaiting-decision" as Decision
+Decision : do / a Maintainer answers
+
+Implementing --> Accepting : request the acceptance check\n[every sub-issue is closed]
+PlanReview --> Accepting : request the acceptance check\n[every sub-issue is closed]
+PlanReview --> Implementing : mark the requirement as in work\na Maintainer adds ready to a fix sub-issue
+Accepting -[#red]-> PlanReview : <color:red>ask for the plan review</color>\n<color:red>[the Planner wrote the acceptance check,</color>\n<color:red>a sub-issue is open, every sub-issue</color>\n<color:red>has exactly one risk label]</color>\n/ cumin notifies
+Accepting --> Acceptance : ask for the acceptance\n[the Planner wrote the acceptance check,\n<color:red>every sub-issue is closed</color>]\n/ cumin notifies
+Accepting --> Accepting : request the acceptance check again\n[no acceptance check, <color:red>or a sub-issue fails</color>\n<color:red>the split check</color>; first time]
+Accepting --> Decision : stop the acceptance check\n[a question, or the same failure\nthe second time]\n/ cumin notifies
+Acceptance --> [*] : a Maintainer closes the issue
+
+legend right
+  A box is a state: a label on GitHub, without "cumin/status/".
+  An arrow is a transition of issue-states.md: [guard] / effect.
+  Red: the new transition and the new guards.
+endlegend
+
+@enduml
