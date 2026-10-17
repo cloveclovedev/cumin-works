@@ -94,14 +94,16 @@
 | 合計 | 26 | 42 | 7 | 35 |
 
 - 開いたままの指摘は、要求Issueごとに2〜15件あり、合計35件である。#711 は、前の2つの要求Issueの残りを直すための要求Issueである。
-- 提案: Implementerの決まりは今のまま (数行で、Issueの範囲の中のものだけを、同じラウンドで直す) にする。残りは、受け入れの確認が Fix in this requirement に仕分けて、まとめてsub-issueにする。理由: 決まりを広げると、Pull Requestごとにレビューのラウンドが1回増え、ラウンドの上限に近づく。仕分けなら、1つの要求Issueで1回だけの分割の確認で済む。
-- 見直すきっかけ: 仕分けを入れたあとの2つの要求Issueで、修正のsub-issueが要求Issueごとに5を超えたとき。決めるのはMaintainerである。
+- 決めたこと: Maintainerが要求Issue #845 で決めた。Reviewerは、Implementerが全てのnon-blockingの指摘に返事をしてから `APPROVE` する。Implementerは、non-blockingの指摘ごとに「Fix in this pull request」(`Fixed`)、「Needs a decision」(`Deferred`)、「No action」(`Not changed`) に仕分けて返事をする。上の数は、その根拠である。
+- 理由: 開いたままの指摘の多くは、同じPull Requestで直せる小さな修正だった。Pull Requestの中で直せば、受け入れの確認に届くのは、選択の要る項目と作業の要らない項目が主になる。
+- 受け入れた不利益: レビューのラウンドが増え、ラウンドの上限に近づく。#845 は `max_review_rounds` の初期値を4にする。
+- 受け入れの確認の仕分けは、#845 のあとも要る。フォローアップノートは、`Fixed` か `Answer` で始まらない返事の指摘を今までどおり載せるので、`Deferred` と `Not changed` の項目は、受け入れの確認がこの文書の3つの組に仕分ける。
+- 採らなかった案: Implementerの決まりを今のまま (数行で、Issueの範囲の中のものだけを直す) にし、残りを受け入れの確認でまとめてsub-issueにする方法。Maintainerが #845 で、Pull Requestの中で答える方を選んだ。
 
 ## まだ決めていないこと
 
 | 決める、または確かめること | どこで |
 |---|---|
-| Implementerがnon-blockingの指摘を直す範囲 (上の提案を採るか) | Maintainerが #839 で決める |
 | 変わる行の文言と、`planner.md` のテスト7と8 | #841 |
 
 ## 後回しにしたこと
