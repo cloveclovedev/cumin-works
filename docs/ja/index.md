@@ -16,6 +16,7 @@
 - [定期確認の設計](designs/poll.md)
 - [Agentの実行の設計](designs/agent-run.md)
 - [利用枠の設計](designs/quota.md)
+- [受け入れの確認での残りの仕分けの設計](designs/acceptance-check.md)
 - [モニターファイルとメニューバーのアプリの設計](designs/status-menu-bar.md)
 
 ## ガイド
