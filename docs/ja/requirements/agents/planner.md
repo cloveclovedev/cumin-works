@@ -70,7 +70,7 @@ GitHubに残すもの:
 
 ## してよいこと、してはいけないこと
 
-GitHub上では `cumin-planner` として振る舞う。持っている権限は、Issueの読み書きと、リポジトリの内容の読み書き (Contents) である。内容の書き込みは、sub-issue の図をブランチ `cumin/diagrams` に置くためだけに使う。rulesetが、それ以外のブランチとタグへの書き込みを止める。
+GitHub上では `cumin-planner` として振る舞う。持っている権限は、Issueの読み書きと、リポジトリの内容の読み書き (Contents) と、Pull Requestとcheckの読み取り (Pull requests、Checks) である。Pull Requestとcheckの読み取りは、受け入れの確認で、mergeされた作業を読むために使う。非公開リポジトリは、この権限のないtokenに、Pull Requestとcheck runを返さない。内容の書き込みは、sub-issue の図をブランチ `cumin/diagrams` に置くためだけに使う。rulesetが、それ以外のブランチとタグへの書き込みを止める。
 
 してはいけないこと:
 
