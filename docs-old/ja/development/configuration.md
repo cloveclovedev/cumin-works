@@ -1,0 +1,213 @@
+# 設定の一覧
+
+Hostの設定ファイルと、対象のリポジトリの設定ファイルに書けるキーの一覧。設定の意味と、初期値や制限の理由は、[cumin本体の要件](../requirements/cumin-core.md) の「設定」にある。ここには、キーの名前と書き方だけを書く。
+
+この文書のはじめの節は、Hostの設定ファイルについて書く。リポジトリの設定ファイルは、最後の節にある。
+
+## 設定ファイルの場所
+
+- 既定の場所は `~/.config/cumin/config.toml` である。
+- `cumin run --config <path>` で、別のファイルを指定できる。
+- 秘密の値 (GitHub Appの秘密鍵、Discordのwebhookのアドレス) は、このファイルに書かない。
+
+## 読み込みの決まり
+
+- ファイルにないキーには、初期値が使われる。
+- 知らないキー、型の違う値、制限を外れた値があると、`cumin run` は起動せずに、キーの名前を示して終わる。
+- TOMLの書き方の誤りと、型の違う値は、最初の1つだけを表示する。TOMLのパーサが、そこで読み込みを止めるためである。知らないキーと、制限を外れた値は、全てまとめて表示する。
+- 時間は、`"60s"` や `"50m"` のように、単位を付けた文字列で書く。単位のない数値は使えない。
+
+## キー
+
+| キー | 内容 | 初期値 | 制限 |
+|---|---|---|---|
+| `repositories` | 対象のリポジトリの一覧。`"<owner>/<repo>"` の形の文字列の配列 | なし (必須) | 1つ以上。同じリポジトリを2回書けない |
+| `work_dir` | `git worktree` を置くディレクトリ。先頭の `~/` は、ホームディレクトリに置き換わる | なし (必須) | 空にできない |
+| `poll_interval` | 定期確認の間隔 | `"60s"` | 0より大きい |
+| `idle_poll_interval` | 作業中のIssueがないリポジトリを確かめる間隔。作業中の意味は、[定期確認の設計](../designs/poll.md) の「定期確認の間隔」にある | `"5m"` | `poll_interval` 以上。`poll_interval` を5分より長くするときは、このキーも書く |
+| `max_issues_in_progress` | リポジトリごとに同時に進めるIssueの数 | `1` | 1以上 |
+| `max_review_rounds` | レビューのラウンドの上限 | `3` | 1以上 |
+| `max_check_fix_requests` | checkの修正を依頼する回数の上限 | `3` | 1以上 |
+| `checks_wait_time` | 必須のcheckが全て結果を返すのを待つ時間。過ぎたら、Maintainerに回す | `"60m"` | 0より大きい |
+| `merge_method` | cuminがPull Requestをmergeするときの方法 | `"squash"` | `"squash"`、`"merge"`、`"rebase"` のどれか |
+| `roles.<role>.time_limit` | Agentの実行時間の上限 | `"50m"` | 0より大きく、`"55m"` 以下 |
+| `roles.<role>.cli` | Agentを動かすCLI | `"claude-code"` | v0.1では `"claude-code"` だけ |
+| `roles.<role>.cli_path` | CLIの実行ファイル。ディレクトリを含まない名前は、`PATH` から探す。受け入れテストは、偽のCLIの実行ファイルを指す | `"claude"` | 空にできない |
+| `roles.<role>.model` | Agentを動かすモデル。空なら、CLIの既定のモデルを使う | 空 | なし |
+| `quota.five_hour.threshold` | 5h枠のしきい値 (%)。どの時間帯にも入らない時刻に使われる | `85` | 1〜100 |
+| `quota.five_hour.bands` | 5h枠の時間帯ごとのしきい値。下の「時間帯」を参照 | なし | 時間帯どうしは、重ねられない |
+| `quota.weekly.target` | weekly枠のペースの上限の式の目標 (%) | `85` | 1〜100 |
+| `quota.weekly.lead` | weekly枠のペースの上限の式で、経過時間に足す時間 (前倒し) | `"24h"` | 0以上、`"168h"` (7日) 未満 |
+| `notify.discord.enabled` | Discordの通知を出すか。`false` のとき、cuminはラベルの付け替えとコメントをふだんどおり行い、通知だけを出さない | `true` | 真偽値 |
+| `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps` が書き込む | なし | キーを書くなら、空にできない |
+
+- `<role>` は、`planner`、`implementer`、`reviewer` のどれかである。
+- `<app>` は、`cumin-core` と、上の3つのroleのどれかである。
+- `<organization>` は、対象のリポジトリの持ち主の名前である。
+- weekly枠に時間帯はない。リセットの曜日や時刻も、設定には持たない。週の始まりは、使用率とともに読むリセット時刻から決まる。
+
+## 時間帯
+
+`[[quota.five_hour.bands]]` を並べると、5h枠のしきい値を時間帯ごとに変えられる。Operatorが使わない時間帯のしきい値を高くする、という使い方をする。
+
+| キー | 内容 | 制限 |
+|---|---|---|
+| `from` | 時間帯の始まり。この時刻を含む | `"HH:MM"` の形。`"00:00"` から `"23:59"` まで |
+| `to` | 時間帯の終わり。この時刻を含まない | `from` と同じ形。`from` と同じ時刻にはできない |
+| `threshold` | この時間帯のしきい値 (%) | 1〜100。必須 |
+
+- 時刻は、Hostのローカルの時刻である。
+- `to` が `from` より前なら、時間帯は日付をまたぐ。`from = "23:00"`、`to = "06:00"` は、23時から翌朝の6時までを表す。
+- 時間帯どうしは、重ねられない。重なっていると、両方の位置 (`quota.five_hour.bands[1]` など) を示して終わる。位置は、ファイルに書いた順に0から数える。
+
+このファイルで決められない設定:
+
+- 保護されたパスは、対象のリポジトリの `.cumin/config.toml` だけで決める。下の「リポジトリの設定ファイル」を参照。
+- riskの基準は、TOMLのキーではなく、Markdownのファイルで上書きする。
+
+## 例
+
+```toml
+repositories = ["example-org/example-repo"]
+work_dir = "~/cumin-work"
+
+poll_interval = "60s"
+idle_poll_interval = "5m"
+max_issues_in_progress = 1
+max_review_rounds = 3
+max_check_fix_requests = 3
+checks_wait_time = "60m"
+merge_method = "squash"
+
+[roles.implementer]
+time_limit = "50m"
+cli = "claude-code"
+cli_path = "claude"
+model = ""
+
+[quota.five_hour]
+threshold = 85
+
+# 23時から翌朝の6時までは、5h枠を使い切ってよい。
+[[quota.five_hour.bands]]
+from = "23:00"
+to = "06:00"
+threshold = 100
+
+# weekly枠は、週を通して85%まで使う。1日分を前倒しで使ってよい。
+[quota.weekly]
+target = 85
+lead = "24h"
+
+[notify.discord]
+enabled = true
+
+[github_apps.example-org]
+cumin-core = "<Client ID>"
+planner = "<Client ID>"
+implementer = "<Client ID>"
+reviewer = "<Client ID>"
+```
+
+## 優先度のラベル
+
+`priority_labels` は、着手の順番を決めるラベルを、優先度の高い順に並べた配列である。順番の決まりは [Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) の「着手の順番」にある。
+
+```toml
+priority_labels = ["priority/P0", "priority/P1", "priority/P2", "priority/P3"]
+```
+
+- Organizationが既に使っているラベルの名前を、そのまま書く。段の数は自由である。
+- 書いたラベルを、cuminは作らず、変えない。足りないラベルは、`scripts/setup-repo.sh` が一覧にして、実行した人が `y` と答えたときだけ作る ([セットアップの手順](setup-guide.md) の手順3)。
+- 書けるのは、リポジトリの設定ファイルだけである。Hostの設定ファイルに書くと、知らないキーのエラーになる。ラベルはリポジトリにあり、足りないラベルを作るスクリプトがリポジトリのファイルを読むためである。
+- 制限: 1つ以上。空の名前、前後に空白のある名前、同じ名前は書けない。
+- 書かなければ、ラベルは `cumin/priority/P0` 〜 `cumin/priority/P3` になる。このときは、足りないラベルを、cuminがそのリポジトリの最初の定期確認で作る。
+- 一覧にないラベルは、優先度として数えない。初期値の名前のラベルも、一覧を書いたリポジトリでは数えない。
+- ラベルの名前は、GitHubと同じく、大文字と小文字を区別しない。
+
+## リポジトリの設定ファイル
+
+対象のリポジトリは、一部の設定を自分で決められる。場所は、そのリポジトリの既定のブランチの `.cumin/config.toml` である。cuminは既定のブランチからだけ読む。Pull Requestのブランチの内容は効かない。
+
+書けるキーは、上の表で「リポジトリで上書き」ができるものと、`protected_paths`、`priority_labels`、`tool_checks` だけである。
+
+| キー | 内容 |
+|---|---|
+| `max_review_rounds` | Hostの設定と同じ |
+| `max_check_fix_requests` | Hostの設定と同じ |
+| `checks_wait_time` | Hostの設定と同じ。CIの長さはリポジトリごとに違うので、リポジトリが選べる |
+| `merge_method` | Hostの設定と同じ |
+| `priority_labels` | 着手の順番を決める優先度のラベルの一覧。優先度の高い順に書く。リポジトリの設定ファイルにだけ書ける。下の「優先度のラベル」を参照 |
+| `roles.<role>.cli` | Hostの設定と同じ |
+| `roles.<role>.model` | Hostの設定と同じ |
+| `notify.discord.enabled` | Hostの設定と同じ。そのリポジトリのIssueと、そのリポジトリの道具の確認の失敗について、通知を出すかどうかを、リポジトリが選ぶ。webhookのアドレスはHostのもの1つで、リポジトリからは変えられない |
+| `protected_paths` | Agentに変更させないパスの一覧。リポジトリの設定ファイルにだけ書ける。書かなければ、またはファイルがなければ、初期値 (`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`) になる。書いた一覧は、初期値に足されるのではなく、初期値を置き換える。cuminはこの一覧を読み、照合の決まりとともに、起動の依頼のデータとしてどのroleのAgentにも渡す。cuminは一覧の中身を確かめない。確かめて強制するのは、GitHub Actionsのcheck (`cumin-protected-paths`) だけである |
+| `tool_checks` | このリポジトリのAgentが使う道具が、Hostで使えることを確かめるコマンドの一覧。リポジトリの設定ファイルにだけ書ける。書かなければ、確認しない。下の「道具の確認」を参照 |
+
+読み込みの決まり:
+
+- 書かないキーには、Hostの設定ファイルの値が残る。優先順位は、初期値、Hostの設定ファイル、リポジトリの設定ファイルの順に強くなる。
+- 値の制限と、制限を外れたときの文章は、Hostの設定ファイルと同じである。
+- 次のものは、そのリポジトリのエラーになる。cuminはキーの名前をログに出して、そのリポジトリの定期確認を飛ばす。他のリポジトリの定期確認は続く。Maintainerが直したものをmergeすると、次の定期確認から元に戻る。
+  - Hostに属するキー (`repositories`、`work_dir`、`poll_interval`、`idle_poll_interval`、`max_issues_in_progress`、`quota` の表、`github_apps` の表、`roles.<role>.cli_path`、`roles.<role>.time_limit`)
+  - 知らないキーと、知らないroleの名前
+  - 制限を外れた値
+- `roles.<role>.cli_path` と `roles.<role>.time_limit` がHostのものなのは、前者がHostのパスであり、後者がGitHub Appのtokenの寿命から決まるためである。
+
+riskの基準は、このファイルではなく、同じディレクトリの `.cumin/risk-criteria.md` で上書きする。優先順位は設定と同じで、次の順に強くなる。
+
+| 段 | 場所 |
+|---|---|
+| 初期値 | cuminに同梱の `disciplines/software-engineering/risk-criteria.md` |
+| Host | Hostの設定ファイルと同じディレクトリの `risk-criteria.md` |
+| リポジトリ | 対象のリポジトリの既定のブランチの `.cumin/risk-criteria.md` |
+
+- あるファイルの内容は、それより弱い段の文章を丸ごと置き換える。足すのではない。
+- cuminは中身を読まない。PlannerとReviewerへの指示に、そのまま入れる。
+- ファイルがあって、中身が空白だけのときは、そのリポジトリのエラーになる。空の指示がAgentに渡るのを防ぐためである。
+
+例:
+
+```toml
+# レビューのラウンドを2回までにし、mergeはrebaseにする。
+max_review_rounds = 2
+merge_method = "rebase"
+
+protected_paths = [
+  ".cumin/",
+  "CLAUDE.md",
+  "AGENTS.md",
+  ".claude/",
+]
+
+# 表の外のキーは、表より前に書く。表のあとに書くと、その表のキーになる。
+[roles.implementer]
+model = "sonnet"
+
+# このリポジトリのIssueについては、Discordの通知を出さない。
+[notify.discord]
+enabled = false
+```
+
+### 道具の確認
+
+`tool_checks` は、確認の配列である。1つの確認は、1つのコマンドである。意味と、確認が通る条件は、[cumin本体の要件](../requirements/cumin-core.md) の「道具の確認」にある。cuminは、リポジトリの定期確認のたびに確認を全部実行し、1つでも失敗している間は、そのリポジトリのAgentを起動しない。
+
+```toml
+# 表の配列なので、表の外のキーよりあとに書く。
+[[tool_checks]]
+command = ["docker", "info"]
+time_limit = "30s"
+
+[[tool_checks]]
+command = ["git", "--version"]
+```
+
+| キー | 内容 | 初期値 | 制限 |
+|---|---|---|---|
+| `command` | 実行するコマンド。文字列の配列で、1つめがプログラムの名前、残りが引数である。シェルは通さない | なし (必須) | 空の配列にできない。1つめの文字列は、空にできない |
+| `time_limit` | 待つ時間の上限 | `"10s"` | 0より大きく、`"60s"` 以下 |
+
+- 書けるのは、リポジトリの設定ファイルだけである。Hostの設定ファイルに書くと、知らないキーのエラーになる。cuminがHostで実行するコマンドを、保護されたパスである `.cumin/` の下のファイルだけで決めるためである。
+- 確認は、ファイルに書いた順に並ぶ。
+- 制限を外れた確認は、`tool_checks[1].command` のように、キーと項目の番号で示す。番号は0から数える。誤りのある確認は、全てまとめて表示する。

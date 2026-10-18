@@ -1,0 +1,116 @@
+@startuml poll-review
+' cumin works - the Reviewer request (request the review), and the way out of cumin/status/reviewing that every poll and the end of a Reviewer run decide (request a review fix, start the merge, ask for the merge decision, request the cause, stop at the round limit, stop the review).
+' Document: poll.md, section on the Reviewer request.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:request the review: every required check passed on the head commit;
+:Read the login of the Reviewer App
+and the last cumin/status/ready of the issue;
+:Count the round from the reviews on GitHub
+(pure function);
+:Write the head commit and zero counts
+of requests to the state file;
+:Change the label to cumin/status/reviewing;
+:Remove the Reviewer worktree,
+open the head commit detached;
+if (Round?) then (1)
+  :New session;
+else (2 or later)
+  :Resume the Reviewer session;
+  :Name the last reviewed commit;
+endif
+if (The Reviewer approved an earlier commit?) then (yes)
+  :Name the last approved commit
+  (round 1: review only the diff from it);
+else (no)
+endif
+:Run the Reviewer ("review");
+note right
+  blocked: change the label, write the comment,
+  notify (stop the review).
+  Done and abnormal end: the way out below decides.
+  Not started: the count stays; the second time,
+  hand back to a Maintainer (stop the review
+  or stop at the round limit).
+  cumin stops after its runs: the end of the run
+  starts no request, and changes no label.
+end note
+partition "The way out of cumin/status/reviewing: every poll, and the end of a Reviewer run" {
+  if (A Reviewer runs for the issue?) then (yes)
+    :Change nothing, read nothing;
+    stop
+  else (no)
+  endif
+  :Read the issue again, with the facts:
+  who added the label and when, the question comments,
+  the last cumin/status/ready, the state file;
+  if (The label is of cumin-core or of a Maintainer?) then (no)
+    :Do nothing; notify once;
+    stop
+  else (yes)
+  endif
+  :Decide with the pure function ReviewEnd;
+  if (A question comment after the label?) then (yes)
+    :stop the review: change the label to cumin/status/awaiting-decision;
+    :Notify;
+  elseif (No open pull request closes the issue?) then (yes)
+    :Hand back to a Maintainer (stop the review):
+    the reason is the risk label when the issue
+    has not exactly one, else the pull request
+    that is no longer open (Pull request: None);
+  elseif (The head commit moved?) then (yes)
+    :Change the label to cumin/status/checking
+    (the old review still counts as a round);
+  elseif (Review on the head commit?) then (APPROVE)
+    if (DecideMerge?) then (risk/low)
+      :start the merge: the merge procedure;
+    elseif (risk/medium or risk/high) then
+      :ask for the merge decision: change the label to
+      cumin/status/awaiting-merge-decision;
+      :Notify once;
+    elseif (a required check does not pass) then
+      :Change the label to cumin/status/checking;
+    else (not exactly one risk label)
+      :Hand back to a Maintainer (stop the review);
+    endif
+  elseif (REQUEST_CHANGES) then
+    if (Round below max_review_rounds?) then (yes)
+      :request a review fix: change the label to cumin/status/implementing;
+      :Ask the Implementer to fix the comments
+      (its own session, the branch of the pull request);
+    elseif (A decision request of the Reviewer
+    after its last review?) then (yes)
+      :stop at the round limit: change the label to
+      cumin/status/awaiting-decision;
+      :Notify (link: that comment);
+    elseif (The cause was just requested with done,
+    or requested twice in this stay?) then (yes)
+      :Hand back to a Maintainer (stop at the round limit);
+    elseif (Quota at a limit?) then (yes)
+      :Request nothing, count nothing;
+    else (no)
+      :Count the request in the state file;
+      :request the cause: ask the Reviewer to explain the cause
+      (the same session);
+    endif
+  else (none)
+    if (Requested again in this stay?
+    (count in the state file)) then (yes)
+      :Hand back to a Maintainer (stop the review,
+      after an abnormal end: with its kind);
+    elseif (Quota at a limit?) then (yes)
+      :Request nothing, count nothing;
+    else (no)
+      :Count the request in the state file;
+      :Ask the Reviewer once more
+      (after a done run: the short text in its session,
+      at a poll or after an abnormal end:
+      the whole review request);
+    endif
+  endif
+}
+stop
+@enduml

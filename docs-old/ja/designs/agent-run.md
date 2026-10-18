@@ -1,0 +1,194 @@
+# Agentの実行の設計
+
+- 状態: Approved
+- 要件: [cumin本体の要件](../requirements/cumin-core.md) の「Agentの起動」、[Agentに共通の要件](../requirements/agents/common.md) の「指示の渡し方」と「プロセスとセッション」
+- 事実の出どころ: [調査・実測で確定した制約](../evidence/measured-constraints.md) の行の番号 (「実測 N」と書く) か、公式ドキュメントのページの名前 (git、Claude Code) で示す。
+
+Agentを1回起動して結果を受け取るまでの、Host側の設計をまとめる。作業場所の用意と片付け、CLIの起動、出力の読み取り、実行時間の上限が対象である。Agentの実行を必要とする処理 (定期確認と判定の `internal/workflow`、利用枠の `internal/quota`、組み立ての `cmd/cumin`。以下、呼び出し処理と書く) は、この設計で決めた入口を通してだけAgentに触れる。 パッケージとファイルの受け持ちは [コードの構成の設計](code-layout.md) にある。
+
+## 範囲
+
+扱うこと:
+
+- 1回の依頼を、起動から結果までのひとつながりの手順として扱うために決めること。Agentを動かすCLIに固有の事情は `internal/agent` の接続部分に閉じ込め、呼び出し処理からは、起動、セッションの番号、結果、使用率、異常終了だけが見えるようにする。
+
+扱わないこと:
+
+- どの条件でAgentを起動するか。[Issueのラベルと状態遷移](../requirements/workflow/issue-states.md) にある。
+- 着手の直前に使用率を読むこと。[cumin本体の設計メモ](cumin-core.md) の「起動前の使用率の確認」にある。
+- roleごとの指示の内容。各roleの要件文書と `roles/` にある。
+
+## 設計
+
+### 作業場所
+
+![作業場所の配置](agent-run-layout.svg)
+
+図の元ファイル: [agent-run-layout.puml](agent-run-layout.puml)
+
+- 対象のリポジトリごとに、`<work_dir>/<owner>/<repo>/clone` にcloneを1つ置く。`git clone --no-checkout` で作るので作業ファイルは置かれず、worktreeの親としてだけ使う (公式: git-clone の `--no-checkout`)。一度作ったcloneは使い回し、着手のたびに `git fetch --prune origin` で更新する。fetchでは `origin/HEAD` が動かないため、続けて `git remote set-head origin --auto` を実行し、リモートの既定のブランチを問い合わせる (公式: git-remote)。
+- worktreeは、Issueとroleの組ごとに `<work_dir>/<owner>/<repo>/<Issue番号>-<role>` に1つ作る。こうしておけば、並行して進むIssueの作業が混ざらない。
+- 書き込みを行うrole (Implementer) のworktreeは、cuminが名前を決めたブランチに置く。`origin/<ブランチ>` が既にあればそこから始め (続きの依頼)、なければ `origin/HEAD` から新しく作る。読むだけのrole (Planner) のworktreeは、`origin/HEAD` をdetachedで開き、依頼のたびに作り直す ([定期確認の設計](poll.md) の「Plannerへの依頼」)。Plannerがリポジトリに書くのは、実装Issueの図だけである。図はworktreeではなく、Git Database API (`gh api`) でブランチ `cumin/diagrams` に足す。このブランチは既定のブランチと履歴を共有しないので、worktreeとは関係がない。
+- Reviewerのworktreeは、Pull Requestの先頭のコミットを、SHAを指定してdetachedで開く。同じIssueのImplementerのworktreeが、そのPull Requestのブランチを持っているためである。gitは、別のworktreeがチェックアウトしているブランチを、`--force` なしでは開かない。コミットを指定したdetachedの作業場所には、この制限がない (公式: git-worktree の `add` と `--force`)。ラウンドごとに先頭のコミットが変わるので、依頼のたびにworktreeを消して作り直す。Plannerと同じである。Reviewerは何もpushしないので、消して失うものはない。
+- 開くコミットは、40桁か64桁の小文字の16進のSHAに限る。gitに渡す前に確かめる。短い名前は曖昧になりうるうえ、16進でない名前はオプションやrefとして読まれうるためである。コミットは、直前の `git fetch` で取り込まれる。cuminが扱うのは、同じリポジトリのブランチのPull Requestだけである。
+- 採らなかった案: Reviewerも、Pull Requestのブランチを開く。Implementerのworktreeと同時には開けない。`--force` で開くと、同じブランチの2つの作業場所が、互いの知らないところで動く。
+- worktreeが既にあるときは、fetchもせずにそのまま返す。異常終了後のやり直しは、同じ作業場所で続ける。再利用するのは、gitがworktreeとして認識するディレクトリだけである。用意が途中で止まって残った空のディレクトリは作り直し、ディレクトリだけが消えている場合は `git worktree prune` で登録を消してから作り直す。
+- 続きの依頼 (「request the implementation」で、Pull Requestが既にある) の前には、前のラウンドのworktreeを、GitHubにないものを持っていないときだけ消す。確かめるのは、`git fetch` のあとで、`git status --porcelain` が空であることと、`git rev-list HEAD --not --remotes=origin` が空であることである。持っていれば、消さずにそのまま使う。cuminが止めた実行の作業は、pushされずにworktreeに残っているためである。
+- 用意と片付けは、プロセスの中で直列に実行する。同じリポジトリの2つのIssueに同時に着手しても、cloneが2つ作られることはない。
+- worktreeの先頭のコミットは `git rev-parse HEAD` で読む。実行が終わったあとに、Pull Requestの先頭のコミットと比べて、最後のコミットがpushされたかを判定するためである ([定期確認の設計](poll.md) の「実行終了の判定」)。
+- sub-issueが閉じたら、定期確認の処理が片付ける。対象は、スナップショットで閉じていると分かるsub-issueのうち、Agentが動いていないものである。roleごとのworktree (Implementer、Reviewer、Planner) を `git worktree remove --force` で消し、worktreeが持っていたローカルのブランチも消す。Hostの状態ファイルの、そのIssueの項目も消す。
+- 片付けの前に、worktreeがGitHubにないものを持っていないかを確かめる。確かめ方は続きの依頼と同じ (`git status --porcelain` と `git rev-list HEAD --not --remotes=origin`) だが、1つ足す。mergeするとPull Requestのブランチは消え、squash mergeではそのコミットが既定のブランチに入らない。そこで、worktreeの先頭のコミットが、どれかのPull Requestの先頭 (`refs/pull/<番号>/head`) と同じなら、GitHubにあるとみなす。GitHubは、全てのPull Requestについてこのrefを残す (公式: Checking out pull requests locally)。一覧は `git ls-remote origin 'refs/pull/*/head'` で読む。
+- GitHubにないものを持つworktreeは消さず、警告をログに1回出す。cuminは、再起動するまでそのworktreeを確かめ直さない。定期確認のたびにfetchしないためである。
+- スナップショットに出てこないIssue (閉じた要求Issueのsub-issue、Maintainerが要求Issueから外したsub-issue) のworktreeは、消さない。閉じた要求Issueは読まない (原則6) うえ、外しただけのIssueは開いていることがある。Operatorが [作業場所の片付け](../development/work-directory.md) の手順で消す。
+- PlannerのworktreeはPlannerの実行が終わるたびに消す (done、blocked、異常終了のどれでも。同じ実行の中の依頼し直しと、分割に続く受け入れの確認が終わったあとである)。Plannerは読むだけで何も持たず、次の依頼で作り直すためである。こうすると、要求Issueが閉じたあとにPlannerのworktreeが残らない。cuminを止めるときも消す。
+- gitは `os/exec` で呼ぶ。認証の入力待ちで止まらないように `GIT_TERMINAL_PROMPT=0` を付ける (公式: git の環境変数)。gitの出力はエラーの文章にだけ含め、infoのログには出さない。
+- GitHubと通信するgit (`git clone`、`git fetch`、`git ls-remote`、`git remote set-head`) は、そのworktreeのroleのAppのinstallation tokenで認証する。公開のリポジトリでも非公開のリポジトリでも、同じである。非公開のリポジトリは、認証情報のないHTTPSのgitを終了コード128で断り、4つのAppのどのtokenでも、`git ls-remote`、`git clone`、`git fetch` が通る (実測 149)。`git remote set-head origin --auto` も、同じ認証で通る (実測 149)。
+  - 使うApp: Implementerのworktreeの用意と片付けにはImplementerのApp、Reviewerのworktreeには ReviewerのApp、Plannerのworktreeには PlannerのAppを使う。cloneは3つのroleが共有するので、最初に用意したroleのtokenで作られる。`cumin-core` のtokenと、OperatorやMaintainerの認証情報は、gitに渡さない。
+  - tokenは、GitHubと通信するgitを実行する直前にだけ、対象のリポジトリ1つと `contents: read` に絞って発行する。用意では、1回の用意に1つである。片付けでは、worktreeがあって、GitHubにないものを確かめるときにだけ発行する。worktreeのない閉じたsub-issueと、再起動まで確かめ直さないworktreeには、発行しない。Appより狭い権限のtokenを発行できる (実測 57)。絞ったtokenで、非公開のリポジトリのgitが通る (実測 149)。4つのroleのAppは、どれも Contents の読み取りを持つ ([GitHub Appの登録手順](../development/github-app-setup.md) の権限の表)。gitでHTTPSを使うには Contents の権限が要る (公式: Authenticating as a GitHub App installation)。Agentの実行に渡すtoken (「1回の依頼の手順」) とは別のtokenである。実行のtokenは、起動の直前に発行して、1時間の期限を実行に残すためである。
+  - 渡し方は、Agentの環境と同じ3つの環境変数である (`GIT_CONFIG_COUNT=1`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>`。公式: git-config の環境変数。実測 149 は、この渡し方で測った)。tokenがあるのは、そのgitのプロセスの環境だけである。remoteのアドレスは `https://github.com/<owner>/<repo>.git` のままで、cloneの `.git/config`、引数、ログ、Hostの状態ファイルには、tokenが入らない。gitは `GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` で呼び、Hostのcredential helperを読ませない。
+  - `GIT_CONFIG_KEY_0` の名前は、remoteのアドレスのスキームとホストから作る (`http.<スキーム>://<ホスト>/.extraheader`)。ヘッダが届くのは、そのホストだけである (公式: git-config の `http.<url>.*`)。GitHubでは、上の名前になる。用意では、呼び出し処理が渡すアドレスから作る。片付けでは、cloneの設定だけから読んだアドレス (`git config --local --get remote.origin.url`) から作る。`git remote get-url` は使わない。Hostのユーザの `url.<base>.insteadOf` がアドレスを書き換え、GitHubと通信するgitが読まない設定で、tokenを渡すかどうかが決まってしまうためである (公式: git-config の `--local` と `url.<base>.insteadOf`)。HTTPでないアドレス (テストが使うローカルのリポジトリ) には、ヘッダがないので、tokenを発行しない。
+  - GitHubと通信するgitには、`GIT_SSH_COMMAND=false`、空の `GIT_ASKPASS` と `SSH_ASKPASS`、`GIT_TERMINAL_PROMPT=0` も付ける。Hostの鍵も、パスワードを尋ねるプログラムも使わない (公式: git の環境変数)。tokenを渡す前に `GIT_CONFIG_COUNT=0` を置くので、cuminの環境にある `GIT_CONFIG_*` の設定は、このgitに届かない。
+  - tokenを発行するのは `Service.GitToken` で、`Workspace` はフィールド `Token` を通して呼ぶ。`cumin run` が起動時につなぐ。`Token` が空の `Workspace` (テスト) は、tokenを渡さない。
+  - gitの出力は、エラーの文章に入れる前に、tokenと、そのbase64の形を `[redacted]` に置き換える。Hostの環境がgitに通信の記録を出させても (`GIT_CURL_VERBOSE`、`GIT_TRACE_REDACT=0`)、エラーとログにtokenは入らない。
+  - GitHubと通信しないgit (`git worktree`、`git status`、`git rev-list`、`git rev-parse`、`git config --local`) には、tokenを渡さない。
+  - tokenを発行できないときは、用意を失敗にする。呼び出し側は、失敗したgitのコマンドと同じに扱う。認証なしでやり直さない。片付けでは、worktreeを消さずに残し、失敗したgitのコマンドと同じに扱う。
+  - 受け入れた不利益: tokenの発行が、着手のたびに1つ、worktreeのある閉じたsub-issueの片付けのたびに1つ増える (どちらもRESTの書き込み1回。GraphQLのポイントは使わない)。片付けるものがない定期確認では、増えない。
+  - 採らなかった案: tokenをremoteのアドレスに入れる (`https://x-access-token:<token>@github.com/...`。公式が示す形)。アドレスはcloneの `.git/config` に残り、tokenがHostに残る。
+  - 採らなかった案: credential helperにtokenを持たせる。Hostにファイルかプロセスが増え、片付けが要る。
+  - 採らなかった案: `cumin-core` のtokenでcloneとfetchをする。roleの作業場所には、そのroleのAppのtokenを使う (#790 の要件2: cloneとfetchは、roleのAppのtokenで行う)。
+  - 採らなかった案: 非公開のリポジトリのときだけ認証する。道が2つになり、公開のリポジトリでは新しい道が試されない。
+- gitのコマンドは、どれも5分で打ち切る (定数 `gitTimeout`)。`Workspace` がgitを呼ぶ場所は1つ (`Workspace.git`) で、そこで `context.WithTimeout` の期限を付ける。期限が来ると、gitにSIGTERMを送る (公式: os/exec の `CommandContext` と `Cmd.Cancel`)。
+  - 理由: 期限がないと、応答の返らない `git fetch` や `git clone` が1つあるだけで、cuminを起動し直すまで実行の開始が止まる。用意と片付けは直列なので、ほかのIssueの着手も止まる。5分は、最初のcloneも終わると見込んだ値で、測った値ではない。cloneの時間は、リポジトリの大きさと回線で決まる。cloneが5分で終わらないリポジトリでは、着手のたびに、期限が過ぎたというエラー (`git clone ...: the deadline of 5m0s passed`) で用意が失敗する。
+  - SIGTERMにする理由: gitは、SIGTERMで終わるときに、ロックのファイルと、途中のcloneのディレクトリを消す。SIGKILLでは消せない。途中のcloneのディレクトリが残ると、次の用意がそれをcloneとみなし、そのリポジトリの用意が失敗し続ける。
+  - gitがSIGTERMで終わらないときと、gitの子プロセスが出力のパイプを開いたままのときも、コマンドは終わる。期限の2秒後 (定数 `gitWaitDelay`) に、`os/exec` がgitをSIGKILLで止め、パイプを閉じる (公式: os/exec の `Cmd.WaitDelay`)。
+  - `git clone` が失敗したら、cloneのディレクトリを消す。SIGKILLで止めたgitは、ディレクトリを残すためである。
+  - 期限で終わったコマンドのエラーは、コマンドの名前と、期限が過ぎたことと、それまでのgitの出力を持つ。呼び出し側は、失敗したほかのgitのコマンドと同じに扱う。
+  - 5分は、設定にはしない。対象ごとに変える理由がまだないためである。`Workspace` のフィールド `GitTimeout` は、テストが期限を短くするためのものである。
+  - 期限は、`Workspace` が呼ぶgitだけのものである。Agent CLIと、Agentが実行するコマンドには付けない ([実行時間の上限](#実行時間の上限) が別に決める)。
+- 採らなかった案: Issueごとにcloneする。毎回リポジトリ全体を取り直すことになり、遅いうえにディスクも使う。
+- 採らなかった案: cloneにmainをチェックアウトしておく。Agentが誤ってそこで作業しかねない。同じブランチを2か所でチェックアウトすることはできないので、worktreeの邪魔にもなる。
+- 採らなかった案: bare clone。remote-tracking branchとその設定が作られないため (公式: git-clone の `--bare`)、fetchの設定を自分で足すことになる。
+
+![gitのコマンドの期限](agent-run-git-deadline.svg)
+
+図の元ファイル: [agent-run-git-deadline.puml](agent-run-git-deadline.puml)
+
+### Claude Codeの起動
+
+![1回の実行](agent-run.svg)
+
+図の元ファイル: [agent-run.puml](agent-run.puml)
+
+- 依頼のたびに、worktreeを作業ディレクトリにして `claude -p` を起動する。標準入力はnullデバイスにつなぐ。標準入力が開いたまま何も届かないと、CLIは3秒待ってから先に進むためである (実測。Claude Code 2.1.267)。プロセスは、依頼が終わったら終了する。
+- オプション (公式: Run Claude Code programmatically、CLI reference):
+  - `--append-system-prompt <roleの指示>`: roleの指示はシステムプロンプトの末尾に足す。Claude Code既定のシステムプロンプト (ツールの使い方、リポジトリの `CLAUDE.md`) はそのまま活かす。
+    - roleの指示は、`roles/<role>.md`、そのroleのdisciplineのファイル (`disciplines/<discipline>/<role>.md`)、平易な英語の決まり (`templates/writing-rules.md`)、対象のリポジトリのriskの基準を、この順に連結したものである。disciplineのファイルがないroleは、その部分を飛ばす。riskの基準のない起動 (使用率を読む最小の実行) は、残りを受け取る。合成の決まりは [Agentに共通の要件](../requirements/agents/common.md) の「指示の合成」にある。続きの依頼でも同じ指示を渡すので、依頼の種類に依存することは、指示ではなく依頼文に書く。
+    - 連結するのは `internal/agent` である。`roles`、`disciplines`、`templates` は、どれも自分のMarkdownを読むだけで、互いを知らない。riskの基準は、呼び出し処理が3段を解決したうえで、起動の依頼のデータとして渡す。1か所で連結するので、外から差し替えられる部分が増えても、変わるのはその1か所である (disciplineを外から読む仕組みは [要求のbacklog](../requirements/backlog.md) の「roleとdisciplineの分離」)。
+  - `--add-dir <そのroleのskillのディレクトリ>`: 1つの行動のためのテンプレート (Pull Requestの説明、レビューの指摘への返答、Maintainerに判断を求める文章) は、システムプロンプトではなくskillとして渡す。長い実装のあとにシステムプロンプトの末尾を忘れないように、行動の直前に読ませるためである。`cumin run` が起動時に、`templates/` の文面を本文にしたskillを、Hostの状態のディレクトリの `skills/<role>/.claude/skills/<名前>/SKILL.md` に書く。roleごとにディレクトリを分け、そのroleが受け取るskillだけを入れる。起動では自分のroleのディレクトリだけを渡すので、roleは自分の仕事のskillしか見ない。毎回、roleのディレクトリごと作り直すので、ファイルはバイナリと一致し、roleの間で移したskillが古い側に残らない。Claude Codeは `--add-dir` のディレクトリの `.claude/skills/` からskillを読み、起動時には名前と説明だけを文脈に入れ、本文は呼ばれたときに読む (公式: Skills)。`--setting-sources project` でも読まれる (公式: Skills、`project` のsetting sourceに依存する)。テンプレートの文面は `templates/` にだけ置く。
+  - `-p <依頼文>`: 依頼文はプロンプトの引数で渡す。
+    - 依頼文の先頭には、その実行の事実を、ラベルを付けた行のかたまりとして置く。1行目は、cuminからのデータであることを示す。続く行は、扱うIssue (その実行が扱うIssueの番号と種類。種類は「requirement issue」か「implementation issue」。例: `- Issue of the run: #12 (implementation issue)`)、Issue Ownerのログイン名 (例: `- Issue Owner login: <login>`。ないときは `- Issue Owner login: there is no Issue Owner login`)、保護されたパス (そのリポジトリで効いている一覧を1行に1つずつ書き、続けて照合の決まりを固定の英文で書く。決まりは5つで、どの深さにも合うこと、位置が決まること、ディレクトリ、ワイルドカードが使えないこと、大文字と小文字を区別しないことである。一覧が空のときは「none」と書き、決まりは書かない)、実行時間の上限 (その実行に使う設定の `roles.<role>.time_limit`)、実行が終わる時刻 (起動の時刻に上限を足した時刻。UTCのRFC 3339) である。Plannerの依頼には、そのあとに2行を足す。Implementerの時間の上限とReviewerの時間の上限 (設定の `roles.implementer.time_limit` と `roles.reviewer.time_limit`。例: `- Time limit of the Implementer: 50m`、`- Time limit of the Reviewer: 50m`) である。ImplementerとReviewerの依頼には、この2行を書かない。かたまりのあとに空行を1つ置き、呼び出し処理の依頼文を続ける。決まりは [Agentに共通の要件](../requirements/agents/common.md) の「起動の依頼の事実」と「プロセスとセッション」にある。
+    - 事実は実行のたびに変わるので、roleの指示ではなく依頼文に入れる。どのroleの、どの種類の依頼にも入れる。続きの依頼 (`--resume`) にも入れ、終わる時刻はその実行のものになる。Plannerの続きの依頼にも、ImplementerとReviewerの時間の上限をもう一度入れる。
+    - かたまりを作るのは `internal/agent` の純粋な関数である。扱うIssueとIssue Ownerのログイン名は、呼び出し処理が起動の依頼のデータとして渡す。Issue Ownerのログイン名は、呼び出し処理がGitHubから読んで決める ([定期確認の設計](poll.md) の「Issue Ownerのログイン名の読み取り」)。空のときは「ない」と書く。時間の上限と終わる時刻は、起動の入口が時計と設定を読んで渡す。ImplementerとReviewerの時間の上限も、起動の入口が、持っているroleごとの設定から読んで渡す。時計は入口が持ち、テストが差し替える。Issueの番号のない起動 (テスト) では、扱うIssueの行とIssue Ownerのログイン名の行を書かない。
+  - `--setting-sources project`: ユーザアカウントの設定と `CLAUDE.md` を読ませない (実測 6e、27)。
+  - `--permission-mode bypassPermissions`: 全てのツールを許可する。headlessの実行では、許可を求められても答える人がいない。`--dangerously-skip-permissions` と同じ意味である (CLI reference)。
+  - `--json-schema <結果のスキーマ>`: 結果を [共通の形式](../requirements/agents/common.md) に従わせる。スキーマの文字列は、コードの側で要件文書と同じに保つ。
+  - `--output-format stream-json --verbose`: イベントを1行ずつ読む。`--json-schema` と併用できる (実測 26)。
+  - `--model <モデル>`: 設定 `roles.<role>.model` が空でないときだけ付ける。
+  - `--resume <セッションの番号>`: 続きの依頼のときだけ付ける (実測 31)。roleの指示と依頼文は、続きの依頼でも改めて渡す。
+- 採らなかった案: `--bare`。サブスクリプションのログインが使えない (実測 6a)。
+- 採らなかった案: `--allowedTools` でツールを列挙する。roleごとの制限は、GitHub Appの権限とrulesetで行う (cumin本体の要件)。
+- 採らなかった案: roleの指示を依頼文に含める。続きの依頼で指示を二重に渡すことになるうえ、システムプロンプトとしても扱われない。
+- 実行ファイルは設定 `roles.<role>.cli_path` で決める。受け入れテストでは、決まった出力を返すシェルスクリプトを指定する。
+
+### 出力の読み取り
+
+- 標準出力の1行を1つのJSONとして読み、`type` で見分ける。読むのは次の3種類だけで、ほかは読み飛ばす。
+  - `system` の `init`: セッションの番号 (`session_id`) と、起動の記録の確認に使う項目 (「起動の記録の確認」)。
+  - `rate_limit_event`: `rate_limit_info.unifiedWindows` の `five_hour` と `seven_day` にある `utilization` (0から1) と `resetsAt` (Unix秒) (実測 1)。1回の実行で何度も出るので、最後のものを使用率とする。
+  - `result`: `session_id`、`subtype`、`is_error`、`structured_output` (実測 26)。
+- 正常終了とみなすのは、終了コードが0で、`result` があり、`is_error` が偽で、`structured_output` がスキーマに合い、`blocked` なら理由が空でない場合である。呼び出し処理には、セッションの番号、結果、使用率を返す。
+- `rate_limit_event` がなくても異常終了にはせず、使用率を「読めなかった」として返す。着手前の使用率の確認は、別の話題 (cumin本体の設計メモ) が受け持つ。
+- 異常終了は、種類を付けて返す。種類は、プロセスの失敗 (起動できない、終了コードが0でない)、`result` がない、`is_error` が真、結果がスキーマに合わない、実行時間の上限、である。やり直すかどうかは、呼び出し処理がこの種類を見て決める。
+- 使用率の数値はdebugのログにだけ出す。infoのログに出すのは、セッションの番号、結果、異常終了の種類である。標準エラー出力はdebugのログに出す。
+- `rate_limit_event` は、Agent SDKの文書に `SDKRateLimitEvent` として載っている。cuminが読む `unifiedWindows` は載っていない (実測 2)。形が変われば、使用率は「読めなかった」になる。2026-09-20 の最小の実機実行で、3つのイベントの項目名と、`result` の `subtype: "success"` を確かめた。
+
+### Agentの環境
+
+- CLIプロセスの環境変数は、cuminの環境を引き継がず、決まった一覧から組み立てる。Hostから引き継ぐのは `PATH`、`HOME`、`TMPDIR`、`LANG`、`LC_ALL`、`LC_CTYPE`、`SHELL`、`USER`、`LOGNAME` だけである。Hostのユーザが持つ `SSH_AUTH_SOCK`、`GH_TOKEN`、`GITHUB_TOKEN`、`ANTHROPIC_API_KEY` は一覧にないので、Agentには届かない。`HOME` を残すのは、Claude Codeがサブスクリプションのログインとセッションの記録を `~/.claude` の下に探しに行くからである。
+- 自動メモリは、環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` で切る。`--setting-sources project` だけでは止まらない (実測 86、公式: Environment variables)。
+- claude.aiアカウントのコネクタ (アカウントに結び付いたMCPサーバ) は、環境変数 `ENABLE_CLAUDEAI_MCP_SERVERS=false` で切る。ログインしているユーザには既定で読み込まれ、`--setting-sources project` では止まらない (公式: Environment variables)。2026-09-22 のsandboxでの実機実行で、このコネクタが `init` の `mcp_servers` に現れ、起動の記録の確認が実行を止めた。
+- gitには、Hostのユーザとシステムの設定ファイルを読ませない。`GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` を付けると、credential helperとOperatorの作者設定が見えなくなる (公式: git の環境変数)。`GIT_TERMINAL_PROMPT=0` でパスワードの入力待ちを防ぎ、`GIT_SSH_COMMAND=false` でSSH接続を必ず失敗させる。worktreeのremoteはHTTPSなので、Hostの鍵を使う経路はない。
+- roleのtokenは、`GIT_CONFIG_COUNT=1`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>` の3つで渡す (公式: git-config の環境変数)。ファイルにも引数にも書かない。
+- コミットの作者は、roleのAppのbotユーザにする。`GIT_AUTHOR_NAME` と `GIT_COMMITTER_NAME` は `<slug>[bot]`、`GIT_AUTHOR_EMAIL` と `GIT_COMMITTER_EMAIL` は `<botのuser id>+<slug>[bot]@users.noreply.github.com` とする。この形にすると、GitHubがコミットをbotユーザに結び付ける (実測 49)。作者を渡さない場合、gitはHostのユーザ名とホスト名から作者を推測してコミットしてしまう (2026-09-21に実機で確認。Apple Git 2.50.1)。
+- ghには `GH_TOKEN` でroleのtokenを渡す。ghは、保存済みのログインより `GH_TOKEN` を優先する。`GH_CONFIG_DIR` には、依頼のたびに作る空のディレクトリを指定し、Hostのユーザの設定を読ませない。ディレクトリが空なら、ghは既定の設定 (`git_protocol` は `https`) で動く (2026-09-21に実機で確認。gh 2.101.0)。`GH_PROMPT_DISABLED=1` と `GH_NO_UPDATE_NOTIFIER=1` で、入力待ちと更新の通知も止める (公式: gh help environment)。このディレクトリは依頼が終わったら消す。
+- この環境が防ぐのは、うっかり使ってしまうことだけである。Agentのプロセスには `HOME` があるので、意図して `~/.ssh` や `~/.claude` のファイルを読みに行くAgentは止められない。roleごとの制限は、GitHub Appの権限とrulesetで行う。
+- 採らなかった案: `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`。Bashツールの環境から認証情報を取り除く機能だが、Agentはまさにそこでroleのtokenを使う。
+- 採らなかった案: cuminの環境を引き継ぎ、危ない変数だけを外す。外し忘れた変数がそのままAgentに届いてしまう。
+- 採らなかった案: Agent用に別のOSユーザを用意する。要求のbacklogにある。
+
+### 道具の確認の実行
+
+リポジトリの道具の確認 (cumin本体の要件の「道具の確認」) のコマンドを1つ実行するのは、`RunToolCheck` である。失敗した確認が何を止めるかは、呼び出す側が決める ([cumin本体の設計メモ](cumin-core.md) の「道具の確認の実行」)。
+
+- 環境変数は、上の「Agentの環境」の、Hostから引き継ぐ一覧 (`baseEnvironment`) だけである。Agentと同じ `PATH` で道具を探すので、Agentに見えない道具は、確認でも見えない。roleのtokenも、gitとghの設定も渡さない。確認はGitHubを使わないためである。
+- プログラムは、シェルを通さずに `os/exec` で起動する。`os/exec` はcuminの `PATH` でプログラムを探し、`baseEnvironment` の `PATH` はcuminの `PATH` と同じである (公式: os/exec の `Command`、`LookPath`)。
+- 実行するディレクトリは、作業場所の根 (`work_dir`) である。なければ作る。新しいHostでは、最初の定期確認が、最初のworktreeよりも前に来るためである。
+- 通るのは、時間の上限の中に終了コード0で終わったときだけである。プログラムが見つからないとき、時間の上限を過ぎたとき、0でない終了コードのときは、理由を持つエラーを返す。
+- プロセスは、自分のプロセスグループで起動する。時間の上限を過ぎたら、グループにすぐSIGKILLを送る。確認には、保存するものがないので、SIGTERMで待たない。終わったあとにも、グループに残ったプロセスを止める。
+- 標準出力と標準エラー出力は捨てる。確認の出力は、ログに入らない。
+
+### 起動の記録の確認
+
+- 実行の最初に出る `init` のイベントで、Agentが作業場所の外の文脈を読み込んでいないことと、cuminが渡したskillが届いていることを確かめる。見るのは、`plugins` (項目がない、または組み込みでないpluginがあれば異常。下を参照)、`mcp_servers` (項目がない、または空でなければ異常)、`memory_paths` (項目があり、作業場所の外のパスを指すか、パスとして読み取れない形なら異常)、`skills` (項目がない、または、cuminがそのroleのために書き出したskillが1つでも載っていなければ異常) である。項目がない場合まで異常にするのは、Claude Codeが項目の名前を変えたときに、確かめないまま通してしまわないためである。`--setting-sources project` を付けると `mcp_servers` は空になり (実測 27)、自動メモリを切ると `memory_paths` は項目ごと現れない (実測 86。2026-09-21 の最小の実機実行でも同じだった)。
+- 異常に当たったら、実行時間の上限と同じ手順 (プロセスグループにSIGTERM、猶予のあとSIGKILL) でその場で止める。追えない指示のもとでAgentに作業を始めさせないためである。異常終了の種類は「user-level context」とし、理由には項目の名前だけを書いて、パスは書かない。
+- `result` のイベントが来るまでに `init` のイベントがなければ、同じ種類の異常終了にする。起動の記録がないと、Agentが何を読んだのか分からない。
+- Claude Code は、`--setting-sources project` を付けても、バイナリに入ったpluginを `plugins` に載せる (2.1.284 では `agents-md@builtin` と `telemetry@builtin`。2026-09-29 に実測)。`source` が `<名前>@builtin` のpluginは、全て許す。`builtin` は、Claude Codeが組み込みのpluginのために予約したmarketplaceの名前で、marketplace、claude.ai、skillのディレクトリから来たpluginには付かない (公式: Marketplace reference の Reserved names)。組み込みのpluginは、組み込みのツールと同じくClaude Code自身の一部なので、ユーザの文脈ではない。Claude Codeの更新で組み込みのpluginが増えても実行が止まらないよう、名前の一覧は持たない (#156 で Maintainer が決めた)。名前だけでは照らさない。同じ名前でも `@synced` や marketplace のpluginは止める。`source` のない項目と、読み取れない形も止める。止めたときの理由には、そのpluginの `source` を書く。
+- claude.aiのアカウントのコネクタは、`mcp_servers` に載る。Agentの環境に `ENABLE_CLAUDEAI_MCP_SERVERS=false` を入れて止めるので、`mcp_servers` の確かめ方は厳しいままにする。コネクタはOperatorのアカウントのデータを、`bypassPermissions` の実行に持ち込むためである。
+- 確かめられないこと: `init` のイベントには、読み込んだ指示ファイル (`CLAUDE.md`) の一覧がない (2026-09-21 の実機実行で確かめた項目名は `agents`、`mcp_servers`、`plugins`、`skills`、`slash_commands`、`tools` など)。作業場所の外の指示については、`--setting-sources project` に頼る (実測 6e)。`skills` で確かめるのは、cuminのskillが全て載っていることだけである。組み込みのskillとリポジトリのskillは名前では区別できないので、載っていること自体は異常にしない。
+- `skills` は、skillの名前の文字列の配列である。公式ドキュメントに記載がないので、実機で確かめた (2026-09-25、Claude Code 2.1.273。手順は [Agentの実機の確認](../development/agent-live-check.md)、記録は #166)。配列でない形と、文字列でない要素は、読めないものとして異常にする。他の項目と同じで、読めない記録は何も確かめられないためである。
+- 使用率を読む最小の実行では、この確認を行わない。作業ディレクトリが空で、結果も使わないからである。
+- 実機で確かめたこと (2026-09-22、Claude Code 2.1.267): sandboxのworktreeで本物のClaude Codeを起動したところ、claude.aiアカウントのコネクタが `mcp_servers` に載り、この確認が起動の直後に実行を止めた。コネクタを環境変数で切ったあとの実行は、「Agentの環境」を参照。
+- 採らなかった案: 異常を見つけても実行を最後まで待ち、それから異常終了にする。利用枠を無駄にするうえ、追えない指示のもとでの作業がGitHubに残りかねない。
+
+### 異常終了のやり直し
+
+- 異常終了 (プロセスの失敗、`result` がない、`is_error`、結果がスキーマに合わない、実行時間の上限、起動の記録にユーザの文脈がある) のとき、呼び出し処理は、実行の中で同じ依頼をやり直さない。実装も、レビューも、分割も、受け入れの確認も、実行の終わりにGitHubの事実から決める。結果がなければ、1回だけ依頼し直す ([定期確認の設計](poll.md) の「実行終了の判定」、「Reviewerへの依頼 (request the review、stop the review)」、「Plannerへの依頼 (request the split、request the acceptance check)」)。異常終了、結果を残さなかった実行、再起動で切れた実行が、同じ1つの決まりになる。ImplementerとPlannerの依頼し直しは、同じ作業場所で続ける。途中までの作業がworktreeに残っているためである。Reviewerの依頼し直しは、worktreeを作り直す。Reviewerは何もworktreeに残さないためである。
+- 異常終了のあとのReviewerの依頼し直しは、そのラウンドの最初の依頼と同じセッションで始める (1ラウンド目は新しいセッション)。異常終了した実行のセッションは再開しない。Implementerの依頼し直しは、Hostの状態ファイルにImplementerのセッションがあれば、その続きから始める。状態ファイルに残るのは、正常に終わった実行のセッションだけである。異常終了した実行のセッションは残さないので、最初の実行が異常終了したときは、新しいセッションになる。
+- 異常終了した実行のセッションを再開しない理由は3つある。異常終了の種類の多くは、セッションの番号を返さない (プロセスの失敗、`init` のイベントがない) か、同じ結果を繰り返す (起動の記録にユーザの文脈がある、環境の誤り)。実行時間の上限で止めた実行を再開すると、長い文脈を読み直す分だけ利用枠を余計に使い、また上限に当たりやすい。判定が1つで済み、種類ごとの分岐が要らない。
+- 見直す合図: 異常終了が頻発して、やり直しの利用枠が目立つようになったとき。種類ごとに分ける (結果の形式だけが誤っていたときは再開する、など) 案がある。
+- cuminが止まるとき (contextの取り消し) の異常終了は、やり直さない。新しい実行を始めずに終わり、ラベルも変えない ([cumin本体の設計メモ](cumin-core.md) の「止め方」)。
+- どのroleでも、依頼し直したあとにも結果がなければ、Maintainerに戻す ([定期確認の設計](poll.md) の「うまくいかなかったときに、Maintainerに戻す道」)。
+- 依頼し直しの回数は、Hostの状態ファイルに持つ (Implementerは `implementation_requests`、Reviewerは `review_requests` と `cause_requests`、Plannerは `split_requests` と `acceptance_requests`)。再起動のあとの定期確認も、同じ回数から決めるためである。Implementerの回数は、ラベルを `cumin/status/implementing` に替える場所で、ラベルを替える前に0に戻す。
+
+### 実行時間の上限
+
+- 依頼ごとの上限は、設定 `roles.<role>.time_limit` の値である。上限を過ぎたら打ち切り、異常終了 (種類は「実行時間の上限」) として返す。呼び出し処理が依頼を取り消したときも、同じ種類にする。
+- Agentは、この上限と、実行が終わる時刻を、依頼文の先頭で受け取る (「Claude Codeの起動」)。長い確認を、終わる時刻より前に終えるためである。
+- 打ち切りは2段階で行う。まずCLIのプロセスグループにSIGTERMを送る。SIGTERMを受けたCLIは終了コード143で終わり、実行中のBashコマンドのプロセスツリーも止める (公式: Run Claude Code programmatically の "Stop a run with SIGTERM"、実測 32)。猶予 (10秒) のうちに終わらなければ、プロセスグループにSIGKILLを送る。
+- CLIは自分のプロセスグループで起動する (`Setpgid`)。Agentが起動したコマンドも同じグループに入るので、シグナルがそこまで届く。
+- 実装にはGoの `os/exec` の `Cmd.Cancel` と `Cmd.WaitDelay` を使う。`Cancel` がSIGTERMを送り、`WaitDelay` (猶予と同じ値) を過ぎると `os/exec` がCLIを止めてパイプを閉じる。その後、cuminがグループにSIGKILLを送り、残ったものを消す。
+- 標準出力は、行が届くたびに読む (`Cmd.Stdout` に書き込み先を渡す)。プロセスが終わった時点でパイプに残っていた行も、`os/exec` が読み切ってから `Wait` が返る。
+- 実機で確かめたこと (2026-09-20、Claude Code 2.1.267): Bashで `sleep 600` を実行中のCLIに上限でSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループには何も残らなかった。手順は [Agentの実機の確認](../development/agent-live-check.md) にある。
+- 採らなかった案: `--max-turns`。手元のCLIのヘルプに載っていないうえ、ターンの数は時間の上限にならない (実測 32)。
+- 採らなかった案: SIGKILLだけを送る。CLIがセッションを記録し、Bashのプロセスツリーを止める機会がなくなる。
+
+### 1回の依頼の手順
+
+- 呼び出し処理は、1回の依頼を `internal/agent` の1つの入口 (起動) に渡すだけでよい。入口は次の順に進める。
+  1. roleのAppのinstallation tokenを、対象のリポジトリ1つに絞って発行する。tokenは依頼のたびに新しく発行し、使い回さない。実行は最長55分続くのに対し、tokenは発行から1時間で失効するからである (cumin-coreのtokenの使い回しとは別の話である)。
+  2. botの身元を読む。`GET /app` でAppのslugを、`GET /users/<slug>[bot]` でbotユーザのidを読み、作者の名前とメールアドレスを組み立てる (「Agentの環境」)。読むのはroleごとに1回だけで、以後はメモリに持つ。変わらない値なので、失っても読み直せばよい。
+  3. worktreeでCLIを起動する (「Claude Codeの起動」)。起動の直前に時計を読み、扱うIssue、実行時間の上限、終わる時刻 (Plannerには、ImplementerとReviewerの時間の上限も) を依頼文の先頭に置く。tokenと身元は実行の環境変数にだけ入れ、ログにも戻り値にも手元の状態にも入れない。
+- 入口は、結果と一緒に、roleのAppのbotのlogin (`<slug>[bot]`) を返す。呼び出し処理が、Pull Requestの作成者と比べるためである (「wait for the checks」)。2で読んだ身元をそのまま返すので、読み取りは増えない。
+- 起動の入口は、使用率を読まない。読んだばかりの使用率が呼び出し処理の手元にあれば、起動に最小の実行が要らないためである。使用率を読む最小の実行は、別の入口 (使用率の読み取り) にあり、呼び出し処理が、Agentの起動の前の1つの確認の中で呼ぶ ([利用枠の設計](quota.md) の「Agentの起動の前の確認」)。この入口はtokenを発行しない。
+- roleごとの設定 (CLI、実行ファイル、モデル、時間の上限) と、リポジトリの持ち主とroleの組ごとのAppの認証情報 (設定 `github_apps.<organization>.<role>`) は、起動時に入口へ渡す。設定を読むのは `cmd/cumin` の役目である。身元も、持ち主とroleの組ごとに持つ。
+- CLIが無視できないグローバルな指示ファイルへの備え: 入口は、roleのCLIごとに「そのCLIが読んでしまうユーザアカウントの指示ファイル」の一覧を持ち、実際にあるものを警告として返す。`cumin run` が起動時にこれをログに出す。Claude Codeでは一覧は空である (`--setting-sources project` と自動メモリの環境変数で、全て無視できる。実測 6e、86)。別のCLIを足すときに、そのCLIの一覧を書く。
+- 採らなかった案: tokenの発行を、定期確認で使うtokenの使い回しに乗せる。使い回したtokenは、実行の途中で失効しかねない。
+- 採らなかった案: 身元を設定ファイルに書く。slugとidはGitHubが決める値なので、書き写すと食い違いが生じる。
+
+## まだ決めていないこと
+
+なし。
+
+## 後回しにしたこと
+
+なし。

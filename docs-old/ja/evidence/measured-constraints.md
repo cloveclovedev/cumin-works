@@ -1,0 +1,228 @@
+# 調査・実測で確定した制約
+
+Claude Code、GitHub、git、macOS、Discord について、公式文書と実機で確かめた事実だけを集める。この文書が持つのは、外部の道具の振る舞いだけである。cumin自身の問い合わせや振る舞いを測った値 (1回の定期確認のポイントなど) は、ここに書かない。cuminのコードが変わるたびに古くなるからである。その値は、測ったPull Requestの説明に書き、設計メモが今の値を述べて、そのPull Requestにリンクする。設計上の決定は含まない。要件の文書ではなく、事実の記録である。行は主題ごとの9つの表に分かれ、表の中では番号の順に並ぶ。番号は確かめた順に付けたもので、文書の全体で一意である。1つの事実は1つの行に書く。まだ確かめていないことと、ある日に観測しただけで今も成り立つか分からないことは、主題の表に置かず、「未確認 (Not confirmed)」の節に集める。この節の行を、事実として読んではいけない。別の行にまとめてなくした番号と、cumin自身の実測なのでなくした番号は、最後の「引退した番号」の表にある。
+
+確度の凡例: 実測 = このホストで実際に動かして観測した、公式文書 = 公式ドキュメントで確認した、未確認 = 公式文書に記載が見つからず、まだ試していない。または、ある日に観測したが、測り直していない。未確認の行は「未確認 (Not confirmed)」の節にだけある。「日付と版」の列は、その行を確かめた日付である。そのときの道具の版が分かる行には、版も書く。日付が2つ以上ある行は、行の中の事実を別の日に確かめている。1つの番号の確かめた部分と確かめていない部分は、同じ番号で主題の表とこの節に分かれ、互いを指す。
+
+## Claude Code
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 1 | headless実行 (`claude -p ... --output-format stream-json --verbose`) の出力に `rate_limit_event` が含まれ、5h枠とweekly枠の使用率とリセット時刻を機械可読で読める | `rate_limit_info.unifiedWindows.five_hour` と `seven_day` のそれぞれに、`utilization` (0から1の使用率) と `resetsAt` (Unix秒) がある。`status: "allowed"` も返る。同時刻の `/usage` の表示と値が一致した | 実測 | 2026-09-19、Claude Code 2.1.267 |
+| 2 | `rate_limit_event` は、Agent SDKの文書に `SDKRateLimitEvent` として記述がある。`rate_limit_info` の `status`、`utilization`、`resetsAt`、`rateLimitType` (`five_hour`、`seven_day`、`seven_day_opus`、`seven_day_sonnet`、`overage`) があり、イベントは利用枠の状態が変わったときに出る、とある。`unifiedWindows` は記述がない。headlessの文書には、このイベントの記述がない。バージョンアップで変わりうる | 公式: Agent SDK のTypeScriptリファレンス (2026-09-21)、headless | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 3 | `claude -p "/usage"` はheadlessで動き、使用率とリセット時刻を人間向けテキストで返す。`--output-format json` でもテキストが `result` に入るだけ | 出力例: `Current session: <N>% used · resets <日時> (<タイムゾーン>)` | 実測 + 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 4 | statuslineスクリプトへのJSONには `rate_limits.five_hour.used_percentage` と `resets_at` (Unix秒) などがある。Pro/Max加入者のみ、セッション内の最初のAPI応答後にだけ現れる | https://code.claude.com/docs/en/statusline.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 5 | Anthropic APIのRate Limits API、Usage & Cost APIはAPI組織向けで、サブスクリプションの5h枠・weekly枠は返さない | https://platform.claude.com/docs/en/manage-claude/rate-limits-api.md | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 6a | `claude -p` の `--bare` は、hooks、skills、plugins、MCPサーバ、自動メモリ、CLAUDE.md の自動読み込みを全て省く。ただしサブスクリプションのログインを使えず、`ANTHROPIC_API_KEY` などが要る | https://code.claude.com/docs/en/headless.md: "bare mode doesn't use your subscription login"、"In bare mode, Claude Code never reads OAuth credentials or the system keychain." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 6b | `--bare` は将来 `-p` の既定になる予定と書かれている。そうなったあとに、サブスクリプションのログインで `-p` を使う方法は、書かれていない | 同上: "`--bare` is the recommended mode for scripted and SDK calls, and will become the default for `-p` in a future release." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 6c | `--bare` なしの `claude -p` は、対話セッションと同じ文脈を読み込む。作業ディレクトリの設定と、ユーザアカウントの `~/.claude` の設定の両方が対象になる | 同上: "Without it, `claude -p` loads the same context an interactive session would, including anything configured in the working directory or `~/.claude`." | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 6d | Agentの最後の応答をJSON Schemaに従わせる機能は、Claude CodeにもCodexにもある。Claude Codeは `claude -p --output-format json --json-schema <schema>` で、結果は `structured_output` に入る。Codexは `codex exec --output-schema <file>` で、`-o` で最後の応答をファイルに書ける | https://code.claude.com/docs/en/headless.md、https://learn.chatgpt.com/docs/non-interactive-mode | 公式文書 | 2026-09-19、Claude Code 2.1.267 |
+| 6e | `claude -p` に `--setting-sources project` を付けると、ユーザアカウントの `~/.claude/CLAUDE.md` が読み込まれなくなる。サブスクリプションのログインはそのまま使える | 同じ質問を2回実行した。オプションなしでは `~/.claude/CLAUDE.md` の内容を答え、オプションありでは「その指示はない」と答えた。どちらもサブスクリプションで実行できた (Claude Code 2.1.267) | 実測 | 2026-09-19、Claude Code 2.1.267 |
+| 26 | `--json-schema` は `--output-format stream-json --verbose` と併用できる。1回の実行で、`rate_limit_event` と、`result` のイベントの `structured_output`、`session_id`、`subtype`、`is_error` が取れる | 公式文書は `--output-format json` との組み合わせしか説明していない。実際に併用して、両方が出力されることを確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 |
+| 27 | `--setting-sources project` を付けると、実行の最初に出る `system` / `init` のイベントで、`skills` は組み込みのものだけになる。`plugins` に載るのは、バイナリに入ったpluginだけである (107を参照)。`mcp_servers` は、claude.aiのアカウントのコネクタを除いて空になる (91を参照) | ユーザアカウントにplugin、MCPサーバ、skillを入れてあるHostで確かめた | 実測 | 2026-09-20、Claude Code 2.1.267 (`skills`)。`mcp_servers` は2026-09-22 (91)。`plugins` は2026-09-29、Claude Code 2.1.284 (107) |
+| 29 | `claude -p "/usage"` はモデルを呼ばず (`num_turns` が0、`total_cost_usd` が0)、利用枠を使わない。ただし `rate_limit_event` は出ず、人間向けの文章だけが返る。使用率を機械可読で返すサブコマンドは、`claude --help` にない。機械可読の使用率を読むには、モデルを呼ぶ実行が要る。CLIのサブコマンド、フラグ、hook、statuslineの項目、SDKの呼び出しのどれも、モデルを呼ばずにサブスクリプションの使用率を返さない。`/usage` は、文書にないendpointをログインのOAuthのtokenで呼んでいる | `rate_limit_event` は、モデルへの要求に対する応答に付いてくる情報である。公式文書 (2026-09-21) と公開の報告 | 実測 + 公式文書 (不在の確認) | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 30 | システムプロンプトを `--system-prompt` で短いものに置き換え、1語だけ答えさせる最小の実行でも、`rate_limit_event` は出る。実行は1〜2秒で終わる。入力のほとんどは、CLIが毎回送る定型の部分である | 同左 | 実測 | 2026-09-20、Claude Code 2.1.267 |
+| 31 | `-p` でも `--resume <session_id>` でセッションを再開できる。2.1.223以降は、別のディレクトリからでも再開できる | https://code.claude.com/docs/en/sessions.md | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
+| 32 | `--max-turns` は、手元の `claude --help` に出てこない。実行時間の上限を指定するフラグは、`--help` にない。`-p` の実行は、SIGTERMを受けると終了コード143で終わる。Bashで `sleep 600` を実行中の `claude -p` のプロセスグループにSIGTERMを送ると、CLIは猶予を待たずに終わり、プロセスグループに何も残らない | https://code.claude.com/docs/en/headless.md、手元の `--help`。プロセスグループへのSIGTERMは #42 の実機の確認で、打ち切りのあとに `pgrep -g <プロセスグループ>` が何も返さなかった | 公式文書 + 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 74 | `claude -p` は、標準入力が開いたまま何も来ないと、3秒待ってから進み、標準エラー出力に "Warning: no stdin data received in 3s, proceeding without it" を出す。標準入力がnullデバイスなら待たない | 最小の実行で観測した | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 85 | `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` は、Bashツール、hook、MCPサーバの環境から認証情報を取り除く | 公式: Environment variables | 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 86 | `--setting-sources project` を付けても、自動メモリは止まらない。`init` のイベントの `memory_paths.auto` が、ユーザアカウントの下にある、作業ディレクトリごとのメモリを指す。環境変数 `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` を付けると、`init` のイベントに `memory_paths` の項目そのものがない。設定の `autoMemoryEnabled: false` でも止められる。`init` には、指示のファイルの一覧を返す項目がない。ある項目は `plugins`、`mcp_servers`、`skills`、`agents`、`slash_commands`、`tools` など | https://code.claude.com/docs/en/memory.md。環境変数の有無で `init` のイベントを比べた。#76 で実測。項目の全体は #67 に記録 | 実測 + 公式文書 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 87 | `rate_limit_event` には、`rate_limit_info` のほかに、`session_id` と `uuid` がある。`rate_limit_info` の項目は `status`、`resetsAt`、`rateLimitType`、`unifiedWindows` (1を参照)、`isUsingOverage`、`overageStatus`、`overageDisabledReason` である。通常の実行では `status` は `allowed` になる。正常終了の `result` のイベントには、`subtype: "success"`、`is_error: false`、`structured_output` (26を参照) のほかに、`terminal_reason`、`stop_reason`、`permission_denials` がある | 最小の実行の出力の項目名を確かめた。#76 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 91 | `--setting-sources project` を付けた `-p` の実行でも、claude.aiのアカウントのコネクタが `init` の `mcp_servers` に現れる。worktreeに `.mcp.json` がなくても同じである。`ENABLE_CLAUDEAI_MCP_SERVERS=false` を付けると消える | #93 で実測 (2026-09-22) | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 97 | `--setting-sources project` と `--add-dir <ディレクトリ>` を付けた `-p` の実行で、Agentに見えるskillは、そのディレクトリのskillと、CLIに組み込みのskillだけである。Hostのユーザの `~/.claude/skills/` のskillは見えない | live scenario Impl-1 (#101) の記録 | 実測 | 2026-09-22、Claude Code 2.1.267 |
+| 107 | `--setting-sources project` を付けても、`init` の `plugins` に、バイナリに入ったpluginが載る。2.1.284 では `agents-md@builtin` と `telemetry@builtin` で、`path` は `builtin` である。claude.aiから同期したpluginではないので、`syncClaudeAiPlugins` では消えない | Hostで実測 (2026-09-29)。公式: `anthropics/claude-code` の `mods/` | 実測 + 公式文書 | 2026-09-25、2026-09-29、Claude Code 2.1.284 |
+| 108 | `builtin` は予約されたmarketplaceの名前で、Claude Codeはバイナリに入ったpluginにだけ使う。marketplace、claude.ai、skillsのディレクトリから来たpluginの `source` が `<名前>@builtin` になることはない | 公式: Marketplace reference の "Reserved names" (#207 で確認) | 公式文書 | 2026-09-25、2026-09-29、Claude Code 2.1.284 |
+| 111 | `init` のイベントの `skills` は、skillの名前の文字列の配列である (86で項目の名前だけを記録した) | #166 の記録 (2026-09-25、Claude Code 2.1.273) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
+
+## GitHub Appとtoken
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 7 | 無料のmachine accountは、個人アカウントに加えて1つまで。roleごとに4つの無料アカウントを作ることはできない | GitHub利用規約 B.3: "You may maintain no more than one free machine account in addition to your free Personal Account." | 公式文書 | 2026-09-19 |
+| 8 | GitHub Appは1つの所有者につき100個まで登録できる。seatを消費しない。privateなAppは所有アカウントにだけインストールできる | docs.github.com: registering-a-github-app、deciding-when-to-build-a-github-app、making-a-github-app-public-or-private | 公式文書 | 2026-09-19 |
+| 10 | Issue作成、ラベル、sub-issue、依存関係 (blocked by)、Pull Request作成、レビュー (APPROVE)、mergeは、すべてinstallation tokenで呼べる。mergeに要る権限は `Contents: write` | docs.github.com: permissions-required-for-github-apps | 公式文書 | 2026-09-19 |
+| 19 | Appは、人を@メンションするコメントを投稿できる (201)。メンションされた人に通知が届く | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。通知が届くことは、Maintainerが2026-09-21に確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 33 | installation access tokenの期限は、発行から1時間で固定である。発行のAPIで指定できるのは `repositories`、`repository_ids`、`permissions` だけで、期限を変える項目はない | docs.github.com: rest/apps/apps | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
+| 44 | GitHub Appは、manifestから登録できる (GitHub App Manifest flow)。名前や権限を書いたmanifestを `https://github.com/organizations/<org>/settings/apps/new` に渡し、人が "Create GitHub App" を押すと、`redirect_url` にcodeが戻る。1時間以内に `POST /app-manifests/{code}/conversions` を呼ぶと、`id` や `pem` (秘密鍵) が返る。`redirect_url` に `http://127.0.0.1:<port>` を受け付ける。`hook_attributes` のないmanifestも受け付ける | docs.github.com: registering-a-github-app-from-a-manifest。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 45 | Manifest flowでAppが登録されるのは、人が "Create GitHub App" を押したときではなく、codeを交換したとき (`POST /app-manifests/{code}/conversions`) である。交換の前に止まった流れは、Appを残さない | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 46 | 登録されたAppの権限は、manifestに書いた権限に、GitHubが自分で足す `metadata: read` を加えたものになる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 47 | Organizationのownerは、自分のtokenで、privateなAppを `GET /apps/{slug}` で読める。認証なしでは404が返る | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 48 | Appが作ったPull Requestの作成者は、`user.type` が `Bot` になる。APIでも、workflowの中の `github.event.pull_request.user.type` でも同じである | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 49 | Appの操作は、そのAppの名義になる。Appのloginは `<slug>[bot]` である。メールアドレスが `<botのuser id>+<slug>[bot]@users.noreply.github.com` のコミットは、そのbotのユーザに結び付く | docs.github.com: authenticating-as-a-github-app-installation。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 57 | Appより狭い権限で発行したtokenは、その外の操作を拒否される (403)。Appが持っていない権限を求めると、発行が422で失敗する | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 58 | 公開リポジトリでは、Issuesが読み取りだけのtokenでも、Issueを作り、コメントを書ける (201)。GitHubのアカウントなら誰でもできる操作だからである。Issuesの権限で止められるのは、ラベルの付け替え、本文の編集、Issueを閉じることなどである | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 61 | cumin-coreのAppは、今の権限のままで、ImplementerのAppが作ったPull Requestにラベルを付け、外せる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 84 | `GH_CONFIG_DIR` に存在しないディレクトリを指定し、`GH_TOKEN` を渡すと、ghは既定の設定 (`git_protocol` は `https`) で動き、ディレクトリを作らない | #74 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 92 | Hostのユーザの設定ファイルを読ませず、設計メモの環境変数だけ (tokenを `extraheader` と `GH_TOKEN` で、botの身元を作者とコミッターで) を渡した環境で、`git push` と `gh pr create` はImplementerのAppの名義で成功し、コミットの作者とコミッターはbotのユーザになる | sandboxで実測 (2026-09-22) | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 110 | GitHub Appの名前を変えると、slugが名前に追従する。新しいslugの `GET /apps/{slug}` が答え、古いslugは404になる。App idは変わらない。Organizationへのインストールも、選んだリポジトリも、そのまま残る。botのログイン名はslugに追従するので、改名のあとのコミットは新しい名前になり、前のコミットは古い名前のまま残る | Maintainerが改名した直後にRESTで確かめた (2026-09-25、#155 のNote)。公式文書は、改名で何が残るかを書いていない | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
+| 112 | Issues の書き込みだけを持ち、Pull requests の権限を持たないAppのinstallation tokenで、sub-issueの作成、マイルストーンと blocked by の設定、コメントができる。`GET /repos/{owner}/{repo}/issues/{number}` で、Pull Requestの本文も読める | 公式: Permissions required for GitHub Apps (Issues の項にこのendpointがある)。live scenario Accept-1 (#172) で実測 (2026-09-29、Claude Code 2.1.284) | 公式文書 + 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
+| 114 | 画面でIssueに画像を添付するときのアップロード (`user-attachments`) は、GitHub Appのinstallation tokenを受け付けない。Contentsの書き込みを持つAppのtokenでも、SVGとPNGのどちらも、`token` と `Bearer` のどちらの形でも404になる。`gh` の添付の機能は、installation tokenでは送る前に拒否する。REST APIの文書にこのendpointはない | sandboxで実測 (2026-09-29、#198 の decision request) | 実測 | 2026-09-29、2026-09-30 |
+| 126 | GitHub Appのインストールにリポジトリを足す `PUT /user/installations/{installation_id}/repositories/{repository_id}` は、`gh` のログインのtoken (OAuth、`gho_`) では、4つのAppのどれでも404になる。`GET /user/installations` は403で、「GitHub Appに認可されたtokenで認証する」よう求められる。公式文書は、このendpointを classic personal access token (`repo` の scope) でだけ使えるとしている | 公式: REST API endpoints for GitHub App installations ("Add a repository to an app installation")。Hostで実測 | 公式文書 + 実測 | 2026-10-02 |
+
+## REST API
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 16 | REST APIの上限は、installation tokenがインストールごとに毎時5,000以上、個人のtokenはユーザーごとに毎時5,000 (全token共有)。内容を作る操作には毎分80・毎時500の二次制限がある | docs.github.com: rate-limits-for-the-rest-api | 公式文書 | 2026-09-19 |
+| 37 | sub-issueの一覧と、blocked by の一覧は、Issueのオブジェクト (ラベルと状態を含む) を返す。親のIssueを返す `GET /repos/{owner}/{repo}/issues/{issue_number}/parent` もある | docs.github.com: rest/issues/sub-issues、rest/issues/issue-dependencies | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
+| 52 | AppがAPIで作ったPull Requestには、`.github/pull_request_template.md` が使われない。本文を渡さなければ、本文は空になる | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 56 | `POST /repos/{owner}/{repo}/issues` に `parent_issue_id` を渡すと、Appのtokenでも、1回の呼び出しでsub-issueを作れる。blocked by の追加は201を返す。sub-issueの追加と blocked by の追加は、Issue番号ではなくIssueの `id` を渡す (`POST .../issues/{n}/sub_issues` の `sub_issue_id`、`POST .../issues/{n}/dependencies/blocked_by` の `issue_id`)。Issueを作るREST APIに、テンプレートや入力フォームを指定する項目はない。Issueのテンプレートと入力フォームは、画面でIssueを作るときだけ働く | docs.github.com: rest/issues/issues、rest/issues/sub-issues、rest/issues/issue-dependencies、syntax-for-issue-forms。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 59 | レビューを出すREST APIの `event` は `APPROVE`、`REQUEST_CHANGES`、`COMMENT` のどれかで、`REQUEST_CHANGES` と `COMMENT` には本文が要る。レビューのコメントへの返答は、スレッドの最初のコメントに対してだけできる。レビューの一覧 (`GET /pulls/{n}/reviews`) では、`REQUEST_CHANGES` と `APPROVE` のレビューの `state` が、`CHANGES_REQUESTED` と `APPROVED` になる。`commit_id` は、レビューしたコミットの完全なSHAである | docs.github.com: rest/pulls/reviews、rest/pulls/comments。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 69 | リポジトリをOrganizationに移しても、Issue、Pull Request、webhook、secret、releaseは保たれ、古いアドレスは転送される | 公式文書による。実測していない | 公式文書 | 2026-09-20、2026-09-21 |
+| 78 | `PUT /repos/{owner}/{repo}/issues/{n}/labels` に、リポジトリにないラベルの名前を渡すと、そのラベルが既定の色 (`ededed`) で作られ、付け替えは失敗しない | sandboxで `cumin/status/implementing` のラベルを消してから、着手させた | 実測 | 2026-09-21 |
+| 90 | `GET /users/{username}` は、installation tokenを `Authorization: Bearer` で渡しても、botのユーザ (`<slug>[bot]`) の数値の `id` を返す | 公式: Get a user。#70 の実機の確認で実測 | 公式文書 + 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 93 | `POST /repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by` の応答は、依存する側 (パスの `{n}`) のIssueであり、依存先のIssueではない | #9 のsub-issueに blocked by を張ったときに観測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
+| 99 | `GET /repos/{owner}/{repo}/contents/{path}` を installation token で呼ぶには、Contents の read が要る | 公式: Permissions required for GitHub Apps | 公式文書 | 2026-09-22 |
+| 122 | cumin-coreのinstallation tokenで、`GET /repos/{owner}/{repo}/collaborators/{username}/permission` を呼べ、どのアカウントの権限も読める。人のアカウントは `User`、botは `Bot` と分かる。公開リポジトリでは、協力者でない人も `read` と答える | 公式: Get repository permissions for a user (Metadata の読み取り)。#293 の M1 | 公式文書 + 実測 | 2026-10-01 |
+| 138 | cumin-coreのinstallation token (Pull requests の書き込み) で、`POST /repos/{owner}/{repo}/pulls/{n}/requested_reviewers` を呼べる。Implementer の App が作ったPull Requestで、admin か write の権限を持つ人の login を `reviewers` に渡すと201を返し、`GET .../pulls/{n}/requested_reviewers` の `users` にその login が1つ現れる。公式文書は、このendpointが通知を起こすとしている | 公式: Request reviewers for a pull request、Permissions required for GitHub Apps ("Pull requests" の書き込み、installation access token を受け付ける)。sandboxで実測 (#510 の V1) | 公式文書 + 実測 | 2026-10-04 |
+| 139 | すでにレビューを依頼してある login に、同じ依頼 (`POST .../pulls/{n}/requested_reviewers`) をもう一度送っても、201を返して失敗しない。`requested_reviewers` の `users` には、その login が1つのまま残る | sandboxで実測 (#510 の V2) | 実測 | 2026-10-04 |
+| 140 | 協力者でないアカウントを `reviewers` に渡した `POST .../pulls/{n}/requested_reviewers` は、422を返す。メッセージは「Reviews may only be requested from collaborators. One or more of the users or teams you specified is not a collaborator of the ... repository.」である。そのアカウントは `requested_reviewers` に現れない | 公式: Request reviewers for a pull request (422)。sandboxで実測 (#510 の V3) | 公式文書 + 実測 | 2026-10-04 |
+
+## GraphQLとそのポイント
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 39 | GraphQLのAPIは、installation tokenに、1時間あたり5,000ポイントを割り当てる。同じインストールの対象のリポジトリ全てで、この枠を分け合う。1つの問い合わせは1ポイント以上かかる。`first` と `last` に指定できるのは1から100までである | docs.github.com: rate-limits-and-query-limits-for-the-graphql-api | 公式文書 | 2026-09-20、Claude Code 2.1.267 |
+| 55 | installation tokenで実際に読んだ項目は、次の6つである。`Issue.closedByPullRequestsReferences(includeClosedPrs: true)`、`Issue.blockedBy`、`Issue.parent`、`Issue.subIssuesSummary`、`PullRequest.closingIssuesReferences`、`PullRequest.statusCheckRollup`。`closedByPullRequestsReferences` の既定は開いているPull Requestだけで、`includeClosedPrs` でmerge済みも含む。次の項目は、スキーマのintrospectionで、あることだけを確かめた。2026-09-21 の時点では、installation tokenで読んでいない。`LabeledEvent` に `createdAt` と `label`。`Issue.timelineItems` に `itemTypes` と `since`。`PullRequest` に `reviews`、`headRefOid`。`PullRequestReview` に `author`、`state`、`commit`、`submittedAt` | 6つの項目は、公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して読んだ。残りは、GraphQLのスキーマのintrospection (2026-09-20) | 実測 (6つの項目)。残りはスキーマだけ | 2026-09-20、2026-09-21 |
+| 94 | GitHub Appが作ったPull Requestの GraphQL の `author` は `Bot` 型で、`login` に `[bot]` が付かない。RESTの `user.login` には付く (49を参照) | sandboxで実測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
+| 98 | GraphQLの `Repository.object(expression: "HEAD:<path>")` は、ファイルがなければ `null` を返す。`HEAD:` はそのリポジトリの既定のブランチを指す。`Blob` には `oid`、`text`、`byteSize`、`isBinary`、`isTruncated` があり、1MiBを超えるファイルは `isTruncated` になる。接続 (connection) でない項目 (`object`、`defaultBranchRef`) は、問い合わせのポイントを変えない (足す前も足したあとも `cost` は6) | GraphQLのスキーマのintrospectionと、sandboxでの実測 | 実測 | 2026-09-22 |
+| 113 | GraphQLで1つのIssueの `comments(last: 50, before: ...)` を読む問い合わせは、1ポイントである。この値は、129の数え方 (最小は1ポイント) に従う | #221 で実測 (2026-09-29) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.273、2.1.284 |
+| 128 | `PullRequest.mergeable` はスカラーで、`MergeableState` の値は `MERGEABLE`、`CONFLICTING`、`UNKNOWN` の3つである。`Commit.committedDate` は null にならず、`Commit.pushedDate` は「no longer supported」である。`PullRequest.headRef` は、開いているPull Requestでも `null` を返すことがあった | GraphQLのスキーマのintrospectionと、cumin-worksでの実測 (2026-10-03) | 実測 | 2026-10-03 |
+| 129 | 1つの問い合わせのポイントは、接続ごとに「その接続を読むのに要る要求の数」を足し、100で割って四捨五入した値である。要求の数は、親の `first` か `last` が上限まで返ると仮定して数える。その接続自身の `first` と `last` (接続の中のページの大きさ) と、スカラーの項目は、ポイントを変えない。最小は1ポイントである。インストールの枠は1時間あたり5,000ポイントで、リポジトリが20を超えると1つにつき50ポイント、Organizationの利用者が20人を超えると1人につき50ポイント増え、12,500ポイントが上限である (GitHub Enterprise Cloud でないとき)。二次の制限では、GraphQLのendpointは1分あたり2,000ポイントまでで、mutationのない問い合わせは1ポイント、mutationのある問い合わせは5ポイントと数える。この数え方は、一次の枠のポイントとは別である | 公式: Rate limits and query limits for the GraphQL API ("Primary rate limit"、"Predicting the point value of a query"、"Secondary rate limits")。接続の中のページの大きさとスカラーがポイントを変えないことは、sandboxとcumin-worksで実測 (2026-09-25、2026-10-03、`rateLimit.cost`) | 公式文書 + 実測 | 2026-09-25、2026-10-03 |
+| 137 | `nodes(ids:)` は、1回に100件までのidを受け付ける。101件では「You may not provide more than 100 node ids」のエラーで、データを返さない。存在しないidは、その位置が null になり、`errors` に「Could not resolve to a node with the global id」が入る | cumin-worksで実測 (#426、2026-10-03) | 実測 | 2026-10-03 |
+| 142 | `Issue.timelineItems(itemTypes: [LABELED_EVENT, UNLABELED_EVENT], last: 100)` は、ラベルを付けたイベントと外したイベントを、タイムラインの順 (古いほうから) に返す。`UnlabeledEvent` には `createdAt` と `label { name }` がある。`__typename` で2つを見分けられる。1回の `PUT .../issues/{n}/labels` でラベルを替えると、外したイベントと付けたイベントが同じ秒の `createdAt` を持ち、外したイベントが先に並ぶ | cumin-worksでinstallation tokenで実測 (#551) | 実測 | 2026-10-05 |
+| 143 | `Issue.subIssues` は、`after`、`before`、`first`、`last` を取り、`IssueConnection` を返す。`IssueConnection` には `pageInfo` (`hasNextPage`、`endCursor`) がある。`after` に前のページの `endCursor` を渡すと、その次のsub-issueから返す。sub-issueが12件のIssueを `first: 12` で読むと、`hasNextPage` は `false` である。ポイントは129の数え方に従う。要求Issue 10件のページの下で、sub-issueを `first: 12` で、その下のラベルと blocked by を読む問い合わせは、3ポイントである。1つのIssueの `subIssues(first: 12, after: ...)` を、その下のラベル、blocked by、Issueを閉じるPull Requestと一緒に読む問い合わせは、1ポイントである | 公式: https://docs.github.com/en/graphql/reference/issues (`Issue.subIssues` と `IssueConnection`)。引数はスキーマのintrospectionでも確かめた。カーソルとポイントは、cumin-worksで実測 (#626、`rateLimit.cost`) | 公式文書 + 実測 | 2026-10-08 |
+
+## rulesetとcheck
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 12 | Pull Requestの作成者は自分のPull Requestをapproveできない。作成者とレビュー者の身元が同じだとapproveが成立しない | docs.github.com: approving-a-pull-request-with-required-reviews | 公式文書 | 2026-09-19 |
+| 13 | rulesetとbranch protectionは、Freeプラン (個人・Organizationとも) では公開リポジトリでしか使えない。非公開リポジトリで使うには個人はPro、OrganizationはTeamが要る。Teamプランの非公開リポジトリで実際に作れたことは146に、rulesetのないプランの非公開リポジトリが返す応答は154にある | docs.github.com: about-rulesets、about-protected-branches | 公式文書 | 2026-09-19 |
+| 15 | ラベルを条件にしたruleは、ruleの一覧に存在しない (「risk/mediumならMaintainerの承認が必須」をGitHubだけでは書けない) | docs.github.com: available-rules-for-rulesets に記載なし | 公式文書 (不在の確認) | 2026-09-19 |
+| 21 | ファイルのパスを制限するrule (push ruleset) は、Teamプランの非公開または内部リポジトリでしか使えない。Freeプランの公開リポジトリでは使えない | docs.github.com: about-rulesets | 公式文書 | 2026-09-19 |
+| 24 | secret scanning、push protection、code scanning、dependency reviewは、公開リポジトリでは無料で使える。Dependabotは全てのプランで使える | docs.github.com: code-security/getting-started/github-security-features | 公式文書 | 2026-09-19 |
+| 51 | `if` の条件で飛ばされたjobのcheck runは、`status: completed`、`conclusion: skipped` になる。必須のcheckであっても、mergeを止めない。workflow全体が飛ばされたとき (パスやブランチの絞り込みなど) は、checkが保留のまま残り、mergeを止める | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた。workflow全体が飛ばされた場合は、docs.github.com: troubleshooting-required-status-checks | 実測 (workflow全体が飛ばされた場合は公式文書) | 2026-09-20、2026-09-21 |
+| 53 | `GET /repos/{owner}/{repo}/rules/branches/{branch}` は、installation tokenで呼べて、必須のcheckの一覧が返る。要る権限は Metadata: Read-only である | docs.github.com: permissions-required-for-github-apps。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 54 | 公開リポジトリでは、installation tokenは、Checks、Commit statuses、Actions の権限がなくても、check run、commit status、check runのannotation、jobのログを読める。jobのログは、認証なしでは読めない (403)。jobのIDは、check runの `details_url` の最後の部分である。公式文書は、check runの一覧を読むには Checks: Read-only、commit statusを読むには Commit statuses: Read-only が要る、と書いている。失敗したGitHub Actionsのcheck runは、`output.title` が空で、内容はannotationに入る。非公開リポジトリでは、同じtokenで4つとも読めない (148) | docs.github.com: permissions-required-for-github-apps。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 (権限が要るという記述は公式文書) | 2026-09-20、2026-09-21 |
+| 62 | rulesetのbypass listにGitHub Appを入れられる。必須status checkは「このAppが出したものだけ有効」と発行元を固定できる。"Restrict updates" のruleがあるブランチへのPull Requestは、mergeの状態が常に `blocked` になる (`mergeable_state`、GraphQLでは `BLOCKED`)。bypass listにいる相手から見ても、必須のcheckが全て通っていても、同じである。それでも、bypass listにいる相手のmergeの呼び出しは成功する (200)。bypass listにいないAppは、405 (`Repository rule violations found`) を受け取る。`gh pr merge` には `--admin` が要る | docs.github.com: creating-rulesets-for-a-repository、available-rules-for-rulesets。公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 68 | rulesetのbypassの相手の種類 `RepositoryRole` で、`actor_id: 5` は `admin` のroleである。同じ内容でrulesetを `PUT` しても、履歴の版は増えない。OAuthのtoken (`gh`) でworkflowのファイルをpushするには、`workflow` のscopeが要る。既定のブランチのworkflowを変えたあと、開いているPull Requestを閉じて開き直しても、古いworkflowが動く。"Update branch" か新しいコミットで、新しいworkflowが動く | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 79 | 公開リポジトリでは、標準のGitHub-hosted runner (macOSを含む) の利用は無料である。Freeプランの同時実行は、全体で20 job、macOSは5 jobまで。`macos-latest` はarm64である | 公式: About billing for GitHub Actions、Usage limits for GitHub Actions、GitHub-hosted runners reference | 公式文書 | 2026-09-21 |
+| 80 | `POST /repos/{owner}/{repo}/rulesets` に、そのリポジトリにある ruleset と同じ名前を渡すと、422 "Name must be unique" が返る。同じリポジトリに、同じ名前の ruleset は2つ作れない | sandboxで実測 | 実測 | 2026-09-21 |
+| 81 | `GET /repos/{owner}/{repo}/rulesets` は、`includes_parents` (初期値 `true`) により、Organizationの ruleset のうちそのリポジトリに当たるものも返す | 公式: Get all repository rulesets | 公式文書 | 2026-09-21 |
+| 82 | Organizationの階層の ruleset は、GitHub Enterprise プランでだけ作れる。Free と Team の Organization では作れないので、Organizationの ruleset とリポジトリの ruleset の名前が重なることは、これらのプランでは起きない。Organizationの ruleset の名前が一意かどうかは、「Not confirmed」の節の82を参照 | 公式: About rulesets ("For organizations on the GitHub Enterprise plan, you can set up rulesets at the organization level") | 公式文書 | 2026-09-21 |
+| 109 | 必須のcheckは `GET /repos/{owner}/{repo}/rules/branches/{branch}` で読み、この応答はページに分かれる。`statusCheckRollup` は、`CheckRun` なら `name`、`status`、`conclusion`、`checkSuite.app.databaseId` を、`StatusContext` なら `context`、`state` を返す | #187 で実測 (2026-09-25) | 実測 | 2026-09-25、2026-09-29、Claude Code 2.1.284 |
+| 117 | rulesetで作成を止めたブランチを、止められていないAppがGit Database API (`POST /repos/{owner}/{repo}/git/refs`) で作ろうとすると、422 ("Reference update failed") が返る | sandboxのlive check (`TestLiveDiagramsBranch`、#212) で実測 (2026-09-30) | 実測 | 2026-09-29、2026-09-30 |
+| 144 | `GET /repos/{owner}/{repo}/commits/{ref}/check-runs` は、既定 (`filter=latest`) では、やり直したjobについて最新の試行のcheck runだけを返す。`filter=all` は、前の試行のcheck runも返す。前の試行のcheck runは、それぞれ自分のidと、自分のjobのidで終わる `details_url` を持つ。jobをやり直したコミットで、既定は4件 (`total_count: 4`)、`filter=all` は7件を返した。増えた3件は、やり直した3つのjobの前の試行で、1つは `conclusion: cancelled` だった。公式文書は、`filter` を「Filters check runs by their completed_at timestamp. latest returns the most recent check runs.」と書き、初期値は `latest`、値は `latest` と `all` である | 公式: List check runs for a Git reference (`filter`)。cumin-worksのコミットで、Implementer Appのinstallation tokenで実測 (#689) | 公式文書 + 実測 | 2026-10-09 |
+| 146 | Teamプランの Organization の非公開リポジトリでは、`scripts/setup-repo.sh` の5つのruleset (`cumin-protect-main`、`cumin-main-required-checks`、`cumin-branches`、`cumin-diagrams`、`cumin-tags`) が全て作られ、どれも `enforcement: active` になる。準備の前の `GET /repos/{owner}/{repo}/rulesets` は、200と空の一覧を返す。cumin-coreのtoken (`contents`、`issues`、`pull_requests`) で、`GET /repos/{owner}/{repo}/rulesets` と `GET /repos/{owner}/{repo}/rules/branches/{branch}` を読め (どちらも200)、必須のcheck `cumin-protected-paths` が返る。53は、非公開リポジトリでも成り立つ | Teamプランの Organization の非公開の使い捨てのリポジトリで実測 (#792 のコメント、`TestLivePrivateRepositoryFacts` の P1 と `scripts/setup-repo.sh` の出力) | 実測 | 2026-10-11 |
+| 147 | bypassの相手に、そのリポジトリにインストールされていないGitHub Appを書いたrulesetを作ろうとすると、`POST /repos/{owner}/{repo}/rulesets` は 422 "Validation Failed" を返し、理由の文章を返さない。Appをインストールしたあとは、同じ内容で作れる | Teamプランの Organization の非公開の使い捨てのリポジトリで実測 (#792 のコメント、`scripts/setup-repo.sh` の1回目と2回目の出力) | 実測 | 2026-10-11 |
+| 148 | 非公開リポジトリでは、Checks、Commit statuses、Actions の権限のないinstallation token (`contents: write`、`issues: write`、`pull_requests: write`) は、check runの一覧 (`GET /repos/{owner}/{repo}/commits/{ref}/check-runs`)、commit status (`GET /repos/{owner}/{repo}/commits/{ref}/status`)、check runのannotation (`GET /repos/{owner}/{repo}/check-runs/{id}/annotations`)、jobのログ (`GET /repos/{owner}/{repo}/actions/jobs/{id}/logs`) のどれも読めない。4つとも 403 "Resource not accessible by integration" を返す。公式文書は、check runの一覧とannotationに Checks: Read-only、commit statusに Commit statuses: Read-only、jobのログに Actions: Read-only が要る、と書いている。この3つの権限を足したtokenで読めることと、GraphQLの `statusCheckRollup` は、155にある | docs.github.com: permissions-required-for-github-apps。Teamプランの Organization の非公開の使い捨てのリポジトリで実測 (#792 のコメント、`TestLivePrivateRepositoryFacts` の P2) | 実測 (要る権限の名前は公式文書) | 2026-10-11 |
+| 154 | Freeプランの個人アカウントの非公開リポジトリでは、`GET /repos/{owner}/{repo}/rulesets` は、403 Forbidden とメッセージ "Upgrade to GitHub Pro or make this repository public to enable this feature." を返す。rulesetを使えるプランでは、rulesetがなくても、200と空の一覧を返す (146)。Freeプランの Organization が返すメッセージは、「Not confirmed」の節の152を参照 | Freeプランの個人アカウントの非公開リポジトリで、`gh api repos/<owner>/<repo>/rulesets -i` を実測 (#793 のMaintainerのコメント) | 実測 | 2026-10-11 |
+| 155 | 非公開リポジトリで、Checks: Read-only、Commit statuses: Read-only、Actions: Read-only を足したinstallation token (`cumin-core` の権限の表のtoken) は、check runの一覧、commit status、check runのannotation、jobのログを読める (4つとも200)。GraphQLの `statusCheckRollup` も読める (エラーなし、`state` と6つのcontext)。この3つの権限のないtokenでは、GraphQLの要求は200で返るが、`errors` に `FORBIDDEN` ("Resource not accessible by integration") が入り、`statusCheckRollup` は null になる。`if` の条件で飛ばされたjobにはログがなく、`GET /repos/{owner}/{repo}/actions/jobs/{id}/logs` は、リポジトリの管理者にも404を返す | Teamプランの Organization の非公開の使い捨てのリポジトリで実測 (#805 のコメント、`TestLivePrivateRepositoryFacts` の P2 と P5) | 実測 | 2026-10-11、2026-10-12 |
+
+## mergeと閉じるリンク
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 60 | Appが作った、本文に `Closes #N` のあるPull Requestを、別のAppがmergeすると、Pull Requestに閉じるリンクが付いていれば、sub-issueである #N が数秒で閉じる。2026-09-30の途中からは、作った直後に閉じるリンクが付かないことがある。手で張ったリンクでは閉じなかった日もある。どちらも今も成り立つかは分からない (「Not confirmed」の節の120と121を参照) | 公開の使い捨てのリポジトリに、roleごとの4つのGitHub Appを登録して確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 118 | cumin-coreのinstallation tokenで、GraphQLの `addCloseIssueReferences` を呼べる。張ったリンクは、すぐに実装Issueの `closedByPullRequestsReferences` に現れ、Issueにcumin-coreの `connected` のイベントが付く。公式のGraphQLのリファレンスは、このmutationに要る権限を書いていない | sandboxの `TestLiveCloseReferences` で実測 (#278、C1とC2、2026-09-30) | 実測 | 2026-09-30、2026-10-01 |
+| 119 | cumin-coreのtokenで、Issueを `state: closed`、`state_reason: completed` で閉じられる。閉じたIssueをもう一度閉じても200が返り、`closed` のイベントは1つのままである | 同上 (C3とC4) | 実測 | 2026-09-30、2026-10-01 |
+| 123 | Pull Requestのmergeで、`sha` に先頭でないコミットを渡すと、409 ("Head branch was modified") が返り、何もmergeされない | 公式: Merge a pull request。#293 の M2 | 公式文書 + 実測 | 2026-10-01 |
+| 124 | 衝突するPull Requestのmergeは、405 ("Pull Request has merge conflicts") になる。rulesetに止められたmergeも405である (62)。mergeの直前に読んだ `mergeable` は、mainが動いた直後だと古い `true` のことがある | #293 の M4 | 実測 | 2026-10-01 |
+| 125 | mergeが405で失敗した直後に読み直すと、衝突のときだけ `mergeable` が `false`、`mergeable_state` が `dirty` になる。衝突とrulesetの拒否は、これで見分けられる | 公式: Get a pull request。#293 の M5 | 公式文書 + 実測 | 2026-10-01 |
+| 145 | 別のPull Requestのmergeが既定のブランチを動かした直後のmergeは、405になることがある。メッセージは「Base branch was modified. Review and try the merge again.」である。cumin-coreが1つのPull Requestをmergeし、2秒後に別のPull Requestのmergeを送ると、この答えが返った。124の2つの場合 (衝突、rulesetの拒否) とは、メッセージで見分けられる。衝突のメッセージは "Pull Request has merge conflicts"、rulesetの拒否のメッセージは `Repository rule violations found` である (62)。この答えのPull Requestは、衝突もrulesetの違反も持たない。Pull Requestを変えずに、約4分後に送った同じ先頭のコミットのmergeは通った | cumin-worksで実測 (#316。#354 のmergeの直後の #355 のmerge) | 実測 | 2026-10-03 |
+| 157 | Pull Requestがmergeされたあとでそのheadのブランチを消すと、GitHubは、同じリポジトリで、消したブランチをbaseにしている開いたPull Requestを探し、そのbaseを、mergeされたPull Requestのbaseに自動で替える。mergeされていないブランチを消すと、そのブランチに結び付いた開いたPull Requestは閉じる。baseを替えると、一部のコミットがPull Requestのタイムラインから消えることがあり、レビューのコメントが古い扱い (outdated) になることがある。branch protectionのruleとリポジトリのruleは、mergeのあとのブランチの自動の削除を妨げることがある。確かめていない部分は「未確認 (Not confirmed)」の節の157にある | 公式: Merging a pull request ("If you delete a head branch after its pull request has been merged, ...")、Managing branches within your repository (「Deleting a branch」の手順)、Changing the base branch of a pull request、Managing the automatic deletion of branches。About pull requests には、この記述がない | 公式文書 | 2026-10-13 |
+
+## git
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 70 | `git worktree add <path> <branch>` は、`<branch>` がローカルになく、ちょうど1つのリモートにあれば、`git worktree add --track -b <branch> <path> <remote>/<branch>` と同じに扱われる | git-worktree: "If <commit-ish> is a branch name ... and is not found ... but there does exist a tracking branch in exactly one remote ... treat as equivalent to: git worktree add --track -b <branch> <path> <remote>/<branch>" | 公式文書 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 71 | `git clone --no-checkout` は、remote-tracking branch と `remote.origin.fetch` を作る。`--bare` はどちらも作らない | git-clone: `--no-checkout` は "Do not checkout HEAD after the clone is complete"。`--bare` は "neither remote-tracking branches nor the related configuration variables are created" | 公式文書 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 72 | `git fetch` は `refs/remotes/origin/HEAD` を動かさない。`git remote set-head origin --auto` がリモートに問い合わせて、`refs/remotes/origin/HEAD` をリモートの既定のブランチに向ける | git-remote: "With -a or --auto, the remote is queried to determine its HEAD, then the symbolic-ref refs/remotes/<name>/HEAD is set to the same branch"。git-fetch には HEAD の更新の記述がない | 公式文書 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 73 | `git worktree list --porcelain` は、worktreeの実体のパスを出す。macOSでは、`/var` の下の一時ディレクトリが `/private/var` で出る | テストで `filepath.EvalSymlinks` と比べた | 実測 | 2026-09-20、Claude Code 2.1.267、Apple Git 2.50.1 |
+| 83 | `GIT_CONFIG_GLOBAL=/dev/null` と `GIT_CONFIG_NOSYSTEM=1` を付けても、`GIT_AUTHOR_*` と `GIT_COMMITTER_*` がなければ、gitはユーザ名とホスト名から推測した作者でコミットに成功する | #74 で実測 | 実測 | 2026-09-21、2026-09-22、Claude Code 2.1.267、git 2.50.1、gh 2.101.0 |
+| 96 | contextを取り消した `git clone` は、"signal: killed" で失敗する | `TestRun_CreatesTheLabelsOnceAndPollsAtTheInterval` で観測 | 実測 | 2026-09-22、Claude Code 2.1.267 |
+| 115 | 公開リポジトリでは、親のない (orphan) ブランチ `cumin/diagrams` に置いたSVGを、`https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>` の画像としてIssueとPull Requestに貼ると、Webでも Android のGitHubアプリでも表示される。本文のURLは書き換えられず (Camoを通らない)、`image/svg+xml` で200を返す。Mermaidの図は、Android のアプリでは "Loading" のまま表示されない。非公開リポジトリでは、このアドレスの画像は表示されない (150)。相対リンクの画像は、公開リポジトリのGitHubアプリでは表示されない (153) | sandboxで実測 (2026-09-29、#198 の decision request) | 実測 | 2026-09-29、2026-09-30 |
+| 116 | PlantUMLは、SVGに埋め込むソースのコメント (`<!--SRC=[...]-->`) の中で、`--` を `- -` と書く。XMLのコメントは `--` を含めないためである。ソースを読み戻すときは、空白を除いてから読む | #231 で観測 (2026-09-30) | 実測 | 2026-09-29、2026-09-30 |
+| 149 | 非公開リポジトリへのHTTPSの `git ls-remote`、`git clone`、`git fetch` は、認証情報がないと、終了コード128 (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`) で失敗する。installation tokenを、gitの環境変数 (`GIT_CONFIG_COUNT`、`GIT_CONFIG_KEY_0=http.https://github.com/.extraheader`、`GIT_CONFIG_VALUE_0=Authorization: Basic <x-access-token:token のbase64>`) で渡すと、3つとも終了コード0で終わる。cumin-core、Planner、Implementer、Reviewer の4つのAppのtokenのどれでも同じである。Planner、Implementer、Reviewer のAppの、リポジトリ1つと `contents: read` に絞ったtokenでも、3つとも終了コード0で終わる。`git remote set-head origin --auto` も、認証情報がないと終了コード128で失敗し、どのtokenでも終了コード0で終わる。公式文書は、installation tokenをHTTPのパスワードとしてgitに使え、Appに Contents の権限が要る、と書いている | 公式: Authenticating as a GitHub App installation。Teamプランの Organization の非公開の使い捨てのリポジトリで実測 (#792 と #804 のコメント、`TestLivePrivateRepositoryFacts` の P3) | 公式文書 + 実測 | 2026-10-11、2026-10-12 |
+| 150 | 非公開リポジトリでは、`cumin/diagrams` のSVGのアドレス `https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>` は、認証なしでは404 (`text/plain`) を返し、installation tokenを `Authorization: Bearer` で付けると200 (`image/svg+xml`) を返す。このアドレスをIssueとPull Requestの本文に画像として貼ると、リポジトリを読める人が見ても、WebでもGitHubアプリでも画像は表示されない。公式文書は、IssueとPull Requestとコメントの中の画像に、相対リンク `../blob/<ref>/<path>?raw=true` を示し、非公開リポジトリでは、読む人がそのリポジトリを読めるときだけ表示される、と書いている。相対リンクの表示は153にある | 公式: Basic writing and formatting syntax の "Images"。Teamプランの Organization の非公開の使い捨てのリポジトリで実測 (#792 のコメント、`TestLivePrivateRepositoryFacts` の P4 と、Maintainerが目で見た結果) | 実測 (相対リンクは公式文書) | 2026-10-11 |
+| 153 | IssueとPull Requestの本文に、`cumin/diagrams` の同じSVGを4つのアドレスで画像として貼り、リポジトリを読める人がサインインして見た結果。(a) `https://raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>.svg`: 公開リポジトリでは、WebでもGitHubアプリでも表示される。非公開リポジトリでは、どちらでも表示されない。(b) 相対リンク `../blob/<commit>/<path>.svg?raw=true`: 公開リポジトリでは、Webで表示され、GitHubアプリでは表示されない。非公開リポジトリでは、Webで表示され、GitHubアプリでは表示されない。(c) `https://github.com/<owner>/<repo>/blob/<commit>/<path>.svg?raw=true` と (d) `https://github.com/<owner>/<repo>/raw/<commit>/<path>.svg`: 非公開リポジトリでは、どちらもWebで表示され、GitHubアプリでは表示されない。非公開リポジトリのGitHubアプリで表示されるアドレスは、4つの中にない。IssueとPull Requestで、結果は同じである。公開リポジトリでは、サインインしていない人にも、(a) と (b) がWebで表示される。非公開リポジトリを読めない人は、Issueのページを開けない。認証なしでは、非公開リポジトリの (c) のアドレスは404を返す。GitHubは、どのアドレスも、Markdownに書かれたままIssueのHTMLに書く (`Accept: application/vnd.github.html+json` で読んだ)。画像を取りに行くのは、読む人のブラウザかアプリである | Teamプランの Organization の非公開の使い捨てのリポジトリと、公開のsandboxで実測 (#793 のMaintainerのコメント。Maintainerが目で見た結果) | 実測 | 2026-10-11 |
+
+## macOS
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 63 | macOSの `security find-generic-password -s <service> -a <account> -w` は、項目のパスワードだけを出力する。1行の値は、そのまま返す。改行を含む値は、16進で返す | `man security`。Hostで確かめた | 公式文書 + 実測 | 2026-09-20、2026-09-21 |
+| 64 | `security -i` は、コマンドを標準入力から読む。秘密の値を、引数に出さずに渡せる。失敗したコマンドの終了コードを返す。項目がないときの終了コードは44である。保存に失敗しても、値を出力しない | Hostで確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 65 | `security add-generic-password` に、存在しないkeychainのファイルのパスを渡すと、成功を報告して、既定のkeychainに書く | Hostで確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 67 | launchdが起動したプロセス (ログイン中のユーザのLaunchAgent) は、`security` が作ったKeychainの項目を、確認のダイアログなしで `security` から読める | Hostで確かめた | 実測 | 2026-09-20、2026-09-21 |
+| 100 | `man launchd.plist`: `KeepAlive` の `SuccessfulExit` は、終了コードが0かどうかの逆の条件で起動し直す意味で、`KeepAlive` は `RunAtLoad` を含意する。`ProcessType` の `Standard` は書かないのと同じで、`Background` はCPUとI/Oを絞る。`ExitTimeOut` はSIGTERMからSIGKILLまでの時間で、初期値はシステムが決める。launchdはjobのプロセスグループに残ったプロセスを止めるが、CLIは自分のプロセスグループで動くので届かない | `man launchd.plist` | 公式文書 | 2026-09-22 |
+| 101 | ログイン中のユーザの LaunchAgent は `gui/<uid>` の domain にある。Appleが求めるのは一意な `Label` だけで、逆ドメインの形は例の慣習である。launchdから起動したcuminは、Keychainの項目を確認の画面なしで読み、`kill -9` のあと11秒で起動し直され、`launchctl kill SIGTERM` で終了コード0で止まった | `man launchctl`。Hostでの実測 (#112 の記録) | 公式文書 + 実測 | 2026-09-22 |
+| 103 | `security add-generic-password ... -w` は、次の引数を値として取る。`-w` のあとにkeychainのパスを書くと、パスが秘密の値として保存され、コマンドは成功を報告する。`-w` を付けない、または `-w` を最後に置いてkeychainのパスを書かないと、値を標準入力から2回読む | Hostで、一時的なkeychainと作り物の値で実測 (2026-09-22) | 実測 | 2026-09-22、2026-09-23 |
+| 104 | keychainのパスを指定しない `find-generic-password` と `delete-generic-password` は、検索の一覧にある全てのkeychainを探す。`security default-keychain` は、既定のkeychainのパスを出力する | `man security` と、Hostでの実測 | 公式文書 + 実測 | 2026-09-22、2026-09-23 |
+
+## Discord
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 102 | Discordのwebhookは `POST /webhooks/{webhook.id}/{webhook.token}` で実行する。本文には `content`、`embeds`、`components`、`file`、`poll` のどれかが要り、`content` は2000文字まで。既定の応答は `204 No Content` で、メッセージの保存に失敗してもエラーにならない。`wait=true` を付けると、作られたメッセージが返る。Allowed Mentions Object の `parse` を空の配列にすると、全てのメンションが抑えられる | 公式: Execute Webhook (2026-09-22) | 公式文書 | 2026-09-22、2026-09-23 |
+
+## 未確認 (Not confirmed)
+
+次の行は、確かめた事実ではない。まだ試していないことと、ある日に観測しただけで、今も成り立つか分からないことである。番号は主題の表と同じ並びから付けたもので、82は確かめた部分が「rulesetとcheck」の表に、157は確かめた部分が「mergeと閉じるリンク」の表にある。
+
+| # | 制約 | 根拠 | 確度 | 日付と版 |
+|---|---|---|---|---|
+| 6 | 枠の上限に当たったときのheadless実行の振る舞い (エラーの形、`status` の値) | 試していない | 未確認 | 2026-09-19、Claude Code 2.1.267 |
+| 17 | GitHub Appのapproveが「必須承認数」に数えられるか | 公式文書に記載なし。コミュニティでは「数えられる」との報告がある | 未確認 | 2026-09-19 |
+| 82 | Organizationの ruleset の名前が一意かどうか。Organizationの ruleset が、リポジトリの ruleset と同じ名前を持てるかどうか | 公式文書に記載がない。試していない。Organizationの ruleset を作れるプランは、「rulesetとcheck」の表の82を参照 | 未確認 | 2026-09-21 |
+| 120 | 2026-09-30には、手で張ったリンク (画面の Development の欄、または `addCloseIssueReferences`) のPull Requestを既定のブランチにmergeしても、Issueは閉じなかった。cumin-coreのmergeで、1分待っても開いたままだった | sandboxの `TestLiveCloseReferences` で観測 (#278、C5、2026-09-30)。cumin-works #271 と #229 でも同じ | 未確認 (2026-09-30から2026-10-01に観測した。それからは測り直していない) | 2026-09-30、2026-10-01 |
+| 121 | 2026-09-30の途中から、本文に `Closes #N` と書いたPull Requestに、作った直後は閉じるリンクが付かないことがある。数時間あとに付くこともある (cumin-works #268〜#270、sandbox #185 は作ってから3分はリンクがなく、2026-10-01には付いていた)。キーワードのリンクと手で張ったリンクは、`closingIssuesReferences(userLinkedOnly: true)` で見分けられる。GitHub Status に障害の表示はなく、community の discussions 209162 と 209148 に報告がある | cumin-works、sandbox、ほかの公開リポジトリで観測 (2026-09-30、2026-10-01) | 未確認 (2026-09-30から2026-10-01に観測した。それからは測り直していない) | 2026-09-30、2026-10-01 |
+| 141 | GitHubは、`labeled` のイベントを遅れて、ラベルを付けていないアカウントで記録することがある。送ったもの: Planner Appが `POST /repos/{owner}/{repo}/issues` でラベルを1つ付けてIssueを作り、そのあとラベルを書かなかった。作ってから31秒後に、Maintainerが `cumin/status/ready` を付けた。GitHubが記録したもの: 作ってから100秒後に、Planner Appをactorとする `labeled` のイベントが2つ付いた。1つは作ったときのラベル、1つは `cumin/status/ready` である。Maintainerのイベントとこのイベントの間に、`unlabeled` のイベントはない。同じ実行の別のIssueでは、Maintainerだけが付けたラベルに、遅れたイベントが付いた。それより前の3回の実行の6つのIssueでは、作ったときのラベルのイベントは、作ってから1〜2秒後だった | sandboxで、シナリオ E2E-1 のlive実行で観測 (#551) | 未確認 (2026-10-05に観測した。それからは測り直していない) | 2026-10-05 |
+| 151 | 非公開リポジトリで、job `cumin-protected-paths` が1つのPull Requestに使う、課金されるGitHub Actionsの時間。人のPull Requestではjobが飛ばされ (2回のうち2回)、時間を使わなかった。AppのPull Requestでは、1回のpushにjobが1つ動き、3〜4秒で終わった (2回のうち2回)。`GET /repos/{owner}/{repo}/actions/runs/{id}/timing` は、実行の20分あとにも、動いたjobに、課金される時間として0 msを返した。公式文書は、jobごとに分単位に切り上げる、と書いている。課金された分数そのものは、読めていない | Teamプランの Organization の非公開の使い捨てのリポジトリで観測 (#792 のコメント、#799 の実機の確認)。公式: GitHub Actions billing | 未確認 | 2026-10-11、2026-10-12 |
+| 152 | Freeプランの Organization の非公開リポジトリで、`GET /repos/{owner}/{repo}/rulesets` が返すステータスとメッセージ。rulesetを使えないプランの非公開リポジトリで、`scripts/setup-repo.sh --dry-run` が何を出すか | 試していない。Freeプランの個人アカウントの非公開リポジトリでは、403が返る (「rulesetとcheck」の表の154)。Organization では、メッセージが別のプランの名前を挙げるかもしれない | 未確認 | 2026-10-11 |
+| 156 | 非公開リポジトリで、Pull requests の権限のないApp (Planner) のtokenが、Pull Requestとそのcheckを読めるか。実機の確認では、Plannerが受け入れの確認で、Pull Requestとcheck runの読み取りに403を受けた、と報告した。公開リポジトリでは、同じtokenで読める | Teamプランの Organization の非公開の使い捨てのリポジトリの実機の確認 (#799) で、Plannerの報告として観測した。テストでは測っていない | 未確認 | 2026-10-12 |
+| 157 | mergeのあとにブランチを自動で消す設定 (`delete_branch_on_merge`) がないリポジトリでは、誰かがブランチを消すまで、GitHubはbaseを替えない。積んだPull Requestで、baseが実際に替わること | 推論。公式文書は、ブランチを消したときに替わる、とだけ書く。試していない。公式文書で確かめた部分は「mergeと閉じるリンク」の表の157にある | 未確認 | 2026-10-13 |
+
+## 引退した番号 (Retired numbers)
+
+次の番号の行は、同じ事実の別の行にまとめたか、cumin自身の問い合わせの実測なのでなくした。番号は使い回さない。前の文面は、gitの履歴にある。cumin自身の実測は、右の列のPull Requestの説明か、そのPull Requestの変更にある。
+
+| 引退した番号 | いま事実を持つ行、または実測を持つPull Request |
+|---|---|
+| 9 | 33、57。Appの名義は49 |
+| 11 | 56 |
+| 14 | 62 |
+| 18 | 49 |
+| 20 | 51 |
+| 22 | 56 |
+| 23 | 59 |
+| 25 | 52 |
+| 28 | 86 |
+| 34 | 53 |
+| 35 | 54 |
+| 36 | 55 |
+| 38 | 44 |
+| 40 | 55 |
+| 41 | 63 |
+| 42 | 48 |
+| 43 | 47 |
+| 50 | 19 |
+| 66 | 104 |
+| 75 | 87 |
+| 76 | 32 |
+| 77 | 129 |
+| 88 | 2 |
+| 89 | 29 |
+| 95 | 129 |
+| 105 | 129 |
+| 106 | cumin自身の実測。#195 |
+| 127 | cumin自身の実測。#233。17ポイントへの変化は #412 |
+| 130 | cumin自身の実測。#421 |
+| 131 | cumin自身の実測。#421 |
+| 132 | cumin自身の実測。#421 |
+| 133 | cumin自身の実測。#421。今の値は #454 |
+| 134 | cumin自身の実測。#449。`nodes(ids:)` の事実は137 |
+| 135 | cumin自身の実測。#454 |
+| 136 | cumin自身の実測。#454 |

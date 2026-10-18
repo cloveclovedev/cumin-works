@@ -1,0 +1,53 @@
+@startuml poll-start
+' cumin works - the claim (request the implementation) and agent runs in parallel.
+' Document: poll.md, section on agent runs in parallel.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+participant "poll loop" as poll
+participant "claim\n(request the implementation)" as claim
+participant "GitHub" as gh
+participant "Workspace\n(clone and worktree)" as ws
+participant "agent.Service" as agents
+participant "Claude Code" as cli
+
+poll -> gh: read the snapshot
+poll -> claim: hand over the claim list
+claim -> agents: read the quota usage (minimal run,\nonly without a stored usage that is new enough)
+agents -> cli: minimal run
+cli --> agents: usage
+agents --> claim: usage
+note right of claim
+  The one check before every start of an agent:
+  at a quota limit (stop agent starts), no label
+  change and no request (quota.md)
+end note
+claim -> gh: change the label to cumin/status/implementing
+note right of claim
+  No request when the label
+  does not change (principle 3)
+end note
+claim -> claim: decide the branch name and the request
+claim ->> agents: start the run (another goroutine)
+claim --> poll: return
+poll -> poll: next poll (does not wait for the run)
+
+group another goroutine (one for each issue)
+  agents -> ws: prepare the worktree
+  agents -> gh: create the token of the role
+  agents -> cli: start with the request and the role instruction
+  cli --> agents: result, session ID, usage
+  agents -> agents: log the result
+  note right of agents
+    This is the end of the run.
+    The check is "end of a run" (wait for the checks).
+  end note
+end
+
+note over poll, cli
+  When cumin stops, it waits for the running runs.
+  The context of a run is the context of the poll,
+  so a stop ends the run abnormally (kind: time limit).
+end note
+@enduml

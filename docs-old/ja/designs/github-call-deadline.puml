@@ -1,0 +1,58 @@
+@startuml github-call-deadline
+' cumin works - every call of the GitHub client ends after a deadline,
+' a read that fails for a reason that passes is sent again, and no call
+' leaves before the reset time of a full primary rate limit or during the
+' wait of a secondary rate limit.
+' Document: cumin-core.md, topic on the GitHub client.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+rectangle "cumin run\n(poll, actions)" as run
+rectangle "cumin status" as status
+rectangle "cumin setup" as setup
+rectangle "AppClient\ninternal/platform/github\nREST and GraphQL" as client
+cloud "GitHub API" as api
+
+run --> client
+status --> client
+setup --> client
+client -[#red,bold]-> api : <color:red>every try ends\n<color:red>after 30 seconds</color>
+
+note right of client
+  A try that gets no answer
+  ends with an error at the deadline.
+  A read (GET, GraphQL query) that fails
+  with a network error or a 5xx answer
+  is sent again: up to 3 retries,
+  2 seconds apart, one warn log line each.
+  A write is sent once.
+  After the last try, the error
+  is a temporary error (IsTemporary).
+end note
+
+note left of client
+  An answer of a full primary rate limit
+  (REST: 403 or 429, GraphQL: 200 with an error,
+  both with x-ratelimit-remaining: 0)
+  returns a RateLimitError with the reset time
+  of x-ratelimit-reset, and one warn log line.
+  It is not sent again at once.
+  Until the reset time, a call of the same
+  installation returns that error
+  and sends nothing.
+end note
+
+note bottom of client
+  An answer of a secondary rate limit
+  (REST: 403 or 429, GraphQL: 200 or 403,
+  with a message "secondary rate limit"
+  or the header retry-after)
+  returns a RateLimitError at once,
+  and one warn log line.
+  The wait is retry-after, else 1 minute.
+  During the wait, a call of the same
+  installation returns that error
+  and sends nothing.
+end note
+@enduml

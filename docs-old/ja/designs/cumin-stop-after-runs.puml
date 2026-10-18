@@ -1,0 +1,49 @@
+@startuml cumin-stop-after-runs
+' cumin works - the stop after the current runs: cumin finishes the agent runs and starts no new work before it exits.
+' Document: cumin-core.md, topic on the stop after the runs.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+
+start
+:Operator: cumin stop --after-current-runs;
+:write stop-request.json
+(state directory of the Host);
+repeat
+  :poll: read the request;
+  :apply the actions that need no agent
+  (requirement issue labels, labels of the pull request,
+  merge after an approval of a Maintainer, close after a merge,
+  stops for a Maintainer, follow-up notes, cleanup);
+  note right
+    Every start of an agent passes one check.
+    While cumin stops, the check gives no permit:
+    no agent starts, no label changes for the start,
+    and nothing is counted. This holds for every
+    request to an agent, at a poll and at the end
+    of a run:
+    split, acceptance check, claim, review,
+    check fix, conflict resolution, review fix,
+    fix of the review of a Maintainer, cause,
+    and the second request of the split,
+    of the acceptance check, of the implementation,
+    of the review, and of the cause.
+    ----
+    The agent runs that are going on end
+    by themselves. What follows the end
+    of a run and needs no agent still runs:
+    verify done, labels, merge, stops for a Maintainer.
+  end note
+repeat while (a run in progress before or after the poll,\nor one that the poll started?) is (yes: wait for the end\nof a run or the interval)
+->no;
+:remove stop-request.json;
+:log "stopped", exit code 0;
+stop
+
+note right
+  SIGTERM keeps its meaning at any time:
+  cancel the runs and stop at once.
+  A request that is found at the start
+  of cumin run is removed.
+end note
+@enduml

@@ -1,0 +1,460 @@
+# セットアップの手順
+
+cumin-works を、ある Organization とそのリポジトリに導入する手順。何もない状態から始めて、cumin がそのリポジトリで動ける状態にする。
+
+手作業で同じことをする手順は [GitHub Appの登録手順](github-app-setup.md) にある。下のコマンドやスクリプトが使えないときの代わりになる。
+
+## 誰が、どこで、何を使うか
+
+手順は、誰の認証で、どのマシンで動かすかで分けてある。
+
+| 手順 | 使う認証 | 動かす場所 | 道具 |
+|---|---|---|---|
+| 1. GitHub App の登録と、秘密鍵の保存 | Organization の owner のブラウザと、Host の Keychain | Host | `cumin setup github-apps` |
+| 2. GitHub App のインストール | Organization の owner のブラウザ | どこでも | ブラウザ |
+| 3. リポジトリの準備 | リポジトリの管理者の `gh` | どのマシンでも | `scripts/setup-repo.sh` |
+| 4. 通知のアドレスの保存と cumin の常駐 | Host のユーザ | Host | `cumin setup notify`、`cumin setup launchd` と `launchctl` |
+
+分けた理由:
+
+- cumin は、Operator の認証情報も、リポジトリの管理者の権限 (Administration) も使わない ([cumin本体の要件](../requirements/cumin-core.md) の「受け持たないこと」)。管理者の権限が要る手順3は、管理者が自分の `gh` で実行する。
+- 手順3には、Host も cumin も要らない。Organization の owner、Host を動かす人、リポジトリの管理者が別の人でも、それぞれが自分の持ち場で実行できる。
+- 手順3が当てる内容は、読めるファイル (ruleset の JSON と workflow) である。管理者は、中身を確かめてから、自分の権限で当てられる。画面から手で当てることもできる。
+- 手順1を cumin のコマンドにしているのは、秘密鍵をプロセスの中だけで扱うためと、権限の表を App の登録と token の絞り込みで1つにするためである。
+
+
+## 前提
+
+- 対象のリポジトリで ruleset を使える。公開のリポジトリか、ruleset を使えるプランの非公開のリポジトリである。cumin は、既定のブランチの保護を全て ruleset に頼るので、ruleset のないリポジトリを対象にしない。
+
+  | リポジトリ | 要るプラン |
+  |---|---|
+  | 公開 | どのプランでもよい (GitHub Free for organizations を含む) |
+  | Organization の非公開 | GitHub Team 以上 (GitHub Team か GitHub Enterprise Cloud) |
+
+  - 公式: [About rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets) は、ruleset を使えるのは、GitHub Free では公開のリポジトリ、GitHub Pro、GitHub Team、GitHub Enterprise Cloud では公開と非公開のリポジトリだと書いている。プランの違いは [GitHub's plans](https://docs.github.com/en/get-started/learning-about-github/githubs-plans) にある。
+  - GitHub Team の Organization の非公開のリポジトリで、手順3の5つの ruleset が全て作られることは、確かめてある ([調査・実測で確定した制約](../evidence/measured-constraints.md) の 146)。
+  - Free プランの非公開のリポジトリ (#296) と、個人アカウントのリポジトリ (#295) は、まだ対象にしていない。Free プランの非公開のリポジトリでは、手順3のスクリプトが、何も変える前に止まる (「うまくいかないとき」)。
+- 非公開のリポジトリでは、GitHub Actions の時間が、プランに含まれる分から引かれる。含まれる分を超えると、課金される。公開のリポジトリでは、標準の GitHub-hosted runner は無料である (公式: [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions))。
+  - 時間を使うのは、対象のリポジトリのCIと、手順3が入れる保護されたパスのcheck (workflow `cumin-protected-paths`) である。
+  - 保護されたパスのcheckは、App の Pull Request でだけ動く。人の Pull Request では飛ばされ、時間を使わない。1回の push で1つの job が動き、5分で打ち切られる。
+  - App の Pull Request では、この job は1回の push に3〜4秒で終わった。GitHub は job ごとに分単位に切り上げて数える。課金された分数そのものは、API からは読めていない ([調査・実測で確定した制約](../evidence/measured-constraints.md) の 151)。
+- 対象のリポジトリのCI (`.github/workflows`) は、cumin を導入する前に、Maintainer が用意する。Implementer の GitHub App には Workflows の権限がなく、workflow を足すことも変えることもできないためである。同じ理由で、保護されたパスの workflow は、管理者が手順3のスクリプトで入れる。
+- 手順3を実行する人は、対象のリポジトリの管理者である。
+- 手順3を実行するマシンに `gh` があり、ログインしてある。`gh` の token には `workflow` の scope が要る。workflow のファイルを push するためである。足りないときは、次を実行する。
+
+```sh
+gh auth refresh -h github.com -s workflow
+```
+
+- ラベルは用意しなくてよい。手順3のスクリプトと、起動のときの cumin が、足りないラベルを作る。既にあるラベルの色と説明を cumin の一覧に合わせるのは、手順3のスクリプトだけである。cumin が使わなくなったラベルを消すのも、手順3のスクリプトだけで、消す前に尋ねる。優先度のラベルだけは、名前を設定で決められる。Organization のラベルを使うときは、手順3のスクリプトが、足りないラベルを作るかどうかを尋ねる。
+- 対象のリポジトリの持ち主は、Organization である。v0.1 の `cumin setup github-apps` は、個人アカウントの GitHub App を登録しない。
+
+個人アカウントのリポジトリから始める場合:
+
+1. 無料の Organization を作る。
+2. リポジトリの Settings のいちばん下の "Danger Zone" で "Transfer" を選び、Organization に移す。Issue、Pull Request、webhook、secrets、release は一緒に移り、古いアドレスは新しい場所に転送される。古い場所に同じ名前のリポジトリを作ると、転送は消える。
+3. そのあとで、下の手順1から進める。GitHub App は Organization の側に登録する。
+
+## 手順1と2: GitHub App の登録とインストール
+
+Host で、Organization の owner がブラウザにログインした状態で実行する。
+
+```sh
+cumin setup github-apps --org <Organizationの名前> [--name-prefix <Appの名前の前に付ける文字>] [--config <Hostの設定ファイル>]
+```
+
+コマンドがすること:
+
+1. 4つの App (`cumin-core`、`planner`、`implementer`、`reviewer`) のうち、この Host でまだ登録していないものを、1つずつ登録する。App ごとにブラウザで手元のページが開き、ページが manifest を GitHub に送る。GitHub の画面で "Create GitHub App" を押す。
+2. App を1つ登録するたびに、秘密鍵を Keychain に入れ、そのあとで Client ID を Host の設定ファイルの `[github_apps.<Organization>]` に書く。設定ファイルの他の行とコメントは変えない。設定ファイルが symbolic link なら、リンクの先のファイルを書き換え、リンクは残す。
+3. 登録が済んだら、Organization にまだインストールされていない App のインストールのページを開く。アドレスも表示する。
+
+App の名前は `<prefix>cumin-core`、`<prefix>cumin-planner`、`<prefix>cumin-implementer`、`<prefix>cumin-reviewer` になる。App の名前は GitHub 全体で一意なので、Organization ごとに `--name-prefix` を変える。34文字を超える名前は、ブラウザを開く前にエラーになる。
+
+インストールの画面では:
+
+1. Organization を選ぶ。
+2. "Only select repositories" を選び、cumin に任せるリポジトリだけを選ぶ。
+3. "Install" を押す。
+
+インストールが済んだかどうかは、コマンドをもう一度実行すると分かる。済んでいる App は `installed` と表示され、ページは開かない。
+
+もう一度実行したとき:
+
+- 登録済みの App は飛ばす。登録済みとは、Host の設定に Client ID があり、Keychain にその Client ID の鍵があることである。足りない App だけを登録する。設計の変更で App が増えたときも、同じコマンドで足りる。
+- 登録済みの App は、先に全て確かめる。Keychain の鍵が鍵として読めること、GitHub がその鍵をその Client ID のものとして受け付けること、その App の持ち主がこの Organization であること、App ごとに Client ID が違うこと、App の権限が別の role の権限の表と同じではないことである。4つの App は権限の組み合わせが全て違うので、Client ID が role の間で入れ替わっていると、ここで分かる。同じ App を2つの role に使うと、Agent が別の role の身元と権限で動いてしまう。1つでも合わなければ、何も登録せずに止まり、その App の名前を表示する。権限がどの role の表とも違う App は、権限の表が変わった App として扱い、下の「登録済みの App の権限を変える」の案内をする。
+- Organization の名前は、大文字と小文字を区別しない。設定ファイルに書いてある綴りの表を使う。大文字と小文字だけが違う表が2つあると、止まる。
+- 設定に Client ID があるのに、Keychain に鍵がない App があると、コマンドは何も登録せずに止まり、その App の名前を表示する。推測では直さない。App が GitHub に残っているなら、[GitHub Appの登録手順](github-app-setup.md) の手順2で鍵を発行し直して、Keychain に入れる。残っていないなら、設定ファイルのその行を消して、もう一度実行する。
+
+途中で止まったとき:
+
+- GitHub が App を登録するのは、"Create GitHub App" を押した時点ではなく、コマンドが code を交換した時点である。その前にやめたなら、GitHub には何も残らない。もう一度実行すればよい。
+- 交換のあと、Client ID を設定に書く前に止まると、GitHub に App があり、Keychain に鍵があり、設定に Client ID がない状態になる。もう一度実行すると、同じ名前の App を登録しようとして、GitHub に「名前が使われている」と断られる。このときは、GitHub の画面でその App を削除してから、もう一度実行する。
+- 設定ファイルが、コマンドの知らない書き方 (`github_apps` の dotted key や inline table) のときは、コマンドは App を登録する前に止まる。ファイルは変えない。`[github_apps.<Organization>]` の表の形に直してから、もう一度実行する。
+- 設定ファイルのディレクトリに書き込めないときも、コマンドは App を登録する前に止まる。コマンドは、登録の前に、そのディレクトリに一時ファイルを作って消すことで確かめる。ディレクトリがなければ作る。
+
+登録した App は、個人の設定ではなく、Organization の設定にある: `https://github.com/organizations/<Organization>/settings/apps`。
+
+コマンドがしないこと (手作業):
+
+| したいこと | 手順 |
+|---|---|
+| App を削除する | Organization の設定で App の "Edit" → "Advanced" → "Delete GitHub App"。Host の設定ファイルからその App の行を消す。Keychain の鍵 (`cumin-works` / `github-app-private-key/<Client ID>`) は、Keychain Access か `security delete-generic-password` で消す |
+| 1つの App だけ登録し直す、鍵を入れ替える | コマンドにはない。App を削除して設定の行を消してから、もう一度実行する。鍵だけなら、手順2で発行し直す |
+| 登録済みの App の名前を変える | 下の「登録済みの App の名前を変える」に従う |
+
+### 登録済みの App の権限を変える
+
+cumin の機能が変わって App の権限が変わるときは、App を消して登録し直さず、同じコマンドで変える。App を登録し直すと、App ID、slug、bot、秘密鍵が変わり、ruleset の bypass list や、途中の Pull Request の作成者の確認に影響するためである。
+
+GitHub には App の権限を変える API がない。変えられるのは App の設定画面だけで、足した権限は、インストールした Organization が承認するまで効かない。外した権限は、すぐに効く (公式: Modifying a GitHub App registration、Approving updated permissions for a GitHub App)。コマンドは、画面を開いて、GitHub の事実が変わるまで待つ。
+
+1. 権限の表を変える Pull Request を merge し、新しいバイナリを入れる (`scripts/install.sh`)。
+2. `cumin setup github-apps --org <Organizationの名前>` を実行する。表と違う App ごとに、次を行う。
+   1. 変える権限を表示し (例: `contents: read -> write`)、その App の権限の画面を開く。Maintainer は、表示どおりに変えて "Save changes" を押す。コマンドは `GET /app` を読み直し、表と同じになるまで待つ。
+   2. 権限を足したときだけ、インストールの画面を開く。Maintainer は、新しい権限の確認を承認する。コマンドは `GET /orgs/{org}/installation` を読み直し、承認された権限が表と同じになるまで待つ。インストールしていない App は、インストールの画面で新しい権限を求めるので、ここは飛ばす。
+3. 待つのは、1つの画面につき10分までである。過ぎると、その App の名前を表示して止まる。もう一度実行すれば、続きから案内する。
+
+何も変えることがなければ、画面は開かない。権限が別の role の表と同じ App は、表が変わったのではなく Client ID の入れ替わりなので、何も変えずに止まる。
+
+開く画面のアドレス:
+
+| 画面 | アドレス | 出どころ |
+|---|---|---|
+| App の権限 | `https://github.com/organizations/<Organization>/settings/apps/<slug>/permissions` | 公式ドキュメントに記載がない。画面の場所から組み立てた |
+| インストール | `GET /orgs/{org}/installation` の `html_url` | API の応答 |
+
+### 登録済みの App の名前を変える
+
+roleの名前が変わったときに行う。例えば、Chief Engineer を Planner に改名したときは、`<prefix>cumin-chief-engineer` を `<prefix>cumin-planner` にする。
+
+公式ドキュメント (Modifying a GitHub App registration) が書いているのは、手順だけである。
+
+1. App の設定ページを開く。
+2. "Basic information" で名前を変える。
+3. "Save changes" を押す。
+
+公式ドキュメントは、名前を変えたときに、インストール、秘密鍵、App ID、Client ID、slug (公開リンク) がどうなるかを書いていない (2026-09-25 に確認)。だから、変えたあとに必ず確かめる。
+
+cumin の側で分かっていることは3つある。
+
+- cumin は App の名前を照合しない。名前を使うのは、`cumin setup github-apps` が新しい App を登録するときだけで、そこでは `<prefix>cumin-<role>` を作る。登録済みの App の確認は、Client ID、秘密鍵、持ち主、権限で行う。だから名前は、この形でなくてもよい。ただし App を削除して登録し直すと、コマンドは自分が作る名前に戻す。
+- Host の設定に書いてあるのは Client ID だけで、App の名前ではない。Keychain の鍵も Client ID で引く。名前を変えても Client ID が変わらなければ、設定と鍵はそのままでよい。
+- cumin は依頼のたびに `GET /app` で slug を読み、`<slug>[bot]` をコミットの作者に使う ([Agentの実行の設計](../designs/agent-run.md) の「1回の依頼の手順」)。slug が変わっても、設定を直す必要はない。既にあるコミットの作者は、古い名前のまま残る。
+
+名前から作った値を覚えている場所が1つある。ruleset の bypass list である。`scripts/setup-repo.sh --core-app <slug> --implementer-app <slug>` は、slug を `GET /apps/{slug}` で App の数値の id に置き換えてから ruleset に書くので、入っているのは名前ではなく id である。cumin本体か Implementer の App の名前を変えたときは、id が同じかを確かめる (下の手順の6)。
+
+手順:
+
+1. cumin を止める。launchd で動かしているときは `launchctl kill SIGTERM gui/$(id -u)/dev.cloveclove.cumin`。動いている依頼が終わるまで待つ。
+2. GitHub の画面で App の名前を変える (上の3つの手順)。
+3. App の設定ページの "Public link" を見て、slug が新しい名前になったかを確かめる。変わっていなければ、slug は古いままで、`<slug>[bot]` も古いままである。
+4. roleの名前が変わったときは、Host の設定ファイルのキーも変える。`[roles.<古いrole>]` を `[roles.<新しいrole>]` に、`[github_apps.<Organization>]` の `<古いrole> = "<Client ID>"` を `<新しいrole> = "<Client ID>"` にする。Client ID の値は変えない。
+5. 新しいバイナリを入れる (`scripts/install.sh`)。roleの名前を変えたバイナリでないと、4で直したキーを読めない。
+
+   この順番を守る。4を済ませて5を飛ばすと、6のコマンドは古いバイナリで動く。古いバイナリは古いroleの名前しか知らないので、設定にその行がないのを見て「まだ登録していない App」と判断し、古い名前で新しい App を登録しようとする。改名で古い名前は空いているので、そのまま進めると要らない App が1つできる。ブラウザのページが開いただけなら、まだ何も登録されていない。"Create GitHub App" を押さずにコマンドを止めて、5からやり直す。
+6. 確かめる。
+
+   ```sh
+   cumin setup github-apps --org <Organizationの名前> [--config <Hostの設定ファイル>]
+   ```
+
+   全ての App が登録済みでインストール済みなら、コマンドは何も変えず、App ごとに2行を表示する。
+
+   | 行 | 問い合わせ | その行が出たら分かること |
+   |---|---|---|
+   | `already registered <role>: client ID <Client ID>` | `GET /app` | Keychain の鍵が読めて、GitHub がその鍵をその Client ID の App として受け付け、App の持ち主がその Organization で、権限が別の role の表と同じではない。権限がその role の表と違えば、このあとで変更を案内する |
+   | `installed <role> on <Organization>` | `GET /app/installations` | その App が、その Organization にインストールされたままである |
+
+   2つは別の事実を見ている。登録と鍵が正しいまま、インストールだけ外れていることがあるためである。そのときは installation token が出ないので、Agentは何もできない。
+
+   読むのは最後の行だけでよい。`already registered` の確認が1つでも合わなければ、コマンドは何も変えずにそこで止まるので、`installed` の行が roleの数だけ出ていれば、両方が通ったことになる。インストールが外れている App があれば、`installed` の行の代わりにインストールのページのアドレスを表示し、ブラウザを開く。
+
+   cumin本体か Implementer の App の名前を変えたとき、または App を登録し直したときは、ruleset の bypass list の id も確かめる。次の2つが同じなら、ruleset はそのままでよい。違っていたら、`scripts/setup-repo.sh <owner>/<repo> --core-app <cumin本体のslug> --implementer-app <Implementerのslug>` をもう一度実行する。片方だけを渡すと、`cumin-branches` が古い id のまま残る。`cumin-branches` は既定のブランチも対象なので、古い id のままでは、新しい cumin本体の App が merge できない。
+
+   ```sh
+   gh api apps/<新しいslug> --jq .id
+   gh api repos/<owner>/<repo>/rulesets --jq '.[] | .id' | while read -r id; do
+     gh api "repos/<owner>/<repo>/rulesets/$id" --jq '.name, (.bypass_actors[]? | select(.actor_type=="Integration") | .actor_id)'
+   done
+   ```
+7. cumin を起動し直す (`scripts/install.sh --restart`)。最初の定期確認が成功することをログで確かめる。
+
+どのリポジトリが選ばれているかまでは、6のコマンドでは分からない。確かめるときは、Organization の設定の "GitHub Apps" で、その App の "Configure" を開く。
+
+## 手順3: リポジトリの準備
+
+cumin-works のリポジトリを取得して、その中で実行する。
+
+```sh
+scripts/setup-repo.sh <owner>/<repo> [--core-app <cumin本体のAppのslug>] \
+  [--implementer-app <ImplementerのAppのslug>] [--required-check <checkの名前>]... [--dry-run]
+```
+
+| 引数 | 内容 |
+|---|---|
+| `--core-app` | cumin本体の App の slug。mainを守る ruleset、ブランチの ruleset、タグの ruleset の bypass list に入れる。App を登録する前なら省ける。登録したあとに、付けてもう一度実行する |
+| `--implementer-app` | Implementer の App の slug。ブランチの ruleset の bypass list に入れる。`--core-app` と両方あるときだけ、ブランチの ruleset を当てる |
+| `--required-check` | 必須のcheckに足すcheckの名前。リポジトリのCIのjobの名前を渡す。何度でも書ける |
+| `--dry-run` | 何も変えずに、何をするかと、当てる ruleset の JSON を表示する |
+
+slug は、App の設定画面のアドレス (`https://github.com/apps/<slug>`) にある。
+
+スクリプトがすること:
+
+1. `gh` のログイン、`workflow` の scope、管理者の権限、ruleset を使えることを確かめる。足りなければ、何も変えずに止まる。`--dry-run` でも同じである。ruleset を使えるかは、`GET /repos/{owner}/{repo}/rulesets` を読んで確かめる。
+2. 既定のブランチに、次の2つのファイルを足す。
+   - `.github/workflows/cumin-protected-paths.yml`: 保護されたパスのcheck。作成者が bot (GitHub App) の Pull Request で動き、作成者が人の Pull Request では飛ばされる。App の名前は条件に書かない。名前を間違えるとcheckが飛ばされ、飛ばされたcheckは通った扱いになるためである。
+   - `.cumin/config.toml`: 保護されたパスの一覧 (`protected_paths`) のひな形。
+3. 既定のブランチの `.cumin/config.toml` が `priority_labels` (優先度のラベル。[設定の一覧](configuration.md)) を持っていれば、そのうちリポジトリにないラベルを一覧にして、作るかどうかを尋ねる。
+   - `y` と答えたときだけ作る。ほかの答えと、答えがないとき (入力が端末でないとき) は、何も作らない。`--dry-run` は、一覧を表示するだけで尋ねない。
+   - 尋ねるのは、ラベルが Organization のものだからである。cumin は、設定に書かれたラベルを作らず、変えない。作らなかったラベルは、付けられないだけで、cumin の動きは変わらない。
+   - `priority_labels` がなければ、何も尋ねない。cumin が初期値のラベル (`cumin/priority/P0` 〜 `cumin/priority/P3`) を自分で作る。スクリプトは、初期値のラベルを作らない。既にある初期値のラベルの色と説明は、4と同じやり方で cumin の一覧に合わせる。`.cumin/config.toml` がないときも同じである。
+   - `priority_labels` があれば、スクリプトは、そこに書かれたラベルも、初期値のラベルも、色と説明を変えない。
+   - ひな形を足したばかりのリポジトリには `priority_labels` がない。Organization のラベルを使うときは、`priority_labels` を足す Pull Request を merge してから、スクリプトをもう一度実行する。
+4. cumin のラベル (`cumin/type/*`、`cumin/status/*`、`risk/*`。[Issueの状態](../requirements/workflow/issue-states.md) の「ラベルの一覧」) のうち、リポジトリにないものを作り、色か説明が cumin の一覧と違うものを直す。色と説明は、cumin が起動のときに作るものと同じである。cumin も同じラベルを作るので、尋ねない。
+   - ラベルごとに1行を表示する。作ったら `created    label <名前>`、直したら `updated    label <名前>`、一覧と同じなら `unchanged  label <名前>` である。
+   - 色は、大文字と小文字を区別せずに比べる。説明のないラベルは、説明が空のラベルとして比べる。
+   - 直すときは、色と説明の両方を一覧のものにする ([`PATCH /repos/{owner}/{repo}/labels/{name}`](https://docs.github.com/en/rest/issues/labels#update-a-label))。名前は変えない。
+   - `priority_labels` に書かれたラベルは、cumin のラベルと同じ名前でも変えず、`kept       label <名前>` と表示する。
+   - `--dry-run` は、`would create the label <名前>` または `would update the label <名前>` と表示して、何も変えない。
+   - cumin の起動 (`cumin run`) は、足りないラベルを作るだけで、既にあるラベルは変えない。cumin の一覧が変わったあとは、このスクリプトをもう一度実行する。
+
+   ![スクリプトは、リポジトリのラベルを読む。cumin のラベルごとに、priority_labels に書かれていれば残し、なければ作り、色と説明が一覧と同じなら何もせず、違えば直す。.cumin/config.toml が priority_labels を持たないときだけ、既にある初期値の優先度のラベルも同じように直す。初期値の優先度のラベルは作らない。最後に、cumin が使わなくなったラベルごとに、付いている Issue と Pull Request を数え、開いているものに付いていれば残し、なければ尋ねて、答えが y のときだけ消す](setup-repo-labels.svg)
+
+   図の元ファイル: [setup-repo-labels.puml](setup-repo-labels.puml)
+5. cumin が以前の版で使い、今は使わないラベルのうち、リポジトリにあるものを、尋ねてから消す。対象は、スクリプトの `retired_labels` の一覧 (`cumin/status/awaiting-owner-review`、`cumin/status/awaiting-owner-decision`、`cumin/status/awaiting-checks`) だけである。図は、4の図の最後の部分である。
+   - ラベルごとに、そのラベルが付いた Issue と Pull Request を、開いているものと閉じたものに分けて数え ([`GET /repos/{owner}/{repo}/issues`](https://docs.github.com/en/rest/issues/issues#list-repository-issues)。Pull Request も返る)、`retired    label <名前>: <n> open and <m> closed issues and pull requests carry it` と表示する。
+   - 開いている Issue か Pull Request に付いているラベルは、尋ねずに残し、`kept       label <名前>: <n> open issues and pull requests carry it` と表示する。先に、そのIssueからラベルを外す。
+   - それ以外のラベルは、1つずつ、消すかどうかを尋ねる。ラベルを消すと ([`DELETE /repos/{owner}/{repo}/labels/{name}`](https://docs.github.com/en/rest/issues/labels#delete-a-label))、閉じた Issue と Pull Request からもそのラベルが外れる。質問は、そのことを書く。
+   - `y` と答えたときだけ消して、`deleted    label <名前>` と表示する。ほかの答えと、答えがないとき (入力が端末でないとき) は、残して `kept       label <名前>` と表示する。
+   - `priority_labels` に書かれたラベルは、この一覧と同じ名前でも数えず、尋ねず、残す。
+   - `--dry-run` は、数を表示し、`would ask  whether to delete the label <名前>` と表示して、何も消さない。
+   - cumin の一覧にも、この一覧にもないラベルには、何もしない。
+6. 次の ruleset を作る。
+
+| ruleset | 対象 | 内容 | bypass list |
+|---|---|---|---|
+| `cumin-protect-main` | 既定のブランチ | 更新の制限、削除の制限、force push の禁止 | リポジトリの管理者の role と、`--core-app` の App |
+| `cumin-main-required-checks` | 既定のブランチ | 必須のcheck。`cumin-protected-paths` と、`--required-check` で渡したcheck | 空 |
+| `cumin-branches` | `cumin/diagrams` 以外の全てのブランチ | 作成の制限、更新の制限、削除の制限 | リポジトリの管理者の role と、`--core-app` と `--implementer-app` の App |
+| `cumin-diagrams` | `cumin/diagrams` | 削除の制限、force push の禁止 | 空 |
+| `cumin-tags` | 全てのタグ | 作成の制限、更新の制限、削除の制限 | リポジトリの管理者の role と、`--core-app` の App |
+
+- 下の3つは、Planner の App が書き込めるブランチを `cumin/diagrams` だけにし、タグを作れないようにするためにある。release など、ruleset で止まらない操作は、[GitHub Appの登録手順](github-app-setup.md) の「権限を決めた理由」にある。Planner の App は、sub-issue の図を置くために Contents の書き込みを持つ ([GitHub Appの登録手順](github-app-setup.md) の権限の表)。Contents の書き込みは、どのブランチとタグにも及ぶので、ruleset で絞る。
+- `cumin-branches` があると、管理者でない人は、ブランチを作ることも push することもできない。変更は、管理者か、cumin の App が行う。
+- `cumin-diagrams` の bypass list は空である。Issue は、このブランチのコミットで図を示すので、履歴を消せないようにする。
+
+- 2つに分けてあるのは、bypass list にいる cumin本体の App が、必須のcheckまで回避できないようにするためである。
+- `cumin-protected-paths` は、GitHub Actions が出したものだけを有効にする。他の App が同じ名前のcheckを出しても、通らない。
+- 2つめの ruleset の bypass list が空なので、既定のブランチへの直接の push は、Maintainer でも通らない。変更は Pull Request で行う。
+- merge の前にブランチが最新であること (strict) は、求めない。
+
+Maintainer が Pull Request を merge するとき:
+
+- `cumin-protect-main` の「更新の制限」があるので、GitHub は既定のブランチへの merge を、常に「rule に止められている」と表示する (APIでは `mergeable_state` が `blocked`)。bypass list にいる人と App は、それでも merge できる。
+- 画面では、merge のボタンの近くにある、rule を回避して merge する選択肢を選ぶ。`gh` では `gh pr merge --admin` を使う。`--admin` なしの `gh pr merge` は、表示を見て止まる。
+- 必須のcheckの ruleset には bypass がないので、回避できるのは「更新の制限」だけである。必須のcheckが通っていなければ、merge は止まる。
+- Pull Request を作った直後は、必須のcheckがまだ現れていないので、merge は "required status checks are expected" で拒否される。数秒待って、check が現れてから merge する。人の Pull Request では、保護されたパスの check は飛ばされて (skipped) 通る。
+- 保護されたパスのcheckは、Maintainer の Pull Request では飛ばされる。飛ばされたcheckは、必須のcheckとして通った扱いになる (2026-09-20に実機で確かめた)。
+
+もう一度実行したとき:
+
+- 同じ引数なら、結果は変わらない。ファイルは足されず、ruleset は同じ内容になる。
+- `.cumin/config.toml` が既にあれば、内容が違っていても上書きしない。そのリポジトリの設定だからである。
+- workflow のファイルが違う内容で既にあれば、違いを表示して、上書きしない。ruleset は当てたうえで、最後にエラーで終わる。Pull Request で直してから、もう一度実行する。
+- ruleset は名前で探す。あればファイルの内容に合わせ、なければ作る。
+
+## 手順4: cumin を常駐させる (launchd)
+
+Host で、Operator 自身のアカウントで実行する。設定ファイルと Keychain の鍵がそろってから行う。
+
+### 通知のアドレスを Keychain に入れる
+
+cumin は、人の対応が要るときに Discord の webhook で知らせる。webhook のアドレスは秘密なので、設定ファイルではなく Keychain に置く ([cumin本体の設計メモ](../designs/cumin-core.md) の「通知」)。
+
+1. Discord で、通知を受けるチャンネルの "Integrations" から webhook を1つ作り、そのアドレスを控える。
+2. Host で、次を実行する。
+
+```sh
+cumin setup notify --discord-webhook
+```
+
+   コマンドがアドレスを尋ねる。貼り付けて Enter を押す。アドレスは標準入力から渡るので、コマンドの引数にも履歴にも残らない。入力の間は端末のエコーを切るので、画面にも記録にも残らない。エコーを切れない端末では、コマンドがそう断ってから尋ねる。尋ねる文は標準エラー出力に出るので、標準出力をファイルに向けても端末に見える。Ctrl-C でやめると、エコーを戻してから終わる。
+
+   コマンドは、アドレスが https で、ホストとパスを持つことを確かめてから、既定の keychain に入れ、読み直して「入った」とだけ表示する。同じ項目が既にあれば置き換える。スクリプトから渡すときは、`printf '%s\n' "<アドレス>" | cumin setup notify --discord-webhook` のようにパイプで渡す。
+
+- 項目がなくても `cumin run` は起動する。起動のログに、項目の名前と設定のキーを示す警告が出て、通知だけが届かない。
+- Discord を使わない Host は、設定ファイルに `notify.discord.enabled = false` を書く ([設定の一覧](configuration.md))。対象のリポジトリが `.cumin/config.toml` で入れ直すこともできるので、その場合はアドレスを入れておく。
+- 入れ替えるときは、同じコマンドをもう一度実行する。
+
+コマンドを使えないとき (cumin をまだ置いていない、別のマシンから入れるなど) は、`security` で同じことができる。
+
+```sh
+security add-generic-password -U -s cumin-works -a discord-webhook-url -w
+
+KEYCHAIN=$(security default-keychain | tr -d ' "')
+security find-generic-password -s cumin-works -a discord-webhook-url "$KEYCHAIN" >/dev/null && echo stored
+```
+
+- 1つめのコマンドがアドレスを2回尋ねる。値は既定の keychain (login) に入る。cumin が読むのもそこである。
+- `-w` のうしろに keychain のパスを書かない。`-w` は次の引数を値として取るので、パスがアドレスとして保存され、コマンドは成功したように見える (2026-09-22 に実機で確かめた)。
+- 確認と削除では keychain を指定する。指定しないと、検索リストにある別の keychain の同じ名前の項目に当たり、cumin が見つけられない値を「ある」と答えてしまう。
+- 消すときは `security delete-generic-password -s cumin-works -a discord-webhook-url "$KEYCHAIN"` を実行する。
+
+### 実行ファイルを置く
+
+まず、実行ファイルを作って置く。`go run` が作る一時的なバイナリは launchd から使えないので、`cumin setup launchd` はそれを拒否する。
+
+```sh
+scripts/install.sh
+```
+
+スクリプトは、cumin をビルドして `~/.local/bin/cumin` に置く。Operator 自身のユーザのディレクトリなので、`sudo` は要らない。別の場所に置くなら `--prefix <ディレクトリ>` を付ける。
+
+置いた先が `PATH` に入っていないと、スクリプトが警告を出す。そのときは、先に `PATH` に足すか、これ以降の `cumin` をフルパスで実行する。
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"     # ログインシェルの設定にも足す
+# または
+~/.local/bin/cumin setup launchd
+```
+
+`PATH` は、plist にも書き込まれる。cumin も、cumin が起動する Agent も、この `PATH` で動く。`cumin setup launchd` を実行する前に、次のものを `PATH` に入れておく。
+
+| `PATH` に要るもの | ないとき |
+|---|---|
+| cumin 自身が起動するコマンド: role ごとの Agent の CLI (設定の `cli_path`。初期値は `claude`) と `git`。`cli_path` をパスで書くなら、絶対パスにする。相対パスは「ない」として扱われる | `cumin setup launchd` が、ないコマンドの名前を表示して、plist を書かずに失敗で終わる |
+| 対象のリポジトリの道具: `gh` と、リポジトリの設定の `tool_checks` が確かめる道具 (`docker` など) | `cumin setup launchd` は確かめない。`cumin run` が最初の定期確認で道具の確認を実行し、失敗したリポジトリではAgentを起動せずに通知する |
+
+- `cumin setup launchd` は、Host の設定ファイルと `PATH` のディレクトリだけを読む。GitHub も Keychain も読まないので、道具の確認は実行しない。
+- 道具をあとから足したときは、その道具が `PATH` に入ったシェルで `cumin setup launchd --force` を実行し直してから、job を起動し直す (下の「plist を書き直したら」)。動いている cumin の `PATH` は、plist を書き直しただけでは変わらない。
+- 起動し直したあとに、失敗している道具の確認があれば、`cumin status` がそれを表示する。
+
+次に、LaunchAgent を書き出す。
+
+```sh
+cumin setup launchd [--config <Hostの設定ファイル>] [--dry-run] [--force]
+```
+
+コマンドがすること:
+
+1. 実行中の cumin の絶対パス、設定ファイル、ホームディレクトリ、`PATH` を読み取る。
+2. cumin 自身が起動するコマンド (role ごとの Agent の CLI、`git`) を、plist に書く `PATH` で探す。1つでもなければ、その名前を表示して、何も書かずに失敗で終わる。
+3. `~/.local/state/cumin/` を作る。ログはこの下に出る。
+4. `~/Library/LaunchAgents/dev.cloveclove.cumin.plist` を書く。中身と各キーの理由は [cumin本体の設計メモ](../designs/cumin-core.md) の「launchd」にある。
+5. 起動、停止、再起動、削除の `launchctl` のコマンドを表示する。
+
+`--dry-run` は、手順2のあとに plist を表示するだけで、何も書かない。既に違う内容の plist があるときは、差分を表示して上書きせずに止まる。置き換えるなら `--force` を付ける。
+
+書き出したら、起動する。
+
+| したいこと | コマンド |
+|---|---|
+| 登録して起動する (以後はログインで起動する) | `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.cloveclove.cumin.plist` |
+| 実行中のAgentが終わるのを待って止める | `cumin stop --after-current-runs` |
+| すぐに止める | `launchctl kill SIGTERM gui/$(id -u)/dev.cloveclove.cumin` |
+| 再起動する | `launchctl kickstart -k gui/$(id -u)/dev.cloveclove.cumin` |
+| 外す (ログインでも起動しなくなる) | `cumin setup launchd --remove` |
+| 動いているか見る | `launchctl print gui/$(id -u)/dev.cloveclove.cumin` |
+| ログを見る | `tail -f ~/.local/state/cumin/cumin.log` |
+
+- 0以外の終了コードで終わったときだけ、launchd が起動し直す。`launchctl kill SIGTERM` で止めた cumin も、`cumin stop --after-current-runs` で止めた cumin も 0 で終わるので、止めたままになる。
+- `cumin stop --after-current-runs` は、予約を書いてすぐ終わる。cumin は、次の定期確認から新しい依頼を始めず、実行中のAgentの実行と、その終わりに続く動作を済ませてから終わる。Agent の実行は1時間近くかかることがある。止まる途中かどうかは `cumin status` の `Stop:` の行で分かり、終わるとその行が消える。ログには `stopped` (理由は、止める予約のあとに実行が終わったこと) が出る。待てないときは、「すぐに止める」のコマンドを使う。
+- 「すぐに止める」は、実行中のAgentを取り消す。作業中のラベルのまま残ったIssueは、Maintainer が `cumin/status/ready` を付け直して再開する。
+- Host が再起動したあとは、Operator がログインした時点で起動する。ログインしていない間は動かない。Keychain の鍵を確認の画面なしで読めるのが、ログイン中の LaunchAgent だけだからである。
+- ログのファイルは入れ替わらない。大きくなったら、止めてから消す。
+- plist を書き直したら、`launchctl bootout` してから `launchctl bootstrap` し直す。
+- `cumin setup launchd --remove` は、job が読み込まれていれば止めて、plist を消す。消すのは plist だけで、ログ、設定ファイル、作業ディレクトリ、Keychain の項目、実行ファイルは残る。何が残るかはコマンドが表示する。`--dry-run` を付けると、何をするかだけを表示する。
+- そのパスに cumin のものでない plist があるときは、消さずに止まる。中身を見て、それでも消すなら `--force` を付ける。
+- cumin の実行ファイルを先に消してしまったときは、`launchctl bootout gui/$(id -u)/dev.cloveclove.cumin` と plist の `rm` で同じことができる。
+- 古い名前の LaunchAgent (`dev.cumin-works.cumin`) が残っている Host では、先にそれを外す。`launchctl bootout gui/$(id -u)/dev.cumin-works.cumin` と、`~/Library/LaunchAgents/dev.cumin-works.cumin.plist` の `rm` である。そのあとで `cumin setup launchd` を実行すると、新しい名前で入る。
+- macOS には、LaunchAgent を出し入れする純正の画面はない。システム設定の「ログイン項目と機能拡張」で止めることはできるが、plist のファイルは残る。
+
+cumin を新しくするときは、チェックアウトを既定のブランチの先頭に合わせてから (`git pull --ff-only`)、次を実行する。実行中のAgentが終わるのを待って止め、ビルドしたバイナリを置いて、job を起動し直す。
+
+```sh
+scripts/install.sh --after-current-runs
+```
+
+スクリプトは、次の6つをこの順に行う。1つが失敗したら、そこで `1` で終わり、あとの手順を行わない。
+
+| 手順 | すること | 失敗したとき |
+|---|---|---|
+| 1 | チェックアウトを確かめる。既定のブランチにいる。手元の変更がない。`git fetch` のあとで、リモートの先頭と同じコミットである | cumin は動いたままである |
+| 2 | LaunchAgent を確かめる。読み込まれていて、`<prefix>/cumin` を実行する | cumin は動いたままである |
+| 3 | 捨てるディレクトリにビルドする | cumin は動いたままである |
+| 4 | `cumin stop --after-current-runs` を実行し、止める予約のファイルがなくなるのを待つ | 上限で終わったら、何も置かない。cumin はそのままで、実行を待ってから止まる途中である |
+| 5 | バイナリを置き、LaunchAgent を起動し直す | cumin は止まっている。原因を直して、表示されたコマンドを実行する |
+| 6 | `scripts/cumin-health.sh --wait-polls 2` を実行する。定期確認が2回、エラーなしで終わることを確かめる | 新しいバイナリは入っていて、cumin は起動している。スクリプトがそう表示する |
+
+- 手順4の待つ時間の上限は、`--stop-timeout <seconds>` で変える。初期値は3600秒である。数でない値は、終了コード `2` になる。
+- 上限で終わったあとにもう一度実行すると、続きを待つ。cumin が動いていない Host では、予約を消すものがいないので、手順4は上限で終わる。そのときは `scripts/install.sh --restart` で置いて起動する。
+- `scripts/install.sh --restart` は、待たずに置いて起動し直すので、実行中のAgentが取り消される。Agent が動いていないと分かっているときに使う。
+
+- plist には cumin のパスがそのまま入っているので、同じ場所に置き直すなら plist を書き直さなくてよい。
+- `--restart` は、job が読み込まれているときだけ `launchctl kickstart -k` を実行する。止まっている job は、これで起動する。読み込まれていなければ、その旨を表示して何もしない。
+- `--restart` を付けないと、動いている cumin は古いバイナリのままである。スクリプトがそう表示する。
+- ビルドが失敗したときは、置いてあるバイナリをそのまま残して止まる。
+
+## 対象のリポジトリを足す
+
+App を登録済みの Host に、同じ Organization のリポジトリを足すときの手順。何を決めてから足すかは [既存のプロダクトにcuminを入れる](../guides/adoption.md) にある。
+
+1. 4つの App のインストールのそれぞれで、リポジトリを足す。Organization の設定の "GitHub Apps" で App の "Configure" を選び、"Only select repositories" にそのリポジトリを加える。APIでは足せない。リポジトリを足すAPIは classic personal access token でしか使えない ([調査・実測で確定した制約](../evidence/measured-constraints.md) の126)。
+2. そのリポジトリで、手順3の `scripts/setup-repo.sh` を実行する。`--core-app`、`--implementer-app`、そのリポジトリのCIの `--required-check` を付ける。
+3. 足された `.cumin/config.toml` の `protected_paths` を、そのリポジトリに合わせて直す。要件の文書など、Agent に変えさせないパスを足す。
+4. Host の設定ファイルの `repositories` に `"<owner>/<repo>"` を足し ([設定の一覧](configuration.md))、cumin を再起動する (手順4の表の「再起動する」)。
+5. 下の「セットアップのあとの確認」を、そのリポジトリで行う。
+
+## cumin-works自身を対象にするとき
+
+cumin-worksを、cumin自身で開発するときの決まり。cumin-worksをforkして、cuminで手を入れるときも同じである。手順は上の「対象のリポジトリを足す」と同じで、次の2つが違う。
+
+- 保護されたパスに、Agentの指示 (`roles/`、`disciplines/`、`templates/`) を入れない。開発の対象だからである。動いているcuminは、これらをバイナリに埋め込んで使うので、リポジトリで変わっても、バイナリを入れ替えるまで指示は変わらない。要件の文書 (`docs/ja/requirements/`) は入れる。
+- cuminが自分のコードを変えてmergeしても、Hostのcuminは古いバイナリのまま動く。Operatorが、mergeされた変更を確かめてから、`scripts/install.sh --after-current-runs` で、実行中のAgentが終わるのを待ってから入れ替える (手順4)。cuminは自分のリポジトリでAgentを動かしているので、待たずに入れ替えると、その実行が取り消される。cuminが自分を壊す変更をmergeしても、入れ替えるまでHostは巻き込まれない。
+
+## セットアップのあとの確認
+
+セットアップが終わったら、保護が効いていることを1回確かめる。
+
+1. Implementer の App として、保護されたパス (例: `CLAUDE.md`) を変える Pull Request を開く。
+2. `cumin-protected-paths` のcheckが失敗することを見る。失敗のログに、ファイルと、当たった一覧の項目が出る。
+3. Pull Request を閉じる。
+
+checkが飛ばされたり、通ったりしたら、保護は効いていない。workflow のファイルと、必須のcheckの ruleset を確かめる。
+
+## 保護されたパスの一覧か、workflow を変えたとき
+
+既定のブランチで `.cumin/config.toml` の `protected_paths` か、`cumin-protected-paths.yml` を変えたら、開いている Pull Request のそれぞれで "Update branch" を選び、checkを動かし直す。
+
+- checkは、動くときに一覧を読む。先にcheckが通っていた Pull Request は、新しい一覧では確かめ直されない。
+- Pull Request を閉じて開き直すだけでは足りない。古い workflow のままcheckが動くことを、実機で確かめている。
+
+## 勧めるリポジトリの設定 (任意)
+
+スクリプトは、次の2つを設定しない。リポジトリの好みであり、cumin の動作には要らないためである。
+
+- merge の方法を squash だけにする。cumin が merge するときの方法は、設定の `merge_method` で決まる ([設定の一覧](configuration.md))。リポジトリで許す方法は、この設定と合わせる。合っていないと、cumin の merge が失敗する。
+- head のブランチを、merge のあとに自動で削除する。
+
+## ラベルの見え方
+
+cumin は、実装Issue の `cumin/status/*` と `risk/*` のラベルを、そのIssueを閉じる Pull Request にもコピーする。Pull Request の一覧で、状態と risk を見分けるためである。判定に使うのは、Issue のラベルだけである。
+
+## うまくいかないとき
+
+| 表示 | 対処 |
+|---|---|
+| `the gh login has no "workflow" scope` | 前提にある `gh auth refresh` を実行する |
+| `the gh login is not an administrator of ...` | リポジトリの管理者のアカウントで `gh auth login` する |
+| `the private repository ... cannot use rulesets` | 非公開のリポジトリで、プランに ruleset がない。スクリプトは何も変えていない。ruleset を使えるプラン (Organization は GitHub Team) にしてから、もう一度実行する。cumin は、ruleset のないリポジトリを対象にしない。最後に、GitHub が返したメッセージが出る |
+| `... cannot use rulesets` (`private` がない)、`cannot read the rulesets of ...` | ruleset を読めなかった。スクリプトは何も変えていない。最後に出る GitHub のメッセージを見て直し、もう一度実行する |
+| `cannot add ... If a ruleset blocks the push, add the file with a pull request.` | ruleset が既にあり、ファイルがない状態である。ファイルを Pull Request で足す |
+| `DIFFERENT ... (not overwritten)` と、最後のエラー | workflow がひな形と違う。保護されたパスのcheckが動かないおそれがある。ruleset は当たっている。表示された違いを見て、Pull Request で workflow を直し、もう一度実行する。workflow を直す Pull Request では、その Pull Request の側の workflow が動くので、checkは通る |
+| `cannot read the App ...` | slug を確かめる。非公開の App は、その Organization のメンバーの `gh` でないと読めないことがある |
+| `no Discord webhook URL: the Keychain item ... is missing` | `cumin setup notify --discord-webhook` を実行する。Discord を使わないなら、設定ファイルに `notify.discord.enabled = false` を書く |
+| `... is a temporary build` | `go run` で実行している。`scripts/install.sh` で置いたバイナリから実行する |
+| `... holds a different job` | 同じ名前の plist が、違う内容で既にある。表示された差分を見て、置き換えてよければ `--force` を付ける |
+| launchd の job が動かない | `launchctl print gui/$(id -u)/dev.cloveclove.cumin` で最後の終了コードを見る。`~/.local/state/cumin/cumin.err.log` に設定の誤りが出る |

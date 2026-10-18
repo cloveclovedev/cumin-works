@@ -1,0 +1,108 @@
+@startuml code-layout-files
+' cumin works - the files of a package, where the table of code-layout.md
+' cannot show which file uses which.
+' Document: code-layout.md, topics on the files of the workflow, on the
+' files of the tests and on the files of the two adapters.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+skinparam shadowing false
+skinparam defaultFontName sans-serif
+left to right direction
+
+package "internal/workflow (the poll and the steps)" {
+  file "service.go\nthe Service type, Run, the stop,\nthe issues in work, the steps\nthat every role uses" as wfservice
+  file "poll.go\none poll: the labels, the snapshot,\nthe actions (pollRepository)" as wfpoll
+  file "implement.go\nthe Implementer and the way out\nof cumin/status/implementing" as wfimplement
+  file "plan.go\nthe Planner and the way out\nof cumin/status/planning" as wfplan
+  file "acceptance.go\nthe acceptance check and the way out\nof cumin/status/accepting" as wfacceptance
+  file "review.go\nthe Reviewer and the way out\nof cumin/status/reviewing" as wfreview
+  file "merge.go\nthe merge decision and the steps\nof cumin/status/merging" as wfmerge
+  file "convert.go\nthe types of the GitHub client\nto the types of the rules" as wfconvert
+}
+
+wfservice --> wfpoll
+wfpoll --> wfimplement
+wfpoll --> wfplan
+wfpoll --> wfacceptance
+wfpoll --> wfreview
+wfpoll --> wfmerge
+wfpoll --> wfconvert
+wfacceptance --> wfplan
+
+package "internal/workflow (the pure rules)" {
+  file "domain.go\nthe label names, the snapshot types,\nthe action types, Decide,\nthe order of the starts" as wfdomain
+  file "checks.go\nthe required checks and the issues\nthat wait for them" as wfchecks
+  file "rounds.go\nthe review rounds, CheckReview,\nReviewEnd, the explanation of the cause" as wfrounds
+  file "mergerules.go\nDecideMerge, MergeEnd, the conditions\nof the merge, the Maintainer review" as wfmergerules
+  file "verify.go\nVerifyDone, VerifySplit,\nImplementationEnd" as wfverify
+  file "requirementrules.go\nthe moves of a requirement issue,\nSplitEnd, AcceptanceEnd,\nthe status actor" as wfrequirementrules
+  file "pollrules.go\nthe repository in work, the due poll,\nthe wait of cumin, the label copy" as wfpollrules
+}
+
+wfdomain --> wfchecks
+wfdomain --> wfrounds
+wfdomain --> wfmergerules
+wfdomain --> wfverify
+wfdomain --> wfrequirementrules
+wfdomain --> wfpollrules
+
+package "internal/workflow (tests of the poll)" {
+  file "scene_test.go\nthe scene: fake GitHub, fake CLI,\nlocal remote, webhook, clock, log" as scene
+  file "service_test.go\nthe poll loop, the settings\nof the repository, the stop of cumin" as loop
+  file "claim_test.go\nrequest the implementation" as claim
+  file "verifydone_test.go\nwait for the checks\n(the end of the run)" as verify
+  file "stopimplementation_test.go\nstop the implementation" as stopimpl
+  file "awaitingchecks_test.go\nthe required checks:\nrequest the review,\nstop for missing checks,\ncopy the labels to the pull request" as awaiting
+  file "checkfix_test.go\nrequest a check fix,\nstop for failed checks" as checkfix
+  file "the other *_test.go files that poll\n(one action or one topic each)" as others
+}
+
+loop --> scene
+claim --> scene
+verify --> scene
+stopimpl --> scene
+awaiting --> scene
+checkfix --> scene
+others --> scene
+
+package "internal/setup (tests of cumin setup github-apps)" {
+  file "fakes_test.go\nfake GitHub, fake browser,\nmemory store, newService" as fakes
+  file "manifest_test.go\nthe manifest and the callback" as manifest
+  file "settingsfile_test.go\nthe settings file and the stored keys" as settingsfile
+  file "install_test.go\nthe owner of an App\nand the install page" as install
+  file "permissions_test.go\na changed permission of an App" as permissions
+}
+
+manifest --> fakes
+settingsfile --> fakes
+install --> fakes
+permissions --> fakes
+
+package "internal/platform/github/githubtest (the fake GitHub)" {
+  file "fake.go\nthe Fake type, New, the routing,\nthe planned failures" as fake
+  file "graphql.go\nthe GraphQL snapshot\nand the other GraphQL reads" as fakegraphql
+  file "issues.go\nREST issues, labels, comments" as fakeissues
+  file "pulls.go\npull requests, reviews, the merge" as fakepulls
+  file "checks.go\nchecks and rulesets" as fakechecks
+  file "apps.go\nApps and tokens" as fakeapps
+}
+
+fake --> fakegraphql
+fake --> fakeissues
+fake --> fakepulls
+fake --> fakechecks
+fake --> fakeapps
+
+package "internal/agent (the adapter of Claude Code)" {
+  file "claudecode.go\nthe run of the CLI: the arguments,\nthe stream, the time limit" as claudecode
+  file "startrecord.go\nthe check of the start record\nand the JSON shape helpers" as startrecord
+}
+
+claudecode --> startrecord
+
+package "internal/platform/github (the snapshot)" {
+  file "snapshot.go\nthe exported types\nand the Read methods" as snapshot
+  file "snapshotquery.go\nthe query constants, the response nodes\nand their conversion methods" as snapshotquery
+}
+
+snapshot --> snapshotquery
+@enduml
