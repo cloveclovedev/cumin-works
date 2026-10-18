@@ -31,8 +31,8 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | 対象のリポジトリ | cumin が Issue と Pull Request を扱う GitHub のリポジトリ | 製品リポジトリ | target repository |
 | GitHub App | cumin と各 role が GitHub で使う身元。`cumin-core`、`cumin-planner`、`cumin-implementer`、`cumin-reviewer` | bot アカウント | GitHub App |
 | main ブランチ | 対象のリポジトリの既定のブランチ。名前が main でなくても、こう呼ぶ | 既定のブランチ、デフォルトブランチ | default branch |
-| 作業ディレクトリ | Agent が作業する、Issue ごとの git worktree。Agent から見えるのはこの中である | ワークスペース、作業場所 | worktree |
-| 作業ルートディレクトリ | Host の上で、すべての作業ディレクトリを置く親のディレクトリ。設定の `work_dir` で決める | ワークスペース、作業場所 | work root directory |
+| Agent作業ディレクトリ | Agent が作業する、Issue ごとの git worktree。作業ディレクトリの下に置く。Agent から見えるのはこの中である | ワークスペース、作業場所 | agent work directory |
+| 作業ディレクトリ | Host の上で、すべての Agent作業ディレクトリを置く親のディレクトリ。設定の `work_dir` で決める | ワークスペース、作業場所、作業ルートディレクトリ | work directory |
 | セッション | Agent の会話の続き。続きを頼むときは、同じセッションで Agent を起動することがある | 会話、スレッド | session |
 
 ## Issue と状態遷移
