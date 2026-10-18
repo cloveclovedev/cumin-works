@@ -1,28 +1,20 @@
 # 要求と要件
 
-cumin works v2 の要求と要件の文書の入口。
+<!-- このプロダクトの名前を入れ、このページが要求と要件の文書の入口であることを1文で書く。 -->
 
 ## 全体
 
-- [要求仕様書](overview.md): 解決したい課題、目的、指標、登場人物、フェーズ
-- [cumin本体の要件](cumin-core.md): ルールだけで動くワークフローの基盤。受け持つこと、動かし方、設定、通知
-- [要求のbacklog](backlog.md): v0.1には入れないと決めたが、あとで反映したいこと
+- [要求仕様書](overview.md): 解決したい課題、目的、指標、登場人物、範囲外、フェーズ
+- [技術要素](technology.md): 使う技術と、選んだ理由
+- [用語集](glossary.md): 語の意味と、使わない言い方
+- [バックログ](backlog.md): 今のバージョンには入れないが、あとで取り入れたいこと
+- [ソースコード全体構成](../architecture/overview.md): パッケージと、その役割と設計
 
-## ワークフロー
+## カテゴリごとの要件
 
-- [メインワークフローの図](workflow/main-workflow.svg) (元ファイル: [main-workflow.puml](workflow/main-workflow.puml)): 要求の受付から受け入れまでの流れ
-- [Issueのラベルと状態遷移](workflow/issue-states.md): 要求Issueと実装Issueの状態を表すラベル、状態が移る条件、cuminの動作のきっかけ
+IDの接頭辞は `CWK` である。カテゴリごとにディレクトリを分け、要件のページ (`index.md`) と図を置く。
 
-## Agentの要件
+<!-- カテゴリを足すときは、.cumin-trace.toml の areas に略号を足し、この表に1行を足す。 -->
 
-- [Agentに共通の要件](agents/common.md): 結果の返し方、指示の渡し方、GitHub上の身元、プロセスとセッション
-- [Plannerの要件](agents/planner.md): 要求Issueを実装Issueに分割し、依存関係とriskを付ける
-- [Implementerの要件](agents/implementer.md): 実装Issueを実装して、Pull Requestにまとめる
-- [Reviewerの要件](agents/reviewer.md): Pull Requestをレビューし、指摘が残ったら原因を整理する
-
-## Agentが従う判断基準
-
-- [要求Issueの分割基準](policies/requirement-sizing.md): Maintainerが要求Issueを書くときの、1つの要求Issueの大きさの基準
-- [実装Issueの分割基準](policies/issue-sizing.md): Plannerが要求Issueを分割するときの基準
-- [GitHubに残す文章のテンプレート](policies/writing-templates.md): 要求Issue、実装Issue、Pull Requestの説明、レビュー、返答、Maintainerに判断を求める文章の型
-
+| カテゴリ | ページ | 内容 |
+|---|---|---|
