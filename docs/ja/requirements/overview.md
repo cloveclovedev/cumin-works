@@ -25,29 +25,29 @@ Maintainer の負担をできるだけ減らしながら、Agent を動かし続
 人と Agent:
 
 - Maintainer: 対象のリポジトリに write 以上の権限を持つ人。要求Issueを書き、進めてよいと合図する。
-- Issue Owner: その Issue に今付いている `cumin/status/ready` を付けた Maintainer。その Issue の指示と判断を受け持つ。
+- Assignee: その Issue の指示と判断を受け持つ Maintainer。GitHub の Issue の assignee で表し、1つの Issue に1人だけ付ける。
 - Operator: Host で cumin を動かし、Host の設定と利用制限を受け持つ。
 - Agent: cumin が起動する AI。Planner、Implementer、Reviewer の3つの role がある。
   - Planner: 要求Issueを計画し、マージされた結果を受け入れ確認する。
   - Implementer: 実装Issueを実装し、Pull Request にまとめる。
   - Reviewer: Pull Request をレビューする。
 
-Maintainer と Issue Owner がすること:
+Maintainer と Assignee がすること:
 
 | すること | 誰がするか |
 |---|---|
 | 要求Issueを書き、`cumin/type/requirement` を付ける | Maintainer |
-| `cumin/status/ready` を付けて、進めてよいと合図する。付けた人が、その Issue の Issue Owner になる | Maintainer |
+| `cumin/status/ready` を付けて、進めてよいと合図する。Assignee がいなければ、cumin が付けた人を Assignee にする | Maintainer |
 | 要求Issueどうしに blocked by を張り、優先度のラベルを付ける | Maintainer |
-| Agent への指示を、Issue のコメントに書く | その Issue の Issue Owner |
-| 計画結果の確認 (sub-issue に `cumin/status/ready` を付ける、要らない sub-issue を閉じる) | 要求Issueの Issue Owner |
-| マージ判断 (Pull Request の承認と、変更の依頼) | 実装Issueの Issue Owner |
-| 受け入れ (要求Issueを閉じる) と差し戻し | 要求Issueの Issue Owner |
-| `cumin/status/awaiting-decision` の Issue に答える (答えを書き、`cumin/status/ready` を付け直す) | Maintainer。付け直した人が、新しい Issue Owner になる |
-| `cumin/type/owner-task` の作業をして、その Issue を閉じる | その Issue の Issue Owner |
+| Agent への指示を、Issue のコメントに書く | その Issue の Assignee |
+| 計画結果の確認 (sub-issue に `cumin/status/ready` を付ける、要らない sub-issue を閉じる) | 要求Issueの Assignee |
+| マージ判断 (Pull Request の承認と、変更の依頼) | 実装Issueの Assignee |
+| 受け入れ (要求Issueを閉じる) と差し戻し | 要求Issueの Assignee |
+| `cumin/status/awaiting-decision` の Issue に答える (答えを書き、`cumin/status/ready` を付け直す) | その Issue の Assignee |
+| `cumin/type/owner-task` の作業をして、その Issue を閉じる | その Issue の Assignee |
 | 状態ラベルを手で直す | Maintainer |
 
-Issue Owner がいないときや替わるときは、別の Maintainer がその Issue に `cumin/status/ready` を付け直す。付け直した人が、新しい Issue Owner になる。
+担当を替えるときは、Maintainer が Assignee を替える。Agent は動き直さない。
 
 システム:
 

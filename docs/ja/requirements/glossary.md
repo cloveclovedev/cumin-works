@@ -13,7 +13,7 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | 語 | 意味 | 使わない言い方 | 英語 |
 |---|---|---|---|
 | Maintainer | 対象のリポジトリに write 以上の権限を持つ、人のアカウント。要求Issueを書き、進めてよいと合図し、マージを判断する | メンテナ、Owner | Maintainer |
-| Issue Owner | その Issue に今付いている `cumin/status/ready` を付けた Maintainer | Owner、担当者 | Issue Owner |
+| Assignee | その Issue の指示と判断を受け持つ Maintainer。GitHub の Issue の assignee で表し、1つの Issue に1人だけ付ける | Issue Owner、Owner、担当者 | assignee |
 | Operator | Host で cumin を動かす人 | 運用者、管理者 | Operator |
 | Agent | cumin が起動して作業させる AI。今は headless の Claude Code である | エージェント、AI、bot | agent |
 | role | Agent が受け持つ役目。Planner、Implementer、Reviewer の3つがある | ロール、Agent Role | role |
