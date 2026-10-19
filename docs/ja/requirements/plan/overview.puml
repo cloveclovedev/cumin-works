@@ -1,0 +1,42 @@
+@startuml overview
+' cumin-works - the states of a requirement issue in the plan stage.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A transition is written: action [guard] / what cumin does.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "Draft (no status label)" as Draft
+Draft : do / a Maintainer writes the requirement
+
+state "ready" as Ready
+Ready : do / cumin waits for a free slot
+
+state "planning" as Planning
+Planning : do / the Planner plans
+
+state "awaiting-plan-review" as PlanReview
+PlanReview : do / the Assignee reviews the plan
+
+state "implementing" as Implementing
+Implementing : do / the agents work on the sub-issues
+
+state "awaiting-decision" as Decision
+Decision : do / the Assignee answers
+
+state "accepting" as Accepting #EEEEEE
+Accepting : (the acceptance area)
+
+[*] --> Draft
+Draft --> Ready : a Maintainer adds ready
+Ready --> Planning : request the split\n[cumin handles the ready, the blockers are closed,\ncumin has a free slot]\n/ cumin starts the Planner
+Planning --> PlanReview : ask for the plan review\n[no Planner runs, the plan passes,\na sub-issue is open]\n/ cumin notifies
+Planning --> Planning : request the split again\n[no Planner runs, the plan fails,\nno question, first time]\n/ cumin starts the Planner again
+Planning --> Decision : stop the split\n[no Planner runs, and: the Planner asked,\nor the plan fails after the retry]\n/ cumin notifies
+Planning --> Accepting : [every sub-issue is closed]
+PlanReview --> Implementing : mark the requirement as in work\n[the Assignee adds ready to a sub-issue]\n/ cumin changes the label
+Draft --> Implementing : mark the requirement as in work\n[the Assignee adds ready to a sub-issue]
+Implementing --> PlanReview : ask about the remaining sub-issues\n[only sub-issues without a status label remain]\n/ cumin notifies
+Decision --> Ready : a Maintainer adds ready
+
+@enduml
