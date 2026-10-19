@@ -16,7 +16,7 @@ Maintainer の負担をできるだけ減らしながら、Agent を動かし続
 
 どれも、GitHub と cumin が読む利用制限の使用率から、週ごとに数えられる。
 
-- 稼働: 週の終わりの週間制限の使用率。Operator が自分の作業に使う分を残した目標 (設定の目標) に近いほどよい。稼働は成果そのものではない。Agent が動き続けることを直近の目標にするための、暫定の指標である。
+- 稼働: 週の終わりの週間制限の使用率。設定の目標に近いほどよい。稼働は成果そのものではない。Agent が動き続けることを直近の目標にするための、暫定の指標である。
 - 成果: 週ごとの、マージされた実装Issueの数と、受け入れられた要求Issueの数。
 - Maintainer の負担: 要求Issue 1つあたりで、その要求Issueと sub-issue が Maintainer の番の状態 (`awaiting-` で始まる状態) になった回数。少ないほどよい。
 
@@ -24,13 +24,30 @@ Maintainer の負担をできるだけ減らしながら、Agent を動かし続
 
 人と Agent:
 
-- Maintainer: 要求Issueを書き、進めてよいと合図し、計画結果の確認、マージ判断、受け入れをする。
-- Issue Owner: その Issue を進めてよいと合図した Maintainer。Agent は、この人のコメントを指示として読む。
+- Maintainer: 対象のリポジトリに write 以上の権限を持つ人。要求Issueを書き、進めてよいと合図する。
+- Issue Owner: その Issue に今付いている `cumin/status/ready` を付けた Maintainer。その Issue の指示と判断を受け持つ。
 - Operator: Host で cumin を動かし、Host の設定と利用制限を受け持つ。
 - Agent: cumin が起動する AI。Planner、Implementer、Reviewer の3つの role がある。
   - Planner: 要求Issueを計画し、マージされた結果を受け入れ確認する。
   - Implementer: 実装Issueを実装し、Pull Request にまとめる。
   - Reviewer: Pull Request をレビューする。
+
+Maintainer と Issue Owner がすること:
+
+| すること | 誰がするか |
+|---|---|
+| 要求Issueを書き、`cumin/type/requirement` を付ける | Maintainer |
+| `cumin/status/ready` を付けて、進めてよいと合図する。付けた人が、その Issue の Issue Owner になる | Maintainer |
+| 要求Issueどうしに blocked by を張り、優先度のラベルを付ける | Maintainer |
+| Agent への指示を、Issue のコメントに書く | その Issue の Issue Owner |
+| 計画結果の確認 (sub-issue に `cumin/status/ready` を付ける、要らない sub-issue を閉じる) | 要求Issueの Issue Owner |
+| マージ判断 (Pull Request の承認と、変更の依頼) | 実装Issueの Issue Owner |
+| 受け入れ (要求Issueを閉じる) と差し戻し | 要求Issueの Issue Owner |
+| `cumin/status/awaiting-decision` の Issue に答える (答えを書き、`cumin/status/ready` を付け直す) | Maintainer。付け直した人が、新しい Issue Owner になる |
+| `cumin/type/owner-task` の作業をして、その Issue を閉じる | その Issue の Issue Owner |
+| 状態ラベルを手で直す | Maintainer |
+
+Issue Owner がいないときや替わるときは、別の Maintainer がその Issue に `cumin/status/ready` を付け直す。付け直した人が、新しい Issue Owner になる。
 
 システム:
 

@@ -2,4 +2,4 @@
 prefix = "CWK"
 
 # The allowed areas. Add an area here before you write its first requirement.
-areas = []
+areas = ["STATE", "PLAN", "IMPL", "REVIEW", "MERGE", "ACCEPT", "AGENT", "LIMIT", "POLL", "HOST", "NOTIFY"]
