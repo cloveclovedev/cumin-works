@@ -10,6 +10,20 @@ cumin-works の要求と要件の文書の入口。
 - [バックログ](backlog.md): 今のバージョンには入れないが、あとで取り入れたいこと
 - [ソースコード全体構成](../architecture/overview.md): パッケージと、その役割と設計
 
+## 全体像
+
+要求Issueと実装Issueの状態がどう移るかを示す。状態の移り方は、各カテゴリの要件を合わせた結果であり、この図そのものは要件ではない。
+
+![要求Issueの状態遷移](requirement-issue-states.svg)
+
+図の元ファイル: [requirement-issue-states.puml](requirement-issue-states.puml)
+
+![実装Issueの状態遷移](implementation-issue-states.svg)
+
+図の元ファイル: [implementation-issue-states.puml](implementation-issue-states.puml)
+
+図は旧版のものである。各カテゴリの要件を書いたあとで、今の語で描き直す。
+
 ## カテゴリごとの要件
 
 IDの接頭辞は `CWK` である。カテゴリごとにディレクトリを分け、要件のページ (`index.md`) と図を置く。
@@ -18,7 +32,8 @@ IDの接頭辞は `CWK` である。カテゴリごとにディレクトリを�
 
 | カテゴリ | ページ | 内容 |
 |---|---|---|
-| `STATE` | [状態とラベル](state/index.md) | ラベルの一覧、状態ラベルの決まり、数える状態ラベル、全体の状態遷移 |
+| `LABEL` | [ラベル](label/index.md) | 状態、種類、リスクのラベルと、その決まり |
+| `ACCESS` | [権限](access/index.md) | Maintainer、Assignee、Operator、cumin、Agent が、それぞれ何をしてよいか |
 | `PLAN` | [計画](plan/index.md) | 計画の Agent起動、計画結果の確認、Planner の入力と出力 |
 | `IMPL` | [実装](impl/index.md) | 実装の Agent起動、必須チェックを待つこと、チェックの修正、衝突の解消、Implementer の入力と出力 |
 | `REVIEW` | [レビュー](review/index.md) | レビューの Agent起動、ラウンド、指摘の修正、Reviewer の入力と出力 |

@@ -32,23 +32,6 @@ Maintainer の負担をできるだけ減らしながら、Agent を動かし続
   - Implementer: 実装Issueを実装し、Pull Request にまとめる。
   - Reviewer: Pull Request をレビューする。
 
-Maintainer と Assignee がすること:
-
-| すること | 誰がするか |
-|---|---|
-| 要求Issueを書き、`cumin/type/requirement` を付ける | Maintainer |
-| `cumin/status/ready` を付けて、進めてよいと合図する。Assignee がいなければ、cumin が付けた人を Assignee にする | Maintainer |
-| 要求Issueどうしに blocked by を張り、優先度のラベルを付ける | Maintainer |
-| Agent への指示を、Issue のコメントに書く | その Issue の Assignee |
-| 計画結果の確認 (sub-issue に `cumin/status/ready` を付ける、要らない sub-issue を閉じる) | 要求Issueの Assignee |
-| マージ判断 (Pull Request の承認と、変更の依頼) | 実装Issueの Assignee |
-| 受け入れ (要求Issueを閉じる) と差し戻し | 要求Issueの Assignee |
-| `cumin/status/awaiting-decision` の Issue に答える (答えを書き、`cumin/status/ready` を付け直す) | その Issue の Assignee |
-| `cumin/type/owner-task` の作業をして、その Issue を閉じる | その Issue の Assignee |
-| 状態ラベルを手で直す | Maintainer |
-
-担当を替えるときは、Maintainer が Assignee を替える。Agent は動き直さない。
-
 システム:
 
 - cumin: Host で常駐し、GitHub を定期確認して、状態ラベルを替え、Agent起動とマージを行う。
