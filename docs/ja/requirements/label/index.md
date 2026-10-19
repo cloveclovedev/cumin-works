@@ -4,12 +4,12 @@ Maintainer と cumin の間の取り決めとして、Issue と Pull Request に
 
 ## 全体像
 
-ラベルには4つの種類がある。優先度のラベルのほかは、名前の前半で見分けられる。
+ラベルには4つの種類があり、名前の前半で見分けられる。優先度のラベルだけは、リポジトリの設定で名前を変えられる。
 
 - `cumin/type/*`: Issue の種類。状態ではないので、閉じるまで付けたままにする。
 - `cumin/status/*`: Issue の状態。
-- `risk/*`: 実装Issueのマージのリスク。
-- 優先度のラベル: 着手の順番 ([定期確認](../poll/index.md))。
+- `cumin/risk/*`: 実装Issueのマージのリスク。
+- `cumin/priority/*`: 着手の順番 ([定期確認](../poll/index.md))。
 
 状態は3つの種類に分かれ、名前で見分けられる。
 
@@ -62,7 +62,7 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 
 ---
 
-### 種類とリスクのラベル
+### 種類、リスク、優先度のラベル
 
 #### `CWK-LABEL-004` 種類のラベル
 
@@ -76,9 +76,20 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 
 #### `CWK-LABEL-005` リスクのラベル
 
-実装Issueには、`risk/low`、`risk/medium`、`risk/high` のどれか1つが付く。Planner が仮に付け、Maintainer が確かめて、必要なら替える。
+実装Issueには、`cumin/risk/low`、`cumin/risk/medium`、`cumin/risk/high` のどれか1つが付く。Planner が仮に付け、Maintainer が確かめて、必要なら替える。
 
 - 検証: `test` リスクのラベルがないか、2つ以上ある実装Issueがあると、計画が確認を通らない
+
+---
+
+#### `CWK-LABEL-008` 優先度のラベル
+
+優先度のラベルは、着手の順番を表す。初期値は `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` で、`P0` が最も高い。対象のリポジトリに優先度のラベルがすでにあるときのために、`.cumin/config.toml` の `priority_labels` で、ラベルの名前を高い順に設定できる。設定があれば、cumin は初期値ではなく、設定のラベルに従う。Host の設定ファイルでは設定できない。
+
+優先度のラベルは、要求Issueにも実装Issueにも付けてよく、付けなくてもよい。付けるのは Maintainer だけである。cumin と Agent は、付けも外しもせず、Pull Request にも写さない。この順番で着手する決まりは [定期確認](../poll/index.md) で決める。
+
+- 検証: `test` `priority_labels` を設定したリポジトリでは、設定のラベルの順に着手する。設定のないリポジトリでは、初期値のラベルの順に着手する
+- 検証: `test` cumin と Agent が作業したあとも、Issue の優先度のラベルは変わらず、Pull Request には優先度のラベルが付かない
 
 ---
 
@@ -94,7 +105,7 @@ cumin は、実装Issueの状態ラベルとリスクのラベルを、その Is
 
 #### `CWK-LABEL-007` ラベルを作る
 
-cumin は、対象のリポジトリに足りないラベルを作る。すでにあるラベルの色と説明は変えない。
+cumin は、対象のリポジトリに足りないラベルを作る。すでにあるラベルの色と説明は変えない。`priority_labels` で設定した優先度のラベルは、対象のリポジトリか Organization がすでに持つラベルなので、作らない。
 
 - 検証: `test` ラベルのないリポジトリで、cumin がこのページのラベルを作る。すでにあるラベルの色と説明は変わらない
 

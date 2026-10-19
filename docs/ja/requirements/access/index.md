@@ -10,7 +10,7 @@
 | Assignee | その Issue の指示と判断 | Issue の assignee |
 | Operator | Host の上の cumin の操作 | Host |
 | cumin | 状態ラベルの付け替え、マージ | `cumin-core` の GitHub App の権限と ruleset |
-| Agent | その role の作業 | role ごとの GitHub App の権限と ruleset |
+| Agent | その role の作業 | role ごとの GitHub App の権限と ruleset。Host では、cumin を動かすユーザアカウント |
 
 ## 要件
 
@@ -20,7 +20,7 @@
 
 Maintainer は、対象のリポジトリに write 以上 (write、maintain、admin) の権限を持つ、人のアカウントである。bot のアカウントは、権限があっても Maintainer ではない。cumin の GitHub App も Maintainer にならない。Maintainer の一覧は設定に持たず、GitHub の権限から、その都度決める。
 
-- 検証: `test` write の権限を持つ人のアカウントは Maintainer として数え、read と triage の権限のアカウントと、GitHub App は数えない
+- 検証: `test` write の権限を持つ人のアカウントは Maintainer とし、read と triage の権限のアカウントと、GitHub App は Maintainer としない
 
 ---
 
@@ -41,7 +41,7 @@ Maintainer と Assignee は、次のことをする。
 | `cumin/type/owner-task` の作業をして、その Issue を閉じる | その Issue の Assignee |
 | 状態ラベルを手で直す | Maintainer |
 
-Agent は、Assignee のコメントだけを指示として読む。cumin は、判断を Assignee に求め、Assignee の判断だけを数える。
+Agent は、Assignee のコメントだけを指示として読む。cumin は、判断を Assignee に求め、Assignee の判断だけを扱う。
 
 - 検証: `test` 実装Issueの Assignee でない Maintainer が Pull Request を承認しても、cumin はマージしない。Assignee が承認するとマージする
 
@@ -55,13 +55,13 @@ Operator は、Host の上のコマンド、Host の設定ファイル、Keychai
 
 ---
 
-### 数える状態ラベル
+### 扱う状態ラベル
 
 #### `CWK-ACCESS-004` 状態ラベルを付けたアカウント
 
-cumin は、今付いている状態ラベルを最後に付けたアカウントを確かめ、次のときだけ、その状態ラベルを数える。付けたアカウントは、GitHub が Issue のタイムラインに残すラベルのイベントから読む。
+cumin は、今付いている状態ラベルを最後に付けたアカウントを確かめ、次のときだけ、その状態ラベルを扱う。付けたアカウントは、GitHub が Issue のタイムラインに残すラベルのイベントから読む。
 
-| 状態ラベル | 数えるのは、誰が付けたときか |
+| 状態ラベル | 扱うのは、誰が付けたときか |
 |---|---|
 | `cumin/status/ready` | Maintainer |
 | ほかのすべての状態ラベル | `cumin-core` の GitHub App か、Maintainer |
@@ -70,9 +70,9 @@ cumin は、今付いている状態ラベルを最後に付けたアカウン�
 
 ---
 
-#### `CWK-ACCESS-005` 数えない状態ラベル
+#### `CWK-ACCESS-005` 扱わない状態ラベル
 
-数えない状態ラベルの付いた Issue では、cumin は何もしない。Agent起動をせず、マージせず、ラベルも替えない。ログと通知を1回だけ残し、同じラベルについて、定期確認のたびに繰り返さない。Maintainer が正しいラベルを付け直すと、今までどおり進む。
+扱わない状態ラベルの付いた Issue では、cumin は何もしない。Agent起動をせず、マージせず、ラベルも替えない。ログと通知を1回だけ残し、同じラベルについて、定期確認のたびに繰り返さない。Maintainer が正しいラベルを付け直すと、今までどおり進む。
 
 - 検証: `test` Maintainer でないアカウントが `cumin/status/ready` を付けても着手せず、通知は1回だけである。Maintainer が付け直すと着手する
 
@@ -98,10 +98,10 @@ Issue を進められるのは、assignee がちょうど1人で、その人が 
 
 #### `CWK-ACCESS-008` Assignee を替える
 
-担当を替えるときは、Maintainer が assignee を替える。cumin は、Maintainer が替えた assignee だけを数える。替えたアカウントは、GitHub が Issue のタイムラインに残す assignee のイベントから読む。assignee を替えても、Agent は動き直さない。
+担当を替えるときは、Maintainer が assignee を替える。cumin は、Maintainer が替えた assignee だけを扱う。替えたアカウントは、GitHub が Issue のタイムラインに残す assignee のイベントから読む。assignee を替えても、Agent は動き直さない。
 
 - 検証: `test` Maintainer が assignee を替えると、次の判断はその人に求める。Agent起動は増えない
-- 検証: `test` Maintainer でないアカウントが assignee を替えたときは、数えない
+- 検証: `test` Maintainer でないアカウントが assignee を替えたときは、扱わない
 
 ---
 
@@ -148,11 +148,11 @@ GitHub App の名前は、運用する組織ごとに決めてよい。
 
 ---
 
-#### `CWK-ACCESS-013` 権限で止める
+#### `CWK-ACCESS-013` Host での Agent の権限
 
-Agent は、ツールの使用をすべて許可するモードで起動する。headless の実行では、許可を尋ねられても答える人がいないためである。role ごとの制限は、GitHub App の権限と ruleset で行う。
+Agent は、Host の上では、cumin を動かす Host のユーザアカウントと同じ権限を持つ。ツールの使用はすべて許可するモードで起動する。headless の実行では、許可を尋ねられても答える人がいないためである。そのため、GitHub の上で role ごとに作業を制限するのは、GitHub App の権限と ruleset である。
 
-- 検証: `inspection` Agent の起動のコマンドが、許可を尋ねないモードであることを確かめる
+- 検証: `inspection` Agent が cumin と同じユーザアカウントで動き、起動のコマンドが許可を尋ねないモードであることを確かめる
 
 ---
 

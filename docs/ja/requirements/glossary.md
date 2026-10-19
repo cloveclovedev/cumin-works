@@ -61,7 +61,7 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 |---|---|---|---|
 | 計画 | Planner が要求Issueを読み、実装Issueに分け、依存関係とリスクを付けること | 分割、分解 | plan |
 | 計画結果の確認 | Maintainer が、計画の結果と sub-issue を確かめること | 分割結果の確認、plan review、プランレビュー | plan review |
-| リスク | 実装Issueのマージのリスク。`risk/*` のラベルで表す | risk | risk |
+| リスク | 実装Issueのマージのリスク。`cumin/risk/*` のラベルで表す | risk | risk |
 | 保護されたパス | Agent が変えてはいけないファイルのパス | 保護パス | protected path |
 | 必須チェック | main ブランチの保護で、マージの前に通る必要があるチェック | 必須の check | required check |
 | ラウンド | Reviewer のレビュー1回と、それへの修正の組 | 周回 | round |
