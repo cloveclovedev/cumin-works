@@ -1,0 +1,33 @@
+@startuml overview
+' cumin-works - the states of an implementation issue in the review stage.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A transition is written: action [guard] / what cumin does. A gray state belongs to another area.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "checking" as Checking #EEEEEE
+Checking : (the implementation area)
+
+state "reviewing" as Reviewing
+Reviewing : do / the Reviewer reviews the pull request
+
+state "implementing" as Implementing #EEEEEE
+Implementing : (the implementation area)
+
+state "awaiting-decision" as Decision
+Decision : do / the Assignee answers
+
+state "merging or awaiting-merge-decision" as Merge #EEEEEE
+Merge : (the merge area)
+
+Checking --> Reviewing : request the review\n[every required check passed]\n/ cumin starts the Reviewer
+Reviewing --> Implementing : request a review fix\n[no Reviewer runs, REQUEST_CHANGES\non the head commit, below the limit]\n/ cumin starts the Implementer\nin the same session
+Reviewing --> Checking : go back to the checks\n[no Reviewer runs, and: the head commit changed,\nor APPROVE but a required check did not pass]
+Reviewing --> Reviewing : request the review again\n[no Reviewer runs, no review on the head commit,\nno question, first time]\n/ cumin starts the Reviewer again
+Reviewing --> Reviewing : request the cause\n[no Reviewer runs, REQUEST_CHANGES\nat the limit, no cause comment]\n/ cumin starts the Reviewer\nin the same session
+Reviewing --> Decision : stop at the round limit\n[the Reviewer wrote the cause comment]\n/ cumin notifies
+Reviewing --> Decision : stop the review\n[no Reviewer runs, and: the Reviewer asked,\nor no review after the retry,\nor not exactly one risk label, or no pull request]\n/ cumin notifies
+Reviewing --> Merge : [APPROVE on the head commit,\nthe required checks passed]
+
+@enduml
