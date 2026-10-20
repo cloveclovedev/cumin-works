@@ -14,7 +14,7 @@
 
 要求Issueの `cumin/status/ready` は、いつも「Planner が要求Issueを読み直す」という1つの意味である。Maintainer は、要求Issueを書き終えたとき、計画が止まって答えたとき、受け入れ確認で Planner が質問して答えたときに、要求Issueに `cumin/status/ready` を付ける。Planner はすでにある sub-issue を確かめて、足りない分だけを作る。作るものがなく、sub-issue がすべて閉じていれば、受け入れ確認に進む。
 
-Maintainer は、Planner を通さずに、自分で sub-issue を書いてもよい。このときは要求Issueには `cumin/status/ready` を付けず、sub-issue にだけ付ける。計画の Agent起動は起きず、実装を始めた印が付く (`CWK-PLAN-008`)。
+Maintainer は、Planner を通さずに、自分で sub-issue を書いてもよい。このときは、先に自分を要求Issueの Assignee にしておき、要求Issueには `cumin/status/ready` を付けず、sub-issue にだけ付ける。計画の Agent起動は起きず、実装を始めた印が付く (`CWK-PLAN-008`)。
 
 ## 要件
 
@@ -93,9 +93,12 @@ Planner が動いていないとき、cumin は計画の結果を GitHub で確�
 
 要求Issueの Assignee が、その要求Issueの sub-issue のどれかに `cumin/status/ready` を付けたとき、cumin は要求Issueの状態を `cumin/status/implementing` に替える。替えるのは、要求Issueが `cumin/status/awaiting-plan-review`、`cumin/status/awaiting-acceptance`、状態ラベルなしのどれかのときだけである。
 
+要求Issueに Assignee がいないときは、cumin は要求Issueを進めず、通知を1回だけ送る。Planner を通さずに sub-issue を書いた要求Issueでは、cumin が Assignee を付ける機会 ([権限](../access/index.md) の `CWK-ACCESS-006`) がないからである。
+
 要求Issueに状態ラベルがあるときは、その `cumin/status/ready` が、要求Issueが今の状態になったあとに付いたものに限る。前の計画で `cumin/status/ready` が付いたまま残っている sub-issue で、Assignee が新しい sub-issue を確かめる前に要求Issueが進むことを防ぐためである。
 
 - 検証: `test` Assignee が sub-issue に `cumin/status/ready` を付けると、要求Issueが `cumin/status/implementing` になる。Agent起動は起きない
+- 検証: `test` Assignee のいない要求Issueの sub-issue に Maintainer が `cumin/status/ready` を付けると、要求Issueの状態は替わらず、通知は1回だけである
 - 検証: `test` 計画をやり直して新しい sub-issue が増えた要求Issueは、前から `cumin/status/ready` の付いた sub-issue があっても、Assignee が新しく `cumin/status/ready` を付けるまで `cumin/status/awaiting-plan-review` のままである
 
 ---
@@ -243,7 +246,7 @@ Planner は、次のどれかに当たったら、推測で計画せずに `bloc
 | 1 | Maintainer が要求Issueを書き、`cumin/status/ready` を付ける。Planner が計画し、Assignee が sub-issue のすべてに `cumin/status/ready` を付ける | 計画が始まり (`CWK-PLAN-001`)、計画結果の確認を求める通知が1回届き (`CWK-PLAN-005`)、要求Issueが `cumin/status/implementing` になる (`CWK-PLAN-008`) |
 | 2 | Planner が質問して止まる。Assignee が要求Issueに答えを書き、`cumin/status/ready` を付け直す | 要求Issueが `cumin/status/awaiting-decision` になり (`CWK-PLAN-007`)、付け直すと、Planner がすでにある sub-issue を確かめて計画をやり直す (`CWK-PLAN-001`、`CWK-PLAN-019`) |
 | 3 | Assignee が計画結果の確認で、sub-issue の一部にだけ `cumin/status/ready` を付ける。それらがすべて閉じる | 要求Issueが `cumin/status/awaiting-plan-review` に戻り、通知が1回届く (`CWK-PLAN-009`)。Assignee が残りを閉じると、受け入れ確認に進む |
-| 4 | Maintainer が Planner を通さずに sub-issue を書き、sub-issue にだけ `cumin/status/ready` を付ける | Planner は起動されず、要求Issueが `cumin/status/implementing` になる (`CWK-PLAN-008`) |
+| 4 | Maintainer が Planner を通さずに sub-issue を書き、自分を要求Issueの Assignee にして、sub-issue にだけ `cumin/status/ready` を付ける | Planner は起動されず、要求Issueが `cumin/status/implementing` になる (`CWK-PLAN-008`) |
 
 ## 未決事項
 
