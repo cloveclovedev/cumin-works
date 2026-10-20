@@ -36,7 +36,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 - cumin decides completion from facts on GitHub, never from what an agent reports. `done` from an agent only means "start checking".
 - cumin changes the status label before it starts an agent. It never requests the same work twice.
 - The same state must always produce the same action. Keep the decision logic as pure functions from a snapshot of GitHub facts to actions. Keep I/O (GitHub, CLI, Keychain, Discord, git) at the edges.
-- Name each cumin action by its name in the tables of `issue-states.md`, in code, comments, log lines, and test names (for example "wait for the checks", "stop the implementation").
+- Name each cumin action by one short English name, and use the same name in code, comments, log lines, and test names (for example "wait for the checks", "stop the implementation"). Do not add these names to the requirement documents.
 - Configuration is TOML. Do not hard-code values that the settings table in `cumin-core.md` lists. Secrets are in the macOS Keychain, never in files or in the repository.
 - An agent receives only the token of its own GitHub App, never the credentials of the Operator or of a Maintainer, and starts isolated from the Host user's settings (`docs/ja/designs/agent-run.md`).
 - Differences between agent CLIs stay inside one adapter in `internal/agent/`.
