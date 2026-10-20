@@ -1,10 +1,10 @@
 # レビュー
 
-必須チェックの通った Pull Request を Reviewer がレビューし、指摘を Implementer が直す段階を決める。cumin が Reviewer を起動し、レビューを GitHub で確かめ、ラウンドを数え、上限で Assignee に回すまでである。承認のあとのマージとマージ判断は [マージ](../merge/index.md)、Agent起動に共通のことは [Agent](../agent/index.md) で決める。
+必須チェックの通った Pull Request を Reviewer がレビューし、指摘を Implementer が直すまでの流れを決める。cumin が Reviewer を起動し、レビューを GitHub で確かめ、ラウンドを数え、上限で Assignee に回すまでである。承認のあとのマージとマージ判断は [マージ](../merge/index.md)、Agent起動に共通のことは [Agent](../agent/index.md) で決める。
 
 ## 全体像
 
-実装Issueがレビューの段階でたどる状態を示す。灰色の状態は、ほかのカテゴリで決める。
+実装Issueがレビューでたどる状態を示す。灰色の状態は、ほかのカテゴリで決める。
 
 ![レビューの全体像](overview.svg)
 
@@ -20,7 +20,7 @@ Reviewer のセッションと Implementer のセッションは、共有しな�
 
 #### `CWK-REVIEW-001` レビューを始める
 
-`cumin/status/checking` の実装Issueで、必須チェックが Pull Request の先頭のコミットですべて通ったとき ([実装](../impl/index.md) の `CWK-IMPL-010`)、cumin は状態を `cumin/status/reviewing` に替えてから、Reviewer を起動する (request the review)。1ラウンド目は新しいセッションで、2ラウンド目からは Reviewer の直前のセッションで起動する。
+`cumin/status/checking` の実装Issueで、必須チェックが Pull Request の先頭のコミットですべて通ったとき ([実装](../impl/index.md) の `CWK-IMPL-010`)、cumin は状態を `cumin/status/reviewing` に替えてから、Reviewer を起動する。1ラウンド目は新しいセッションで、2ラウンド目からは Reviewer の直前のセッションで起動する。
 
 - 検証: `test` 必須チェックが通ると、実装Issueが `cumin/status/reviewing` になり、Reviewer の Agent起動が1回だけ起きる
 - 検証: `test` 指摘の修正のあとのレビューでは、Reviewer の直前のセッションで起動する
@@ -53,7 +53,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 #### `CWK-REVIEW-004` 指摘の修正を頼む
 
-`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、Reviewer の最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、ラウンドが上限に達していないとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで指摘の修正を頼む (request a review fix)。
+`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、Reviewer の最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、ラウンドが上限に達していないとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで指摘の修正を頼む。
 
 - 検証: `test` `REQUEST_CHANGES` のあとで、実装Issueが `cumin/status/implementing` になり、Implementer の直前のセッションで Agent起動が1回起きる
 
@@ -61,7 +61,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 #### `CWK-REVIEW-005` チェックに戻る
 
-`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどちらかが成り立つとき、cumin は状態を `cumin/status/checking` に替える (go back to the checks)。古いコミットへのレビューは、ラウンドに数えたまま残る。
+`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどちらかが成り立つとき、cumin は状態を `cumin/status/checking` に替える。古いコミットへのレビューは、ラウンドに数えたまま残る。
 
 - レビューの間に、先頭のコミットが変わった
 - `APPROVE` が出ているが、必須チェックのどれかが今の先頭のコミットで通っていない
@@ -72,7 +72,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 #### `CWK-REVIEW-006` レビューをやり直す
 
-`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、今の先頭のコミットに Reviewer のレビューがなく、Reviewer の質問のコメントもないとき、cumin は Reviewer をもう一度起動する (request the review again)。やり直すのは、1つの `cumin/status/reviewing` の間に1回だけである。状態は替えない。
+`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、今の先頭のコミットに Reviewer のレビューがなく、Reviewer の質問のコメントもないとき、cumin は Reviewer をもう一度起動する。やり直すのは、1つの `cumin/status/reviewing` の間に1回だけである。状態は替えない。
 
 - 検証: `test` レビューを出さずに終わった Reviewer のあとで、Reviewer の Agent起動がもう一度だけ起き、状態は `cumin/status/reviewing` のままである
 
@@ -80,7 +80,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 #### `CWK-REVIEW-007` レビューを止める
 
-`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する (stop the review)。質問のコメントでないときは、止めた理由をコメントに書く。
+`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。質問のコメントでないときは、止めた理由をコメントに書く。
 
 - Reviewer の質問のコメントが、実装Issueが `cumin/status/reviewing` になったあとに書かれている。Reviewer の質問では、やり直さない
 - 今の先頭のコミットにレビューがなく、`CWK-REVIEW-006` のやり直しを済ませている
@@ -109,7 +109,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 #### `CWK-REVIEW-009` 原因の整理を頼む
 
-`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、ラウンドが設定の上限 (`max_review_rounds`、初期値は3) に達し、Reviewer の原因の整理のコメントがまだないとき、cumin は Reviewer の直前のセッションで、何が決まっていないことが原因かの整理を頼む (request the cause)。状態は替えない。
+`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、ラウンドが設定の上限 (`max_review_rounds`、初期値は3) に達し、Reviewer の原因の整理のコメントがまだないとき、cumin は Reviewer の直前のセッションで、何が決まっていないことが原因かの整理を頼む。状態は替えない。
 
 - 検証: `test` 上限のラウンドで `REQUEST_CHANGES` が出ると、指摘の修正ではなく、原因の整理の Agent起動が1回起きる
 
@@ -117,7 +117,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 #### `CWK-REVIEW-010` ラウンドの上限で止める
 
-`cumin/status/reviewing` の実装Issueで、Reviewer の原因の整理のコメントが Pull Request に書かれているとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する (stop at the round limit)。
+`cumin/status/reviewing` の実装Issueで、Reviewer の原因の整理のコメントが Pull Request に書かれているとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。
 
 - 検証: `test` 原因の整理のコメントが付いたあとで、実装Issueが `cumin/status/awaiting-decision` になり、通知は1回だけである
 
