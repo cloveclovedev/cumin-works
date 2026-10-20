@@ -26,9 +26,9 @@ MergeDecision : (the merge area)
 
 [*] --> Ready : a Maintainer adds ready
 Ready --> Implementing : request the implementation\n[cumin handles the ready, the blockers are closed,\ncumin has a free slot, no owner-task]\n/ cumin starts the Implementer
-Implementing --> Checking : wait for the checks\n[no Implementer runs, the pull request passes]\n/ cumin links the pull request if needed
-Implementing --> Implementing : request the implementation again\n[no Implementer runs, the pull request fails,\nno question, first time]\n/ cumin starts the Implementer again
-Implementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the pull request fails after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies
+Implementing --> Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if needed
+Implementing --> Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again
+Implementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies
 Checking --> Implementing : request a check fix\n[a required check failed, below the limit]\n/ cumin starts the Implementer\nin the same session
 Checking --> Decision : stop for failed checks\n[a required check failed, at the limit]\n/ cumin notifies
 Checking --> Decision : stop for missing checks\n[a required check has no result\nafter the wait time]\n/ cumin notifies

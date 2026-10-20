@@ -78,7 +78,7 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 
 実装Issueには、`cumin/risk/low`、`cumin/risk/medium`、`cumin/risk/high` のどれか1つが付く。Planner が仮に付け、Maintainer が確かめて、必要なら替える。
 
-- 検証: `test` リスクのラベルがないか、2つ以上ある実装Issueがあると、計画が確認を通らない
+- 検証: `test` リスクのラベルがないか、2つ以上ある実装Issueがあると、計画が完了したと判断されない
 
 ---
 

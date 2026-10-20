@@ -41,17 +41,17 @@ cumin は、Reviewer の Agent起動で、次の事実を渡す。
 
 ---
 
-### レビューを確かめる
+### レビューの完了判断
 
-#### `CWK-REVIEW-003` レビューが確認を通る
+#### `CWK-REVIEW-003` レビューの完了を判断する
 
-cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の先頭のコミットに出した、結果が `APPROVE` か `REQUEST_CHANGES` のレビューである。古いコミットへのレビューと、`COMMENT` だけのレビューは数えない。Reviewer が返した結果も使わない。
+cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに、結果が `APPROVE` か `REQUEST_CHANGES` のレビューを出したとき、レビューが完了したと判断する。cumin が数えるのは、このレビューだけである。古いコミットへのレビューと、`COMMENT` だけのレビューは数えない。Reviewer が返した結果も使わない。
 
 - 検証: `test` 古いコミットへの `APPROVE` と、今の先頭のコミットへの `COMMENT` では、レビューがないものとして扱う
 
 ---
 
-#### `CWK-REVIEW-004` 指摘の修正を頼む
+#### `CWK-REVIEW-004` 指摘を修正する
 
 `cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、Reviewer の最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、ラウンドが上限に達していないとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで指摘の修正を頼む。
 
@@ -107,7 +107,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 ---
 
-#### `CWK-REVIEW-009` 原因の整理を頼む
+#### `CWK-REVIEW-009` 原因を整理する
 
 `cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、ラウンドが設定の上限 (`max_review_rounds`、初期値は3) に達し、Reviewer の原因の整理のコメントがまだないとき、cumin は Reviewer の直前のセッションで、何が決まっていないことが原因かの整理を頼む。状態は替えない。
 
@@ -123,7 +123,7 @@ cumin が数えるレビューは、`cumin-reviewer` が Pull Request の今の�
 
 ---
 
-### Reviewer が残すもの
+### Reviewer の成果物
 
 #### `CWK-REVIEW-011` レビュー
 
@@ -233,7 +233,7 @@ Implementer は、提案のうち、数行で直せて実装Issueの範囲の中
 
 ---
 
-### Reviewer が止まるとき
+### Reviewer が判断を求めるとき
 
 #### `CWK-REVIEW-019` 推測でレビューしない
 

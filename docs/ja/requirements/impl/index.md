@@ -56,19 +56,19 @@ cumin は、実装Issueごとにブランチの名前を決めて、Implementer 
 
 ---
 
-### Pull Request を確かめる
+### 実装の完了判断
 
-#### `CWK-IMPL-005` Pull Request が確認を通る
+#### `CWK-IMPL-005` 実装の完了を判断する
 
-Implementer が動いていないとき、cumin は Pull Request を GitHub で確かめる。確認を通るのは、cumin がその実装Issueのために決めたブランチ (`CWK-IMPL-003`) に Pull Request が開いていて、作成者が `cumin-implementer` で、先頭のコミットが push されているときである。この確認では、Pull Request をブランチと作成者で見つける。GitHub が本文の `Closes #<番号>` からリンクを作らないことがあるためである。Implementer が返した結果は、確認に使わない。
+Implementer が動いていないとき、cumin は Pull Request を GitHub で確かめる。cumin は、その実装Issueのために決めたブランチ (`CWK-IMPL-003`) に Pull Request が開いていて、作成者が `cumin-implementer` で、先頭のコミットが push されているとき、実装が完了したと判断する。この判断では、Pull Request をブランチと作成者で見つける。GitHub が本文の `Closes #<番号>` からリンクを作らないことがあるためである。Implementer が返した結果は、判断に使わない。
 
-- 検証: `test` 本文の `Closes` からリンクが作られていない Pull Request でも、ブランチと作成者が合えば確認を通る。ほかの作成者の Pull Request は確認を通らない
+- 検証: `test` 本文の `Closes` からリンクが作られていない Pull Request でも、ブランチと作成者が合えば実装が完了したと判断する。ほかの作成者の Pull Request では、完了したと判断しない
 
 ---
 
 #### `CWK-IMPL-006` チェックを待つ
 
-`cumin/status/implementing` の実装Issueで、Implementer が動いておらず、Pull Request が確認を通るとき、cumin は状態を `cumin/status/checking` に替える。実装Issueにその Pull Request を閉じるリンクがなければ、`cumin-core` がリンクを付け、付いたことを読み直して確かめてから替える。GitHub がすでにリンクを作っていれば、何も付けない。ほかのアクションは、このリンクで実装Issueの Pull Request を見つける。
+`cumin/status/implementing` の実装Issueで、Implementer が動いておらず、実装が完了したとき、cumin は状態を `cumin/status/checking` に替える。実装Issueにその Pull Request を閉じるリンクがなければ、`cumin-core` がリンクを付け、付いたことを読み直して確かめてから替える。GitHub がすでにリンクを作っていれば、何も付けない。ほかのアクションは、このリンクで実装Issueの Pull Request を見つける。
 
 - 検証: `test` リンクのない Pull Request で、cumin がリンクを付け、実装Issueが `cumin/status/checking` になる。リンクがすでにあれば、付け直さない
 
@@ -76,7 +76,7 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 
 #### `CWK-IMPL-007` 実装をやり直す
 
-`cumin/status/implementing` の実装Issueで、Implementer が動いておらず、Pull Request が確認を通らず、Implementer の質問のコメントがないとき、cumin は Implementer をもう一度起動して、続きから進めさせる。やり直すのは、1つの `cumin/status/implementing` の間に1回だけである。状態は替えない。
+`cumin/status/implementing` の実装Issueで、Implementer が動いておらず、実装が完了しておらず、Implementer の質問のコメントがないとき、cumin は Implementer をもう一度起動して、続きから進めさせる。やり直すのは、1つの `cumin/status/implementing` の間に1回だけである。状態は替えない。
 
 - 検証: `test` Pull Request を開かずに終わった実装のあとで、Implementer の Agent起動がもう一度だけ起き、状態は `cumin/status/implementing` のままである
 
@@ -87,11 +87,11 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 `cumin/status/implementing` の実装Issueで、Implementer が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。質問のコメントでないときは、止めた理由を実装Issueのコメントに書く。
 
 - Implementer の質問のコメントが、実装Issueが `cumin/status/implementing` になったあとに書かれている。Implementer の質問では、やり直さない。実装に要る要件が足りないことが多く、Maintainer が Issue を書き直す必要があるためである
-- Pull Request が確認を通らず、`CWK-IMPL-007` のやり直しを済ませている
+- 実装が完了しておらず、`CWK-IMPL-007` のやり直しを済ませている
 - 衝突の解消 (`CWK-IMPL-015`) を頼んだあとも、先頭のコミットが頼む前のままである。先頭のコミットの時刻と、実装Issueに最新の `cumin/status/implementing` が付いた時刻を比べて決める
 
 - 検証: `test` Implementer が `blocked` を返すと、やり直さずに `cumin/status/awaiting-decision` になる
-- 検証: `test` やり直しのあとも Pull Request が確認を通らないと、理由のコメントが付いて `cumin/status/awaiting-decision` になる
+- 検証: `test` やり直しのあとも実装が完了しないと、理由のコメントが付いて `cumin/status/awaiting-decision` になる
 - 検証: `test` 衝突の解消のあとも先頭のコミットが変わらないと、衝突の解消を繰り返さずに `cumin/status/awaiting-decision` になる
 
 ---
@@ -122,7 +122,7 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 
 ---
 
-#### `CWK-IMPL-012` チェックの修正を頼む
+#### `CWK-IMPL-012` チェックの失敗を修正する
 
 `cumin/status/checking` の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が設定の上限 (`max_check_fix_requests`、初期値は3回) に達していないとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで修正を頼む。失敗したチェックの内容を添える。
 
@@ -153,7 +153,7 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 
 ### 衝突の解消
 
-#### `CWK-IMPL-015` 衝突の解消を頼む
+#### `CWK-IMPL-015` 衝突の解消
 
 `cumin/status/checking` か `cumin/status/awaiting-merge-decision` の実装Issueで、GitHub が Pull Request を main ブランチと衝突していると返したとき (GraphQL の `mergeable` が `CONFLICTING`)、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで衝突の解消を頼む。`cumin/status/merging` からの衝突の解消は、[マージ](../merge/index.md) で決める。
 
@@ -166,7 +166,7 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 
 ---
 
-### Implementer が残すもの
+### Implementer の成果物
 
 #### `CWK-IMPL-016` Pull Request
 
@@ -242,13 +242,13 @@ Implementer は、Pull Request を開いて push したら、レビューもチ�
 
 ##### `CWK-IMPL-021.4` main ブランチの一覧を読む
 
-ワークフローは、保護されたパスの一覧を、Pull Request のブランチではなく main ブランチから読む。一覧のある `.cumin/` も、保護されたパスに含める。Implementer が同じ Pull Request の中で一覧を書き換えて、チェックをすり抜けることを防ぐためである。
+ワークフローは、保護されたパスの一覧を、Pull Request のブランチではなく main ブランチから読む。一覧のある `.cumin/` も、保護されたパスに含める。Implementer は、自分のブランチなら保護されたパスのファイルもコミットできる。保護は、このチェックが失敗してマージできないことで効く。Pull Request のブランチから一覧を読むと、Implementer が同じ Pull Request で一覧から `.cumin/` と自分の変更を外せば、書き換えた一覧で判定されて、チェックが通ってしまう。`.cumin/` を一覧に含めるのは、一覧を書き換える Pull Request がマージされて、後の Pull Request の保護が弱まることを防ぐためである。
 
 - 検証: `demo` Pull Request のブランチで一覧から自分の変更を外しても、チェックが失敗する
 
 ---
 
-### Implementer が止まるとき
+### Implementer が判断を求めるとき
 
 #### `CWK-IMPL-022` 推測で実装しない
 
@@ -290,7 +290,7 @@ blocked by の Issue で終わっているはずの作業が、実際には足�
 
 | # | 場面 | 期待する結果 |
 |---|---|---|
-| 1 | Maintainer が実装Issueに `cumin/status/ready` を付ける。Implementer が Pull Request を開き、必須チェックが通る | 実装が始まり (`CWK-IMPL-001`)、Pull Request が確認を通って `cumin/status/checking` になり (`CWK-IMPL-005`、`CWK-IMPL-006`)、チェックが通るとレビューに進む (`CWK-IMPL-010`) |
+| 1 | Maintainer が実装Issueに `cumin/status/ready` を付ける。Implementer が Pull Request を開き、必須チェックが通る | 実装が始まり (`CWK-IMPL-001`)、実装が完了したと判断されて `cumin/status/checking` になり (`CWK-IMPL-005`、`CWK-IMPL-006`)、チェックが通るとレビューに進む (`CWK-IMPL-010`) |
 | 2 | 必須チェックが失敗し、Implementer が直す | 同じセッションで修正を頼み (`CWK-IMPL-012`)、同じ Pull Request に修正が積まれ (`CWK-IMPL-016`)、`cumin/status/checking` に戻ってチェックが通る |
 | 3 | `cumin/status/checking` の間に、ほかの Pull Request のマージで衝突する | `UNKNOWN` の間は待ち、`CONFLICTING` になると衝突の解消を1回だけ頼む (`CWK-IMPL-015`)。チェックの修正の回数は増えない |
 | 4 | 必須チェックが待ち時間を過ぎても結果を返さない | `cumin/status/awaiting-decision` になり、先頭のコミット、そのチェック、待った時間を添えて通知が1回届く (`CWK-IMPL-014`) |
