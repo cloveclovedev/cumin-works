@@ -173,7 +173,7 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 Implementer は、1つの実装Issueにつき、渡された名前のブランチに Pull Request を1つ開く。説明は [pull-request.md](../../../../templates/pull-request.md) の形式で書き、本文に `Closes #<実装Issueの番号>` を書く。続きや修正のときは、新しい Pull Request を作らず、同じ Pull Request にコミットを積む。
 
 - 検証: `demo` `cumin/status/ready` の実装Issueで実装すると、渡した名前のブランチに Pull Request が1つ開き、本文に `Closes #<番号>` がある
-- 検証: `demo` チェックの修正と、Maintainer の差し戻しのあとの続きで、新しい Pull Request は作られず、同じ Pull Request にコミットが積まれる
+- 検証: `demo` チェックの修正と、マージ判断で Assignee が出した `REQUEST_CHANGES` のあとの続きで、新しい Pull Request は作られず、同じ Pull Request にコミットが積まれる
 
 ---
 
