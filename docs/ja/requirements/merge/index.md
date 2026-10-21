@@ -25,6 +25,7 @@ Reviewer が承認した Pull Request を、マージし、実装Issueを閉じ�
 - Reviewer の最新のレビューが、今の先頭のコミットへの `APPROVE` である
 - 必須チェックが、今の先頭のコミットですべて通っている
 - リスクのラベルが `cumin/risk/low` である
+- 土台を待たなくてよい (`CWK-MERGE-022`)
 
 - 検証: `test` `cumin/risk/low` の実装Issueで、Reviewer が今の先頭のコミットを承認し、必須チェックが通っていると、実装Issueが `cumin/status/merging` になる
 
@@ -47,7 +48,7 @@ Assignee は、Pull Request を GitHub のレビューで判断する。cumin �
 
 #### `CWK-MERGE-003` Assignee の承認でマージを始める
 
-`cumin/status/awaiting-merge-decision` の実装Issueで、Assignee の最新のレビューが今の先頭のコミットへの `APPROVE` で、必須チェックが今の先頭のコミットですべて通っているとき、cumin は状態を `cumin/status/merging` に替える。古いコミットへの承認は数えない。衝突の解消などで新しいコミットが入ったら、Assignee はもう一度承認する。
+`cumin/status/awaiting-merge-decision` の実装Issueで、Assignee の最新のレビューが今の先頭のコミットへの `APPROVE` で、必須チェックが今の先頭のコミットですべて通っていて、土台より先にマージすることにならない (`CWK-MERGE-022`) とき、cumin は状態を `cumin/status/merging` に替える。古いコミットへの承認は数えない。衝突の解消などで新しいコミットが入ったら、Assignee はもう一度承認する。
 
 - 検証: `test` Assignee が今の先頭のコミットを承認すると、実装Issueが `cumin/status/merging` になる
 - 検証: `test` 古いコミットへの承認、Assignee でない Maintainer の承認、bot の承認、あとから同じ Assignee の `REQUEST_CHANGES` で覆された承認では、`cumin/status/merging` にならない
@@ -86,6 +87,7 @@ cumin は、`cumin/status/merging` の実装Issueの Pull Request を、次の�
 - リスクのラベルが1つだけ付いている
 - Reviewer の最新のレビューが、今の先頭のコミットへの `APPROVE` である
 - リスクが `cumin/risk/medium` か `cumin/risk/high` なら、Assignee の最新のレビューも、今の先頭のコミットへの `APPROVE` である
+- Pull Request の base が main ブランチで、実装Issueの blocked by の Issue がすべて閉じている (`CWK-MERGE-022`)
 
 - 検証: `test` `cumin/status/merging` を手で付けた、Assignee の承認のない `cumin/risk/medium` の実装Issueは、マージしない
 
@@ -139,6 +141,63 @@ GitHub が、main ブランチが変わったことを理由にマージを断�
 - マージのあとで、実装Issueを閉じられない (`CWK-MERGE-012`)
 
 - 検証: `test` 必須チェックの不足など、ほかの理由でマージを断られた実装Issueは、理由のコメントが付いて `cumin/status/awaiting-decision` になり、通知が1回届く
+
+---
+
+### 土台を待つ
+
+積んだ Pull Request ([実装](../impl/index.md) の `CWK-IMPL-023`) は、レビューが済んでも、土台がマージされるまでマージしない。土台がマージされると、GitHub は土台のブランチを消し、積んだ Pull Request の base を main ブランチに替える。そのあと cumin は、積んだブランチに main ブランチを取り込ませ、チェックとレビューをもう一度通してから、マージに進む。
+
+#### `CWK-MERGE-020` 土台を待つ
+
+`cumin/status/reviewing` の実装Issueで、`CWK-MERGE-001` か `CWK-MERGE-002` の条件のうち、土台を待たなくてよいこと (`CWK-MERGE-022`) のほかがすべて成り立ち、Pull Request の base が main ブランチでないか、開いている blocked by の Issue があるとき、cumin は状態を `cumin/status/awaiting-base` に替える。Agent も人の判断も待たない状態であり、Assignee の判断は土台のほうで待つ。
+
+blocked by の Issue が開いていることも条件にするのは、Maintainer が土台の開いている間に手で base を main ブランチに替えても、`cumin/status/reviewing` のまま黙って止まらないようにするためである。
+
+- 検証: `test` 積んだ Pull Request を Reviewer が承認すると、実装Issueが `cumin/status/awaiting-base` になり、Agent起動もマージも起きない
+
+---
+
+#### `CWK-MERGE-021` main ブランチを取り込む
+
+実装Issueが次のすべてを満たすとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで、main ブランチを取り込むよう頼む。
+
+- `cumin/status/awaiting-base` である。または `cumin/status/reviewing` で、`CWK-MERGE-001` か `CWK-MERGE-002` の条件のうち、土台を待たなくてよいことのほかがすべて成り立つ
+- Pull Request の base が main ブランチで、blocked by の Issue がすべて閉じている
+- 先頭のコミットが、blocked by の Issue を閉じた Pull Request のマージのコミットを含まない
+
+土台が squash でマージされると、積んだブランチには土台の元のコミットが残り、main ブランチのマージのコミットは入っていない。Implementer は強制 push をしないので、rebase ではなく、main ブランチをマージするコミットで取り込む。土台のマージより後に切ったブランチは、そのコミットを含むので、何も起きない。取り込んだあとは、必須チェック ([実装](../impl/index.md)) とレビュー ([レビュー](../review/index.md)) をもう一度通る。
+
+この取り込みは続きの作業なので、空きを待たない。利用制限で Agent起動を止めている間は待つ。
+
+- 検証: `test` 土台がマージされて base が main ブランチになると、積んだ実装Issueが `cumin/status/implementing` になり、Implementer の直前のセッションで Agent起動が1回起き、空きがなくても起きる
+- 検証: `test` 土台のマージより後に切ったブランチの実装Issueでは、取り込みを頼まずにマージに進む
+
+---
+
+#### `CWK-MERGE-022` 土台より先にマージしない
+
+cumin は、Pull Request の base が main ブランチで、実装Issueの blocked by の Issue がすべて閉じているときだけ、マージに進み、マージを送る (`CWK-MERGE-001`、`CWK-MERGE-002`、`CWK-MERGE-003`、`CWK-MERGE-006`)。`cumin/status/reviewing` からマージに進むとき (`CWK-MERGE-001`、`CWK-MERGE-002`) は、先頭のコミットが blocked by の Issue を閉じた Pull Request のマージのコミットを含むことも条件にする。この条件が成り立つことを、このページでは「土台を待たなくてよい」と呼ぶ。`cumin/risk/low` の積んだ Pull Request も、土台のブランチにはマージしない。
+
+blocked by の Issue が閉じていることも条件にするのは、Maintainer が手で base を替えた場合にも、土台より先のマージを防ぐためである。
+
+- 検証: `test` base が土台のブランチの `cumin/risk/low` の Pull Request は、Reviewer が承認してもマージされない
+- 検証: `test` Maintainer が手で base を main ブランチに替えても、blocked by の Issue が開いている間は、マージされない
+
+---
+
+#### `CWK-MERGE-023` 土台の上の実装を止める
+
+積んだ実装Issueで、Agent が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替え、理由をコメントに書いて、通知する。積んだ作業のどこを残すかは、Assignee が決める。却下された土台のコミットは、積んだブランチに残るので、Assignee は `cumin/status/ready` を付ける前に、そのコミットを除くか、Pull Request を閉じる。
+
+- 土台の Pull Request が、マージされずに閉じた。対象は、Pull Request の base が main ブランチでない、作業中の状態か `cumin/status/awaiting-base` の実装Issueである
+- 積んだ Pull Request が、マージされずに閉じた。GitHub は、マージされていないブランチを消すと、そのブランチを base にする Pull Request を閉じる
+- `cumin/status/awaiting-base` で、土台が定期確認の間隔より前にマージされたのに、Pull Request の base が main ブランチでない。リポジトリの規則がブランチの自動の削除を妨げたときや、Maintainer が自動の削除を切ったときに起きる。間隔を待つのは、マージとブランチの削除の間の短い時間に止めないためである
+- main ブランチの取り込み (`CWK-MERGE-021`) を頼んだあとも、先頭のコミットが土台のマージのコミットを含まない。そのまま通すと、レビューと取り込みの依頼が上限なく回るためである
+
+- 検証: `test` 土台の Pull Request がマージされずに閉じると、積んだ実装Issueが理由のコメント付きで `cumin/status/awaiting-decision` になり、通知が1回届く
+- 検証: `test` 土台がマージされても、間隔を過ぎて base が土台のブランチのままなら、`cumin/status/awaiting-decision` になる
+- 検証: `test` 取り込みのあとも先頭のコミットがマージのコミットを含まないと、取り込みを繰り返さずに `cumin/status/awaiting-decision` になる
 
 ---
 
@@ -231,6 +290,8 @@ cumin は、Agent の判断を使わず、決まった形式から次のもの�
 | 4 | 承認されたあと、ほかの Pull Request のマージで衝突する | マージを送らずに衝突の解消を頼み (`CWK-MERGE-009`)、チェックとレビューを通ってもう一度マージに進む |
 | 5 | 同じ定期確認で、2つの Pull Request をマージする | 1つマージするごとに数秒待ち (`CWK-MERGE-007`)、405 で断られた Pull Request は次の定期確認でマージされる (`CWK-MERGE-010`) |
 | 6 | 最後の sub-issue の Pull Request がマージされる | フォローアップノートが付いてから、受け入れ確認を頼む (`CWK-MERGE-018`) |
+| 7 | 積んだ Pull Request を Reviewer が承認し、そのあと Assignee が土台を squash でマージする | `cumin/status/awaiting-base` で待ち (`CWK-MERGE-020`)、base が main ブランチに替わると、main ブランチを取り込ませ (`CWK-MERGE-021`)、チェックとレビューを通ってマージに進む。土台より先にはマージしない (`CWK-MERGE-022`) |
+| 8 | Assignee が土台の Pull Request を、マージせずに閉じる | 積んだ実装Issueが止まり、理由のコメントと通知が届く (`CWK-MERGE-023`) |
 
 ## 未決事項
 

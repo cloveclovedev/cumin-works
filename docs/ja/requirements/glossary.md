@@ -66,6 +66,8 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | 必須チェック | main ブランチの保護で、マージの前に通る必要があるチェック | 必須の check | required check |
 | ラウンド | Reviewer のレビュー1回と、それへの修正の組 | 周回 | round |
 | マージ判断 | Maintainer が Pull Request を見て、マージするかを決めること | merge の判断、マージ判定 | merge decision |
+| 土台 | Assignee のマージ判断を待つ Pull Request で、その上に次の実装を積むもの。base が main ブランチである | ベース、親 PR | base pull request |
+| 積む | 土台のブランチから新しいブランチを切り、土台のブランチを base にした Pull Request で、次の実装Issueを進めること。1段だけである | スタック | stack |
 | 受け入れ確認 | Planner が、マージされた結果が要求Issueを満たすかを確かめること | 受け入れの確認、受入確認 | acceptance check |
 | 受け入れ | Maintainer が受け入れ確認を見て、要求Issueを閉じること | 承認、完了確認 | acceptance |
 | 差し戻し | Maintainer が受け入れずに、sub-issue を足して進め直すこと | 却下、やり直し | send back |

@@ -39,6 +39,7 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 | `checking` | 実装Issue | GitHub が必須チェックを動かす |
 | `reviewing` | 実装Issue | Reviewer が Pull Request をレビューする |
 | `awaiting-merge-decision` | 実装Issue | Assignee が Pull Request を見て、マージ判断をする |
+| `awaiting-base` | 実装Issue | 土台の Pull Request のマージを待つ。この Issue には、誰も作業しない ([マージ](../merge/index.md) の `CWK-MERGE-020`) |
 | `merging` | 実装Issue | cumin が Pull Request をマージし、実装Issueを閉じる |
 | `awaiting-decision` | 要求Issue、実装Issue | Assignee が答える。cumin が先に進めない理由は、Issue のコメントにある |
 
