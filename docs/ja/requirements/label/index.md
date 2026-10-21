@@ -1,6 +1,6 @@
 # ラベル
 
-Maintainer と cumin の間の取り決めとして、Issue と Pull Request に付けるラベルを決める。Maintainer はラベルを見て状態を知り、ラベルを付けて cumin に合図する。状態ごとのアクションは、計画、実装、レビュー、マージ、受け入れの各カテゴリで決める。誰がどのラベルを付けてよいかは [権限](../access/index.md) で決める。
+Issue と Pull Request に付けるラベルを決める。Maintainer はラベルで状態を知り、ラベルで cumin に合図する。状態ごとのアクションは各カテゴリで決める。誰がどのラベルを付けてよいかは [権限](../access/index.md) で決める。
 
 ## 全体像
 
@@ -69,7 +69,7 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 
 `cumin/type/requirement` は、その Issue が要求Issueであることを表す。Maintainer が付け、閉じるまで付けたままにする。`cumin/type/requirement` の付いた Issue の sub-issue が、実装Issueである。実装Issueを表すラベルは作らない。
 
-`cumin/type/owner-task` は、その実装Issueの作業を Assignee が手で行うことを表す。Implementer が変えられないファイル (保護されたパス、GitHub App の権限で書けないファイル) の変更が要るときに、Planner か Maintainer が付ける。cumin は、`cumin/status/ready` が付いていても、この Issue に着手しない。
+`cumin/type/owner-task` は、その実装Issueの作業を Assignee が手で行うことを表す。Implementer が変えられないファイル (保護されたパス、GitHub App の権限で書けないファイル) の変更が要るときに、Planner か Maintainer が付ける。cumin は、この Issue に着手しない。
 
 - 検証: `test` `cumin/type/owner-task` と `cumin/status/ready` の付いた実装Issueに、Agent起動をしない
 
@@ -85,9 +85,9 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 
 #### `CWK-LABEL-008` 優先度のラベル
 
-優先度のラベルは、着手の順番を表す。初期値は `cumin/priority/P0`、`cumin/priority/P1`、`cumin/priority/P2`、`cumin/priority/P3` で、`P0` が最も高い。対象のリポジトリに優先度のラベルがすでにあるときのために、`.cumin/config.toml` の `priority_labels` で、ラベルの名前を高い順に設定できる。設定があれば、cumin は初期値ではなく、設定のラベルに従う。Host の設定ファイルでは設定できない。
+優先度のラベルは、着手の順番を表す。初期値は `cumin/priority/P0` から `cumin/priority/P3` で、`P0` が最も高い。対象のリポジトリにすでにある優先度のラベルを使うときは、`.cumin/config.toml` の `priority_labels` に、名前を高い順に書く。
 
-優先度のラベルは、要求Issueにも実装Issueにも付けてよく、付けなくてもよい。付けるのは Maintainer だけである。cumin と Agent は、付けも外しもせず、Pull Request にも写さない。この順番で着手する決まりは [定期確認](../poll/index.md) で決める。
+優先度のラベルは、要求Issueにも実装Issueにも付けてよい。付けるのは Maintainer だけで、cumin と Agent は付けも外しもせず、Pull Request にも写さない。着手の順番は [定期確認](../poll/index.md) の `CWK-POLL-006` で決める。
 
 - 検証: `test` `priority_labels` を設定したリポジトリでは、設定のラベルの順に着手する。設定のないリポジトリでは、初期値のラベルの順に着手する
 - 検証: `test` cumin と Agent が作業したあとも、Issue の優先度のラベルは変わらず、Pull Request には優先度のラベルが付かない
@@ -98,7 +98,7 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 
 #### `CWK-LABEL-006` ラベルを Pull Request に写す
 
-cumin は、実装Issueの状態ラベルとリスクのラベルを、その Issue を閉じる Pull Request にも写す。写したラベルは、Maintainer が Pull Request の一覧で状態とリスクを見分けるためのもので、cumin は読まない。Pull Request の側でラベルを替えても、cumin が実装Issueのラベルで上書きする。この写しは、どの状態でも行い、状態を変えない。
+cumin は、実装Issueの状態ラベルとリスクのラベルを、その Issue を閉じる Pull Request に写す。Maintainer が Pull Request の一覧で見分けるためのもので、cumin は読まない。Pull Request の側で替えても、実装Issueのラベルで上書きする。
 
 - 検証: `test` cumin が実装Issueのラベルを替える、Maintainer が実装Issueのリスクを替える、Maintainer が Pull Request の側のラベルを替える、のどれのあとでも、次の定期確認で Pull Request のラベルが実装Issueと同じになる。cumin のアクションは、Pull Request のラベルに左右されない
 

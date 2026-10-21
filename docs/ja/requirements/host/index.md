@@ -139,7 +139,7 @@ Host がスリープから戻ったとき、cumin と動いている Agent は�
 | `idle_poll_interval` | 作業中でないリポジトリの定期確認の間隔。`poll_interval` 以上 (`CWK-POLL-004`) | 5分 | Host |
 | `max_issues_in_progress` | リポジトリごとに同時に進める Issue の数 (`CWK-POLL-005`) | 1 | Host |
 | `quota.five_hour.threshold` | 5時間制限のしきい値 (`CWK-LIMIT-004`) | 85% | Host |
-| `quota.five_hour.bands` | 5時間制限の時間帯ごとのしきい値。時間帯は重ねられない (`CWK-LIMIT-004`) | なし | Host |
+| `quota.five_hour.bands` | 5時間制限の時間帯ごとのしきい値。同じ時刻を2つの時間帯に入れられない (`CWK-LIMIT-004`) | なし | Host |
 | `quota.weekly.target` | 週間制限の目標 (`CWK-LIMIT-005`) | 85% | Host |
 | `quota.weekly.lead` | 週間制限の前倒し。7日未満 (`CWK-LIMIT-005`) | 1日 | Host |
 | `github_apps.<organization>.<app>` | GitHub App の Client ID。`cumin setup github-apps` が書く | なし | Host |

@@ -4,7 +4,7 @@ Agent起動に共通のことを決める。起動の手順、渡す指示と事
 
 ## 全体像
 
-1回の Agent起動で、実行が Host の上でたどる段階を示す。GitHub のラベルではない。
+1回の Agent起動で、実行が Host の上でたどる流れを示す。GitHub のラベルではない。
 
 ![Agent の全体像](overview.svg)
 

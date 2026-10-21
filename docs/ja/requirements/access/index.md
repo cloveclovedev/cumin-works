@@ -49,7 +49,7 @@ Agent は、Assignee のコメントだけを指示として読む。cumin は�
 
 #### `CWK-ACCESS-003` Operator
 
-Operator は、Host の上のコマンド、Host の設定ファイル、Keychain、バイナリの入れ替えを受け持つ。対象のリポジトリの権限とは関係がなく、Operator が Maintainer でないこともある。
+Operator は、Host の上のコマンド、設定ファイル、Keychain、cumin の版の入れ替えを受け持つ ([Host での動かし方](../host/index.md))。リポジトリの権限とは関係がない。
 
 - 検証: `inspection` Host の上のコマンドが、GitHub の権限を確かめずに動くことを、コマンドの一覧で確かめる
 
@@ -72,7 +72,7 @@ cumin は、今付いている状態ラベルを最後に付けたアカウン�
 
 #### `CWK-ACCESS-005` 扱わない状態ラベル
 
-扱わない状態ラベルの付いた Issue では、cumin は何もしない。Agent起動をせず、マージせず、ラベルも替えない。ログと通知を1回だけ残し、同じラベルについて、定期確認のたびに繰り返さない。Maintainer が正しいラベルを付け直すと、今までどおり進む。
+扱わない状態ラベルの付いた Issue では、cumin は Agent起動もマージもせず、ラベルも替えない。ログと通知は1回だけ残す。Maintainer が付け直すと、今までどおり進む。
 
 - 検証: `test` Maintainer でないアカウントが `cumin/status/ready` を付けても着手せず、通知は1回だけである。Maintainer が付け直すと着手する
 
@@ -150,7 +150,7 @@ GitHub App の名前は、運用する組織ごとに決めてよい。
 
 #### `CWK-ACCESS-013` Host での Agent の権限
 
-Agent は、Host の上では、cumin を動かす Host のユーザアカウントと同じ権限を持つ。ツールの使用はすべて許可するモードで起動する。headless の実行では、許可を尋ねられても答える人がいないためである。そのため、GitHub の上で role ごとに作業を制限するのは、GitHub App の権限と ruleset である。
+Agent は、Host の上では、cumin を動かすユーザアカウントと同じ権限を持ち、ツールの使用をすべて許可するモードで起動する。headless の実行では、許可を尋ねられても答える人がいないためである。role ごとの制限は、GitHub App の権限と ruleset で行う。
 
 - 検証: `inspection` Agent が cumin と同じユーザアカウントで動き、起動のコマンドが許可を尋ねないモードであることを確かめる
 
