@@ -54,6 +54,8 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | 空き | 同時に動かせる Agent の数に、余裕があること | 枠 | free slot |
 | Agent起動 | cumin が role と Issue を決めて Agent を始め、作業を頼むこと。続きを頼むときも含む | 依頼、指示、起動 | agent start |
 | 通知 | Host の設定で決めた通知先に知らせること。文書には相手の名前を書かない | 連絡、アラート | notify |
+| 作業中のリポジトリ | Agent が動いているか、人なしで進む Issue があるか、前回の定期確認でアクションをしたか失敗した、対象のリポジトリ。短い間隔で定期確認する | アクティブなリポジトリ | busy repository |
+| 全部を読めない Issue | sub-issue、ラベル、blocked by の Issue、結び付いた Pull Request のどれかが、cumin の読む数の上限を超えた Issue。cumin は何もしない | 大きすぎる Issue | issue that cumin cannot read whole |
 
 ## 作業の流れ
 
@@ -81,6 +83,10 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | 5時間制限 | 5時間ごとにリセットされる利用制限 | 5h枠、5時間枠 | 5-hour limit |
 | 週間制限 | 週ごとにリセットされる利用制限 | weekly枠、週枠 | weekly limit |
 | ツール動作確認 | Agent起動の前に、リポジトリが必要とするツールが Host で動くかを、コマンドで確かめること | 道具の確認、tool check | tool check |
+| 使用率 | 5時間制限か週間制限のうち、使った割合 | 利用率、消費率 | usage |
+| ペースの上限 | 週間制限の上限。週の経過とともに上がる | | pace limit |
+| 手元の状態 | cumin が Host に持つ、失っても作業を失わない情報。セッションの番号、回数、使用率など | ローカル DB、キャッシュ | local state |
+| モニターファイル | cumin が定期確認のたびに書き、cumin を外から見る道具が読むファイル。cumin 自身は読まない | 監視ファイル、ステータスファイル | monitor file |
 | 専門知識 | 1つの分野の作業の基準。role の契約とは別に、Agent に渡す。`disciplines/` に置く | discipline、規律、専門スキル | discipline |
 
 ## 要件文書とテスト

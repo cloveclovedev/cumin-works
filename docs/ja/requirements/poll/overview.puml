@@ -1,0 +1,23 @@
+@startuml overview
+' cumin-works - one poll of one target repository.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+start
+:read .cumin/config.toml of the default branch;
+:run the tool checks;
+:read the open issues, their labels, sub-issues,\nblockers, pull requests, reviews, and checks;
+:skip each issue that cumin cannot read whole\n(notify once);
+:decide the actions from the facts\nand from the agents that run;
+note right
+  The same facts give the same actions.
+  The same decision runs right after an agent run ends.
+end note
+:take the actions that start no agent\n(labels, comments, notifications, merges);
+if (agent starts stopped by a usage limit or a tool check?) then (yes)
+  :start no agent; every issue keeps its state;
+else (no)
+  :start the agents, in the order of priority\nand of the issue number, up to the free slots;
+endif
+stop
+
+@enduml

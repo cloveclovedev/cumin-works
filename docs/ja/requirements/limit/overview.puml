@@ -1,0 +1,20 @@
+@startuml overview
+' cumin-works - the state of cumin itself for the agent starts under the usage limits.
+' One instance for one cumin, kept on the Host, not on GitHub. It holds for every repository.
+' A transition is written: action [guard] / what cumin does.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "starting agents" as Starting
+Starting : do / cumin starts the agent of each transition\nthat starts an agent
+
+state "agent starts stopped" as Stopped
+Stopped : do / the running agents end; cumin starts no agent.\nEvery issue keeps its state.\nTransitions that start no agent go on
+
+[*] --> Starting
+Starting --> Stopped : stop agent starts\n[a usage is at its limit,\nor cumin cannot read the usage]\n/ cumin notifies once
+Stopped --> Starting : resume agent starts\n[the Operator allows the 5-hour limit,\nthe weekly usage is under its limit]
+Stopped --> Starting : resume agent starts\n[the time of the next try passed,\nboth usages are under their limits]
+
+@enduml

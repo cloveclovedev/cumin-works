@@ -1,0 +1,21 @@
+@startuml overview
+' cumin-works - when cumin notifies. Each cause is notified once.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+left to right direction
+
+rectangle "an issue enters a state of a person's turn\n(awaiting-plan-review, awaiting-merge-decision,\nawaiting-acceptance, awaiting-decision)" as Turn
+rectangle "cumin cannot take an issue\n(a label it does not take, no single Assignee,\nan issue it cannot read whole)" as Cannot
+rectangle "cumin stops agent starts\n(a usage limit, an unread usage,\na failed tool check, failed polls)" as Stop
+rectangle "nothing goes on without a Maintainer" as Waits
+
+rectangle "notify once:\na link and one line of the reason" as Notify
+rectangle "the issue and the pull request\nhold the details and the talk" as GitHub
+
+Turn --> Notify
+Cannot --> Notify
+Stop --> Notify
+Waits --> Notify
+Notify --> GitHub : the reader goes to
+
+@enduml
