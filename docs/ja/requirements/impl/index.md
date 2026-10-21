@@ -1,6 +1,6 @@
 # 実装
 
-実装Issueを Pull Request にまとめ、必須チェックが通るまでの流れを決める。cumin が Implementer を起動し、Pull Request を GitHub で確かめ、必須チェックを待ち、失敗と衝突を直させるまでである。レビューは [レビュー](../review/index.md)、マージとマージ判断は [マージ](../merge/index.md)、Agent起動に共通のことは [Agent](../agent/index.md) で決める。
+実装Issueを Pull Request にまとめるまでの流れを決める。cumin が Implementer を起動し、Pull Request を GitHub で確かめて、必須チェックを待つ状態に替えるまでである。必須チェック、チェックの失敗と衝突の修正、保護されたパスのチェックは [チェック](../check/index.md)、レビューは [レビュー](../review/index.md)、マージとマージ判断は [マージ](../merge/index.md)、Agent起動に共通のことは [Agent](../agent/index.md) で決める。
 
 ## 全体像
 
@@ -12,8 +12,6 @@
 
 「Implementer が動いていない」の意味は、[Agent](../agent/index.md) の `CWK-AGENT-001` で決める。
 
-`cumin/status/checking` は、「Implementer の作業が済み、チェックが動いている」ことを GitHub に残すための状態である。`cumin/status/implementing` のままだと、Implementer が修正の途中なのか、チェックを待っているのかを、GitHub の事実から見分けられない。チェックが動いている間は Agent が動いていないので、利用制限を使わない。Pull Request が開いただけでは、レビューに進まない。
-
 ## 要件
 
 ### 実装の Agent起動
@@ -23,7 +21,7 @@
 `cumin/status/ready` の付いた実装Issueが次のすべてを満たすとき、cumin は状態を `cumin/status/implementing` に替えてから、新しいセッションで Implementer を起動する。実装Issueを閉じる Pull Request がすでにあれば、その続きから進めさせる。
 
 - その `cumin/status/ready` を、cumin が扱う ([権限](../access/index.md) の `CWK-ACCESS-004`)
-- 実装Issueの blocked by の Issue が、すべて閉じている (`CWK-IMPL-002`)。または、マージ判断を待つ Pull Request のブランチから始める条件を満たす (`CWK-IMPL-023.1`)
+- 実装Issueの blocked by の Issue が、すべて閉じている (`CWK-IMPL-002`)。または、マージ判断を待つ Pull Request のブランチから始める条件を満たす (`CWK-IMPL-015.1`)
 - cumin に空きがある
 - `cumin/type/owner-task` が付いていない ([ラベル](../label/index.md) の `CWK-LABEL-004`)
 
@@ -34,7 +32,7 @@
 
 #### `CWK-IMPL-002` 先の実装Issueを待つ
 
-blocked by の Issue が1つでも開いている実装Issueには、cumin は着手しない。例外は、開いている blocked by の Issue が Assignee のマージ判断を待っているときで、その Pull Request のブランチから始める (`CWK-IMPL-023`)。
+blocked by の Issue が1つでも開いている実装Issueには、cumin は着手しない。例外は、開いている blocked by の Issue が Assignee のマージ判断を待っているときで、その Pull Request のブランチから始める (`CWK-IMPL-015`)。
 
 - 検証: `test` blocked by の実装Issueが `cumin/status/implementing` の間は着手せず、閉じたあとの定期確認で着手する
 
@@ -50,7 +48,7 @@ cumin は、実装Issueごとにブランチの名前を決めて、Implementer 
 
 #### `CWK-IMPL-004` 回数を数え直す
 
-`CWK-IMPL-001` で `cumin/status/ready` から `cumin/status/implementing` に移るたびに、cumin はチェックの修正の回数 (`CWK-IMPL-012`) を0に戻す。Maintainer が介入したあとは Agent のセッションも新しくなるので、上限も数え直す。
+`CWK-IMPL-001` で `cumin/status/ready` から `cumin/status/implementing` に移るたびに、cumin はチェックの修正の回数 ([チェック](../check/index.md) の `CWK-CHECK-004`) を0に戻す。Maintainer が介入したあとは Agent のセッションも新しくなるので、上限も数え直す。
 
 - 検証: `test` チェックの修正を上限まで頼んで止まった実装Issueに、Maintainer が `cumin/status/ready` を付け直すと、チェックの修正をまた上限まで頼める
 
@@ -88,7 +86,7 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 
 - Implementer の質問のコメントが、実装Issueが `cumin/status/implementing` になったあとに書かれている。Implementer の質問では、やり直さない。実装に要る要件が足りないことが多く、Maintainer が Issue を書き直す必要があるためである
 - やり直し (`CWK-IMPL-007`) のあとも、実装が完了していない
-- 衝突の解消 (`CWK-IMPL-015`) を頼んだあとも、先頭のコミットが頼む前のままである。先頭のコミットの時刻と、実装Issueに最新の `cumin/status/implementing` が付いた時刻を比べて決める
+- 衝突の解消 ([チェック](../check/index.md) の `CWK-CHECK-007`) を頼んだあとも、先頭のコミットが頼む前のままである。先頭のコミットの時刻と、実装Issueに最新の `cumin/status/implementing` が付いた時刻を比べて決める
 
 - 検証: `test` Implementer が `blocked` を返すと、やり直さずに `cumin/status/awaiting-decision` になる
 - 検証: `test` やり直しのあとも実装が完了しないと、理由のコメントが付いて `cumin/status/awaiting-decision` になる
@@ -96,85 +94,15 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 
 ---
 
-### 必須チェック
-
-#### `CWK-IMPL-009` 必須チェックの一覧
-
-必須チェックは、main ブランチに効く ruleset の "Require status checks to pass before merging" に登録されたチェックである。cumin は、その一覧を GitHub の ruleset から読む。今そのコミットに付いているチェックの一覧では決めない。push の直後はチェックがまだ1つも現れておらず、チェックがないのか、これから現れるのかを見分けられないためである。
-
-- 検証: `test` ruleset に登録したチェックだけを待ち、登録していないチェックの失敗では止まらない
-
----
-
-#### `CWK-IMPL-010` 必須チェックが通る
-
-必須チェックが通るとは、一覧のすべてのチェックが、Pull Request の先頭のコミットで、結論 `success`、`skipped`、`neutral` のどれかを返したことである。GitHub も、この3つをマージを止めない結論として扱う。一覧が空なら、すぐに通る。
-
-- 検証: `test` 3つの結論はどれも通ったと扱い、ほかの結論は通ったと扱わない。一覧が空のリポジトリでは、`cumin/status/checking` を通って、次の定期確認でレビューに進む
-
----
-
-#### `CWK-IMPL-011` 判定の順番
-
-`cumin/status/checking` の実装Issueでは、1回の定期確認で、衝突の解消 (`CWK-IMPL-015`)、チェックの結果 (レビューに進む、`CWK-IMPL-012`、`CWK-IMPL-013`)、`CWK-IMPL-014` の順に判定し、最初に成り立ったものだけを行う。
-
-- 検証: `test` 衝突していて、チェックの待ち時間も過ぎた実装Issueでは、衝突の解消だけが起きる
-
----
-
-#### `CWK-IMPL-012` チェックの失敗を修正する
-
-`cumin/status/checking` の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が設定の上限 (`max_check_fix_requests`、初期値は3回) に達していないとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで修正を頼む。失敗したチェックの内容を添える。
-
-- 検証: `test` 必須チェックが失敗すると、失敗したチェックの内容を添えて、直前のセッションで Implementer の Agent起動が1回起きる
-
----
-
-#### `CWK-IMPL-013` チェックの失敗で止める
-
-`cumin/status/checking` の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が上限に達しているとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。コメントと通知には、失敗したチェックの名前と、頼んだ回数を書く。
-
-- 検証: `test` 上限までチェックの修正を頼んでも失敗すると、`cumin/status/awaiting-decision` になり、通知は1回だけである
-
----
-
-#### `CWK-IMPL-014` チェックが来ないときに止める
-
-`cumin/status/checking` の実装Issueで、設定の待ち時間 (`checks_wait_time`、初期値は60分) を過ぎても、必須チェックのどれかが先頭のコミットで結果を返していないとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。
-
-- 待ち時間は、実装Issueに最新の `cumin/status/checking` が付いた時刻と、先頭のコミットの時刻のうち、遅いほうから数える。待っている間に誰かがブランチに push すると、そこから数え直す。
-- 実装Issueを閉じる開いている Pull Request がないときも、ラベルの時刻から待ち時間を過ぎたら止める。
-- コメントと通知には、先頭のコミット、結果を返していない必須チェック、待った時間を書く。Pull Request がないときは、そのことと待った時間を書く。チェックが来ない理由は調べない。理由は Maintainer が調べる。
-
-- 検証: `test` 待ち時間を過ぎても結果を返さない必須チェックがあると、先頭のコミット、そのチェック、待った時間を添えて、通知が1回だけ届く
-- 検証: `test` 開いている Pull Request がなくなった実装Issueでも、待ち時間を過ぎると、そのことを添えて止まる
-
----
-
-### 衝突の解消
-
-#### `CWK-IMPL-015` 衝突の解消
-
-`cumin/status/checking` か `cumin/status/awaiting-merge-decision` の実装Issueで、GitHub が Pull Request をその base (ふつうは main ブランチ。`CWK-IMPL-023` で始めた Pull Request では、blocked by の Issue のブランチ) と衝突していると返したとき (GraphQL の `mergeable` が `CONFLICTING`)、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで衝突の解消を頼む。`cumin/status/merging` からの衝突の解消は、[マージ](../merge/index.md) で決める。
-
-- `mergeable` が `UNKNOWN` のときは、GitHub がまだ計算しているので、その定期確認では判定しない。`UNKNOWN` のまま待ち時間を過ぎたら、`CWK-IMPL-014` で止まる。
-- 衝突の解消は、チェックの修正の回数に数えない。衝突は Implementer の誤りではなく、並行して進むほかの Pull Request のマージで起きるためである。
-- 衝突したまま待たないのは、GitHub が衝突のある Pull Request では `pull_request` のワークフローを動かさず、チェックがいつまでも結果を返さないためである。
-
-- 検証: `test` 衝突した Pull Request の実装Issueで、Implementer に衝突の解消を1回だけ頼み、チェックの修正の回数は増えない
-- 検証: `test` `mergeable` が `UNKNOWN` の間は、衝突の解消を頼まない
-
----
-
 ### マージ判断を待つ Pull Request のブランチから始める
 
 blocked by の Issue の Pull Request が Assignee のマージ判断を待つ間も、それに依存する実装Issueが止まらないように、cumin は、その Pull Request がマージされたものとみなして、そのブランチから次の実装を始める。始めた Pull Request は、base が main ブランチでない Pull Request になる。blocked by の Issue のマージを待つこと、そのマージのあとに main ブランチを取り込むこと、blocked by の Issue より先にマージしないことは、[マージ](../merge/index.md) で決める。
 
-#### `CWK-IMPL-023` マージ判断を待つ Pull Request のブランチから始める
+#### `CWK-IMPL-015` マージ判断を待つ Pull Request のブランチから始める
 
 cumin は、条件を満たす実装Issueを、blocked by の Issue の Pull Request のブランチから始める。始めたあとも、必須チェックとレビューは、ほかの Pull Request と同じに通る。
 
-##### `CWK-IMPL-023.1` 着手の条件
+##### `CWK-IMPL-015.1` 着手の条件
 
 `cumin/status/ready` の実装Issueで、`CWK-IMPL-001` の blocked by のほかの条件を満たし、次のすべてが成り立つとき、cumin は、blocked by の Issue の Pull Request のブランチから実装を始める。
 
@@ -183,7 +111,7 @@ cumin は、条件を満たす実装Issueを、blocked by の Issue の Pull Req
 - 対象のリポジトリが、マージのあとにブランチを自動で消す設定 (`deleteBranchOnMerge`) である。ブランチが消えたときにだけ、GitHub が、そのブランチを base にする Pull Request の base を main ブランチに替えるためである。この設定がないリポジトリでは、今までどおり blocked by の Issue が閉じるのを待つ
 - 対象のリポジトリの `.cumin/config.toml` で、この始め方を有効にしている (`start_on_awaiting_merge_decision = true`)。初期値は `false` で、有効にしていないリポジトリでは、今までどおり blocked by の Issue が閉じるのを待つ。ツール動作確認と同じく、リポジトリの `.cumin/config.toml` だけで決める
 
-有効にする前に、Maintainer は、必須チェックのワークフローが、base が main ブランチでない Pull Request でも動くことを確かめる。cumin は、必須チェックの一覧を main ブランチの規則から読み、この形の Pull Request でもその結果を待つ。ワークフローを `on: pull_request: branches: [main]` のように絞っているリポジトリでは、チェックが来ず、待ち時間のあとで止まる (`CWK-IMPL-014`)。
+有効にする前に、Maintainer は、必須チェックのワークフローが、base が main ブランチでない Pull Request でも動くことを確かめる。cumin は、必須チェックの一覧を main ブランチの規則から読み、この形の Pull Request でもその結果を待つ。ワークフローを `on: pull_request: branches: [main]` のように絞っているリポジトリでは、チェックが来ず、待ち時間のあとで止まる ([チェック](../check/index.md) の `CWK-CHECK-006`)。
 
 `cumin/status/awaiting-merge-decision` は、Reviewer が blocked by の Issue の Pull Request の今の先頭のコミットを承認したことを表す。Reviewer が承認する前の Pull Request のブランチからは始めない。
 
@@ -191,7 +119,7 @@ cumin は、条件を満たす実装Issueを、blocked by の Issue の Pull Req
 
 ---
 
-##### `CWK-IMPL-023.2` ブランチと base
+##### `CWK-IMPL-015.2` ブランチと base
 
 このとき cumin は、Implementer に、blocked by の Issue のブランチを渡す。Implementer は、新しいブランチをそのブランチから切り、Pull Request の base もそのブランチにする。差分に、この実装Issueの変更だけが出るようにするためである。cumin は、base が main ブランチでないことで、この形の Pull Request を見分ける。ラベルも draft も使わない。
 
@@ -200,7 +128,7 @@ cumin は、条件を満たす実装Issueを、blocked by の Issue の Pull Req
 
 ---
 
-##### `CWK-IMPL-023.3` 1段だけにする
+##### `CWK-IMPL-015.3` 1段だけにする
 
 blocked by の Issue の Pull Request の base が main ブランチであることを条件にするので、base が main ブランチでない Pull Request のブランチからは、さらに始めない。深さを選べるようにすることは [バックログ](../backlog.md) にある。
 
@@ -208,9 +136,9 @@ blocked by の Issue の Pull Request の base が main ブランチであるこ
 
 ---
 
-##### `CWK-IMPL-023.4` blocked by の Issue の変更は追わない
+##### `CWK-IMPL-015.4` blocked by の Issue の変更は追わない
 
-Assignee が blocked by の Issue の Pull Request に `REQUEST_CHANGES` を出して、そのブランチが変わっても、cumin はこの実装Issueのブランチを更新しない。base のブランチとの衝突だけを、衝突の解消 (`CWK-IMPL-015`) で解く。base のブランチが動くたびに更新すると、そのたびに Implementer の実行とレビューが1回ずつ要るためである。この実装Issueのブランチは、blocked by の Issue がマージされるまで、古いコミットの上にある。
+Assignee が blocked by の Issue の Pull Request に `REQUEST_CHANGES` を出して、そのブランチが変わっても、cumin はこの実装Issueのブランチを更新しない。base のブランチとの衝突だけを、衝突の解消 ([チェック](../check/index.md) の `CWK-CHECK-007`) で解く。base のブランチが動くたびに更新すると、そのたびに Implementer の実行とレビューが1回ずつ要るためである。この実装Issueのブランチは、blocked by の Issue がマージされるまで、古いコミットの上にある。
 
 - 検証: `test` blocked by の Issue の Pull Request に新しいコミットが入っても、この実装Issueに Agent起動は起きない。base のブランチと衝突したときだけ、衝突の解消を頼む
 
@@ -218,7 +146,7 @@ Assignee が blocked by の Issue の Pull Request に `REQUEST_CHANGES` を出�
 
 ### Implementer の成果物
 
-#### `CWK-IMPL-016` Pull Request
+#### `CWK-IMPL-009` Pull Request
 
 Implementer は、1つの実装Issueにつき、渡された名前のブランチに Pull Request を1つ開く。説明は [pull-request.md](../../../../templates/pull-request.md) の形式で書き、本文に `Closes #<実装Issueの番号>` を書く。続きや修正のときは、新しい Pull Request を作らず、同じ Pull Request にコミットを積む。
 
@@ -227,7 +155,7 @@ Implementer は、1つの実装Issueにつき、渡された名前のブラン�
 
 ---
 
-#### `CWK-IMPL-017` 範囲の外の作業
+#### `CWK-IMPL-010` 範囲の外の作業
 
 Implementer は、実装Issueに書かれていない範囲に手を広げない。自分で気づいた範囲の外の作業は、Pull Request の説明の `Follow-up` に書き、Issue は作らない。マージのあとに、cumin がフォローアップノートとして要求Issueに書く ([マージ](../merge/index.md))。
 
@@ -235,7 +163,7 @@ Implementer は、実装Issueに書かれていない範囲に手を広げない
 
 ---
 
-#### `CWK-IMPL-018` Pull Request の図
+#### `CWK-IMPL-011` Pull Request の図
 
 Implementer は、Pull Request の「Where this fits」の図を直すときは、直した図をブランチ `cumin/diagrams` に新しいファイルとして足す。Pull Request のブランチには図のファイルを置かない。ただし、設計文書の図を変えるときは、Pull Request のブランチで変える。
 
@@ -243,7 +171,7 @@ Implementer は、Pull Request の「Where this fits」の図を直すときは�
 
 ---
 
-#### `CWK-IMPL-019` Issue を変えない
+#### `CWK-IMPL-012` Issue を変えない
 
 Implementer は、実装Issueと要求Issueの本文を書き換えない。
 
@@ -251,7 +179,7 @@ Implementer は、実装Issueと要求Issueの本文を書き換えない。
 
 ---
 
-#### `CWK-IMPL-020` 待たずに終わる
+#### `CWK-IMPL-013` 待たずに終わる
 
 Implementer は、Pull Request を開いて push したら、レビューもチェックも待たずに実行を終える。チェックとレビューを待つのは cumin である。
 
@@ -259,60 +187,13 @@ Implementer は、Pull Request を開いて push したら、レビューもチ�
 
 ---
 
-### 保護されたパスのチェック
-
-#### `CWK-IMPL-021` 保護されたパスのチェック
-
-保護されたパスが変わっていないことは、cumin ではなく、GitHub Actions のチェックで確かめる。チェックが失敗したときは、ほかの必須チェックと同じく `CWK-IMPL-012` に進む。
-
-##### `CWK-IMPL-021.1` 保護されたパスの一覧
-
-保護されたパスの一覧は、対象のリポジトリの `.cumin/config.toml` の `protected_paths` に書く。ファイルかキーがなければ、初期値の `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md` を使う。`REVIEW.md` を含めるのは、Agent が書き換えると、Reviewer の判断が変わるためである ([レビュー](../review/index.md) の `CWK-REVIEW-017`)。
-
-- 検証: `test` `protected_paths` のないリポジトリで、`REVIEW.md` を変える bot の Pull Request のチェックが失敗する
-
----
-
-##### `CWK-IMPL-021.2` 変更ファイルと突き合わせる
-
-対象のリポジトリに GitHub Actions のワークフローを置く。ワークフローは、Pull Request の変更ファイルの一覧を保護されたパスの一覧と突き合わせ、1つでも当たれば失敗する。
-
-- 検証: `demo` 保護されたパスを変える Pull Request を bot が開くと、チェックが失敗する
-
----
-
-##### `CWK-IMPL-021.3` 必須チェックにする
-
-このチェックを、main ブランチの ruleset で必須チェックに登録する。
-
-- 検証: `inspection` 対象のリポジトリの ruleset に、このチェックが必須チェックとして登録されている
-
----
-
-##### `CWK-IMPL-021.4` bot の Pull Request だけに掛ける
-
-チェックの job は、Pull Request の作成者が bot (GitHub App など) のときだけ動く。作成者が人のときは job が飛ばされ、GitHub は `skipped` として扱うので、人の Pull Request はこのチェックで止まらない。条件に GitHub App の名前は使わない。名前を間違えると job が飛ばされて通った扱いになり、保護が黙って効かなくなるためである。
-
-- 検証: `demo` 人が保護されたパスを変える Pull Request を開くと、チェックが `skipped` になる
-- 検証: `inspection` ワークフローの条件が、GitHub App の名前ではなく、作成者が bot かどうかで決まっている
-
----
-
-##### `CWK-IMPL-021.5` main ブランチの一覧を読む
-
-ワークフローは、保護されたパスの一覧を、Pull Request のブランチではなく main ブランチから読む。一覧のある `.cumin/` も、保護されたパスに含める。Implementer は、自分のブランチなら保護されたパスのファイルもコミットできる。保護は、このチェックが失敗してマージできないことで効く。Pull Request のブランチから一覧を読むと、Implementer が同じ Pull Request で一覧から `.cumin/` と自分の変更を外せば、書き換えた一覧で判定されて、チェックが通ってしまう。`.cumin/` を一覧に含めるのは、一覧を書き換える Pull Request がマージされて、後の Pull Request の保護が弱まることを防ぐためである。
-
-- 検証: `demo` Pull Request のブランチで一覧から自分の変更を外しても、チェックが失敗する
-
----
-
 ### Implementer が判断を求めるとき
 
-#### `CWK-IMPL-022` 推測で実装しない
+#### `CWK-IMPL-014` 推測で実装しない
 
 Implementer は、次のどれかに当たったら、推測で進めずに `blocked` を返す。cumin は、やり直さずに止める (`CWK-IMPL-008`)。
 
-##### `CWK-IMPL-022.1` 足りない要件
+##### `CWK-IMPL-014.1` 足りない要件
 
 実装に要る要件が足りないか、要件どうしが食い違っているときは、止まる。理由には、何が決まっていないかを書く。
 
@@ -320,7 +201,7 @@ Implementer は、次のどれかに当たったら、推測で進めずに `blo
 
 ---
 
-##### `CWK-IMPL-022.2` 変えられないファイル
+##### `CWK-IMPL-014.2` 変えられないファイル
 
 保護されたパスか `.github/workflows` の変更が要るときは、変えずに止まる。理由には、そのパスを書く。
 
@@ -328,7 +209,7 @@ Implementer は、次のどれかに当たったら、推測で進めずに `blo
 
 ---
 
-##### `CWK-IMPL-022.3` 大きすぎる実装Issue
+##### `CWK-IMPL-014.3` 大きすぎる実装Issue
 
 実装Issueが、1つの Pull Request に収まらない大きさだと分かったときは、止まる。
 
@@ -336,9 +217,9 @@ Implementer は、次のどれかに当たったら、推測で進めずに `blo
 
 ---
 
-##### `CWK-IMPL-022.4` 足りない先の作業
+##### `CWK-IMPL-014.4` 足りない先の作業
 
-blocked by の Issue で終わっているはずの作業が、実際には足りていないときは、止まる。`CWK-IMPL-023` で始めた実装Issueでは、blocked by の Issue のブランチにあるはずの作業である。
+blocked by の Issue で終わっているはずの作業が、実際には足りていないときは、止まる。`CWK-IMPL-015` で始めた実装Issueでは、blocked by の Issue のブランチにあるはずの作業である。
 
 - 検証: `demo` 先の実装Issueの成果が main ブランチにない状態で実装すると、結果は `blocked` で、足りない作業が理由に書いてある
 
@@ -348,13 +229,10 @@ blocked by の Issue で終わっているはずの作業が、実際には足�
 
 | # | 場面 | 期待する結果 |
 |---|---|---|
-| 1 | Maintainer が実装Issueに `cumin/status/ready` を付ける。Implementer が Pull Request を開き、必須チェックが通る | 実装が始まり (`CWK-IMPL-001`)、実装が完了したと判断されて `cumin/status/checking` になり (`CWK-IMPL-005`、`CWK-IMPL-006`)、チェックが通るとレビューに進む (`CWK-IMPL-010`) |
-| 2 | 必須チェックが失敗し、Implementer が直す | 同じセッションで修正を頼み (`CWK-IMPL-012`)、同じ Pull Request に修正が積まれ (`CWK-IMPL-016`)、`cumin/status/checking` に戻ってチェックが通る |
-| 3 | `cumin/status/checking` の間に、ほかの Pull Request のマージで衝突する | `UNKNOWN` の間は待ち、`CONFLICTING` になると衝突の解消を1回だけ頼む (`CWK-IMPL-015`)。チェックの修正の回数は増えない |
-| 4 | 必須チェックが待ち時間を過ぎても結果を返さない | `cumin/status/awaiting-decision` になり、先頭のコミット、そのチェック、待った時間を添えて通知が1回届く (`CWK-IMPL-014`) |
-| 5 | 保護されたパスの変更が要る実装Issueで実装する | Implementer が `blocked` を返し (`CWK-IMPL-022.2`)、やり直さずに `cumin/status/awaiting-decision` になる (`CWK-IMPL-008`) |
-| 6 | Maintainer が止まった実装Issueを直し、`cumin/status/ready` を付け直す | 新しいセッションで続きから進み、新しい Pull Request は作られない (`CWK-IMPL-001`、`CWK-IMPL-016`)。チェックの修正の回数は0から数え直す (`CWK-IMPL-004`) |
-| 7 | 先の実装Issueが Assignee のマージ判断を待っている間に、それに依存する実装Issueに `cumin/status/ready` が付いている | blocked by の Issue のブランチから切ったブランチで実装が始まり、Pull Request の base がそのブランチになる (`CWK-IMPL-023.1`、`CWK-IMPL-023.2`)。そのあとは [マージ](../merge/index.md) の、blocked by の Issue のマージを待つ流れに進む |
+| 1 | Maintainer が実装Issueに `cumin/status/ready` を付ける。Implementer が Pull Request を開き、必須チェックが通る | 実装が始まり (`CWK-IMPL-001`)、実装が完了したと判断されて `cumin/status/checking` になり (`CWK-IMPL-005`、`CWK-IMPL-006`)、チェックが通るとレビューに進む ([チェック](../check/index.md) の `CWK-CHECK-002`) |
+| 2 | 保護されたパスの変更が要る実装Issueで実装する | Implementer が `blocked` を返し (`CWK-IMPL-014.2`)、やり直さずに `cumin/status/awaiting-decision` になる (`CWK-IMPL-008`) |
+| 3 | Maintainer が止まった実装Issueを直し、`cumin/status/ready` を付け直す | 新しいセッションで続きから進み、新しい Pull Request は作られない (`CWK-IMPL-001`、`CWK-IMPL-009`)。チェックの修正の回数は0から数え直す (`CWK-IMPL-004`) |
+| 4 | 先の実装Issueが Assignee のマージ判断を待っている間に、それに依存する実装Issueに `cumin/status/ready` が付いている | blocked by の Issue のブランチから切ったブランチで実装が始まり、Pull Request の base がそのブランチになる (`CWK-IMPL-015.1`、`CWK-IMPL-015.2`)。そのあとは [マージ](../merge/index.md) の、blocked by の Issue のマージを待つ流れに進む |
 
 ## 未決事項
 

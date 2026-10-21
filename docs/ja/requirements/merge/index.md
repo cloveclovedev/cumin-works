@@ -1,6 +1,6 @@
 # マージ
 
-Reviewer が承認した Pull Request を、マージし、実装Issueを閉じるまでの流れを決める。リスクに合わせてマージ判断を Assignee に求めること、Assignee の承認と指摘、マージ、実装Issueを閉じること、フォローアップノートまでである。承認の前のレビューは [レビュー](../review/index.md)、`cumin/status/checking` と `cumin/status/awaiting-merge-decision` からの衝突の解消は [実装](../impl/index.md)、受け入れ確認は [受け入れ](../accept/index.md) で決める。
+Reviewer が承認した Pull Request を、マージし、実装Issueを閉じるまでの流れを決める。リスクに合わせてマージ判断を Assignee に求めること、Assignee の承認と指摘、マージ、実装Issueを閉じること、フォローアップノートまでである。承認の前のレビューは [レビュー](../review/index.md)、`cumin/status/checking` と `cumin/status/awaiting-merge-decision` からの衝突の解消は [チェック](../check/index.md)、受け入れ確認は [受け入れ](../accept/index.md) で決める。
 
 ## 全体像
 
@@ -59,7 +59,7 @@ Assignee は、Pull Request を GitHub のレビューで判断する。cumin �
 
 `cumin/status/awaiting-merge-decision` の実装Issueで、Assignee の最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、そのレビューが、実装Issueが最後に `cumin/status/awaiting-merge-decision` になったあとに出されているとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで Assignee の指摘の修正を頼む。
 
-- 修正のあとは、必須チェック ([実装](../impl/index.md))、Reviewer のレビュー ([レビュー](../review/index.md)) を通り、`CWK-MERGE-002` でもう一度 Assignee の判断を待つ。
+- 修正のあとは、必須チェック ([チェック](../check/index.md))、Reviewer のレビュー ([レビュー](../review/index.md)) を通り、`CWK-MERGE-002` でもう一度 Assignee の判断を待つ。
 - この修正は、レビューのラウンドにも、チェックの修正の回数にも数えず、回数を0にも戻さない。`REQUEST_CHANGES` を出すのは毎回 Assignee なので、止まらない往復にならないためである。レビューのラウンドは、Reviewer の最後の `APPROVE` のあとから数え直す ([レビュー](../review/index.md) の `CWK-REVIEW-008`)。
 - 1つの `REQUEST_CHANGES` で修正を頼むのは1回だけである。Implementer がコミットせずに答えたときは、先頭のコミットが変わらず、`REQUEST_CHANGES` はそのコミットに残るが、実装Issueが `cumin/status/awaiting-merge-decision` に戻ったあとのレビューではないので、この遷移は起きない。Assignee は答えを読んで、承認するか、もう一度 `REQUEST_CHANGES` を出す。
 
@@ -71,7 +71,7 @@ Assignee は、Pull Request を GitHub のレビューで判断する。cumin �
 
 #### `CWK-MERGE-005` マージ判断と衝突の順番
 
-`cumin/status/awaiting-merge-decision` の実装Issueでは、1回の定期確認で、`CWK-MERGE-003`、`CWK-MERGE-004`、衝突の解消 ([実装](../impl/index.md) の `CWK-IMPL-015`) の順に判定し、最初に成り立ったものだけを行う。衝突した先頭のコミットに Assignee の判断があれば、その判断を先に進めるためである。承認なら `cumin/status/merging` で衝突を解消し (`CWK-MERGE-009`)、`REQUEST_CHANGES` なら指摘の修正のあとの `cumin/status/checking` で衝突を解消する。
+`cumin/status/awaiting-merge-decision` の実装Issueでは、1回の定期確認で、`CWK-MERGE-003`、`CWK-MERGE-004`、衝突の解消 ([チェック](../check/index.md) の `CWK-CHECK-007`) の順に判定し、最初に成り立ったものだけを行う。衝突した先頭のコミットに Assignee の判断があれば、その判断を先に進めるためである。承認なら `cumin/status/merging` で衝突を解消し (`CWK-MERGE-009`)、`REQUEST_CHANGES` なら指摘の修正のあとの `cumin/status/checking` で衝突を解消する。
 
 - 検証: `test` 衝突していて、Assignee が今の先頭のコミットを承認した実装Issueは、`cumin/status/implementing` ではなく `cumin/status/merging` になる
 
@@ -119,7 +119,7 @@ cumin は、`cumin/status/merging` の実装Issueの Pull Request を、次の�
 
 `cumin/status/merging` の実装Issueで、マージの条件 (`CWK-MERGE-006`) が成り立ち、GitHub が Pull Request を main ブランチと衝突していると返したとき (GraphQL の `mergeable` が `CONFLICTING`)、または、衝突を理由にマージを断ったとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで衝突の解消を頼む。衝突していると分かっている Pull Request には、マージを送らない。断られたあとは、送り直さない。
 
-衝突の解消は、チェックの修正の回数に数えない ([実装](../impl/index.md) の `CWK-IMPL-015` と同じ)。解消のあとは、必須チェックとレビューを通り、リスクに合わせてもう一度 `CWK-MERGE-001` か `CWK-MERGE-002` に進む。
+衝突の解消は、チェックの修正の回数に数えない ([チェック](../check/index.md) の `CWK-CHECK-007` と同じ)。解消のあとは、必須チェックとレビューを通り、リスクに合わせてもう一度 `CWK-MERGE-001` か `CWK-MERGE-002` に進む。
 
 - 検証: `test` 承認されたあとに衝突した Pull Request では、マージを送らずに、Implementer に衝突の解消を1回だけ頼む
 
@@ -146,7 +146,7 @@ GitHub が、main ブランチが変わったことを理由にマージを断�
 
 ### blocked by の Issue のマージを待つ
 
-blocked by の Issue の Pull Request のブランチから始めた実装Issue ([実装](../impl/index.md) の `CWK-IMPL-023`) の Pull Request は、base が main ブランチでない。この Pull Request は、レビューが済んでも、blocked by の Issue の Pull Request がマージされるまでマージしない。そちらがマージされると、GitHub はそのブランチを消し、この Pull Request の base を main ブランチに替える。そのあと cumin は、この Pull Request のブランチに main ブランチを取り込ませ、チェックとレビューをもう一度通してから、マージに進む。
+blocked by の Issue の Pull Request のブランチから始めた実装Issue ([実装](../impl/index.md) の `CWK-IMPL-015`) の Pull Request は、base が main ブランチでない。この Pull Request は、レビューが済んでも、blocked by の Issue の Pull Request がマージされるまでマージしない。そちらがマージされると、GitHub はそのブランチを消し、この Pull Request の base を main ブランチに替える。そのあと cumin は、この Pull Request のブランチに main ブランチを取り込ませ、チェックとレビューをもう一度通してから、マージに進む。
 
 #### `CWK-MERGE-020` blocked by の Issue のマージを待つ
 
@@ -166,7 +166,7 @@ blocked by の Issue が開いていることも条件にするのは、blocked 
 - Pull Request の base が main ブランチで、blocked by の Issue がすべて閉じている
 - 先頭のコミットが、blocked by の Issue を閉じた Pull Request のマージのコミットを含まない
 
-blocked by の Issue の Pull Request が squash でマージされると、この実装Issueのブランチには、そちらの元のコミットが残り、main ブランチのマージのコミットは入っていない。Implementer は強制 push をしないので、rebase ではなく、main ブランチをマージするコミットで取り込む。そのマージより後に切ったブランチは、マージのコミットを含むので、何も起きない。取り込んだあとは、必須チェック ([実装](../impl/index.md)) とレビュー ([レビュー](../review/index.md)) をもう一度通る。
+blocked by の Issue の Pull Request が squash でマージされると、この実装Issueのブランチには、そちらの元のコミットが残り、main ブランチのマージのコミットは入っていない。Implementer は強制 push をしないので、rebase ではなく、main ブランチをマージするコミットで取り込む。そのマージより後に切ったブランチは、マージのコミットを含むので、何も起きない。取り込んだあとは、必須チェック ([チェック](../check/index.md)) とレビュー ([レビュー](../review/index.md)) をもう一度通る。
 
 この取り込みは続きの作業なので、空きを待たない。利用制限で Agent起動を止めている間は待つ。
 
@@ -188,7 +188,7 @@ blocked by の Issue が閉じていることも条件にするのは、Maintain
 
 #### `CWK-MERGE-023` blocked by の Issue のブランチから始めた実装を止める
 
-`CWK-IMPL-023` で始めた実装Issueで、Agent が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替え、理由をコメントに書いて、通知する。作業のどこを残すかは、Assignee が決める。却下された blocked by の Issue のコミットは、この実装Issueのブランチに残るので、Assignee は `cumin/status/ready` を付ける前に、そのコミットを除くか、Pull Request を閉じる。
+`CWK-IMPL-015` で始めた実装Issueで、Agent が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替え、理由をコメントに書いて、通知する。作業のどこを残すかは、Assignee が決める。却下された blocked by の Issue のコミットは、この実装Issueのブランチに残るので、Assignee は `cumin/status/ready` を付ける前に、そのコミットを除くか、Pull Request を閉じる。
 
 - blocked by の Issue の Pull Request が、マージされずに閉じた。対象は、Pull Request の base が main ブランチでない、作業中の状態か `cumin/status/awaiting-base` の実装Issueである
 - この実装Issueの Pull Request が、マージされずに閉じた。GitHub は、マージされていないブランチを消すと、そのブランチを base にする Pull Request を閉じる

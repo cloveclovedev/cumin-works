@@ -12,29 +12,17 @@ Ready : do / cumin waits for a free slot
 state "implementing" as Implementing
 Implementing : do / the Implementer works
 
-state "checking" as Checking
-Checking : do / GitHub runs the required checks
+state "checking" as Checking #EEEEEE
+Checking : (the check area)
 
 state "awaiting-decision" as Decision
 Decision : do / the Assignee answers
 
-state "reviewing" as Reviewing #EEEEEE
-Reviewing : (the review area)
-
-state "awaiting-merge-decision" as MergeDecision #EEEEEE
-MergeDecision : (the merge area)
-
 [*] --> Ready : a Maintainer adds ready
-Ready --> Implementing : request the implementation\n[cumin handles the ready, the blockers are closed,\ncumin has a free slot, no owner-task]\n/ cumin starts the Implementer
+Ready --> Implementing : request the implementation\n[cumin handles the ready, cumin has a free slot,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer
 Implementing --> Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if needed
 Implementing --> Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again
 Implementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies
-Checking --> Implementing : request a check fix\n[a required check failed, below the limit]\n/ cumin starts the Implementer\nin the same session
-Checking --> Decision : stop for failed checks\n[a required check failed, at the limit]\n/ cumin notifies
-Checking --> Decision : stop for missing checks\n[a required check has no result\nafter the wait time]\n/ cumin notifies
-Checking --> Implementing : request a conflict resolution\n[GitHub returns CONFLICTING]\n/ cumin starts the Implementer\nin the same session
-MergeDecision --> Implementing : request a conflict resolution\n[GitHub returns CONFLICTING]
-Checking --> Reviewing : [every required check passed]
 Decision --> Ready : a Maintainer adds ready
 
 @enduml

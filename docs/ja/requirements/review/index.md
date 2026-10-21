@@ -20,7 +20,7 @@ Reviewer のセッションと Implementer のセッションは、共有しな�
 
 #### `CWK-REVIEW-001` レビューを始める
 
-`cumin/status/checking` の実装Issueで、必須チェックが Pull Request の先頭のコミットですべて通ったとき ([実装](../impl/index.md) の `CWK-IMPL-010`)、cumin は状態を `cumin/status/reviewing` に替えてから、Reviewer を起動する。1ラウンド目は新しいセッションで、2ラウンド目からは Reviewer の直前のセッションで起動する。
+`cumin/status/checking` の実装Issueで、必須チェックが Pull Request の先頭のコミットですべて通ったとき ([チェック](../check/index.md) の `CWK-CHECK-002`)、cumin は状態を `cumin/status/reviewing` に替えてから、Reviewer を起動する。1ラウンド目は新しいセッションで、2ラウンド目からは Reviewer の直前のセッションで起動する。
 
 - 検証: `test` 必須チェックが通ると、実装Issueが `cumin/status/reviewing` になり、Reviewer の Agent起動が1回だけ起きる
 - 検証: `test` 指摘の修正のあとのレビューでは、Reviewer の直前のセッションで起動する

@@ -1,0 +1,32 @@
+@startuml overview
+' cumin-works - the states of an implementation issue in the check stage.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A transition is written: action [guard] / what cumin does. A gray state belongs to another area.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "implementing" as Implementing #EEEEEE
+Implementing : (the implementation area)
+
+state "checking" as Checking
+Checking : do / GitHub runs the required checks
+
+state "awaiting-decision" as Decision
+Decision : do / the Assignee answers
+
+state "reviewing" as Reviewing #EEEEEE
+Reviewing : (the review area)
+
+state "awaiting-merge-decision" as MergeDecision #EEEEEE
+MergeDecision : (the merge area)
+
+Implementing --> Checking : wait for the checks\n(the implementation area)
+Checking --> Implementing : request a conflict resolution\n[GitHub returns CONFLICTING]\n/ cumin starts the Implementer\nin the same session
+Checking --> Implementing : request a check fix\n[a required check failed, below the limit]\n/ cumin starts the Implementer\nin the same session
+Checking --> Decision : stop for failed checks\n[a required check failed, at the limit]\n/ cumin notifies
+Checking --> Decision : stop for missing checks\n[a required check has no result\nafter the wait time]\n/ cumin notifies
+MergeDecision --> Implementing : request a conflict resolution\n[GitHub returns CONFLICTING]
+Checking --> Reviewing : [every required check passed]
+
+@enduml

@@ -113,7 +113,7 @@ cumin は、Agent起動の依頼の先頭に、その実行の事実を、ラベ
 
 - 扱う Issue の番号と、種類 (要求Issueか実装Issueか)
 - その Issue の Assignee のログイン名。いなければ、いないと書く。Agent は、Assignee のコメントだけを指示として読む ([権限](../access/index.md) の `CWK-ACCESS-002`)
-- 対象のリポジトリの保護されたパスの一覧と、照合の決まり ([実装](../impl/index.md) の `CWK-IMPL-021.1`)
+- 対象のリポジトリの保護されたパスの一覧と、照合の決まり ([チェック](../check/index.md) の `CWK-CHECK-008.1`)
 - この実行の時間の上限と、実行が終わる時刻 (`CWK-AGENT-015`)
 
 - 検証: `test` どの role の Agent起動でも、渡す事実に、Issue の番号と種類、Assignee のログイン名、保護されたパス、時間の上限と終わる時刻がある
@@ -258,7 +258,7 @@ Agent は、`cumin/*` のラベルを付け替えない。例外は、Planner �
 
 #### `CWK-AGENT-021` 保護されたパスを変えない
 
-Agent は、渡された保護されたパス (`CWK-AGENT-010`) のファイルを変えない。変える必要があるときは、`blocked` を返す ([実装](../impl/index.md) の `CWK-IMPL-022.2`)。
+Agent は、渡された保護されたパス (`CWK-AGENT-010`) のファイルを変えない。変える必要があるときは、`blocked` を返す ([実装](../impl/index.md) の `CWK-IMPL-014.2`)。
 
 - 検証: `demo` `CLAUDE.md` の変更を求める実装Issueで、Implementer は変更せずに `blocked` を返す
 
