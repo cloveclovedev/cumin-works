@@ -10,7 +10,7 @@
 
 図の元ファイル: [overview.puml](overview.puml)
 
-このページで「Reviewer が動いていない」とは、この cumin が、その実装Issueの Reviewer の実行を今持っていないことである。
+「Reviewer が動いていない」の意味は、[Agent](../agent/index.md) の `CWK-AGENT-001` で決める。
 
 Reviewer のセッションと Implementer のセッションは、共有しない。Reviewer が見るのは、GitHub に出ているものと、リポジトリの中身だけである。
 
@@ -305,4 +305,4 @@ Pull Request の内容が、実装Issueとほとんど関係がないときは�
 
 ## 未決事項
 
-- 「Reviewer が動いていない」の意味は、[計画](../plan/index.md) と [実装](../impl/index.md) と同じく、[Agent](../agent/index.md) か [定期確認](../poll/index.md) に移す。
+なし

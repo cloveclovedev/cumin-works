@@ -10,7 +10,7 @@
 
 図の元ファイル: [overview.puml](overview.puml)
 
-このページで「Planner が動いていない」とは、この cumin が、その要求Issueの Planner の実行を今持っていないことである。
+「Planner が動いていない」の意味は、[Agent](../agent/index.md) の `CWK-AGENT-001` で決める。
 
 受け入れ確認は、sub-issue をすべて合わせた main ブランチの上で、要求Issueの要求が満たされているかを、Planner が1項目ずつ確かめることである。Pull Request は1つずつしか確かめられないので、全体を確かめる役がほかにいない。計画が正しいことは、Assignee が計画結果の確認で見ている。受け入れ確認は、その計画を前提に、まとめた結果が1つの振る舞いとして正しいかを見る。
 
@@ -213,4 +213,4 @@ Planner は、受け入れ確認で、コードを直さず、要求Issueの本�
 
 ## 未決事項
 
-- 「Planner が動いていない」の意味は、ほかのページと同じく、[Agent](../agent/index.md) か [定期確認](../poll/index.md) に移す。
+なし

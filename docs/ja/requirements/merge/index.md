@@ -10,7 +10,7 @@ Reviewer が承認した Pull Request を、マージし、実装Issueを閉じ�
 
 図の元ファイル: [overview.puml](overview.puml)
 
-このページで「Reviewer が動いていない」とは、この cumin が、その実装Issueの Reviewer の実行を今持っていないことである。
+「Reviewer が動いていない」の意味は、[Agent](../agent/index.md) の `CWK-AGENT-001` で決める。
 
 マージそのものは Agent を起動しないので、利用制限で Agent起動を止めている間も、cumin を止める途中でも、`cumin/status/merging` の実装Issueはマージする。衝突の解消のように Agent を起動するアクションだけが待つ ([利用制限](../limit/index.md))。
 
@@ -234,5 +234,4 @@ cumin は、Agent の判断を使わず、決まった形式から次のもの�
 
 ## 未決事項
 
-- 「Reviewer が動いていない」の意味は、ほかのページと同じく、[Agent](../agent/index.md) か [定期確認](../poll/index.md) に移す。
 - マージの間に待つ秒数 (今のコードでは5秒) を設定にするかは、HOST の設定を書くときに決める。

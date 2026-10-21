@@ -10,7 +10,7 @@
 
 図の元ファイル: [overview.puml](overview.puml)
 
-このページで「Implementer が動いていない」とは、この cumin が、その実装Issueの Implementer の実行を今持っていないことである。
+「Implementer が動いていない」の意味は、[Agent](../agent/index.md) の `CWK-AGENT-001` で決める。
 
 `cumin/status/checking` は、「Implementer の作業が済み、チェックが動いている」ことを GitHub に残すための状態である。`cumin/status/implementing` のままだと、Implementer が修正の途中なのか、チェックを待っているのかを、GitHub の事実から見分けられない。チェックが動いている間は Agent が動いていないので、利用制限を使わない。Pull Request が開いただけでは、レビューに進まない。
 
@@ -307,4 +307,4 @@ blocked by の Issue で終わっているはずの作業が、実際には足�
 
 ## 未決事項
 
-- 「Implementer が動いていない」の意味は、[計画](../plan/index.md) の「Planner が動いていない」と同じく、[Agent](../agent/index.md) か [定期確認](../poll/index.md) に移す。
+なし

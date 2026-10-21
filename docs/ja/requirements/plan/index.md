@@ -10,7 +10,7 @@
 
 図の元ファイル: [overview.puml](overview.puml)
 
-このページで「Planner が動いていない」とは、この cumin が、その要求Issueの Planner の実行を今持っていないことである。
+「Planner が動いていない」の意味は、[Agent](../agent/index.md) の `CWK-AGENT-001` で決める。
 
 要求Issueの `cumin/status/ready` は、いつも「Planner が要求Issueを読み直す」という1つの意味である。Maintainer は、要求Issueを書き終えたとき、計画が止まって答えたとき、受け入れ確認で Planner が質問して答えたときに、要求Issueに `cumin/status/ready` を付ける。Planner はすでにある sub-issue を確かめて、足りない分だけを作る。作るものがなく、sub-issue がすべて閉じていれば、受け入れ確認に進む。
 
@@ -251,4 +251,4 @@ Planner は、次のどれかに当たったら、推測で計画せずに `bloc
 
 ## 未決事項
 
-- 「Planner が動いていない」の意味は、ほかのカテゴリでも同じなので、[Agent](../agent/index.md) か [定期確認](../poll/index.md) に移す。どちらに書くかは、そのカテゴリを書くときに決める。
+なし
