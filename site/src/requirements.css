@@ -1,0 +1,387 @@
+/* The block of each requirement and its ID (CTR-SITE-006). The colors come
+   from the variables of Starlight only (CTR-SITE-001). */
+.sl-markdown-content section.requirement {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem 1rem;
+}
+
+.sl-markdown-content section.requirement + section.requirement {
+  margin-top: 1.5rem;
+}
+
+.sl-markdown-content code.requirement-id {
+  border: 1px solid var(--sl-color-gray-4);
+  border-radius: 0.25rem;
+  font-size: 0.75em;
+  margin-inline-end: 0.5em;
+  vertical-align: middle;
+}
+
+/* The body of every page is wider than the default of Starlight, and its
+   images have round corners (CTR-SITE-014). Starlight sizes both the
+   container and the main pane from --sl-content-width. */
+:root {
+  --sl-content-width: 60rem;
+}
+
+.sl-markdown-content img {
+  border-radius: 0.5rem;
+}
+
+/* The progress of the requirements on the dashboard (CTR-DASH-001): a map of
+   tiles, then one line for each requirement. The progress has a color: done
+   green, in progress orange, not filed a gray outline. A requirement with
+   children has the color of its own progress, and a neutral outline only in
+   an older trace with no progress for it. The page gives each progress as
+   text too. */
+.dashboard {
+  font-size: var(--sl-text-sm);
+}
+
+.dashboard a {
+  color: var(--sl-color-text);
+  text-decoration: none;
+}
+
+.dashboard a:hover {
+  text-decoration: underline;
+}
+
+.dashboard-legend {
+  color: var(--sl-color-gray-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.dashboard-legend .dashboard-dot,
+.dashboard-legend .dashboard-square {
+  margin-inline-end: 0.3rem;
+  vertical-align: -0.05rem;
+}
+
+.dashboard-dot {
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  height: 0.6rem;
+  width: 0.6rem;
+}
+
+.dashboard-legend .dashboard-dot {
+  height: 0.7rem;
+  width: 0.7rem;
+}
+
+.dashboard-dot[data-state="done"],
+.dashboard-tile[data-state="done"],
+.dashboard-bar [data-state="done"] {
+  background: var(--sl-color-green);
+}
+
+.dashboard-dot[data-state="in_progress"],
+.dashboard-tile[data-state="in_progress"],
+.dashboard-bar [data-state="in_progress"] {
+  background: var(--sl-color-orange);
+}
+
+.dashboard-dot[data-state="not_filed"],
+.dashboard-tile[data-state="not_filed"],
+.dashboard-bar [data-state="not_filed"] {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--sl-color-gray-5);
+}
+
+.dashboard-dot[data-state="parent"],
+.dashboard-tile[data-state="parent"],
+.dashboard-bar [data-state="parent"] {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--sl-color-gray-4);
+}
+
+.dashboard-count {
+  color: var(--sl-color-gray-3);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The map: one row for each category, one tile for each requirement. */
+.dashboard-map-row {
+  align-items: start;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  padding: 0.35rem 0;
+}
+
+.dashboard-map-label {
+  line-height: 1.3;
+}
+
+.dashboard-map-label b {
+  color: var(--sl-color-white);
+  display: block;
+}
+
+.dashboard-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.dashboard a.dashboard-tile,
+.dashboard-tile {
+  border-radius: 3px;
+  color: var(--sl-color-black);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--sl-font-mono, var(--sl-font-system-mono));
+  font-size: 0.68rem;
+  height: 2.1rem;
+  justify-content: space-between;
+  padding: 2px 3px;
+  width: 2.6rem;
+}
+
+/* The text on a green or an orange tile is dark in both themes. */
+:root[data-theme="light"] .dashboard a.dashboard-tile,
+:root[data-theme="light"] .dashboard-tile {
+  color: var(--sl-color-white);
+}
+
+.dashboard a.dashboard-tile[data-state="not_filed"],
+.dashboard-tile[data-state="not_filed"],
+:root[data-theme="light"] .dashboard a.dashboard-tile[data-state="not_filed"],
+:root[data-theme="light"] .dashboard-tile[data-state="not_filed"] {
+  color: var(--sl-color-gray-3);
+}
+
+.dashboard a.dashboard-tile[data-state="parent"],
+.dashboard-tile[data-state="parent"],
+:root[data-theme="light"] .dashboard a.dashboard-tile[data-state="parent"],
+:root[data-theme="light"] .dashboard-tile[data-state="parent"] {
+  color: var(--sl-color-gray-2);
+}
+
+.dashboard a.dashboard-tile:hover {
+  text-decoration: none;
+}
+
+/* The line at the bottom of a tile: the closed share of its implementation
+   issues. */
+.dashboard-tile-line {
+  border-radius: 1px;
+  height: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.dashboard-tile-line::before {
+  background: var(--sl-color-black);
+  content: "";
+  inset: 0;
+  opacity: 0.25;
+  position: absolute;
+}
+
+.dashboard-tile-line span {
+  background: var(--sl-color-black);
+  display: block;
+  height: 100%;
+  opacity: 0.6;
+  position: relative;
+}
+
+/* In the light theme, --sl-color-black is light; the line stays dark. */
+:root[data-theme="light"] .dashboard-tile-line::before,
+:root[data-theme="light"] .dashboard-tile-line span {
+  background: var(--sl-color-white);
+}
+
+/* The list: a header for each category, one line for each requirement. */
+.dashboard-group {
+  margin: 0 0 1.25rem;
+}
+
+.dashboard-group-head {
+  align-items: center;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) 10rem 5.5rem;
+  padding: 0.2rem 0;
+}
+
+.dashboard-group-head h3 {
+  color: var(--sl-color-white);
+  font-size: var(--sl-text-base);
+  margin: 0;
+}
+
+.dashboard-group-head h3 small {
+  color: var(--sl-color-gray-3);
+  font-size: 0.75rem;
+  font-weight: normal;
+  margin-inline-start: 0.4rem;
+}
+
+.dashboard-bar {
+  background: var(--sl-color-gray-6);
+  border-radius: 0.25rem;
+  display: flex;
+  height: 0.5rem;
+  overflow: hidden;
+}
+
+.dashboard-bar span {
+  display: block;
+  height: 100%;
+}
+
+.dashboard-bar [data-state="not_filed"] {
+  background: var(--sl-color-gray-5);
+  box-shadow: none;
+}
+
+.dashboard-line {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-areas: "dot id title issues implementation";
+  grid-template-columns: 0.8rem 6.5rem minmax(0, 1fr) 7rem 9rem;
+  line-height: 1.4;
+  padding: 0.12rem 0;
+}
+
+.dashboard-line:hover {
+  background: var(--sl-color-gray-6);
+}
+
+.dashboard-line .dashboard-dot {
+  grid-area: dot;
+}
+
+.dashboard-id {
+  color: var(--sl-color-text-accent);
+  font-family: var(--sl-font-mono, var(--sl-font-system-mono));
+  font-size: 0.75rem;
+  grid-area: id;
+  white-space: nowrap;
+}
+
+.dashboard a.dashboard-id {
+  color: var(--sl-color-text-accent);
+}
+
+.dashboard-title {
+  grid-area: title;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-line[data-state="parent"] {
+  color: var(--sl-color-gray-2);
+}
+
+.dashboard-issues {
+  grid-area: issues;
+}
+
+.dashboard-issues a + a {
+  margin-inline-start: 0.25rem;
+}
+
+.dashboard-milestone {
+  color: var(--sl-color-gray-3);
+  font-size: 0.7rem;
+  margin-inline-start: 0.2rem;
+}
+
+.dashboard-implementation {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+  grid-area: implementation;
+  justify-content: flex-end;
+}
+
+.dashboard-squares {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.dashboard-square {
+  background: var(--sl-color-gray-5);
+  border-radius: 1px;
+  display: inline-block;
+  height: 0.55rem;
+  width: 0.55rem;
+}
+
+.dashboard .dashboard-square[data-closed="true"] {
+  background: var(--sl-color-green);
+}
+
+/* The discrepancies: one line for each, in the columns of a line of the
+   list. */
+.dashboard-discrepancy {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-areas: ". id title issue .";
+  grid-template-columns: 0.8rem 6.5rem minmax(0, 1fr) 7rem 9rem;
+  line-height: 1.4;
+  padding: 0.12rem 0;
+}
+
+.dashboard-discrepancy:hover {
+  background: var(--sl-color-gray-6);
+}
+
+.dashboard-issue {
+  grid-area: issue;
+}
+
+.dashboard code.dashboard-id {
+  background: none;
+  padding: 0;
+}
+
+/* On a narrow screen, the label of a map row stands above its tiles, the
+   issues of a line move below its title, and the issue of a discrepancy moves
+   below its kind. */
+@media (max-width: 40rem) {
+  .dashboard-map-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+  }
+
+  .dashboard-group-head {
+    grid-template-columns: minmax(0, 1fr) 5rem auto;
+  }
+
+  .dashboard-line {
+    grid-template-areas:
+      "dot id title"
+      ". issues implementation";
+    grid-template-columns: 0.8rem 6.5rem minmax(0, 1fr);
+    padding: 0.25rem 0;
+  }
+
+  .dashboard-implementation {
+    justify-content: flex-start;
+  }
+
+  .dashboard-discrepancy {
+    grid-template-areas:
+      ". id title"
+      ". issue issue";
+    grid-template-columns: 0.8rem 6.5rem minmax(0, 1fr);
+    padding: 0.25rem 0;
+  }
+}

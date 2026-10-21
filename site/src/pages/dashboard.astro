@@ -1,0 +1,163 @@
+---
+// The dashboard page (docs/ja/designs/dashboard/page.md). It reads
+// site/trace.json at build time, and shows the time of the read and the
+// progress of the requirements (CTR-DASH-001, CTR-DASH-006) as static HTML
+// (CTR-DASH-007): a map of tiles, then one line for each discrepancy
+// (CTR-DASH-009), then one line for each requirement. Each requirement links
+// to its anchor in the site, and each issue to GitHub (CTR-DASH-005). Without a valid trace, the page shows only that GitHub
+// could not be read.
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import { join } from "node:path";
+import { readSettings } from "../settings.mjs";
+import { idTable } from "../requirements.mjs";
+import { areaTitle, discrepancies, issueURL, japanTime, readTrace, requirementURL, tree } from "../dashboard.mjs";
+
+// The build bundles this page under site/dist, so the root of settings.mjs
+// is wrong here. Astro builds in site/, its project root, so the top of the
+// repository is its parent.
+const top = join(process.cwd(), "..");
+const settings = readSettings(top);
+const table = idTable(settings, top);
+let trace = readTrace(top);
+let groups = [];
+let problems = [];
+let readAt = "";
+if (trace !== undefined) {
+  try {
+    // One group for each category row, with the requirement rows below it.
+    for (const row of tree(trace)) {
+      if (row.kind === "category") groups.push({ ...row, title: areaTitle(settings, top, row), rows: [] });
+      else groups.at(-1).rows.push({ ...row, url: requirementURL(table, row.id) });
+    }
+    problems = discrepancies(trace).map((d) => ({ ...d, url: requirementURL(table, d.id) }));
+    readAt = japanTime(trace.read_at);
+  } catch {
+    trace = undefined;
+  }
+}
+const percent = (n, total) => (total === 0 ? 0 : (100 * n) / total);
+// The text of a tile, for its title and for screen readers.
+const tileText = (row) => `${row.id} ${row.title} ・ ${row.progress}${row.total > 0 ? ` ・ 実装Issue ${row.closed} / ${row.total}` : ""}`;
+const subText = (sub) => `${sub.repository}#${sub.number} ${sub.closed ? "閉じた" : "開いている"}`;
+---
+
+<StarlightPage frontmatter={{ title: "ダッシュボード", tableOfContents: false }}>
+  {
+    trace === undefined ? (
+      <p class="dashboard-failed">GitHub を読めなかったため、進捗を表示できません。</p>
+    ) : (
+      <>
+        <p class="dashboard-read-at">
+          GitHub を読んだ時刻: <time datetime={trace.read_at}>{readAt}</time>
+        </p>
+        <h2>要件の進捗</h2>
+        <div class="dashboard not-content">
+          <p class="dashboard-legend">
+            <span><span class="dashboard-dot" data-state="done" />完了</span>
+            <span><span class="dashboard-dot" data-state="in_progress" />進行中</span>
+            <span><span class="dashboard-dot" data-state="not_filed" />未起票</span>
+            <span>タイルの下の線: 実装Issue の閉じた割合</span>
+          </p>
+          <div class="dashboard-map">
+            {groups.map((group) => (
+              <div class="dashboard-map-row" data-kind="category" data-id={group.id}>
+                <div class="dashboard-map-label">
+                  <b>{group.title}</b>
+                  <span class="dashboard-count">{group.id} ・ {group.progress}</span>
+                </div>
+                <div class="dashboard-tiles">
+                  {group.rows.map((row) => {
+                    const Tile = row.url === undefined ? "span" : "a";
+                    return (
+                      <Tile class="dashboard-tile" data-kind="requirement" data-id={row.id} data-depth={row.depth} data-state={row.state} href={row.url} role={row.url === undefined ? "img" : undefined} title={tileText(row)} aria-label={tileText(row)}>
+                        <span aria-hidden="true">{row.short}</span>
+                        {row.total > 0 && (
+                          <span class="dashboard-tile-line" aria-hidden="true">
+                            <span style={`width: ${percent(row.closed, row.total)}%`} />
+                          </span>
+                        )}
+                      </Tile>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {problems.length > 0 && (
+          <>
+            <h2>不整合</h2>
+            <div class="dashboard not-content">
+              {problems.map((problem) => (
+                <div class="dashboard-discrepancy" data-kind={problem.kind} data-id={problem.id}>
+                  {problem.url === undefined ? <code class="dashboard-id">{problem.id}</code> : <a class="dashboard-id" href={problem.url}>{problem.id}</a>}
+                  <span class="dashboard-title" title={problem.label}>
+                    {problem.label}
+                  </span>
+                  <a class="dashboard-issue" href={issueURL(trace.repository, problem.issue)}>#{problem.issue}</a>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <h2>要件の一覧</h2>
+        <div class="dashboard not-content">
+          <p class="dashboard-legend">
+            <span><span class="dashboard-dot" data-state="done" />完了</span>
+            <span><span class="dashboard-dot" data-state="in_progress" />進行中</span>
+            <span><span class="dashboard-dot" data-state="not_filed" />未起票</span>
+            <span><span class="dashboard-square" data-closed="false" />実装Issue (緑は閉じた)</span>
+          </p>
+          {groups.map((group) => (
+            <section class="dashboard-group" data-kind="category" data-id={group.id}>
+              <div class="dashboard-group-head">
+                <h3>
+                  {group.title}
+                  <small>{group.id}</small>
+                </h3>
+                <span class="dashboard-bar" aria-hidden="true">
+                  <span data-state="done" style={`width: ${percent(group.counts.done, group.leafCount)}%`} />
+                  <span data-state="in_progress" style={`width: ${percent(group.counts.in_progress, group.leafCount)}%`} />
+                  <span data-state="not_filed" style={`width: ${percent(group.counts.not_filed, group.leafCount)}%`} />
+                </span>
+                <span class="dashboard-count">{group.progress}</span>
+              </div>
+              {group.rows.map((row) => (
+                <div class="dashboard-line" data-kind="requirement" data-id={row.id} data-depth={row.depth} data-state={row.state}>
+                  <span class="dashboard-dot" data-state={row.state}>
+                    <span class="sr-only">{row.progress}</span>
+                  </span>
+                  {row.url === undefined ? <span class="dashboard-id">{row.id}</span> : <a class="dashboard-id" href={row.url}>{row.id}</a>}
+                  <span class="dashboard-title" title={row.title} style={row.depth > 1 ? `padding-inline-start: ${row.depth - 1}rem` : undefined}>
+                    {row.title}
+                    {!row.leaf && <span class="dashboard-count" aria-hidden="true"> ・ {row.progress}</span>}
+                  </span>
+                  <span class="dashboard-issues">
+                    {row.issues.map((number) => (
+                      <a href={issueURL(trace.repository, number)}>#{number}</a>
+                    ))}
+                    {row.milestones.map((milestone) => (
+                      <span class="dashboard-milestone">{milestone}</span>
+                    ))}
+                  </span>
+                  <span class="dashboard-implementation">
+                    {row.total > 0 && (
+                      <>
+                        <span class="dashboard-squares">
+                          {row.subIssues.map((sub) => (
+                            <a class="dashboard-square" data-closed={String(sub.closed)} href={issueURL(sub.repository, sub.number)} title={subText(sub)} aria-label={subText(sub)} />
+                          ))}
+                        </span>
+                        <span class="dashboard-count">{row.implementation}</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+      </>
+    )
+  }
+</StarlightPage>

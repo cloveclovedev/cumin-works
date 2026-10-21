@@ -1,0 +1,22 @@
+{
+  "name": "requirements-site",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "dev-trace": "rm -f trace.json; (cd .. && cumin-trace trace > site/trace.json.tmp) && mv trace.json.tmp trace.json; rm -f trace.json.tmp; astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check-site": "node scripts/check-site.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-satteri": "0.4.4",
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.4.0",
+    "satteri": "0.10.5",
+    "smol-toml": "1.9.1"
+  }
+}
