@@ -87,7 +87,7 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 `cumin/status/implementing` の実装Issueで、Implementer が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。質問のコメントでないときは、止めた理由を実装Issueのコメントに書く。
 
 - Implementer の質問のコメントが、実装Issueが `cumin/status/implementing` になったあとに書かれている。Implementer の質問では、やり直さない。実装に要る要件が足りないことが多く、Maintainer が Issue を書き直す必要があるためである
-- 実装が完了しておらず、`CWK-IMPL-007` のやり直しを済ませている
+- やり直し (`CWK-IMPL-007`) のあとも、実装が完了していない
 - 衝突の解消 (`CWK-IMPL-015`) を頼んだあとも、先頭のコミットが頼む前のままである。先頭のコミットの時刻と、実装Issueに最新の `cumin/status/implementing` が付いた時刻を比べて決める
 
 - 検証: `test` Implementer が `blocked` を返すと、やり直さずに `cumin/status/awaiting-decision` になる

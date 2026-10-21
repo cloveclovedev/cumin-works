@@ -90,7 +90,7 @@ cumin は、今付いている状態ラベルを最後に付けたアカウン�
 
 #### `CWK-ACCESS-007` Assignee は1人の Maintainer
 
-Issue を進められるのは、assignee がちょうど1人で、その人が Maintainer のときだけである。assignee が2人以上いるとき、または assignee が Maintainer でないとき、cumin はその Issue を進めず、通知を1回だけ送る。
+Issue を進められるのは、assignee が1人だけで、その人が Maintainer のときだけである。assignee が2人以上いるとき、または assignee が Maintainer でないとき、cumin はその Issue を進めず、通知を1回だけ送る。
 
 - 検証: `test` assignee が2人いる Issue と、Maintainer でない assignee の Issue に、cumin は着手せず、それぞれ通知は1回だけである
 

@@ -53,7 +53,7 @@ cumin は、Planner の Agent起動で渡す事実に、Implementer と Reviewer
 
 #### `CWK-PLAN-004` 計画の完了を判断する
 
-Planner が動いていないとき、cumin は計画の結果を GitHub で確かめる。cumin は、要求Issueに sub-issue が1つ以上あり、すべての sub-issue にリスクのラベルがちょうど1つ付いているとき、計画が完了したと判断する。Planner が返した結果 (`done` か `blocked` か) は、判断に使わない。
+Planner が動いていないとき、cumin は計画の結果を GitHub で確かめる。cumin は、要求Issueに sub-issue が1つ以上あり、すべての sub-issue にリスクのラベルが1つだけ付いているとき、計画が完了したと判断する。Planner が返した結果 (`done` か `blocked` か) は、判断に使わない。
 
 - 検証: `test` sub-issue がない要求Issueと、リスクのラベルがない、または2つ以上ある sub-issue を持つ要求Issueは、計画が完了したと判断されない。Planner が `done` を返しても同じである
 
@@ -80,7 +80,7 @@ Planner が動いていないとき、cumin は計画の結果を GitHub で確�
 `cumin/status/planning` の要求Issueで、Planner が動いておらず、次のどちらかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。質問のコメントでないときは、止めた理由を要求Issueのコメントに書く。
 
 - Planner の質問のコメントが、要求Issueが `cumin/status/planning` になったあとに書かれている
-- 計画が完了しておらず、`CWK-PLAN-006` のやり直しを済ませている
+- やり直し (`CWK-PLAN-006`) のあとも、計画が完了していない
 
 - 検証: `test` Planner が `blocked` を返すと、やり直さずに `cumin/status/awaiting-decision` になる
 - 検証: `test` やり直しのあとも計画が完了しないと、理由のコメントが付いて `cumin/status/awaiting-decision` になる
@@ -148,7 +148,7 @@ Planner は、実装Issueどうしの依存関係を blocked by で記録する�
 
 #### `CWK-PLAN-014` リスクを仮に付ける
 
-Planner は、それぞれの実装Issueに、リスクのラベルをちょうど1つ付ける。基準は、Planner と Reviewer が受け取るリスクの基準の文章である ([Agent](../agent/index.md))。迷ったら高いほうを付ける。`cumin/risk/high` に当たる変更は、それだけの最小の実装Issueに分ける。
+Planner は、それぞれの実装Issueに、リスクのラベルを1つだけ付ける。基準は、Planner と Reviewer が受け取るリスクの基準の文章である ([Agent](../agent/index.md))。迷ったら高いほうを付ける。`cumin/risk/high` に当たる変更は、それだけの最小の実装Issueに分ける。
 
 - 検証: `demo` データベースのマイグレーションを含む要求Issueで計画すると、マイグレーションだけの実装Issueが分けて作られ、`cumin/risk/high` が付く
 

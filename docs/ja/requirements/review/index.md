@@ -83,9 +83,11 @@ cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに�
 `cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどれかが成り立つとき、cumin は状態を `cumin/status/awaiting-decision` に替えて、通知する。質問のコメントでないときは、止めた理由をコメントに書く。
 
 - Reviewer の質問のコメントが、実装Issueが `cumin/status/reviewing` になったあとに書かれている。Reviewer の質問では、やり直さない
-- 今の先頭のコミットにレビューがなく、`CWK-REVIEW-006` のやり直しを済ませている
-- 実装Issueのリスクのラベルが、ちょうど1つでない
-- 実装Issueを閉じる開いている Pull Request がない。このときもリスクのラベルがちょうど1つでなければ、そちらを理由にする
+- やり直し (`CWK-REVIEW-006`) の Reviewer も、今の先頭のコミットにレビューを出さずに終わった
+- 実装Issueのリスクのラベルがないか、2つ以上ある
+- 実装Issueを閉じる開いている Pull Request がない
+
+当たる条件が2つ以上あるときは、そのすべてを理由に書く。
 
 - 検証: `test` Reviewer が `blocked` を返すと、やり直さずに `cumin/status/awaiting-decision` になる
 - 検証: `test` リスクのラベルを外した実装Issueと、Pull Request が閉じられた実装Issueは、それぞれの理由のコメントが付いて止まる
