@@ -166,7 +166,7 @@ blocked by の Issue が開いていることも条件にするのは、blocked 
 - Pull Request の base が main ブランチで、blocked by の Issue がすべて閉じている
 - 先頭のコミットが、blocked by の Issue を閉じた Pull Request のマージのコミットを含まない
 
-blocked by の Issue の Pull Request が squash でマージされると、この実装Issueのブランチには、そちらの元のコミットが残り、main ブランチのマージのコミットは入っていない。Implementer は強制 push をしないので、rebase ではなく、main ブランチをマージするコミットで取り込む。そのマージより後に切ったブランチは、マージのコミットを含むので、何も起きない。取り込んだあとは、必須チェック ([チェック](../check/index.md)) とレビュー ([レビュー](../review/index.md)) をもう一度通る。
+blocked by の Issue の Pull Request が squash でマージされると、この実装Issueのブランチには、そちらの元のコミットが残り、main ブランチのマージのコミットは入っていない。Implementer は強制 push をしないので、rebase ではなく、main ブランチをマージするコミットで取り込む。そのマージより後に切ったブランチは、マージのコミットを含むので、何も起きない。取り込んだあとは、もう一度、必須チェックの完了 ([チェック](../check/index.md)) とレビュー ([レビュー](../review/index.md)) を経る。
 
 この取り込みは続きの作業なので、空きを待たない。利用制限で Agent起動を止めている間は待つ。
 
