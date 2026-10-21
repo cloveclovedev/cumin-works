@@ -1,0 +1,39 @@
+@startuml overview
+' cumin-works - the states of a requirement issue in the acceptance stage.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A transition is written: action [guard] / what cumin does. A gray state belongs to another area.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "planning, implementing, or awaiting-plan-review" as Before #EEEEEE
+Before : (the plan area)
+
+state "accepting" as Accepting
+Accepting : do / the Planner checks the requirement on main
+
+state "awaiting-acceptance" as AwaitingAcceptance
+AwaitingAcceptance : do / the Assignee accepts or sends back
+
+state "awaiting-plan-review" as PlanReview #EEEEEE
+PlanReview : (the plan area)
+
+state "implementing" as Implementing #EEEEEE
+Implementing : (the plan area)
+
+state "awaiting-decision" as Decision
+Decision : do / the Assignee answers
+
+state "ready" as Ready #EEEEEE
+Ready : (the plan area)
+
+Before --> Accepting : request the acceptance check\n[every sub-issue is closed, no check after the last close,\nthe follow-up notes are written, cumin has a free slot]\n/ cumin starts the Planner
+Accepting --> AwaitingAcceptance : ask for the acceptance\n[an acceptance check comment after the last close,\nevery sub-issue is closed]\n/ cumin notifies
+Accepting --> PlanReview : ask for the plan review\n[an acceptance check comment after the last close,\nan open sub-issue, each open one has one risk label]\n/ cumin notifies
+Accepting --> Accepting : request the acceptance check again\n[no Planner runs, no question, first time, and:\nno check comment, or an open sub-issue\nwithout exactly one risk label]\n/ cumin starts the Planner again
+Accepting --> Decision : stop the acceptance check\n[no Planner runs, and: the Planner asked,\nor the same failure after the retry]\n/ cumin notifies
+AwaitingAcceptance --> [*] : the Assignee closes the issue
+AwaitingAcceptance --> Implementing : send back\n[the Assignee adds ready to a new sub-issue]
+Decision --> Ready : the Assignee answers and adds ready
+
+@enduml

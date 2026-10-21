@@ -1,0 +1,5 @@
+# The settings of cumin-trace for the requirement documents of this repository
+prefix = "CWK"
+
+# The allowed areas. Add an area here before you write its first requirement.
+areas = ["LABEL", "ACCESS", "PLAN", "IMPL", "CHECK", "REVIEW", "MERGE", "ACCEPT", "AGENT", "LIMIT", "POLL", "HOST", "NOTIFY"]

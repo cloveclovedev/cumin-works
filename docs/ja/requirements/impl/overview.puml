@@ -1,0 +1,28 @@
+@startuml overview
+' cumin-works - the states of an implementation issue in the implementation stage.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A transition is written: action [guard] / what cumin does. A gray state belongs to another area.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "ready" as Ready
+Ready : do / cumin waits for a free slot
+
+state "implementing" as Implementing
+Implementing : do / the Implementer works
+
+state "checking" as Checking #EEEEEE
+Checking : (the check area)
+
+state "awaiting-decision" as Decision
+Decision : do / the Assignee answers
+
+[*] --> Ready : a Maintainer adds ready
+Ready --> Implementing : request the implementation\n[cumin handles the ready, cumin has a free slot,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer
+Implementing --> Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if needed
+Implementing --> Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again
+Implementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies
+Decision --> Ready : a Maintainer adds ready
+
+@enduml
