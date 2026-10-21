@@ -200,7 +200,7 @@ Reviewer は、前に出した指摘とその返答、前のラウンドでレ�
 
 #### `CWK-REVIEW-015` レビューの深さ
 
-Reviewer は、実装Issueのリスクのラベルに合わせて、コードレビューの skill の深さ (Claude Code では effort) を選ぶ。リスクと深さの対応は、Reviewer が受け取る専門知識のファイルに書く。初期の専門知識 `software-engineering` では、`cumin/risk/low` は `medium`、`cumin/risk/medium` は `high`、`cumin/risk/high` は `xhigh` である。見落としの代償が大きい変更ほど、時間を掛けて深く見るためである。
+Reviewer は、実装Issueのリスクのラベルに合わせて、コードレビューの skill の深さ (Claude Code では effort) を選ぶ。リスクと深さの対応は、Reviewer が受け取る専門知識のファイルに書く。初期の専門知識 `software-engineering` では、`cumin/risk/low` と `cumin/risk/medium` は `high`、`cumin/risk/high` は `xhigh` である。見落としの代償が大きい変更ほど、時間を掛けて深く見るためである。
 
 - 検証: `inspection` Reviewer が受け取る専門知識のファイルに、リスクのラベルごとの深さがある
 - 検証: `demo` `cumin/risk/high` の実装Issueの1ラウンド目で、`code-review` が `xhigh` で実行される
@@ -306,4 +306,3 @@ Pull Request の内容が、実装Issueとほとんど関係がないときは�
 ## 未決事項
 
 - 「Reviewer が動いていない」の意味は、[計画](../plan/index.md) と [実装](../impl/index.md) と同じく、[Agent](../agent/index.md) か [定期確認](../poll/index.md) に移す。
-- `REVIEW.md` は Reviewer の判断を変えるので、保護されたパスの初期値に入れるかを、[権限](../access/index.md) で決める。

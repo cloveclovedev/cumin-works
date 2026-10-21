@@ -215,7 +215,15 @@ Implementer は、Pull Request を開いて push したら、レビューもチ�
 
 保護されたパスが変わっていないことは、cumin ではなく、GitHub Actions のチェックで確かめる。チェックが失敗したときは、ほかの必須チェックと同じく `CWK-IMPL-012` に進む。
 
-##### `CWK-IMPL-021.1` 変更ファイルと突き合わせる
+##### `CWK-IMPL-021.1` 保護されたパスの一覧
+
+保護されたパスの一覧は、対象のリポジトリの `.cumin/config.toml` の `protected_paths` に書く。ファイルかキーがなければ、初期値の `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md` を使う。`REVIEW.md` を含めるのは、Agent が書き換えると、Reviewer の判断が変わるためである ([レビュー](../review/index.md) の `CWK-REVIEW-017`)。
+
+- 検証: `test` `protected_paths` のないリポジトリで、`REVIEW.md` を変える bot の Pull Request のチェックが失敗する
+
+---
+
+##### `CWK-IMPL-021.2` 変更ファイルと突き合わせる
 
 対象のリポジトリに GitHub Actions のワークフローを置く。ワークフローは、Pull Request の変更ファイルの一覧を保護されたパスの一覧と突き合わせ、1つでも当たれば失敗する。
 
@@ -223,7 +231,7 @@ Implementer は、Pull Request を開いて push したら、レビューもチ�
 
 ---
 
-##### `CWK-IMPL-021.2` 必須チェックにする
+##### `CWK-IMPL-021.3` 必須チェックにする
 
 このチェックを、main ブランチの ruleset で必須チェックに登録する。
 
@@ -231,7 +239,7 @@ Implementer は、Pull Request を開いて push したら、レビューもチ�
 
 ---
 
-##### `CWK-IMPL-021.3` bot の Pull Request だけに掛ける
+##### `CWK-IMPL-021.4` bot の Pull Request だけに掛ける
 
 チェックの job は、Pull Request の作成者が bot (GitHub App など) のときだけ動く。作成者が人のときは job が飛ばされ、GitHub は `skipped` として扱うので、人の Pull Request はこのチェックで止まらない。条件に GitHub App の名前は使わない。名前を間違えると job が飛ばされて通った扱いになり、保護が黙って効かなくなるためである。
 
@@ -240,7 +248,7 @@ Implementer は、Pull Request を開いて push したら、レビューもチ�
 
 ---
 
-##### `CWK-IMPL-021.4` main ブランチの一覧を読む
+##### `CWK-IMPL-021.5` main ブランチの一覧を読む
 
 ワークフローは、保護されたパスの一覧を、Pull Request のブランチではなく main ブランチから読む。一覧のある `.cumin/` も、保護されたパスに含める。Implementer は、自分のブランチなら保護されたパスのファイルもコミットできる。保護は、このチェックが失敗してマージできないことで効く。Pull Request のブランチから一覧を読むと、Implementer が同じ Pull Request で一覧から `.cumin/` と自分の変更を外せば、書き換えた一覧で判定されて、チェックが通ってしまう。`.cumin/` を一覧に含めるのは、一覧を書き換える Pull Request がマージされて、後の Pull Request の保護が弱まることを防ぐためである。
 
