@@ -1,6 +1,6 @@
 # チェック
 
-実装Issueの Pull Request で、必須チェックが通るまでの流れを決める。cumin が必須チェックの結果を待ち、失敗と衝突を Implementer に直させ、通ったらレビューに進めるまでである。cumin が対象のリポジトリに置く、保護されたパスのチェックもここで決める。Implementer の作業は [実装](../impl/index.md)、レビューは [レビュー](../review/index.md) で決める。
+実装Issueの Pull Request で、必須チェックが完了するまでの流れを決める。cumin が必須チェックの結果を待ち、失敗と衝突を Implementer に直させ、完了したらレビューに進めるまでである。cumin が対象のリポジトリに置く、保護されたパスのチェックもここで決める。Implementer の作業は [実装](../impl/index.md)、レビューは [レビュー](../review/index.md) で決める。
 
 ## 全体像
 
@@ -24,11 +24,11 @@
 
 ---
 
-#### `CWK-CHECK-002` 必須チェックが通る
+#### `CWK-CHECK-002` 必須チェックの完了を判断する
 
-必須チェックが通るとは、一覧のすべてのチェックが、Pull Request の先頭のコミットで、結論 `success`、`skipped`、`neutral` のどれかを返したことである。GitHub も、この3つをマージを止めない結論として扱う。一覧が空なら、すぐに通る。
+cumin は、一覧のすべてのチェックが、Pull Request の先頭のコミットで、結論 `success`、`skipped`、`neutral` のどれかを返したとき、必須チェックが完了したと判断する。GitHub も、この3つをマージを止めない結論として扱う。一覧が空なら、すぐに完了したと判断する。
 
-- 検証: `test` 3つの結論はどれも通ったと扱い、ほかの結論は通ったと扱わない。一覧が空のリポジトリでは、`cumin/status/checking` を通って、次の定期確認でレビューに進む
+- 検証: `test` 3つの結論はどれも完了と判断し、ほかの結論では完了と判断しない。一覧が空のリポジトリでは、`cumin/status/checking` になったあと、次の定期確認でレビューに進む
 
 ---
 
@@ -118,7 +118,7 @@
 
 ##### `CWK-CHECK-008.4` bot の Pull Request だけに掛ける
 
-チェックの job は、Pull Request の作成者が bot (GitHub App など) のときだけ動く。作成者が人のときは job が飛ばされ、GitHub は `skipped` として扱うので、人の Pull Request はこのチェックで止まらない。条件に GitHub App の名前は使わない。名前を間違えると job が飛ばされて通った扱いになり、保護が黙って効かなくなるためである。
+チェックの job は、Pull Request の作成者が bot (GitHub App など) のときだけ動く。作成者が人のときは job が飛ばされ、GitHub は `skipped` として扱うので、人の Pull Request はこのチェックで止まらない。条件に GitHub App の名前は使わない。名前を間違えると job が飛ばされて成功した扱いになり、保護が黙って効かなくなるためである。
 
 - 検証: `demo` 人が保護されたパスを変える Pull Request を開くと、チェックが `skipped` になる
 - 検証: `inspection` ワークフローの条件が、GitHub App の名前ではなく、作成者が bot かどうかで決まっている
@@ -127,7 +127,7 @@
 
 ##### `CWK-CHECK-008.5` main ブランチの一覧を読む
 
-ワークフローは、保護されたパスの一覧を、Pull Request のブランチではなく main ブランチから読む。一覧のある `.cumin/` も、保護されたパスに含める。Implementer は、自分のブランチなら保護されたパスのファイルもコミットできる。保護は、このチェックが失敗してマージできないことで効く。Pull Request のブランチから一覧を読むと、Implementer が同じ Pull Request で一覧から `.cumin/` と自分の変更を外せば、書き換えた一覧で判定されて、チェックが通ってしまう。`.cumin/` を一覧に含めるのは、一覧を書き換える Pull Request がマージされて、後の Pull Request の保護が弱まることを防ぐためである。
+ワークフローは、保護されたパスの一覧を、Pull Request のブランチではなく main ブランチから読む。一覧のある `.cumin/` も、保護されたパスに含める。Implementer は、自分のブランチなら保護されたパスのファイルもコミットできる。保護は、このチェックが失敗してマージできないことで効く。Pull Request のブランチから一覧を読むと、Implementer が同じ Pull Request で一覧から `.cumin/` と自分の変更を外せば、書き換えた一覧で判定されて、チェックが成功してしまう。`.cumin/` を一覧に含めるのは、一覧を書き換える Pull Request がマージされて、後の Pull Request の保護が弱まることを防ぐためである。
 
 - 検証: `demo` Pull Request のブランチで一覧から自分の変更を外しても、チェックが失敗する
 
@@ -137,7 +137,7 @@
 
 | # | 場面 | 期待する結果 |
 |---|---|---|
-| 1 | 必須チェックが失敗し、Implementer が直す | 同じセッションで修正を頼み (`CWK-CHECK-004`)、同じ Pull Request に修正が積まれ ([実装](../impl/index.md) の `CWK-IMPL-009`)、`cumin/status/checking` に戻ってチェックが通る |
+| 1 | 必須チェックが失敗し、Implementer が直す | 同じセッションで修正を頼み (`CWK-CHECK-004`)、同じ Pull Request に修正が積まれ ([実装](../impl/index.md) の `CWK-IMPL-009`)、`cumin/status/checking` に戻って必須チェックが完了する |
 | 2 | `cumin/status/checking` の間に、ほかの Pull Request のマージで衝突する | `UNKNOWN` の間は待ち、`CONFLICTING` になると衝突の解消を1回だけ頼む (`CWK-CHECK-007`)。チェックの修正の回数は増えない |
 | 3 | 必須チェックが待ち時間を過ぎても結果を返さない | `cumin/status/awaiting-decision` になり、先頭のコミット、そのチェック、待った時間を添えて通知が1回届く (`CWK-CHECK-006`) |
 

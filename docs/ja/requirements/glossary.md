@@ -63,7 +63,7 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | 計画結果の確認 | Maintainer が、計画の結果と sub-issue を確かめること | 分割結果の確認、plan review、プランレビュー | plan review |
 | リスク | 実装Issueのマージのリスク。`cumin/risk/*` のラベルで表す | risk | risk |
 | 保護されたパス | Agent が変えてはいけないファイルのパス | 保護パス | protected path |
-| 必須チェック | main ブランチの保護で、マージの前に通る必要があるチェック | 必須の check | required check |
+| 必須チェック | main ブランチの保護で、マージの前に成功している必要があるチェック | 必須の check | required check |
 | ラウンド | Reviewer のレビュー1回と、それへの修正の組 | 周回 | round |
 | マージ判断 | Maintainer が Pull Request を見て、マージするかを決めること | merge の判断、マージ判定 | merge decision |
 | マージ判断を待つ Pull Request のブランチから始める | blocked by の Issue の Pull Request が Assignee のマージ判断を待つ間に、そのブランチから新しいブランチを切り、そのブランチを base にした Pull Request で、次の実装Issueを進めること | 土台、積む、重ねる、スタック | start on the branch of a pull request that waits for the merge decision |

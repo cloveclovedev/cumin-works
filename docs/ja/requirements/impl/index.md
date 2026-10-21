@@ -217,7 +217,7 @@ blocked by の Issue で終わっているはずの作業が、実際には足�
 
 | # | 場面 | 期待する結果 |
 |---|---|---|
-| 1 | Maintainer が実装Issueに `cumin/status/ready` を付ける。Implementer が Pull Request を開き、必須チェックが通る | 実装が始まり (`CWK-IMPL-001`)、実装が完了したと判断されて `cumin/status/checking` になり (`CWK-IMPL-005`、`CWK-IMPL-006`)、チェックが通るとレビューに進む ([チェック](../check/index.md) の `CWK-CHECK-002`) |
+| 1 | Maintainer が実装Issueに `cumin/status/ready` を付ける。Implementer が Pull Request を開き、必須チェックが完了する | 実装が始まり (`CWK-IMPL-001`)、実装が完了したと判断されて `cumin/status/checking` になり (`CWK-IMPL-005`、`CWK-IMPL-006`)、必須チェックが完了するとレビューに進む ([チェック](../check/index.md) の `CWK-CHECK-002`) |
 | 2 | 保護されたパスの変更が要る実装Issueで実装する | Implementer が `blocked` を返し (`CWK-IMPL-014.2`)、やり直さずに `cumin/status/awaiting-decision` になる (`CWK-IMPL-008`) |
 | 3 | Maintainer が止まった実装Issueを直し、`cumin/status/ready` を付け直す | 新しいセッションで続きから進み、新しい Pull Request は作られない (`CWK-IMPL-001`、`CWK-IMPL-009`)。チェックの修正の回数は0から数え直す (`CWK-IMPL-004`) |
 | 4 | 先の実装Issueが Assignee のマージ判断を待っている間に、それに依存する実装Issueに `cumin/status/ready` が付いている | blocked by の Issue のブランチから切ったブランチで実装が始まり、Pull Request の base がそのブランチになる (`CWK-IMPL-015.1`、`CWK-IMPL-015.2`)。そのあとは [マージ](../merge/index.md) の、blocked by の Issue のマージを待つ流れに進む |

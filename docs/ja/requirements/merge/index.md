@@ -23,11 +23,11 @@ Reviewer が承認した Pull Request を、マージし、実装Issueを閉じ�
 `cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のすべてが成り立つとき、cumin は状態を `cumin/status/merging` に替える。マージは `cumin/status/merging` の中で行う (`CWK-MERGE-006`)。
 
 - Reviewer の最新のレビューが、今の先頭のコミットへの `APPROVE` である
-- 必須チェックが、今の先頭のコミットですべて通っている
+- 必須チェックが、今の先頭のコミットで完了している ([チェック](../check/index.md) の `CWK-CHECK-002`)
 - リスクのラベルが `cumin/risk/low` である
 - blocked by の Issue のマージを待たなくてよい (`CWK-MERGE-022`)
 
-- 検証: `test` `cumin/risk/low` の実装Issueで、Reviewer が今の先頭のコミットを承認し、必須チェックが通っていると、実装Issueが `cumin/status/merging` になる
+- 検証: `test` `cumin/risk/low` の実装Issueで、Reviewer が今の先頭のコミットを承認し、必須チェックが完了していると、実装Issueが `cumin/status/merging` になる
 
 ---
 
@@ -48,7 +48,7 @@ Assignee は、Pull Request を GitHub のレビューで判断する。cumin �
 
 #### `CWK-MERGE-003` Assignee の承認でマージを始める
 
-`cumin/status/awaiting-merge-decision` の実装Issueで、Assignee の最新のレビューが今の先頭のコミットへの `APPROVE` で、必須チェックが今の先頭のコミットですべて通っていて、blocked by の Issue より先にマージすることにならない (`CWK-MERGE-022`) とき、cumin は状態を `cumin/status/merging` に替える。古いコミットへの承認は数えない。衝突の解消などで新しいコミットが入ったら、Assignee はもう一度承認する。
+`cumin/status/awaiting-merge-decision` の実装Issueで、Assignee の最新のレビューが今の先頭のコミットへの `APPROVE` で、必須チェックが今の先頭のコミットで完了していて、blocked by の Issue より先にマージすることにならない (`CWK-MERGE-022`) とき、cumin は状態を `cumin/status/merging` に替える。古いコミットへの承認は数えない。衝突の解消などで新しいコミットが入ったら、Assignee はもう一度承認する。
 
 - 検証: `test` Assignee が今の先頭のコミットを承認すると、実装Issueが `cumin/status/merging` になる
 - 検証: `test` 古いコミットへの承認、Assignee でない Maintainer の承認、bot の承認、あとから同じ Assignee の `REQUEST_CHANGES` で覆された承認では、`cumin/status/merging` にならない
@@ -83,7 +83,7 @@ Assignee は、Pull Request を GitHub のレビューで判断する。cumin �
 
 cumin は、`cumin/status/merging` の実装Issueの Pull Request を、次のすべてが成り立つときだけマージする。`cumin/status/merging` のラベルが付いていることは、条件の代わりにならない。cumin は、マージを送るたびに条件を確かめ直す。
 
-- 必須チェックが、今の先頭のコミットですべて通っている
+- 必須チェックが、今の先頭のコミットで完了している
 - リスクのラベルが1つだけ付いている
 - Reviewer の最新のレビューが、今の先頭のコミットへの `APPROVE` である
 - リスクが `cumin/risk/medium` か `cumin/risk/high` なら、Assignee の最新のレビューも、今の先頭のコミットへの `APPROVE` である
@@ -286,11 +286,11 @@ cumin は、Agent の判断を使わず、決まった形式から次のもの�
 |---|---|---|
 | 1 | `cumin/risk/low` の Pull Request を Reviewer が承認する | `cumin/status/merging` になり (`CWK-MERGE-001`)、承認されたコミットがマージされ (`CWK-MERGE-007`)、実装Issueが閉じ (`CWK-MERGE-012`)、残りの作業があればフォローアップノートが1つ付く (`CWK-MERGE-014`、`CWK-MERGE-015`) |
 | 2 | `cumin/risk/medium` の Pull Request を Reviewer が承認し、Assignee が承認する | `cumin/status/awaiting-merge-decision` になって通知が届き (`CWK-MERGE-002`)、Assignee の承認で `cumin/status/merging` になってマージされる (`CWK-MERGE-003`、`CWK-MERGE-006`) |
-| 3 | マージ判断で Assignee が `REQUEST_CHANGES` を出し、Implementer が直す | Implementer の直前のセッションで修正を頼み (`CWK-MERGE-004`)、チェックと、承認したコミットからの差分のレビュー (`CWK-REVIEW-014.2`) を通って、もう一度 `cumin/status/awaiting-merge-decision` になる。レビューのラウンドとチェックの修正の回数は増えない |
-| 4 | 承認されたあと、ほかの Pull Request のマージで衝突する | マージを送らずに衝突の解消を頼み (`CWK-MERGE-009`)、チェックとレビューを通ってもう一度マージに進む |
+| 3 | マージ判断で Assignee が `REQUEST_CHANGES` を出し、Implementer が直す | Implementer の直前のセッションで修正を頼み (`CWK-MERGE-004`)、必須チェックの完了と、承認したコミットからの差分のレビュー (`CWK-REVIEW-014.2`) を経て、もう一度 `cumin/status/awaiting-merge-decision` になる。レビューのラウンドとチェックの修正の回数は増えない |
+| 4 | 承認されたあと、ほかの Pull Request のマージで衝突する | マージを送らずに衝突の解消を頼み (`CWK-MERGE-009`)、必須チェックの完了とレビューを経て、もう一度マージに進む |
 | 5 | 同じ定期確認で、2つの Pull Request をマージする | 1つマージするごとに数秒待ち (`CWK-MERGE-007`)、405 で断られた Pull Request は次の定期確認でマージされる (`CWK-MERGE-010`) |
 | 6 | 最後の sub-issue の Pull Request がマージされる | フォローアップノートが付いてから、受け入れ確認を頼む (`CWK-MERGE-018`) |
-| 7 | base が main ブランチでない Pull Request を Reviewer が承認し、そのあと Assignee が blocked by の Issue の Pull Request を squash でマージする | `cumin/status/awaiting-base` で待ち (`CWK-MERGE-020`)、base が main ブランチに替わると、main ブランチを取り込ませ (`CWK-MERGE-021`)、チェックとレビューを通ってマージに進む。blocked by の Issue より先にはマージしない (`CWK-MERGE-022`) |
+| 7 | base が main ブランチでない Pull Request を Reviewer が承認し、そのあと Assignee が blocked by の Issue の Pull Request を squash でマージする | `cumin/status/awaiting-base` で待ち (`CWK-MERGE-020`)、base が main ブランチに替わると、main ブランチを取り込ませ (`CWK-MERGE-021`)、必須チェックの完了とレビューを経て、マージに進む。blocked by の Issue より先にはマージしない (`CWK-MERGE-022`) |
 | 8 | Assignee が blocked by の Issue の Pull Request を、マージせずに閉じる | そのブランチから始めた実装Issueが止まり、理由のコメントと通知が届く (`CWK-MERGE-023`) |
 
 ## 未決事項

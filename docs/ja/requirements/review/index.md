@@ -1,6 +1,6 @@
 # レビュー
 
-必須チェックの通った Pull Request を Reviewer がレビューし、指摘を Implementer が直すまでの流れを決める。cumin が Reviewer を起動し、レビューを GitHub で確かめ、ラウンドを数え、上限で Assignee に回すまでである。承認のあとのマージとマージ判断は [マージ](../merge/index.md)、Agent起動に共通のことは [Agent](../agent/index.md) で決める。
+必須チェックが完了した Pull Request を Reviewer がレビューし、指摘を Implementer が直すまでの流れを決める。cumin が Reviewer を起動し、レビューを GitHub で確かめ、ラウンドを数え、上限で Assignee に回すまでである。承認のあとのマージとマージ判断は [マージ](../merge/index.md)、Agent起動に共通のことは [Agent](../agent/index.md) で決める。
 
 ## 全体像
 
@@ -20,9 +20,9 @@ Reviewer のセッションと Implementer のセッションは、共有しな�
 
 #### `CWK-REVIEW-001` レビューを始める
 
-`cumin/status/checking` の実装Issueで、必須チェックが Pull Request の先頭のコミットですべて通ったとき ([チェック](../check/index.md) の `CWK-CHECK-002`)、cumin は状態を `cumin/status/reviewing` に替えてから、Reviewer を起動する。1ラウンド目は新しいセッションで、2ラウンド目からは Reviewer の直前のセッションで起動する。
+`cumin/status/checking` の実装Issueで、必須チェックが Pull Request の先頭のコミットで完了したとき ([チェック](../check/index.md) の `CWK-CHECK-002`)、cumin は状態を `cumin/status/reviewing` に替えてから、Reviewer を起動する。1ラウンド目は新しいセッションで、2ラウンド目からは Reviewer の直前のセッションで起動する。
 
-- 検証: `test` 必須チェックが通ると、実装Issueが `cumin/status/reviewing` になり、Reviewer の Agent起動が1回だけ起きる
+- 検証: `test` 必須チェックが完了すると、実装Issueが `cumin/status/reviewing` になり、Reviewer の Agent起動が1回だけ起きる
 - 検証: `test` 指摘の修正のあとのレビューでは、Reviewer の直前のセッションで起動する
 
 ---
@@ -64,9 +64,9 @@ cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに�
 `cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどちらかが成り立つとき、cumin は状態を `cumin/status/checking` に替える。古いコミットへのレビューは、ラウンドに数えたまま残る。
 
 - レビューの間に、先頭のコミットが変わった
-- `APPROVE` が出ているが、必須チェックのどれかが今の先頭のコミットで通っていない
+- `APPROVE` が出ているが、必須チェックが今の先頭のコミットで完了していない
 
-- 検証: `test` レビューの間に push された実装Issueは、`cumin/status/checking` に戻り、チェックが通るともう一度レビューされる
+- 検証: `test` レビューの間に push された実装Issueは、`cumin/status/checking` に戻り、必須チェックが完了するともう一度レビューされる
 
 ---
 
@@ -297,10 +297,10 @@ Pull Request の内容が、実装Issueとほとんど関係がないときは�
 
 | # | 場面 | 期待する結果 |
 |---|---|---|
-| 1 | 必須チェックが通り、Reviewer が `REQUEST_CHANGES` を出し、Implementer が直し、2ラウンド目で `APPROVE` が出る | レビューが始まり (`CWK-REVIEW-001`)、指摘の修正を頼み (`CWK-REVIEW-004`)、チェックを通って2ラウンド目が直前のセッションで起動され、前の指摘と返答と差分だけを見て承認する (`CWK-REVIEW-014.3`)。そのあとはマージに進む |
+| 1 | 必須チェックが完了し、Reviewer が `REQUEST_CHANGES` を出し、Implementer が直し、2ラウンド目で `APPROVE` が出る | レビューが始まり (`CWK-REVIEW-001`)、指摘の修正を頼み (`CWK-REVIEW-004`)、必須チェックの完了を経て2ラウンド目が直前のセッションで起動され、前の指摘と返答と差分だけを見て承認する (`CWK-REVIEW-014.3`)。そのあとはマージに進む |
 | 2 | 上限のラウンドでも指摘が残る | 原因の整理を頼み (`CWK-REVIEW-009`)、コメントが付くと `cumin/status/awaiting-decision` になって通知が1回届く (`CWK-REVIEW-010`、`CWK-REVIEW-018`) |
 | 3 | Reviewer が承認したあとに衝突が起き、Implementer が解消する | ラウンドが1から数え直され (`CWK-REVIEW-008`)、承認したコミットからの差分だけがレビューされる (`CWK-REVIEW-002`、`CWK-REVIEW-014.2`) |
-| 4 | レビューの間に、誰かがブランチに push する | `cumin/status/checking` に戻り、チェックが通るともう一度レビューされる (`CWK-REVIEW-005`) |
+| 4 | レビューの間に、誰かがブランチに push する | `cumin/status/checking` に戻り、必須チェックが完了するともう一度レビューされる (`CWK-REVIEW-005`) |
 | 5 | 1ラウンド目の指摘が提案と元からある問題だけである | `REQUEST_CHANGES` になり (`CWK-REVIEW-011`)、Implementer が提案のすべてに返答し (`CWK-REVIEW-020`、`CWK-REVIEW-021`)、2ラウンド目で `APPROVE` が出る。元からある問題は直されない (`CWK-REVIEW-013`) |
 
 ## 未決事項
