@@ -181,10 +181,13 @@ cumin は、条件を満たす実装Issueを、blocked by の Issue の Pull Req
 - 開いている blocked by の Issue が1つだけで、それが `cumin/status/awaiting-merge-decision` である
 - その Issue の Pull Request の base が、main ブランチである
 - 対象のリポジトリが、マージのあとにブランチを自動で消す設定 (`deleteBranchOnMerge`) である。ブランチが消えたときにだけ、GitHub が、そのブランチを base にする Pull Request の base を main ブランチに替えるためである。この設定がないリポジトリでは、今までどおり blocked by の Issue が閉じるのを待つ
+- 対象のリポジトリの `.cumin/config.toml` で、この始め方を有効にしている (`start_on_awaiting_merge_decision = true`)。初期値は `false` で、有効にしていないリポジトリでは、今までどおり blocked by の Issue が閉じるのを待つ。ツール動作確認と同じく、リポジトリの `.cumin/config.toml` だけで決める
+
+有効にする前に、Maintainer は、必須チェックのワークフローが、base が main ブランチでない Pull Request でも動くことを確かめる。cumin は、必須チェックの一覧を main ブランチの規則から読み、この形の Pull Request でもその結果を待つ。ワークフローを `on: pull_request: branches: [main]` のように絞っているリポジトリでは、チェックが来ず、待ち時間のあとで止まる (`CWK-IMPL-014`)。
 
 `cumin/status/awaiting-merge-decision` は、Reviewer が blocked by の Issue の Pull Request の今の先頭のコミットを承認したことを表す。Reviewer が承認する前の Pull Request のブランチからは始めない。
 
-- 検証: `test` blocked by の実装Issueが `cumin/status/awaiting-merge-decision` で、その Pull Request の base が main ブランチなら、着手する。`cumin/status/reviewing` のとき、`deleteBranchOnMerge` が偽のとき、開いている blocked by が2つあるときは着手しない
+- 検証: `test` blocked by の実装Issueが `cumin/status/awaiting-merge-decision` で、その Pull Request の base が main ブランチなら、着手する。`cumin/status/reviewing` のとき、`deleteBranchOnMerge` が偽のとき、`start_on_awaiting_merge_decision` が `false` か書いていないとき、開いている blocked by が2つあるときは着手しない
 
 ---
 
