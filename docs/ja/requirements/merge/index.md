@@ -42,7 +42,7 @@ Reviewer が承認した Pull Request をマージし、実装Issueを閉じる�
 
 ### マージ判断
 
-cumin が数えるのは、実装Issueの今の Assignee のレビューのうち、`COMMENT` を除いた最新のものだけである ([権限](../access/index.md) の `CWK-ACCESS-002`)。古いコミットへのレビューは数えない。
+cumin がマージ判断に使うのは、実装Issueの今の Assignee のレビューのうち、`COMMENT` を除いた最新のものだけである ([権限](../access/index.md) の `CWK-ACCESS-002`)。古いコミットへのレビューは使わない。
 
 #### `CWK-MERGE-003` Assignee の承認でマージを始める
 
@@ -58,7 +58,7 @@ cumin が数えるのは、実装Issueの今の Assignee のレビューのう�
 `cumin/status/awaiting-merge-decision` の実装Issueで、Assignee の最新のレビューが今の先頭のコミットへの `REQUEST_CHANGES` で、実装Issueが最後に `cumin/status/awaiting-merge-decision` になったあとに出たものであるとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで修正を頼む。
 
 - 修正のあとは、必須チェックとレビューを経て、もう一度 `CWK-MERGE-002` に進む。
-- この修正は、レビューのラウンドにもチェックの修正の回数にも数えない。`REQUEST_CHANGES` を出すのは毎回 Assignee なので、往復が止まらなくなることはない。
+- この修正は、レビューのラウンドにもチェックの修正の回数にも含めない。`REQUEST_CHANGES` を出すのは毎回 Assignee なので、往復が止まらなくなることはない。
 - 1つの `REQUEST_CHANGES` で頼むのは1回だけである。Implementer がコミットせずに答えたときは、Assignee がもう一度判断する。
 
 - 検証: `test` `REQUEST_CHANGES` を出すと、`cumin/status/implementing` になり、直前のセッションで Agent起動が1回起きる。ラウンドとチェックの修正の回数は変わらない
@@ -114,7 +114,7 @@ cumin は、`cumin/status/merging` の実装Issueの Pull Request を、次の�
 
 #### `CWK-MERGE-009` マージの前の衝突を解消する
 
-`cumin/status/merging` の実装Issueで、マージの条件が成り立ち、GitHub が衝突していると返したとき、または衝突でマージを断ったとき、cumin はマージを送らずに、状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで衝突の解消を頼む。チェックの修正の回数には数えない。
+`cumin/status/merging` の実装Issueで、マージの条件が成り立ち、GitHub が衝突していると返したとき、または衝突でマージを断ったとき、cumin はマージを送らずに、状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで衝突の解消を頼む。チェックの修正の回数には含めない。
 
 - 検証: `test` 承認のあとに衝突した Pull Request では、マージを送らずに、衝突の解消を1回だけ頼む
 

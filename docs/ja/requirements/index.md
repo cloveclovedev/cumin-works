@@ -38,7 +38,7 @@ IDの接頭辞は `CWK` である。カテゴリごとにディレクトリを�
 | `IMPL` | [実装](impl/index.md) | 実装の Agent起動、実装の完了判断、マージ判断を待つ Pull Request のブランチから始めること、Implementer の入力と出力 |
 | `CHECK` | [チェック](check/index.md) | 必須チェックを待つこと、チェックの失敗の修正、衝突の解消、保護されたパスのチェック |
 | `REVIEW` | [レビュー](review/index.md) | レビューの Agent起動、ラウンド、指摘の修正、Reviewer の入力と出力 |
-| `MERGE` | [マージ](merge/index.md) | マージ判断、承認の数え方、マージ、実装Issueを閉じること、フォローアップノート |
+| `MERGE` | [マージ](merge/index.md) | マージ判断、マージ判断に使うレビュー、マージ、実装Issueを閉じること、フォローアップノート |
 | `ACCEPT` | [受け入れ](accept/index.md) | 受け入れ確認、残りの項目の仕分けと修正の sub-issue、受け入れ、差し戻し |
 | `AGENT` | [Agent](agent/index.md) | Agent起動に共通のこと。結果の形式、指示の渡し方、権限、セッション、異常終了、ツール動作確認 |
 | `LIMIT` | [利用制限](limit/index.md) | 5時間制限と週間制限、Agent起動を止めることと再開すること |

@@ -45,7 +45,7 @@ cumin は、Reviewer の Agent起動で、次の事実を渡す。
 
 #### `CWK-REVIEW-003` レビューの完了を判断する
 
-cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに、結果が `APPROVE` か `REQUEST_CHANGES` のレビューを出したとき、レビューが完了したと判断する。cumin が数えるのは、このレビューだけである。古いコミットへのレビューと、`COMMENT` だけのレビューは数えない。Reviewer が返した結果も使わない。
+cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに、結果が `APPROVE` か `REQUEST_CHANGES` のレビューを出したとき、レビューが完了したと判断する。cumin が使うのは、このレビューだけである。古いコミットへのレビューと、`COMMENT` だけのレビューは使わない。Reviewer が返した結果も使わない。
 
 - 検証: `test` 古いコミットへの `APPROVE` と、今の先頭のコミットへの `COMMENT` では、レビューがないものとして扱う
 
@@ -61,7 +61,7 @@ cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに�
 
 #### `CWK-REVIEW-005` チェックに戻る
 
-`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどちらかが成り立つとき、cumin は状態を `cumin/status/checking` に替える。古いコミットへのレビューは、ラウンドに数えたまま残る。
+`cumin/status/reviewing` の実装Issueで、Reviewer が動いておらず、次のどちらかが成り立つとき、cumin は状態を `cumin/status/checking` に替える。古いコミットへのレビューも、ラウンドに含めたままにする。
 
 - レビューの間に、先頭のコミットが変わった
 - `APPROVE` が出ているが、必須チェックが今の先頭のコミットで完了していない
@@ -98,7 +98,7 @@ cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに�
 
 #### `CWK-REVIEW-008` ラウンドの数え方
 
-ラウンドは、次の2つのうち新しいほうよりあとに出た、`cumin-reviewer` のレビューの数で数える。cumin はラウンドの数を手元に持たない。
+ラウンドは、次の2つのうち新しいほうよりあとに出た、`cumin-reviewer` のレビューの数とする。cumin はラウンドの数を手元に持たない。
 
 - 実装Issueに最後に `cumin/status/ready` が付いたとき
 - `cumin-reviewer` が最後に `APPROVE` を出したとき
@@ -129,7 +129,7 @@ cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに�
 
 #### `CWK-REVIEW-011` レビュー
 
-Reviewer は、Pull Request の今の先頭のコミットに、GitHub のレビューを1つ出す。修正が必要な指摘が残っておらず、Reviewer の提案のすべてに Implementer の返答があるときだけ `APPROVE` にする。それ以外は、提案だけが残っているときも `REQUEST_CHANGES` にする。元からある問題 (`CWK-REVIEW-013`) は、どちらにも数えない。`COMMENT` だけのレビューにはしない。指摘とまとめは [review.md](../../../../templates/review.md) の形式で書き、まとめにラウンドと上限を書く。
+Reviewer は、Pull Request の今の先頭のコミットに、GitHub のレビューを1つ出す。修正が必要な指摘が残っておらず、Reviewer の提案のすべてに Implementer の返答があるときだけ `APPROVE` にする。それ以外は、提案だけが残っているときも `REQUEST_CHANGES` にする。元からある問題 (`CWK-REVIEW-013`) は、どちらにも入れない。`COMMENT` だけのレビューにはしない。指摘とまとめは [review.md](../../../../templates/review.md) の形式で書き、まとめにラウンドと上限を書く。
 
 - 検証: `demo` 完了の条件を満たした正しい Pull Request で、指摘がなければ、今の先頭のコミットに `APPROVE` が出る
 - 検証: `demo` 完了の条件を満たしていない Pull Request で、`REQUEST_CHANGES` が出て、修正が必要な指摘に、場所と理由が書いてある

@@ -41,7 +41,7 @@ cumin が読むのは、受け入れ確認のコメントがあるか、sub-issu
 
 #### `CWK-ACCEPT-002` 受け入れ確認の完了を判断する
 
-cumin は、`cumin-planner` が要求Issueに書いた `## Acceptance check` で始まるコメントが、最後の sub-issue が閉じたあとにあるとき、受け入れ確認が完了したと判断する。それより前のコメントは数えない。Planner が返した結果も使わない。
+cumin は、`cumin-planner` が要求Issueに書いた `## Acceptance check` で始まるコメントが、最後の sub-issue が閉じたあとにあるとき、受け入れ確認が完了したと判断する。それより前のコメントは使わない。Planner が返した結果も使わない。
 
 - 検証: `test` 最後の sub-issue が閉じる前のコメントしかないと、完了したと判断しない
 

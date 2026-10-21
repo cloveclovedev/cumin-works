@@ -76,7 +76,7 @@ cumin は、一覧のすべてのチェックが、Pull Request の先頭のコ�
 `cumin/status/checking` か `cumin/status/awaiting-merge-decision` の実装Issueで、GitHub が Pull Request をその base (ふつうは main ブランチ。[実装](../impl/index.md) の `CWK-IMPL-015` で始めた Pull Request では、blocked by の Issue のブランチ) と衝突していると返したとき (GraphQL の `mergeable` が `CONFLICTING`)、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで衝突の解消を頼む。`cumin/status/merging` からの衝突の解消は、[マージ](../merge/index.md) で決める。
 
 - `mergeable` が `UNKNOWN` のときは、GitHub がまだ計算しているので、その定期確認では判定しない。`UNKNOWN` のまま待ち時間を過ぎたら、`CWK-CHECK-006` で止まる。
-- 衝突の解消は、チェックの修正の回数に数えない。衝突は Implementer の誤りではなく、並行して進むほかの Pull Request のマージで起きるためである。
+- 衝突の解消は、チェックの修正の回数に含めない。衝突は Implementer の誤りではなく、並行して進むほかの Pull Request のマージで起きるためである。
 - 衝突したまま待たないのは、GitHub が衝突のある Pull Request では `pull_request` のワークフローを動かさず、チェックがいつまでも結果を返さないためである。
 
 - 検証: `test` 衝突した Pull Request の実装Issueで、Implementer に衝突の解消を1回だけ頼み、チェックの修正の回数は増えない
