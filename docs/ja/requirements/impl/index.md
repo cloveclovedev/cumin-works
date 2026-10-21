@@ -202,7 +202,7 @@ cumin は、条件を満たす実装Issueを、blocked by の Issue の Pull Req
 
 ##### `CWK-IMPL-023.3` 1段だけにする
 
-blocked by の Issue の Pull Request の base が main ブランチであることを条件にするので、base が main ブランチでない Pull Request のブランチからは、さらに始めない。
+blocked by の Issue の Pull Request の base が main ブランチであることを条件にするので、base が main ブランチでない Pull Request のブランチからは、さらに始めない。深さを選べるようにすることは [バックログ](../backlog.md) にある。
 
 - 検証: `test` blocked by の Issue の Pull Request の base が main ブランチでないなら、着手しない
 
