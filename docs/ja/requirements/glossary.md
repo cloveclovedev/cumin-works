@@ -51,10 +51,10 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | ガード条件 | 遷移が起きるために成り立っている必要がある条件 | 条件、前提 | guard condition |
 | アクション | 遷移のときに cumin が行うこと | 動作、処理 | action |
 | 定期確認 | cumin が一定の間隔で GitHub を読み、アクションを決めること | ポーリング、巡回 | poll |
-| 空き | 同時に動かせる Agent の数に、余裕があること | 枠 | free slot |
+| 空き | リポジトリごとに同時に進める Issue の数 ([定期確認](poll/index.md) の `CWK-POLL-005`) に、余裕があること | 枠 | free slot |
 | Agent起動 | cumin が role と Issue を決めて Agent を始め、作業を頼むこと。続きを頼むときも含む | 依頼、指示、起動 | agent start |
 | 通知 | Host の設定で決めた通知先に知らせること。文書には相手の名前を書かない | 連絡、アラート | notify |
-| 作業中のリポジトリ | Agent が動いているか、人なしで進む Issue があるか、前回の定期確認でアクションをしたか失敗した、対象のリポジトリ。短い間隔で定期確認する | アクティブなリポジトリ | busy repository |
+| 作業中のリポジトリ | 短い間隔で定期確認する対象のリポジトリ。条件は [定期確認](poll/index.md) の `CWK-POLL-004` で決める | アクティブなリポジトリ | busy repository |
 | 全部を読めない Issue | sub-issue、ラベル、blocked by の Issue、結び付いた Pull Request のどれかが、cumin の読む数の上限を超えた Issue。cumin は何もしない | 大きすぎる Issue | issue that cumin cannot read whole |
 
 ## 作業の流れ

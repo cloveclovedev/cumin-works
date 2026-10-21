@@ -94,7 +94,7 @@ cumin は、`cumin/status/merging` の実装Issueの Pull Request を、次の�
 
 `cumin/status/merging` の実装Issueで、Pull Request がマージされておらず、マージの条件が成り立ち、衝突していないとき、cumin はマージを送る。
 
-- マージの方法は、Host の設定 `merge_method` (初期値は squash) に従う。
+- マージの方法は、設定 `merge_method` (初期値は squash) に従う。
 - 承認されたコミットだけをマージする。承認のあとに push されたコミットは、マージしない。
 - 答えが届かなかったときは、次の定期確認で、マージ済みかを読んでから決める。同じマージを2回送らない。
 - 1回の定期確認で2つ以上マージするときは、1つごとに数秒待つ。

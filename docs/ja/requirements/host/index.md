@@ -58,13 +58,15 @@ Operator は、次のコマンドを使う。
 
 #### `CWK-HOST-004` 状態の表示
 
-`cumin status` は、次のことを表示する。GitHub のラベルとモニターファイル (`CWK-HOST-014`) から読み、GitHub に書き込まない。
+`cumin status` は、次のことを表示する。GitHub のラベル、手元の状態、モニターファイル (`CWK-HOST-014`) から読み、GitHub に書き込まない。
 
 - 作業中の Agent と、人の番を待つ Issue
 - 5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因
 - 止める予約があるか
-- 失敗しているツール動作確認と、全部を読めない Issue
-- 最後の定期確認の時刻と、そのエラー。モニターファイルがないか古ければ、そのこと
+- 失敗しているツール動作確認と、全部を読めない Issue。Pull Request の数で全部を読めない Issue は、通知だけで知らせる
+- 最後の定期確認の時刻と、そのエラー。モニターファイルがないとき、または最後の定期確認が `poll_interval` の3倍より古いときは、そのこと
+
+モニターファイルの中身で、終了コードは変えない。
 
 - 検証: `test` 使用率で Agent起動を止めているとき、`cumin status` がその原因の制限を表示する
 - 検証: `test` モニターファイルがないとき、そのことを1行で表示し、ほかの表示は続ける
@@ -83,7 +85,7 @@ Operator は、次のコマンドを使う。
 
 #### `CWK-HOST-006` すぐに止める
 
-`cumin run` は、SIGINT と SIGTERM ですぐに止まる。新しい Agent起動をせず、動いている Agent も止める。ラベルは替えない。終了コードは 0 なので、launchd は起動し直さない。次に起動すると、最初の定期確認が続きを決める。
+`cumin run` は、SIGINT と SIGTERM で、動いている Agent も止めてすぐに終わる。ラベルは替えず、終了コードは 0 なので launchd は起動し直さない。
 
 - 検証: `test` Agent の実行中に SIGTERM を送ると、Agent のプロセスも残らずに、終了コード 0 で終わる。起動し直すと、その Issue のやり直しが起きる
 
@@ -91,7 +93,7 @@ Operator は、次のコマンドを使う。
 
 #### `CWK-HOST-007` 実行を待ってから止める
 
-`cumin stop --after-current-runs` を実行すると、cumin は新しい Agent起動をせず、動いている Agent の実行が終わるのを待ってから止まる。待つ間も、Agent を起動しないアクション (ラベルの付け替え、コメント、通知、マージ) は続ける。止める予約は、次の起動には残らない。cumin の版を入れ替える前に使う。
+`cumin stop --after-current-runs` を実行すると、cumin は新しい Agent起動をせず、動いている Agent の実行が終わるのを待ってから止まる。待つ間も、Agent を起動しないアクション (ラベルの付け替え、コメント、通知、マージ) は続ける。止める予約は、次の起動には残らない。
 
 - 検証: `test` 予約のあと、動いている実行の結果はラベルに反映されるが、続きの Agent起動は起きず、終了コード 0 で終わる。起動し直すと、続きの Agent起動が1回だけ起きる
 
@@ -109,7 +111,7 @@ Host がスリープから戻ったとき、cumin と動いている Agent は�
 
 #### `CWK-HOST-009` 設定ファイル
 
-設定は TOML のファイルに書く。値をコードに埋め込まない。Host の設定ファイルは、既定の場所にあり、`cumin run --config` で変えられる。知らないキー、型の違う値、範囲を外れた値があると、`cumin run` は起動せずに、そのキーを示して終わる。
+設定は TOML のファイルに書く。値をコードに埋め込まない。Host の設定ファイルは `~/.config/cumin/config.toml` にあり、`cumin run --config` で変えられる。知らないキー、型の違う値、範囲を外れた値があると、`cumin run` は起動せずに、そのキーを示して終わる。
 
 - 検証: `test` 知らないキーと範囲を外れた値がある設定ファイルで、`cumin run` が起動せずに、それぞれのキーを示す
 
@@ -139,7 +141,7 @@ Host がスリープから戻ったとき、cumin と動いている Agent は�
 | `idle_poll_interval` | 作業中でないリポジトリの定期確認の間隔。`poll_interval` 以上 (`CWK-POLL-004`) | 5分 | Host |
 | `max_issues_in_progress` | リポジトリごとに同時に進める Issue の数 (`CWK-POLL-005`) | 1 | Host |
 | `quota.five_hour.threshold` | 5時間制限のしきい値 (`CWK-LIMIT-004`) | 85% | Host |
-| `quota.five_hour.bands` | 5時間制限の時間帯ごとのしきい値。同じ時刻を2つの時間帯に入れられない (`CWK-LIMIT-004`) | なし | Host |
+| `quota.five_hour.bands` | 5時間制限の時間帯ごとのしきい値 (`CWK-LIMIT-004`) | なし | Host |
 | `quota.weekly.target` | 週間制限の目標 (`CWK-LIMIT-005`) | 85% | Host |
 | `quota.weekly.lead` | 週間制限の前倒し。7日未満 (`CWK-LIMIT-005`) | 1日 | Host |
 | `github_apps.<organization>.<app>` | GitHub App の Client ID。`cumin setup github-apps` が書く | なし | Host |
@@ -195,7 +197,7 @@ GitHub App の秘密鍵と、通知の webhook のアドレスは、Host の mac
 
 #### `CWK-HOST-014` モニターファイル
 
-cumin は、定期確認のたびと Agent の実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、止める予約、利用制限で止めているか、動いている Agent、人の番を待つ Issue である。cumin を外から見る道具と `cumin status` が読む。cumin 自身は読まず、ここからは何も決めない。
+cumin は、定期確認のたびと Agent の実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、止める予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めない Issue、動いている Agent、人の番を待つ Issue である。cumin を外から見る道具と `cumin status` が読む。cumin 自身は読まず、ここからは何も決めない。
 
 - 検証: `test` 定期確認のあと、モニターファイルに、その時刻と、人の番を待つ Issue がある
 - 検証: `test` モニターファイルを消しても、cumin のアクションは変わらない
