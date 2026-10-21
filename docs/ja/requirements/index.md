@@ -22,7 +22,7 @@ cumin-works の要求と要件の文書の入口。
 
 図の元ファイル: [implementation-issue-states.puml](implementation-issue-states.puml)
 
-図は旧版のものである。各カテゴリの要件を書いたあとで、今の語で描き直す。
+矢印には遷移の名前だけを書く。ガード条件とアクションは、各カテゴリのページの図と要件にある。Agent起動を止めるかどうかは Issue の状態ではなく cumin 自身の状態で、[利用制限](limit/index.md) で決める。
 
 ## カテゴリごとの要件
 
