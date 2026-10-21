@@ -96,51 +96,39 @@ Implementer が動いていないとき、cumin は Pull Request を GitHub で�
 
 ### マージ判断を待つ Pull Request のブランチから始める
 
-blocked by の Issue の Pull Request が Assignee のマージ判断を待つ間も、それに依存する実装Issueが止まらないように、cumin は、その Pull Request がマージされたものとみなして、そのブランチから次の実装を始める。始めた Pull Request は、base が main ブランチでない Pull Request になる。blocked by の Issue のマージを待つこと、そのマージのあとに main ブランチを取り込むこと、blocked by の Issue より先にマージしないことは、[マージ](../merge/index.md) で決める。
+blocked by の Issue の Pull Request が Assignee のマージ判断を待つ間、それに依存する実装Issueを止めないために、cumin はそのブランチから次の実装を始める。その Pull Request のマージを待つことと、マージのあとのことは [マージ](../merge/index.md) で決める。
 
 #### `CWK-IMPL-015` マージ判断を待つ Pull Request のブランチから始める
 
-cumin は、条件を満たす実装Issueを、blocked by の Issue の Pull Request のブランチから始める。始めたあとも、必須チェックとレビューは、ほかの Pull Request と同じに通る。
-
 ##### `CWK-IMPL-015.1` 着手の条件
 
-`cumin/status/ready` の実装Issueで、`CWK-IMPL-001` の blocked by のほかの条件を満たし、次のすべてが成り立つとき、cumin は、blocked by の Issue の Pull Request のブランチから実装を始める。
+`cumin/status/ready` の実装Issueで、blocked by の Issue が閉じていることのほかは `CWK-IMPL-001` の条件を満たし、次のすべてが成り立つとき、cumin は、blocked by の Issue の Pull Request のブランチから実装を始める。
 
-- 開いている blocked by の Issue が1つだけで、それが `cumin/status/awaiting-merge-decision` である
-- その Issue の Pull Request の base が、main ブランチである
-- 対象のリポジトリが、マージのあとにブランチを自動で消す設定 (`deleteBranchOnMerge`) である。ブランチが消えたときにだけ、GitHub が、そのブランチを base にする Pull Request の base を main ブランチに替えるためである。この設定がないリポジトリでは、今までどおり blocked by の Issue が閉じるのを待つ
-- 対象のリポジトリの `.cumin/config.toml` で、この始め方を有効にしている (`start_on_awaiting_merge_decision = true`)。初期値は `false` で、有効にしていないリポジトリでは、今までどおり blocked by の Issue が閉じるのを待つ。ツール動作確認と同じく、リポジトリの `.cumin/config.toml` だけで決める
+- 開いている blocked by の Issue が1つだけで、`cumin/status/awaiting-merge-decision` である。Reviewer が承認する前の Pull Request からは始めない
+- その Pull Request の base が main ブランチである。これで、始めるのは1段だけになる。深さを選べるようにすることは [バックログ](../backlog.md) にある
+- 対象のリポジトリが、マージのあとにブランチを自動で消す (`deleteBranchOnMerge`)。GitHub は、ブランチが消えたときにだけ、そのブランチを base にする Pull Request の base を main ブランチに替える
+- 対象のリポジトリの `.cumin/config.toml` で `start_on_awaiting_merge_decision = true` にしている。初期値は `false` である
 
-有効にする前に、Maintainer は、必須チェックのワークフローが、base が main ブランチでない Pull Request でも動くことを確かめる。cumin は、必須チェックの一覧を main ブランチの規則から読み、この形の Pull Request でもその結果を待つ。ワークフローを `on: pull_request: branches: [main]` のように絞っているリポジトリでは、チェックが来ず、待ち時間のあとで止まる ([チェック](../check/index.md) の `CWK-CHECK-006`)。
+有効にする前に、Maintainer は、必須チェックのワークフローが、base が main ブランチでない Pull Request でも動くことを確かめる。動かないと、チェックが来ずに止まる ([チェック](../check/index.md) の `CWK-CHECK-006`)。
 
-`cumin/status/awaiting-merge-decision` は、Reviewer が blocked by の Issue の Pull Request の今の先頭のコミットを承認したことを表す。Reviewer が承認する前の Pull Request のブランチからは始めない。
-
-- 検証: `test` blocked by の実装Issueが `cumin/status/awaiting-merge-decision` で、その Pull Request の base が main ブランチなら、着手する。`cumin/status/reviewing` のとき、`deleteBranchOnMerge` が偽のとき、`start_on_awaiting_merge_decision` が `false` か書いていないとき、開いている blocked by が2つあるときは着手しない
+- 検証: `test` 4つを満たせば着手し、1つでも欠ければ着手しない (blocked by の Issue が `cumin/status/reviewing`、その base が main ブランチでない、`deleteBranchOnMerge` が偽、設定が `false`、開いている blocked by が2つ)
 
 ---
 
 ##### `CWK-IMPL-015.2` ブランチと base
 
-このとき cumin は、Implementer に、blocked by の Issue のブランチを渡す。Implementer は、新しいブランチをそのブランチから切り、Pull Request の base もそのブランチにする。差分に、この実装Issueの変更だけが出るようにするためである。cumin は、base が main ブランチでないことで、この形の Pull Request を見分ける。ラベルも draft も使わない。
+cumin は Implementer に blocked by の Issue のブランチを渡し、Implementer はそこから新しいブランチを切って、Pull Request の base もそのブランチにする。差分に、この実装Issueの変更だけを出すためである。cumin は、base が main ブランチでないことで、この Pull Request を見分ける。
 
-- 検証: `test` この形で始める Agent起動で渡す事実に、blocked by の Issue のブランチがある
-- 検証: `demo` この形で始めた実装Issueの Pull Request の base が blocked by の Issue のブランチで、差分にこの実装Issueの変更だけがある
-
----
-
-##### `CWK-IMPL-015.3` 1段だけにする
-
-blocked by の Issue の Pull Request の base が main ブランチであることを条件にするので、base が main ブランチでない Pull Request のブランチからは、さらに始めない。深さを選べるようにすることは [バックログ](../backlog.md) にある。
-
-- 検証: `test` blocked by の Issue の Pull Request の base が main ブランチでないなら、着手しない
+- 検証: `test` Agent起動で渡す事実に、blocked by の Issue のブランチがある
+- 検証: `demo` 開いた Pull Request の base が blocked by の Issue のブランチで、差分にこの実装Issueの変更だけがある
 
 ---
 
-##### `CWK-IMPL-015.4` blocked by の Issue の変更は追わない
+##### `CWK-IMPL-015.3` blocked by の Issue の変更は追わない
 
-Assignee が blocked by の Issue の Pull Request に `REQUEST_CHANGES` を出して、そのブランチが変わっても、cumin はこの実装Issueのブランチを更新しない。base のブランチとの衝突だけを、衝突の解消 ([チェック](../check/index.md) の `CWK-CHECK-007`) で解く。base のブランチが動くたびに更新すると、そのたびに Implementer の実行とレビューが1回ずつ要るためである。この実装Issueのブランチは、blocked by の Issue がマージされるまで、古いコミットの上にある。
+blocked by の Issue の Pull Request が変わっても、cumin はこの実装Issueのブランチを更新せず、衝突したときだけ衝突の解消 ([チェック](../check/index.md) の `CWK-CHECK-007`) を頼む。変わるたびに更新すると、そのたびに実装とレビューが1回ずつ要るためである。
 
-- 検証: `test` blocked by の Issue の Pull Request に新しいコミットが入っても、この実装Issueに Agent起動は起きない。base のブランチと衝突したときだけ、衝突の解消を頼む
+- 検証: `test` blocked by の Issue の Pull Request に新しいコミットが入っても、Agent起動は起きない。衝突したときだけ、衝突の解消を頼む
 
 ---
 
