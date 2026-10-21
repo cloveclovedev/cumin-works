@@ -1,0 +1,37 @@
+@startuml overview
+' cumin-works - the states of an implementation issue in the merge stage.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A transition is written: action [guard] / what cumin does. A gray state belongs to another area.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "reviewing" as Reviewing #EEEEEE
+Reviewing : (the review area)
+
+state "awaiting-merge-decision" as MergeDecision
+MergeDecision : do / the Assignee reviews the pull request
+
+state "merging" as Merging
+Merging : do / cumin merges the pull request
+
+state "implementing" as Implementing #EEEEEE
+Implementing : (the implementation area)
+
+state "checking" as Checking #EEEEEE
+Checking : (the implementation area)
+
+state "awaiting-decision" as Decision
+Decision : do / the Assignee answers
+
+Reviewing --> Merging : start the merge\n[no Reviewer runs, APPROVE on the head commit,\nthe required checks passed, risk low]
+Reviewing --> MergeDecision : ask for the merge decision\n[the same, risk medium or high]\n/ cumin asks the Assignee for a review, notifies
+MergeDecision --> Merging : start the merge\n[the Assignee's APPROVE on the head commit,\nthe required checks passed]
+MergeDecision --> Implementing : request an assignee review fix\n[the Assignee's REQUEST_CHANGES on the head commit,\nafter the last awaiting-merge-decision]\n/ cumin starts the Implementer in the same session
+Merging --> Merging : merge\n[not merged, the merge conditions hold, no conflict]\n/ cumin merges the approved commit
+Merging --> [*] : close the merged issue\n[merged]\n/ cumin closes the issue if GitHub did not
+Merging --> Checking : go back to the checks\n[not merged, a merge condition fails]
+Merging --> Implementing : request a conflict resolution\n[the merge conditions hold, a conflict]\n/ cumin starts the Implementer in the same session
+Merging --> Decision : stop the merge\n[the merge was refused for another reason,\nor the issue cannot be closed]\n/ cumin comments, notifies
+
+@enduml

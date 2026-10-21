@@ -103,7 +103,7 @@ cumin は、`cumin-reviewer` が Pull Request の今の先頭のコミットに�
 - 実装Issueに最後に `cumin/status/ready` が付いたとき
 - `cumin-reviewer` が最後に `APPROVE` を出したとき
 
-`APPROVE` のあとで数え直すのは、衝突の解消や、マージ判断で Assignee が出した `REQUEST_CHANGES` で先頭のコミットが変わり、レビューをやり直すことになるためである。
+`APPROVE` のあとで数え直すのは、衝突の解消や、マージ判断で Assignee が出した `REQUEST_CHANGES` ([マージ](../merge/index.md) の `CWK-MERGE-004`) で先頭のコミットが変わり、レビューをやり直すことになるためである。
 
 - 検証: `test` `cumin/status/ready` の付け直しのあとと、Reviewer の `APPROVE` のあとで、ラウンドが1から数え直される
 
