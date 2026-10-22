@@ -1,0 +1,320 @@
+<!DOCTYPE html><html lang="ja" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-g5ptsecz"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>GitHubに残す文章のテンプレート | cumin-works</title><script>document.addEventListener("click",(e)=>{const i=e.target.closest?.(".sl-markdown-content img");if(i)location.href=i.currentSrc||i.src;});</script><link rel="shortcut icon" href="/cumin-works/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.0"/><meta name="generator" content="Starlight v0.42.6"/><meta property="og:title" content="GitHubに残す文章のテンプレート"/><meta property="og:type" content="article"/><meta property="og:locale" content="ja"/><meta property="og:site_name" content="cumin-works"/><meta name="twitter:card" content="summary_large_image"/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/cumin-works/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/cumin-works/_astro/middleware.ChY9DAF1.css"><script type="module" src="/cumin-works/_astro/page.cNngjUgL.js"></script></head><body class="astro-g5ptsecz"><a class="sl-skip-link astro-qb7clj6f" href="#_top">コンテンツにスキップ</a><div class="page sl-flex astro-yntsjkba"><header class="header astro-yntsjkba"><div class="header astro-by6fddyj"><div class="title-wrapper sl-flex astro-by6fddyj"><a href="/cumin-works/" class="site-title sl-flex astro-6rvad3va"><span class="astro-6rvad3va" translate="no">cumin-works</span></a></div><div class="sl-flex print:hidden astro-by6fddyj"><site-search class="astro-by6fddyj astro-b5kgnn7o" data-translations="{&quot;placeholder&quot;:&quot;検索&quot;}"><button data-open-modal disabled aria-label="検索" aria-keyshortcuts="Control+K" class="astro-b5kgnn7o"><svg aria-hidden="true" class="astro-b5kgnn7o astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-b5kgnn7o" aria-hidden="true">検索</span><kbd class="sl-hidden md:sl-flex astro-b5kgnn7o" style="display: none;"><kbd class="astro-b5kgnn7o">Ctrl</kbd><kbd class="astro-b5kgnn7o">K</kbd></kbd></button><dialog style="padding:0" aria-label="検索" class="astro-b5kgnn7o"><div class="dialog-frame sl-flex astro-b5kgnn7o"><button data-close-modal class="sl-flex md:sl-hidden astro-b5kgnn7o">キャンセル</button><div class="search-container astro-b5kgnn7o"><div id="starlight__search" class="astro-b5kgnn7o"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/cumin-works/_astro/Search.astro_astro_type_script_index_0_lang.B5CqXQOD.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-by6fddyj"><div class="sl-flex social-icons astro-by6fddyj"></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-2z5xp7gb"><span class="sr-only astro-2z5xp7gb">テーマの選択</span><svg aria-hidden="true" class="icon label-icon astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-2z5xp7gb"><option value="dark" class="astro-2z5xp7gb">ダーク</option><option value="light" class="astro-2z5xp7gb">ライト</option><option value="auto" selected class="astro-2z5xp7gb">自動</option></select><svg aria-hidden="true" class="icon caret astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-yntsjkba" aria-label="メイン"><button popovertarget="starlight__sidebar" class="sl-menu-button sl-flex md:sl-hidden print:hidden astro-r2osgdlg"><svg aria-hidden="true" class="open-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg><span class="sr-only astro-r2osgdlg">メニュー</span></button><script type="module">var e=class extends HTMLElement{constructor(){super();let e=matchMedia(`(min-width: 50em)`),t=()=>{this.popover=e.matches?null:`auto`};t(),e.addEventListener(`change`,()=>t()),this.addEventListener(`toggle`,({newState:e})=>this.trapFocus(e===`open`))}trapFocus(e){document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}};customElements.define(`sl-sidebar-pane`,e);</script><sl-sidebar-pane popover id="starlight__sidebar" class="sidebar-pane astro-yntsjkba"><div class="sidebar-content sl-flex astro-yntsjkba"><sl-sidebar-state-persist data-hash="0itjxo5" class="astro-ipdry5cl"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/dashboard/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">ダッシュボード</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">cumin-works</span></a></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">要求と要件</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">要求と要件</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/overview/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">cumin-works 要求仕様書</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/technology/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">技術要素</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/glossary/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">用語集</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/backlog/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">バックログ</span></a></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">利用制限</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/limit/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">利用制限</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">ラベル</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/label/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">ラベル</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">権限</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/access/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">権限</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">計画</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/plan/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">計画</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">実装</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/impl/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">実装</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">チェック</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/check/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">チェック</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">レビュー</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/review/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">レビュー</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">マージ</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="8"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/merge/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">マージ</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">受け入れ</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="9"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/accept/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">受け入れ</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Agent</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="10"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/agent/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Agent</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">定期確認</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="11"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/poll/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">定期確認</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Host での動かし方</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="12"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/host/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Host での動かし方</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">通知</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="13"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/notify/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">通知</span></a></li></ul></details></li></ul></details></li><li class="astro-rmhv4bp6"><a href="/cumin-works/architecture/overview/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">ソースコード全体構成</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/reference/requirement-sizing/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">要求Issueの分割基準</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/reference/issue-sizing/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">実装Issueの分割基準</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/reference/writing-templates/" aria-current="page" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">GitHubに残す文章のテンプレート</span></a></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-p4azlveh"><div class="social-icons astro-p4azlveh"></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-2z5xp7gb"><span class="sr-only astro-2z5xp7gb">テーマの選択</span><svg aria-hidden="true" class="icon label-icon astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-2z5xp7gb"><option value="dark" class="astro-2z5xp7gb">ダーク</option><option value="light" class="astro-2z5xp7gb">ライト</option><option value="auto" selected class="astro-2z5xp7gb">自動</option></select><svg aria-hidden="true" class="icon caret astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">目次<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#テンプレートの一覧" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">テンプレートの一覧</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#どのテンプレートにも共通の決まり" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">どのテンプレートにも共通の決まり</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#テンプレートごとの狙い" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">テンプレートごとの狙い</span></a><ul class="isMobile astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#要求issue" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">要求Issue</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#実装issue" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">実装Issue</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#分割の全体像" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">分割の全体像</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#受け入れの確認" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">受け入れの確認</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#pull-requestの説明" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Pull Requestの説明</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#レビュー" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">レビュー</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#レビューの指摘への返答" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">レビューの指摘への返答</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#maintainerに判断を求める" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Maintainerに判断を求める</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#フォローアップノート" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">フォローアップノート</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#長さと図" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">長さと図</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#平易な英語の決まり" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">平易な英語の決まり</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#置き場所" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">置き場所</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#出典" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">出典</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/cumin-works/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">目次</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#テンプレートの一覧" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">テンプレートの一覧</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#どのテンプレートにも共通の決まり" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">どのテンプレートにも共通の決まり</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#テンプレートごとの狙い" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">テンプレートごとの狙い</span></a><ul class="astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#要求issue" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">要求Issue</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#実装issue" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">実装Issue</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#分割の全体像" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">分割の全体像</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#受け入れの確認" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">受け入れの確認</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#pull-requestの説明" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Pull Requestの説明</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#レビュー" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">レビュー</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#レビューの指摘への返答" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">レビューの指摘への返答</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#maintainerに判断を求める" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Maintainerに判断を求める</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#フォローアップノート" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">フォローアップノート</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#長さと図" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">長さと図</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#平易な英語の決まり" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">平易な英語の決まり</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#置き場所" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">置き場所</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#出典" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">出典</span></a></li></ul></nav></starlight-toc><script type="module" src="/cumin-works/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main data-pagefind-body class="astro-g5ptsecz" lang="ja" dir="ltr"><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">GitHubに残す文章のテンプレート</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content">
+<p>MaintainerとAgentがGitHubに残す文章の型を定める。テンプレートそのものは英語で、リポジトリの直下の <code>templates/</code> にある。この文書は、それぞれの狙いと、決めた理由を説明する。</p>
+<p>GitHubに残す文章は、平易な英語で書く。読み手は、英語を母語としないMaintainerと、他のAgentである。</p>
+<h2 id="テンプレートの一覧">テンプレートの一覧</h2>
+<table>
+<thead>
+<tr>
+<th>テンプレート</th>
+<th>書く人</th>
+<th>読む人</th>
+<th>使う場面</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>writing-rules.md</td>
+<td>全てのAgent</td>
+<td>—</td>
+<td>平易な英語の決まり。全ての文章に当てはまる</td>
+</tr>
+<tr>
+<td>requirement-issue.md</td>
+<td>Maintainer</td>
+<td>Planner</td>
+<td>要求Issueを書く</td>
+</tr>
+<tr>
+<td>implementation-issue.md</td>
+<td>Planner</td>
+<td>Implementer、Reviewer</td>
+<td>実装Issueを作る</td>
+</tr>
+<tr>
+<td>plan-summary.md</td>
+<td>Planner</td>
+<td>Maintainer</td>
+<td>要求Issueに、分割の全体像をコメントする</td>
+</tr>
+<tr>
+<td>acceptance-check.md</td>
+<td>Planner</td>
+<td>Maintainer</td>
+<td>sub-issueが全て閉じたあとに、要求が満たされているかを確かめた結果を、要求Issueにコメントする</td>
+</tr>
+<tr>
+<td>pull-request.md</td>
+<td>Implementer</td>
+<td>Reviewer、Maintainer</td>
+<td>Pull Requestの説明を書く</td>
+</tr>
+<tr>
+<td>review.md</td>
+<td>Reviewer</td>
+<td>Implementer、Maintainer</td>
+<td>レビューの指摘と、レビューのまとめを書く</td>
+</tr>
+<tr>
+<td>review-reply.md</td>
+<td>Implementer</td>
+<td>Reviewer、Maintainer</td>
+<td>レビューの指摘に返答する</td>
+</tr>
+<tr>
+<td>decision-request.md</td>
+<td>全てのAgent</td>
+<td>Maintainer</td>
+<td>Maintainerに判断を求める。<code>blocked</code> のときと、3ラウンドで指摘が残ったとき</td>
+</tr>
+<tr>
+<td>follow-up-note.md</td>
+<td>cumin (Agentではない)</td>
+<td>Maintainer</td>
+<td>mergeのあとに、残った作業をフォローアップノートとして要求Issueに転記する</td>
+</tr>
+</tbody>
+</table>
+<h2 id="どのテンプレートにも共通の決まり">どのテンプレートにも共通の決まり</h2>
+<ul>
+<li>見出しは、テンプレートの通りに書く。見出しは、AgentとcuminとMaintainerの間の約束である。</li>
+<li>書くことがない節は、消さずに「None」と書く。</li>
+<li>1つの実装Issueが、1つのPull Requestになる。</li>
+<li>太字は使わない。</li>
+</ul>
+<h2 id="テンプレートごとの狙い">テンプレートごとの狙い</h2>
+<h3 id="要求issue">要求Issue</h3>
+<ul>
+<li>Maintainerが書くのは「何が欲しいか」と「なぜか」である。作り方は、制約でない限り書かない。大きなOSSの機能要望のテンプレートも、人が書く欄はこの2つに絞っている。</li>
+<li>要求は、正しいか正しくないかを確かめられる決まりとして、1行に1つ書く。</li>
+<li>1つの要求Issueの大きさは、<a href="/cumin-works/reference/requirement-sizing/">要求Issueの分割基準</a> に従う。</li>
+<li>決めていないことは「Open questions」に書く。Plannerは、分割が変わるような未決事項に当たったら、推測せずに <code>blocked</code> を返す。</li>
+<li>目的の1文には、「When (状況)、I want (したいこと)、so I can (得たい結果)」の型を使ってもよい。利用者の人物像を決めなくても書ける。</li>
+</ul>
+<h3 id="実装issue">実装Issue</h3>
+<ul>
+<li>本文だけで作業できるようにする。Implementerは、本文、リンクされた文書、リポジトリから作業する。あとから付いたコメントには頼らない。</li>
+<li>背景、範囲、完了条件、関連する文書の4つの節に、2つの節を足した。「Pointers」(変更するファイルと、手本にする既存のコード) と、「How to verify」(確かめるためのコマンド) である。GitHub Copilot、Claude Code、Codexの公式の手引きが、そろってこの2つを求めている。</li>
+<li>依存関係は、本文ではなく、GitHubの blocked by の関係で記録する。同じことを2か所に書かない。</li>
+</ul>
+<h3 id="分割の全体像">分割の全体像</h3>
+<ul>
+<li>Maintainerが、実装Issueを1つずつ開かなくても、分割の全体をつかめるようにする。</li>
+<li>「Requirement coverage」で、要求の1つ1つが、どの実装Issueで満たされるかを示す。抜けがあれば、ここで見つかる。</li>
+<li>「Assumptions」に、要求に書かれていなかったのでPlannerが決めたことを書く。Maintainerは、作業が始まる前に直せる。</li>
+<li>承認の方法は、返信ではなく、実装Issueに <code>cumin/status/ready</code> を付けることである。</li>
+</ul>
+<h3 id="受け入れの確認">受け入れの確認</h3>
+<ul>
+<li>Maintainerが、自分で確かめ直さなくても、受け入れるかどうかを決められるようにする。</li>
+<li>要求Issueの Requirements の1項目を、表の1行にする。要求と結果が、1対1で対応する。</li>
+<li>証拠の欄に、実行したコマンドと結果を書かせる。確かめ方の間違いで、不具合があるように見えることがある。証拠があれば、Maintainerが切り分けられる。</li>
+<li>Failがあっても、Plannerは直さない。Issueも作らない。どう直すかの提案を書く。差し戻すかどうかは、Maintainerが決める。提案があれば、Maintainerは差し戻しのsub-issueを、提案を写して書ける。</li>
+<li>見出しの <code>## Acceptance check</code> は、cuminが確認の済んだことを判定するのに使う。</li>
+</ul>
+<h3 id="pull-requestの説明">Pull Requestの説明</h3>
+<ul>
+<li>題はConventional Commitsの形にし、命令形で書く。</li>
+<li>「How it was checked」は、変えたものごとに「何を、どう確かめ、結果はどうか」の表にする。コマンドの出力は畳んで添える。「テストは通った」と書くだけにしない。</li>
+<li>「Documentation」は、文書を直したか、直す必要がないかを、必ず書かせる。</li>
+</ul>
+<h3 id="レビュー">レビュー</h3>
+<ul>
+<li>指摘の形式は Conventional Comments に従う。全ての指摘に、ラベルを1つと、<code>(blocking)</code> か <code>(non-blocking)</code> のどちらかを必ず付ける。</li>
+<li><code>(blocking)</code> が1つでもあれば <code>REQUEST_CHANGES</code>、1つもなければ <code>APPROVE</code> にする。指摘の重さとレビューの結果が、機械的に対応する。</li>
+<li><code>(blocking)</code> にしてよい理由を、7つに限った。Reviewerの要件の「修正が必要な指摘にしてよいもの」と同じである。好みの問題は、常に <code>(non-blocking)</code> にする。こうしないと、ラウンドを重ねても指摘がなくならない。</li>
+<li>指摘には、必ず「Why」を書く。理由のない指摘は、Implementerが直しようがない。</li>
+<li>指摘は、書いた人ではなく、コードについて書く。</li>
+</ul>
+<h3 id="レビューの指摘への返答">レビューの指摘への返答</h3>
+<ul>
+<li>返答は、<code>Fixed</code>、<code>Not changed</code>、<code>Deferred</code>、<code>Answer</code> のどれかで始める。</li>
+<li>同意しないときは、事実 (テストの結果、文書、相手の案の具体的な問題) を示してから、質問を1つする。</li>
+<li>同じ反論を繰り返さない。3ラウンドで決着しなければ、Maintainerが決める。</li>
+<li>コメントのスレッドを解決済みにする操作は、v0.1ではどのAgentも行わない。cuminは、レビューの結果だけで判定する。</li>
+</ul>
+<h3 id="maintainerに判断を求める">Maintainerに判断を求める</h3>
+<ul>
+<li>1行目に、決めてほしいことを書く。Maintainerが、残りを読まなくても問いが分かるようにする。</li>
+<li>「Not decided」に、何が決まっていないのか、それをどこに書くべきかを書く。3ラウンドで指摘が残るのは、多くの場合、要求の側に決まっていないことがあるためである。</li>
+<li>選択肢を2つか3つ、良い点と悪い点を付けて示し、1つを勧める。</li>
+<li>続け方も書く。Maintainerは、コメントで答えるかIssueを直してから、止めたIssue (起動の依頼の「扱うIssue」。要求Issueのことも、実装Issueのこともある) に <code>cumin/status/ready</code> を付ける。文章は、roleの名前やIssueの種類を決め打ちせず、「止めたIssue」と書く。</li>
+<li>Agentが <code>blocked</code> を返すときは、この形式の文章を <code>blocked_reason</code> に入れる。cuminが、それをIssueのコメントとして投稿する。</li>
+</ul>
+<h3 id="フォローアップノート">フォローアップノート</h3>
+<ul>
+<li>Implementerが <code>Follow-up</code> に書いた範囲の外の作業と、対応されなかった <code>(non-blocking)</code> の指摘は、mergeされるとPull Requestの中に埋もれる。cuminがこれを、フォローアップノートとして要求Issueに転記する。</li>
+<li>cuminはAIの判断を使わない。機械的に拾えるのは、指摘に必ず <code>(blocking)</code> か <code>(non-blocking)</code> が付き、返答が <code>Fixed</code> などの決まった言葉で始まるからである。テンプレートの形式は、このためにも守らせる。</li>
+<li>フォローアップノートは記録であり、Issueにはしない。Maintainerがやりたいものを新しい要求Issueに書けば、通常のフローで実装Issueになる。</li>
+</ul>
+<h2 id="長さと図">長さと図</h2>
+<p>Maintainerは、GitHubに残る文章の多くを、スマートフォンで、1回だけ読む。読む時間を減らすために、writing-rules.md の11〜14で、次を決めている。</p>
+<ul>
+<li>長さの上限。実装Issueは40行、Pull Requestの説明は40行、Maintainerに判断を求める文章は20行、分割の全体像と受け入れの確認は表と15行、Maintainerへのその他のコメントは15行。コマンドの出力や長い一覧は、畳める <code>&lt;details&gt;</code> に入れる。</li>
+<li>文書の行や規則の番号、状態の名前を単独で書かない。遷移は、Issueのラベルと状態遷移 の表の名前で書く (「request the review」)。状態の名前には、「<code>checking</code> (checkを待つ)」のように、5語以内の意味を毎回添える。</li>
+<li>流れや状態は、文章より先に図で示す。図は、リポジトリが持つSVGを、コミットを指定した画像として貼る。Issueのために描いた図 (ブランチ <code>cumin/diagrams</code> の <code>issue-&lt;番号&gt;/&lt;名前&gt;.svg</code>。対象に色を付ける) か、設計文書のSVGである。画像のラベルは全て英語にする。色を付けた箱か矢印を、1文で名指しする。文字の図は、箱が1列に並ぶ4個までの流れにだけ使う。分岐や状態は必ずSVGにする。Mermaidは、GitHubのアプリで描画されないので使わない。文章は、図に書けないことだけを書く。</li>
+<li>位置づけ (製品のどの部分を変えるか) は、Plannerが実装Issueの「Where this fits」で決める。粒度は、読み手が図の1か所を指せること。Plannerは、実装Issueごとに設計文書の図から描いた図を <code>cumin/diagrams</code> に置き、その画像を貼る。Pull Requestは同じ見出し「Where this fits」にそれをそのまま写し、実装で変わったときだけ書き直す。書き直すときは、Implementerが直した図を <code>cumin/diagrams</code> の <code>issue-&lt;実装Issueの番号&gt;/</code> に新しいファイルとして足す。Pull Requestのブランチには置かない。Pull Requestが設計文書の図を変えたときは、そのブランチのコミットの設計文書のSVGを貼る。図がない部分は、実装Issueの完了条件に「設計文書にこの部分の図を足す」と書く。</li>
+<li>最初の2行に要点を書く。IssueやテンプレートやIssueに書いてあることを繰り返さず、リンクする。</li>
+</ul>
+<p>Pull Requestの説明は、「Where this fits」(実装Issueと同じ位置づけ) のあとの「What」に、設計メモの差分が与えるのと同じ情報を書く。前はどう動いていて、このPull Requestで何をどういう方針で変えるか (Before と After、または図)。Maintainerは、それと「How it was checked」の表を読めば、方針の正しさを判断できる。「How it was checked」は、変えたものごとに、何を、どう確かめ、結果がどうだったかを1行の表にする。テストの一覧やコマンドの出力は、畳んで添える。</p>
+<h2 id="平易な英語の決まり">平易な英語の決まり</h2>
+<p>writing-rules.md の10項目。文の長さの上限 (指示は20語、説明は25語) は、Simplified Technical Englishという規格の数字である。他の項目は、Google、Microsoft、米国政府の、英語を母語としない読み手に向けた文章の手引きに共通している。</p>
+<h2 id="置き場所">置き場所</h2>
+<table>
+<thead>
+<tr>
+<th>テンプレート</th>
+<th>置き場所</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求Issue</td>
+<td>対象のリポジトリの <code>.github/ISSUE_TEMPLATE/</code> に置くと、MaintainerがGitHubの画面でIssueを作るときに使える</td>
+</tr>
+<tr>
+<td>Pull Requestの説明</td>
+<td>対象のリポジトリの <code>.github/pull_request_template.md</code> に置いてもよい。ただし、AgentがAPIでPull Requestを作るときには使われない (実測 52) ので、cuminがskillとして渡す</td>
+</tr>
+<tr>
+<td>それ以外</td>
+<td>cuminが、依頼のたびに、roleとしての指示と一緒にskillとして渡す。テンプレートごとに1つのskillにし、Agentはその文章を書く直前にskillを読む。skillはroleごとのディレクトリに置き、そのroleが書く文章のものだけを渡す。roleが書かない文章のskillを見せると、そのroleがしてはいけない行動を誘うためである。平易な英語の決まりだけは、全ての文章に当てはまるので、指示の本文に入れる</td>
+</tr>
+</tbody>
+</table>
+<p>GitHubのIssueのテンプレートと入力フォームは、画面でIssueを作るときだけ働く。AgentがAPIでIssueを作るときには働かないので、Agentは自分で見出しを書く。</p>
+<h2 id="出典">出典</h2>
+<p>調査は2026-09-19に行った。引用は、ページを要約する取得ツールを通して確かめたものが多い。文言をそのまま使うときは、原文を確かめ直すこと。</p>
+<table>
+<thead>
+<tr>
+<th>出典</th>
+<th>使った箇所</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conventional Comments <a href="https://conventionalcomments.org/">https://conventionalcomments.org/</a></td>
+<td>指摘のラベルと、<code>(blocking)</code> <code>(non-blocking)</code></td>
+</tr>
+<tr>
+<td>Google Engineering Practices (レビューする側) <a href="https://google.github.io/eng-practices/review/reviewer/comments.html">https://google.github.io/eng-practices/review/reviewer/comments.html</a> 、<a href="https://google.github.io/eng-practices/review/reviewer/standard.html">https://google.github.io/eng-practices/review/reviewer/standard.html</a></td>
+<td>理由を書く。コードについて書く。完璧でなくても、良くなっていれば承認する。決着しないときは上に回す</td>
+</tr>
+<tr>
+<td>Google Engineering Practices (書く側) <a href="https://google.github.io/eng-practices/review/developer/cl-descriptions.html">https://google.github.io/eng-practices/review/developer/cl-descriptions.html</a> 、<a href="https://google.github.io/eng-practices/review/developer/handling-comments.html">https://google.github.io/eng-practices/review/developer/handling-comments.html</a></td>
+<td>説明の1行目は命令形。同意しないときの書き方</td>
+</tr>
+<tr>
+<td>GitHub Copilot coding agent <a href="https://docs.github.com/en/copilot/tutorials/coding-agent/get-the-best-results">https://docs.github.com/en/copilot/tutorials/coding-agent/get-the-best-results</a></td>
+<td>実装Issueに要るもの (問題の説明、完了条件、変更するファイル)</td>
+</tr>
+<tr>
+<td>Claude Code best practices <a href="https://code.claude.com/docs/en/best-practices">https://code.claude.com/docs/en/best-practices</a></td>
+<td>実行できる確認手段を渡す。範囲の外を明記する。証拠を示させる。Reviewerには、正しさと要件に関わる点だけを指摘させる</td>
+</tr>
+<tr>
+<td>OpenAI Codex prompting <a href="https://learn.chatgpt.com/docs/prompting">https://learn.chatgpt.com/docs/prompting</a></td>
+<td>確かめ方を書く</td>
+</tr>
+<tr>
+<td>Kubernetesのテンプレート <a href="https://github.com/kubernetes/kubernetes/tree/master/.github">https://github.com/kubernetes/kubernetes/tree/master/.github</a></td>
+<td>人が書く欄は「何を」と「なぜ」に絞る。レビューする人への注記</td>
+</tr>
+<tr>
+<td>Cucumber (Example Mapping、Gherkin) <a href="https://cucumber.io/docs/bdd/example-mapping/">https://cucumber.io/docs/bdd/example-mapping/</a></td>
+<td>決まりの一覧として完了条件を書く。未決事項を別に書き出す</td>
+</tr>
+<tr>
+<td>SBAR <a href="https://www.ihi.org/library/tools/sbar-tool-situation-background-assessment-recommendation">https://www.ihi.org/library/tools/sbar-tool-situation-background-assessment-recommendation</a> 、MADR <a href="https://adr.github.io/madr/">https://adr.github.io/madr/</a></td>
+<td>判断を求める文章の順序。選択肢と得失</td>
+</tr>
+<tr>
+<td>Google developer documentation style guide <a href="https://developers.google.com/style/translation">https://developers.google.com/style/translation</a> 、Microsoft Style Guide <a href="https://learn.microsoft.com/en-us/style-guide/global-communications/writing-tips">https://learn.microsoft.com/en-us/style-guide/global-communications/writing-tips</a> 、digital.gov <a href="https://digital.gov/guides/plain-language/writing">https://digital.gov/guides/plain-language/writing</a> 、ASD-STE100 <a href="https://www.asd-ste100.org/">https://www.asd-ste100.org/</a></td>
+<td>平易な英語の決まり</td>
+</tr>
+<tr>
+<td>GitHub Docs (テンプレート、レビュー、Issueを閉じる言葉) <a href="https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/about-issue-and-pull-request-templates">https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/about-issue-and-pull-request-templates</a> 、<a href="https://docs.github.com/en/rest/pulls/reviews">https://docs.github.com/en/rest/pulls/reviews</a></td>
+<td>テンプレートの置き場所。レビューの結果の種類。<code>REQUEST_CHANGES</code> には本文が要る</td>
+</tr>
+</tbody>
+</table>
+<p>出典に基づかず、この文書で決めたこと:</p>
+<ul>
+<li>指摘の「Why」「Fix」という項目名と、ラウンド数の表示</li>
+<li>返答の4つの書き出しと、直したコミットを書く決まり</li>
+<li>判断を求める文章の「Not decided」「To continue」「Until then」の行</li>
+<li>分割の全体像の「Requirement coverage」と、承認の方法</li>
+</ul>
+</div><footer class="sl-flex astro-ddtxxk7k"><div class="meta sl-flex astro-ddtxxk7k"></div><div class="pagination-links print:hidden astro-b5raizh3" dir="ltr"><a href="/cumin-works/reference/issue-sizing/" rel="prev" class="astro-b5raizh3"><svg aria-hidden="true" class="astro-b5raizh3 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-b5raizh3">前へ<br class="astro-b5raizh3"><span class="link-title astro-b5raizh3">実装Issueの分割基準</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>

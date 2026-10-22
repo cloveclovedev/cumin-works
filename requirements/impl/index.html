@@ -1,0 +1,274 @@
+<!DOCTYPE html><html lang="ja" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-g5ptsecz"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>実装 | cumin-works</title><script>document.addEventListener("click",(e)=>{const i=e.target.closest?.(".sl-markdown-content img");if(i)location.href=i.currentSrc||i.src;});</script><link rel="shortcut icon" href="/cumin-works/favicon.svg" type="image/svg+xml"/><meta name="generator" content="Astro v7.4.0"/><meta name="generator" content="Starlight v0.42.6"/><meta property="og:title" content="実装"/><meta property="og:type" content="article"/><meta property="og:locale" content="ja"/><meta property="og:site_name" content="cumin-works"/><meta name="twitter:card" content="summary_large_image"/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/cumin-works/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/cumin-works/_astro/middleware.ChY9DAF1.css"><script type="module" src="/cumin-works/_astro/page.cNngjUgL.js"></script></head><body class="astro-g5ptsecz"><a class="sl-skip-link astro-qb7clj6f" href="#_top">コンテンツにスキップ</a><div class="page sl-flex astro-yntsjkba"><header class="header astro-yntsjkba"><div class="header astro-by6fddyj"><div class="title-wrapper sl-flex astro-by6fddyj"><a href="/cumin-works/" class="site-title sl-flex astro-6rvad3va"><span class="astro-6rvad3va" translate="no">cumin-works</span></a></div><div class="sl-flex print:hidden astro-by6fddyj"><site-search class="astro-by6fddyj astro-b5kgnn7o" data-translations="{&quot;placeholder&quot;:&quot;検索&quot;}"><button data-open-modal disabled aria-label="検索" aria-keyshortcuts="Control+K" class="astro-b5kgnn7o"><svg aria-hidden="true" class="astro-b5kgnn7o astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-b5kgnn7o" aria-hidden="true">検索</span><kbd class="sl-hidden md:sl-flex astro-b5kgnn7o" style="display: none;"><kbd class="astro-b5kgnn7o">Ctrl</kbd><kbd class="astro-b5kgnn7o">K</kbd></kbd></button><dialog style="padding:0" aria-label="検索" class="astro-b5kgnn7o"><div class="dialog-frame sl-flex astro-b5kgnn7o"><button data-close-modal class="sl-flex md:sl-hidden astro-b5kgnn7o">キャンセル</button><div class="search-container astro-b5kgnn7o"><div id="starlight__search" class="astro-b5kgnn7o"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/cumin-works/_astro/Search.astro_astro_type_script_index_0_lang.B5CqXQOD.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-by6fddyj"><div class="sl-flex social-icons astro-by6fddyj"></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-2z5xp7gb"><span class="sr-only astro-2z5xp7gb">テーマの選択</span><svg aria-hidden="true" class="icon label-icon astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-2z5xp7gb"><option value="dark" class="astro-2z5xp7gb">ダーク</option><option value="light" class="astro-2z5xp7gb">ライト</option><option value="auto" selected class="astro-2z5xp7gb">自動</option></select><svg aria-hidden="true" class="icon caret astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script><script type="module">var e=`starlight-theme`,t=e=>e===`auto`||e===`dark`||e===`light`?e:`auto`,n=()=>t(typeof localStorage<`u`&&localStorage.getItem(e));function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}var i=()=>matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`;function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)});var o=class extends HTMLElement{constructor(){super(),a(n()),this.querySelector(`select`)?.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&a(t(e.currentTarget.value))})}};customElements.define(`starlight-theme-select`,o);</script><script type="module">var e=class extends HTMLElement{constructor(){super();let e=this.querySelector(`select`);e&&(e.addEventListener(`change`,e=>{e.currentTarget instanceof HTMLSelectElement&&(window.location.pathname=e.currentTarget.value)}),window.addEventListener(`pageshow`,t=>{if(!t.persisted)return;let n=e.querySelector(`option[selected]`)?.index;n!==e.selectedIndex&&(e.selectedIndex=n??0)}))}};customElements.define(`starlight-lang-select`,e);</script></div></div></header><nav class="sidebar print:hidden astro-yntsjkba" aria-label="メイン"><button popovertarget="starlight__sidebar" class="sl-menu-button sl-flex md:sl-hidden print:hidden astro-r2osgdlg"><svg aria-hidden="true" class="open-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg><span class="sr-only astro-r2osgdlg">メニュー</span></button><script type="module">var e=class extends HTMLElement{constructor(){super();let e=matchMedia(`(min-width: 50em)`),t=()=>{this.popover=e.matches?null:`auto`};t(),e.addEventListener(`change`,()=>t()),this.addEventListener(`toggle`,({newState:e})=>this.trapFocus(e===`open`))}trapFocus(e){document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}};customElements.define(`sl-sidebar-pane`,e);</script><sl-sidebar-pane popover id="starlight__sidebar" class="sidebar-pane astro-yntsjkba"><div class="sidebar-content sl-flex astro-yntsjkba"><sl-sidebar-state-persist data-hash="0itjxo5" class="astro-ipdry5cl"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/dashboard/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">ダッシュボード</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">cumin-works</span></a></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">要求と要件</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">要求と要件</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/overview/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">cumin-works 要求仕様書</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/technology/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">技術要素</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/glossary/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">用語集</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/backlog/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">バックログ</span></a></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">利用制限</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/limit/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">利用制限</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">ラベル</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/label/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">ラベル</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">権限</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/access/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">権限</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">計画</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/plan/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">計画</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">実装</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/impl/" aria-current="page" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">実装</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">チェック</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/check/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">チェック</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">レビュー</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/review/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">レビュー</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">マージ</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="8"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/merge/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">マージ</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">受け入れ</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="9"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/accept/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">受け入れ</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Agent</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="10"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/agent/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Agent</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">定期確認</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="11"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/poll/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">定期確認</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Host での動かし方</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="12"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/host/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Host での動かし方</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">通知</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="13"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/cumin-works/requirements/notify/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">通知</span></a></li></ul></details></li></ul></details></li><li class="astro-rmhv4bp6"><a href="/cumin-works/architecture/overview/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">ソースコード全体構成</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/reference/requirement-sizing/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">要求Issueの分割基準</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/reference/issue-sizing/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">実装Issueの分割基準</span></a></li><li class="astro-rmhv4bp6"><a href="/cumin-works/reference/writing-templates/" class="large astro-rmhv4bp6"><span class="astro-rmhv4bp6">GitHubに残す文章のテンプレート</span></a></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-p4azlveh"><div class="social-icons astro-p4azlveh"></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-2z5xp7gb"><span class="sr-only astro-2z5xp7gb">テーマの選択</span><svg aria-hidden="true" class="icon label-icon astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-2z5xp7gb"><option value="dark" class="astro-2z5xp7gb">ダーク</option><option value="light" class="astro-2z5xp7gb">ライト</option><option value="auto" selected class="astro-2z5xp7gb">自動</option></select><svg aria-hidden="true" class="icon caret astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
+	StarlightThemeProvider.updatePickers();
+</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">目次<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#全体像" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">全体像</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#要件" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">要件</span></a><ul class="isMobile astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#実装の-agent起動" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">実装の Agent起動</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#実装の完了判断" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">実装の完了判断</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#マージ判断を待つ-pull-request-のブランチから始める" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">マージ判断を待つ Pull Request のブランチから始める</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#implementer-の成果物" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Implementer の成果物</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#implementer-が判断を求めるとき" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Implementer が判断を求めるとき</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#受け入れテスト" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">受け入れテスト</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#未決事項" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">未決事項</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/cumin-works/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">目次</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#全体像" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">全体像</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#要件" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">要件</span></a><ul class="astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#実装の-agent起動" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">実装の Agent起動</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#実装の完了判断" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">実装の完了判断</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#マージ判断を待つ-pull-request-のブランチから始める" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">マージ判断を待つ Pull Request のブランチから始める</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#implementer-の成果物" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Implementer の成果物</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#implementer-が判断を求めるとき" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Implementer が判断を求めるとき</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#受け入れテスト" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">受け入れテスト</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#未決事項" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">未決事項</span></a></li></ul></nav></starlight-toc><script type="module" src="/cumin-works/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main data-pagefind-body class="astro-g5ptsecz" lang="ja" dir="ltr"><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">実装</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content">
+<p>実装Issueを Pull Request にまとめるまでの流れを決める。cumin が Implementer を起動し、Pull Request を GitHub で確かめて、必須チェックを待つ状態に替えるまでである。必須チェックと修正は <a href="/cumin-works/requirements/check/">チェック</a>、レビューは <a href="/cumin-works/requirements/review/">レビュー</a>、マージは <a href="/cumin-works/requirements/merge/">マージ</a>、Agent起動に共通のことは <a href="/cumin-works/requirements/agent/">Agent</a> で決める。</p>
+<h2 id="全体像">全体像</h2>
+<p>実装Issueが実装でたどる状態を示す。灰色の状態は、ほかのカテゴリで決める。</p>
+<p><img alt="実装の全体像" loading="lazy" decoding="async" width="1050" height="555" src="/cumin-works/_astro/overview.BAw6lQxd_1AXNaI.svg"></p>
+<p>図の元ファイル: overview.puml</p><details><summary>overview.puml</summary><div class="expressive-code"><link rel="stylesheet" href="/cumin-works/_astro/ec.w36nc.css"><script type="module" src="/cumin-works/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@startuml overview</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' cumin-works - the states of an implementation issue in the implementation stage.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' A transition is written: action [guard] / what cumin does. A gray state belongs to another area.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' Render: run scripts/render-diagrams.sh at the root of the repository.</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">hide empty description</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "ready" as Ready</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Ready : do / cumin waits for a free slot</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "implementing" as Implementing</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing : do / the Implementer works</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "checking" as Checking #EEEEEE</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Checking : (the check area)</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "awaiting-decision" as Decision</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Decision : do / the Assignee answers</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">[*] --&gt; Ready : a Maintainer adds ready</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Ready --&gt; Implementing : request the implementation\n[cumin handles the ready, cumin has a free slot,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if needed</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Decision --&gt; Ready : a Maintainer adds ready</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@enduml</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="クリップボードにコピー" data-copied="コピーしました！" data-code="@startuml overview&#x27; cumin-works - the states of an implementation issue in the implementation stage.&#x27; A state is a label on GitHub, written without &quot;cumin/status/&quot;. &quot;do /&quot; says who works in the state.&#x27; A transition is written: action [guard] / what cumin does. A gray state belongs to another area.&#x27; Render: run scripts/render-diagrams.sh at the root of the repository.hide empty descriptionstate &quot;ready&quot; as ReadyReady : do / cumin waits for a free slotstate &quot;implementing&quot; as ImplementingImplementing : do / the Implementer worksstate &quot;checking&quot; as Checking #EEEEEEChecking : (the check area)state &quot;awaiting-decision&quot; as DecisionDecision : do / the Assignee answers[*] --> Ready : a Maintainer adds readyReady --> Implementing : request the implementation\n[cumin handles the ready, cumin has a free slot,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the ImplementerImplementing --> Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if neededImplementing --> Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer againImplementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifiesDecision --> Ready : a Maintainer adds ready@enduml"><div></div></button></div></figure></div></details>
+<p>「Implementer が動いていない」の意味は、<a href="/cumin-works/requirements/agent/">Agent</a> の <code><a href="/cumin-works/requirements/agent/#CWK-AGENT-001">CWK-AGENT-001</a></code> で決める。</p>
+<h2 id="要件">要件</h2>
+<h3 id="実装の-agent起動">実装の Agent起動</h3>
+<section class="requirement"><h4 id="CWK-IMPL-001"><code class="requirement-id">CWK-IMPL-001</code> 実装を始める</h4>
+<p><code>cumin/status/ready</code> の付いた実装Issueが次のすべてを満たすとき、cumin は状態を <code>cumin/status/implementing</code> に替えてから、新しいセッションで Implementer を起動する。実装Issueの Pull Request がすでにあれば、その続きから進めさせる。</p>
+<ul>
+<li>
+<p>その <code>cumin/status/ready</code> を、cumin が扱う (<a href="/cumin-works/requirements/access/">権限</a> の <code><a href="/cumin-works/requirements/access/#CWK-ACCESS-004">CWK-ACCESS-004</a></code>)</p>
+</li>
+<li>
+<p>blocked by の Issue がすべて閉じている (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-002">CWK-IMPL-002</a></code>)。または <code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015.1">CWK-IMPL-015.1</a></code> の条件を満たす</p>
+</li>
+<li>
+<p>空きがある</p>
+</li>
+<li>
+<p><code>cumin/type/owner-task</code> が付いていない (<code><a href="/cumin-works/requirements/label/#CWK-LABEL-004">CWK-LABEL-004</a></code>)</p>
+</li>
+<li>
+<p>検証: <code>test</code> 4つを満たす実装Issueで、Implementer の起動が新しいセッションで1回だけ起き、その前に状態が <code>cumin/status/implementing</code> になっている</p>
+</li>
+<li>
+<p>検証: <code>test</code> Pull Request がすでにある実装Issueでは、同じ Pull Request の続きから進めさせる</p>
+</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-002"><code class="requirement-id">CWK-IMPL-002</code> 先の実装Issueを待つ</h4>
+<p>blocked by の Issue が1つでも開いている実装Issueには、cumin は着手しない。例外は <code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015">CWK-IMPL-015</a></code> である。</p>
+<ul>
+<li>検証: <code>test</code> blocked by の実装Issueが閉じたあとの定期確認で、着手する</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-003"><code class="requirement-id">CWK-IMPL-003</code> ブランチの名前</h4>
+<p>cumin は、実装Issueごとに <code>cumin/&lt;実装Issueの番号&gt;-&lt;短い説明&gt;</code> の形のブランチの名前を決めて、Implementer に渡す。</p>
+<ul>
+<li>検証: <code>test</code> Implementer に渡す事実に、この形のブランチの名前がある</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-004"><code class="requirement-id">CWK-IMPL-004</code> 回数を数え直す</h4>
+<p><code><a href="/cumin-works/requirements/impl/#CWK-IMPL-001">CWK-IMPL-001</a></code> で <code>cumin/status/implementing</code> に移るたびに、cumin はチェックの修正の回数 (<code><a href="/cumin-works/requirements/check/#CWK-CHECK-004">CWK-CHECK-004</a></code>) を0に戻す。</p>
+<ul>
+<li>検証: <code>test</code> チェックの修正の上限で止まった実装Issueに <code>cumin/status/ready</code> を付け直すと、また上限まで頼める</li>
+</ul>
+</section><h3 id="実装の完了判断">実装の完了判断</h3>
+<section class="requirement"><h4 id="CWK-IMPL-005"><code class="requirement-id">CWK-IMPL-005</code> 実装の完了を判断する</h4>
+<p>cumin は、Implementer が動いていないとき、<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-003">CWK-IMPL-003</a></code> のブランチに <code>cumin-implementer</code> の作った Pull Request が開いていて、先頭のコミットが push されていれば、実装が完了したと判断する。Pull Request は、本文の <code>Closes</code> ではなくブランチと作成者で見つける。GitHub が <code>Closes</code> からリンクを作らないことがあるからである。Implementer の結果は使わない。</p>
+<ul>
+<li>検証: <code>test</code> <code>Closes</code> のリンクがない Pull Request でも、ブランチと作成者が合えば完了と判断する。作成者が違えば判断しない</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-006"><code class="requirement-id">CWK-IMPL-006</code> チェックを待つ</h4>
+<p><code>cumin/status/implementing</code> の実装Issueで、Implementer が動いておらず、実装が完了したとき、cumin は状態を <code>cumin/status/checking</code> に替える。実装Issueにその Pull Request を閉じるリンクがなければ、先に <code>cumin-core</code> がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装Issueの Pull Request を見つける。</p>
+<ul>
+<li>検証: <code>test</code> リンクのない Pull Request で、cumin がリンクを付けてから <code>cumin/status/checking</code> に替える。リンクがあれば付け直さない</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-007"><code class="requirement-id">CWK-IMPL-007</code> 実装をやり直す</h4>
+<p><code>cumin/status/implementing</code> の実装Issueで、Implementer が動いておらず、実装が完了しておらず、質問のコメントもないとき、cumin は状態を替えずに Implementer をもう一度起動して、続きから進めさせる。やり直しは、1つの <code>cumin/status/implementing</code> の間に1回だけである。</p>
+<ul>
+<li>検証: <code>test</code> Pull Request を開かずに終わると、Implementer がもう一度だけ起動され、状態は <code>cumin/status/implementing</code> のままである</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-008"><code class="requirement-id">CWK-IMPL-008</code> 実装を止める</h4>
+<p><code>cumin/status/implementing</code> の実装Issueで、Implementer が動いておらず、次のどれかが成り立つとき、cumin は状態を <code>cumin/status/awaiting-decision</code> に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。</p>
+<ul>
+<li>
+<p><code>cumin/status/implementing</code> になったあとに、Implementer の質問のコメントがある。質問ではやり直さない。要件が足りず、Maintainer が Issue を直す必要があることが多いからである</p>
+</li>
+<li>
+<p>やり直しのあとも、実装が完了していない</p>
+</li>
+<li>
+<p>衝突の解消 (<code><a href="/cumin-works/requirements/check/#CWK-CHECK-007">CWK-CHECK-007</a></code>) を頼んだあとも、先頭のコミットが変わっていない。先頭のコミットの時刻と、最新の <code>cumin/status/implementing</code> が付いた時刻を比べて決める</p>
+</li>
+<li>
+<p>検証: <code>test</code> Implementer が <code>blocked</code> を返すと、やり直さずに <code>cumin/status/awaiting-decision</code> になる</p>
+</li>
+<li>
+<p>検証: <code>test</code> やり直しのあとも完了しないと、理由のコメントが付いて <code>cumin/status/awaiting-decision</code> になる</p>
+</li>
+<li>
+<p>検証: <code>test</code> 衝突の解消のあとも先頭のコミットが変わらないと、繰り返さずに <code>cumin/status/awaiting-decision</code> になる</p>
+</li>
+</ul>
+</section><h3 id="マージ判断を待つ-pull-request-のブランチから始める">マージ判断を待つ Pull Request のブランチから始める</h3>
+<p>blocked by の Issue の Pull Request が Assignee のマージ判断を待つ間も、cumin はそのブランチから次の実装を始められる。その Pull Request のマージを待つことと、マージのあとのことは <a href="/cumin-works/requirements/merge/">マージ</a> で決める。</p>
+<section class="requirement"><h4 id="CWK-IMPL-015"><code class="requirement-id">CWK-IMPL-015</code> マージ判断を待つ Pull Request のブランチから始める</h4>
+<section class="requirement"><h5 id="CWK-IMPL-015.1"><code class="requirement-id">CWK-IMPL-015.1</code> 着手の条件</h5>
+<p><code>cumin/status/ready</code> の実装Issueが、blocked by のほかは <code><a href="/cumin-works/requirements/impl/#CWK-IMPL-001">CWK-IMPL-001</a></code> の条件を満たし、次のすべてが成り立つとき、cumin は blocked by の Issue の Pull Request のブランチから実装を始める。</p>
+<ul>
+<li>開いている blocked by の Issue が1つだけで、<code>cumin/status/awaiting-merge-decision</code> である</li>
+<li>その Pull Request の base が main ブランチである。始めるのは1段だけである (<a href="/cumin-works/requirements/backlog/">バックログ</a>)</li>
+<li>対象のリポジトリが、マージのあとにブランチを自動で消す (<code>deleteBranchOnMerge</code>)。GitHub は、ブランチが消えたときにだけ、それを base にする Pull Request の base を main ブランチに替える</li>
+<li><code>.cumin/config.toml</code> で <code>start_on_awaiting_merge_decision = true</code> にしている (初期値は <code>false</code>)</li>
+</ul>
+<p>有効にする前に、Maintainer は、必須チェックのワークフローが、base が main ブランチでない Pull Request でも動くことを確かめる。動かないと、チェックが来ずに止まる (<code><a href="/cumin-works/requirements/check/#CWK-CHECK-006">CWK-CHECK-006</a></code>)。</p>
+<ul>
+<li>検証: <code>test</code> 4つを満たせば着手する。blocked by の Issue が <code>cumin/status/reviewing</code>、その base が main ブランチでない、<code>deleteBranchOnMerge</code> が偽、設定が <code>false</code>、開いている blocked by が2つ、のどれでも着手しない</li>
+</ul>
+</section><section class="requirement"><h5 id="CWK-IMPL-015.2"><code class="requirement-id">CWK-IMPL-015.2</code> ブランチと base</h5>
+<p>cumin は Implementer に blocked by の Issue のブランチを渡す。Implementer はそこから新しいブランチを切り、Pull Request の base もそのブランチにする。差分に、この実装Issueの変更だけを出すためである。</p>
+<ul>
+<li>検証: <code>test</code> Implementer に渡す事実に、blocked by の Issue のブランチがある</li>
+<li>検証: <code>demo</code> 開いた Pull Request の base が blocked by の Issue のブランチで、差分にこの実装Issueの変更だけがある</li>
+</ul>
+</section><section class="requirement"><h5 id="CWK-IMPL-015.3"><code class="requirement-id">CWK-IMPL-015.3</code> blocked by の Issue の変更は追わない</h5>
+<p>blocked by の Issue の Pull Request が変わっても、cumin はこの実装Issueのブランチを更新しない。衝突したときだけ、衝突の解消 (<code><a href="/cumin-works/requirements/check/#CWK-CHECK-007">CWK-CHECK-007</a></code>) を頼む。変わるたびに更新すると、そのたびに実装とレビューが要るからである。</p>
+<ul>
+<li>検証: <code>test</code> blocked by の Issue の Pull Request に新しいコミットが入っても、Agent起動は起きない。衝突したときだけ衝突の解消を頼む</li>
+</ul>
+</section></section><h3 id="implementer-の成果物">Implementer の成果物</h3>
+<section class="requirement"><h4 id="CWK-IMPL-009"><code class="requirement-id">CWK-IMPL-009</code> Pull Request</h4>
+<p>Implementer は、1つの実装Issueにつき、渡された名前のブランチに Pull Request を1つ開く。説明は pull-request.md の形式で書き、本文に <code>Closes #&lt;実装Issueの番号&gt;</code> を書く。続きや修正では、同じ Pull Request にコミットを足す。</p>
+<ul>
+<li>検証: <code>demo</code> 実装すると、渡した名前のブランチに Pull Request が1つ開き、本文に <code>Closes #&lt;番号&gt;</code> がある</li>
+<li>検証: <code>demo</code> チェックの修正と、Assignee の <code>REQUEST_CHANGES</code> のあとで、新しい Pull Request は作られない</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-010"><code class="requirement-id">CWK-IMPL-010</code> 範囲の外の作業</h4>
+<p>Implementer は、実装Issueの範囲の外に手を広げない。気づいた範囲の外の作業は、Pull Request の説明の <code>Follow-up</code> に書き、Issue は作らない。マージのあとに、cumin がフォローアップノートに書く (<a href="/cumin-works/requirements/merge/">マージ</a>)。</p>
+<ul>
+<li>検証: <code>inspection</code> レビューで、変更が範囲の中にあり、範囲の外の作業が <code>Follow-up</code> にあることを確かめる</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-011"><code class="requirement-id">CWK-IMPL-011</code> Pull Request の図</h4>
+<p>Implementer は、「Where this fits」の図を直すときは、直した図をブランチ <code>cumin/diagrams</code> に新しいファイルとして足す。Pull Request のブランチに図のファイルを置くのは、設計文書の図を変えるときだけである。</p>
+<ul>
+<li>検証: <code>demo</code> 位置づけが変わった Pull Request で、直した図が <code>cumin/diagrams</code> にあり、Pull Request のブランチには設計文書の図のほかに図のファイルがない</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-012"><code class="requirement-id">CWK-IMPL-012</code> Issue を変えない</h4>
+<p>Implementer は、実装Issueと要求Issueの本文を書き換えない。</p>
+<ul>
+<li>検証: <code>demo</code> 実装のあとで、実装Issueと要求Issueの本文が変わっていない</li>
+</ul>
+</section><section class="requirement"><h4 id="CWK-IMPL-013"><code class="requirement-id">CWK-IMPL-013</code> 待たずに終わる</h4>
+<p>Implementer は、Pull Request を開いて push したら、チェックもレビューも待たずに終わる。待つのは cumin である。</p>
+<ul>
+<li>検証: <code>inspection</code> Implementer の role のファイルに、この決まりがある</li>
+</ul>
+</section><h3 id="implementer-が判断を求めるとき">Implementer が判断を求めるとき</h3>
+<section class="requirement"><h4 id="CWK-IMPL-014"><code class="requirement-id">CWK-IMPL-014</code> 推測で実装しない</h4>
+<p>Implementer は、次のどれかに当たったら、推測で進めずに <code>blocked</code> を返す。cumin は、やり直さずに止める (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>)。</p>
+<section class="requirement"><h5 id="CWK-IMPL-014.1"><code class="requirement-id">CWK-IMPL-014.1</code> 足りない要件</h5>
+<p>実装に要る要件が足りないか、食い違っているときは、止まる。理由には、何が決まっていないかを書く。</p>
+<ul>
+<li>検証: <code>demo</code> 要件の足りない実装Issueで実装すると、決まっていないことが理由に書いてある</li>
+</ul>
+</section><section class="requirement"><h5 id="CWK-IMPL-014.2"><code class="requirement-id">CWK-IMPL-014.2</code> 変えられないファイル</h5>
+<p>保護されたパスか <code>.github/workflows</code> の変更が要るときは、変えずに止まる。理由には、そのパスを書く。</p>
+<ul>
+<li>検証: <code>demo</code> 保護されたパスの変更が要る実装Issueで実装すると、そのパスは変わらず、理由にそのパスが書いてある</li>
+</ul>
+</section><section class="requirement"><h5 id="CWK-IMPL-014.3"><code class="requirement-id">CWK-IMPL-014.3</code> 大きすぎる実装Issue</h5>
+<p>1つの Pull Request に収まらないと分かったときは、止まる。理由には、分け方を書く。</p>
+<ul>
+<li>検証: <code>demo</code> 1つの Pull Request に収まらない実装Issueで実装すると、分け方が理由に書いてある</li>
+</ul>
+</section><section class="requirement"><h5 id="CWK-IMPL-014.4"><code class="requirement-id">CWK-IMPL-014.4</code> 足りない先の作業</h5>
+<p>blocked by の Issue で済んでいるはずの作業が足りないときは、止まる。<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015">CWK-IMPL-015</a></code> で始めた実装Issueでは、blocked by の Issue のブランチにあるはずの作業である。</p>
+<ul>
+<li>検証: <code>demo</code> 先の実装Issueの成果が main ブランチにない状態で実装すると、足りない作業が理由に書いてある</li>
+</ul>
+</section></section><h2 id="受け入れテスト">受け入れテスト</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>場面</th>
+<th>期待する結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Maintainer が実装Issueに <code>cumin/status/ready</code> を付け、Implementer が Pull Request を開く</td>
+<td>実装が始まり (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-001">CWK-IMPL-001</a></code>)、完了と判断されて <code>cumin/status/checking</code> になり (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-005">CWK-IMPL-005</a></code>、<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-006">CWK-IMPL-006</a></code>)、必須チェックが完了するとレビューに進む (<code><a href="/cumin-works/requirements/check/#CWK-CHECK-002">CWK-CHECK-002</a></code>)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>保護されたパスの変更が要る実装Issueで実装する</td>
+<td>Implementer が <code>blocked</code> を返し (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-014.2">CWK-IMPL-014.2</a></code>)、やり直さずに <code>cumin/status/awaiting-decision</code> になる (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Maintainer が止まった実装Issueを直し、<code>cumin/status/ready</code> を付け直す</td>
+<td>新しいセッションで続きから進み、新しい Pull Request は作られない (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-001">CWK-IMPL-001</a></code>、<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-009">CWK-IMPL-009</a></code>)。チェックの修正の回数は0から数え直す (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-004">CWK-IMPL-004</a></code>)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>先の実装Issueがマージ判断を待つ間に、依存する実装Issueに <code>cumin/status/ready</code> が付いている</td>
+<td>blocked by の Issue のブランチから実装が始まり、Pull Request の base がそのブランチになる (<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015.1">CWK-IMPL-015.1</a></code>、<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015.2">CWK-IMPL-015.2</a></code>)。そのあとは <a href="/cumin-works/requirements/merge/">マージ</a> の流れに進む</td>
+</tr>
+</tbody>
+</table>
+<h2 id="未決事項">未決事項</h2>
+<p>なし</p>
+</div><footer class="sl-flex astro-ddtxxk7k"><div class="meta sl-flex astro-ddtxxk7k"></div><div class="pagination-links print:hidden astro-b5raizh3" dir="ltr"><a href="/cumin-works/requirements/plan/" rel="prev" class="astro-b5raizh3"><svg aria-hidden="true" class="astro-b5raizh3 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg><span class="astro-b5raizh3">前へ<br class="astro-b5raizh3"><span class="link-title astro-b5raizh3">計画</span></span></a><a href="/cumin-works/requirements/check/" rel="next" class="astro-b5raizh3"><svg aria-hidden="true" class="astro-b5raizh3 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.5rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg><span class="astro-b5raizh3">次へ<br class="astro-b5raizh3"><span class="link-title astro-b5raizh3">チェック</span></span></a></div></footer></div></div></main></div></div></div></div></body></html>
