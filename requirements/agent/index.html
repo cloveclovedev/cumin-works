@@ -94,6 +94,11 @@
 <ul>
 <li>検証: <code>test</code> 実行の途中で cumin を再起動すると、次の定期確認で各ページのやり直しが起きる</li>
 </ul>
+</section><section class="requirement"><h4 id="CWK-AGENT-024"><code class="requirement-id">CWK-AGENT-024</code> すべての Agent起動の前の確認</h4>
+<p>cumin は、どの Agent起動の前にも、同じ1つの確認を行う。確認するのは、利用制限 (<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-007">CWK-LIMIT-007</a></code>)、そのリポジトリのツール動作確認 (<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018.3">CWK-AGENT-018.3</a></code>)、止める予約 (<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>) である。新しい種類の Agent起動を足しても、この確認を飛ばせない。</p>
+<ul>
+<li>検証: <code>inspection</code> Agent を起動するコードの呼び出し元が1つだけで、その前に確認があることを、テストで確かめる</li>
+</ul>
 </section><section class="requirement"><h4 id="CWK-AGENT-002"><code class="requirement-id">CWK-AGENT-002</code> 状態を先に替える</h4>
 <p>cumin は、Agent起動の前に状態ラベルを替える。替えられなければ起動しない。1つの Issue で、同時に2つの Agent を起動しない。</p>
 <ul>
