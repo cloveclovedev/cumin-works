@@ -1,6 +1,6 @@
 # 要求と要件
 
-cumin-works の要求と要件を書いた文書の入口である。
+cumin-worksの要求と要件を書いた文書の入口である。
 
 ## 全体
 
@@ -22,34 +22,34 @@ cumin-works の要求と要件を書いた文書の入口である。
 
 図の元ファイル: [implementation-issue-states.puml](implementation-issue-states.puml)
 
-矢印には遷移の名前だけを書く。ガード条件とアクションは、各カテゴリのページの図と要件にある。Agent起動を止めているかどうかは、Issue の状態ではなく cumin 自身の状態である。止めることと再開することは [利用制限](limit/index.md) で決める。
+矢印には遷移の名前だけを書く。ガード条件とアクションは、各カテゴリのページの図と要件にある。Agent起動を止めているかどうかは、Issueの状態ではなくcumin自身の状態である。止めることと再開することは[利用制限](limit/index.md)で決める。
 
 ## カテゴリごとの要件
 
-IDの接頭辞は `CWK` である。カテゴリごとにディレクトリを分け、要件のページ (`index.md`) と図を置く。
+IDの接頭辞は`CWK`である。カテゴリごとにディレクトリを分け、要件のページ（`index.md`）と図を置く。
 
-<!-- カテゴリを足すときは、.cumin-trace.toml の areas に略号を足し、この表に1行を足す。 -->
+<!-- カテゴリを足すときは、.cumin-trace.tomlのareasに略号を足し、この表に1行を足す。 -->
 
 | カテゴリ | ページ | 内容 |
 |---|---|---|
 | `LABEL` | [ラベル](label/index.md) | 状態、種類、リスクのラベルと、その決まり |
-| `ACCESS` | [権限](access/index.md) | Maintainer、Assignee、Operator、cumin、Agent が、それぞれ何をしてよいか |
-| `PLAN` | [計画](plan/index.md) | 計画の Agent起動、計画結果の確認、Planner の入力と出力 |
-| `IMPL` | [実装](impl/index.md) | 実装の Agent起動、実装の完了判断、マージ判断を待つ Pull Request のブランチから始めること、Implementer の入力と出力 |
+| `ACCESS` | [権限](access/index.md) | Maintainer、Assignee、Operator、cumin、Agentが、それぞれ何をしてよいか |
+| `PLAN` | [計画](plan/index.md) | 計画のAgent起動、計画結果の確認、Plannerの入力と出力 |
+| `IMPL` | [実装](impl/index.md) | 実装のAgent起動、実装の完了判断、マージ判断を待つPull Requestのブランチから始めること、Implementerの入力と出力 |
 | `CHECK` | [チェック](check/index.md) | 必須チェックを待つこと、チェックの失敗の修正、衝突の解消、保護されたパスのチェック |
-| `REVIEW` | [レビュー](review/index.md) | レビューの Agent起動、ラウンド、指摘の修正、Reviewer の入力と出力 |
+| `REVIEW` | [レビュー](review/index.md) | レビューのAgent起動、ラウンド、指摘の修正、Reviewerの入力と出力 |
 | `MERGE` | [マージ](merge/index.md) | マージ判断、マージ判断に使うレビュー、マージ、実装Issueを閉じること、フォローアップノート |
-| `ACCEPT` | [受け入れ](accept/index.md) | 受け入れ確認、残りの項目の仕分けと修正の sub-issue、受け入れ、差し戻し |
+| `ACCEPT` | [受け入れ](accept/index.md) | 受け入れ確認、残りの項目の仕分けと修正のsub-issue、受け入れ、差し戻し |
 | `AGENT` | [Agent](agent/index.md) | Agent起動に共通のこと。結果の形式、指示の渡し方、権限、セッション、異常終了、ツール動作確認 |
 | `LIMIT` | [利用制限](limit/index.md) | 5時間制限と週間制限、Agent起動を止めることと再開すること |
-| `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHub の呼び出しの失敗、全部を読めない Issue、手元の状態 |
-| `HOST` | [Host での動かし方](host/index.md) | コマンド、launchd、止め方、設定、Keychain、モニターファイル |
+| `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHubの呼び出しの失敗、全部を読めないIssue、手元の状態 |
+| `HOST` | [Hostでの動かし方](host/index.md) | コマンド、launchd、止め方、設定、Keychain、モニターファイル |
 | `NOTIFY` | [通知](notify/index.md) | 通知するとき、通知の中身と送り方 |
 
 ## 要件の外の文書
 
-次の文書は人が読む説明で、要件ではない。Agent が受け取るのは、`disciplines/` と `templates/` の英語の文である。
+次の文書は人が読む説明で、要件ではない。Agentが受け取るのは、`disciplines/`と`templates/`の英語の文である。
 
 - [要求Issueの大きさの基準](../reference/requirement-sizing.md)
 - [実装Issueの大きさの基準](../reference/issue-sizing.md)
-- [GitHub に残す文章のテンプレート](../reference/writing-templates.md)
+- [GitHubに残す文章のテンプレート](../reference/writing-templates.md)
