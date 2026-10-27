@@ -55,9 +55,9 @@ Reviewer を Codex などのほかの CLI でも動かし、1ラウンド目で 
 
 ### マージ判断を待つ Pull Request のブランチから始める深さを選べる
 
-`.cumin/config.toml` の設定で、マージ判断を待つ Pull Request のブランチから始める深さ ([実装](impl/index.md) の `CWK-IMPL-015.1`) を2段以上にできるようにする。そのためには、`cumin/status/awaiting-base` の実装Issueの Pull Request のブランチからも始める条件と、下の段が止まったら上の段も止める決まりが要る。
+`.cumin/config.toml` の設定で、マージ判断を待つ Pull Request のブランチから始める深さ ([実装](impl/index.md) の `CWK-IMPL-015.1`) を2段以上にできるようにする。そのためには、`cumin/status/awaiting-blocker-merge` の実装Issueの Pull Request のブランチからも始める条件と、下の段が止まったら上の段も止める決まりが要る。
 
 - 後回しにした理由: 1段でもまだ実際に動かしておらず、2段にしても便利さは大きく変わらない見込みである。深くするほど、下の段が却下されたときに無駄になる実装とレビューが増え、マージのあとの取り込みも段ごとに繰り返す
-- 見直すきっかけ: `cumin/status/awaiting-base` の実装Issueに依存する実装Issueが、待たされることが目立ってきたとき
+- 見直すきっかけ: `cumin/status/awaiting-blocker-merge` の実装Issueに依存する実装Issueが、待たされることが目立ってきたとき
 
 ---

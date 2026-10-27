@@ -57,7 +57,7 @@ cumin の原則:
 
 ## 範囲外
 
-- Windows では動かさない。Linux への対応は [バックログ](backlog.md) にある。
+- Windows では動かさない。
 
 ## 進め方
 

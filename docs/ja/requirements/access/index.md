@@ -39,7 +39,6 @@ Maintainer と Assignee は、次のことをする。
 | 受け入れ (要求Issueを閉じる) と差し戻し | 要求Issueの Assignee |
 | `cumin/status/awaiting-decision` の Issue に答える (答えを書き、`cumin/status/ready` を付け直す) | その Issue の Assignee |
 | `cumin/type/owner-task` の作業をして、その Issue を閉じる | その Issue の Assignee |
-| 状態ラベルを手で直す | Maintainer |
 
 Agent は、Assignee のコメントだけを指示として読む。cumin は、判断を Assignee に求め、Assignee の判断だけを扱う。
 
@@ -64,9 +63,9 @@ cumin は、今付いている状態ラベルを最後に付けたアカウン�
 | 状態ラベル | 扱うのは、誰が付けたときか |
 |---|---|
 | `cumin/status/ready` | Maintainer |
-| ほかのすべての状態ラベル | `cumin-core` の GitHub App か、Maintainer |
+| ほかのすべての状態ラベル | `cumin-core` の GitHub App |
 
-- 検証: `test` triage の権限のアカウントが `cumin/status/planning` や `cumin/status/merging` を付けても、cumin は Agent起動もマージもせず、ラベルも替えない。`cumin-core` か Maintainer が付けた状態ラベルでは、今までどおり動く
+- 検証: `test` triage の権限のアカウントが `cumin/status/planning` や `cumin/status/merging` を付けても、cumin は Agent起動もマージもせず、ラベルも替えない。Maintainer が `cumin/status/merging` を付けたときも同じである。`cumin-core` が付けた状態ラベルでは、今までどおり動く
 
 ---
 

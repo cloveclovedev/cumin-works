@@ -160,9 +160,9 @@ cumin は、これが成り立つときだけマージに進む。`cumin/risk/lo
 
 #### `CWK-MERGE-020` blocked by の Issue を待つ
 
-`cumin/status/reviewing` の実装Issueで、`CWK-MERGE-001` か `CWK-MERGE-002` の条件のうち blocked by の Issue を待たなくてよいことのほかが成り立ち、base が main ブランチでないか、開いている blocked by の Issue があるとき、cumin は状態を `cumin/status/awaiting-base` に替える。この状態では、誰も作業しない。
+`cumin/status/reviewing` の実装Issueで、`CWK-MERGE-001` か `CWK-MERGE-002` の条件のうち blocked by の Issue を待たなくてよいことのほかが成り立ち、base が main ブランチでないか、開いている blocked by の Issue があるとき、cumin は状態を `cumin/status/awaiting-blocker-merge` に替える。この状態では、誰も作業しない。
 
-- 検証: `test` base が main ブランチでない Pull Request を Reviewer が承認すると、`cumin/status/awaiting-base` になり、Agent起動もマージも起きない
+- 検証: `test` base が main ブランチでない Pull Request を Reviewer が承認すると、`cumin/status/awaiting-blocker-merge` になり、Agent起動もマージも起きない
 
 ---
 
@@ -170,7 +170,7 @@ cumin は、これが成り立つときだけマージに進む。`cumin/risk/lo
 
 実装Issueが次のすべてを満たすとき、cumin は状態を `cumin/status/implementing` に替えて、Implementer の直前のセッションで、main ブランチを取り込むよう頼む。
 
-- `cumin/status/awaiting-base` か、`CWK-MERGE-020` と同じ条件の `cumin/status/reviewing` である
+- `cumin/status/awaiting-blocker-merge` か、`CWK-MERGE-020` と同じ条件の `cumin/status/reviewing` である
 - base が main ブランチで、blocked by の Issue がすべて閉じている
 - 先頭のコミットが、blocked by の Issue を閉じた Pull Request のマージのコミットを含まない
 
@@ -187,7 +187,7 @@ Implementer は強制 push をしないので、main ブランチをマージす
 
 - blocked by の Issue の Pull Request が、マージされずに閉じた
 - この実装Issueの Pull Request が、マージされずに閉じた
-- `cumin/status/awaiting-base` で、blocked by の Issue の Pull Request がマージされてから定期確認の間隔を過ぎても、base が main ブランチにならない
+- `cumin/status/awaiting-blocker-merge` で、blocked by の Issue の Pull Request がマージされてから定期確認の間隔を過ぎても、base が main ブランチにならない
 - main ブランチの取り込みを頼んだあとも、先頭のコミットがマージのコミットを含まない
 
 却下された blocked by の Issue のコミットはブランチに残るので、Assignee は、それを除くか Pull Request を閉じてから、`cumin/status/ready` を付ける。
@@ -282,7 +282,7 @@ cumin は、フォローアップノートから Issue を作らない。
 | 4 | 承認のあと、ほかのマージで衝突する | マージを送らずに衝突の解消を頼み (`CWK-MERGE-009`)、必須チェックとレビューを経て、もう一度マージに進む |
 | 5 | 同じ定期確認で2つマージし、2つめが 405 で断られる | 1つめのあと数秒待ち (`CWK-MERGE-007`)、2つめは次の定期確認でマージされる (`CWK-MERGE-010`) |
 | 6 | 最後の sub-issue の Pull Request がマージされる | フォローアップノートが付いてから、受け入れ確認を頼む (`CWK-MERGE-018`) |
-| 7 | base が main ブランチでない Pull Request を Reviewer が承認し、そのあと blocked by の Issue の Pull Request が squash でマージされる | `cumin/status/awaiting-base` で待ち (`CWK-MERGE-020`)、main ブランチを取り込んで (`CWK-MERGE-021`)、必須チェックとレビューを経てマージに進む。blocked by の Issue より先にはマージしない (`CWK-MERGE-022`) |
+| 7 | base が main ブランチでない Pull Request を Reviewer が承認し、そのあと blocked by の Issue の Pull Request が squash でマージされる | `cumin/status/awaiting-blocker-merge` で待ち (`CWK-MERGE-020`)、main ブランチを取り込んで (`CWK-MERGE-021`)、必須チェックとレビューを経てマージに進む。blocked by の Issue より先にはマージしない (`CWK-MERGE-022`) |
 | 8 | blocked by の Issue の Pull Request が、マージされずに閉じる | そのブランチから始めた実装Issueが止まり、通知が届く (`CWK-MERGE-023`) |
 
 ## 未決事項

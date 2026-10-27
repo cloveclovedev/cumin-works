@@ -14,7 +14,7 @@ Issue と Pull Request に付けるラベルを決める。Maintainer はラベ�
 状態は3つの種類に分かれ、名前で見分けられる。
 
 - 人なしで進む状態: 名前が `-ing` で終わる。Agent、GitHub、cumin のどれかが作業している。
-- 人の番の状態: 名前が `awaiting-` で始まる。Assignee が動くまで進まない。
+- cumin の外を待つ状態: 名前が `awaiting-` で始まる。Assignee の判断や、ほかの Issue のマージのように、cumin が自分では進められないことを待つ。
 - 順番を待つ状態: `ready`。Maintainer が進めてよいと合図し、cumin が空きを待っている。
 
 状態がどう移るかの全体は、[要求と要件の入口](../index.md) の全体像の図にある。
@@ -39,7 +39,7 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 | `checking` | 実装Issue | GitHub が必須チェックを動かす |
 | `reviewing` | 実装Issue | Reviewer が Pull Request をレビューする |
 | `awaiting-merge-decision` | 実装Issue | Assignee が Pull Request を見て、マージ判断をする |
-| `awaiting-base` | 実装Issue | blocked by の Issue の Pull Request のマージを待つ。この Issue には、誰も作業しない ([マージ](../merge/index.md) の `CWK-MERGE-020`) |
+| `awaiting-blocker-merge` | 実装Issue | blocked by の Issue の Pull Request のマージを待つ。この Issue には、誰も作業しない ([マージ](../merge/index.md) の `CWK-MERGE-020`) |
 | `merging` | 実装Issue | cumin が Pull Request をマージし、実装Issueを閉じる |
 | `awaiting-decision` | 要求Issue、実装Issue | Assignee が答える。cumin が先に進めない理由は、Issue のコメントにある |
 
@@ -77,7 +77,7 @@ Issue の状態は、次のどれかである。状態ラベルの名前は、`c
 
 #### `CWK-LABEL-005` リスクのラベル
 
-実装Issueには、`cumin/risk/low`、`cumin/risk/medium`、`cumin/risk/high` のどれか1つが付く。Planner が仮に付け、Maintainer が確かめて、必要なら替える。
+実装Issueには、`cumin/risk/low`、`cumin/risk/medium`、`cumin/risk/high` のどれか1つが付く。Planner が仮に付け、要求Issueの Assignee が確かめて、必要なら替える。
 
 - 検証: `test` リスクのラベルがないか、2つ以上ある実装Issueがあると、計画が完了したと判断されない
 

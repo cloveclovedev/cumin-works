@@ -29,11 +29,11 @@ cumin が読むのは、受け入れ確認のコメントがあるか、sub-issu
 - sub-issue が1つ以上あり、すべて閉じている
 - 最後の sub-issue が閉じたあとの受け入れ確認のコメント (`CWK-ACCEPT-002`) がない
 - フォローアップノートを書き終えている ([マージ](../merge/index.md) の `CWK-MERGE-018`)
-- cumin に空きがある
+- そのリポジトリで同時に進める Issue の数に余裕がある ([定期確認](../poll/index.md) の `CWK-POLL-005`)
 
 - 検証: `test` 最後の sub-issue の Pull Request がマージされると、`cumin/status/accepting` になり、新しいセッションで Agent起動が1回起きる
 - 検証: `test` Assignee が最後の sub-issue を閉じた `cumin/status/awaiting-plan-review` の要求Issueでも、受け入れ確認が始まる
-- 検証: `test` 空きがない間は始めず、空きができた定期確認で始める
+- 検証: `test` 同時に進める Issue の数に余裕がない間は始めず、余裕ができた定期確認で始める
 
 ---
 
@@ -102,9 +102,9 @@ Assignee は、要求Issueを閉じて受け入れる。判断が要る項目 (`
 
 #### `CWK-ACCEPT-008` 差し戻し
 
-Assignee は、要求Issueに sub-issue を足し、`cumin/status/ready` を付けて差し戻す。足した sub-issue がすべて閉じると、受け入れ確認がもう一度始まる。
+Assignee は、要求Issueに sub-issue を足し、足した sub-issue に `cumin/status/ready` を付けて差し戻す。足した sub-issue がすべて閉じると、受け入れ確認がもう一度始まる。
 
-- 検証: `test` `cumin/status/awaiting-acceptance` の要求Issueに sub-issue を足して `cumin/status/ready` を付けると、`cumin/status/implementing` になり、その sub-issue が閉じると受け入れ確認がもう一度始まる
+- 検証: `test` `cumin/status/awaiting-acceptance` の要求Issueに sub-issue を足し、その sub-issue に `cumin/status/ready` を付けると、`cumin/status/implementing` になり、その sub-issue が閉じると受け入れ確認がもう一度始まる
 
 ---
 

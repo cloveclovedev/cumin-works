@@ -12,7 +12,7 @@ state "implementing" as Implementing
 state "checking" as Checking
 state "reviewing" as Reviewing
 state "awaiting-merge-decision" as MergeDecision
-state "awaiting-base" as AwaitingBase
+state "awaiting-blocker-merge" as AwaitingBase
 state "merging" as Merging
 state "awaiting-decision" as Decision
 

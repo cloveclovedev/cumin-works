@@ -12,7 +12,7 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 
 | 語 | 意味 | 使わない言い方 | 英語 |
 |---|---|---|---|
-| Maintainer | 対象のリポジトリに write 以上の権限を持つ、人のアカウント。要求Issueを書き、進めてよいと合図し、マージを判断する | メンテナ、Owner | Maintainer |
+| Maintainer | 対象のリポジトリに write 以上の権限を持つ、人のアカウント。要求Issueを書き、進めてよいと合図する | メンテナ、Owner | Maintainer |
 | Assignee | その Issue の指示と判断を受け持つ Maintainer。GitHub の Issue の assignee で表し、1つの Issue に1人だけ付ける | Issue Owner、Owner、担当者 | assignee |
 | Operator | Host で cumin を動かす人 | 運用者、管理者 | Operator |
 | Agent | cumin が起動して作業させる AI。今は headless の Claude Code である | エージェント、AI、bot | agent |
@@ -62,17 +62,17 @@ cumin-works の文書で使う語の意味を決める。「使わない言い�
 | 語 | 意味 | 使わない言い方 | 英語 |
 |---|---|---|---|
 | 計画 | Planner が要求Issueを読み、実装Issueに分け、依存関係とリスクを付けること | 分割、分解 | plan |
-| 計画結果の確認 | Maintainer が、計画の結果と sub-issue を確かめること | 分割結果の確認、plan review、プランレビュー | plan review |
+| 計画結果の確認 | 要求Issueの Assignee が、計画の結果と sub-issue を確かめること | 分割結果の確認、plan review、プランレビュー | plan review |
 | リスク | 実装Issueのマージのリスク。`cumin/risk/*` のラベルで表す | risk | risk |
 | 保護されたパス | Agent が変えてはいけないファイルのパス | 保護パス | protected path |
 | 必須チェック | main ブランチの保護で、マージの前に成功している必要があるチェック | 必須の check | required check |
 | ラウンド | Reviewer のレビュー1回と、それへの修正の組 | 周回 | round |
-| マージ判断 | Maintainer が Pull Request を見て、マージするかを決めること | merge の判断、マージ判定 | merge decision |
+| マージ判断 | 実装Issueの Assignee が Pull Request を見て、マージするかを決めること | merge の判断、マージ判定 | merge decision |
 | マージ判断を待つ Pull Request のブランチから始める | blocked by の Issue の Pull Request が Assignee のマージ判断を待つ間に、そのブランチから新しいブランチを切り、そのブランチを base にした Pull Request で、次の実装Issueを進めること | 土台、積む、重ねる、スタック | start on the branch of a pull request that waits for the merge decision |
 | base が main ブランチでない Pull Request | マージ判断を待つ Pull Request のブランチから始めた実装Issueの Pull Request。blocked by の Issue の Pull Request がマージされるまでマージしない | 積んだ Pull Request、重ねた Pull Request、先の Pull Request、子 PR | pull request with a base other than the default branch |
 | 受け入れ確認 | Planner が、マージされた結果が要求Issueを満たすかを確かめること | 受け入れの確認、受入確認 | acceptance check |
-| 受け入れ | Maintainer が受け入れ確認を見て、要求Issueを閉じること | 承認、完了確認 | acceptance |
-| 差し戻し | Maintainer が受け入れずに、sub-issue を足して進め直すこと | 却下、やり直し | send back |
+| 受け入れ | 要求Issueの Assignee が受け入れ確認を見て、要求Issueを閉じること | 承認、完了確認 | acceptance |
+| 差し戻し | 要求Issueの Assignee が受け入れずに、sub-issue を足して進め直すこと | 却下、やり直し | send back |
 | フォローアップノート | マージのあとに残った指摘を、cumin が要求Issueにまとめて書くコメント | Follow-up コメント | follow-up note |
 
 ## 利用制限とツール

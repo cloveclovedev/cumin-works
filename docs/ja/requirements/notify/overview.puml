@@ -4,17 +4,17 @@
 
 left to right direction
 
-rectangle "an issue enters a state of a person's turn\n(awaiting-plan-review, awaiting-merge-decision,\nawaiting-acceptance, awaiting-decision)" as Turn
-rectangle "cumin cannot take an issue\n(a label it does not take, no single Assignee,\nan issue it cannot read whole)" as Cannot
-rectangle "cumin stops agent starts\n(a usage limit, an unread usage,\na failed tool check, failed polls)" as Stop
-rectangle "nothing goes on without a Maintainer" as Waits
+rectangle "a person needs to decide\n(awaiting-plan-review, awaiting-merge-decision,\nawaiting-acceptance, awaiting-decision)" as Decide
+rectangle "something is wrong\n(a label it does not take, no single Assignee,\nan issue it cannot read whole, an unread usage,\na failed tool check, failed polls)" as Wrong
+rectangle "a usage limit is reached" as Limit
+rectangle "no issue to take next" as Waits
 
 rectangle "notify once:\na link and one line of the reason" as Notify
 rectangle "the issue and the pull request\nhold the details and the talk" as GitHub
 
-Turn --> Notify
-Cannot --> Notify
-Stop --> Notify
+Decide --> Notify
+Wrong --> Notify
+Limit --> Notify
 Waits --> Notify
 Notify --> GitHub : the reader goes to
 

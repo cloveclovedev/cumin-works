@@ -21,8 +21,8 @@ Implementing : (the implementation area)
 state "checking" as Checking #EEEEEE
 Checking : (the implementation area)
 
-state "awaiting-base" as AwaitingBase
-AwaitingBase : no one works; the base pull request waits
+state "awaiting-blocker-merge" as AwaitingBase
+AwaitingBase : no one works; the pull request of the blocker waits
 
 state "awaiting-decision" as Decision
 Decision : do / the Assignee answers

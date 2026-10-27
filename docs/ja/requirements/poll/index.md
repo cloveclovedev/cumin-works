@@ -51,7 +51,7 @@ cumin は、作業中のリポジトリを `poll_interval` (初期値は60秒) �
 - 状態が `ready`、`implementing`、`checking`、`reviewing`、`merging` の実装Issueがある
 - 前回の定期確認で、アクションをしたか、失敗した
 
-人の番の Issue しかないリポジトリは、作業中でない。そのため、Maintainer の操作には `idle_poll_interval` のうちに気付く。
+`awaiting-` で始まる状態の Issue しかないリポジトリは、作業中でない。そのため、Maintainer の操作には `idle_poll_interval` のうちに気付く。
 
 - 検証: `test` 作業中のリポジトリと作業中でないリポジトリを同時に扱うと、それぞれの間隔で確かめる。作業中でないリポジトリで Maintainer が `cumin/status/ready` を付けると、`idle_poll_interval` のうちに着手する
 
@@ -61,9 +61,9 @@ cumin は、作業中のリポジトリを `poll_interval` (初期値は60秒) �
 
 #### `CWK-POLL-005` 同時に進める Issue の数
 
-1つのリポジトリで同時に進める Issue の数は、`max_issues_in_progress` (初期値は1) までである。含めるのは、状態が `planning`、`accepting` の要求Issueと、`implementing`、`checking`、`reviewing`、`merging` の開いている実装Issueである。`implementing` の要求Issue、人の番の Issue、`ready` と `awaiting-base` の Issue は含めない。違うリポジトリの Issue は、並行して進めてよい。
+1つのリポジトリで同時に進める Issue の数は、`max_issues_in_progress` (初期値は1) までである。含めるのは、状態が `planning`、`accepting` の要求Issueと、`implementing`、`checking`、`reviewing`、`merging` の開いている実装Issueである。`implementing` の要求Issue、`ready` の Issue、`awaiting-` で始まる状態の Issue は含めない。違うリポジトリの Issue は、並行して進めてよい。
 
-- 検証: `test` `max_issues_in_progress` が1のリポジトリで、`implementing` の実装Issueがある間は、別の `ready` の実装Issueに着手しない。`awaiting-base` の実装Issueしかなければ着手する
+- 検証: `test` `max_issues_in_progress` が1のリポジトリで、`implementing` の実装Issueがある間は、別の `ready` の実装Issueに着手しない。`awaiting-blocker-merge` の実装Issueしかなければ着手する
 
 ---
 
