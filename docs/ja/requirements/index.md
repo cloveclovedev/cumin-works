@@ -1,6 +1,6 @@
 # 要求と要件
 
-cumin-works の要求と要件の文書の入口。
+cumin-works の要求と要件を書いた文書の入口である。
 
 ## 全体
 
@@ -12,7 +12,7 @@ cumin-works の要求と要件の文書の入口。
 
 ## 全体像
 
-要求Issueと実装Issueの状態がどう移るかを示す。状態の移り方は、各カテゴリの要件を合わせた結果であり、この図そのものは要件ではない。
+次の図は、要求Issueと実装Issueの状態がどう移るかを示す。状態の移り方は各カテゴリの要件を合わせた結果であり、図そのものは要件ではない。
 
 ![要求Issueの状態遷移](requirement-issue-states.svg)
 
@@ -22,7 +22,7 @@ cumin-works の要求と要件の文書の入口。
 
 図の元ファイル: [implementation-issue-states.puml](implementation-issue-states.puml)
 
-矢印には遷移の名前だけを書く。ガード条件とアクションは、各カテゴリのページの図と要件にある。Agent起動を止めるかどうかは Issue の状態ではなく cumin 自身の状態で、[利用制限](limit/index.md) で決める。
+矢印には遷移の名前だけを書く。ガード条件とアクションは、各カテゴリのページの図と要件にある。Agent起動を止めているかどうかは、Issue の状態ではなく cumin 自身の状態である。止めることと再開することは [利用制限](limit/index.md) で決める。
 
 ## カテゴリごとの要件
 
@@ -42,13 +42,13 @@ IDの接頭辞は `CWK` である。カテゴリごとにディレクトリを�
 | `ACCEPT` | [受け入れ](accept/index.md) | 受け入れ確認、残りの項目の仕分けと修正の sub-issue、受け入れ、差し戻し |
 | `AGENT` | [Agent](agent/index.md) | Agent起動に共通のこと。結果の形式、指示の渡し方、権限、セッション、異常終了、ツール動作確認 |
 | `LIMIT` | [利用制限](limit/index.md) | 5時間制限と週間制限、Agent起動を止めることと再開すること |
-| `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHub の失敗、全部を読めない Issue、手元に持つ状態 |
+| `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHub の呼び出しの失敗、全部を読めない Issue、手元の状態 |
 | `HOST` | [Host での動かし方](host/index.md) | コマンド、launchd、止め方、設定、Keychain、モニターファイル |
-| `NOTIFY` | [通知](notify/index.md) | いつ、何を知らせるか、待ち状態の通知 |
+| `NOTIFY` | [通知](notify/index.md) | 通知するとき、通知の中身と送り方 |
 
 ## 要件の外の文書
 
-人が読む説明で、要件ではない。Agent が受け取るのは、`disciplines/` と `templates/` の英語の文である。
+次の文書は人が読む説明で、要件ではない。Agent が受け取るのは、`disciplines/` と `templates/` の英語の文である。
 
 - [要求Issueの大きさの基準](../reference/requirement-sizing.md)
 - [実装Issueの大きさの基準](../reference/issue-sizing.md)
