@@ -57,7 +57,7 @@ cumin の原則:
 
 ## 範囲外
 
-- Windows では動かさない。
+- Windows と Linux では動かさない。
 
 ## 進め方
 
