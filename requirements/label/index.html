@@ -83,7 +83,7 @@
 <p>状態は3つの種類に分かれ、名前で見分けられる。</p>
 <ul>
 <li>人なしで進む状態: 名前が <code>-ing</code> で終わる。Agent、GitHub、cumin のどれかが作業している。</li>
-<li>人の番の状態: 名前が <code>awaiting-</code> で始まる。Assignee が動くまで進まない。</li>
+<li>cumin の外を待つ状態: 名前が <code>awaiting-</code> で始まる。Assignee の判断や、ほかの Issue のマージのように、cumin が自分では進められないことを待つ。</li>
 <li>順番を待つ状態: <code>ready</code>。Maintainer が進めてよいと合図し、cumin が空きを待っている。</li>
 </ul>
 <p>状態がどう移るかの全体は、<a href="/cumin-works/requirements/">要求と要件の入口</a> の全体像の図にある。</p>
@@ -151,7 +151,7 @@
 <td>Assignee が Pull Request を見て、マージ判断をする</td>
 </tr>
 <tr>
-<td><code>awaiting-base</code></td>
+<td><code>awaiting-blocker-merge</code></td>
 <td>実装Issue</td>
 <td>blocked by の Issue の Pull Request のマージを待つ。この Issue には、誰も作業しない (<a href="/cumin-works/requirements/merge/">マージ</a> の <code><a href="/cumin-works/requirements/merge/#CWK-MERGE-020">CWK-MERGE-020</a></code>)</td>
 </tr>
@@ -188,7 +188,7 @@
 <li>検証: <code>test</code> <code>cumin/type/owner-task</code> と <code>cumin/status/ready</code> の付いた実装Issueに、Agent起動をしない</li>
 </ul>
 </section><section class="requirement"><h4 id="CWK-LABEL-005"><code class="requirement-id">CWK-LABEL-005</code> リスクのラベル</h4>
-<p>実装Issueには、<code>cumin/risk/low</code>、<code>cumin/risk/medium</code>、<code>cumin/risk/high</code> のどれか1つが付く。Planner が仮に付け、Maintainer が確かめて、必要なら替える。</p>
+<p>実装Issueには、<code>cumin/risk/low</code>、<code>cumin/risk/medium</code>、<code>cumin/risk/high</code> のどれか1つが付く。Planner が仮に付け、要求Issueの Assignee が確かめて、必要なら替える。</p>
 <ul>
 <li>検証: <code>test</code> リスクのラベルがないか、2つ以上ある実装Issueがあると、計画が完了したと判断されない</li>
 </ul>

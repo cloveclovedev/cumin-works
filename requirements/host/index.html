@@ -149,7 +149,7 @@
 </section><section class="requirement"><h4 id="CWK-HOST-004"><code class="requirement-id">CWK-HOST-004</code> 状態の表示</h4>
 <p><code>cumin status</code> は、次のことを表示する。GitHub のラベル、手元の状態、モニターファイル (<code><a href="/cumin-works/requirements/host/#CWK-HOST-014">CWK-HOST-014</a></code>) から読み、GitHub に書き込まない。</p>
 <ul>
-<li>作業中の Agent と、人の番を待つ Issue</li>
+<li>作業中の Agent と、<code>awaiting-</code> で始まる状態の Issue</li>
 <li>5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因</li>
 <li>止める予約があるか</li>
 <li>失敗しているツール動作確認と、全部を読めない Issue。Pull Request の数で全部を読めない Issue は、通知だけで知らせる</li>
@@ -410,9 +410,9 @@
 <li>検証: <code>test</code> 秘密の値が、設定ファイル、手元の状態、ログのどれにも現れない</li>
 </ul>
 </section><section class="requirement"><h4 id="CWK-HOST-014"><code class="requirement-id">CWK-HOST-014</code> モニターファイル</h4>
-<p>cumin は、定期確認のたびと Agent の実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、止める予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めない Issue、動いている Agent、人の番を待つ Issue である。cumin を外から見る道具と <code>cumin status</code> が読む。cumin 自身は読まず、ここからは何も決めない。</p>
+<p>cumin は、定期確認のたびと Agent の実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、止める予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めない Issue、動いている Agent、<code>awaiting-</code> で始まる状態の Issue である。cumin を外から見る道具と <code>cumin status</code> が読む。cumin 自身は読まず、ここからは何も決めない。</p>
 <ul>
-<li>検証: <code>test</code> 定期確認のあと、モニターファイルに、その時刻と、人の番を待つ Issue がある</li>
+<li>検証: <code>test</code> 定期確認のあと、モニターファイルに、その時刻と、<code>awaiting-</code> で始まる状態の Issue がある</li>
 <li>検証: <code>test</code> モニターファイルを消しても、cumin のアクションは変わらない</li>
 </ul>
 </section><h2 id="受け入れテスト">受け入れテスト</h2>

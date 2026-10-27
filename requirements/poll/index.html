@@ -105,15 +105,15 @@
 <li>状態が <code>ready</code>、<code>implementing</code>、<code>checking</code>、<code>reviewing</code>、<code>merging</code> の実装Issueがある</li>
 <li>前回の定期確認で、アクションをしたか、失敗した</li>
 </ul>
-<p>人の番の Issue しかないリポジトリは、作業中でない。そのため、Maintainer の操作には <code>idle_poll_interval</code> のうちに気付く。</p>
+<p><code>awaiting-</code> で始まる状態の Issue しかないリポジトリは、作業中でない。そのため、Maintainer の操作には <code>idle_poll_interval</code> のうちに気付く。</p>
 <ul>
 <li>検証: <code>test</code> 作業中のリポジトリと作業中でないリポジトリを同時に扱うと、それぞれの間隔で確かめる。作業中でないリポジトリで Maintainer が <code>cumin/status/ready</code> を付けると、<code>idle_poll_interval</code> のうちに着手する</li>
 </ul>
 </section><h3 id="着手">着手</h3>
 <section class="requirement"><h4 id="CWK-POLL-005"><code class="requirement-id">CWK-POLL-005</code> 同時に進める Issue の数</h4>
-<p>1つのリポジトリで同時に進める Issue の数は、<code>max_issues_in_progress</code> (初期値は1) までである。含めるのは、状態が <code>planning</code>、<code>accepting</code> の要求Issueと、<code>implementing</code>、<code>checking</code>、<code>reviewing</code>、<code>merging</code> の開いている実装Issueである。<code>implementing</code> の要求Issue、人の番の Issue、<code>ready</code> と <code>awaiting-base</code> の Issue は含めない。違うリポジトリの Issue は、並行して進めてよい。</p>
+<p>1つのリポジトリで同時に進める Issue の数は、<code>max_issues_in_progress</code> (初期値は1) までである。含めるのは、状態が <code>planning</code>、<code>accepting</code> の要求Issueと、<code>implementing</code>、<code>checking</code>、<code>reviewing</code>、<code>merging</code> の開いている実装Issueである。<code>implementing</code> の要求Issue、<code>ready</code> の Issue、<code>awaiting-</code> で始まる状態の Issue は含めない。違うリポジトリの Issue は、並行して進めてよい。</p>
 <ul>
-<li>検証: <code>test</code> <code>max_issues_in_progress</code> が1のリポジトリで、<code>implementing</code> の実装Issueがある間は、別の <code>ready</code> の実装Issueに着手しない。<code>awaiting-base</code> の実装Issueしかなければ着手する</li>
+<li>検証: <code>test</code> <code>max_issues_in_progress</code> が1のリポジトリで、<code>implementing</code> の実装Issueがある間は、別の <code>ready</code> の実装Issueに着手しない。<code>awaiting-blocker-merge</code> の実装Issueしかなければ着手する</li>
 </ul>
 </section><section class="requirement"><h4 id="CWK-POLL-006"><code class="requirement-id">CWK-POLL-006</code> 着手の順番</h4>
 <p>空きより多くの Issue に着手できるとき、cumin は優先度の高い順に着手する。同じ優先度なら、Issue の番号の小さい順である。</p>

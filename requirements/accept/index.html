@@ -110,7 +110,7 @@
 <p>フォローアップノートを書き終えている (<a href="/cumin-works/requirements/merge/">マージ</a> の <code><a href="/cumin-works/requirements/merge/#CWK-MERGE-018">CWK-MERGE-018</a></code>)</p>
 </li>
 <li>
-<p>cumin に空きがある</p>
+<p>そのリポジトリで同時に進める Issue の数に余裕がある (<a href="/cumin-works/requirements/poll/">定期確認</a> の <code><a href="/cumin-works/requirements/poll/#CWK-POLL-005">CWK-POLL-005</a></code>)</p>
 </li>
 <li>
 <p>検証: <code>test</code> 最後の sub-issue の Pull Request がマージされると、<code>cumin/status/accepting</code> になり、新しいセッションで Agent起動が1回起きる</p>
@@ -119,7 +119,7 @@
 <p>検証: <code>test</code> Assignee が最後の sub-issue を閉じた <code>cumin/status/awaiting-plan-review</code> の要求Issueでも、受け入れ確認が始まる</p>
 </li>
 <li>
-<p>検証: <code>test</code> 空きがない間は始めず、空きができた定期確認で始める</p>
+<p>検証: <code>test</code> 同時に進める Issue の数に余裕がない間は始めず、余裕ができた定期確認で始める</p>
 </li>
 </ul>
 </section><h3 id="受け入れ確認の完了判断">受け入れ確認の完了判断</h3>
@@ -173,9 +173,9 @@
 <li>検証: <code>test</code> 要求Issueを閉じたあと、その要求Issueにアクションが起きない</li>
 </ul>
 </section><section class="requirement"><h4 id="CWK-ACCEPT-008"><code class="requirement-id">CWK-ACCEPT-008</code> 差し戻し</h4>
-<p>Assignee は、要求Issueに sub-issue を足し、<code>cumin/status/ready</code> を付けて差し戻す。足した sub-issue がすべて閉じると、受け入れ確認がもう一度始まる。</p>
+<p>Assignee は、要求Issueに sub-issue を足し、足した sub-issue に <code>cumin/status/ready</code> を付けて差し戻す。足した sub-issue がすべて閉じると、受け入れ確認がもう一度始まる。</p>
 <ul>
-<li>検証: <code>test</code> <code>cumin/status/awaiting-acceptance</code> の要求Issueに sub-issue を足して <code>cumin/status/ready</code> を付けると、<code>cumin/status/implementing</code> になり、その sub-issue が閉じると受け入れ確認がもう一度始まる</li>
+<li>検証: <code>test</code> <code>cumin/status/awaiting-acceptance</code> の要求Issueに sub-issue を足し、その sub-issue に <code>cumin/status/ready</code> を付けると、<code>cumin/status/implementing</code> になり、その sub-issue が閉じると受け入れ確認がもう一度始まる</li>
 </ul>
 </section><h3 id="planner-の成果物">Planner の成果物</h3>
 <section class="requirement"><h4 id="CWK-ACCEPT-009"><code class="requirement-id">CWK-ACCEPT-009</code> 受け入れ確認のコメント</h4>

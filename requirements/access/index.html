@@ -162,10 +162,6 @@
 <td><code>cumin/type/owner-task</code> の作業をして、その Issue を閉じる</td>
 <td>その Issue の Assignee</td>
 </tr>
-<tr>
-<td>状態ラベルを手で直す</td>
-<td>Maintainer</td>
-</tr>
 </tbody>
 </table>
 <p>Agent は、Assignee のコメントだけを指示として読む。cumin は、判断を Assignee に求め、Assignee の判断だけを扱う。</p>
@@ -194,12 +190,12 @@
 </tr>
 <tr>
 <td>ほかのすべての状態ラベル</td>
-<td><code>cumin-core</code> の GitHub App か、Maintainer</td>
+<td><code>cumin-core</code> の GitHub App</td>
 </tr>
 </tbody>
 </table>
 <ul>
-<li>検証: <code>test</code> triage の権限のアカウントが <code>cumin/status/planning</code> や <code>cumin/status/merging</code> を付けても、cumin は Agent起動もマージもせず、ラベルも替えない。<code>cumin-core</code> か Maintainer が付けた状態ラベルでは、今までどおり動く</li>
+<li>検証: <code>test</code> triage の権限のアカウントが <code>cumin/status/planning</code> や <code>cumin/status/merging</code> を付けても、cumin は Agent起動もマージもせず、ラベルも替えない。Maintainer が <code>cumin/status/merging</code> を付けたときも同じである。<code>cumin-core</code> が付けた状態ラベルでは、今までどおり動く</li>
 </ul>
 </section><section class="requirement"><h4 id="CWK-ACCESS-005"><code class="requirement-id">CWK-ACCESS-005</code> 扱わない状態ラベル</h4>
 <p>扱わない状態ラベルの付いた Issue では、cumin は Agent起動もマージもせず、ラベルも替えない。ログと通知は1回だけ残す。Maintainer が付け直すと、今までどおり進む。</p>
