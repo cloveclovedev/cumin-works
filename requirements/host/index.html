@@ -82,9 +82,9 @@
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@enduml</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="クリップボードにコピー" data-copied="コピーしました！" data-code="@startuml overview&#x27; cumin-works - what cumin keeps on the Host, and who reads and writes it.&#x27; Render: run scripts/render-diagrams.sh at the root of the repository.actor &quot;Operator&quot; as Operatorrectangle &quot;Host&quot; {  rectangle &quot;launchd&quot; as Launchd  rectangle &quot;cumin run&quot; as Run  rectangle &quot;cumin status,\nquota allow, stop, setup&quot; as Commands  file &quot;settings (TOML)&quot; as Settings  database &quot;Keychain\n(private keys, webhook address)&quot; as Keychain  file &quot;local state\n(sessions, counts, usage)&quot; as State  file &quot;monitor file&quot; as Monitor  rectangle &quot;agents&quot; as Agents}cloud &quot;GitHub&quot; as GitHubcloud &quot;notification channel&quot; as ChannelOperator --> CommandsOperator --> Settings : writesLaunchd --> Run : starts, restarts after a failureRun --> Settings : readsRun --> Keychain : reads at startRun --> State : reads, writesRun --> Monitor : writesCommands --> Monitor : status readsCommands --> Keychain : setup writesRun --> Agents : starts with a role tokenRun --> GitHub : polls, writes labels,\ncomments, mergesAgents --> GitHub : work as the roleRun --> Channel : notifies@enduml"><div></div></button></div></figure></div></details>
 <ul>
 <li>設定: Operatorが書く。秘密の値は含めない。</li>
-<li>秘密の値: macOSのKeychainに置く。</li>
+<li>秘密の値: macOSのKeychainに置く</li>
 <li>手元の状態: cuminが書く。失っても作業を失わない（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-003">CWK-POLL-003</a></code>）。</li>
-<li>モニターファイル: cuminが書き、cuminを外から見る道具が読む。</li>
+<li>モニターファイル: cuminが書き、cuminを外から見る道具が読む</li>
 </ul>
 <h2 id="要件">要件</h2>
 <h3 id="常駐">常駐</h3>
@@ -191,7 +191,7 @@
 <p>対象のリポジトリは、mainブランチの<code>.cumin/config.toml</code>で、一部の設定を自分で決められる。Pull Requestのブランチの内容は効かない。<code>.cumin/</code>は保護されたパスなので、Maintainerが承認したものだけが効く。</p>
 <ul>
 <li>
-<p>優先順位は、初期値、Hostの設定ファイル、リポジトリの設定の順に強くなる。</p>
+<p>優先順位は、初期値、Hostの設定ファイル、リポジトリの設定の順に強くなる</p>
 </li>
 <li>
 <p>リポジトリの設定に、Hostだけのキー、知らないキー、範囲を外れた値があると、cuminはそのキーをログに出して、そのリポジトリの定期確認を飛ばす。ほかのリポジトリは続ける。</p>
@@ -357,16 +357,16 @@
 </table>
 <ul>
 <li>
-<p><code>&lt;role&gt;</code>は<code>planner</code>、<code>implementer</code>、<code>reviewer</code>のどれか、<code>&lt;app&gt;</code>は<code>cumin-core</code>とこの3つのどれかである。</p>
+<p><code>&lt;role&gt;</code>は<code>planner</code>、<code>implementer</code>、<code>reviewer</code>のどれか、<code>&lt;app&gt;</code>は<code>cumin-core</code>とこの3つのどれかである</p>
 </li>
 <li>
-<p>時間は、<code>"60s"</code>や<code>"50m"</code>のように、単位を付けて書く。</p>
+<p>時間は、<code>"60s"</code>や<code>"50m"</code>のように、単位を付けて書く</p>
 </li>
 <li>
-<p>リポジトリだけのキーは、Hostの設定ファイルに書くと、知らないキーの誤りになる。</p>
+<p>リポジトリだけのキーは、Hostの設定ファイルに書くと、知らないキーの誤りになる</p>
 </li>
 <li>
-<p>次の値は設定にせず、固定の値とする: GitHubの読み取りのやり直しの回数と間隔（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-007">CWK-POLL-007</a></code>）、sub-issueを読む数（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-011">CWK-POLL-011</a></code>）、続けて失敗したら知らせる回数（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-010">CWK-POLL-010</a></code>）、1回の定期確認で2つ以上マージするときの間に待つ秒数（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-007">CWK-MERGE-007</a></code>）。</p>
+<p>次の値は設定にせず、固定の値とする: GitHubの読み取りのやり直しの回数と間隔（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-007">CWK-POLL-007</a></code>）、sub-issueを読む数（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-011">CWK-POLL-011</a></code>）、続けて失敗したら知らせる回数（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-010">CWK-POLL-010</a></code>）、1回の定期確認で2つ以上マージするときの間に待つ秒数（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-007">CWK-MERGE-007</a></code>）</p>
 </li>
 <li>
 <p>検証: <code>test</code> この表のすべてのキーを書いた設定ファイルを、cuminが誤りなく読む</p>

@@ -127,7 +127,7 @@
 <p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>REQUEST_CHANGES</code>で、実装Issueが最後に<code>cumin/status/awaiting-merge-decision</code>になったあとに出たものであるとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで修正を頼む。</p>
 <ul>
 <li>
-<p>修正のあとは、必須チェックとレビューを経て、もう一度<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-002">CWK-MERGE-002</a></code>に進む。</p>
+<p>修正のあとは、必須チェックとレビューを経て、もう一度<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-002">CWK-MERGE-002</a></code>に進む</p>
 </li>
 <li>
 <p>この修正は、レビューのラウンドにもチェックの修正の回数にも含めない。<code>REQUEST_CHANGES</code>を出すのは毎回Assigneeなので、往復が止まらなくなることはない。</p>
@@ -174,7 +174,7 @@
 <p><code>cumin/status/merging</code>の実装Issueで、Pull Requestがマージされておらず、マージの条件が成り立ち、衝突していないとき、cuminはマージを送る。</p>
 <ul>
 <li>
-<p>マージの方法は、設定<code>merge_method</code>（初期値はsquash）に従う。</p>
+<p>マージの方法は、設定<code>merge_method</code>（初期値はsquash）に従う</p>
 </li>
 <li>
 <p>承認されたコミットだけをマージする。承認のあとにpushされたコミットは、マージしない。</p>
@@ -183,7 +183,7 @@
 <p>答えが届かなかったときは、次の定期確認で、マージ済みかを読んでから決める。同じマージを2回送らない。</p>
 </li>
 <li>
-<p>1回の定期確認で2つ以上マージするときは、1つごとに数秒待つ。</p>
+<p>1回の定期確認で2つ以上マージするときは、1つごとに数秒待つ</p>
 </li>
 <li>
 <p>検証: <code>test</code> 答えが届かなかったマージで、次の定期確認がマージ済みと読むと、送り直さずに実装Issueを閉じる</p>

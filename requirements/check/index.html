@@ -116,10 +116,10 @@
 <p><code>cumin/status/checking</code>の実装Issueで、待ち時間（<code>checks_wait_time</code>、初期値は60分）を過ぎても、必須チェックのどれかが先頭のコミットで結果を返していないとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
 <ul>
 <li>
-<p>待ち時間は、最新の<code>cumin/status/checking</code>が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える。</p>
+<p>待ち時間は、最新の<code>cumin/status/checking</code>が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える</p>
 </li>
 <li>
-<p>開いているPull Requestがないときも、ラベルの時刻から待ち時間を過ぎたら止める。</p>
+<p>開いているPull Requestがないときも、ラベルの時刻から待ち時間を過ぎたら止める</p>
 </li>
 <li>
 <p>コメントと通知には、先頭のコミット、結果を返していない必須チェック、待った時間を書く。Pull Requestがないときは、そのことを書く。理由はAssigneeが調べる。</p>
@@ -142,7 +142,7 @@
 <p>衝突の解消は、チェックの修正の回数に含めない。衝突はほかのPull Requestのマージで起き、Implementerの誤りではないからである。</p>
 </li>
 <li>
-<p>衝突のあるPull Requestでは、GitHubが<code>pull_request</code>のワークフローを動かさないので、待たずに解消させる。</p>
+<p>衝突のあるPull Requestでは、GitHubが<code>pull_request</code>のワークフローを動かさないので、待たずに解消させる</p>
 </li>
 <li>
 <p>検証: <code>test</code> 衝突すると、衝突の解消を1回だけ頼み、チェックの修正の回数は増えない</p>

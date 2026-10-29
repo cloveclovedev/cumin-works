@@ -149,16 +149,16 @@
 <h2 id="どのテンプレートにも共通の決まり">どのテンプレートにも共通の決まり</h2>
 <ul>
 <li>見出しは、テンプレートの通りに書く。見出しは、AgentとcuminとMaintainerの間の約束である。</li>
-<li>書くことがない節は、消さずに「None」と書く。</li>
-<li>1つの実装Issueが、1つのPull Requestになる。</li>
-<li>太字は使わない。</li>
+<li>書くことがない節は、消さずに「None」と書く</li>
+<li>1つの実装Issueが、1つのPull Requestになる</li>
+<li>太字は使わない</li>
 </ul>
 <h2 id="テンプレートごとの狙い">テンプレートごとの狙い</h2>
 <h3 id="要求issue">要求Issue</h3>
 <ul>
 <li>Maintainerが書くのは「何が欲しいか」と「なぜか」である。作り方は、制約でない限り書かない。大きなOSSの機能要望のテンプレートも、人が書く欄はこの2つに絞っている。</li>
-<li>要求は、正しいか正しくないかを確かめられる決まりとして、1行に1つ書く。</li>
-<li>1つの要求Issueの大きさは、<a href="/cumin-works/reference/requirement-sizing/">要求Issueの分割基準</a>に従う。</li>
+<li>要求は、正しいか正しくないかを確かめられる決まりとして、1行に1つ書く</li>
+<li>1つの要求Issueの大きさは、<a href="/cumin-works/reference/requirement-sizing/">要求Issueの分割基準</a>に従う</li>
 <li>決めていないことは「Open questions」に書く。Plannerは、分割が変わるような未決事項に当たったら、推測せずに<code>blocked</code>を返す。</li>
 <li>目的の1文には、「When（状況）、I want（したいこと）、so I can（得たい結果）」の型を使ってもよい。利用者の人物像を決めなくても書ける。</li>
 </ul>
@@ -170,24 +170,24 @@
 </ul>
 <h3 id="分割の全体像">分割の全体像</h3>
 <ul>
-<li>Maintainerが、実装Issueを1つずつ開かなくても、分割の全体をつかめるようにする。</li>
+<li>Maintainerが、実装Issueを1つずつ開かなくても、分割の全体をつかめるようにする</li>
 <li>「Requirement coverage」で、要求の1つ1つが、どの実装Issueで満たされるかを示す。抜けがあれば、ここで見つかる。</li>
 <li>「Assumptions」に、要求に書かれていなかったのでPlannerが決めたことを書く。Maintainerは、作業が始まる前に直せる。</li>
-<li>承認の方法は、返信ではなく、実装Issueに<code>cumin/status/ready</code>を付けることである。</li>
+<li>承認の方法は、返信ではなく、実装Issueに<code>cumin/status/ready</code>を付けることである</li>
 </ul>
 <h3 id="受け入れの確認">受け入れの確認</h3>
 <ul>
-<li>Maintainerが、自分で確かめ直さなくても、受け入れるかどうかを決められるようにする。</li>
+<li>Maintainerが、自分で確かめ直さなくても、受け入れるかどうかを決められるようにする</li>
 <li>要求IssueのRequirementsの1項目を、表の1行にする。要求と結果が、1対1で対応する。</li>
 <li>証拠の欄に、実行したコマンドと結果を書かせる。確かめ方の間違いで、不具合があるように見えることがある。証拠があれば、Maintainerが切り分けられる。</li>
 <li>Failがあっても、Plannerは直さない。Issueも作らない。どう直すかの提案を書く。差し戻すかどうかは、Maintainerが決める。提案があれば、Maintainerは差し戻しのsub-issueを、提案を写して書ける。</li>
-<li>見出しの<code>## Acceptance check</code>は、cuminが確認の済んだことを判定するのに使う。</li>
+<li>見出しの<code>## Acceptance check</code>は、cuminが確認の済んだことを判定するのに使う</li>
 </ul>
 <h3 id="pull-requestの説明">Pull Requestの説明</h3>
 <ul>
-<li>題はConventional Commitsの形にし、命令形で書く。</li>
+<li>題はConventional Commitsの形にし、命令形で書く</li>
 <li>「How it was checked」は、変えたものごとに「何を、どう確かめ、結果はどうか」の表にする。コマンドの出力は畳んで添える。「テストは通った」と書くだけにしない。</li>
-<li>「Documentation」は、文書を直したか、直す必要がないかを、必ず書かせる。</li>
+<li>「Documentation」は、文書を直したか、直す必要がないかを、必ず書かせる</li>
 </ul>
 <h3 id="レビュー">レビュー</h3>
 <ul>
@@ -195,12 +195,12 @@
 <li><code>(blocking)</code>が1つでもあれば<code>REQUEST_CHANGES</code>、1つもなければ<code>APPROVE</code>にする。指摘の重さとレビューの結果が、機械的に対応する。</li>
 <li><code>(blocking)</code>にしてよい理由を、7つに限った。Reviewerの要件の「修正が必要な指摘にしてよいもの」と同じである。好みの問題は、常に<code>(non-blocking)</code>にする。こうしないと、ラウンドを重ねても指摘がなくならない。</li>
 <li>指摘には、必ず「Why」を書く。理由のない指摘は、Implementerが直しようがない。</li>
-<li>指摘は、書いた人ではなく、コードについて書く。</li>
+<li>指摘は、書いた人ではなく、コードについて書く</li>
 </ul>
 <h3 id="レビューの指摘への返答">レビューの指摘への返答</h3>
 <ul>
-<li>返答は、<code>Fixed</code>、<code>Not changed</code>、<code>Deferred</code>、<code>Answer</code>のどれかで始める。</li>
-<li>同意しないときは、事実（テストの結果、文書、相手の案の具体的な問題）を示してから、質問を1つする。</li>
+<li>返答は、<code>Fixed</code>、<code>Not changed</code>、<code>Deferred</code>、<code>Answer</code>のどれかで始める</li>
+<li>同意しないときは、事実（テストの結果、文書、相手の案の具体的な問題）を示してから、質問を1つする</li>
 <li>同じ反論を繰り返さない。3ラウンドで決着しなければ、Maintainerが決める。</li>
 <li>コメントのスレッドを解決済みにする操作は、v0.1ではどのAgentも行わない。cuminは、レビューの結果だけで判定する。</li>
 </ul>
@@ -208,7 +208,7 @@
 <ul>
 <li>1行目に、決めてほしいことを書く。Maintainerが、残りを読まなくても問いが分かるようにする。</li>
 <li>「Not decided」に、何が決まっていないのか、それをどこに書くべきかを書く。3ラウンドで指摘が残るのは、多くの場合、要求の側に決まっていないことがあるためである。</li>
-<li>選択肢を2つか3つ、良い点と悪い点を付けて示し、1つを勧める。</li>
+<li>選択肢を2つか3つ、良い点と悪い点を付けて示し、1つを勧める</li>
 <li>続け方も書く。Maintainerは、コメントで答えるかIssueを直してから、止めたIssue（起動の依頼の「扱うIssue」。要求Issueのことも、実装Issueのこともある）に<code>cumin/status/ready</code>を付ける。文章は、roleの名前やIssueの種類を決め打ちせず、「止めたIssue」と書く。</li>
 <li>Agentが<code>blocked</code>を返すときは、この形式の文章を<code>blocked_reason</code>に入れる。cuminが、それをIssueのコメントとして投稿する。</li>
 </ul>
