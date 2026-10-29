@@ -191,16 +191,6 @@ Plannerは、受け入れ確認でコードを直さず、要求Issueの本文�
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | 最後のsub-issueがマージされ、要求がすべて満たされ、直すものがない | フォローアップノートのあとに受け入れ確認が始まり（`CWK-ACCEPT-001`）、仕分けのあるコメントが付いて（`CWK-ACCEPT-009`、`CWK-ACCEPT-011`）、受け入れを求める通知が届く（`CWK-ACCEPT-003`）。閉じると何も起きない（`CWK-ACCEPT-007`）|
-| 2 | 受け入れ確認で、文書とコードのずれと、範囲を変える提案が見つかる | ずれはsub-issueになり（`CWK-ACCEPT-012`）、提案には行き先と下書きが付く（`CWK-ACCEPT-014`）。計画結果の確認を経てsub-issueが閉じると、受け入れ確認がもう一度行われ、そこではsub-issueを作らない（`CWK-ACCEPT-004`、`CWK-ACCEPT-013`）|
-| 3 | Assigneeがsub-issueを足して差し戻す | `cumin/status/implementing`になり（`CWK-ACCEPT-008`）、足したsub-issueが閉じると、新しいコメントで受け入れ確認が行われる（`CWK-ACCEPT-016`）|
-| 4 | Plannerが質問して止まり、Assigneeが答えて`cumin/status/ready`を付ける | 止まって通知が届き（`CWK-ACCEPT-006`）、Plannerが読み直して、作るものがなければ受け入れ確認に戻る（`CWK-ACCEPT-001`）|
-| 5 | Assigneeが手で行う作業のsub-issueを、最後に閉じる | `cumin/status/awaiting-plan-review`から受け入れ確認が始まる（`CWK-ACCEPT-001`）|
-
 ## 未決事項
 
 なし

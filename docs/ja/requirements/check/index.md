@@ -141,14 +141,6 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | 必須チェックが失敗し、Implementerが直す | 直前のセッションで修正を頼み（`CWK-CHECK-004`）、同じPull Requestに修正が足され（`CWK-IMPL-009`）、`cumin/status/checking`に戻って必須チェックが完了する |
-| 2 | `cumin/status/checking`の間に、ほかのPull Requestのマージで衝突する | `UNKNOWN`の間は待ち、`CONFLICTING`になると衝突の解消を1回だけ頼む（`CWK-CHECK-007`）|
-| 3 | 必須チェックが待ち時間を過ぎても結果を返さない | `cumin/status/awaiting-decision`になり、通知が1回届く（`CWK-CHECK-006`）|
-
 ## 未決事項
 
 なし

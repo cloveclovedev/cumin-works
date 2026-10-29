@@ -155,12 +155,6 @@ Agentは、Hostの上では、cuminを動かすユーザアカウントと同じ
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | Maintainerでないアカウントが、assigneeのないIssueに`cumin/status/ready`を付ける。そのあとMaintainerが付け直す | 最初は着手せず、ラベルもassigneeも替わらず、通知は1回だけ（`CWK-ACCESS-005`）。付け直すと、そのMaintainerがassigneeになり（`CWK-ACCESS-006`）、着手する |
-
 ## 未決事項
 
 なし

@@ -204,15 +204,6 @@ cuminは、定期確認のたびとAgentの実行が終わるたびに、モニ�
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | Hostにcuminを入れ、`cumin setup github-apps`、`cumin setup launchd`を実行して、ログインする | cuminが常駐して、対象のリポジトリの定期確認を始める（`CWK-HOST-001`、`CWK-HOST-003`、`CWK-HOST-005`）|
-| 2 | Agentの実行中に`cumin stop --after-current-runs`を実行し、cuminの版を入れ替えて起動する | 実行の結果が反映されてから止まり、起動のあとに続きから進む（`CWK-HOST-007`）|
-| 3 | リポジトリの`.cumin/config.toml`に誤りのある値を足す | そのリポジトリの定期確認だけが飛ばされ、Maintainerが直すと次の定期確認から戻る（`CWK-HOST-010`）|
-| 4 | AgentのCLIか`git`が`PATH`にない状態で`cumin setup launchd`を実行する | ないコマンドを示して、定義を書かずに失敗で終わる（`CWK-HOST-005`）|
-
 ## 未決事項
 
 なし

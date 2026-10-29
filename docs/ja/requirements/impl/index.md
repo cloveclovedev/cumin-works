@@ -213,15 +213,6 @@ blocked byのIssueで済んでいるはずの作業が足りないときは、�
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | Maintainerが実装Issueに`cumin/status/ready`を付け、ImplementerがPull Requestを開く | 実装が始まり（`CWK-IMPL-001`）、完了と判断されて`cumin/status/checking`になり（`CWK-IMPL-005`、`CWK-IMPL-006`）、必須チェックが完了するとレビューに進む（`CWK-CHECK-002`）|
-| 2 | 保護されたパスの変更が要る実装Issueで実装する | Implementerが`blocked`を返し（`CWK-IMPL-014.2`）、やり直さずに`cumin/status/awaiting-decision`になる（`CWK-IMPL-008`）|
-| 3 | Maintainerが止まった実装Issueを直し、`cumin/status/ready`を付け直す | 新しいセッションで続きから進み、新しいPull Requestは作られない（`CWK-IMPL-001`、`CWK-IMPL-009`）。チェックの修正の回数は0から数え直す（`CWK-IMPL-004`）|
-| 4 | 先の実装Issueがマージ判断を待つ間に、依存する実装Issueに`cumin/status/ready`が付いている | blocked byのIssueのブランチから実装が始まり、Pull Requestのbaseがそのブランチになる（`CWK-IMPL-015.1`、`CWK-IMPL-015.2`）。そのあとは[マージ](../merge/index.md)の流れに進む |
-
 ## 未決事項
 
 なし

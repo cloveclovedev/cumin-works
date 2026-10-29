@@ -239,15 +239,6 @@ Plannerは、次のどれかに当たったら、推測で計画せずに`blocke
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | Maintainerが要求Issueに`cumin/status/ready`を付け、計画のあと、Assigneeがsub-issueのすべてに`cumin/status/ready`を付ける | 計画が始まり（`CWK-PLAN-001`）、確認を求める通知が1回届き（`CWK-PLAN-005`）、要求Issueが`cumin/status/implementing`になる（`CWK-PLAN-008`）|
-| 2 | Plannerが質問して止まり、Assigneeが答えて`cumin/status/ready`を付け直す | `cumin/status/awaiting-decision`になり（`CWK-PLAN-007`）、付け直すと、すでにあるsub-issueを確かめて計画をやり直す（`CWK-PLAN-001`、`CWK-PLAN-019`）|
-| 3 | Assigneeがsub-issueの一部にだけ`cumin/status/ready`を付け、それらがすべて閉じる | `cumin/status/awaiting-plan-review`に戻り、通知が1回届く（`CWK-PLAN-009`）。残りを閉じると、受け入れ確認に進む |
-| 4 | Maintainerが自分でsub-issueを書き、自分をAssigneeにして、sub-issueにだけ`cumin/status/ready`を付ける | Plannerは起動されず、要求Issueが`cumin/status/implementing`になる（`CWK-PLAN-008`）|
-
 ## 未決事項
 
 なし

@@ -289,16 +289,6 @@ Pull Requestの内容が、実装Issueとほとんど関係がないときは、
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | Reviewerが`REQUEST_CHANGES`を出し、Implementerが直し、2ラウンド目で`APPROVE`が出る | レビューが始まり（`CWK-REVIEW-001`）、修正を頼み（`CWK-REVIEW-004`）、必須チェックのあと、2ラウンド目が前の指摘と返答と差分だけを見て承認する（`CWK-REVIEW-014.3`）|
-| 2 | 上限のラウンドでも指摘が残る | 原因の整理を頼み（`CWK-REVIEW-009`）、コメントが付くと`cumin/status/awaiting-decision`になって通知が1回届く（`CWK-REVIEW-010`、`CWK-REVIEW-018`）|
-| 3 | 承認のあとに衝突が起き、Implementerが解消する | ラウンドが1から数え直され（`CWK-REVIEW-008`）、承認したコミットからの差分だけがレビューされる（`CWK-REVIEW-014.2`）|
-| 4 | レビューの間に、誰かがブランチにpushする | `cumin/status/checking`に戻り、もう一度レビューされる（`CWK-REVIEW-005`）|
-| 5 | 1ラウンド目の指摘が、提案と元からある問題だけである | `REQUEST_CHANGES`になり（`CWK-REVIEW-011`）、Implementerが提案に返答し（`CWK-REVIEW-021`）、2ラウンド目で`APPROVE`が出る。元からある問題は直されない（`CWK-REVIEW-013`）|
-
 ## 未決事項
 
 なし

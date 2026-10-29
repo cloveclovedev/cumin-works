@@ -272,19 +272,6 @@ cuminは、フォローアップノートからIssueを作らない。
 
 ---
 
-## 受け入れテスト
-
-| # | 場面 | 期待する結果 |
-|---|---|---|
-| 1 | `cumin/risk/low`のPull RequestをReviewerが承認する | マージに進み（`CWK-MERGE-001`）、承認されたコミットがマージされ（`CWK-MERGE-007`）、実装Issueが閉じ（`CWK-MERGE-012`）、残りの作業があればフォローアップノートが付く（`CWK-MERGE-014`）|
-| 2 | `cumin/risk/medium`のPull Requestを、ReviewerとAssigneeが承認する | マージ判断を求める通知が届き（`CWK-MERGE-002`）、Assigneeの承認でマージされる（`CWK-MERGE-003`）|
-| 3 | Assigneeが`REQUEST_CHANGES`を出し、Implementerが直す | 直前のセッションで修正を頼み（`CWK-MERGE-004`）、必須チェックとレビューを経て、もう一度マージ判断を待つ。ラウンドとチェックの修正の回数は増えない |
-| 4 | 承認のあと、ほかのマージで衝突する | マージを送らずに衝突の解消を頼み（`CWK-MERGE-009`）、必須チェックとレビューを経て、もう一度マージに進む |
-| 5 | 同じ定期確認で2つマージし、2つめが405で断られる | 1つめのあと数秒待ち（`CWK-MERGE-007`）、2つめは次の定期確認でマージされる（`CWK-MERGE-010`）|
-| 6 | 最後のsub-issueのPull Requestがマージされる | フォローアップノートが付いてから、受け入れ確認を頼む（`CWK-MERGE-018`）|
-| 7 | baseがmainブランチでないPull RequestをReviewerが承認し、そのあとblocked byのIssueのPull Requestがsquashでマージされる | `cumin/status/awaiting-blocker-merge`で待ち（`CWK-MERGE-020`）、mainブランチを取り込んで（`CWK-MERGE-021`）、必須チェックとレビューを経てマージに進む。blocked byのIssueより先にはマージしない（`CWK-MERGE-022`）|
-| 8 | blocked byのIssueのPull Requestが、マージされずに閉じる | そのブランチから始めた実装Issueが止まり、通知が届く（`CWK-MERGE-023`）|
-
 ## 未決事項
 
 なし
