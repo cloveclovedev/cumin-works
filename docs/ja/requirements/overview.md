@@ -22,7 +22,7 @@ Maintainerの負担をできるだけ減らしながら、Agentを動かし続�
 
 ### 人とAgent
 
-- Maintainer: 対象のリポジトリにwrite以上の権限を持つ人。要求Issueを書き、要求Issue実装開始を判断する。
+- Maintainer: 対象のリポジトリにwrite以上の権限を持つ人。要求Issueを書き、要求Issueの実装開始を判断する。
 - Assignee: Issueの指示と判断を受け持つMaintainer。GitHubのIssueのassigneeで表し、1つのIssueに1人。
 - Operator: Hostでcuminを動かし、Hostの設定と利用制限を受け持つ
 - Agent: cuminが起動するAI。Planner、Implementer、Reviewerの3つのroleがある。
