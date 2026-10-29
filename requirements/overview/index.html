@@ -74,7 +74,7 @@
 <p>cumin-worksは、GitHubのIssueとPull Requestを見ながら、決められたルールだけでAgentを起動し、計画、実装、レビュー、マージまでを進めるツールである。人は要求を書き、要所で判断する。</p>
 <h2 id="解決したい課題">解決したい課題</h2>
 <ol>
-<li>人が手を動かしていない時間には、Agentを使える利用制限がほとんど使われずに残る。</li>
+<li>人が手を動かしていない時間には、Agentもほとんど使われない</li>
 <li>Agentを使い始めるきっかけが人のやる気と空き時間になっている。人が忙しいほど、Agentも動かない。</li>
 <li>時刻で起動するような自動化はできても、それだけではマージされる成果物に結びつく使い方にならない。何を頼み、結果をどう確かめ、次に何をするかを、毎回人が決めている。</li>
 </ol>
@@ -84,7 +84,7 @@
 <p>どれも、GitHubと、cuminが読む利用制限の使用率から、週ごとに出せる。</p>
 <ul>
 <li>稼働: 週の終わりの時点の、週間制限の使用率。設定で決めた目標に近いほどよい。稼働は成果そのものではない。Agentが動き続けることを直近の目標にするための暫定の指標である。</li>
-<li>成果: 週ごとの、マージされた実装Issueの数と、受け入れられた要求Issueの数。</li>
+<li>成果: 週ごとの、マージされた実装Issueの数と、受け入れられた要求Issueの数</li>
 <li>Maintainerの負担: 要求Issue 1つあたりで、その要求Issueとsub-issueがMaintainerの番の状態（<code>awaiting-</code>で始まる状態）になった回数。少ないほどよい。</li>
 </ul>
 <h2 id="登場人物">登場人物</h2>
@@ -92,29 +92,29 @@
 <ul>
 <li>Maintainer: 対象のリポジトリにwrite以上の権限を持つ人。要求Issueを書き、進めてよいと合図する。</li>
 <li>Assignee: そのIssueの指示と判断を受け持つMaintainer。GitHubのIssueのassigneeで表し、1つのIssueに1人だけ付ける。</li>
-<li>Operator: Hostでcuminを動かし、Hostの設定と利用制限を受け持つ。</li>
+<li>Operator: Hostでcuminを動かし、Hostの設定と利用制限を受け持つ</li>
 <li>Agent: cuminが起動するAI。Planner、Implementer、Reviewerの3つのroleがある。
 <ul>
-<li>Planner: 要求Issueを計画し、マージされた結果の受け入れ確認をする。</li>
-<li>Implementer: 実装Issueを実装し、Pull Requestにまとめる。</li>
-<li>Reviewer: Pull Requestをレビューする。</li>
+<li>Planner: 要求Issueを計画し、マージされた結果の受け入れ確認をする</li>
+<li>Implementer: 実装Issueを実装し、Pull Requestにまとめる</li>
+<li>Reviewer: Pull Requestをレビューする</li>
 </ul>
 </li>
 </ul>
 <h3 id="システム">システム</h3>
 <ul>
-<li>cumin: Hostに常駐し、GitHubを定期確認して、状態ラベルを替え、Agent起動とマージを行う。</li>
+<li>cumin: Hostに常駐し、GitHubを定期確認して、状態ラベルを替え、Agent起動とマージを行う</li>
 <li>Host: cuminが動くマシン。macOSを対象にする。</li>
 <li>GitHub: 要求、作業、成果物と、その状態を記録する唯一の場所。cuminと各roleは、それぞれのGitHub AppでGitHubを使う。GitHub Appの名前は運用する組織ごとに決める。</li>
 </ul>
 <h2 id="原則">原則</h2>
 <h3 id="ワークフローの原則">ワークフローの原則</h3>
 <ul>
-<li>Agentの判断で要求から外れないように、適切なところでMaintainerに判断を求める。</li>
-<li>Maintainerが判断するときの負担を、できるだけ小さくする。
+<li>Agentの判断で要求から外れないように、適切なところでMaintainerに判断を求める</li>
+<li>Maintainerが判断するときの負担を、できるだけ小さくする
 <ul>
-<li>変更を1回で判断できる大きさに分ける。</li>
-<li>判断に要る情報（変更の内容と、全体の中での位置）を、できるだけ図で示す。</li>
+<li>変更を1回で判断できる大きさに分ける</li>
+<li>判断に要る情報（変更の内容と、全体の中での位置）を、できるだけ図で示す</li>
 </ul>
 </li>
 <li>人が見ていない間もAgentを動かせるように、Agentにはその作業に要る最小の権限だけを渡す。人の認証情報は渡さない。</li>
@@ -122,20 +122,20 @@
 <h3 id="cuminの原則">cuminの原則</h3>
 <ul>
 <li>cuminは決められたルールだけで動く。AIによる判断を含まない。要求の解釈、計画、実装、レビュー、リスクの判断は、すべてAgentかMaintainerが行う。</li>
-<li>同じGitHubの状態からはいつも同じアクションを決める。</li>
+<li>同じGitHubの状態からはいつも同じアクションを決める</li>
 <li>状態はGitHubに置く。cuminが手元に持つのは、失っても作業を失わないものだけである。</li>
 <li>完了はGitHubの上の事実で決める。Agentの申告では決めない。</li>
 </ul>
 <h2 id="範囲外">範囲外</h2>
 <ul>
-<li>WindowsとLinuxでは動かさない。</li>
+<li>WindowsとLinuxでは動かさない</li>
 </ul>
 <h2 id="進め方">進め方</h2>
 <ul>
 <li>シンプルファースト: 要件を満たすいちばん単純な方法を探す。AIの道具は速く変わる。</li>
 <li>要件ファースト: すべての振る舞いは要件にたどれる。要件の量は、Maintainerが全体を把握できる大きさに保つ。</li>
-<li>ドキュメントファースト: 文書はいつも、動いているものに追いついている。</li>
-<li>テストファースト: 細かいユニットテストを多く書くより、受け入れテストで要件を確かめることを優先する。</li>
+<li>ドキュメントファースト: 文書はいつも、動いているものに追いついている</li>
+<li>テストファースト: 細かいユニットテストを多く書くより、受け入れテストで要件を確かめることを優先する</li>
 </ul>
 <h2 id="フェーズ">フェーズ</h2>
 <p>バージョンごとの目標を書く。期日の目安と、どの要求Issueがどのバージョンに入るかは、GitHubのマイルストーンで管理する。</p>
