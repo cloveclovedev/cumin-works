@@ -7,9 +7,9 @@ IssueとPull Requestに付けるラベルを決める。Maintainerはラベル�
 ラベルには4つの種類があり、名前の前半で見分けられる。優先度のラベルだけは、リポジトリの設定で名前を変えられる。
 
 - `cumin/type/*`: Issueの種類。状態ではないので、閉じるまで付けたままにする。
-- `cumin/status/*`: Issueの状態。
-- `cumin/risk/*`: 実装Issueのマージのリスク。
-- `cumin/priority/*`: 着手の順番（[定期確認](../poll/index.md)）。
+- `cumin/status/*`: Issueの状態
+- `cumin/risk/*`: 実装Issueのマージのリスク
+- `cumin/priority/*`: 着手の順番（[定期確認](../poll/index.md)）
 
 状態は3つの種類に分かれ、名前で見分けられる。
 

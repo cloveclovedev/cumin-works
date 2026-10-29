@@ -60,8 +60,8 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 `cumin/status/checking`の実装Issueで、待ち時間（`checks_wait_time`、初期値は60分）を過ぎても、必須チェックのどれかが先頭のコミットで結果を返していないとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
-- 待ち時間は、最新の`cumin/status/checking`が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える。
-- 開いているPull Requestがないときも、ラベルの時刻から待ち時間を過ぎたら止める。
+- 待ち時間は、最新の`cumin/status/checking`が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える
+- 開いているPull Requestがないときも、ラベルの時刻から待ち時間を過ぎたら止める
 - コメントと通知には、先頭のコミット、結果を返していない必須チェック、待った時間を書く。Pull Requestがないときは、そのことを書く。理由はAssigneeが調べる。
 
 - 検証: `test` 待ち時間を過ぎると、先頭のコミット、そのチェック、待った時間を添えて、通知が1回だけ届く
@@ -77,7 +77,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 - `mergeable`が`UNKNOWN`の間は、GitHubが計算中なので判定しない。`UNKNOWN`のまま待ち時間を過ぎたら、`CWK-CHECK-006`で止まる。
 - 衝突の解消は、チェックの修正の回数に含めない。衝突はほかのPull Requestのマージで起き、Implementerの誤りではないからである。
-- 衝突のあるPull Requestでは、GitHubが`pull_request`のワークフローを動かさないので、待たずに解消させる。
+- 衝突のあるPull Requestでは、GitHubが`pull_request`のワークフローを動かさないので、待たずに解消させる
 
 - 検証: `test` 衝突すると、衝突の解消を1回だけ頼み、チェックの修正の回数は増えない
 - 検証: `test` `mergeable`が`UNKNOWN`の間は、衝突の解消を頼まない
