@@ -119,7 +119,7 @@
 </tr>
 <tr>
 <td><code>cumin quota allow</code></td>
-<td>今の5時間制限を使い切ってよいと許可する（<a href="/cumin-works/requirements/limit/">利用制限</a>の<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-006">CWK-LIMIT-006</a></code>）</td>
+<td>今の5時間制限を使い切ってよいと許可する（<a href="/cumin-works/requirements/limit/">利用制限</a>の<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-009">CWK-LIMIT-009</a></code>）</td>
 </tr>
 <tr>
 <td><code>cumin stop --after-current-runs</code></td>
@@ -246,26 +246,26 @@
 <td>Host</td>
 </tr>
 <tr>
+<td><code>quota.read_interval</code></td>
+<td>使用率を読む最小の間隔（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-004">CWK-LIMIT-004</a></code>）</td>
+<td>5分</td>
+<td>Host</td>
+</tr>
+<tr>
 <td><code>quota.five_hour.threshold</code></td>
-<td>5時間制限のしきい値（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-004">CWK-LIMIT-004</a></code>）</td>
+<td>5時間制限のしきい値（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-007">CWK-LIMIT-007</a></code>）</td>
 <td>85%</td>
 <td>Host</td>
 </tr>
 <tr>
-<td><code>quota.five_hour.bands</code></td>
-<td>5時間制限の時間帯ごとのしきい値（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-004">CWK-LIMIT-004</a></code>）</td>
-<td>なし</td>
-<td>Host</td>
-</tr>
-<tr>
 <td><code>quota.weekly.target</code></td>
-<td>週間制限の目標（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-005">CWK-LIMIT-005</a></code>）</td>
+<td>週間制限の目標（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-008">CWK-LIMIT-008</a></code>）</td>
 <td>85%</td>
 <td>Host</td>
 </tr>
 <tr>
 <td><code>quota.weekly.lead</code></td>
-<td>週間制限の前倒し。7日未満（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-005">CWK-LIMIT-005</a></code>）</td>
+<td>週間制限の前倒し。7日未満（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-008">CWK-LIMIT-008</a></code>）</td>
 <td>1日</td>
 <td>Host</td>
 </tr>
