@@ -45,7 +45,7 @@ Operatorは、次のコマンドを使う。
 |---|---|
 | `cumin run` | 常駐して動く。launchdから起動する |
 | `cumin status` | 今の状態を表示する（`CWK-HOST-004`）|
-| `cumin quota allow` | 今の5時間制限を使い切ってよいと許可する（[利用制限](../limit/index.md)の`CWK-LIMIT-006`）|
+| `cumin quota allow` | 今の5時間制限を使い切ってよいと許可する（[利用制限](../limit/index.md)の`CWK-LIMIT-009`）|
 | `cumin stop --after-current-runs` | 動いているAgentの実行が終わるのを待ってから止める（`CWK-HOST-007`）|
 | `cumin setup github-apps` | roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないGitHub Appだけを登録する |
 | `cumin setup launchd` | LaunchAgentの定義を書く（`CWK-HOST-005`）|
@@ -140,10 +140,10 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 | `poll_interval` | 作業中のリポジトリの定期確認の間隔（`CWK-POLL-004`）| 60秒 | Host |
 | `idle_poll_interval` | 作業中でないリポジトリの定期確認の間隔。`poll_interval`以上（`CWK-POLL-004`）| 5分 | Host |
 | `max_issues_in_progress` | リポジトリごとに同時に進めるIssueの数（`CWK-POLL-005`）| 1 | Host |
-| `quota.five_hour.threshold` | 5時間制限のしきい値（`CWK-LIMIT-004`）| 85% | Host |
-| `quota.five_hour.bands` | 5時間制限の時間帯ごとのしきい値（`CWK-LIMIT-004`）| なし | Host |
-| `quota.weekly.target` | 週間制限の目標（`CWK-LIMIT-005`）| 85% | Host |
-| `quota.weekly.lead` | 週間制限の前倒し。7日未満（`CWK-LIMIT-005`）| 1日 | Host |
+| `quota.read_interval` | 使用率を読む最小の間隔（`CWK-LIMIT-004`）| 5分 | Host |
+| `quota.five_hour.threshold` | 5時間制限のしきい値（`CWK-LIMIT-007`）| 85% | Host |
+| `quota.weekly.target` | 週間制限の目標（`CWK-LIMIT-008`）| 85% | Host |
+| `quota.weekly.lead` | 週間制限の前倒し。7日未満（`CWK-LIMIT-008`）| 1日 | Host |
 | `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps`が書く | なし | Host |
 | `roles.<role>.time_limit` | 実行の時間の上限。55分以下（`CWK-AGENT-015`）| 50分 | Host |
 | `roles.<role>.cli_path` | AgentのCLIの実行ファイル | `claude` | Host |
