@@ -229,7 +229,7 @@ Reviewerは、専門知識のファイルにある観点で、セキュリティ
 
 #### `CWK-REVIEW-019` 直さない
 
-Reviewerは、コードを変えず、pushせず、Pull Requestをマージせず、閉じず、Issueの本文を書き換えない。pushは権限でも止まる（`CWK-ACCESS-012`）。
+Reviewerは、コードを変えず、pushせず、Pull Requestをマージせず、閉じず、Issueの本文を書き換えない。pushは権限でも止まる（`CWK-ACCESS-005`）。
 
 - 検証: `demo` レビューのあとで、Pull Requestのコミット、状態、Issueの本文が変わっていない
 

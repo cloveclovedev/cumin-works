@@ -25,7 +25,7 @@ cuminが読むのは、受け入れ確認のコメントがあるか、sub-issue
 要求Issueが次のすべてを満たすとき、cuminは状態を`cumin/status/accepting`に替えてから、新しいセッションでPlannerに受け入れ確認を頼む。
 
 - 状態が`cumin/status/implementing`か`cumin/status/awaiting-plan-review`である。または`cumin/status/planning`で、Plannerが動いておらず、計画が完了している（[計画](../plan/index.md)の`CWK-PLAN-004`）
-- その状態ラベルをcuminが扱う（[権限](../access/index.md)の`CWK-ACCESS-004`）
+- その状態ラベルをcuminが扱う（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - sub-issueが1つ以上あり、すべて閉じている
 - 最後のsub-issueが閉じたあとの受け入れ確認のコメント（`CWK-ACCEPT-002`）がない
 - フォローアップノートを書き終えている（[マージ](../merge/index.md)の`CWK-MERGE-018`）

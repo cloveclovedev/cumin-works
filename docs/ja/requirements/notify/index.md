@@ -37,12 +37,13 @@ cuminは、次の異常な状態のときに、通知する。
 
 | 場面 | 要件 |
 |---|---|
-| 扱わない状態ラベルが付いた | `CWK-ACCESS-005` |
-| assigneeが1人のMaintainerでない | `CWK-ACCESS-007` |
+| 扱わない状態ラベルが付いた | `CWK-ACCESS-013` |
+| assigneeが1人のMaintainerでない | `CWK-ACCESS-013` |
 | 要求IssueにAssigneeがいない | `CWK-PLAN-008` |
 | 全部を読めないIssueがある | `CWK-POLL-012` |
 | 使用率を読めない | `CWK-LIMIT-006` |
 | ツール動作確認が失敗した | `CWK-AGENT-018.3` |
+| rulesetが効いていない | `CWK-ACCESS-015` |
 | 定期確認が続けて失敗した | `CWK-POLL-010` |
 
 - 検証: `test` 各要件の場面で、通知が1回届き、同じ原因のまま定期確認を3回行っても増えない

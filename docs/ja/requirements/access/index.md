@@ -1,48 +1,36 @@
 # 権限
 
-人、cumin、Agentが、それぞれ何をしてよいかを決める。cuminは、権限のない人の操作では動かない。Agentには、そのroleの作業に要る最小の権限だけを渡す。
+人、cumin、Agentが、それぞれどんな権限を持ち、その権限をどう作るかを決める。cuminは、権限のない人の操作では動かない。Agentには、そのroleの作業に要る最小の権限だけを渡す。
 
 ## 全体像
 
-| 誰 | 何をしてよいか | どこで決まるか |
+| 誰 | 何をしてよいか | 権限の定義 |
 |---|---|---|
-| Maintainer | 要求Issueを書き、`cumin/status/ready`で合図する | 対象のリポジトリの権限 |
-| Assignee | そのIssueの指示と判断 | Issueのassignee |
-| Operator | Hostの上のcuminの操作 | Host |
-| cumin | 状態ラベルの付け替え、マージ | `cumin-core`のGitHub Appの権限とruleset |
-| Agent | そのroleの作業 | roleごとのGitHub Appの権限とruleset。Hostでは、cuminを動かすユーザアカウント |
+| Maintainer | 要求Issueを書く | 対象リポジトリの権限設定 |
+| Assignee | そのIssueの指示と判断 | 対象リポジトリの権限設定 |
+| Operator | Hostの上のcuminの操作 | Hostのログインアカウントの権限設定 |
+| cumin | 状態ラベルの付け替え、マージ、Agentの起動 | `cumin-core`のGitHub Appの権限とruleset |
+| Agent | そのroleの作業 | roleごとのGitHub Appの権限とruleset。Host上の権限は、cuminを動かすユーザアカウントの権限設定 |
 
 ## 要件
 
-### 人
+### 権限の種類
 
 #### `CWK-ACCESS-001` Maintainer
 
 Maintainerは、対象のリポジトリにwrite以上（write、maintain、admin）の権限を持つ、人のアカウントである。botのアカウントは、権限があってもMaintainerではない。cuminのGitHub AppもMaintainerにならない。Maintainerの一覧は設定に持たず、GitHubの権限から、その都度決める。
 
-- 検証: `test` writeの権限を持つ人のアカウントはMaintainerとし、readとtriageの権限のアカウントと、GitHub AppはMaintainerとしない
+- 検証: `test` GitHub mockでテスト
+- 検証: `inspection` Maintainerを判定するコードが1箇所だけ
 
 ---
 
-#### `CWK-ACCESS-002` 人がすること
+#### `CWK-ACCESS-002` Assignee
 
-MaintainerとAssigneeは、次のことをする。
+Assigneeは、IssueにアサインされたMaintainerである。そのIssueの指示と判断を受け持つ。
+MaintainerはIssueごとに1人とする。
 
-| すること | 誰がするか |
-|---|---|
-| 要求Issueを書き、`cumin/type/requirement`を付ける | Maintainer |
-| `cumin/status/ready`を付けて、進めてよいと合図する | Maintainer |
-| 要求Issueどうしにblocked byを張り、優先度のラベルを付ける | Maintainer |
-| Agentへの指示を、Issueのコメントに書く | そのIssueのAssignee |
-| 計画結果の確認（sub-issueに`cumin/status/ready`を付ける、要らないsub-issueを閉じる）| 要求IssueのAssignee |
-| マージ判断（Pull Requestの承認と、変更の依頼）| 実装IssueのAssignee |
-| 受け入れ（要求Issueを閉じる）と差し戻し | 要求IssueのAssignee |
-| `cumin/status/awaiting-decision`のIssueに答える（答えを書き、`cumin/status/ready`を付け直す）| そのIssueのAssignee |
-| `cumin/type/owner-task`の作業をして、そのIssueを閉じる | そのIssueのAssignee |
-
-Agentは、Assigneeのコメントだけを指示として読む。cuminは、判断をAssigneeに求め、Assigneeの判断だけを扱う。
-
-- 検証: `test` 実装IssueのAssigneeでないMaintainerがPull Requestを承認しても、cuminはマージしない。Assigneeが承認するとマージする
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -54,83 +42,28 @@ Operatorは、Hostの上のコマンド、設定ファイル、Keychain、cumin�
 
 ---
 
-### 扱う状態ラベル
+#### `CWK-ACCESS-004` cuminの権限
 
-#### `CWK-ACCESS-004` 状態ラベルを付けたアカウント
+cuminは、GitHubの上では`cumin-core`のGitHub Appとして振る舞う。持つ権限は次の6つである。
 
-cuminは、今付いている状態ラベルを最後に付けたアカウントを確かめ、次のときだけ、その状態ラベルを扱う。付けたアカウントは、GitHubがIssueのタイムラインに残すラベルのイベントから読む。
+- コードの読み書き（マージに必要）
+- Pull Requestの読み書き
+- Issueの読み書き
+- チェックの読み取り
+- commit statusの読み取り
+- GitHub Actionsのjobのログの読み取り
 
-| 状態ラベル | 扱うのは、誰が付けたときか |
-|---|---|
-| `cumin/status/ready` | Maintainer |
-| ほかのすべての状態ラベル | `cumin-core`のGitHub App |
+読み取りの3つは、privateのリポジトリで、必須チェックとその失敗の内容を読むのに必要である。
 
-- 検証: `test` triageの権限のアカウントが`cumin/status/planning`や`cumin/status/merging`を付けても、cuminはAgent起動もマージもせず、ラベルも替えない。Maintainerが`cumin/status/merging`を付けたときも同じである。`cumin-core`が付けた状態ラベルでは、今までどおり動く
+mainブランチを更新できるのは、rulesetによって、リポジトリの管理者と`cumin-core`だけに限る。
 
----
+cuminは、人の認証情報（HostにあるOperatorの`gh`のログインなど）と、リポジトリの管理者の権限（Administration）を使わない。
 
-#### `CWK-ACCESS-005` 扱わない状態ラベル
-
-扱わない状態ラベルの付いたIssueでは、cuminはAgent起動もマージもせず、ラベルも替えない。ログと通知は1回だけ残す。Maintainerが付け直すと、今までどおり進む。
-
-- 検証: `test` Maintainerでないアカウントが`cumin/status/ready`を付けても着手せず、通知は1回だけである。Maintainerが付け直すと着手する
+- 検証: `inspection` `cumin-core`のGitHub Appの権限が、この6つと一致し、cuminのGitHubの呼び出しがすべてGitHub Appのtokenで行われる
 
 ---
 
-### Assignee
-
-#### `CWK-ACCESS-006` Assigneeを付ける
-
-`cumin/status/ready`の付いたIssueにassigneeがいなければ、cuminは、その`cumin/status/ready`を付けたMaintainerをassigneeにする。
-
-- 検証: `test` assigneeのないIssueにMaintainerが`cumin/status/ready`を付けると、その人がassigneeになる
-
----
-
-#### `CWK-ACCESS-007` Assigneeは1人のMaintainer
-
-Issueを進められるのは、assigneeが1人だけで、その人がMaintainerのときだけである。assigneeが2人以上いるとき、またはassigneeがMaintainerでないとき、cuminはそのIssueを進めず、通知を1回だけ送る。
-
-- 検証: `test` assigneeが2人いるIssueと、MaintainerでないassigneeのIssueに、cuminは着手せず、それぞれ通知は1回だけである
-
----
-
-#### `CWK-ACCESS-008` Assigneeを替える
-
-担当を替えるときは、Maintainerがassigneeを替える。cuminは、Maintainerが替えたassigneeだけを扱う。替えたアカウントは、GitHubがIssueのタイムラインに残すassigneeのイベントから読む。assigneeを替えても、Agentは動き直さない。
-
-- 検証: `test` Maintainerがassigneeを替えると、次の判断はその人に求める。Agent起動は増えない
-- 検証: `test` Maintainerでないアカウントがassigneeを替えたときは、扱わない
-
----
-
-### cuminとAgent
-
-#### `CWK-ACCESS-009` cuminの権限
-
-cuminは、GitHubの上では`cumin-core`のGitHub Appとして振る舞う。持つ権限は、コードの読み書き（マージに要る）、Pull Requestの読み書き、Issueの読み書き、チェックとcommit statusとGitHub Actionsのjobのログの読み取りである。読み取りの3つは、privateのリポジトリで、必須チェックとその失敗の内容を読むのに要る。mainブランチを更新できるのは、rulesetによって、リポジトリの管理者と`cumin-core`だけに限る。
-
-- 検証: `inspection` `cumin-core`のGitHub Appの権限が、この6つと一致する
-
----
-
-#### `CWK-ACCESS-010` cuminが使わない権限
-
-cuminは、人の認証情報（HostにあるOperatorの`gh`のログインなど）と、リポジトリの管理者の権限（Administration）を使わない。rulesetのような、管理者の権限が要る準備は、管理者が自分の`gh`でスクリプトを実行して行う。
-
-- 検証: `inspection` cuminのGitHubの呼び出しが、すべてGitHub Appのtokenで行われ、Administrationの権限を求めないことを、コードとAppの権限で確かめる
-
----
-
-#### `CWK-ACCESS-011` Agentに渡す権限
-
-Agentは、自分のroleのGitHub Appとして振る舞う。cuminは、Agent起動のたびに、そのroleのGitHub AppのtokenだけをAgentに渡す。tokenは1時間で失効する。Agentは、人の認証情報を使わない。
-
-- 検証: `test` Agentのプロセスの環境に、そのroleのGitHub Appのtokenのほかに、GitHubの認証情報がない
-
----
-
-#### `CWK-ACCESS-012` roleごとの権限
+#### `CWK-ACCESS-005` roleごとの権限
 
 roleごとのGitHub Appは、次の権限だけを持つ。
 
@@ -147,11 +80,102 @@ GitHub Appの名前は、運用する組織ごとに決めてよい。
 
 ---
 
-#### `CWK-ACCESS-013` HostでのAgentの権限
+#### `CWK-ACCESS-006` HostでのAgentの権限
 
-Agentは、Hostの上では、cuminを動かすユーザアカウントと同じ権限を持ち、ツールの使用をすべて許可するモードで起動する。headlessの実行では、許可を尋ねられても答える人がいないためである。roleごとの制限は、GitHub Appの権限とrulesetで行う。
+Agentは、Hostの上では、cuminを動かすユーザアカウントと同じ権限を持ち、ツールの使用をすべて許可するモードで起動する。
 
-- 検証: `inspection` Agentがcuminと同じユーザアカウントで動き、起動のコマンドが許可を尋ねないモードであることを確かめる
+- 検証: `inspection` Agentがcuminと同じユーザアカウントで動き、起動のコマンドが許可を尋ねないモードである
+
+---
+
+### 権限の設定方法
+
+#### `CWK-ACCESS-007` GitHub Appを作る
+
+Operatorは、`cumin setup github-apps`で、`cumin-core`とroleごとのGitHub Appを作る。各GitHub Appの権限は、`CWK-ACCESS-004`と`CWK-ACCESS-005`の権限だけにする。秘密鍵の置き場所は[Hostでの動かし方](../host/index.md)で決める。
+
+- 検証: `demo` テスト用の実リポジトリで、作ったGitHub Appの権限を確かめる
+
+---
+
+#### `CWK-ACCESS-008` rulesetを作る
+
+rulesetのような、リポジトリの管理者の権限が要る準備は、管理者が自分の`gh`でスクリプトを実行して行う。cuminは、この準備をしない。
+
+- 検証: `demo` テスト用の実リポジトリで、スクリプトがrulesetを作る
+
+---
+
+#### `CWK-ACCESS-009` Agentにtokenを渡す
+
+Agentは、自分のroleのGitHub Appとして振る舞う。cuminは、Agent起動のたびに、そのroleのGitHub AppのtokenだけをAgentに渡す。tokenは1時間で失効する。Agentは、人の認証情報を使わない。
+
+- 検証: `test` Agentのプロセスの環境に、そのroleのGitHub Appのtokenのほかに、GitHubの認証情報がない
+
+---
+
+#### `CWK-ACCESS-010` Assigneeを付ける
+
+`cumin/status/ready`の付いたIssueにassigneeがいなければ、cuminは、その`cumin/status/ready`を付けたMaintainerをassigneeにする。
+
+- 検証: `test` GitHub mockでテスト
+
+---
+
+#### `CWK-ACCESS-011` Assigneeを替える
+
+担当を替えるときは、Maintainerがassigneeを替える。assigneeを替えても、Agentは動き直さない。次の判断は、新しいAssigneeに求める。
+
+- 検証: `test` GitHub mockでテスト
+
+---
+
+### 権限の確かめ方
+
+#### `CWK-ACCESS-012` 各操作元の権限チェック
+
+cuminは、GitHubへの各操作を読み取るとき、適切な権限を持ったものが行った操作かをチェックする。誰が行ったかは、GitHubがIssueのタイムラインに残すイベントと、レビューとコメントの作者から読む。
+
+| 種類 | 扱うのは、誰が行ったときか |
+|---|---|
+| 状態ラベルを付ける | `cumin/status/ready`はMaintainer、ほかは`cumin-core`のGitHub App |
+| assigneeを替える | Maintainer |
+| 判断と指示（承認、変更の依頼、受け入れ、指示のコメントなど） | そのIssueのAssignee |
+
+どの操作が判断と指示に当たるかは、各カテゴリの要件で決める。
+
+- 検証: `test` GitHub mockで、種類ごとに、扱うアカウントと扱わないアカウントをテスト
+
+---
+
+#### `CWK-ACCESS-013` 権限に不一致のあるIssue
+
+次のどれかに当たるIssueでは、cuminはAgentを起動せず、マージもラベルの付け替えもしない。ログと通知は1回だけ残す。
+
+- 権限外のアカウントが状態ラベルを付けたか、assigneeを替えた
+- assigneeが2人以上いる
+- assigneeがMaintainerでない
+
+適切な操作で直されると、cuminはそのIssueを再開する。
+
+- 検証: `test` GitHub mockでテスト
+
+---
+
+#### `CWK-ACCESS-014` 権限外の操作を無視する
+
+権限外のアカウントによる判断と指示を、cuminは使わない。Issueは止めず、通知もしない。publicのリポジトリでは、誰でもコメントやレビューを書けるからである。
+
+- 検証: `test` GitHub mockでテスト
+
+---
+
+#### `CWK-ACCESS-015` rulesetを確かめる
+
+cuminは、リポジトリでAgentを起動する前とマージの前に、`CWK-ACCESS-004`と`CWK-ACCESS-005`で決めた制限のrulesetが、そのリポジトリに効いているかを確かめる。効いていなければ、そのリポジトリでAgentを起動せず、マージもしない。通知は1回だけ送る。
+
+- 検証: `test` GitHub mockでテスト
+- 検証: `demo` テスト用の実リポジトリで、rulesetを外すと止まる
 
 ---
 

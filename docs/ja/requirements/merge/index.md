@@ -42,7 +42,7 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 ### マージ判断
 
-cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビューのうち、`COMMENT`を除いた最新のものだけである（[権限](../access/index.md)の`CWK-ACCESS-002`）。古いコミットへのレビューは使わない。
+cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビューのうち、`COMMENT`を除いた最新のものだけである（[権限](../access/index.md)の`CWK-ACCESS-012`）。古いコミットへのレビューは使わない。
 
 #### `CWK-MERGE-003` Assigneeの承認でマージを始める
 

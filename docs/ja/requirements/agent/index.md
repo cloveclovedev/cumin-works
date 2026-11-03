@@ -26,7 +26,7 @@ Agent起動に共通のことを決める。起動の手順、渡す指示と事
 
 #### `CWK-AGENT-024` すべてのAgent起動の前の確認
 
-cuminは、どのAgent起動の前にも、同じ1つの確認を行う。確認するのは、利用制限（`CWK-LIMIT-001`）、そのリポジトリのツール動作確認（`CWK-AGENT-018.3`）、止める予約（`CWK-HOST-007`）である。新しい種類のAgent起動を足しても、この確認を飛ばせない。
+cuminは、どのAgent起動の前にも、同じ1つの確認を行う。確認するのは、利用制限（`CWK-LIMIT-001`）、そのリポジトリのツール動作確認（`CWK-AGENT-018.3`）、rulesetの確認（[権限](../access/index.md)の`CWK-ACCESS-015`）、止める予約（`CWK-HOST-007`）である。新しい種類のAgent起動を足しても、この確認を飛ばせない。
 
 - 検証: `test` 利用制限に達している間は、どの種類のAgent起動も起きない
 - 検証: `inspection` Agentを起動するコードの呼び出し元が1つだけで、その前に確認がある
@@ -61,7 +61,7 @@ Issueが閉じ、そのAgentが動いていないとき、cuminはそのIssueの
 
 #### `CWK-AGENT-005` Agentの環境
 
-cuminは、起動の直前にそのroleのGitHub Appのtokenを発行して、Agentの環境に入れる（[権限](../access/index.md)の`CWK-ACCESS-011`）。tokenの1時間の期限を、実行にまるごと残すためである。Hostのユーザアカウントのgitと`gh`の認証は、Agentから使えなくする。
+cuminは、起動の直前にそのroleのGitHub Appのtokenを発行して、Agentの環境に入れる（[権限](../access/index.md)の`CWK-ACCESS-009`）。tokenの1時間の期限を、実行にまるごと残すためである。Hostのユーザアカウントのgitと`gh`の認証は、Agentから使えなくする。
 
 - 検証: `test` Agentのプロセスで、Hostのユーザアカウントのgitと`gh`の認証が使われない
 
@@ -120,7 +120,7 @@ cuminは、実行の最初に出る起動の記録（Claude Codeでは`init`の�
 cuminは、依頼の先頭に、次の事実を書く。roleごとに足す事実は、各ページで決める。
 
 - 扱うIssueの番号と種類
-- Assigneeのログイン名。いなければ、いないと書く。AgentはAssigneeのコメントだけを指示として読む（[権限](../access/index.md)の`CWK-ACCESS-002`）
+- Assigneeのログイン名。いなければ、いないと書く。AgentはAssigneeのコメントだけを指示として読む（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - 保護されたパスの一覧と照合の決まり（[チェック](../check/index.md)の`CWK-CHECK-008.1`）
 - 時間の上限と、実行が終わる時刻
 

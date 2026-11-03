@@ -24,7 +24,7 @@ Maintainerは、Plannerを通さずに自分でsub-issueを書いてもよい。
 
 `cumin/status/ready`の付いた要求Issueが次のすべてを満たすとき、cuminは状態を`cumin/status/planning`に替えてから、新しいセッションでPlannerを起動する。sub-issueがすでにあってもよい。
 
-- その`cumin/status/ready`を、cuminが扱う（[権限](../access/index.md)の`CWK-ACCESS-004`）
+- その`cumin/status/ready`を、cuminが扱う（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - blocked byのIssueが、すべて閉じている（`CWK-PLAN-002`）
 - 空きがある
 
@@ -94,7 +94,7 @@ cuminは、Plannerが動いていないとき、要求Issueにsub-issueが1つ�
 要求IssueのAssigneeがsub-issueのどれかに`cumin/status/ready`を付けたとき、cuminは要求Issueを`cumin/status/implementing`に替える。替えるのは、要求Issueが`awaiting-plan-review`、`awaiting-acceptance`、状態ラベルなしのどれかのときだけである。
 
 - 要求Issueに状態ラベルがあるときは、要求Issueが今の状態になったあとに付いた`cumin/status/ready`だけを使う。前の計画の`cumin/status/ready`が残っていても、新しいsub-issueを確かめる前に進まないためである。
-- 要求IssueにAssigneeがいなければ、進めずに、通知を1回だけ送る。Plannerを通さない要求Issueでは、cuminがAssigneeを付ける機会（`CWK-ACCESS-006`）がないからである。
+- 要求IssueにAssigneeがいなければ、進めずに、通知を1回だけ送る。Plannerを通さない要求Issueでは、cuminがAssigneeを付ける機会（`CWK-ACCESS-010`）がないからである。
 
 - 検証: `test` Assigneeがsub-issueに`cumin/status/ready`を付けると、要求Issueが`cumin/status/implementing`になり、Agent起動は起きない
 - 検証: `test` Assigneeのいない要求Issueでは状態が替わらず、通知は1回だけである
