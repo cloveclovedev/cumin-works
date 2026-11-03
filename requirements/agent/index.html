@@ -95,7 +95,7 @@
 <li>検証: <code>test</code> 実行の途中でcuminを再起動すると、次の定期確認で各ページのやり直しが起きる</li>
 </ul>
 </section><section class="requirement"><h4 id="CWK-AGENT-024"><code class="requirement-id">CWK-AGENT-024</code> すべてのAgent起動の前の確認</h4>
-<p>cuminは、どのAgent起動の前にも、同じ1つの確認を行う。確認するのは、利用制限（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）、そのリポジトリのツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018.3">CWK-AGENT-018.3</a></code>）、止める予約（<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>）である。新しい種類のAgent起動を足しても、この確認を飛ばせない。</p>
+<p>cuminは、どのAgent起動の前にも、同じ1つの確認を行う。確認するのは、利用制限（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）、そのリポジトリのツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018.3">CWK-AGENT-018.3</a></code>）、rulesetの確認（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-015">CWK-ACCESS-015</a></code>）、止める予約（<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>）である。新しい種類のAgent起動を足しても、この確認を飛ばせない。</p>
 <ul>
 <li>検証: <code>test</code> 利用制限に達している間は、どの種類のAgent起動も起きない</li>
 <li>検証: <code>inspection</code> Agentを起動するコードの呼び出し元が1つだけで、その前に確認がある</li>
@@ -118,7 +118,7 @@
 <li>検証: <code>test</code> pushしていないコミットがあると、消えない</li>
 </ul>
 </section><section class="requirement"><h4 id="CWK-AGENT-005"><code class="requirement-id">CWK-AGENT-005</code> Agentの環境</h4>
-<p>cuminは、起動の直前にそのroleのGitHub Appのtokenを発行して、Agentの環境に入れる（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-011">CWK-ACCESS-011</a></code>）。tokenの1時間の期限を、実行にまるごと残すためである。Hostのユーザアカウントのgitと<code>gh</code>の認証は、Agentから使えなくする。</p>
+<p>cuminは、起動の直前にそのroleのGitHub Appのtokenを発行して、Agentの環境に入れる（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-009">CWK-ACCESS-009</a></code>）。tokenの1時間の期限を、実行にまるごと残すためである。Hostのユーザアカウントのgitと<code>gh</code>の認証は、Agentから使えなくする。</p>
 <ul>
 <li>検証: <code>test</code> Agentのプロセスで、Hostのユーザアカウントのgitと<code>gh</code>の認証が使われない</li>
 </ul>
@@ -177,7 +177,7 @@
 <p>扱うIssueの番号と種類</p>
 </li>
 <li>
-<p>Assigneeのログイン名。いなければ、いないと書く。AgentはAssigneeのコメントだけを指示として読む（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-002">CWK-ACCESS-002</a></code>）</p>
+<p>Assigneeのログイン名。いなければ、いないと書く。AgentはAssigneeのコメントだけを指示として読む（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-012">CWK-ACCESS-012</a></code>）</p>
 </li>
 <li>
 <p>保護されたパスの一覧と照合の決まり（<a href="/cumin-works/requirements/check/">チェック</a>の<code><a href="/cumin-works/requirements/check/#CWK-CHECK-008.1">CWK-CHECK-008.1</a></code>）</p>

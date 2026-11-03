@@ -116,7 +116,7 @@
 <li>検証: <code>test</code> レビューの依頼が失敗しても、<code>cumin/status/awaiting-decision</code>にならない</li>
 </ul>
 </section><h3 id="マージ判断">マージ判断</h3>
-<p>cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビューのうち、<code>COMMENT</code>を除いた最新のものだけである（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-002">CWK-ACCESS-002</a></code>）。古いコミットへのレビューは使わない。</p>
+<p>cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビューのうち、<code>COMMENT</code>を除いた最新のものだけである（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-012">CWK-ACCESS-012</a></code>）。古いコミットへのレビューは使わない。</p>
 <section class="requirement"><h4 id="CWK-MERGE-003"><code class="requirement-id">CWK-MERGE-003</code> Assigneeの承認でマージを始める</h4>
 <p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>APPROVE</code>で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-022">CWK-MERGE-022</a></code>）とき、cuminは状態を<code>cumin/status/merging</code>に替える。</p>
 <ul>

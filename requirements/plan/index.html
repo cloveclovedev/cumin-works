@@ -95,7 +95,7 @@
 <p><code>cumin/status/ready</code>の付いた要求Issueが次のすべてを満たすとき、cuminは状態を<code>cumin/status/planning</code>に替えてから、新しいセッションでPlannerを起動する。sub-issueがすでにあってもよい。</p>
 <ul>
 <li>
-<p>その<code>cumin/status/ready</code>を、cuminが扱う（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-004">CWK-ACCESS-004</a></code>）</p>
+<p>その<code>cumin/status/ready</code>を、cuminが扱う（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-012">CWK-ACCESS-012</a></code>）</p>
 </li>
 <li>
 <p>blocked byのIssueが、すべて閉じている（<code><a href="/cumin-works/requirements/plan/#CWK-PLAN-002">CWK-PLAN-002</a></code>）</p>
@@ -160,7 +160,7 @@
 <p>要求Issueに状態ラベルがあるときは、要求Issueが今の状態になったあとに付いた<code>cumin/status/ready</code>だけを使う。前の計画の<code>cumin/status/ready</code>が残っていても、新しいsub-issueを確かめる前に進まないためである。</p>
 </li>
 <li>
-<p>要求IssueにAssigneeがいなければ、進めずに、通知を1回だけ送る。Plannerを通さない要求Issueでは、cuminがAssigneeを付ける機会（<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-006">CWK-ACCESS-006</a></code>）がないからである。</p>
+<p>要求IssueにAssigneeがいなければ、進めずに、通知を1回だけ送る。Plannerを通さない要求Issueでは、cuminがAssigneeを付ける機会（<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-010">CWK-ACCESS-010</a></code>）がないからである。</p>
 </li>
 <li>
 <p>検証: <code>test</code> Assigneeがsub-issueに<code>cumin/status/ready</code>を付けると、要求Issueが<code>cumin/status/implementing</code>になり、Agent起動は起きない</p>
