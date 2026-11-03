@@ -23,7 +23,7 @@
 - その`cumin/status/ready`を、cuminが扱う（[権限](../access/index.md)の`CWK-ACCESS-004`）
 - blocked byのIssueがすべて閉じている（`CWK-IMPL-002`）。または`CWK-IMPL-015.1`の条件を満たす
 - 空きがある
-- `cumin/type/owner-task`が付いていない（`CWK-LABEL-004`）
+- `cumin/type/owner-task`が付いていない（`CWK-LABEL-001`）
 
 - 検証: `test` 4つを満たす実装Issueで、Implementerの起動が新しいセッションで1回だけ起き、その前に状態が`cumin/status/implementing`になっている
 - 検証: `test` Pull Requestがすでにある実装Issueでは、同じPull Requestの続きから進めさせる

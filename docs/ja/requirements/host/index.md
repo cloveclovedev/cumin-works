@@ -154,7 +154,7 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 | `checks_wait_time` | 必須チェックの結果を待つ時間（[チェック](../check/index.md)）| 60分 | 両方 |
 | `merge_method` | マージの方法。squash、merge、rebaseのどれか（[マージ](../merge/index.md)）| squash | 両方 |
 | `notify.discord.enabled` | 通知を送るか。リポジトリで決めると、そのリポジトリについての通知に効く（[通知](../notify/index.md)）| true | 両方 |
-| `priority_labels` | 優先度のラベルの名前。高い順（`CWK-LABEL-008`）| `cumin/priority/P0`〜`P3` | リポジトリ |
+| `priority_labels` | 優先度のラベルの名前。高い順（`CWK-LABEL-006`）| `cumin/priority/P0`〜`P3` | リポジトリ |
 | `protected_paths` | 保護されたパス（`CWK-CHECK-008.1`）| `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md` | リポジトリ |
 | `tool_checks` | ツール動作確認（`CWK-AGENT-018.1`）| なし | リポジトリ |
 | `start_on_awaiting_merge_decision` | マージ判断を待つPull Requestのブランチから始めるか（`CWK-IMPL-015`）| false | リポジトリ |

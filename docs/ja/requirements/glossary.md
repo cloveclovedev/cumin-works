@@ -45,7 +45,6 @@ cumin-worksの文書で使う語の意味を決める。「使わない言い方
 | 要求Issue | 要求を書いたIssue。`cumin/type/requirement`が付く | 要件Issue、親Issue | requirement issue |
 | 実装Issue | 要求Issueのsub-issueで、1つのPull Requestで実装する単位 | 子Issue、タスク | implementation issue |
 | sub-issue | GitHubの親子関係で、あるIssueの子になっているIssue | サブIssue、子Issue | sub-issue |
-| ドラフト | 状態ラベルのないIssue。cuminは扱わない。GitHubのdraftのPull Requestとは別のものである | 下書き | draft |
 | 状態 | Issueがワークフローのどこにいるか。状態ラベル1つで表す | ステータス | state |
 | 状態ラベル | 状態を表す`cumin/status/*`のラベル | ステータスラベル | status label |
 | 遷移 | 状態が移ること。同じ状態にとどまる遷移もある。「イベント[ガード条件] / アクション」の形で書く | | transition |
