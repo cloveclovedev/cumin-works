@@ -79,9 +79,9 @@ Issueの状態は、次のどれかである。状態ラベルの名前は、`cu
 
 #### `CWK-LABEL-004` cuminへの再開指示
 
-MaintainerやAssigineeがタスクを終えてcuminにタスクを再開してほしいときは、`ready`ラベルを該当Issueに追加する
+MaintainerやAssigneeがタスクを終えてcuminにタスクを再開してほしいときは、`ready`ラベルを該当Issueに追加する
 
-- 検証: `test` GitHub mockでテスト。`ready`とMaintainerやAssigineeにアクションが求められる状態ラベルは同時についていてもエラーにならない。各タイミングの振る舞いはそれぞれのカテゴリで定義する
+- 検証: `test` GitHub mockでテスト。`ready`とMaintainerやAssigneeにアクションが求められる状態ラベルは同時についていてもエラーにならない。各タイミングの振る舞いはそれぞれのカテゴリで定義する
 
 ---
 
