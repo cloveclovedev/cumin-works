@@ -70,17 +70,17 @@
 		})();
 	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-p4azlveh"><div class="social-icons astro-p4azlveh"></div><starlight-theme-select><label style="--sl-select-width: 6.25em" class="astro-2z5xp7gb"><span class="sr-only astro-2z5xp7gb">テーマの選択</span><svg aria-hidden="true" class="icon label-icon astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg><select autocomplete="off" class="astro-2z5xp7gb"><option value="dark" class="astro-2z5xp7gb">ダーク</option><option value="light" class="astro-2z5xp7gb">ライト</option><option value="auto" selected class="astro-2z5xp7gb">自動</option></select><svg aria-hidden="true" class="icon caret astro-2z5xp7gb astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"/></svg></label></starlight-theme-select><script>
 	StarlightThemeProvider.updatePickers();
-</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">目次<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#全体像" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">全体像</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#要件" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">要件</span></a><ul class="isMobile astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#状態のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">状態のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#種類リスク優先度のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">種類、リスク、優先度のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#pull-requestとリポジトリ" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Pull Requestとリポジトリ</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#未決事項" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">未決事項</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/cumin-works/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">目次</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#全体像" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">全体像</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#要件" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">要件</span></a><ul class="astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#状態のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">状態のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#種類リスク優先度のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">種類、リスク、優先度のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#pull-requestとリポジトリ" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Pull Requestとリポジトリ</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#未決事項" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">未決事項</span></a></li></ul></nav></starlight-toc><script type="module" src="/cumin-works/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main data-pagefind-body class="astro-g5ptsecz" lang="ja" dir="ltr"><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">ラベル</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content">
+</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">目次<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#全体像" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">全体像</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#要件" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">要件</span></a><ul class="isMobile astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#種類のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">種類のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#状態のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">状態のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#リスクのラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">リスクのラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#優先度のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">優先度のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#pull-request" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Pull Request</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#リポジトリ" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">リポジトリ</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#未決事項" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">未決事項</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/cumin-works/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">目次</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">概要</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#全体像" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">全体像</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#要件" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">要件</span></a><ul class="astro-jugkfwgx" style="--depth: 1;"><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#種類のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">種類のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#状態のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">状態のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#リスクのラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">リスクのラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#優先度のラベル" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">優先度のラベル</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#pull-request" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">Pull Request</span></a></li><li style="--depth: 1;" class="astro-jugkfwgx"><a href="#リポジトリ" style="--depth: 1;" class="astro-jugkfwgx"><span style="--depth: 1;" class="astro-jugkfwgx">リポジトリ</span></a></li></ul></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#未決事項" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">未決事項</span></a></li></ul></nav></starlight-toc><script type="module" src="/cumin-works/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main data-pagefind-body class="astro-g5ptsecz" lang="ja" dir="ltr"><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">ラベル</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content">
 <p>IssueとPull Requestに付けるラベルを決める。Maintainerはラベルで状態を知り、ラベルでcuminに合図する。状態ごとのアクションは各カテゴリで決める。誰がどのラベルを付けてよいかは<a href="/cumin-works/requirements/access/">権限</a>で決める。</p>
 <h2 id="全体像">全体像</h2>
-<p>ラベルには4つの種類があり、名前の前半で見分けられる。優先度のラベルだけは、リポジトリの設定で名前を変えられる。</p>
+<p>ラベルには以下の種類がある。</p>
 <ul>
 <li><code>cumin/type/*</code>: Issueの種類。状態ではないので、閉じるまで付けたままにする。</li>
 <li><code>cumin/status/*</code>: Issueの状態</li>
 <li><code>cumin/risk/*</code>: 実装Issueのマージのリスク</li>
 <li><code>cumin/priority/*</code>: 着手の順番（<a href="/cumin-works/requirements/poll/">定期確認</a>）</li>
 </ul>
-<p>状態は3つの種類に分かれ、名前で見分けられる。</p>
+<p>状態の命名規則は以下に定める。</p>
 <ul>
 <li>人なしで進む状態: 名前が<code>-ing</code>で終わる。Agent、GitHub、cuminのどれかが作業している。</li>
 <li>cuminの外を待つ状態: 名前が<code>awaiting-</code>で始まる。Assigneeの判断や、ほかのIssueのマージのように、cuminが自分では進められないことを待つ。</li>
@@ -88,15 +88,49 @@
 </ul>
 <p>状態がどう移るかの全体は、<a href="/cumin-works/requirements/">要求と要件の入口</a>の全体像の図にある。</p>
 <h2 id="要件">要件</h2>
-<h3 id="状態のラベル">状態のラベル</h3>
-<section class="requirement"><h4 id="CWK-LABEL-001"><code class="requirement-id">CWK-LABEL-001</code> 状態の一覧</h4>
+<h3 id="種類のラベル">種類のラベル</h3>
+<section class="requirement"><h4 id="CWK-LABEL-001"><code class="requirement-id">CWK-LABEL-001</code> 種類のラベル</h4>
+<p>Issueの種類は、次のどれかである。</p>
+<table>
+<thead>
+<tr>
+<th>種類</th>
+<th>ラベル</th>
+<th>付ける人</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求Issue</td>
+<td><code>cumin/type/requirement</code></td>
+<td>Maintainer</td>
+</tr>
+<tr>
+<td>実装Issue</td>
+<td>なし</td>
+<td>なし</td>
+</tr>
+<tr>
+<td>Assigneeが手で行う実装Issue</td>
+<td><code>cumin/type/owner-task</code></td>
+<td>PlannerかMaintainer</td>
+</tr>
+</tbody>
+</table>
+<p><code>cumin/type/requirement</code>は、そのIssueが要求Issueであることを表す。Maintainerが付け、閉じるまで付けたままにする。<code>cumin/type/requirement</code>の付いたIssueのsub-issueが、実装Issueである。実装Issueを表すラベルは作らない。</p>
+<p><code>cumin/type/owner-task</code>は、その実装Issueの作業をAssigneeが手で行うことを表す。Implementerが変えられないファイル（保護されたパス、GitHub Appの権限で書けないファイル）の変更が要るときに、PlannerかMaintainerが付ける。cuminは、このIssueに着手しない。</p>
+<ul>
+<li>検証: <code>inspection</code> ラベルの名前がコードの定義と一致すること</li>
+</ul>
+</section><h3 id="状態のラベル">状態のラベル</h3>
+<section class="requirement"><h4 id="CWK-LABEL-002"><code class="requirement-id">CWK-LABEL-002</code> 状態の一覧</h4>
 <p>Issueの状態は、次のどれかである。状態ラベルの名前は、<code>cumin/status/</code>のあとに状態の名前を付けたものである。</p>
 <table>
 <thead>
 <tr>
 <th>状態</th>
 <th>付く対象</th>
-<th>その状態で進むこと</th>
+<th>その状態で期待されるアクション</th>
 </tr>
 </thead>
 <tbody>
@@ -118,7 +152,7 @@
 <tr>
 <td><code>implementing</code></td>
 <td>要求Issue</td>
-<td>sub-issueの作業が進む。要求Issueそのものには、誰も作業しない</td>
+<td>Implementerが要求Issueに紐づく実装Issueを実装する</td>
 </tr>
 <tr>
 <td><code>accepting</code></td>
@@ -168,47 +202,47 @@
 </tbody>
 </table>
 <ul>
-<li>検証: <code>test</code> cuminが作るラベルの一覧が、この表の状態と一致する</li>
+<li>検証: <code>inspection</code> ラベルの名前がコードの定義と一致すること</li>
 </ul>
-</section><section class="requirement"><h4 id="CWK-LABEL-002"><code class="requirement-id">CWK-LABEL-002</code> 状態ラベルは1つ</h4>
-<p>1つのIssueに付く状態ラベルは、常に1つだけである。状態ラベルを替えるのはcuminである。例外は<code>cumin/status/ready</code>で、これはMaintainerが付ける。</p>
+</section><section class="requirement"><h4 id="CWK-LABEL-003"><code class="requirement-id">CWK-LABEL-003</code> 状態ラベルは1つ</h4>
+<p>1つのIssueに付く状態ラベルは、常に1つだけである。状態ラベルを替えるのはcuminである。
+例外は<code>cumin/status/ready</code>で、これはMaintainerやAssigneeがつける。またタスク再開指示でもあるので状態ラベルの重複も許可する。</p>
 <ul>
-<li>検証: <code>test</code> cuminがラベルを替えたあと、どのIssueにも状態ラベルが1つだけ付いている</li>
+<li>検証: <code>test</code> GitHub mockでテスト</li>
+<li>検証: <code>inspection</code> Issueの状態ラベルを書き込むコードが一箇所だけである</li>
 </ul>
-</section><section class="requirement"><h4 id="CWK-LABEL-003"><code class="requirement-id">CWK-LABEL-003</code> ドラフトは扱わない</h4>
-<p>状態ラベルのないIssue（ドラフト）は、cuminが扱わない。</p>
+</section><section class="requirement"><h4 id="CWK-LABEL-004"><code class="requirement-id">CWK-LABEL-004</code> cuminへの再開指示</h4>
+<p>MaintainerやAssigineeがタスクを終えてcuminにタスクを再開してほしいときは、<code>ready</code>ラベルを該当Issueに追加する</p>
 <ul>
-<li>検証: <code>test</code> 状態ラベルのないIssueに、cuminは何もしない</li>
+<li>検証: <code>test</code> GitHub mockでテスト。<code>ready</code>とMaintainerやAssigineeにアクションが求められる状態ラベルは同時についていてもエラーにならない。各タイミングの振る舞いはそれぞれのカテゴリで定義する</li>
 </ul>
-</section><h3 id="種類リスク優先度のラベル">種類、リスク、優先度のラベル</h3>
-<section class="requirement"><h4 id="CWK-LABEL-004"><code class="requirement-id">CWK-LABEL-004</code> 種類のラベル</h4>
-<p><code>cumin/type/requirement</code>は、そのIssueが要求Issueであることを表す。Maintainerが付け、閉じるまで付けたままにする。<code>cumin/type/requirement</code>の付いたIssueのsub-issueが、実装Issueである。実装Issueを表すラベルは作らない。</p>
-<p><code>cumin/type/owner-task</code>は、その実装Issueの作業をAssigneeが手で行うことを表す。Implementerが変えられないファイル（保護されたパス、GitHub Appの権限で書けないファイル）の変更が要るときに、PlannerかMaintainerが付ける。cuminは、このIssueに着手しない。</p>
-<ul>
-<li>検証: <code>test</code> <code>cumin/type/owner-task</code>と<code>cumin/status/ready</code>の付いた実装Issueに、Agent起動をしない</li>
-</ul>
-</section><section class="requirement"><h4 id="CWK-LABEL-005"><code class="requirement-id">CWK-LABEL-005</code> リスクのラベル</h4>
+</section><h3 id="リスクのラベル">リスクのラベル</h3>
+<section class="requirement"><h4 id="CWK-LABEL-005"><code class="requirement-id">CWK-LABEL-005</code> リスクのラベル</h4>
 <p>実装Issueには、<code>cumin/risk/low</code>、<code>cumin/risk/medium</code>、<code>cumin/risk/high</code>のどれか1つが付く。Plannerが仮に付け、要求IssueのAssigneeが確かめて、必要なら替える。</p>
 <ul>
-<li>検証: <code>test</code> リスクのラベルがないか、2つ以上ある実装Issueがあると、計画が完了したと判断されない</li>
+<li>検証: <code>inspection</code> ラベルの名前がコードの定義と一致すること</li>
 </ul>
-</section><section class="requirement"><h4 id="CWK-LABEL-008"><code class="requirement-id">CWK-LABEL-008</code> 優先度のラベル</h4>
-<p>優先度のラベルは、着手の順番を表す。初期値は<code>cumin/priority/P0</code>から<code>cumin/priority/P3</code>で、<code>P0</code>が最も高い。対象のリポジトリにすでにある優先度のラベルを使うときは、<code>.cumin/config.toml</code>の<code>priority_labels</code>に、名前を高い順に書く。</p>
+</section><h3 id="優先度のラベル">優先度のラベル</h3>
+<section class="requirement"><h4 id="CWK-LABEL-006"><code class="requirement-id">CWK-LABEL-006</code> 優先度のラベル</h4>
+<p>優先度のラベルは、着手の順番を表す。初期値は<code>cumin/priority/P0</code>から<code>cumin/priority/P3</code>で、<code>P0</code>が最も高い。
+対象のリポジトリにすでにある優先度のラベルを使うときは、<code>.cumin/config.toml</code>の<code>priority_labels</code>に、名前を高い順に書く。</p>
 <p>優先度のラベルは、要求Issueにも実装Issueにも付けてよい。付けるのはMaintainerだけで、cuminとAgentは付けも外しもせず、Pull Requestにも写さない。着手の順番は<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-006">CWK-POLL-006</a></code>で決める。</p>
 <ul>
-<li>検証: <code>test</code> <code>priority_labels</code>を設定したリポジトリでは、設定のラベルの順に着手する。設定のないリポジトリでは、初期値のラベルの順に着手する</li>
-<li>検証: <code>test</code> cuminとAgentが作業したあとも、Issueの優先度のラベルは変わらず、Pull Requestには優先度のラベルが付かない</li>
+<li>検証: <code>inspection</code> ラベルの名前がコードの定義と一致すること</li>
 </ul>
-</section><h3 id="pull-requestとリポジトリ">Pull Requestとリポジトリ</h3>
-<section class="requirement"><h4 id="CWK-LABEL-006"><code class="requirement-id">CWK-LABEL-006</code> ラベルをPull Requestに写す</h4>
+</section><h3 id="pull-request">Pull Request</h3>
+<section class="requirement"><h4 id="CWK-LABEL-007"><code class="requirement-id">CWK-LABEL-007</code> ラベルをPull Requestに写す</h4>
 <p>cuminは、実装Issueの状態ラベルとリスクのラベルを、そのIssueを閉じるPull Requestに写す。MaintainerがPull Requestの一覧で見分けるためのもので、cuminは読まない。Pull Requestの側で替えても、実装Issueのラベルで上書きする。</p>
 <ul>
-<li>検証: <code>test</code> cuminが実装Issueのラベルを替える、Maintainerが実装Issueのリスクを替える、MaintainerがPull Requestの側のラベルを替える、のどれのあとでも、次の定期確認でPull Requestのラベルが実装Issueと同じになる。cuminのアクションは、Pull Requestのラベルに左右されない</li>
+<li>検証: <code>test</code> GitHub mockでテスト</li>
 </ul>
-</section><section class="requirement"><h4 id="CWK-LABEL-007"><code class="requirement-id">CWK-LABEL-007</code> ラベルを作る</h4>
-<p>cuminは、対象のリポジトリに足りないラベルを作る。すでにあるラベルの色と説明は変えない。<code>priority_labels</code>で設定した優先度のラベルは、対象のリポジトリかOrganizationがすでに持つラベルなので、作らない。</p>
+</section><h3 id="リポジトリ">リポジトリ</h3>
+<section class="requirement"><h4 id="CWK-LABEL-008"><code class="requirement-id">CWK-LABEL-008</code> ラベルを作る</h4>
+<p>cuminは、対象のリポジトリに足りないラベルを作る。すでにあるラベルの色と説明は変えない。
+<code>priority_labels</code>で設定した優先度のラベルは、対象のリポジトリがすでに持つラベルなので、作らない。</p>
 <ul>
-<li>検証: <code>test</code> ラベルのないリポジトリで、cuminがこのページのラベルを作る。すでにあるラベルの色と説明は変わらない</li>
+<li>検証: <code>test</code> GitHub mockでテスト</li>
+<li>検証: <code>demo</code> テスト用の実リポジトリで確認</li>
 </ul>
 </section><h2 id="未決事項">未決事項</h2>
 <p>なし</p>
