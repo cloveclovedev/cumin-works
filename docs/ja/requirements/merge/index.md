@@ -10,8 +10,6 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 図の元ファイル: [overview.puml](overview.puml)
 
-「Reviewerが動いていない」の意味は、[Agent](../agent/index.md)の`CWK-AGENT-001`で決める。
-
 マージはAgentを起動しないので、利用制限でAgent起動を止めている間もマージする（[利用制限](../limit/index.md)）。
 
 ## 要件
@@ -27,7 +25,7 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 - リスクのラベルが`cumin/risk/low`である
 - blocked byのIssueを待たなくてよい（`CWK-MERGE-022`）
 
-- 検証: `test` 4つが成り立つと、実装Issueが`cumin/status/merging`になる
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -35,8 +33,7 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 `CWK-MERGE-001`の条件のうち、リスクのラベルだけが`cumin/risk/medium`か`cumin/risk/high`のとき、cuminは状態を`cumin/status/awaiting-merge-decision`に替え、Pull RequestでAssigneeにレビューを頼み、通知する。レビューを頼むのに失敗しても、ログに残すだけで、実装Issueは止めない。
 
-- 検証: `test` `cumin/risk/medium`の実装IssueでReviewerが承認すると、`cumin/status/awaiting-merge-decision`になり、レビューの依頼と通知が1回ずつ起きる
-- 検証: `test` レビューの依頼が失敗しても、`cumin/status/awaiting-decision`にならない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -48,8 +45,7 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 `cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`APPROVE`で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（`CWK-MERGE-022`）とき、cuminは状態を`cumin/status/merging`に替える。
 
-- 検証: `test` Assigneeが今の先頭のコミットを承認すると、`cumin/status/merging`になる
-- 検証: `test` 古いコミットへの承認、ほかのMaintainerの承認、botの承認、あとの`REQUEST_CHANGES`で覆された承認では、`cumin/status/merging`にならない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -61,8 +57,7 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 - この修正は、レビューのラウンドにもチェックの修正の回数にも含めない。`REQUEST_CHANGES`を出すのは毎回Assigneeなので、往復が止まらなくなることはない。
 - 1つの`REQUEST_CHANGES`で頼むのは1回だけである。Implementerがコミットせずに答えたときは、Assigneeがもう一度判断する。
 
-- 検証: `test` `REQUEST_CHANGES`を出すと、`cumin/status/implementing`になり、直前のセッションでAgent起動が1回起きる。ラウンドとチェックの修正の回数は変わらない
-- 検証: `test` Implementerがコミットせずに答えたあと、同じ`REQUEST_CHANGES`で2回目の修正は頼まない
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -70,7 +65,7 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 `cumin/status/awaiting-merge-decision`の実装Issueでは、`CWK-MERGE-003`、`CWK-MERGE-004`、衝突の解消（[チェック](../check/index.md)の`CWK-CHECK-007`）の順に判定し、最初に成り立ったものだけを行う。衝突していても、Assigneeの判断を先に進める。
 
-- 検証: `test` 衝突していて、Assigneeが承認した実装Issueは、`cumin/status/merging`になる
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -86,7 +81,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 - リスクが`cumin/risk/medium`か`cumin/risk/high`なら、Assigneeの最新のレビューも、今の先頭のコミットへの`APPROVE`である
 - Pull Requestのbaseがmainブランチで、blocked byのIssueがすべて閉じている（`CWK-MERGE-022`）
 
-- 検証: `test` `cumin/status/merging`を手で付けた、Assigneeの承認のない`cumin/risk/medium`の実装Issueは、マージしない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -99,8 +94,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 - 答えが届かなかったときは、次の定期確認で、マージ済みかを読んでから決める。同じマージを2回送らない。
 - 1回の定期確認で2つ以上マージするときは、1つごとに数秒待つ
 
-- 検証: `test` 答えが届かなかったマージで、次の定期確認がマージ済みと読むと、送り直さずに実装Issueを閉じる
-- 検証: `test` 承認のあとにpushされたコミットは、マージされない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -108,7 +102,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 `cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、マージの条件が成り立たないとき、cuminは状態を`cumin/status/checking`に替える。
 
-- 検証: `test` `cumin/status/merging`のあとで先頭のコミットが変わると、マージせずに`cumin/status/checking`になる
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -116,7 +110,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 `cumin/status/merging`の実装Issueで、マージの条件が成り立ち、GitHubが衝突していると返したとき、または衝突でマージを断ったとき、cuminはマージを送らずに、状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで衝突の解消を頼む。チェックの修正の回数には含めない。
 
-- 検証: `test` 承認のあとに衝突したPull Requestでは、マージを送らずに、衝突の解消を1回だけ頼む
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -124,7 +118,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 GitHubが、mainブランチが変わったことを理由にマージを断ったとき（405、`Base branch was modified`）、cuminは`cumin/status/merging`のまま、次の定期確認でもう一度マージを送る。ほかのマージの直後に起きる、すぐに直る断り方だからである。
 
-- 検証: `test` 405で断られた実装Issueは、次の定期確認でマージされる
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -135,7 +129,7 @@ GitHubが、mainブランチが変わったことを理由にマージを断っ�
 - GitHubが、衝突でもmainブランチの変更でもない理由で、マージを断った
 - マージのあとで、実装Issueを閉じられない
 
-- 検証: `test` ほかの理由でマージを断られると、理由のコメントが付いて`cumin/status/awaiting-decision`になり、通知が1回届く
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -153,8 +147,7 @@ GitHubが、mainブランチが変わったことを理由にマージを断っ�
 
 cuminは、これが成り立つときだけマージに進む。`cumin/risk/low`でも同じである。`cumin/status/merging`の中では、初めの2つを確かめる（`CWK-MERGE-006`）。
 
-- 検証: `test` baseがblocked byのIssueのブランチの`cumin/risk/low`のPull Requestは、Reviewerが承認してもマージされない
-- 検証: `test` Maintainerが手でbaseをmainブランチに替えても、blocked byのIssueが開いている間はマージされない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -162,7 +155,7 @@ cuminは、これが成り立つときだけマージに進む。`cumin/risk/low
 
 `cumin/status/reviewing`の実装Issueで、`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうちblocked byのIssueを待たなくてよいことのほかが成り立ち、baseがmainブランチでないか、開いているblocked byのIssueがあるとき、cuminは状態を`cumin/status/awaiting-blocker-merge`に替える。この状態では、誰も作業しない。
 
-- 検証: `test` baseがmainブランチでないPull RequestをReviewerが承認すると、`cumin/status/awaiting-blocker-merge`になり、Agent起動もマージも起きない
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -174,10 +167,9 @@ cuminは、これが成り立つときだけマージに進む。`cumin/risk/low
 - baseがmainブランチで、blocked byのIssueがすべて閉じている
 - 先頭のコミットが、blocked byのIssueを閉じたPull Requestのマージのコミットを含まない
 
-Implementerは強制pushをしないので、mainブランチをマージするコミットで取り込む。取り込んだあとは、必須チェックとレビューを経る。続きの作業なので、空きは待たない。
+Implementerは強制pushをしないので、mainブランチをマージするコミットで取り込む。取り込んだあとは、必須チェックとレビューを経る。続きの作業なので、同時に進めるIssueの数に余裕ができるのを待たない。
 
-- 検証: `test` blocked byのIssueのPull Requestがマージされると、直前のセッションでAgent起動が1回起きる。空きがなくても起きる
-- 検証: `test` マージのコミットをすでに含むブランチでは、取り込みを頼まずにマージに進む
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -192,8 +184,7 @@ Implementerは強制pushをしないので、mainブランチをマージする�
 
 却下されたblocked byのIssueのコミットはブランチに残るので、Assigneeは、それを除くかPull Requestを閉じてから、`cumin/status/ready`を付ける。
 
-- 検証: `test` blocked byのIssueのPull Requestがマージされずに閉じると、`cumin/status/awaiting-decision`になり、通知が1回届く
-- 検証: `test` 取り込みのあとも先頭のコミットがマージのコミットを含まないと、取り込みを繰り返さずに止まる
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -203,7 +194,7 @@ Implementerは強制pushをしないので、mainブランチをマージする�
 
 `cumin/status/merging`の実装Issueで、Pull Requestがマージ済みになったとき、GitHubが実装Issueを閉じていなければ、cuminが閉じる。cuminが実装Issueを閉じるのは、このときだけである。そのため、Maintainerが開き直した実装Issueは開いたままになる。
 
-- 検証: `test` GitHubが閉じなかった実装Issueをcuminが1回だけ閉じ、Maintainerが開き直しても、もう閉じない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -211,7 +202,7 @@ Implementerは強制pushをしないので、mainブランチをマージする�
 
 mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自分でマージしてもよい。そのあとは、cuminがマージしたときと同じに扱う。GitHubが実装Issueを閉じなければ、そのMaintainerが閉じる。
 
-- 検証: `test` Maintainerがマージして実装Issueを閉じると、cuminがマージしたときと同じフォローアップノートが付く
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -223,7 +214,7 @@ mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自�
 
 実装Issueが閉じ、それを閉じるPull Requestがマージ済みで、そのPull Requestのフォローアップノートがまだないとき、cuminは要求Issueにフォローアップノートを1つ書く。誰が閉じたかは問わない。状態は替えない。形式は[follow-up-note.md](../../../../templates/follow-up-note.md)に従う。
 
-- 検証: `test` `Follow-up`に文章のあるPull Requestがマージされると、要求Issueにフォローアップノートが1つ付く
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -235,8 +226,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 - Reviewerの提案のうち、Implementerの返答が`Fixed`でないもの（[レビュー](../review/index.md)の`CWK-REVIEW-021`）
 - 元からある問題（[レビュー](../review/index.md)の`CWK-REVIEW-013`）
 
-- 検証: `test` `Follow-up`がNoneで、提案がすべて`Fixed`で、元からある問題がないと、フォローアップノートは付かない
-- 検証: `test` `Deferred`の提案と元からある問題が1つずつあると、その2つが載る
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -244,7 +234,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 フォローアップノートは、1つのPull Requestに1つだけ書く。あるかどうかは、コメントの目印でGitHubから読む。
 
-- 検証: `test` cuminを再起動しても、同じフォローアップノートは増えない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -252,7 +242,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 閉じた要求Issueには、フォローアップノートを書かない。
 
-- 検証: `test` 閉じた要求Issueのsub-issueのPull Requestがマージされても、書かない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -260,7 +250,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 sub-issueがすべて閉じたとき、cuminは、フォローアップノートを書き終えてから受け入れ確認を頼む（[受け入れ](../accept/index.md)）。
 
-- 検証: `test` 最後のsub-issueがマージされた定期確認で、フォローアップノートより先に受け入れ確認のAgent起動が起きない
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -268,7 +258,7 @@ sub-issueがすべて閉じたとき、cuminは、フォローアップノート
 
 cuminは、フォローアップノートからIssueを作らない。
 
-- 検証: `test` フォローアップノートを書いても、Issueの数が増えない
+- 検証: `test` GitHub mockでテスト
 
 ---
 

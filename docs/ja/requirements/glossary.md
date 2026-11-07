@@ -18,6 +18,7 @@ cumin-worksの文書で使う語の意味を決める。「使わない言い方
 | Assignee | そのIssueの指示と判断を受け持つMaintainer。GitHubのIssueのassigneeで表し、1つのIssueに1人だけ付ける | Issue Owner、Owner、担当者 | assignee |
 | Operator | Hostでcuminを動かす人 | 運用者、管理者 | Operator |
 | Agent | cuminが起動して作業させるAI。今はheadlessのClaude Codeである | エージェント、AI、bot | agent |
+| Agentが動いている | あるIssueであるroleの実行を、このcuminが今持っていること。cuminを再起動すると、どのAgentも動いていないとして扱う | | agent is running |
 | role | Agentが受け持つ役目。Planner、Implementer、Reviewerの3つがある | ロール、Agent Role | role |
 | Planner | 要求Issueを計画し、受け入れ確認をするrole | | Planner |
 | Implementer | 実装Issueを実装し、Pull Requestにまとめるrole | | Implementer |
@@ -52,10 +53,9 @@ cumin-worksの文書で使う語の意味を決める。「使わない言い方
 | ガード条件 | 遷移が起きるために成り立っている必要がある条件 | 前提 | guard condition |
 | アクション | 遷移のときにcuminが行うこと | 動作、処理 | action |
 | 定期確認 | cuminが一定の間隔でGitHubを読み、アクションを決めること | ポーリング、巡回 | poll |
-| 空き | リポジトリごとに同時に進めるIssueの数（[定期確認](poll/index.md)の`CWK-POLL-005`）に、余裕があること | 枠 | free slot |
 | Agent起動 | cuminがroleとIssueを決めてAgentを始め、作業を頼むこと。続きを頼むときも含む | 依頼、指示、起動 | agent start |
 | 通知 | Hostの設定で決めた通知先に知らせること。文書には相手の名前を書かない | 連絡、アラート | notify |
-| 作業中のリポジトリ | 短い間隔で定期確認する対象のリポジトリ。条件は[定期確認](poll/index.md)の`CWK-POLL-004`で決める | アクティブなリポジトリ | busy repository |
+| 作業中のリポジトリ | 短い間隔で定期確認する対象のリポジトリ | アクティブなリポジトリ | busy repository |
 | 全部を読めないIssue | sub-issue、ラベル、blocked byのIssue、結び付いたPull Requestのどれかが、cuminの読む数の上限を超えたIssue。cuminは何もしない | 大きすぎるIssue | issue that cumin cannot read whole |
 
 ## 作業の流れ

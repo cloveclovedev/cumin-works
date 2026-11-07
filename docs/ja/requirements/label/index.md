@@ -15,7 +15,7 @@ IssueとPull Requestに付けるラベルを決める。Maintainerはラベル�
 
 - 人なしで進む状態: 名前が`-ing`で終わる。Agent、GitHub、cuminのどれかが作業している。
 - cuminの外を待つ状態: 名前が`awaiting-`で始まる。Assigneeの判断や、ほかのIssueのマージのように、cuminが自分では進められないことを待つ。
-- 順番を待つ状態: `ready`。Maintainerが進めてよいと合図し、cuminが空きを待っている。
+- 順番を待つ状態: `ready`。Maintainerが進めてよいと合図し、同時に進めるIssueの数に余裕ができるのを、cuminが待っている。
 
 状態がどう移るかの全体は、[要求と要件の入口](../index.md)の全体像の図にある。
 
@@ -49,7 +49,7 @@ Issueの状態は、次のどれかである。状態ラベルの名前は、`cu
 
 | 状態 | 付く対象 | その状態で期待されるアクション |
 |---|---|---|
-| `ready` | 要求Issue、実装Issue | cuminが空きを待つ |
+| `ready` | 要求Issue、実装Issue | 同時に進めるIssueの数に余裕ができるのを、cuminが待つ |
 | `planning` | 要求Issue | Plannerが計画する |
 | `awaiting-plan-review` | 要求Issue | Assigneeが計画結果を確かめる |
 | `implementing` | 要求Issue | Implementerが要求Issueに紐づく実装Issueを実装する |

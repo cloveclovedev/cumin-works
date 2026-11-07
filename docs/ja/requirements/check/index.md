@@ -20,7 +20,7 @@
 
 必須チェックは、mainブランチに効くrulesetの "Require status checks to pass before merging" に登録されたチェックである。cuminは、その一覧をrulesetから読む。コミットに付いているチェックからは決めない。pushの直後は、チェックがないのか、これから現れるのかを見分けられないためである。
 
-- 検証: `test` rulesetに登録したチェックだけを待ち、登録していないチェックの失敗では止まらない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -28,7 +28,7 @@
 
 cuminは、一覧のすべてのチェックが、先頭のコミットで`success`、`skipped`、`neutral`のどれかを返したとき、必須チェックが完了したと判断する。GitHubも、この3つでマージを止めない。一覧が空なら、すぐに完了と判断する。
 
-- 検証: `test` 3つの結論は完了と判断し、ほかの結論は判断しない。一覧が空のリポジトリでは、次の定期確認でレビューに進む
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -36,7 +36,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 `cumin/status/checking`の実装Issueでは、1回の定期確認で、衝突の解消（`CWK-CHECK-007`）、チェックの結果（レビューに進む、`CWK-CHECK-004`、`CWK-CHECK-005`）、`CWK-CHECK-006`の順に判定し、最初に成り立ったものだけを行う。
 
-- 検証: `test` 衝突していて、待ち時間も過ぎた実装Issueでは、衝突の解消だけが起きる
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -44,7 +44,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 `cumin/status/checking`の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が上限（`max_check_fix_requests`、初期値は3回）に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで、失敗したチェックの内容を添えて修正を頼む。
 
-- 検証: `test` 必須チェックが失敗すると、直前のセッションでImplementerが1回起動され、失敗の内容が渡される
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -52,7 +52,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 `cumin/status/checking`の実装Issueで、必須チェックのどれかが失敗し、修正を頼んだ回数が上限に達しているとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。コメントと通知には、失敗したチェックの名前と、頼んだ回数を書く。
 
-- 検証: `test` 上限まで頼んでも失敗すると、`cumin/status/awaiting-decision`になり、通知は1回だけである
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -64,8 +64,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 - 開いているPull Requestがないときも、ラベルの時刻から待ち時間を過ぎたら止める
 - コメントと通知には、先頭のコミット、結果を返していない必須チェック、待った時間を書く。Pull Requestがないときは、そのことを書く。理由はAssigneeが調べる。
 
-- 検証: `test` 待ち時間を過ぎると、先頭のコミット、そのチェック、待った時間を添えて、通知が1回だけ届く
-- 検証: `test` 開いているPull Requestがなくなった実装Issueでも、待ち時間を過ぎると止まる
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -79,8 +78,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 - 衝突の解消は、チェックの修正の回数に含めない。衝突はほかのPull Requestのマージで起き、Implementerの誤りではないからである。
 - 衝突のあるPull Requestでは、GitHubが`pull_request`のワークフローを動かさないので、待たずに解消させる
 
-- 検証: `test` 衝突すると、衝突の解消を1回だけ頼み、チェックの修正の回数は増えない
-- 検証: `test` `mergeable`が`UNKNOWN`の間は、衝突の解消を頼まない
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -104,7 +102,7 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 - ワイルドカードは使えない
 - 大文字と小文字を区別しない
 
-- 検証: `test` `protected_paths`のないリポジトリで、`REVIEW.md`を変えるbotのPull Requestのチェックが失敗する
+- 検証: `test` 保護されたパスの判定を単体テスト
 
 ---
 
@@ -112,7 +110,7 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 
 対象のリポジトリに置くワークフローが、Pull Requestの変更ファイルを保護されたパスの一覧と突き合わせ、1つでも当たれば失敗する。
 
-- 検証: `demo` 保護されたパスを変えるPull Requestをbotが開くと、チェックが失敗する
+- 検証: `demo` テスト用の実リポジトリでPull Requestを開いて確認
 
 ---
 
@@ -128,7 +126,7 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 
 チェックのjobは、Pull Requestの作成者がbotのときだけ動く。人のPull Requestではjobが飛ばされて`skipped`になり、止まらない。条件にGitHub Appの名前は使わない。名前を間違えると、jobが飛ばされて保護が黙って効かなくなるためである。
 
-- 検証: `demo` 人が保護されたパスを変えるPull Requestを開くと、チェックが`skipped`になる
+- 検証: `demo` テスト用の実リポジトリでPull Requestを開いて確認
 - 検証: `inspection` ワークフローの条件が、GitHub Appの名前ではなく、作成者がbotかどうかで決まっている
 
 ---
@@ -137,7 +135,7 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 
 ワークフローは、保護されたパスの一覧を、Pull Requestのブランチではなくmainブランチから読む。一覧のある`.cumin/`も、保護されたパスに含める。Pull Requestのブランチから読むと、同じPull Requestで一覧から自分の変更を外せば、チェックが成功してしまうためである。`.cumin/`を含めるのは、一覧を弱めるPull Requestがマージされないためである。
 
-- 検証: `demo` Pull Requestのブランチで一覧から自分の変更を外しても、チェックが失敗する
+- 検証: `demo` テスト用の実リポジトリでPull Requestを開いて確認
 
 ---
 

@@ -20,7 +20,7 @@ cuminがGitHubをいつ、どの順に読み、どう次のアクションを決
 
 cuminは、閉じた要求Issueを読まず、ラベルを替えず、コメントも書かない。
 
-- 検証: `test` 閉じた要求Issueに、cuminはGitHubへの書き込みをしない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -28,7 +28,7 @@ cuminは、閉じた要求Issueを読まず、ラベルを替えず、コメン�
 
 cuminは、GitHubの事実と、Agentが動いているか（`CWK-AGENT-001`）だけで、次のアクションを決める。同じ事実からは、いつも同じアクションを決める。決めるのは、定期確認のときと、Agentの実行が終わった直後で、どちらも同じ決め方をする。
 
-- 検証: `test` 実行が終わった直後にGitHubを読めなかったときも、次の定期確認で、読めたときと同じアクションになる
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -36,7 +36,7 @@ cuminは、GitHubの事実と、Agentが動いているか（`CWK-AGENT-001`）�
 
 cuminがHostの手元に持つのは、失っても作業を失わないものだけである。Agentのセッションの番号、チェックの修正を頼んだ回数、使用率とリセット時刻、5時間制限を使い切る許可、ツール動作確認の結果、止める予約、やり直しの回数、通知を送った記録がこれに当たる。レビューのラウンドの数は手元に持たず、Pull Requestのレビューから読む。
 
-- 検証: `test` 手元の状態をすべて消してcuminを再起動しても、作業中のIssueが続きから進み、同じAgent起動が二重に起きない。Maintainerが`cumin/status/ready`を付け直す必要はない
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -53,7 +53,7 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 `awaiting-`で始まる状態のIssueしかないリポジトリは、作業中でない。そのため、Maintainerの操作には`idle_poll_interval`のうちに気付く。
 
-- 検証: `test` 作業中のリポジトリと作業中でないリポジトリを同時に扱うと、それぞれの間隔で確かめる。作業中でないリポジトリでMaintainerが`cumin/status/ready`を付けると、`idle_poll_interval`のうちに着手する
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -63,21 +63,20 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 1つのリポジトリで同時に進めるIssueの数は、`max_issues_in_progress`（初期値は1）までである。含めるのは、状態が`planning`、`accepting`の要求Issueと、`implementing`、`checking`、`reviewing`、`merging`の開いている実装Issueである。`implementing`の要求Issue、`ready`のIssue、`awaiting-`で始まる状態のIssueは含めない。違うリポジトリのIssueは、並行して進めてよい。
 
-- 検証: `test` `max_issues_in_progress`が1のリポジトリで、`implementing`の実装Issueがある間は、別の`ready`の実装Issueに着手しない。`awaiting-blocker-merge`の実装Issueしかなければ着手する
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
 #### `CWK-POLL-006` 着手の順番
 
-空きより多くのIssueに着手できるとき、cuminは優先度の高い順に着手する。同じ優先度なら、Issueの番号の小さい順である。
+同時に進めるIssueの数より多くのIssueに着手できるとき、cuminは優先度の高い順に着手する。同じ優先度なら、Issueの番号の小さい順である。
 
 - 優先度のラベル（[ラベル](../label/index.md)の`CWK-LABEL-006`）のないIssueは、ラベルのあるIssueのあとに着手する
 - 優先度のラベルのない実装Issueは、その要求Issueの優先度を使う
 - 優先度のラベルが2つ以上付いたIssueは、高いほうを使う
 - 優先度は、着手できるIssueの間の順番だけを決める。blocked byのIssue、同時に進めるIssueの数、利用制限を越えて着手することはなく、動いているAgentを止めることもない。
 
-- 検証: `test` 番号の大きいIssueに高い優先度のラベルがあると、そちらから着手する。同じ優先度なら番号の小さい順、ラベルのないIssueは最後である
-- 検証: `test` 要求Issueだけに優先度のラベルがあると、その実装Issueはその優先度で着手される
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -87,8 +86,7 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 一時的な失敗は、ネットワークの誤り、5xxの応答、二次のレート制限、一次のレート制限を使い切ったことの4つである。ネットワークの誤りと5xxの応答は、読み取りに限り、数秒あけて3回までやり直す。書き込みはやり直さない。答えが届かなかった書き込みを、二重にしないためである。
 
-- 検証: `test` 読み取りが1回だけネットワークの誤りで失敗しても、やり直しで成功し、そのまま進む
-- 検証: `test` 書き込みが5xxで失敗しても、やり直さない
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -96,7 +94,7 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 レート制限に当たると、cuminはGitHubが返す時刻まで、そのGitHub AppのインストールでGitHubを呼ばない。一次のレート制限はリセットの時刻まで、二次のレート制限は`retry-after`の分、なければ1分待つ。呼び出しの中では待たず、その時刻のあとの定期確認でやり直す。待つ間も、ほかのリポジトリは進める。
 
-- 検証: `test` 一次のレート制限を使い切ると、リセットの時刻までGitHubを呼ばず、そのあとの定期確認で続きから進む
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -104,7 +102,7 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 やり直しても一時的な失敗で終わったとき、cuminは何も持っておかない。Issueは今の状態のまま残り、次の定期確認が同じ事実から同じアクションを決める。すでに済んだ書き込みは読み直しで見えるので、二重にはしない。
 
-- 検証: `test` Agentの実行のあとで読み取りが失敗し続けても、Issueはラベルを保ち、あとの定期確認で、失敗しなかったときと同じアクションをする。書き込みは二重にならない
+- 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
@@ -112,7 +110,7 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 同じリポジトリの定期確認が、同じ理由で3回続けて失敗したら、cuminは通知する。次に知らせるのは、その間に定期確認が成功したあとである。一次のレート制限を使い切ったことも、この通知で分かる。
 
-- 検証: `test` 同じ理由で5回続けて失敗しても、通知は1回だけである。成功したあとに、また3回続けて失敗すると、もう一度通知する
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -122,8 +120,7 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 cuminは、1つのIssueについて読む数に上限を持つ。sub-issueは12件ずつ、3ページの36件までを読む。sub-issueが36件を超えたIssueは、全部を読めないIssueである。ラベル、blocked byのIssue、結び付いたPull Requestがcuminの読む数を超えたIssueも、同じである。sub-issueの1つが全部を読めないIssueなら、その要求Issueも全部を読めないIssueとする。
 
-- 検証: `test` 閉じたものを含めてsub-issueが20件ある要求Issueは、全部を読み、今までどおり進む
-- 検証: `test` sub-issueが37件ある要求Issueは、全部を読めないIssueになる
+- 検証: `test` GitHub mockでテスト
 
 ---
 
@@ -131,8 +128,7 @@ cuminは、1つのIssueについて読む数に上限を持つ。sub-issueは12�
 
 全部を読めないIssueには、cuminは何もせず、ラベルも替えない。ほかのIssueは今までどおり進める。cuminは、Issueと超えた上限を書いて、1回だけ通知する。次に知らせるのは、そのIssueを全部読めたあとである。
 
-- 検証: `test` 全部を読めない要求Issueと、別の`ready`の実装Issueがあると、別の実装Issueには着手し、全部を読めない要求Issueとそのsub-issueには何もしない
-- 検証: `test` 全部を読めないIssueがあるまま定期確認を3回行っても、通知は1回だけである。sub-issueを36件以下に減らすと、次の定期確認から今までどおり進む
+- 検証: `test` GitHub mockでテスト
 
 ---
 
