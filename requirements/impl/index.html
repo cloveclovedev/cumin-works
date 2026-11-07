@@ -124,7 +124,7 @@
 <p>Pull Requestは、本文の<code>Closes</code>ではなくブランチと作成者で見つける。GitHubが<code>Closes</code>からリンクを作らないことがあるからである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-IMPL-005"><code class="requirement-id">CWK-IMPL-005</code> チェックを待つ</h4>
-<p><code>cumin/status/implementing</code>の実装Issueで、Implementerの実行が終わっていて、実装が完了したとき、cuminは状態を<code>cumin/status/checking</code>に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に<code>cumin-core</code>がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。</p>
+<p><code>cumin/status/implementing</code>の実装Issueで、実装が完了したとき、cuminは状態を<code>cumin/status/checking</code>に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に<code>cumin-core</code>がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-IMPL-006"><code class="requirement-id">CWK-IMPL-006</code> 実装をやり直す</h4>
 <p><code>cumin/status/implementing</code>の実装Issueで、Implementerの実行が終わっていて、実装が完了しておらず、質問のコメントもないとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。やり直しは、1つの<code>cumin/status/implementing</code>の間に1回だけである。</p>
