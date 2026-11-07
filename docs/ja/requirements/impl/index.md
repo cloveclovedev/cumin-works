@@ -64,7 +64,7 @@ Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つ
 
 `cumin/status/implementing`の実装Issueで、実装が完了したとき、cuminは状態を`cumin/status/checking`に替える。
 
-替える前に、そのPull Requestがマージで実装Issueを閉じるように、GitHubで紐づいているかを確かめる。紐づいていなければ、`cumin-core`が紐づける。
+ラベルを替える前に、そのPull Requestがマージされると対象の実装Issueを閉じるように、GitHubで紐づいているかを確かめる。紐づいていなければ、`cumin-core`が紐づける。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -72,7 +72,13 @@ Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つ
 
 #### `CWK-IMPL-006` 実装をやり直す
 
-`cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、実装が完了しておらず、質問のコメントもないとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。やり直しは、1つの`cumin/status/implementing`の間に1回だけである。
+次のすべてが成り立つとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。
+
+- 状態が`cumin/status/implementing`である
+- Implementerの実行が終わっている
+- 実装が完了していない
+- 質問のコメントがない
+- 今の`cumin/status/implementing`の間に、まだやり直していない
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
