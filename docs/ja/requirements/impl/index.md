@@ -48,7 +48,13 @@ cuminは、実装Issueごとに`cumin/<実装Issueの番号>-<短い説明>`の�
 
 #### `CWK-IMPL-004` 実装の完了を判断する
 
-cuminは、Implementerの実行が終わっているとき、`CWK-IMPL-002`のブランチに`cumin-implementer`の作ったPull Requestが開いていて、先頭のコミットがpushされていれば、実装が完了したと判断する。Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つける。GitHubが`Closes`からリンクを作らないことがあるからである。
+cuminは、次のすべてが成り立つとき、実装が完了したと判断する。
+
+- Implementerの実行が終わっている
+- `CWK-IMPL-002`のブランチに、`cumin-implementer`の作ったPull Requestが開いている
+- 実装IssueのAgent作業ディレクトリの先頭のコミットが、そのPull Requestの先頭のコミットと同じである
+
+Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つける。GitHubが`Closes`からリンクを作らないことがあるからである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
