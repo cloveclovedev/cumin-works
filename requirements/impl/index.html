@@ -74,25 +74,28 @@
 <p>実装IssueをPull Requestにまとめるまでの流れを決める。cuminがImplementerを起動し、Pull RequestをGitHubで確かめて、必須チェックを待つ状態に替えるまでである。必須チェックと修正は<a href="/cumin-works/requirements/check/">チェック</a>、レビューは<a href="/cumin-works/requirements/review/">レビュー</a>、マージは<a href="/cumin-works/requirements/merge/">マージ</a>、Agent起動に共通のことは<a href="/cumin-works/requirements/agent/">Agent</a>で決める。</p>
 <h2 id="全体像">全体像</h2>
 <p>実装Issueが実装でたどる状態を示す。灰色の状態は、ほかのカテゴリで決める。</p>
-<p><img alt="実装の全体像" loading="lazy" decoding="async" width="1050" height="555" src="/cumin-works/_astro/overview.BAw6lQxd_1AXNaI.svg"></p>
+<p><img alt="実装の全体像" loading="lazy" decoding="async" width="1180" height="555" src="/cumin-works/_astro/overview.C2yzMURP_Z2jTTFv.svg"></p>
 <p>図の元ファイル: overview.puml</p><details><summary>overview.puml</summary><div class="expressive-code"><link rel="stylesheet" href="/cumin-works/_astro/ec.w36nc.css"><script type="module" src="/cumin-works/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@startuml overview</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' cumin-works - the states of an implementation issue in the implementation stage.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' A transition is written: action [guard] / what cumin does. A gray state belongs to another area.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' Render: run scripts/render-diagrams.sh at the root of the repository.</span></div></div><div class="ec-line"><div class="code">
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">hide empty description</span></div></div><div class="ec-line"><div class="code">
-</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "ready" as Ready</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Ready : do / cumin waits for a free slot</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "ready" as Ready</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Ready : do / cumin waits until the repository can take another issue</span></div></div><div class="ec-line"><div class="code">
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "implementing" as Implementing</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing : do / the Implementer works</span></div></div><div class="ec-line"><div class="code">
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "checking" as Checking #EEEEEE</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Checking : (the check area)</span></div></div><div class="ec-line"><div class="code">
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "awaiting-decision" as Decision</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Decision : do / the Assignee answers</span></div></div><div class="ec-line"><div class="code">
-</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">[*] --&gt; Ready : a Maintainer adds ready</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Ready --&gt; Implementing : request the implementation\n[cumin handles the ready, cumin has a free slot,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if needed</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Decision --&gt; Ready : a Maintainer adds ready</span></div></div><div class="ec-line"><div class="code">
-</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@enduml</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="クリップボードにコピー" data-copied="コピーしました！" data-code="@startuml overview&#x27; cumin-works - the states of an implementation issue in the implementation stage.&#x27; A state is a label on GitHub, written without &quot;cumin/status/&quot;. &quot;do /&quot; says who works in the state.&#x27; A transition is written: action [guard] / what cumin does. A gray state belongs to another area.&#x27; Render: run scripts/render-diagrams.sh at the root of the repository.hide empty descriptionstate &quot;ready&quot; as ReadyReady : do / cumin waits for a free slotstate &quot;implementing&quot; as ImplementingImplementing : do / the Implementer worksstate &quot;checking&quot; as Checking #EEEEEEChecking : (the check area)state &quot;awaiting-decision&quot; as DecisionDecision : do / the Assignee answers[*] --> Ready : a Maintainer adds readyReady --> Implementing : request the implementation\n[cumin handles the ready, cumin has a free slot,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the ImplementerImplementing --> Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if neededImplementing --> Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer againImplementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifiesDecision --> Ready : a Maintainer adds ready@enduml"><div></div></button></div></figure></div></details>
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">[*] --&gt; Ready : a Maintainer adds ready</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Ready --&gt; Implementing : request the implementation\n[a Maintainer added ready, the repository can take another issue,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Checking : wait for the checks\n[the Implementer run has ended, the implementation is complete]\n/ cumin links the pull request if needed</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Implementing : request the implementation again\n[the Implementer run has ended, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Implementing --&gt; Decision : stop the implementation\n[the Implementer run has ended, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Decision --&gt; Ready : a Maintainer adds ready</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@enduml</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="クリップボードにコピー" data-copied="コピーしました！" data-code="@startuml overview&#x27; cumin-works - the states of an implementation issue in the implementation stage.&#x27; A state is a label on GitHub, written without &quot;cumin/status/&quot;. &quot;do /&quot; says who works in the state.&#x27; A transition is written: action [guard] / what cumin does. A gray state belongs to another area.&#x27; Render: run scripts/render-diagrams.sh at the root of the repository.hide empty descriptionstate &quot;ready&quot; as ReadyReady : do / cumin waits until the repository can take another issuestate &quot;implementing&quot; as ImplementingImplementing : do / the Implementer worksstate &quot;checking&quot; as Checking #EEEEEEChecking : (the check area)state &quot;awaiting-decision&quot; as DecisionDecision : do / the Assignee answers[*] --> Ready : a Maintainer adds readyReady --> Implementing : request the implementation\n[a Maintainer added ready, the repository can take another issue,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the ImplementerImplementing --> Checking : wait for the checks\n[the Implementer run has ended, the implementation is complete]\n/ cumin links the pull request if neededImplementing --> Implementing : request the implementation again\n[the Implementer run has ended, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer againImplementing --> Decision : stop the implementation\n[the Implementer run has ended, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifiesDecision --> Ready : a Maintainer adds ready@enduml"><div></div></button></div></figure></div></details>
 <h2 id="要件">要件</h2>
 <h3 id="実装のagent起動">実装のAgent起動</h3>
 <section class="requirement"><h4 id="CWK-IMPL-001"><code class="requirement-id">CWK-IMPL-001</code> 実装を始める</h4>
 <p><code>cumin/status/ready</code>の付いた実装Issueが次のすべてを満たすとき、cuminは状態を<code>cumin/status/implementing</code>に替えてから、新しいセッションでImplementerを起動する。実装IssueのPull Requestがすでにあれば、その続きから進めさせる。</p>
 <ul>
 <li>
-<p>その<code>cumin/status/ready</code>を、cuminが扱う（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-012">CWK-ACCESS-012</a></code>）</p>
+<p>Maintainerが<code>cumin/status/ready</code>を付けている（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-012">CWK-ACCESS-012</a></code>）</p>
 </li>
 <li>
-<p>blocked byのIssueがすべて閉じている（<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-002">CWK-IMPL-002</a></code>）。または<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015.1">CWK-IMPL-015.1</a></code>の条件を満たす</p>
+<p><code>cumin/status/ready</code>のほかに状態ラベルがないか、ほかの状態ラベルが<code>cumin/status/awaiting-decision</code>である</p>
+</li>
+<li>
+<p>blocked byのIssueがすべて閉じている。または<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008.1">CWK-IMPL-008.1</a></code>の条件を満たす</p>
 </li>
 <li>
 <p>同時に進めるIssueの数に余裕がある</p>
@@ -104,27 +107,24 @@
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
 <p><code>test</code> GitHub mockとCLI mockでテスト</p>
 </li></ul></div>
-</section><section class="requirement"><h4 id="CWK-IMPL-002"><code class="requirement-id">CWK-IMPL-002</code> 先の実装Issueを待つ</h4>
-<p>blocked byのIssueが1つでも開いている実装Issueには、cuminは着手しない。例外は<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015">CWK-IMPL-015</a></code>である。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-IMPL-003"><code class="requirement-id">CWK-IMPL-003</code> ブランチの名前</h4>
+</section><section class="requirement"><h4 id="CWK-IMPL-002"><code class="requirement-id">CWK-IMPL-002</code> ブランチの名前</h4>
 <p>cuminは、実装Issueごとに<code>cumin/&lt;実装Issueの番号&gt;-&lt;短い説明&gt;</code>の形のブランチの名前を決めて、Implementerに渡す。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-IMPL-004"><code class="requirement-id">CWK-IMPL-004</code> 回数を数え直す</h4>
+</section><section class="requirement"><h4 id="CWK-IMPL-003"><code class="requirement-id">CWK-IMPL-003</code> 回数を数え直す</h4>
 <p><code><a href="/cumin-works/requirements/impl/#CWK-IMPL-001">CWK-IMPL-001</a></code>で<code>cumin/status/implementing</code>に移るたびに、cuminはチェックの修正の回数（<code><a href="/cumin-works/requirements/check/#CWK-CHECK-004">CWK-CHECK-004</a></code>）を0に戻す。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><h3 id="実装の完了判断">実装の完了判断</h3>
-<section class="requirement"><h4 id="CWK-IMPL-005"><code class="requirement-id">CWK-IMPL-005</code> 実装の完了を判断する</h4>
-<p>cuminは、Implementerが動いていないとき、<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-003">CWK-IMPL-003</a></code>のブランチに<code>cumin-implementer</code>の作ったPull Requestが開いていて、先頭のコミットがpushされていれば、実装が完了したと判断する。Pull Requestは、本文の<code>Closes</code>ではなくブランチと作成者で見つける。GitHubが<code>Closes</code>からリンクを作らないことがあるからである。Implementerの結果は使わない。</p>
+<section class="requirement"><h4 id="CWK-IMPL-004"><code class="requirement-id">CWK-IMPL-004</code> 実装の完了を判断する</h4>
+<p>cuminは、Implementerの実行が終わっているとき、<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-002">CWK-IMPL-002</a></code>のブランチに<code>cumin-implementer</code>の作ったPull Requestが開いていて、先頭のコミットがpushされていれば、実装が完了したと判断する。Pull Requestは、本文の<code>Closes</code>ではなくブランチと作成者で見つける。GitHubが<code>Closes</code>からリンクを作らないことがあるからである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-IMPL-006"><code class="requirement-id">CWK-IMPL-006</code> チェックを待つ</h4>
-<p><code>cumin/status/implementing</code>の実装Issueで、Implementerが動いておらず、実装が完了したとき、cuminは状態を<code>cumin/status/checking</code>に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に<code>cumin-core</code>がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。</p>
+</section><section class="requirement"><h4 id="CWK-IMPL-005"><code class="requirement-id">CWK-IMPL-005</code> チェックを待つ</h4>
+<p><code>cumin/status/implementing</code>の実装Issueで、Implementerの実行が終わっていて、実装が完了したとき、cuminは状態を<code>cumin/status/checking</code>に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に<code>cumin-core</code>がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-IMPL-007"><code class="requirement-id">CWK-IMPL-007</code> 実装をやり直す</h4>
-<p><code>cumin/status/implementing</code>の実装Issueで、Implementerが動いておらず、実装が完了しておらず、質問のコメントもないとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。やり直しは、1つの<code>cumin/status/implementing</code>の間に1回だけである。</p>
+</section><section class="requirement"><h4 id="CWK-IMPL-006"><code class="requirement-id">CWK-IMPL-006</code> 実装をやり直す</h4>
+<p><code>cumin/status/implementing</code>の実装Issueで、Implementerの実行が終わっていて、実装が完了しておらず、質問のコメントもないとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。やり直しは、1つの<code>cumin/status/implementing</code>の間に1回だけである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-IMPL-008"><code class="requirement-id">CWK-IMPL-008</code> 実装を止める</h4>
-<p><code>cumin/status/implementing</code>の実装Issueで、Implementerが動いておらず、次のどれかが成り立つとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。</p>
+</section><section class="requirement"><h4 id="CWK-IMPL-007"><code class="requirement-id">CWK-IMPL-007</code> 実装を止める</h4>
+<p><code>cumin/status/implementing</code>の実装Issueで、Implementerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。</p>
 <ul>
 <li>
 <p><code>cumin/status/implementing</code>になったあとに、Implementerの質問のコメントがある。質問ではやり直さない。要件が足りず、MaintainerがIssueを直す必要があることが多いからである</p>
@@ -141,8 +141,8 @@
 </li></ul></div>
 </section><h3 id="マージ判断を待つpull-requestのブランチから始める">マージ判断を待つPull Requestのブランチから始める</h3>
 <p>blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間も、cuminはそのブランチから次の実装を始められる。そのPull Requestのマージを待つことと、マージのあとのことは<a href="/cumin-works/requirements/merge/">マージ</a>で決める。</p>
-<section class="requirement"><h4 id="CWK-IMPL-015"><code class="requirement-id">CWK-IMPL-015</code> マージ判断を待つPull Requestのブランチから始める</h4>
-<section class="requirement"><h5 id="CWK-IMPL-015.1"><code class="requirement-id">CWK-IMPL-015.1</code> 着手の条件</h5>
+<section class="requirement"><h4 id="CWK-IMPL-008"><code class="requirement-id">CWK-IMPL-008</code> マージ判断を待つPull Requestのブランチから始める</h4>
+<section class="requirement"><h5 id="CWK-IMPL-008.1"><code class="requirement-id">CWK-IMPL-008.1</code> 着手の条件</h5>
 <p><code>cumin/status/ready</code>の実装Issueが、blocked byのほかは<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-001">CWK-IMPL-001</a></code>の条件を満たし、次のすべてが成り立つとき、cuminはblocked byのIssueのPull Requestのブランチから実装を始める。</p>
 <ul>
 <li>開いているblocked byのIssueが1つだけで、<code>cumin/status/awaiting-merge-decision</code>である</li>
@@ -152,10 +152,10 @@
 </ul>
 <p>有効にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（<code><a href="/cumin-works/requirements/check/#CWK-CHECK-006">CWK-CHECK-006</a></code>）。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h5 id="CWK-IMPL-015.2"><code class="requirement-id">CWK-IMPL-015.2</code> ブランチとbase</h5>
+</section><section class="requirement"><h5 id="CWK-IMPL-008.2"><code class="requirement-id">CWK-IMPL-008.2</code> ブランチとbase</h5>
 <p>cuminはImplementerにblocked byのIssueのブランチを渡す。Implementerはそこから新しいブランチを切り、Pull Requestのbaseもそのブランチにする。差分に、この実装Issueの変更だけを出すためである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
-</section><section class="requirement"><h5 id="CWK-IMPL-015.3"><code class="requirement-id">CWK-IMPL-015.3</code> blocked byのIssueの変更は追わない</h5>
+</section><section class="requirement"><h5 id="CWK-IMPL-008.3"><code class="requirement-id">CWK-IMPL-008.3</code> blocked byのIssueの変更は追わない</h5>
 <p>blocked byのIssueのPull Requestが変わっても、cuminはこの実装Issueのブランチを更新しない。衝突したときだけ、衝突の解消（<code><a href="/cumin-works/requirements/check/#CWK-CHECK-007">CWK-CHECK-007</a></code>）を頼む。変わるたびに更新すると、そのたびに実装とレビューが要るからである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section></section><h3 id="implementerの成果物">Implementerの成果物</h3>
@@ -176,7 +176,7 @@
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Implementerのroleのファイルに、この決まりがある</li></ul></div>
 </section><h3 id="implementerが判断を求めるとき">Implementerが判断を求めるとき</h3>
 <section class="requirement"><h4 id="CWK-IMPL-014"><code class="requirement-id">CWK-IMPL-014</code> 推測で実装しない</h4>
-<p>Implementerは、次のどれかに当たったら、推測で進めずに<code>blocked</code>を返す。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>）。</p>
+<p>Implementerは、次のどれかに当たったら、推測で進めずに<code>blocked</code>を返す。<code>blocked_reason</code>は、decision-request.mdの形式で、Assigneeに決めてほしいことを書く。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-007">CWK-IMPL-007</a></code>）。</p>
 <section class="requirement"><h5 id="CWK-IMPL-014.1"><code class="requirement-id">CWK-IMPL-014.1</code> 足りない要件</h5>
 <p>実装に要る要件が足りないか、食い違っているときは、止まる。理由には、何が決まっていないかを書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
@@ -186,8 +186,8 @@
 </section><section class="requirement"><h5 id="CWK-IMPL-014.3"><code class="requirement-id">CWK-IMPL-014.3</code> 大きすぎる実装Issue</h5>
 <p>1つのPull Requestに収まらないと分かったときは、止まる。理由には、分け方を書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
-</section><section class="requirement"><h5 id="CWK-IMPL-014.4"><code class="requirement-id">CWK-IMPL-014.4</code> 足りない先の作業</h5>
-<p>blocked byのIssueで済んでいるはずの作業が足りないときは、止まる。<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015">CWK-IMPL-015</a></code>で始めた実装Issueでは、blocked byのIssueのブランチにあるはずの作業である。</p>
+</section><section class="requirement"><h5 id="CWK-IMPL-014.4"><code class="requirement-id">CWK-IMPL-014.4</code> blocked byのIssueで足りない作業</h5>
+<p>blocked byのIssueで済んでいるはずの作業が足りないときは、止まる。<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>で始めた実装Issueでは、blocked byのIssueのブランチにあるはずの作業である。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
 </section></section><h2 id="未決事項">未決事項</h2>
 <p>なし</p>

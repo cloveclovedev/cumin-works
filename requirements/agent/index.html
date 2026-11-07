@@ -90,7 +90,7 @@
 <h2 id="要件">要件</h2>
 <h3 id="agent起動の手順">Agent起動の手順</h3>
 <section class="requirement"><h4 id="CWK-AGENT-001"><code class="requirement-id">CWK-AGENT-001</code> Agentが動いていること</h4>
-<p>あるIssueで あるroleの「Agentが動いている」とは、このcuminが、その実行を今持っていることである。各ページの「Plannerが動いていない」などは、この意味である。cuminを再起動すると、どのAgentも動いていないとして扱う。</p>
+<p>あるIssueで あるroleの「Agentが動いている」とは、このcuminが、その実行を今持っていることである。各ページの「Plannerの実行が終わっている」などは、Agentが動いていないことを指す。cuminを再起動すると、どのAgentも動いていないとして扱う。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-024"><code class="requirement-id">CWK-AGENT-024</code> すべてのAgent起動の前の確認</h4>
 <p>cuminは、どのAgent起動の前にも、同じ1つの確認を行う。確認するのは、利用制限（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）、そのリポジトリのツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018.3">CWK-AGENT-018.3</a></code>）、rulesetの確認（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-015">CWK-ACCESS-015</a></code>）、止める予約（<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>）である。新しい種類のAgent起動を足しても、この確認を飛ばせない。</p>
@@ -102,7 +102,7 @@
 <p>cuminは、IssueとroleごとにAgent作業ディレクトリを用意し、その中でAgentを起動する。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-004"><code class="requirement-id">CWK-AGENT-004</code> Agent作業ディレクトリを片付ける</h4>
-<p>Issueが閉じ、そのAgentが動いていないとき、cuminはそのIssueのAgent作業ディレクトリとローカルのブランチを消す。コミットしていない変更かpushしていないコミットがあれば、消さない。cuminが読まないIssueのAgent作業ディレクトリは、Operatorが片付ける。</p>
+<p>Issueが閉じ、そのAgentの実行が終わっているとき、cuminはそのIssueのAgent作業ディレクトリとローカルのブランチを消す。コミットしていない変更かpushしていないコミットがあれば、消さない。cuminが読まないIssueのAgent作業ディレクトリは、Operatorが片付ける。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-005"><code class="requirement-id">CWK-AGENT-005</code> Agentの環境</h4>
 <p>cuminは、起動の直前にそのroleのGitHub Appのtokenを発行して、Agentの環境に入れる（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-009">CWK-ACCESS-009</a></code>）。tokenの1時間の期限を、実行にまるごと残すためである。Hostのユーザアカウントのgitと<code>gh</code>の認証は、Agentから使えなくする。</p>

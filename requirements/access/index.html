@@ -195,7 +195,7 @@ MaintainerはIssueごとに1人とする。</p>
 <thead>
 <tr>
 <th>種類</th>
-<th>扱うのは、誰が行ったときか</th>
+<th>権限のあるアカウント</th>
 </tr>
 </thead>
 <tbody>
@@ -214,7 +214,7 @@ MaintainerはIssueごとに1人とする。</p>
 </tbody>
 </table>
 <p>どの操作が判断と指示に当たるかは、各カテゴリの要件で決める。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockで、種類ごとに、扱うアカウントと扱わないアカウントをテスト</li></ul></div>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockで、種類ごとに、権限のあるアカウントとないアカウントの操作をテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-ACCESS-013"><code class="requirement-id">CWK-ACCESS-013</code> 権限に不一致のあるIssue</h4>
 <p>次のどれかに当たるIssueでは、cuminはAgentを起動せず、マージもラベルの付け替えもしない。ログと通知は1回だけ残す。</p>
 <ul>

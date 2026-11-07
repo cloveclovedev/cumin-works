@@ -114,7 +114,7 @@
 </ul>
 <hr>
 <h3 id="マージ判断を待つpull-requestのブランチから始める深さを選べる">マージ判断を待つPull Requestのブランチから始める深さを選べる</h3>
-<p><code>.cumin/config.toml</code>の設定で、マージ判断を待つPull Requestのブランチから始める深さ（<a href="/cumin-works/requirements/impl/">実装</a>の<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-015.1">CWK-IMPL-015.1</a></code>）を2段以上にできるようにする。そのためには、<code>cumin/status/awaiting-blocker-merge</code>の実装IssueのPull Requestのブランチからも始める条件と、下の段が止まったら上の段も止める決まりが要る。</p>
+<p><code>.cumin/config.toml</code>の設定で、マージ判断を待つPull Requestのブランチから始める深さ（<a href="/cumin-works/requirements/impl/">実装</a>の<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008.1">CWK-IMPL-008.1</a></code>）を2段以上にできるようにする。そのためには、<code>cumin/status/awaiting-blocker-merge</code>の実装IssueのPull Requestのブランチからも始める条件と、下の段が止まったら上の段も止める決まりが要る。</p>
 <ul>
 <li>後回しにした理由: 1段でもまだ実際に動かしておらず、2段にしても便利さは大きく変わらない見込みである。深くするほど、下の段が却下されたときに無駄になる実装とレビューが増え、マージのあとの取り込みも段ごとに繰り返す</li>
 <li>見直すきっかけ: <code>cumin/status/awaiting-blocker-merge</code>の実装Issueに依存する実装Issueが、待たされることが目立ってきたとき</li>
