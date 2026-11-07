@@ -93,7 +93,7 @@ cuminは計画の完了を判定したあと、未完了の実装Issueが1つ以
 
 #### `CWK-PLAN-007` Assigneeによる計画確認の完了判定
 
-要求IssueのAssigneeがsub-issueのどれかに`cumin/status/ready`を付けたとき、cuminは要求Issueを`cumin/status/implementing`に替える。
+sub-issueのどれかに、[実装](../impl/index.md)の`CWK-IMPL-001`で着手してよい人が`cumin/status/ready`を付けたとき、cuminは要求Issueを`cumin/status/implementing`に替える。
 要求Issueが`awaiting-plan-review`、`awaiting-acceptance`、状態ラベルなしのどれかのときだけである。
 
 - 要求Issueに状態ラベルがあるときは、要求Issueが今の状態になったあとに付いた`cumin/status/ready`だけを使う。前の計画の`cumin/status/ready`が残っていても、新しいsub-issueを確かめる前に進まないためである。

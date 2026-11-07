@@ -16,7 +16,7 @@ state "awaiting-blocker-merge" as AwaitingBase
 state "merging" as Merging
 state "awaiting-decision" as Decision
 
-[*] --> Ready : a Maintainer adds ready
+[*] --> Ready : an Assignee adds ready
 Ready --> Implementing : request the implementation
 Implementing --> Implementing : request the implementation again
 Implementing --> Checking : wait for the checks

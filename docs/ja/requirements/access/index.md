@@ -138,7 +138,7 @@ cuminは、GitHubへの各操作を読み取るとき、適切な権限を持っ
 
 | 種類 | 権限のあるアカウント |
 |---|---|
-| 状態ラベルを付ける | `cumin/status/ready`はMaintainer、ほかは`cumin-core`のGitHub App |
+| 状態ラベルを付ける | `cumin/status/ready`は、要求IssueではMaintainer、実装Issueでは要求IssueのAssigneeかその実装IssueのAssignee。ほかは`cumin-core`のGitHub App |
 | assigneeを替える | Maintainer |
 | 判断と指示（承認、変更の依頼、受け入れ、指示のコメントなど） | そのIssueのAssignee |
 

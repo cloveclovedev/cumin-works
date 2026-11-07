@@ -18,7 +18,7 @@
 
 `cumin/status/ready`の付いた実装Issueが次のすべてを満たすとき、cuminは状態を`cumin/status/implementing`に替えてから、新しいセッションでImplementerを起動する。実装IssueのPull Requestがすでにあれば、その続きから進めさせる。
 
-- Maintainerが`cumin/status/ready`を付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
+- 要求IssueのAssigneeか、その実装IssueのAssigneeが`cumin/status/ready`を付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - `cumin/status/ready`のほかに状態ラベルがないか、ほかの状態ラベルが`cumin/status/awaiting-decision`である
 - blocked byのIssueがすべて閉じている。または`CWK-IMPL-008.1`の条件を満たす
 - 同時に進めるIssueの数に余裕がある
