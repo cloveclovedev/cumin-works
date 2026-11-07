@@ -125,11 +125,30 @@
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-IMPL-005"><code class="requirement-id">CWK-IMPL-005</code> チェックを待つ</h4>
 <p><code>cumin/status/implementing</code>の実装Issueで、実装が完了したとき、cuminは状態を<code>cumin/status/checking</code>に替える。</p>
-<p>替える前に、そのPull Requestがマージで実装Issueを閉じるように、GitHubで紐づいているかを確かめる。紐づいていなければ、<code>cumin-core</code>が紐づける。</p>
+<p>ラベルを替える前に、そのPull Requestがマージされると対象の実装Issueを閉じるように、GitHubで紐づいているかを確かめる。紐づいていなければ、<code>cumin-core</code>が紐づける。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-IMPL-006"><code class="requirement-id">CWK-IMPL-006</code> 実装をやり直す</h4>
-<p><code>cumin/status/implementing</code>の実装Issueで、Implementerの実行が終わっていて、実装が完了しておらず、質問のコメントもないとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。やり直しは、1つの<code>cumin/status/implementing</code>の間に1回だけである。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
+<p>次のすべてが成り立つとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。</p>
+<ul>
+<li>
+<p>状態が<code>cumin/status/implementing</code>である</p>
+</li>
+<li>
+<p>Implementerの実行が終わっている</p>
+</li>
+<li>
+<p>実装が完了していない</p>
+</li>
+<li>
+<p>質問のコメントがない</p>
+</li>
+<li>
+<p>今の<code>cumin/status/implementing</code>の間に、まだやり直していない</p>
+</li>
+
+</ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
+<p><code>test</code> GitHub mockとCLI mockでテスト</p>
+</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-IMPL-007"><code class="requirement-id">CWK-IMPL-007</code> 実装を止める</h4>
 <p><code>cumin/status/implementing</code>の実装Issueで、Implementerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。</p>
 <ul>
