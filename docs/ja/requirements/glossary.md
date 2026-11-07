@@ -18,7 +18,7 @@ cumin-worksの文書で使う語の意味を決める。「使わない言い方
 | Assignee | そのIssueの指示と判断を受け持つMaintainer。GitHubのIssueのassigneeで表し、1つのIssueに1人だけ付ける | Issue Owner、Owner、担当者 | assignee |
 | Operator | Hostでcuminを動かす人 | 運用者、管理者 | Operator |
 | Agent | cuminが起動して作業させるAI。今はheadlessのClaude Codeである | エージェント、AI、bot | agent |
-| Agentが動いている | あるIssueであるroleの実行を、このcuminが今持っていること。cuminを再起動すると、どのAgentも動いていないとして扱う | | agent is running |
+| Agentが動いている | あるIssueであるroleの実行を、このcuminが今持っていること。cuminを再起動すると、どのAgentも動いていないとして扱う。各ページの「Agentの実行が終わっている」は、Agentが動いていないことを指す | | agent is running |
 | role | Agentが受け持つ役目。Planner、Implementer、Reviewerの3つがある | ロール、Agent Role | role |
 | Planner | 要求Issueを計画し、受け入れ確認をするrole | | Planner |
 | Implementer | 実装Issueを実装し、Pull Requestにまとめるrole | | Implementer |

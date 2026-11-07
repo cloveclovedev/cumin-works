@@ -18,7 +18,7 @@ Agent起動に共通のことを決める。起動の手順、渡す指示と事
 
 #### `CWK-AGENT-001` Agentが動いていること
 
-あるIssueで あるroleの「Agentが動いている」とは、このcuminが、その実行を今持っていることである。各ページの「Plannerが動いていない」などは、この意味である。cuminを再起動すると、どのAgentも動いていないとして扱う。
+あるIssueで あるroleの「Agentが動いている」とは、このcuminが、その実行を今持っていることである。各ページの「Plannerの実行が終わっている」などは、Agentが動いていないことを指す。cuminを再起動すると、どのAgentも動いていないとして扱う。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -51,7 +51,7 @@ cuminは、IssueとroleごとにAgent作業ディレクトリを用意し、そ�
 
 #### `CWK-AGENT-004` Agent作業ディレクトリを片付ける
 
-Issueが閉じ、そのAgentが動いていないとき、cuminはそのIssueのAgent作業ディレクトリとローカルのブランチを消す。コミットしていない変更かpushしていないコミットがあれば、消さない。cuminが読まないIssueのAgent作業ディレクトリは、Operatorが片付ける。
+Issueが閉じ、そのAgentの実行が終わっているとき、cuminはそのIssueのAgent作業ディレクトリとローカルのブランチを消す。コミットしていない変更かpushしていないコミットがあれば、消さない。cuminが読まないIssueのAgent作業ディレクトリは、Operatorが片付ける。
 
 - 検証: `test` GitHub mockでテスト
 

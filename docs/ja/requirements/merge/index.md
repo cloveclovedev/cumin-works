@@ -18,7 +18,7 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 #### `CWK-MERGE-001` マージを始める
 
-`cumin/status/reviewing`の実装Issueで、Reviewerが動いておらず、次のすべてが成り立つとき、cuminは状態を`cumin/status/merging`に替える。
+`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のすべてが成り立つとき、cuminは状態を`cumin/status/merging`に替える。
 
 - Reviewerの最新のレビューが、今の先頭のコミットへの`APPROVE`である
 - 必須チェックが、今の先頭のコミットで完了している（[チェック](../check/index.md)の`CWK-CHECK-002`）
@@ -135,7 +135,7 @@ GitHubが、mainブランチが変わったことを理由にマージを断っ�
 
 ### blocked byのIssueを待つ
 
-[実装](../impl/index.md)の`CWK-IMPL-015`で始めた実装IssueのPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、GitHubはそのブランチを消し、このPull Requestのbaseをmainブランチに替える。
+[実装](../impl/index.md)の`CWK-IMPL-008`で始めた実装IssueのPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、GitHubはそのブランチを消し、このPull Requestのbaseをmainブランチに替える。
 
 #### `CWK-MERGE-022` blocked byのIssueより先にマージしない
 
@@ -175,7 +175,7 @@ Implementerは強制pushをしないので、mainブランチをマージする�
 
 #### `CWK-MERGE-023` blocked byのIssueを待つ実装を止める
 
-`CWK-IMPL-015`で始めた実装Issueで、Agentが動いておらず、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替え、理由をコメントに書いて、通知する。
+`CWK-IMPL-008`で始めた実装Issueで、Agentの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替え、理由をコメントに書いて、通知する。
 
 - blocked byのIssueのPull Requestが、マージされずに閉じた
 - この実装IssueのPull Requestが、マージされずに閉じた

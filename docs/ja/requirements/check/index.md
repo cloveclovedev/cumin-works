@@ -72,7 +72,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 #### `CWK-CHECK-007` 衝突の解消
 
-`cumin/status/checking`か`cumin/status/awaiting-merge-decision`の実装Issueで、GitHubがPull Requestとそのbaseの衝突を返したとき（`mergeable`が`CONFLICTING`）、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで衝突の解消を頼む。baseは、ふつうはmainブランチで、`CWK-IMPL-015`で始めたPull Requestではblocked byのIssueのブランチである。`cumin/status/merging`からの衝突の解消は[マージ](../merge/index.md)で決める。
+`cumin/status/checking`か`cumin/status/awaiting-merge-decision`の実装Issueで、GitHubがPull Requestとそのbaseの衝突を返したとき（`mergeable`が`CONFLICTING`）、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで衝突の解消を頼む。baseは、ふつうはmainブランチで、`CWK-IMPL-008`で始めたPull Requestではblocked byのIssueのブランチである。`cumin/status/merging`からの衝突の解消は[マージ](../merge/index.md)で決める。
 
 - `mergeable`が`UNKNOWN`の間は、GitHubが計算中なので判定しない。`UNKNOWN`のまま待ち時間を過ぎたら、`CWK-CHECK-006`で止まる。
 - 衝突の解消は、チェックの修正の回数に含めない。衝突はほかのPull Requestのマージで起き、Implementerの誤りではないからである。

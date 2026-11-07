@@ -136,7 +136,7 @@ Agentは、自分のroleのGitHub Appとして振る舞う。cuminは、Agent起
 
 cuminは、GitHubへの各操作を読み取るとき、適切な権限を持ったものが行った操作かをチェックする。誰が行ったかは、GitHubがIssueのタイムラインに残すイベントと、レビューとコメントの作者から読む。
 
-| 種類 | 扱うのは、誰が行ったときか |
+| 種類 | 権限のあるアカウント |
 |---|---|
 | 状態ラベルを付ける | `cumin/status/ready`はMaintainer、ほかは`cumin-core`のGitHub App |
 | assigneeを替える | Maintainer |
@@ -144,7 +144,7 @@ cuminは、GitHubへの各操作を読み取るとき、適切な権限を持っ
 
 どの操作が判断と指示に当たるかは、各カテゴリの要件で決める。
 
-- 検証: `test` GitHub mockで、種類ごとに、扱うアカウントと扱わないアカウントをテスト
+- 検証: `test` GitHub mockで、種類ごとに、権限のあるアカウントとないアカウントの操作をテスト
 
 ---
 

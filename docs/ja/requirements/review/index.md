@@ -49,7 +49,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 #### `CWK-REVIEW-004` 指摘を修正する
 
-`cumin/status/reviewing`の実装Issueで、Reviewerが動いておらず、最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、ラウンドが上限に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで指摘の修正を頼む。
+`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、ラウンドが上限に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで指摘の修正を頼む。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -57,7 +57,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 #### `CWK-REVIEW-005` チェックに戻る
 
-`cumin/status/reviewing`の実装Issueで、Reviewerが動いておらず、次のどちらかが成り立つとき、cuminは状態を`cumin/status/checking`に替える。古いコミットへのレビューも、ラウンドに含めたままにする。
+`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/checking`に替える。古いコミットへのレビューも、ラウンドに含めたままにする。
 
 - レビューの間に、先頭のコミットが変わった
 - `APPROVE`が出ているが、必須チェックが今の先頭のコミットで完了していない
@@ -68,7 +68,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 #### `CWK-REVIEW-006` レビューをやり直す
 
-`cumin/status/reviewing`の実装Issueで、Reviewerが動いておらず、今の先頭のコミットにReviewerのレビューも質問のコメントもないとき、cuminは状態を替えずにReviewerをもう一度起動する。やり直しは、1つの`cumin/status/reviewing`の間に1回だけである。
+`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、今の先頭のコミットにReviewerのレビューも質問のコメントもないとき、cuminは状態を替えずにReviewerをもう一度起動する。やり直しは、1つの`cumin/status/reviewing`の間に1回だけである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -76,7 +76,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 #### `CWK-REVIEW-007` レビューを止める
 
-`cumin/status/reviewing`の実装Issueで、Reviewerが動いておらず、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。当たる理由はすべて書く。
+`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。当たる理由はすべて書く。
 
 - `cumin/status/reviewing`になったあとに、Reviewerの質問のコメントがある。質問ではやり直さない
 - やり直しのあとも、今の先頭のコミットにレビューがない
@@ -104,7 +104,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 #### `CWK-REVIEW-009` 原因を整理する
 
-`cumin/status/reviewing`の実装Issueで、Reviewerが動いておらず、最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、ラウンドが上限（`max_review_rounds`、初期値は5）に達し、原因の整理のコメントがまだないとき、cuminは状態を替えずに、Reviewerの直前のセッションで原因の整理を頼む。
+`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、ラウンドが上限（`max_review_rounds`、初期値は5）に達し、原因の整理のコメントがまだないとき、cuminは状態を替えずに、Reviewerの直前のセッションで原因の整理を頼む。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

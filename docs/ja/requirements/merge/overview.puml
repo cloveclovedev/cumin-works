@@ -27,7 +27,7 @@ AwaitingBase : no one works; the pull request of the blocker waits
 state "awaiting-decision" as Decision
 Decision : do / the Assignee answers
 
-Reviewing --> Merging : start the merge\n[no Reviewer runs, APPROVE on the head commit,\nthe required checks passed, risk low, no base to wait for]
+Reviewing --> Merging : start the merge\n[the Reviewer run has ended, APPROVE on the head commit,\nthe required checks passed, risk low, no base to wait for]
 Reviewing --> MergeDecision : ask for the merge decision\n[the same, risk medium or high]\n/ cumin asks the Assignee for a review, notifies
 MergeDecision --> Merging : start the merge\n[the Assignee's APPROVE on the head commit,\nthe required checks passed]
 MergeDecision --> Implementing : request an assignee review fix\n[the Assignee's REQUEST_CHANGES on the head commit,\nafter the last awaiting-merge-decision]\n/ cumin starts the Implementer in the same session

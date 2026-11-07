@@ -18,8 +18,9 @@
 
 `cumin/status/ready`の付いた実装Issueが次のすべてを満たすとき、cuminは状態を`cumin/status/implementing`に替えてから、新しいセッションでImplementerを起動する。実装IssueのPull Requestがすでにあれば、その続きから進めさせる。
 
-- その`cumin/status/ready`を、cuminが扱う（[権限](../access/index.md)の`CWK-ACCESS-012`）
-- blocked byのIssueがすべて閉じている（`CWK-IMPL-002`）。または`CWK-IMPL-015.1`の条件を満たす
+- Maintainerが`cumin/status/ready`を付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
+- `cumin/status/ready`のほかに状態ラベルがないか、ほかの状態ラベルが`cumin/status/awaiting-decision`である
+- blocked byのIssueがすべて閉じている。または`CWK-IMPL-008.1`の条件を満たす
 - 同時に進めるIssueの数に余裕がある
 - `cumin/type/owner-task`が付いていない（`CWK-LABEL-001`）
 
@@ -27,15 +28,7 @@
 
 ---
 
-#### `CWK-IMPL-002` 先の実装Issueを待つ
-
-blocked byのIssueが1つでも開いている実装Issueには、cuminは着手しない。例外は`CWK-IMPL-015`である。
-
-- 検証: `test` GitHub mockとCLI mockでテスト
-
----
-
-#### `CWK-IMPL-003` ブランチの名前
+#### `CWK-IMPL-002` ブランチの名前
 
 cuminは、実装Issueごとに`cumin/<実装Issueの番号>-<短い説明>`の形のブランチの名前を決めて、Implementerに渡す。
 
@@ -43,7 +36,7 @@ cuminは、実装Issueごとに`cumin/<実装Issueの番号>-<短い説明>`の�
 
 ---
 
-#### `CWK-IMPL-004` 回数を数え直す
+#### `CWK-IMPL-003` 回数を数え直す
 
 `CWK-IMPL-001`で`cumin/status/implementing`に移るたびに、cuminはチェックの修正の回数（`CWK-CHECK-004`）を0に戻す。
 
@@ -53,33 +46,33 @@ cuminは、実装Issueごとに`cumin/<実装Issueの番号>-<短い説明>`の�
 
 ### 実装の完了判断
 
-#### `CWK-IMPL-005` 実装の完了を判断する
+#### `CWK-IMPL-004` 実装の完了を判断する
 
-cuminは、Implementerが動いていないとき、`CWK-IMPL-003`のブランチに`cumin-implementer`の作ったPull Requestが開いていて、先頭のコミットがpushされていれば、実装が完了したと判断する。Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つける。GitHubが`Closes`からリンクを作らないことがあるからである。Implementerの結果は使わない。
+cuminは、Implementerの実行が終わっているとき、`CWK-IMPL-002`のブランチに`cumin-implementer`の作ったPull Requestが開いていて、先頭のコミットがpushされていれば、実装が完了したと判断する。Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つける。GitHubが`Closes`からリンクを作らないことがあるからである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
-#### `CWK-IMPL-006` チェックを待つ
+#### `CWK-IMPL-005` チェックを待つ
 
-`cumin/status/implementing`の実装Issueで、Implementerが動いておらず、実装が完了したとき、cuminは状態を`cumin/status/checking`に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に`cumin-core`がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。
+`cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、実装が完了したとき、cuminは状態を`cumin/status/checking`に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に`cumin-core`がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。
 
 - 検証: `test` GitHub mockでテスト
 
 ---
 
-#### `CWK-IMPL-007` 実装をやり直す
+#### `CWK-IMPL-006` 実装をやり直す
 
-`cumin/status/implementing`の実装Issueで、Implementerが動いておらず、実装が完了しておらず、質問のコメントもないとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。やり直しは、1つの`cumin/status/implementing`の間に1回だけである。
+`cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、実装が完了しておらず、質問のコメントもないとき、cuminは状態を替えずにImplementerをもう一度起動して、続きから進めさせる。やり直しは、1つの`cumin/status/implementing`の間に1回だけである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
-#### `CWK-IMPL-008` 実装を止める
+#### `CWK-IMPL-007` 実装を止める
 
-`cumin/status/implementing`の実装Issueで、Implementerが動いておらず、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。
+`cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。
 
 - `cumin/status/implementing`になったあとに、Implementerの質問のコメントがある。質問ではやり直さない。要件が足りず、MaintainerがIssueを直す必要があることが多いからである
 - やり直しのあとも、実装が完了していない
@@ -93,9 +86,9 @@ cuminは、Implementerが動いていないとき、`CWK-IMPL-003`のブラン�
 
 blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間も、cuminはそのブランチから次の実装を始められる。そのPull Requestのマージを待つことと、マージのあとのことは[マージ](../merge/index.md)で決める。
 
-#### `CWK-IMPL-015` マージ判断を待つPull Requestのブランチから始める
+#### `CWK-IMPL-008` マージ判断を待つPull Requestのブランチから始める
 
-##### `CWK-IMPL-015.1` 着手の条件
+##### `CWK-IMPL-008.1` 着手の条件
 
 `cumin/status/ready`の実装Issueが、blocked byのほかは`CWK-IMPL-001`の条件を満たし、次のすべてが成り立つとき、cuminはblocked byのIssueのPull Requestのブランチから実装を始める。
 
@@ -110,7 +103,7 @@ blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間も、
 
 ---
 
-##### `CWK-IMPL-015.2` ブランチとbase
+##### `CWK-IMPL-008.2` ブランチとbase
 
 cuminはImplementerにblocked byのIssueのブランチを渡す。Implementerはそこから新しいブランチを切り、Pull Requestのbaseもそのブランチにする。差分に、この実装Issueの変更だけを出すためである。
 
@@ -119,7 +112,7 @@ cuminはImplementerにblocked byのIssueのブランチを渡す。Implementer�
 
 ---
 
-##### `CWK-IMPL-015.3` blocked byのIssueの変更は追わない
+##### `CWK-IMPL-008.3` blocked byのIssueの変更は追わない
 
 blocked byのIssueのPull Requestが変わっても、cuminはこの実装Issueのブランチを更新しない。衝突したときだけ、衝突の解消（`CWK-CHECK-007`）を頼む。変わるたびに更新すると、そのたびに実装とレビューが要るからである。
 
@@ -173,7 +166,7 @@ Implementerは、Pull Requestを開いてpushしたら、チェックもレビ�
 
 #### `CWK-IMPL-014` 推測で実装しない
 
-Implementerは、次のどれかに当たったら、推測で進めずに`blocked`を返す。cuminは、やり直さずに止める（`CWK-IMPL-008`）。
+Implementerは、次のどれかに当たったら、推測で進めずに`blocked`を返す。`blocked_reason`は、[decision-request.md](../../../../templates/decision-request.md)の形式で、Assigneeに決めてほしいことを書く。cuminは、やり直さずに止める（`CWK-IMPL-007`）。
 
 ##### `CWK-IMPL-014.1` 足りない要件
 
@@ -199,9 +192,9 @@ Implementerは、次のどれかに当たったら、推測で進めずに`block
 
 ---
 
-##### `CWK-IMPL-014.4` 足りない先の作業
+##### `CWK-IMPL-014.4` blocked byのIssueで足りない作業
 
-blocked byのIssueで済んでいるはずの作業が足りないときは、止まる。`CWK-IMPL-015`で始めた実装Issueでは、blocked byのIssueのブランチにあるはずの作業である。
+blocked byのIssueで済んでいるはずの作業が足りないときは、止まる。`CWK-IMPL-008`で始めた実装Issueでは、blocked byのIssueのブランチにあるはずの作業である。
 
 - 検証: `demo` テスト用の実リポジトリでImplementerを動かして確認
 

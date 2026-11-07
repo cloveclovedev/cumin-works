@@ -22,12 +22,12 @@ state "merging or awaiting-merge-decision" as Merge #EEEEEE
 Merge : (the merge area)
 
 Checking --> Reviewing : request the review\n[every required check passed]\n/ cumin starts the Reviewer
-Reviewing --> Implementing : request a review fix\n[no Reviewer runs, REQUEST_CHANGES\non the head commit, below the limit]\n/ cumin starts the Implementer\nin the same session
-Reviewing --> Checking : go back to the checks\n[no Reviewer runs, and: the head commit changed,\nor APPROVE but a required check did not pass]
-Reviewing --> Reviewing : request the review again\n[no Reviewer runs, no review on the head commit,\nno question, first time]\n/ cumin starts the Reviewer again
-Reviewing --> Reviewing : request the cause\n[no Reviewer runs, REQUEST_CHANGES\nat the limit, no cause comment]\n/ cumin starts the Reviewer\nin the same session
+Reviewing --> Implementing : request a review fix\n[the Reviewer run has ended, REQUEST_CHANGES\non the head commit, below the limit]\n/ cumin starts the Implementer\nin the same session
+Reviewing --> Checking : go back to the checks\n[the Reviewer run has ended, and: the head commit changed,\nor APPROVE but a required check did not pass]
+Reviewing --> Reviewing : request the review again\n[the Reviewer run has ended, no review on the head commit,\nno question, first time]\n/ cumin starts the Reviewer again
+Reviewing --> Reviewing : request the cause\n[the Reviewer run has ended, REQUEST_CHANGES\nat the limit, no cause comment]\n/ cumin starts the Reviewer\nin the same session
 Reviewing --> Decision : stop at the round limit\n[the Reviewer wrote the cause comment]\n/ cumin notifies
-Reviewing --> Decision : stop the review\n[no Reviewer runs, and: the Reviewer asked,\nor no review after the retry,\nor not exactly one risk label, or no pull request]\n/ cumin notifies
+Reviewing --> Decision : stop the review\n[the Reviewer run has ended, and: the Reviewer asked,\nor no review after the retry,\nor not exactly one risk label, or no pull request]\n/ cumin notifies
 Reviewing --> Merge : [APPROVE on the head commit,\nthe required checks passed]
 
 @enduml

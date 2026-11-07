@@ -24,7 +24,7 @@ Maintainerは、Plannerを通さずに自分でsub-issueを書いてもよい。
 
 `cumin/status/ready`の付いた要求Issueが次のすべてを満たすとき、cuminは状態を`cumin/status/planning`に替えてから、新しいセッションでPlannerを起動する。sub-issueがすでにあってもよい。
 
-- Maintainerが`cumin/status/ready`をつけている（[権限](../access/index.md)の`CWK-ACCESS-012`）
+- Maintainerが`cumin/status/ready`を付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - blocked byのIssueが、すべて閉じている
 - 同時に進めるIssueの数に余裕がある
 
@@ -72,7 +72,7 @@ cuminは計画の完了を判定したあと、未完了の実装Issueが1つ以
 
 #### `CWK-PLAN-005` 計画をやり直す
 
-`cumin/status/planning`の要求Issueで、Plannerが動いておらず、計画が完了しておらず、Plannerの質問のコメントもないとき、cuminは状態を替えずにPlannerをもう一度起動する。やり直しは、1つの`cumin/status/planning`の間に1回だけである。
+`cumin/status/planning`の要求Issueで、Plannerの実行が終わっていて、計画が完了しておらず、Plannerの質問のコメントもないとき、cuminは状態を替えずにPlannerをもう一度起動する。やり直しは、1つの`cumin/status/planning`の間に1回だけである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -80,7 +80,7 @@ cuminは計画の完了を判定したあと、未完了の実装Issueが1つ以
 
 #### `CWK-PLAN-006` 計画を止める
 
-`cumin/status/planning`の要求Issueで、Plannerが動いておらず、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。
+`cumin/status/planning`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。
 
 - `cumin/status/planning`になったあとに、Plannerの質問のコメントがある
 - やり直し条件に2回以上到達した

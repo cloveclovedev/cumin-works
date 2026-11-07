@@ -22,8 +22,8 @@ cuminが読むのは、受け入れ確認のコメントがあるか、sub-issue
 
 要求Issueが次のすべてを満たすとき、cuminは状態を`cumin/status/accepting`に替えてから、新しいセッションでPlannerに受け入れ確認を頼む。
 
-- 状態が`cumin/status/implementing`か`cumin/status/awaiting-plan-review`である。または`cumin/status/planning`で、Plannerが動いておらず、計画が完了している（[計画](../plan/index.md)の`CWK-PLAN-003`）
-- その状態ラベルをcuminが扱う（[権限](../access/index.md)の`CWK-ACCESS-012`）
+- 状態が`cumin/status/implementing`か`cumin/status/awaiting-plan-review`である。または`cumin/status/planning`で、Plannerの実行が終わっていて、計画が完了している（[計画](../plan/index.md)の`CWK-PLAN-003`）
+- その状態ラベルを、`cumin-core`のGitHub Appが付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - sub-issueが1つ以上あり、すべて閉じている
 - 最後のsub-issueが閉じたあとの受け入れ確認のコメント（`CWK-ACCEPT-002`）がない
 - フォローアップノートを書き終えている（[マージ](../merge/index.md)の`CWK-MERGE-018`）
@@ -45,7 +45,7 @@ cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始�
 
 #### `CWK-ACCEPT-003` 受け入れを求める
 
-`cumin/status/accepting`の要求Issueで、Plannerが動いておらず、受け入れ確認が完了し、sub-issueがすべて閉じているとき、cuminは状態を`cumin/status/awaiting-acceptance`に替えて、通知する。`Fail`があっても同じである。
+`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、受け入れ確認が完了し、sub-issueがすべて閉じているとき、cuminは状態を`cumin/status/awaiting-acceptance`に替えて、通知する。`Fail`があっても同じである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -53,7 +53,7 @@ cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始�
 
 #### `CWK-ACCEPT-004` 修正のsub-issueの確認を求める
 
-`cumin/status/accepting`の要求Issueで、Plannerが動いておらず、受け入れ確認が完了し、開いているsub-issueがあり、そのすべてにリスクのラベルが1つだけ付いているとき、cuminは状態を`cumin/status/awaiting-plan-review`に替えて、通知する。そのあとは、計画のsub-issueと同じに進む（[計画](../plan/index.md)の`CWK-PLAN-007`）。
+`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、受け入れ確認が完了し、開いているsub-issueがあり、そのすべてにリスクのラベルが1つだけ付いているとき、cuminは状態を`cumin/status/awaiting-plan-review`に替えて、通知する。そのあとは、計画のsub-issueと同じに進む（[計画](../plan/index.md)の`CWK-PLAN-007`）。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -61,7 +61,7 @@ cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始�
 
 #### `CWK-ACCEPT-005` 受け入れ確認をやり直す
 
-`cumin/status/accepting`の要求Issueで、Plannerが動いておらず、質問のコメントがなく、次のどちらかが成り立つとき、cuminはPlannerをもう一度起動する。やり直すのは、1つの`cumin/status/accepting`の間に1回だけである。
+`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、質問のコメントがなく、次のどちらかが成り立つとき、cuminはPlannerをもう一度起動する。やり直すのは、1つの`cumin/status/accepting`の間に1回だけである。
 
 - 受け入れ確認のコメントがない
 - コメントはあるが、リスクのラベルが1つだけでない、開いているsub-issueがある
@@ -72,7 +72,7 @@ cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始�
 
 #### `CWK-ACCEPT-006` 受け入れ確認を止める
 
-`cumin/status/accepting`の要求Issueで、Plannerが動いておらず、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントでないときは、理由をコメントに書く。
+`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントでないときは、理由をコメントに書く。
 
 - Plannerの質問のコメントが、`cumin/status/accepting`になったあとにある
 - やり直しのあとも、`CWK-ACCEPT-005`の条件が成り立つ

@@ -7,7 +7,7 @@
 hide empty description
 
 state "ready" as Ready
-Ready : do / cumin waits for a free slot
+Ready : do / cumin waits until the repository can take another issue
 
 state "implementing" as Implementing
 Implementing : do / the Implementer works
@@ -19,10 +19,10 @@ state "awaiting-decision" as Decision
 Decision : do / the Assignee answers
 
 [*] --> Ready : a Maintainer adds ready
-Ready --> Implementing : request the implementation\n[cumin handles the ready, cumin has a free slot,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer
-Implementing --> Checking : wait for the checks\n[no Implementer runs, the implementation is complete]\n/ cumin links the pull request if needed
-Implementing --> Implementing : request the implementation again\n[no Implementer runs, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again
-Implementing --> Decision : stop the implementation\n[no Implementer runs, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies
+Ready --> Implementing : request the implementation\n[a Maintainer added ready, the repository can take another issue,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer
+Implementing --> Checking : wait for the checks\n[the Implementer run has ended, the implementation is complete]\n/ cumin links the pull request if needed
+Implementing --> Implementing : request the implementation again\n[the Implementer run has ended, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again
+Implementing --> Decision : stop the implementation\n[the Implementer run has ended, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies
 Decision --> Ready : a Maintainer adds ready
 
 @enduml
