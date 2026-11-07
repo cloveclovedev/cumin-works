@@ -22,7 +22,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: v0.0.1
+          VERSION: v0.1.1
         run: |
           dir="$RUNNER_TEMP/cumin-trace"
           gh release download "$VERSION" --repo cloveclovedev/cumin-trace --dir "$dir" \

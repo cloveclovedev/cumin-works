@@ -46,6 +46,9 @@ export function japanTime(readAt) {
 }
 
 const progressLabels = { not_filed: "未起票", in_progress: "進行中", done: "完了" };
+// The text of a requirement that is not filed because it changed after its
+// requirement issues closed (CTR-TRC-010).
+const changedLabel = "変更後の未起票";
 
 // planned returns the requirement issues that are not closed as not planned.
 function planned(requirement) {
@@ -85,10 +88,12 @@ function subIssues(requirement) {
 // requirement, for areaTitle(), and the counts of its requirements with no
 // children by progress, and their number (leafCount). A requirement row holds
 // its ID without the prefix and the category (short), its progress (state, or
-// "parent" for a requirement with children and no progress, from an older
-// trace), the text of the progress (the count of the children for a
-// requirement with children), and its implementation issues closed and in
-// all.
+// "parent" for a requirement with children whose progress is null, from an
+// older trace, or not one of the three progresses), the text of the progress
+// (the count of the children for a requirement with children), whether it is
+// not filed because it changed after it was done (changed, from
+// changed_after_done; false when an older trace has no such key), and its
+// implementation issues closed and in all.
 export function tree(trace) {
   const byID = new Map(trace.requirements.map((r) => [r.id, r]));
   const hidden = (r) => {
@@ -120,6 +125,7 @@ export function tree(trace) {
       if (Object.hasOwn(category.counts, r.progress)) category.counts[r.progress]++;
     }
     const subs = subIssues(r);
+    const changed = r.progress === "not_filed" && r.changed_after_done === true;
     rows.push({
       kind: "requirement",
       id: r.id,
@@ -128,7 +134,8 @@ export function tree(trace) {
       depth: depth(r) + 1,
       leaf: !children,
       state: children && !Object.hasOwn(progressLabels, r.progress) ? "parent" : r.progress,
-      progress: children ? `完了 ${r.children.done} / ${r.children.total}` : (progressLabels[r.progress] ?? ""),
+      progress: children ? `完了 ${r.children.done} / ${r.children.total}` : changed ? changedLabel : (progressLabels[r.progress] ?? ""),
+      changed,
       issues: planned(r).map((issue) => issue.number),
       milestones: milestones(r),
       implementation: r.implementation_issues.total === 0 ? "" : `${r.implementation_issues.closed} / ${r.implementation_issues.total}`,

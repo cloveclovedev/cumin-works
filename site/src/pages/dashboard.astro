@@ -56,6 +56,7 @@ const subText = (sub) => `${sub.repository}#${sub.number} ${sub.closed ? "閉じ
             <span><span class="dashboard-dot" data-state="done" />完了</span>
             <span><span class="dashboard-dot" data-state="in_progress" />進行中</span>
             <span><span class="dashboard-dot" data-state="not_filed" />未起票</span>
+            <span><span class="dashboard-dot" data-state="not_filed" data-changed="true" />変更後の未起票</span>
             <span>タイルの下の線: 実装Issue の閉じた割合</span>
           </p>
           <div class="dashboard-map">
@@ -69,7 +70,7 @@ const subText = (sub) => `${sub.repository}#${sub.number} ${sub.closed ? "閉じ
                   {group.rows.map((row) => {
                     const Tile = row.url === undefined ? "span" : "a";
                     return (
-                      <Tile class="dashboard-tile" data-kind="requirement" data-id={row.id} data-depth={row.depth} data-state={row.state} href={row.url} role={row.url === undefined ? "img" : undefined} title={tileText(row)} aria-label={tileText(row)}>
+                      <Tile class="dashboard-tile" data-kind="requirement" data-id={row.id} data-depth={row.depth} data-state={row.state} data-changed={row.changed ? "true" : undefined} href={row.url} role={row.url === undefined ? "img" : undefined} title={tileText(row)} aria-label={tileText(row)}>
                         <span aria-hidden="true">{row.short}</span>
                         {row.total > 0 && (
                           <span class="dashboard-tile-line" aria-hidden="true">
@@ -106,6 +107,7 @@ const subText = (sub) => `${sub.repository}#${sub.number} ${sub.closed ? "閉じ
             <span><span class="dashboard-dot" data-state="done" />完了</span>
             <span><span class="dashboard-dot" data-state="in_progress" />進行中</span>
             <span><span class="dashboard-dot" data-state="not_filed" />未起票</span>
+            <span><span class="dashboard-dot" data-state="not_filed" data-changed="true" />変更後の未起票</span>
             <span><span class="dashboard-square" data-closed="false" />実装Issue (緑は閉じた)</span>
           </p>
           {groups.map((group) => (
@@ -123,8 +125,8 @@ const subText = (sub) => `${sub.repository}#${sub.number} ${sub.closed ? "閉じ
                 <span class="dashboard-count">{group.progress}</span>
               </div>
               {group.rows.map((row) => (
-                <div class="dashboard-line" data-kind="requirement" data-id={row.id} data-depth={row.depth} data-state={row.state}>
-                  <span class="dashboard-dot" data-state={row.state}>
+                <div class="dashboard-line" data-kind="requirement" data-id={row.id} data-depth={row.depth} data-state={row.state} data-changed={row.changed ? "true" : undefined}>
+                  <span class="dashboard-dot" data-state={row.state} data-changed={row.changed ? "true" : undefined}>
                     <span class="sr-only">{row.progress}</span>
                   </span>
                   {row.url === undefined ? <span class="dashboard-id">{row.id}</span> : <a class="dashboard-id" href={row.url}>{row.id}</a>}
