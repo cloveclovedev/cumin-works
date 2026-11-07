@@ -62,7 +62,7 @@ Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つ
 
 #### `CWK-IMPL-005` チェックを待つ
 
-`cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、実装が完了したとき、cuminは状態を`cumin/status/checking`に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に`cumin-core`がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。
+`cumin/status/implementing`の実装Issueで、実装が完了したとき、cuminは状態を`cumin/status/checking`に替える。実装IssueにそのPull Requestを閉じるリンクがなければ、先に`cumin-core`がリンクを付け、読み直して確かめる。ほかのアクションは、このリンクで実装IssueのPull Requestを見つける。
 
 - 検証: `test` GitHub mockでテスト
 
