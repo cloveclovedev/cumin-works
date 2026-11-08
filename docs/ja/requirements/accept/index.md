@@ -49,7 +49,7 @@ cuminは、次のすべてが成り立つとき、受け入れ確認が完了し
 
 #### `CWK-ACCEPT-003` 受け入れを求める
 
-`cumin/status/accepting`の要求Issueで、受け入れ確認が完了し（`CWK-ACCEPT-002`）、sub-issueがすべて閉じているとき、cuminは状態を`cumin/status/awaiting-acceptance`に替えて、通知する。`Fail`があっても同じである。
+`cumin/status/accepting`の要求Issueで、受け入れ確認が完了し（`CWK-ACCEPT-002`）、sub-issueがすべて閉じているとき、cuminは状態を`cumin/status/awaiting-acceptance`に替えて、通知する。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
