@@ -195,7 +195,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 - Pull Requestの説明の`Follow-up`の文章。そのまま写す
 - Reviewerの提案のうち、Implementerの返答が`Fixed`でないもの（[レビュー](../review/index.md)の`CWK-REVIEW-021`）
-- 元からある問題（[レビュー](../review/index.md)の`CWK-REVIEW-013`）
+- 元からある問題（[レビュー](../review/index.md)の`CWK-REVIEW-014`）
 
 - 検証: `test` GitHub mockでテスト
 

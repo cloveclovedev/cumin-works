@@ -37,9 +37,17 @@ cuminは、Reviewerに次の事実を渡す。
 
 ---
 
+#### `CWK-REVIEW-003` リポジトリのレビューの指針
+
+対象のリポジトリの最上位に`REVIEW.md`があれば、Reviewerはそれに従う。`REVIEW.md`には、Maintainerが、そのリポジトリで何が失敗にあたるか、見なくてよいパス、指摘の根拠の示し方などを書く。
+
+- 検証: `demo` テスト用の実リポジトリでReviewerを動かして確認
+
+---
+
 ### レビューの完了判断
 
-#### `CWK-REVIEW-003` レビューの完了を判断する
+#### `CWK-REVIEW-004` レビューの完了を判断する
 
 cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST_CHANGES`のレビューを出したとき、レビューが完了したと判断する。古いコミットへのレビュー、`COMMENT`だけのレビュー、Reviewerの結果は使わない。
 
@@ -47,7 +55,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ---
 
-#### `CWK-REVIEW-004` 指摘を修正する
+#### `CWK-REVIEW-005` 指摘を修正する
 
 `cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、ラウンドが上限に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで指摘の修正を頼む。
 
@@ -55,7 +63,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ---
 
-#### `CWK-REVIEW-005` チェックに戻る
+#### `CWK-REVIEW-006` チェックに戻る
 
 `cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/checking`に替える。古いコミットへのレビューも、ラウンドに含めたままにする。
 
@@ -66,7 +74,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ---
 
-#### `CWK-REVIEW-006` レビューをやり直す
+#### `CWK-REVIEW-007` レビューをやり直す
 
 `cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、今の先頭のコミットにReviewerのレビューも質問のコメントもないとき、cuminは状態を替えずにReviewerをもう一度起動する。やり直しは、1つの`cumin/status/reviewing`の間に1回だけである。
 
@@ -74,7 +82,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ---
 
-#### `CWK-REVIEW-007` レビューを止める
+#### `CWK-REVIEW-008` レビューを止める
 
 `cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
@@ -89,7 +97,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ### ラウンド
 
-#### `CWK-REVIEW-008` ラウンドの数え方
+#### `CWK-REVIEW-009` ラウンドの数え方
 
 ラウンドは、次の2つの新しいほうよりあとに出た`cumin-reviewer`のレビューの数とする。cuminはラウンドの数を手元に持たない。
 
@@ -102,7 +110,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ---
 
-#### `CWK-REVIEW-009` 原因を整理する
+#### `CWK-REVIEW-010` 原因を整理する
 
 `cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、ラウンドが上限（`max_review_rounds`、初期値は5）に達し、原因の整理のコメントがまだないとき、cuminは状態を替えずに、Reviewerの直前のセッションで原因の整理を頼む。
 
@@ -110,7 +118,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ---
 
-#### `CWK-REVIEW-010` ラウンドの上限で止める
+#### `CWK-REVIEW-011` ラウンドの上限で止める
 
 `cumin/status/reviewing`の実装Issueで、Reviewerの原因の整理のコメントがPull Requestにあるとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
@@ -120,15 +128,15 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 ### Reviewerの成果物
 
-#### `CWK-REVIEW-011` レビュー
+#### `CWK-REVIEW-012` レビュー
 
-Reviewerは、今の先頭のコミットにGitHubのレビューを1つ出す。修正が必要な指摘が残っておらず、提案のすべてにImplementerの返答があるときだけ`APPROVE`にし、それ以外は`REQUEST_CHANGES`にする。元からある問題（`CWK-REVIEW-013`）は、この判断に使わない。`COMMENT`だけのレビューにはしない。指摘とまとめは[review.md](../../../../templates/review.md)の形式で書き、まとめにラウンドと上限を書く。
+Reviewerは、今の先頭のコミットにGitHubのレビューを1つ出す。修正が必要な指摘が残っておらず、提案のすべてにImplementerの返答があるときだけ`APPROVE`にし、それ以外は`REQUEST_CHANGES`にする。元からある問題（`CWK-REVIEW-014`）は、この判断に使わない。`COMMENT`だけのレビューにはしない。指摘とまとめは[review.md](../../../../templates/review.md)の形式で書き、まとめにラウンドと上限を書く。
 
 - 検証: `demo` テスト用の実リポジトリでReviewerを動かして確認
 
 ---
 
-#### `CWK-REVIEW-012` 修正が必要な指摘
+#### `CWK-REVIEW-013` 修正が必要な指摘
 
 Reviewerは、指摘を、修正が必要なもの`(blocking)`と提案`(non-blocking)`に分ける。修正が必要な指摘には、何が問題か、なぜ直すか、どう直すかを書く。修正が必要な指摘にしてよいのは、次のものだけである。
 
@@ -138,7 +146,7 @@ Reviewerは、指摘を、修正が必要なもの`(blocking)`と提案`(non-blo
 - 実装Issueの範囲を超えた変更がある
 - 直すべき文書が直されていない
 - リポジトリにある指示（`CLAUDE.md`、`AGENTS.md`など）に反している
-- セキュリティの問題がある（`CWK-REVIEW-016`）
+- セキュリティの問題がある（`CWK-REVIEW-017`）
 - 計算の手間が、現実的なデータ量で明らかに問題になる。完了の条件の性能の目標を満たしていない場合も含む
 - 読んでも正しさを確かめられないほど入り組んでいる
 
@@ -148,7 +156,7 @@ Reviewerは、指摘を、修正が必要なもの`(blocking)`と提案`(non-blo
 
 ---
 
-#### `CWK-REVIEW-013` 元からある問題
+#### `CWK-REVIEW-014` 元からある問題
 
 Reviewerは、Pull Requestが持ち込んだのではなく、前からmainブランチにある問題に気づいたら、元からある問題`(pre-existing)`として書く。元からある問題は`APPROVE`を止めず、Implementerは直さず、返答も要らない。マージのあとにcuminがフォローアップノートに書き（[マージ](../merge/index.md)）、受け入れ確認でPlannerが扱いを決める（[受け入れ](../accept/index.md)）。
 
@@ -156,19 +164,19 @@ Reviewerは、Pull Requestが持ち込んだのではなく、前からmainブ�
 
 ---
 
-#### `CWK-REVIEW-014` ラウンドごとに見る範囲
+#### `CWK-REVIEW-015` ラウンドごとに見る範囲
 
 Reviewerは、1ラウンド目でできる限り洗い出し、2ラウンド目からは指摘が直ったかと返答だけを見る。毎回一から見直すと、新しい指摘がなくならないためである。
 
-##### `CWK-REVIEW-014.1` 1ラウンド目
+##### `CWK-REVIEW-015.1` 1ラウンド目
 
-Reviewerは、AgentのCLIに組み込みのコードレビューとセキュリティレビューのskill（Claude Codeでは`code-review`と`security-review`）を実行する。`code-review`の深さは`CWK-REVIEW-015`で決める。GitHubに投稿する、ファイルを変える、クラウドで動く使い方はしない。skillが挙げた候補は、コードを読んで確かめてから指摘にする。skillが見ないこと（完了の条件、範囲、文書、リポジトリにある指示、専門知識のファイルのセキュリティの観点）は、Reviewerが確かめる。skillがないか失敗したときは、同じ観点を自分で確かめる。
+Reviewerは、AgentのCLIに組み込みのコードレビューとセキュリティレビューのskill（Claude Codeでは`code-review`と`security-review`）を実行する。`code-review`の深さは`CWK-REVIEW-016`で決める。GitHubに投稿する、ファイルを変える、クラウドで動く使い方はしない。skillが挙げた候補は、コードを読んで確かめてから指摘にする。skillが見ないこと（完了の条件、範囲、文書、リポジトリにある指示、専門知識のファイルのセキュリティの観点）は、Reviewerが確かめる。skillがないか失敗したときは、同じ観点を自分で確かめる。
 
 - 検証: `demo` テスト用の実リポジトリでReviewerを動かして確認
 
 ---
 
-##### `CWK-REVIEW-014.2` 承認のあとの1ラウンド目
+##### `CWK-REVIEW-015.2` 承認のあとの1ラウンド目
 
 ReviewerがこのPull Requestを承認したことがあれば、最後に承認したコミット（`CWK-REVIEW-002`）から今の先頭のコミットまでの差分だけを、1ラウンド目と同じ深さで見る。skillもその差分に対して実行する。承認したことがなければ、全体を見る。マージ判断での`REQUEST_CHANGES`や衝突の解消のたびに、全体をレビューし直さないためである。
 
@@ -176,7 +184,7 @@ ReviewerがこのPull Requestを承認したことがあれば、最後に承認
 
 ---
 
-##### `CWK-REVIEW-014.3` 2ラウンド目から
+##### `CWK-REVIEW-015.3` 2ラウンド目から
 
 Reviewerは、前の指摘と返答、前のラウンドのコミットから今の先頭のコミットまでの差分だけを見る。新しく指摘してよいのは、直し方の誤り、納得できない返答、その差分の中の動作の誤りとセキュリティの問題だけである。同じ指摘を繰り返さず、skillも実行しない。
 
@@ -184,7 +192,7 @@ Reviewerは、前の指摘と返答、前のラウンドのコミットから今
 
 ---
 
-#### `CWK-REVIEW-015` レビューの深さ
+#### `CWK-REVIEW-016` レビューの深さ
 
 Reviewerは、リスクのラベルに合わせて、コードレビューのskillの深さ（Claude Codeではeffort）を選ぶ。対応は、専門知識のファイルに書く。初期の専門知識`software-engineering`では、`cumin/risk/low`と`cumin/risk/medium`は`high`、`cumin/risk/high`は`xhigh`である。
 
@@ -193,7 +201,7 @@ Reviewerは、リスクのラベルに合わせて、コードレビューのski
 
 ---
 
-#### `CWK-REVIEW-016` セキュリティの観点とチェックに任せること
+#### `CWK-REVIEW-017` セキュリティの観点とチェックに任せること
 
 Reviewerは、専門知識のファイルにある観点で、セキュリティの問題を確かめる。秘密の値の検出、脆弱性のある依存、静的解析、書式、命名、複雑さのしきい値のように機械で確かめられることは、必須チェックに任せ、Reviewerは見ない。
 
@@ -201,17 +209,9 @@ Reviewerは、専門知識のファイルにある観点で、セキュリティ
 
 ---
 
-#### `CWK-REVIEW-017` リポジトリのレビューの指針
-
-対象のリポジトリの最上位に`REVIEW.md`があれば、Reviewerはそれに従う。`REVIEW.md`には、Maintainerが、そのリポジトリで何が失敗にあたるか、見なくてよいパス、指摘の根拠の示し方などを書く。
-
-- 検証: `demo` テスト用の実リポジトリでReviewerを動かして確認
-
----
-
 #### `CWK-REVIEW-018` 原因の整理のコメント
 
-原因の整理を頼まれたReviewer（`CWK-REVIEW-009`）は、Pull RequestにAssignee向けのコメントを1つ書く。形式は[decision-request.md](../../../../templates/decision-request.md)に従い、決めてほしいこと、何が決まっていないために指摘が直らないかとそれをどこに書くべきか、指摘ごとのReviewerとImplementerの立場、選べる決め方と得失、勧める案を書く。
+原因の整理を頼まれたReviewer（`CWK-REVIEW-010`）は、Pull RequestにAssignee向けのコメントを1つ書く。形式は[decision-request.md](../../../../templates/decision-request.md)に従い、決めてほしいこと、何が決まっていないために指摘が直らないかとそれをどこに書くべきか、指摘ごとのReviewerとImplementerの立場、選べる決め方と得失、勧める案を書く。
 
 - 検証: `demo` テスト用の実リポジトリでReviewerを動かして確認
 
@@ -253,7 +253,7 @@ Implementerは、提案を次の3つに分け、1行の理由を付けて返答�
 
 #### `CWK-REVIEW-022` 推測でレビューしない
 
-Reviewerは、次のどれかに当たったら、レビューを出さずに`blocked`を返す。cuminは、やり直さずに止める（`CWK-REVIEW-007`）。
+Reviewerは、次のどれかに当たったら、レビューを出さずに`blocked`を返す。cuminは、やり直さずに止める（`CWK-REVIEW-008`）。
 
 ##### `CWK-REVIEW-022.1` 合わないリスク
 

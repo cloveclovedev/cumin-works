@@ -92,7 +92,7 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 
 ##### `CWK-CHECK-008.1` 保護されたパスの一覧
 
-保護されたパスの一覧は、対象のリポジトリの`.cumin/config.toml`の`protected_paths`に書く。ファイルかキーがなければ、初期値の`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md`を使う。書いた一覧は、初期値に足すのではなく、初期値を置き換える。`REVIEW.md`を含めるのは、Agentが書き換えると、Reviewerの判断が変わるためである（`CWK-REVIEW-017`）。
+保護されたパスの一覧は、対象のリポジトリの`.cumin/config.toml`の`protected_paths`に書く。ファイルかキーがなければ、初期値の`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md`を使う。書いた一覧は、初期値に足すのではなく、初期値を置き換える。`REVIEW.md`を含めるのは、Agentが書き換えると、Reviewerの判断が変わるためである（`CWK-REVIEW-003`）。
 
 照合の決まりは、`.gitignore`の一部と同じである。
 
