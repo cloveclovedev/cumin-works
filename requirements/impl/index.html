@@ -186,12 +186,11 @@
 <section class="requirement"><h5 id="CWK-IMPL-008.1"><code class="requirement-id">CWK-IMPL-008.1</code> 着手の条件</h5>
 <p><code>cumin/status/ready</code>の実装Issueが、blocked byのほかは<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-001">CWK-IMPL-001</a></code>の条件を満たし、次のすべてが成り立つとき、cuminはblocked byのIssueのPull Requestのブランチから実装を始める。</p>
 <ul>
-<li>開いているblocked byのIssueが1つだけで、<code>cumin/status/awaiting-merge-decision</code>である</li>
-<li>そのPull Requestのbaseがmainブランチである。始めるのは1段だけである（<a href="/cumin-works/requirements/backlog/">バックログ</a>）</li>
+<li>開いているblocked byのIssueが1つだけで、<code>cumin/status/awaiting-merge-decision</code>か<code>cumin/status/awaiting-blocker-merge</code>である。2つ以上のときは始めない（<a href="/cumin-works/requirements/backlog/">バックログ</a>）</li>
+<li>マージされていないblocked byのIssueを、blocked byの向きに順にたどった数が、<code>.cumin/config.toml</code>の<code>max_unmerged_blockers</code>（初期値は0）以下である。0なら、このやり方では始めない</li>
 <li>対象のリポジトリが、マージのあとにブランチを自動で消す（<code>deleteBranchOnMerge</code>）。GitHubは、ブランチが消えたときにだけ、それをbaseにするPull Requestのbaseをmainブランチに替える</li>
-<li><code>.cumin/config.toml</code>で<code>start_on_awaiting_merge_decision = true</code>にしている（初期値は<code>false</code>）</li>
 </ul>
-<p>有効にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（<code><a href="/cumin-works/requirements/check/#CWK-CHECK-006">CWK-CHECK-006</a></code>）。</p>
+<p><code>max_unmerged_blockers</code>を1以上にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（<code><a href="/cumin-works/requirements/check/#CWK-CHECK-006">CWK-CHECK-006</a></code>）。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h5 id="CWK-IMPL-008.2"><code class="requirement-id">CWK-IMPL-008.2</code> ブランチとbase</h5>
 <p>cuminはImplementerにblocked byのIssueのブランチを渡す。Implementerはそこから新しいブランチを切り、Pull Requestのbaseもそのブランチにする。差分に、この実装Issueの変更だけを出すためである。</p>
