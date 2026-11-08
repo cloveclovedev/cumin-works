@@ -110,12 +110,11 @@ blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間も、
 
 `cumin/status/ready`の実装Issueが、blocked byのほかは`CWK-IMPL-001`の条件を満たし、次のすべてが成り立つとき、cuminはblocked byのIssueのPull Requestのブランチから実装を始める。
 
-- 開いているblocked byのIssueが1つだけで、`cumin/status/awaiting-merge-decision`である
-- そのPull Requestのbaseがmainブランチである。始めるのは1段だけである（[バックログ](../backlog.md)）
+- 開いているblocked byのIssueが1つだけで、`cumin/status/awaiting-merge-decision`か`cumin/status/awaiting-blocker-merge`である。2つ以上のときは始めない（[バックログ](../backlog.md)）
+- マージされていないblocked byのIssueを、blocked byの向きに順にたどった数が、`.cumin/config.toml`の`max_unmerged_blockers`（初期値は0）以下である。0なら、このやり方では始めない
 - 対象のリポジトリが、マージのあとにブランチを自動で消す（`deleteBranchOnMerge`）。GitHubは、ブランチが消えたときにだけ、それをbaseにするPull Requestのbaseをmainブランチに替える
-- `.cumin/config.toml`で`start_on_awaiting_merge_decision = true`にしている（初期値は`false`）
 
-有効にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（`CWK-CHECK-006`）。
+`max_unmerged_blockers`を1以上にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（`CWK-CHECK-006`）。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

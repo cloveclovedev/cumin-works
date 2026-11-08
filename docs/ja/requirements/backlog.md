@@ -53,11 +53,11 @@ ReviewerをCodexなどのほかのCLIでも動かし、1ラウンド目でClaude
 
 ---
 
-### マージ判断を待つPull Requestのブランチから始める深さを選べる
+### マージされていないblocked byのIssueが2つ以上ある実装Issueを始める
 
-`.cumin/config.toml`の設定で、マージ判断を待つPull Requestのブランチから始める深さ（[実装](impl/index.md)の`CWK-IMPL-008.1`）を2段以上にできるようにする。そのためには、`cumin/status/awaiting-blocker-merge`の実装IssueのPull Requestのブランチからも始める条件と、下の段が止まったら上の段も止める決まりが要る。
+開いているblocked byのIssueが2つ以上あり、どれもマージされていない実装Issueも、そのブランチから始められるようにする（[実装](impl/index.md)の`CWK-IMPL-008.1`）。1つのblocked byのIssueのブランチから切り、ほかのblocked byのIssueのブランチを取り込む。Reviewerには、どのコミットがほかのblocked byのIssueのものかを渡す。
 
-- 後回しにした理由: 1段でもまだ実際に動かしておらず、2段にしても便利さは大きく変わらない見込みである。深くするほど、下の段が却下されたときに無駄になる実装とレビューが増え、マージのあとの取り込みも段ごとに繰り返す
-- 見直すきっかけ: `cumin/status/awaiting-blocker-merge`の実装Issueに依存する実装Issueが、待たされることが目立ってきたとき
+- 後回しにした理由: Pull Requestのbaseは1つなので、差分にほかのblocked byのIssueの変更が出て、レビューが読みにくくなる。ほかのblocked byのIssueが直されたときや却下されたときの後始末も増える
+- 見直すきっかけ: マージされていないblocked byのIssueを2つ以上持つ実装Issueが、待たされることが目立ってきたとき
 
 ---
