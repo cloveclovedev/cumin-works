@@ -31,8 +31,10 @@ Reviewing --> Merging : start the merge\n[the review completed with APPROVE,\nth
 Reviewing --> MergeDecision : ask for the merge decision\n[the same, but the risk is in merge_decision_risks]\n/ cumin asks the Assignee for a review, notifies
 MergeDecision --> Merging : start the merge\n[the Assignee's APPROVE on the head commit,\nthe required checks completed]
 MergeDecision --> Implementing : request an assignee review fix\n[the Assignee's REQUEST_CHANGES on the head commit,\nafter the last awaiting-merge-decision]\n/ cumin starts the Implementer in the same session
-Reviewing --> AwaitingBase : wait for the blocker merge (MERGE-013)\n[the same, but the base is not main,\nor a blocker is open]
+Reviewing --> AwaitingBase : wait for the blocker merge (MERGE-004)\n[the same, but the base is not main,\nor a blocker is open]
 AwaitingBase --> Implementing : take in the main branch and check again\n(the implementation area, IMPL-008.5)
+AwaitingBase --> Merging : start the merge\n[the blocker condition now holds (MERGE-003),\nthe risk is not in merge_decision_risks]
+AwaitingBase --> MergeDecision : ask for the merge decision\n[the same, but the risk is in merge_decision_risks]
 AwaitingBase --> Decision : stop (the implementation area, IMPL-008.6)
 Merging --> Merging : merge\n[not merged, the merge conditions hold, no conflict]\n/ cumin merges the approved commit
 Merging --> [*] : close the merged issue\n[merged]\n/ cumin closes the issue if GitHub did not

@@ -109,7 +109,7 @@ cuminは、次のすべてが成り立つとき、レビューが完了したと
 - 実装Issueに最後に`cumin/status/ready`が付いたとき
 - `cumin-reviewer`が最後に`APPROVE`を出したとき
 
-`APPROVE`のあとで数え直すのは、衝突の解消やAssigneeの`REQUEST_CHANGES`（`CWK-MERGE-005`）で先頭のコミットが変わり、レビューをやり直すからである。
+`APPROVE`のあとで数え直すのは、衝突の解消やAssigneeの`REQUEST_CHANGES`（`CWK-MERGE-006`）で先頭のコミットが変わり、レビューをやり直すからである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

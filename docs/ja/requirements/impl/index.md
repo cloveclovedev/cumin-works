@@ -97,7 +97,7 @@ Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つ
 
 ### マージ前のblocked byのIssueのブランチから始める
 
-blocked byのIssueのPull Requestがまだマージされていない間も、cuminはそのブランチから次の実装を始められる。blocked byのIssueのマージを待つ状態と、マージの条件は、[マージ](../merge/index.md)の`CWK-MERGE-003`と`CWK-MERGE-013`で決める。
+blocked byのIssueのPull Requestがまだマージされていない間も、cuminはそのブランチから次の実装を始められる。blocked byのIssueのマージを待つ状態と、マージの条件は、[マージ](../merge/index.md)の`CWK-MERGE-003`と`CWK-MERGE-004`で決める。
 
 ![マージ前のblocked byのIssueのブランチから始める流れ](start-from-awaiting-merge-decision.svg)
 

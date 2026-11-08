@@ -1,6 +1,6 @@
 @startuml start-from-awaiting-merge-decision
 ' cumin-works - an implementation issue that starts from the branch of a pull request
-' that waits for the merge decision (IMPL-008, MERGE-013).
+' that waits for the merge decision (IMPL-008, MERGE-004).
 ' Issue #1 is the blocker. Issue #2 is blocked by #1 and starts from the branch of #1.
 ' Render: run scripts/render-diagrams.sh at the root of the repository.
 
@@ -25,7 +25,7 @@ note over B1, B2 : the diff shows only the change of #2.\nNew commits on the bra
 
 ... required checks and review of #2 ...
 
-Cumin -> Cumin : the Reviewer approved #2, but its base is not main\n→ #2 is awaiting-blocker-merge (MERGE-013)
+Cumin -> Cumin : the Reviewer approved #2, but its base is not main\n→ #2 is awaiting-blocker-merge (MERGE-004)
 
 == the Assignee merges #1 ==
 
