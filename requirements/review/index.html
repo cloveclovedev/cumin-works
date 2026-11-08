@@ -166,7 +166,7 @@
 <li>実装Issueに最後に<code>cumin/status/ready</code>が付いたとき</li>
 <li><code>cumin-reviewer</code>が最後に<code>APPROVE</code>を出したとき</li>
 </ul>
-<p><code>APPROVE</code>のあとで数え直すのは、衝突の解消やAssigneeの<code>REQUEST_CHANGES</code>（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-004">CWK-MERGE-004</a></code>）で先頭のコミットが変わり、レビューをやり直すからである。</p>
+<p><code>APPROVE</code>のあとで数え直すのは、衝突の解消やAssigneeの<code>REQUEST_CHANGES</code>（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-005">CWK-MERGE-005</a></code>）で先頭のコミットが変わり、レビューをやり直すからである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-REVIEW-010"><code class="requirement-id">CWK-REVIEW-010</code> ラウンドの上限で止める</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、レビューが完了し（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-004">CWK-REVIEW-004</a></code>）、そのレビューが<code>REQUEST_CHANGES</code>で、ラウンドが上限に達したとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
