@@ -253,7 +253,7 @@ Implementerは、提案を次の3つに分け、1行の理由を付けて返答�
 
 #### `CWK-REVIEW-022` 推測でレビューしない
 
-Reviewerは、次のどれかに当たったら、レビューを出さずに`blocked`を返す。cuminは、やり直さずに止める（`CWK-REVIEW-008`）。
+Reviewerは、次のどれかに当たったら、レビューを出さずに`blocked`を返し、Assigneeに判断を求める（[判断の依頼](../ask/index.md)）。cuminは、やり直さずに止める（`CWK-REVIEW-008`）。
 
 ##### `CWK-REVIEW-022.1` 合わないリスク
 
