@@ -33,7 +33,7 @@ IDの接頭辞は`CWK`である。カテゴリごとにディレクトリを分�
 | `LABEL` | [ラベル](label/index.md) | 状態、種類、リスクのラベルと、その決まり |
 | `ACCESS` | [権限](access/index.md) | Maintainer、Assignee、Operator、cumin、Agentが、それぞれ何をしてよいか |
 | `PLAN` | [計画](plan/index.md) | 計画のAgent起動、計画結果の確認、Plannerの入力と出力 |
-| `IMPL` | [実装](impl/index.md) | 実装のAgent起動、実装の完了判断、マージ判断を待つPull Requestのブランチから始めること、Implementerの入力と出力 |
+| `IMPL` | [実装](impl/index.md) | 実装のAgent起動、実装の完了判断、マージ前のblocked byのIssueのブランチから始めること、Implementerの入力と出力 |
 | `CHECK` | [チェック](check/index.md) | 必須チェックを待つこと、チェックの失敗の修正、衝突の解消、保護されたパスのチェック |
 | `REVIEW` | [レビュー](review/index.md) | レビューのAgent起動、ラウンド、指摘の修正、Reviewerの入力と出力 |
 | `MERGE` | [マージ](merge/index.md) | マージ判断、マージ判断に使うレビュー、マージ、実装Issueを閉じること、フォローアップノート |

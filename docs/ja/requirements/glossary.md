@@ -69,8 +69,8 @@ cumin-worksの文書で使う語の意味を決める。「使わない言い方
 | 必須チェック | mainブランチの保護で、マージの前に成功している必要があるチェック | 必須のcheck | required check |
 | ラウンド | Reviewerのレビュー1回と、それへの修正の組 | 周回 | round |
 | マージ判断 | 実装IssueのAssigneeがPull Requestを見て、マージするかを決めること | mergeの判断、マージ判定 | merge decision |
-| マージ判断を待つPull Requestのブランチから始める | blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間に、そのブランチから新しいブランチを切り、そのブランチをbaseにしたPull Requestで、次の実装Issueを進めること | 土台、積む、重ねる、スタック | start on the branch of a pull request that waits for the merge decision |
-| baseがmainブランチでないPull Request | マージ判断を待つPull Requestのブランチから始めた実装IssueのPull Request。blocked byのIssueのPull Requestがマージされるまでマージしない | 積んだPull Request、重ねたPull Request、先のPull Request、子PR | pull request with a base other than the default branch |
+| マージ前のblocked byのIssueのブランチから始める | blocked byのIssueのPull Requestがまだマージされていない間に、そのブランチから新しいブランチを切り、そのブランチをbaseにしたPull Requestで、次の実装Issueを進めること | 土台、積む、重ねる、スタック | start on the branch of an unmerged blocker |
+| baseがmainブランチでないPull Request | マージ前のblocked byのIssueのブランチから始めた実装IssueのPull Request。blocked byのIssueのPull Requestがマージされるまでマージしない | 積んだPull Request、重ねたPull Request、先のPull Request、子PR | pull request with a base other than the default branch |
 | 受け入れ確認 | Plannerが、マージされた結果が要求Issueを満たすかを確かめること | 受け入れの確認、受入確認 | acceptance check |
 | 受け入れ | 要求IssueのAssigneeが受け入れ確認を見て、要求Issueを閉じること | 承認、完了確認 | acceptance |
 | 差し戻し | 要求IssueのAssigneeが受け入れずに、sub-issueを足して進め直すこと | 却下、やり直し | send back |
