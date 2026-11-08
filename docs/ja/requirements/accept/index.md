@@ -12,7 +12,7 @@
 
 受け入れ確認では、Plannerが、すべてのsub-issueを合わせたmainブランチで、要求Issueの要求を1項目ずつ確かめる。Pull Requestは1つずつしか確かめられていないためである。Plannerは、残りの項目も仕分け、この要求で直すものをsub-issueにする。
 
-cuminが読むのは、受け入れ確認のコメントがあるか、sub-issueが開いているか、開いているsub-issueのリスクのラベルだけである。コメントの中身は読まない。
+cuminが読むのは、受け入れ確認のコメントと質問のコメントがあるか、フォローアップノートを書き終えたか、sub-issueが開いているか、開いているsub-issueのリスクのラベルだけである。コメントの中身は読まない。
 
 ## 要件
 
@@ -36,7 +36,12 @@ cuminが読むのは、受け入れ確認のコメントがあるか、sub-issue
 
 #### `CWK-ACCEPT-002` 受け入れ確認の完了を判断する
 
-cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始まるコメントが、最後のsub-issueが閉じたあとにあるとき、受け入れ確認が完了したと判断する。それより前のコメントは使わない。Plannerが返した結果も使わない。
+cuminは、次のすべてが成り立つとき、受け入れ確認が完了したと判断する。
+
+- Plannerの実行が終わっている
+- `cumin-planner`が要求Issueに書いた`## Acceptance check`で始まるコメントが、最後のsub-issueが閉じたあとにある
+
+それより前のコメントは使わない。Plannerが返した結果も使わない。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -44,7 +49,7 @@ cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始�
 
 #### `CWK-ACCEPT-003` 受け入れを求める
 
-`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、受け入れ確認が完了し、sub-issueがすべて閉じているとき、cuminは状態を`cumin/status/awaiting-acceptance`に替えて、通知する。`Fail`があっても同じである。
+`cumin/status/accepting`の要求Issueで、受け入れ確認が完了し（`CWK-ACCEPT-002`）、sub-issueがすべて閉じているとき、cuminは状態を`cumin/status/awaiting-acceptance`に替えて、通知する。`Fail`があっても同じである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -52,7 +57,7 @@ cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始�
 
 #### `CWK-ACCEPT-004` 修正のsub-issueの確認を求める
 
-`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、受け入れ確認が完了し、開いているsub-issueがあり、そのすべてにリスクのラベルが1つだけ付いているとき、cuminは状態を`cumin/status/awaiting-plan-review`に替えて、通知する。そのあとは、計画のsub-issueと同じに進む（[計画](../plan/index.md)の`CWK-PLAN-007`）。
+`cumin/status/accepting`の要求Issueで、受け入れ確認が完了し（`CWK-ACCEPT-002`）、開いているsub-issueがあり、そのすべてにリスクのラベルが1つだけ付いているとき、cuminは状態を`cumin/status/awaiting-plan-review`に替えて、通知する。そのあとは、計画のsub-issueと同じに進む（[計画](../plan/index.md)の`CWK-PLAN-007`）。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -86,7 +91,7 @@ Assigneeが答えを書いて要求Issueに`cumin/status/ready`を付けると�
 
 #### `CWK-ACCEPT-007` 受け入れ
 
-Assigneeは、要求Issueを閉じて受け入れる。判断が要る項目（`CWK-ACCEPT-014`）は、Assigneeが新しい要求Issueかバックログに書く。cuminは、閉じた要求Issueに何もしない。
+Assigneeは、要求Issueを閉じて受け入れる。判断が要る項目（`CWK-ACCEPT-014`）は、Assigneeが新しい要求Issueかバックログに書く。閉じた要求Issueには、cuminは何もしない（[定期確認](../poll/index.md)の`CWK-POLL-001`）。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -120,7 +125,7 @@ Plannerは、sub-issueを閉じたPull Requestとその説明、フォローア�
 
 #### `CWK-ACCEPT-011` 残りの項目を仕分ける
 
-Plannerは、残りの項目のすべてを、次の3つのどれか1つに入れ、1行の理由を付ける。残りの項目とは、`Fail`の行、フォローアップノートの項目、`Follow-up`以外に書かれた範囲の外の作業である。
+Plannerは、残りの項目のすべてを、次の3つのどれか1つに入れ、1行の理由を付ける。残りの項目とは、`Fail`の行と、フォローアップノートの項目である。
 
 - この要求で直す: 要求の範囲の中の不具合、小さな修正、文書とコードのずれ
 - 判断が要る: 要求の範囲を変えるもの、選択が要るもの
