@@ -19,7 +19,7 @@ state "awaiting-decision" as Decision
 Decision : do / the Assignee answers
 
 [*] --> Ready : an Assignee adds ready
-Ready --> Implementing : request the implementation\n[an Assignee added ready, the repository can take another issue,\nno owner-task, and: the blockers are closed,\nor the only open blocker waits for the merge decision]\n/ cumin starts the Implementer
+Ready --> Implementing : request the implementation\n[an Assignee added ready, the repository can take another issue,\nno owner-task, and: the blockers are closed,\nor the only open blocker is not merged yet (IMPL-008.1)]\n/ cumin starts the Implementer
 Implementing --> Checking : wait for the checks\n[the Implementer run has ended, the implementation is complete]\n/ cumin links the pull request if needed
 Implementing --> Implementing : request the implementation again\n[the Implementer run has ended, the implementation is not complete,\nno question, first time]\n/ cumin starts the Implementer again
 Implementing --> Decision : stop the implementation\n[the Implementer run has ended, and: the Implementer asked,\nor the implementation is not complete after the retry,\nor the conflict resolution changed nothing]\n/ cumin notifies
