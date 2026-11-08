@@ -23,7 +23,7 @@ cuminは、Issueを次の状態に替えたときに、通知する。
 | `awaiting-plan-review` | `CWK-PLAN-004`、`CWK-PLAN-008`、`CWK-ACCEPT-004` |
 | `awaiting-merge-decision` | `CWK-MERGE-002` |
 | `awaiting-acceptance` | `CWK-ACCEPT-003` |
-| `awaiting-decision` | `CWK-PLAN-006`、`CWK-IMPL-007`、`CWK-CHECK-005`、`CWK-CHECK-006`、`CWK-REVIEW-007`、`CWK-REVIEW-010`、`CWK-MERGE-011`、`CWK-IMPL-008.5`、`CWK-ACCEPT-006`、`CWK-AGENT-013` |
+| `awaiting-decision` | `CWK-PLAN-006`、`CWK-IMPL-007`、`CWK-CHECK-005`、`CWK-CHECK-006`、`CWK-REVIEW-007`、`CWK-REVIEW-010`、`CWK-MERGE-011`、`CWK-IMPL-008.6`、`CWK-ACCEPT-006`、`CWK-AGENT-013` |
 
 `awaiting-blocker-merge`は、通知しない。待っているのはblocked byのIssueのPull Requestのマージ判断で、そちらの通知がすでに届いているからである。
 
