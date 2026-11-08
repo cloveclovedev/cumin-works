@@ -12,7 +12,7 @@
 
 受け入れ確認では、Plannerが、すべてのsub-issueを合わせたmainブランチで、要求Issueの要求を1項目ずつ確かめる。Pull Requestは1つずつしか確かめられていないためである。Plannerは、残りの項目も仕分け、この要求で直すものをsub-issueにする。
 
-cuminが読むのは、受け入れ確認のコメントと質問のコメントがあるか、フォローアップノートを書き終えたか、sub-issueが開いているか、開いているsub-issueのリスクのラベルだけである。コメントの中身は読まない。
+cuminが読むのは、受け入れ確認のコメントと質問のコメントがあるか、フォローアップノートがあるか、sub-issueが開いているか、開いているsub-issueのリスクのラベルだけである。コメントの中身は読まない。
 
 ## 要件
 
@@ -26,7 +26,7 @@ cuminが読むのは、受け入れ確認のコメントと質問のコメント
 - その状態ラベルを、`cumin-core`のGitHub Appが付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - sub-issueが1つ以上あり、すべて閉じている
 - 最後のsub-issueが閉じたあとの受け入れ確認のコメント（`CWK-ACCEPT-002`）がない
-- フォローアップノートを書き終えている（[マージ](../merge/index.md)の`CWK-MERGE-020`）
+- 閉じたsub-issueを閉じるマージ済みのPull Requestのすべてに、フォローアップノートがある（[マージ](../merge/index.md)の`CWK-MERGE-016`）
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

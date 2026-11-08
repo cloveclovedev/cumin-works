@@ -187,7 +187,7 @@ mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自�
 
 #### `CWK-MERGE-017` フォローアップノートに書くもの
 
-cuminは、次のものを決まった形式から機械的に拾う。何もなければ書かない。
+cuminは、次のものを決まった形式から機械的に拾う。何もなければ、ないことを1行で書く。
 
 - Pull Requestの説明の`Follow-up`の文章。そのまま写す
 - Reviewerの提案のうち、Implementerの返答が`Fixed`でないもの（[レビュー](../review/index.md)の`CWK-REVIEW-020`）
@@ -213,15 +213,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 ---
 
-#### `CWK-MERGE-020` 受け入れ確認の前にそろえる
-
-sub-issueがすべて閉じたとき、cuminは、フォローアップノートを書き終えてから受け入れ確認を頼む（[受け入れ](../accept/index.md)）。
-
-- 検証: `test` GitHub mockとCLI mockでテスト
-
----
-
-#### `CWK-MERGE-021` Issueにしない
+#### `CWK-MERGE-020` Issueにしない
 
 cuminは、フォローアップノートからIssueを作らない。
 
