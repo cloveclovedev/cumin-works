@@ -111,8 +111,7 @@ blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間も、
 `cumin/status/ready`の実装Issueが、blocked byのほかは`CWK-IMPL-001`の条件を満たし、次のすべてが成り立つとき、cuminはblocked byのIssueのPull Requestのブランチから実装を始める。
 
 - 開いているblocked byのIssueが1つだけで、`cumin/status/awaiting-merge-decision`か`cumin/status/awaiting-blocker-merge`である。2つ以上のときは始めない（[バックログ](../backlog.md)）
-- マージされていないblocked byのIssueを、blocked byの向きに順にたどった数が、`.cumin/config.toml`の`max_unmerged_blockers`（初期値は0）以下である。0なら、このやり方では始めない
-- 対象のリポジトリが、マージのあとにブランチを自動で消す（`deleteBranchOnMerge`）。GitHubは、ブランチが消えたときにだけ、それをbaseにするPull Requestのbaseをmainブランチに替える
+- マージされていないblocked byのIssueを、blocked byの向きに順にたどった数が、`.cumin/config.toml`の`max_unmerged_blockers`以下である
 
 `max_unmerged_blockers`を1以上にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（`CWK-CHECK-006`）。
 
@@ -141,6 +140,8 @@ blocked byのIssueのPull Requestが変わっても、cuminはこの実装Issue�
 
 マージ前のblocked byのIssueのブランチから始めた実装Issueは、始めた時点のblocked byのIssueの上で作られている。blocked byのIssueは、そのあとも変わることがある。そこでcuminは、blocked byのIssueがマージされたら、衝突がなくても、最終的な中身と合わせて確かめ直させる。
 
+blocked byのIssueのPull Requestがマージされたあと、この実装IssueのPull Requestのbaseがまだblocked byのIssueのブランチなら、cuminはbaseをmainブランチに替える。GitHubがすでに替えていれば、何もしない。
+
 次のすべてが成り立つとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで、mainブランチの取り込みと確かめ直しを頼む。続きの作業なので、同時に進めるIssueの数に余裕ができるのを待たない。
 
 - 状態が`cumin/status/awaiting-blocker-merge`か、[マージ](../merge/index.md)の`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうち、blocked byのIssueを待たなくてよいこと（`CWK-MERGE-012`）のほかが成り立つ`cumin/status/reviewing`である
@@ -160,7 +161,7 @@ cuminは、依頼に、blocked byのIssueとそのPull Requestの番号と、こ
 
 - blocked byのIssueのPull Requestが、マージされずに閉じた
 - この実装IssueのPull Requestが、マージされずに閉じた
-- `cumin/status/awaiting-blocker-merge`で、blocked byのIssueのPull Requestがマージされてから定期確認の間隔を過ぎても、baseがmainブランチにならない
+- blocked byのIssueのPull Requestがマージされたあと、baseをmainブランチに替えられない
 - mainブランチの取り込みを頼んだあとも、先頭のコミットがマージのコミットを含まない
 
 却下されたblocked byのIssueのコミットはブランチに残るので、Assigneeは、それを除くかPull Requestを閉じてから、`cumin/status/ready`を付ける。

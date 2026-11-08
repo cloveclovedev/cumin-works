@@ -31,7 +31,7 @@ Cumin -> Cumin : the Reviewer approved #2, but its base is not main\n→ #2 is a
 
 Assignee -> Cumin : approve the pull request of #1
 Cumin -> Main : merge the pull request of #1
-note over Main, B2 : GitHub deletes the branch of #1\nand changes the base of #2 to main
+note over Main, B2 : the base of #2 becomes main: GitHub changes it\nwhen it deletes the branch of #1, or else cumin changes it (IMPL-008.4)
 Cumin -> Impl : take in the main branch and check again\nagainst the merged #1 (IMPL-008.4)\n→ #2 is implementing
 Main -> B2 : merge commit of main
 

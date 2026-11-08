@@ -135,7 +135,7 @@ GitHubが、mainブランチが変わったことを理由にマージを断っ�
 
 ### blocked byのIssueを待つ
 
-[実装](../impl/index.md)のマージ前のblocked byのIssueのブランチから始めた実装Issue（`CWK-IMPL-008`）のPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、GitHubはそのブランチを消し、このPull Requestのbaseをmainブランチに替える。
+[実装](../impl/index.md)のマージ前のblocked byのIssueのブランチから始めた実装Issue（`CWK-IMPL-008`）のPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、このPull Requestのbaseはmainブランチに替わる（`CWK-IMPL-008.4`）。
 
 #### `CWK-MERGE-012` blocked byのIssueより先にマージしない
 
