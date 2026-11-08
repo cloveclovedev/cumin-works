@@ -145,7 +145,7 @@
 <ul>
 <li>作業中のAgentと、<code>awaiting-</code>で始まる状態のIssue</li>
 <li>5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因</li>
-<li>止める予約があるか</li>
+<li>cuminの停止予約があるか</li>
 <li>失敗しているツール動作確認と、全部を読めないIssue。Pull Requestの数で全部を読めないIssueは、通知だけで知らせる</li>
 <li>最後の定期確認の時刻と、そのエラー。モニターファイルがないとき、または最後の定期確認が<code>poll_interval</code>の3倍より古いときは、そのこと</li>
 </ul>
@@ -159,7 +159,7 @@
 <p><code>cumin run</code>は、SIGINTとSIGTERMで、動いているAgentも止めてすぐに終わる。ラベルは替えず、終了コードは0なのでlaunchdは起動し直さない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-007"><code class="requirement-id">CWK-HOST-007</code> 実行を待ってから止める</h4>
-<p><code>cumin stop --after-current-runs</code>を実行すると、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。止める予約は、次の定期確認から効く。止める予約は、次の起動には残らない。</p>
+<p><code>cumin stop --after-current-runs</code>を実行すると、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。cuminの停止予約は、次の定期確認から効く。cuminの停止予約は、次の起動には残らない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-008"><code class="requirement-id">CWK-HOST-008</code> スリープ</h4>
 <p>Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018">CWK-AGENT-018</a></code>）。</p>
@@ -387,7 +387,7 @@
 <p>GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSのKeychainに置く。設定ファイルとリポジトリには書かない。cuminは起動のときに読み、メモリにだけ持ち、手元の状態にもログにも書かない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-014"><code class="requirement-id">CWK-HOST-014</code> モニターファイル</h4>
-<p>cuminは、定期確認のたびとAgentの実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、止める予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めないIssue、動いているAgent、<code>awaiting-</code>で始まる状態のIssueである。cuminを外から見る道具と<code>cumin status</code>が読む。cumin自身は読まず、ここからは何も決めない。</p>
+<p>cuminは、定期確認のたびとAgentの実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、cuminの停止予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めないIssue、動いているAgent、<code>awaiting-</code>で始まる状態のIssueである。cuminを外から見る道具と<code>cumin status</code>が読む。cumin自身は読まず、ここからは何も決めない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><h2 id="未決事項">未決事項</h2>
 <p>なし</p>

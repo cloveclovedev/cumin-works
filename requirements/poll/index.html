@@ -88,7 +88,7 @@
 <p>cuminは、GitHubの事実と、Agentが動いているか（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-001">CWK-AGENT-001</a></code>）だけで、次のアクションを決める。同じ事実からは、いつも同じアクションを決める。決めるのは、定期確認のときと、Agentの実行が終わった直後で、どちらも同じ決め方をする。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-POLL-003"><code class="requirement-id">CWK-POLL-003</code> 手元に持つもの</h4>
-<p>cuminがHostの手元に持つのは、失っても作業を失わないものだけである。Agentのセッションの番号、チェックの修正を頼んだ回数、使用率とリセット時刻、5時間制限を使い切る許可、ツール動作確認の結果、止める予約、やり直しの回数、通知を送った記録がこれに当たる。レビューのラウンドの数は手元に持たず、Pull Requestのレビューから読む。</p>
+<p>cuminがHostの手元に持つのは、失っても作業を失わないものだけである。Agentのセッションの番号、チェックの修正を頼んだ回数、使用率とリセット時刻、5時間制限を使い切る許可、ツール動作確認の結果、cuminの停止予約、やり直しの回数、通知を送った記録がこれに当たる。レビューのラウンドの数は手元に持たず、Pull Requestのレビューから読む。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><h3 id="間隔">間隔</h3>
 <section class="requirement"><h4 id="CWK-POLL-004"><code class="requirement-id">CWK-POLL-004</code> 定期確認の間隔</h4>
