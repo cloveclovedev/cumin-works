@@ -54,7 +54,7 @@ cuminは、次のすべてが成り立つときだけ、実装Issueをマージ�
 
 #### `CWK-MERGE-004` blocked byのIssueを待つ
 
-`cumin/status/reviewing`の実装Issueで、`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうち、`CWK-MERGE-003`のほかが成り立ち、baseがmainブランチでないか、開いているblocked byのIssueがあるとき、cuminは状態を`cumin/status/awaiting-blocker-merge`に替える。この状態では、誰も作業しない。
+`cumin/status/reviewing`の実装Issueで、`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうち、`CWK-MERGE-003`だけが成り立たないとき、cuminは状態を`cumin/status/awaiting-blocker-merge`に替える。この状態では、誰も作業しない。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
