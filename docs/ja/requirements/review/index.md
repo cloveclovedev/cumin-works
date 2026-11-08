@@ -231,7 +231,7 @@ Reviewerは、コードを変えず、pushせず、Pull Requestをマージせ�
 
 Implementerは、修正が必要な指摘と提案のすべてに返答する。元からある問題には返答しなくてよい。形式は[review-reply.md](../../../../templates/review-reply.md)に従う。
 
-- 検証: `demo` テスト用の実リポジトリでReviewerを動かして確認
+- 検証: `demo` テスト用の実リポジトリでImplementerを動かして確認
 
 ---
 
@@ -245,7 +245,7 @@ Implementerは、提案を次の3つに分け、1行の理由を付けて返答�
 
 提案を`Follow-up`に写さない。直されなかった提案は、マージのあとにcuminがフォローアップノートに書く（[マージ](../merge/index.md)）。
 
-- 検証: `demo` テスト用の実リポジトリでReviewerを動かして確認
+- 検証: `demo` テスト用の実リポジトリでImplementerを動かして確認
 
 ---
 
