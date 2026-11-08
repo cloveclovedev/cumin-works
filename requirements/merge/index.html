@@ -114,10 +114,10 @@
 </section><h3 id="マージ判断">マージ判断</h3>
 <p>cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビューのうち、<code>COMMENT</code>を除いた最新のものだけである（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-012">CWK-ACCESS-012</a></code>）。古いコミットへのレビューは使わない。</p>
 <section class="requirement"><h4 id="CWK-MERGE-003"><code class="requirement-id">CWK-MERGE-003</code> Assigneeの承認でマージを始める</h4>
-<p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>APPROVE</code>で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-012">CWK-MERGE-012</a></code>）とき、cuminは状態を<code>cumin/status/merging</code>に替える。</p>
+<p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>APPROVE</code>で、必須チェックが完了していて、blocked byのIssueを待たなくてよく（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-012">CWK-MERGE-012</a></code>）、同時に進めるIssueの数に余裕がある（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-005">CWK-POLL-005</a></code>）とき、cuminは状態を<code>cumin/status/merging</code>に替える。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-MERGE-004"><code class="requirement-id">CWK-MERGE-004</code> Assigneeの指摘を修正する</h4>
-<p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>REQUEST_CHANGES</code>で、実装Issueが最後に<code>cumin/status/awaiting-merge-decision</code>になったあとに出たものであるとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで修正を頼む。</p>
+<p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>REQUEST_CHANGES</code>で、実装Issueが最後に<code>cumin/status/awaiting-merge-decision</code>になったあとに出たもので、同時に進めるIssueの数に余裕がある（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-005">CWK-POLL-005</a></code>）とき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで修正を頼む。</p>
 <ul>
 <li>
 <p>修正のあとは、必須チェックとレビューを経て、もう一度<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-002">CWK-MERGE-002</a></code>に進む</p>

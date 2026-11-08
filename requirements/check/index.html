@@ -120,7 +120,7 @@
 </li></ul></div>
 </section><h3 id="衝突の解消">衝突の解消</h3>
 <section class="requirement"><h4 id="CWK-CHECK-007"><code class="requirement-id">CWK-CHECK-007</code> 衝突の解消</h4>
-<p><code>cumin/status/checking</code>か<code>cumin/status/awaiting-merge-decision</code>の実装Issueで、GitHubがPull Requestとそのbaseの衝突を返したとき（<code>mergeable</code>が<code>CONFLICTING</code>）、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで衝突の解消を頼む。baseは、ふつうはmainブランチで、マージ前のblocked byのIssueのブランチから始めた実装IssueのPull Requestではblocked byのIssueのブランチである。<code>cumin/status/merging</code>からの衝突の解消は<a href="/cumin-works/requirements/merge/">マージ</a>で決める。</p>
+<p><code>cumin/status/checking</code>か<code>cumin/status/awaiting-merge-decision</code>の実装Issueで、GitHubがPull Requestとそのbaseの衝突を返したとき（<code>mergeable</code>が<code>CONFLICTING</code>）、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで衝突の解消を頼む。baseは、ふつうはmainブランチで、マージ前のblocked byのIssueのブランチから始めた実装IssueのPull Requestではblocked byのIssueのブランチである。<code>cumin/status/awaiting-merge-decision</code>から替えるときは、同時に進めるIssueの数に余裕があることも条件にする（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-005">CWK-POLL-005</a></code>）。<code>cumin/status/merging</code>からの衝突の解消は<a href="/cumin-works/requirements/merge/">マージ</a>で決める。</p>
 <ul>
 <li>
 <p><code>mergeable</code>が<code>UNKNOWN</code>の間は、GitHubが計算中なので判定しない。<code>UNKNOWN</code>のまま待ち時間を過ぎたら、<code><a href="/cumin-works/requirements/check/#CWK-CHECK-006">CWK-CHECK-006</a></code>で止まる。</p>

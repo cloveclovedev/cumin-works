@@ -202,11 +202,12 @@
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h5 id="CWK-IMPL-008.5"><code class="requirement-id">CWK-IMPL-008.5</code> blocked byのIssueのマージのあとに確かめ直す</h5>
 <p>マージ前のblocked byのIssueのブランチから始めた実装Issueは、始めた時点のblocked byのIssueの上で作られている。blocked byのIssueは、そのあとも変わることがある。そこでcuminは、blocked byのIssueがマージされたら、衝突がなくても、最終的な中身と合わせて確かめ直させる。</p>
-<p>次のすべてが成り立つとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで、mainブランチの取り込みと確かめ直しを頼む。続きの作業なので、同時に進めるIssueの数に余裕ができるのを待たない。</p>
+<p>次のすべてが成り立つとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで、mainブランチの取り込みと確かめ直しを頼む。</p>
 <ul>
 <li>状態が<code>cumin/status/awaiting-blocker-merge</code>か、<a href="/cumin-works/requirements/merge/">マージ</a>の<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-001">CWK-MERGE-001</a></code>か<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-002">CWK-MERGE-002</a></code>の条件のうち、blocked byのIssueを待たなくてよいこと（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-012">CWK-MERGE-012</a></code>）のほかが成り立つ<code>cumin/status/reviewing</code>である</li>
 <li>baseがmainブランチで、blocked byのIssueがすべて閉じている</li>
 <li>この実装Issueのブランチが、まだblocked byのIssueのマージのあとのmainブランチを取り込んでいない（先頭のコミットが、blocked byのIssueを閉じたPull Requestのマージのコミットを含まない）</li>
+<li><code>cumin/status/awaiting-blocker-merge</code>から替えるときは、同時に進めるIssueの数に余裕がある（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-005">CWK-POLL-005</a></code>）</li>
 </ul>
 <p>cuminは、依頼に次の事実を足す。</p>
 <ul>
