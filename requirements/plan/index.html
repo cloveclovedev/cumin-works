@@ -191,7 +191,7 @@ cuminがPlannerを起動し、計画の結果をGitHubで確かめ、Assigneeの
 <p>Plannerは、実装Issueどうしの依存をblocked byで記録する。blocked byは同じ要求Issueのsub-issueの間だけに張り、循環させない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでPlannerを動かして確認</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-PLAN-013"><code class="requirement-id">CWK-PLAN-013</code> リスクを仮に付ける</h4>
-<p>Plannerは、実装Issueごとにリスクのラベルを1つだけ付ける。基準は、Plannerが受け取るリスクの基準である（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-006">CWK-AGENT-006</a></code>）。迷ったら高いほうを付ける。<code>cumin/risk/high</code>に当たる変更は、それだけの最小の実装Issueに分ける。</p>
+<p>Plannerは、実装Issueごとにリスクのラベルを1つだけ付ける。基準は、Plannerが受け取るリスクの基準である（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-007">CWK-AGENT-007</a></code>）。迷ったら高いほうを付ける。<code>cumin/risk/high</code>に当たる変更は、それだけの最小の実装Issueに分ける。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでPlannerを動かして確認</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-PLAN-014"><code class="requirement-id">CWK-PLAN-014</code> マイルストーンを写す</h4>
 <p>要求Issueにマイルストーンがあれば、Plannerは実装Issueに同じマイルストーンを付ける。</p>

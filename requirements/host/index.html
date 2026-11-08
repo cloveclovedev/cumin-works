@@ -162,7 +162,7 @@
 <p><code>cumin stop --after-current-runs</code>を実行すると、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。止める予約は、次の起動には残らない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-008"><code class="requirement-id">CWK-HOST-008</code> スリープ</h4>
-<p>Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-017">CWK-AGENT-017</a></code>）。</p>
+<p>Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018">CWK-AGENT-018</a></code>）。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> Hostでcuminを動かして確認</li></ul></div>
 </section><h3 id="設定">設定</h3>
 <section class="requirement"><h4 id="CWK-HOST-009"><code class="requirement-id">CWK-HOST-009</code> 設定ファイル</h4>
@@ -255,7 +255,7 @@
 </tr>
 <tr>
 <td><code>roles.&lt;role&gt;.time_limit</code></td>
-<td>実行の時間の上限。55分以下（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-015">CWK-AGENT-015</a></code>）</td>
+<td>実行の時間の上限。55分以下（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-016">CWK-AGENT-016</a></code>）</td>
 <td>50分</td>
 <td>Host</td>
 </tr>
@@ -267,7 +267,7 @@
 </tr>
 <tr>
 <td><code>roles.&lt;role&gt;.cli</code></td>
-<td>Agentを動かすCLI。今はClaude Codeだけ（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019">CWK-AGENT-019</a></code>）</td>
+<td>Agentを動かすCLI。今はClaude Codeだけ（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-020">CWK-AGENT-020</a></code>）</td>
 <td>Claude Code</td>
 <td>両方</td>
 </tr>
@@ -327,7 +327,7 @@
 </tr>
 <tr>
 <td><code>tool_checks</code></td>
-<td>ツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018.1">CWK-AGENT-018.1</a></code>）</td>
+<td>ツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019.1">CWK-AGENT-019.1</a></code>）</td>
 <td>なし</td>
 <td>リポジトリ</td>
 </tr>
@@ -357,7 +357,7 @@
 <p><code>test</code> 設定の読み込みを単体テスト</p>
 </li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-012"><code class="requirement-id">CWK-HOST-012</code> リスクの基準</h4>
-<p>リスクの基準は、TOMLの値ではなく、Markdownのファイルで決める。cuminは中身を読まず、PlannerとReviewerへの指示にそのまま入れる（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-006">CWK-AGENT-006</a></code>）。</p>
+<p>リスクの基準は、TOMLの値ではなく、Markdownのファイルで決める。cuminは中身を読まず、PlannerとReviewerへの指示にそのまま入れる（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-007">CWK-AGENT-007</a></code>）。</p>
 <table>
 <thead>
 <tr>
