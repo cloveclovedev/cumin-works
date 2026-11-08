@@ -10,7 +10,9 @@ IssueをAssigneeの判断に返すときの決まりを決める。Agentが自�
 
 ## 要件
 
-### `CWK-ASK-001` 判断を求めるコメント
+### 判断を求めるコメント
+
+#### `CWK-ASK-001` 判断を求めるコメント
 
 cuminは、Issueを`cumin/status/awaiting-decision`に替えるとき、そのIssueに、Assigneeが判断するためのコメントがあるようにする。コメントには、次のことを書く。
 
@@ -22,7 +24,7 @@ cuminは、Issueを`cumin/status/awaiting-decision`に替えるとき、そのIs
 
 ---
 
-### `CWK-ASK-002` コメントを書く人
+#### `CWK-ASK-002` コメントを書く人
 
 Agentが判断を求めて止まったときは、Agentが[decision-request.md](../../../../templates/decision-request.md)の形式で書いた文が、このコメントになる。`blocked_reason`は、cuminがIssueにコメントとして書く（[Agent](../agent/index.md)の`CWK-AGENT-013`）。それ以外でcuminが止めたときは、cuminが[stop-note.md](../../../../templates/stop-note.md)の形式で書く。1回止めるごとに、コメントは1つである。
 
@@ -31,7 +33,9 @@ Agentが判断を求めて止まったときは、Agentが[decision-request.md](
 
 ---
 
-### `CWK-ASK-003` 判断のあとの再開
+### 再開
+
+#### `CWK-ASK-003` 判断のあとの再開
 
 Assigneeは、判断をIssueのコメントに書き、`cumin/status/ready`を付ける（[ラベル](../label/index.md)の`CWK-LABEL-004`）。そのあとcuminが何をするかは、各カテゴリの要件で決める。
 
