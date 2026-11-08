@@ -27,10 +27,10 @@ Decision : do / the Assignee answers
 state "ready" as Ready #EEEEEE
 Ready : (the plan area)
 
-Before --> Accepting : request the acceptance check\n[every sub-issue is closed, no check after the last close,\nthe follow-up notes are written,\nbelow the limit of issues in progress]\n/ cumin starts the Planner
-Accepting --> AwaitingAcceptance : ask for the acceptance\n[the acceptance check completed,\nevery sub-issue is closed]\n/ cumin notifies
-Accepting --> PlanReview : ask for the plan review\n[the acceptance check completed,\nan open sub-issue, each open one has one risk label]\n/ cumin notifies
-Accepting --> Accepting : request the acceptance check again\n[the Planner run has ended, no question, first time, and:\nno check comment, or an open sub-issue\nwithout exactly one risk label]\n/ cumin starts the Planner again
+Before --> Accepting : request the acceptance check\n[every implementation issue is closed, no check after the last close,\nthe follow-up notes are written,\nbelow the limit of issues in progress]\n/ cumin starts the Planner
+Accepting --> AwaitingAcceptance : ask for the acceptance\n[the acceptance check completed,\nevery implementation issue is closed]\n/ cumin notifies
+Accepting --> PlanReview : ask for the plan review\n[the acceptance check completed,\nan open implementation issue, each open one has one risk label]\n/ cumin notifies
+Accepting --> Accepting : request the acceptance check again\n[the Planner run has ended, no question, first time, and:\nno check comment, or an open implementation issue\nwithout exactly one risk label]\n/ cumin starts the Planner again
 Accepting --> Decision : stop the acceptance check\n[the Planner run has ended, and: the Planner asked,\nor the same failure after the retry]\n/ cumin notifies
 AwaitingAcceptance --> [*] : the Assignee closes the issue
 AwaitingAcceptance --> Implementing : send back\n[the Assignee adds ready to a new implementation issue]
