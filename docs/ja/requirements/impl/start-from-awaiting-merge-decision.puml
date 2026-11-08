@@ -1,0 +1,46 @@
+@startuml start-from-awaiting-merge-decision
+' cumin-works - an implementation issue that starts from the branch of a pull request
+' that waits for the merge decision (IMPL-008, MERGE-020 to MERGE-023).
+' Issue #1 is the blocker. Issue #2 is blocked by #1 and starts from the branch of #1.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide footbox
+
+actor "Assignee" as Assignee
+participant "cumin" as Cumin
+participant "Implementer\n(issue #2)" as Impl
+participant "main" as Main
+participant "branch of #1" as B1
+participant "branch of #2" as B2
+
+== issue #1 waits for the merge decision ==
+
+note over Main, B1 : pull request of #1: base main,\nissue #1 is awaiting-merge-decision
+Cumin -> Cumin : issue #2 is ready, and its only open blocker\nissue #1 is awaiting-merge-decision (IMPL-008.1)
+Cumin -> Impl : request the implementation,\nstarting from the branch of #1 (IMPL-008.2)
+B1 -> B2 : branch off
+Impl -> B2 : commit and push
+Impl -> B2 : open a pull request with base: branch of #1
+note over B1, B2 : the diff shows only the change of #2.\nNew commits on the branch of #1 are not followed (IMPL-008.3)
+
+... required checks and review of #2 ...
+
+Cumin -> Cumin : the Reviewer approved #2, but its base is not main\n→ #2 is awaiting-blocker-merge (MERGE-020)
+
+== the Assignee merges #1 ==
+
+Assignee -> Cumin : approve the pull request of #1
+Cumin -> Main : merge the pull request of #1
+note over Main, B2 : GitHub deletes the branch of #1\nand changes the base of #2 to main
+Cumin -> Impl : take in the main branch (MERGE-021)\n→ #2 is implementing
+Main -> B2 : merge commit of main
+
+... required checks, review, and merge decision of #2 ...
+
+Cumin -> Main : merge the pull request of #2
+
+== if the pull request of #1 is closed without a merge ==
+
+Cumin -> Cumin : stop #2\n→ #2 is awaiting-decision (MERGE-023)
+
+@enduml

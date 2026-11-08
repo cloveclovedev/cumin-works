@@ -100,6 +100,10 @@ Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つ
 
 blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間も、cuminはそのブランチから次の実装を始められる。そのPull Requestのマージを待つことと、マージのあとのことは[マージ](../merge/index.md)で決める。
 
+![マージ判断を待つPull Requestのブランチから始める流れ](start-from-awaiting-merge-decision.svg)
+
+図の元ファイル: [start-from-awaiting-merge-decision.puml](start-from-awaiting-merge-decision.puml)
+
 #### `CWK-IMPL-008` マージ判断を待つPull Requestのブランチから始める
 
 ##### `CWK-IMPL-008.1` 着手の条件
