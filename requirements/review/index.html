@@ -109,14 +109,17 @@
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
 <p><code>test</code> GitHub mockとCLI mockでテスト</p>
 </li></ul></div>
+</section><section class="requirement"><h4 id="CWK-REVIEW-003"><code class="requirement-id">CWK-REVIEW-003</code> リポジトリのレビューの指針</h4>
+<p>対象のリポジトリの最上位に<code>REVIEW.md</code>があれば、Reviewerはそれに従う。<code>REVIEW.md</code>には、Maintainerが、そのリポジトリで何が失敗にあたるか、見なくてよいパス、指摘の根拠の示し方などを書く。</p>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
 </section><h3 id="レビューの完了判断">レビューの完了判断</h3>
-<section class="requirement"><h4 id="CWK-REVIEW-003"><code class="requirement-id">CWK-REVIEW-003</code> レビューの完了を判断する</h4>
+<section class="requirement"><h4 id="CWK-REVIEW-004"><code class="requirement-id">CWK-REVIEW-004</code> レビューの完了を判断する</h4>
 <p>cuminは、<code>cumin-reviewer</code>が今の先頭のコミットに<code>APPROVE</code>か<code>REQUEST_CHANGES</code>のレビューを出したとき、レビューが完了したと判断する。古いコミットへのレビュー、<code>COMMENT</code>だけのレビュー、Reviewerの結果は使わない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-004"><code class="requirement-id">CWK-REVIEW-004</code> 指摘を修正する</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-005"><code class="requirement-id">CWK-REVIEW-005</code> 指摘を修正する</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、Reviewerの実行が終わっていて、最新のレビューが今の先頭のコミットへの<code>REQUEST_CHANGES</code>で、ラウンドが上限に達していないとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで指摘の修正を頼む。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-005"><code class="requirement-id">CWK-REVIEW-005</code> チェックに戻る</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-006"><code class="requirement-id">CWK-REVIEW-006</code> チェックに戻る</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、Reviewerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を<code>cumin/status/checking</code>に替える。古いコミットへのレビューも、ラウンドに含めたままにする。</p>
 <ul>
 <li>
@@ -129,10 +132,10 @@
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
 <p><code>test</code> GitHub mockとCLI mockでテスト</p>
 </li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-006"><code class="requirement-id">CWK-REVIEW-006</code> レビューをやり直す</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-007"><code class="requirement-id">CWK-REVIEW-007</code> レビューをやり直す</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、Reviewerの実行が終わっていて、今の先頭のコミットにReviewerのレビューも質問のコメントもないとき、cuminは状態を替えずにReviewerをもう一度起動する。やり直しは、1つの<code>cumin/status/reviewing</code>の間に1回だけである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-007"><code class="requirement-id">CWK-REVIEW-007</code> レビューを止める</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-008"><code class="requirement-id">CWK-REVIEW-008</code> レビューを止める</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、Reviewerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
 <ul>
 <li>
@@ -152,7 +155,7 @@
 <p><code>test</code> GitHub mockとCLI mockでテスト</p>
 </li></ul></div>
 </section><h3 id="ラウンド">ラウンド</h3>
-<section class="requirement"><h4 id="CWK-REVIEW-008"><code class="requirement-id">CWK-REVIEW-008</code> ラウンドの数え方</h4>
+<section class="requirement"><h4 id="CWK-REVIEW-009"><code class="requirement-id">CWK-REVIEW-009</code> ラウンドの数え方</h4>
 <p>ラウンドは、次の2つの新しいほうよりあとに出た<code>cumin-reviewer</code>のレビューの数とする。cuminはラウンドの数を手元に持たない。</p>
 <ul>
 <li>実装Issueに最後に<code>cumin/status/ready</code>が付いたとき</li>
@@ -160,17 +163,17 @@
 </ul>
 <p><code>APPROVE</code>のあとで数え直すのは、衝突の解消やAssigneeの<code>REQUEST_CHANGES</code>（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-004">CWK-MERGE-004</a></code>）で先頭のコミットが変わり、レビューをやり直すからである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-009"><code class="requirement-id">CWK-REVIEW-009</code> 原因を整理する</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-010"><code class="requirement-id">CWK-REVIEW-010</code> 原因を整理する</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、Reviewerの実行が終わっていて、最新のレビューが今の先頭のコミットへの<code>REQUEST_CHANGES</code>で、ラウンドが上限（<code>max_review_rounds</code>、初期値は5）に達し、原因の整理のコメントがまだないとき、cuminは状態を替えずに、Reviewerの直前のセッションで原因の整理を頼む。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-010"><code class="requirement-id">CWK-REVIEW-010</code> ラウンドの上限で止める</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-011"><code class="requirement-id">CWK-REVIEW-011</code> ラウンドの上限で止める</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、Reviewerの原因の整理のコメントがPull Requestにあるとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><h3 id="reviewerの成果物">Reviewerの成果物</h3>
-<section class="requirement"><h4 id="CWK-REVIEW-011"><code class="requirement-id">CWK-REVIEW-011</code> レビュー</h4>
-<p>Reviewerは、今の先頭のコミットにGitHubのレビューを1つ出す。修正が必要な指摘が残っておらず、提案のすべてにImplementerの返答があるときだけ<code>APPROVE</code>にし、それ以外は<code>REQUEST_CHANGES</code>にする。元からある問題（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-013">CWK-REVIEW-013</a></code>）は、この判断に使わない。<code>COMMENT</code>だけのレビューにはしない。指摘とまとめはreview.mdの形式で書き、まとめにラウンドと上限を書く。</p>
+<section class="requirement"><h4 id="CWK-REVIEW-012"><code class="requirement-id">CWK-REVIEW-012</code> レビュー</h4>
+<p>Reviewerは、今の先頭のコミットにGitHubのレビューを1つ出す。修正が必要な指摘が残っておらず、提案のすべてにImplementerの返答があるときだけ<code>APPROVE</code>にし、それ以外は<code>REQUEST_CHANGES</code>にする。元からある問題（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-014">CWK-REVIEW-014</a></code>）は、この判断に使わない。<code>COMMENT</code>だけのレビューにはしない。指摘とまとめはreview.mdの形式で書き、まとめにラウンドと上限を書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-012"><code class="requirement-id">CWK-REVIEW-012</code> 修正が必要な指摘</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-013"><code class="requirement-id">CWK-REVIEW-013</code> 修正が必要な指摘</h4>
 <p>Reviewerは、指摘を、修正が必要なもの<code>(blocking)</code>と提案<code>(non-blocking)</code>に分ける。修正が必要な指摘には、何が問題か、なぜ直すか、どう直すかを書く。修正が必要な指摘にしてよいのは、次のものだけである。</p>
 <ul>
 <li>完了の条件を満たしていない</li>
@@ -179,37 +182,34 @@
 <li>実装Issueの範囲を超えた変更がある</li>
 <li>直すべき文書が直されていない</li>
 <li>リポジトリにある指示（<code>CLAUDE.md</code>、<code>AGENTS.md</code>など）に反している</li>
-<li>セキュリティの問題がある（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-016">CWK-REVIEW-016</a></code>）</li>
+<li>セキュリティの問題がある（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-017">CWK-REVIEW-017</a></code>）</li>
 <li>計算の手間が、現実的なデータ量で明らかに問題になる。完了の条件の性能の目標を満たしていない場合も含む</li>
 <li>読んでも正しさを確かめられないほど入り組んでいる</li>
 </ul>
 <p>同じ種類の誤りがいくつもの箇所にあれば、1つの指摘にまとめ、すべての箇所を挙げる。直さなくても正しく動く改善案は、提案にする。書き方の好み、言い回し、片付けだけのことは、提案にもしない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-013"><code class="requirement-id">CWK-REVIEW-013</code> 元からある問題</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-014"><code class="requirement-id">CWK-REVIEW-014</code> 元からある問題</h4>
 <p>Reviewerは、Pull Requestが持ち込んだのではなく、前からmainブランチにある問題に気づいたら、元からある問題<code>(pre-existing)</code>として書く。元からある問題は<code>APPROVE</code>を止めず、Implementerは直さず、返答も要らない。マージのあとにcuminがフォローアップノートに書き（<a href="/cumin-works/requirements/merge/">マージ</a>）、受け入れ確認でPlannerが扱いを決める（<a href="/cumin-works/requirements/accept/">受け入れ</a>）。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-014"><code class="requirement-id">CWK-REVIEW-014</code> ラウンドごとに見る範囲</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-015"><code class="requirement-id">CWK-REVIEW-015</code> ラウンドごとに見る範囲</h4>
 <p>Reviewerは、1ラウンド目でできる限り洗い出し、2ラウンド目からは指摘が直ったかと返答だけを見る。毎回一から見直すと、新しい指摘がなくならないためである。</p>
-<section class="requirement"><h5 id="CWK-REVIEW-014.1"><code class="requirement-id">CWK-REVIEW-014.1</code> 1ラウンド目</h5>
-<p>Reviewerは、AgentのCLIに組み込みのコードレビューとセキュリティレビューのskill（Claude Codeでは<code>code-review</code>と<code>security-review</code>）を実行する。<code>code-review</code>の深さは<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-015">CWK-REVIEW-015</a></code>で決める。GitHubに投稿する、ファイルを変える、クラウドで動く使い方はしない。skillが挙げた候補は、コードを読んで確かめてから指摘にする。skillが見ないこと（完了の条件、範囲、文書、リポジトリにある指示、専門知識のファイルのセキュリティの観点）は、Reviewerが確かめる。skillがないか失敗したときは、同じ観点を自分で確かめる。</p>
+<section class="requirement"><h5 id="CWK-REVIEW-015.1"><code class="requirement-id">CWK-REVIEW-015.1</code> 1ラウンド目</h5>
+<p>Reviewerは、AgentのCLIに組み込みのコードレビューとセキュリティレビューのskill（Claude Codeでは<code>code-review</code>と<code>security-review</code>）を実行する。<code>code-review</code>の深さは<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-016">CWK-REVIEW-016</a></code>で決める。GitHubに投稿する、ファイルを変える、クラウドで動く使い方はしない。skillが挙げた候補は、コードを読んで確かめてから指摘にする。skillが見ないこと（完了の条件、範囲、文書、リポジトリにある指示、専門知識のファイルのセキュリティの観点）は、Reviewerが確かめる。skillがないか失敗したときは、同じ観点を自分で確かめる。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section><section class="requirement"><h5 id="CWK-REVIEW-014.2"><code class="requirement-id">CWK-REVIEW-014.2</code> 承認のあとの1ラウンド目</h5>
+</section><section class="requirement"><h5 id="CWK-REVIEW-015.2"><code class="requirement-id">CWK-REVIEW-015.2</code> 承認のあとの1ラウンド目</h5>
 <p>ReviewerがこのPull Requestを承認したことがあれば、最後に承認したコミット（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-002">CWK-REVIEW-002</a></code>）から今の先頭のコミットまでの差分だけを、1ラウンド目と同じ深さで見る。skillもその差分に対して実行する。承認したことがなければ、全体を見る。マージ判断での<code>REQUEST_CHANGES</code>や衝突の解消のたびに、全体をレビューし直さないためである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section><section class="requirement"><h5 id="CWK-REVIEW-014.3"><code class="requirement-id">CWK-REVIEW-014.3</code> 2ラウンド目から</h5>
+</section><section class="requirement"><h5 id="CWK-REVIEW-015.3"><code class="requirement-id">CWK-REVIEW-015.3</code> 2ラウンド目から</h5>
 <p>Reviewerは、前の指摘と返答、前のラウンドのコミットから今の先頭のコミットまでの差分だけを見る。新しく指摘してよいのは、直し方の誤り、納得できない返答、その差分の中の動作の誤りとセキュリティの問題だけである。同じ指摘を繰り返さず、skillも実行しない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section></section><section class="requirement"><h4 id="CWK-REVIEW-015"><code class="requirement-id">CWK-REVIEW-015</code> レビューの深さ</h4>
+</section></section><section class="requirement"><h4 id="CWK-REVIEW-016"><code class="requirement-id">CWK-REVIEW-016</code> レビューの深さ</h4>
 <p>Reviewerは、リスクのラベルに合わせて、コードレビューのskillの深さ（Claude Codeではeffort）を選ぶ。対応は、専門知識のファイルに書く。初期の専門知識<code>software-engineering</code>では、<code>cumin/risk/low</code>と<code>cumin/risk/medium</code>は<code>high</code>、<code>cumin/risk/high</code>は<code>xhigh</code>である。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Reviewerが受け取る専門知識のファイルに、リスクのラベルごとの深さがある</li><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-016"><code class="requirement-id">CWK-REVIEW-016</code> セキュリティの観点とチェックに任せること</h4>
+</section><section class="requirement"><h4 id="CWK-REVIEW-017"><code class="requirement-id">CWK-REVIEW-017</code> セキュリティの観点とチェックに任せること</h4>
 <p>Reviewerは、専門知識のファイルにある観点で、セキュリティの問題を確かめる。秘密の値の検出、脆弱性のある依存、静的解析、書式、命名、複雑さのしきい値のように機械で確かめられることは、必須チェックに任せ、Reviewerは見ない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Reviewerが受け取る専門知識のファイルに、セキュリティの観点と、チェックに任せることがある</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-017"><code class="requirement-id">CWK-REVIEW-017</code> リポジトリのレビューの指針</h4>
-<p>対象のリポジトリの最上位に<code>REVIEW.md</code>があれば、Reviewerはそれに従う。<code>REVIEW.md</code>には、Maintainerが、そのリポジトリで何が失敗にあたるか、見なくてよいパス、指摘の根拠の示し方などを書く。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-REVIEW-018"><code class="requirement-id">CWK-REVIEW-018</code> 原因の整理のコメント</h4>
-<p>原因の整理を頼まれたReviewer（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-009">CWK-REVIEW-009</a></code>）は、Pull RequestにAssignee向けのコメントを1つ書く。形式はdecision-request.mdに従い、決めてほしいこと、何が決まっていないために指摘が直らないかとそれをどこに書くべきか、指摘ごとのReviewerとImplementerの立場、選べる決め方と得失、勧める案を書く。</p>
+<p>原因の整理を頼まれたReviewer（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-010">CWK-REVIEW-010</a></code>）は、Pull RequestにAssignee向けのコメントを1つ書く。形式はdecision-request.mdに従い、決めてほしいこと、何が決まっていないために指摘が直らないかとそれをどこに書くべきか、指摘ごとのReviewerとImplementerの立場、選べる決め方と得失、勧める案を書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-REVIEW-019"><code class="requirement-id">CWK-REVIEW-019</code> 直さない</h4>
 <p>Reviewerは、コードを変えず、pushせず、Pull Requestをマージせず、閉じず、Issueの本文を書き換えない。pushは権限でも止まる（<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-005">CWK-ACCESS-005</a></code>）。</p>
@@ -229,7 +229,7 @@
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
 </section><h3 id="reviewerが判断を求めるとき">Reviewerが判断を求めるとき</h3>
 <section class="requirement"><h4 id="CWK-REVIEW-022"><code class="requirement-id">CWK-REVIEW-022</code> 推測でレビューしない</h4>
-<p>Reviewerは、次のどれかに当たったら、レビューを出さずに<code>blocked</code>を返す。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-007">CWK-REVIEW-007</a></code>）。</p>
+<p>Reviewerは、次のどれかに当たったら、レビューを出さずに<code>blocked</code>を返す。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-008">CWK-REVIEW-008</a></code>）。</p>
 <section class="requirement"><h5 id="CWK-REVIEW-022.1"><code class="requirement-id">CWK-REVIEW-022.1</code> 合わないリスク</h5>
 <p>リスクのラベルが実際の変更と合わないときは、止まる。例えば<code>cumin/risk/low</code>なのに、データベースのマイグレーションを含む。認証、暗号、セッションの処理を変える変更は、リスクの基準の初期値では<code>cumin/risk/high</code>である。リスクを決め直すのはAssigneeなので、Implementerには回さない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>

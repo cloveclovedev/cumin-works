@@ -140,7 +140,7 @@
 <section class="requirement"><h4 id="CWK-CHECK-008"><code class="requirement-id">CWK-CHECK-008</code> 保護されたパスのチェック</h4>
 <p>保護されたパスが変わっていないことは、cuminではなく、GitHub Actionsのチェックで確かめる。失敗したときは、ほかの必須チェックと同じく<code><a href="/cumin-works/requirements/check/#CWK-CHECK-004">CWK-CHECK-004</a></code>に進む。</p>
 <section class="requirement"><h5 id="CWK-CHECK-008.1"><code class="requirement-id">CWK-CHECK-008.1</code> 保護されたパスの一覧</h5>
-<p>保護されたパスの一覧は、対象のリポジトリの<code>.cumin/config.toml</code>の<code>protected_paths</code>に書く。ファイルかキーがなければ、初期値の<code>.cumin/</code>、<code>CLAUDE.md</code>、<code>AGENTS.md</code>、<code>.claude/</code>、<code>REVIEW.md</code>を使う。書いた一覧は、初期値に足すのではなく、初期値を置き換える。<code>REVIEW.md</code>を含めるのは、Agentが書き換えると、Reviewerの判断が変わるためである（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-017">CWK-REVIEW-017</a></code>）。</p>
+<p>保護されたパスの一覧は、対象のリポジトリの<code>.cumin/config.toml</code>の<code>protected_paths</code>に書く。ファイルかキーがなければ、初期値の<code>.cumin/</code>、<code>CLAUDE.md</code>、<code>AGENTS.md</code>、<code>.claude/</code>、<code>REVIEW.md</code>を使う。書いた一覧は、初期値に足すのではなく、初期値を置き換える。<code>REVIEW.md</code>を含めるのは、Agentが書き換えると、Reviewerの判断が変わるためである（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-003">CWK-REVIEW-003</a></code>）。</p>
 <p>照合の決まりは、<code>.gitignore</code>の一部と同じである。</p>
 <ul>
 <li>

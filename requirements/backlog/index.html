@@ -89,7 +89,7 @@
 <p>Pull Requestとは別に、Reviewerがmainブランチの既存のコードを定期的にレビューし、元からある不具合を、ほかの場所で表に出る前に見つける。</p>
 <ul>
 <li>後回しにした理由: 今はPull Requestごとのレビューを固めるのが先で、定期的に動くAgentの仕組みもまだない</li>
-<li>見直すきっかけ: 元からある問題（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-013">CWK-REVIEW-013</a></code>）がフォローアップノートに多く集まったとき</li>
+<li>見直すきっかけ: 元からある問題（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-014">CWK-REVIEW-014</a></code>）がフォローアップノートに多く集まったとき</li>
 </ul>
 <hr>
 <h3 id="レビューの指標">レビューの指標</h3>
@@ -102,7 +102,7 @@
 <h3 id="claude-code以外のcliでのレビュー">Claude Code以外のCLIでのレビュー</h3>
 <p>ReviewerをCodexなどのほかのCLIでも動かし、1ラウンド目でClaude Codeのレビューと合わせて使う。モデルが違えば見落とす点も違うので、同じskillを並列にいくつも動かすより、見落としを減らせる。書き込みの権限が小さいReviewerから試すのがよい。Codexに結果をJSON Schemaに従わせる機能があることは確かめた。Agent作業ディレクトリの隔離、指示の渡し方、起動の記録、セッションの再開、使用率を読めるかは、まだ確かめていない。</p>
 <ul>
-<li>後回しにした理由: AgentのCLIは今はClaude Codeだけで（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019">CWK-AGENT-019</a></code>）、ほかのCLIを入れると、利用制限、Hostの設定、Agentに渡す認証情報の要件も変わる。1ラウンド目では、コードレビューのskillがすでに並列に探して確かめている（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-014.1">CWK-REVIEW-014.1</a></code>）</li>
+<li>後回しにした理由: AgentのCLIは今はClaude Codeだけで（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019">CWK-AGENT-019</a></code>）、ほかのCLIを入れると、利用制限、Hostの設定、Agentに渡す認証情報の要件も変わる。1ラウンド目では、コードレビューのskillがすでに並列に探して確かめている（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-015.1">CWK-REVIEW-015.1</a></code>）</li>
 <li>見直すきっかけ: レビューの指標で、Claude Codeのレビューの見落としが目立ったとき。Codexの利用制限も使いたくなったとき</li>
 </ul>
 <hr>
