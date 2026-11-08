@@ -182,7 +182,7 @@
 <li>実装Issueの範囲を超えた変更がある</li>
 <li>直すべき文書が直されていない</li>
 <li>リポジトリにある指示（<code>CLAUDE.md</code>、<code>AGENTS.md</code>など）に反している</li>
-<li>セキュリティの問題がある（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-017">CWK-REVIEW-017</a></code>）</li>
+<li>セキュリティの問題がある</li>
 <li>計算の手間が、現実的なデータ量で明らかに問題になる。完了の条件の性能の目標を満たしていない場合も含む</li>
 <li>読んでも正しさを確かめられないほど入り組んでいる</li>
 </ul>
@@ -205,9 +205,9 @@
 </section></section><section class="requirement"><h4 id="CWK-REVIEW-016"><code class="requirement-id">CWK-REVIEW-016</code> レビューの深さ</h4>
 <p>Reviewerは、リスクのラベルに合わせて、コードレビューのskillの深さ（Claude Codeではeffort）を選ぶ。対応は、専門知識のファイルに書く。初期の専門知識<code>software-engineering</code>では、<code>cumin/risk/low</code>と<code>cumin/risk/medium</code>は<code>high</code>、<code>cumin/risk/high</code>は<code>xhigh</code>である。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Reviewerが受け取る専門知識のファイルに、リスクのラベルごとの深さがある</li><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-REVIEW-017"><code class="requirement-id">CWK-REVIEW-017</code> セキュリティの観点とチェックに任せること</h4>
-<p>Reviewerは、専門知識のファイルにある観点で、セキュリティの問題を確かめる。秘密の値の検出、脆弱性のある依存、静的解析、書式、命名、複雑さのしきい値のように機械で確かめられることは、必須チェックに任せ、Reviewerは見ない。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Reviewerが受け取る専門知識のファイルに、セキュリティの観点と、チェックに任せることがある</li></ul></div>
+</section><section class="requirement"><h4 id="CWK-REVIEW-017"><code class="requirement-id">CWK-REVIEW-017</code> チェックに任せること</h4>
+<p>秘密の値の検出、脆弱性のある依存、静的解析、書式、命名、複雑さのしきい値のように機械で確かめられることは、必須チェックに任せ、Reviewerは見ない。</p>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Reviewerが受け取る専門知識のファイルに、チェックに任せることがある</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-REVIEW-018"><code class="requirement-id">CWK-REVIEW-018</code> 原因の整理のコメント</h4>
 <p>原因の整理を頼まれたReviewer（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-010">CWK-REVIEW-010</a></code>）は、Pull RequestにAssignee向けのコメントを1つ書く。形式はdecision-request.mdに従い、決めてほしいこと、何が決まっていないために指摘が直らないかとそれをどこに書くべきか、指摘ごとのReviewerとImplementerの立場、選べる決め方と得失、勧める案を書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
