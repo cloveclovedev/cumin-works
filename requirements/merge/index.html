@@ -134,8 +134,8 @@
 <p><code>cumin/status/awaiting-merge-decision</code>の実装Issueでは、<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-003">CWK-MERGE-003</a></code>、<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-004">CWK-MERGE-004</a></code>、衝突の解消（<a href="/cumin-works/requirements/check/">チェック</a>の<code><a href="/cumin-works/requirements/check/#CWK-CHECK-007">CWK-CHECK-007</a></code>）の順に判定し、最初に成り立ったものだけを行う。衝突していても、Assigneeの判断を先に進める。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><h3 id="マージ">マージ</h3>
-<section class="requirement"><h4 id="CWK-MERGE-006"><code class="requirement-id">CWK-MERGE-006</code> マージの条件</h4>
-<p>cuminは、<code>cumin/status/merging</code>の実装IssueのPull Requestを、次のすべてが成り立つときだけマージする。マージを送るたびに確かめ直す。</p>
+<section class="requirement"><h4 id="CWK-MERGE-006"><code class="requirement-id">CWK-MERGE-006</code> GitHub上のマージ前の最終確認</h4>
+<p>cuminは、<code>cumin/status/merging</code>の実装IssueのPull Requestを、次のすべてが成り立つときだけマージする。GitHub上でマージ処理するたびに確かめ直す。</p>
 <ul>
 <li>
 <p>必須チェックが、今の先頭のコミットで完了している</p>
@@ -156,8 +156,8 @@
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
 <p><code>test</code> GitHub mockでテスト</p>
 </li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-007"><code class="requirement-id">CWK-MERGE-007</code> マージを送る</h4>
-<p><code>cumin/status/merging</code>の実装Issueで、Pull Requestがマージされておらず、マージの条件が成り立ち、衝突していないとき、cuminはマージを送る。</p>
+</section><section class="requirement"><h4 id="CWK-MERGE-007"><code class="requirement-id">CWK-MERGE-007</code> GitHub上でマージ処理する</h4>
+<p><code>cumin/status/merging</code>の実装Issueで、Pull Requestがマージされておらず、<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-006">CWK-MERGE-006</a></code>の条件が成り立ち、衝突していないとき、cuminはGitHub上でマージ処理する。</p>
 <ul>
 <li>
 <p>マージの方法は、設定<code>merge_method</code>（初期値はsquash）に従う</p>
@@ -176,13 +176,13 @@
 <p><code>test</code> GitHub mockでテスト</p>
 </li></ul></div>
 </section><section class="requirement"><h4 id="CWK-MERGE-008"><code class="requirement-id">CWK-MERGE-008</code> チェックに戻る</h4>
-<p><code>cumin/status/merging</code>の実装Issueで、Pull Requestがマージされておらず、マージの条件が成り立たないとき、cuminは状態を<code>cumin/status/checking</code>に替える。</p>
+<p><code>cumin/status/merging</code>の実装Issueで、Pull Requestがマージされておらず、<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-006">CWK-MERGE-006</a></code>の条件が成り立たないとき、cuminは状態を<code>cumin/status/checking</code>に替える。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-MERGE-009"><code class="requirement-id">CWK-MERGE-009</code> マージの前の衝突を解消する</h4>
-<p><code>cumin/status/merging</code>の実装Issueで、マージの条件が成り立ち、GitHubが衝突していると返したとき、または衝突でマージを断ったとき、cuminはマージを送らずに、状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで衝突の解消を頼む。チェックの修正の回数には含めない。</p>
+<p><code>cumin/status/merging</code>の実装Issueで、<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-006">CWK-MERGE-006</a></code>の条件が成り立ち、GitHubが衝突していると返したとき、または衝突でマージを断ったとき、cuminはGitHub上でマージ処理せずに、状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで衝突の解消を頼む。チェックの修正の回数には含めない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-MERGE-010"><code class="requirement-id">CWK-MERGE-010</code> mainブランチが変わってマージを断られたとき</h4>
-<p>GitHubが、mainブランチが変わったことを理由にマージを断ったとき（405、<code>Base branch was modified</code>）、cuminは<code>cumin/status/merging</code>のまま、次の定期確認でもう一度マージを送る。ほかのマージの直後に起きる、すぐに直る断り方だからである。</p>
+<p>GitHubが、mainブランチが変わったことを理由にマージを断ったとき（405、<code>Base branch was modified</code>）、cuminは<code>cumin/status/merging</code>のまま、次の定期確認でもう一度GitHub上でマージ処理する。ほかのマージの直後に起きる、すぐに直る断り方だからである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-MERGE-011"><code class="requirement-id">CWK-MERGE-011</code> マージを止める</h4>
 <p><code>cumin/status/merging</code>の実装Issueで、次のどちらかが起きたとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
