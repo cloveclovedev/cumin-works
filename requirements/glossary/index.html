@@ -371,14 +371,14 @@
 <td>merge decision</td>
 </tr>
 <tr>
-<td>マージ判断を待つPull Requestのブランチから始める</td>
-<td>blocked byのIssueのPull RequestがAssigneeのマージ判断を待つ間に、そのブランチから新しいブランチを切り、そのブランチをbaseにしたPull Requestで、次の実装Issueを進めること</td>
+<td>マージ前のblocked byのIssueのブランチから始める</td>
+<td>blocked byのIssueのPull Requestがまだマージされていない間に、そのブランチから新しいブランチを切り、そのブランチをbaseにしたPull Requestで、次の実装Issueを進めること</td>
 <td>土台、積む、重ねる、スタック</td>
-<td>start on the branch of a pull request that waits for the merge decision</td>
+<td>start on the branch of an unmerged blocker</td>
 </tr>
 <tr>
 <td>baseがmainブランチでないPull Request</td>
-<td>マージ判断を待つPull Requestのブランチから始めた実装IssueのPull Request。blocked byのIssueのPull Requestがマージされるまでマージしない</td>
+<td>マージ前のblocked byのIssueのブランチから始めた実装IssueのPull Request。blocked byのIssueのPull Requestがマージされるまでマージしない</td>
 <td>積んだPull Request、重ねたPull Request、先のPull Request、子PR</td>
 <td>pull request with a base other than the default branch</td>
 </tr>
