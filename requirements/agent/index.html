@@ -93,19 +93,19 @@
 <p>あるIssueで あるroleの「Agentが動いている」とは、このcuminが、その実行を今持っていることである。各ページの「Plannerの実行が終わっている」などは、Agentが動いていないことを指す。cuminを再起動すると、どのAgentも動いていないとして扱う。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-002"><code class="requirement-id">CWK-AGENT-002</code> すべてのAgent起動の前の確認</h4>
-<p>cuminは、定期確認のたびに次の確認の結果を更新し、Agentを起動するかの判断に使う。どれかが止めることを示していれば、その定期確認では、止める範囲のAgentを起動しない。新しい種類のAgent起動を足しても、この判断を飛ばせない。</p>
+<p>cuminは、定期確認のたびに次の確認の結果を更新し、Agentを起動するかの判断に使う。どれかが止めることを示していれば、その定期確認では、次に書いた範囲でAgentを起動しない。新しい種類のAgent起動を足しても、この判断を飛ばせない。</p>
 <ul>
 <li>
-<p>利用制限（<a href="/cumin-works/requirements/limit/">利用制限</a>の<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）</p>
+<p>利用制限（<a href="/cumin-works/requirements/limit/">利用制限</a>の<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）: すべてのリポジトリ</p>
 </li>
 <li>
-<p>そのリポジトリのツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019.3">CWK-AGENT-019.3</a></code>）</p>
+<p>リポジトリごとのツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019.3">CWK-AGENT-019.3</a></code>）: そのリポジトリだけ</p>
 </li>
 <li>
-<p>そのリポジトリのruleset（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-015">CWK-ACCESS-015</a></code>）</p>
+<p>リポジトリごとのruleset（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-015">CWK-ACCESS-015</a></code>）: そのリポジトリだけ</p>
 </li>
 <li>
-<p>止める予約（<a href="/cumin-works/requirements/host/">Hostでの動かし方</a>の<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>）</p>
+<p>止める予約（<a href="/cumin-works/requirements/host/">Hostでの動かし方</a>の<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>）: すべてのリポジトリ</p>
 </li>
 
 
