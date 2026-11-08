@@ -187,7 +187,7 @@ mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自�
 
 #### `CWK-MERGE-017` フォローアップノートに書くもの
 
-cuminは、次のものを決まった形式から機械的に拾う。何もなければ、ないことを1行で書く。
+cuminは、次のものを決まった形式から機械的に拾う。何もなければ、ないことを1行で書く。cuminは、拾った項目ごとに`F<Pull Requestの番号>-<連番>`のIDを付ける。Pull Requestの説明の`Follow-up`は、箇条書きの1項目を1つの項目とする。
 
 - Pull Requestの説明の`Follow-up`の文章。そのまま写す
 - Reviewerの提案のうち、Implementerの返答が`Fixed`でないもの（[レビュー](../review/index.md)の`CWK-REVIEW-020`）

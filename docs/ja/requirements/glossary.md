@@ -75,6 +75,7 @@ cumin-worksの文書で使う語の意味を決める。「使わない言い方
 | 受け入れ | 要求IssueのAssigneeが受け入れ確認を見て、要求Issueを閉じること | 承認、完了確認 | acceptance |
 | 差し戻し | 要求IssueのAssigneeが受け入れずに、sub-issueを足して進め直すこと | 却下、やり直し | send back |
 | フォローアップノート | マージのあとに残った指摘を、cuminが要求Issueにまとめて書くコメント | Follow-upコメント | follow-up note |
+| 残課題 | 受け入れ確認でPlannerが仕分ける、受け入れ確認の`Fail`の行と、フォローアップノートの項目。それぞれIDを持つ | 残りの項目 | remaining item |
 
 ## 利用制限とツール
 

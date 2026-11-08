@@ -1,6 +1,6 @@
 # 受け入れ
 
-要求Issueの実装Issueがすべて閉じてから、要求Issueが閉じるまでの流れを決める。Plannerの受け入れ確認、残りの項目の仕分け、Assigneeの受け入れと差し戻しを扱う。実装Issueに`cumin/status/ready`を付けたときの要求Issueの状態は[計画](../plan/index.md)、フォローアップノートは[マージ](../merge/index.md)で決める。
+要求Issueの実装Issueがすべて閉じてから、要求Issueが閉じるまでの流れを決める。Plannerの受け入れ確認、残課題の仕分け、Assigneeの受け入れと差し戻しを扱う。実装Issueに`cumin/status/ready`を付けたときの要求Issueの状態は[計画](../plan/index.md)、フォローアップノートは[マージ](../merge/index.md)で決める。
 
 ## 全体像
 
@@ -10,7 +10,7 @@
 
 図の元ファイル: [overview.puml](overview.puml)
 
-受け入れ確認では、Plannerが、すべての実装Issueを合わせたmainブランチで、要求Issueの要求を1項目ずつ確かめる。Pull Requestは1つずつしか確かめられていないためである。Plannerは、残りの項目も仕分け、この要求で直すものを実装Issueにする。
+受け入れ確認では、Plannerが、すべての実装Issueを合わせたmainブランチで、要求Issueの要求を1項目ずつ確かめる。Pull Requestは1つずつしか確かめられていないためである。Plannerは、残課題も仕分け、この要求で直すものを実装Issueにする。
 
 cuminが読むのは、受け入れ確認のコメントと質問のコメントがあるか、フォローアップノートがあるか、実装Issueが開いているか、開いている実装Issueのリスクのラベルだけである。コメントの中身は読まない。
 
@@ -99,7 +99,7 @@ Assigneeは、要求Issueを閉じて受け入れる。判断が要る項目（`
 
 #### `CWK-ACCEPT-008` 差し戻し
 
-Assigneeは、要求Issueに実装Issueを足し、足した実装Issueに`cumin/status/ready`を付けて差し戻す。cuminは要求Issueを`cumin/status/implementing`に替え（[計画](../plan/index.md)の`CWK-PLAN-007`）、足した実装Issueがすべて閉じると、受け入れ確認をもう一度始める（`CWK-ACCEPT-001`）。
+Assigneeは、要求Issueに実装Issueを足し、足した実装Issueに`cumin/status/ready`を付けて差し戻す。cuminは要求Issueを`cumin/status/implementing`に替え（[計画](../plan/index.md)の`CWK-PLAN-007`）、足した実装Issueがすべて閉じると、受け入れ確認をもう一度始める（`CWK-ACCEPT-001`）。足した実装Issueが残課題に対応するときは、本文にそのIDを書く。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -111,6 +111,7 @@ Assigneeは、要求Issueに実装Issueを足し、足した実装Issueに`cumin
 
 Plannerは、要求Issueに受け入れ確認のコメントを1つ書く。形式は[acceptance-check.md](../../../../templates/acceptance-check.md)に従う。mainブランチの最新の内容で、要求と制約を1項目ずつ確かめ、項目ごとに次のことを書く。
 
+- ID。要求Issueの「Requirements」のn行目は`R<n>`、「Constraints」のn行目は`C<n>`とする。その行が要件のIDを書いていれば、それも書く
 - 結果（`Pass`か`Fail`）
 - 証拠。実行したコマンドと結果、または読んだファイルと行
 - 対応したPull Request
@@ -127,9 +128,9 @@ Plannerは、実装Issueを閉じたPull Requestとその説明、フォロー�
 
 ---
 
-#### `CWK-ACCEPT-011` 残りの項目を仕分ける
+#### `CWK-ACCEPT-011` 残課題を仕分ける
 
-Plannerは、残りの項目のすべてを、次の3つのどれか1つに入れ、1行の理由を付ける。残りの項目とは、`Fail`の行と、フォローアップノートの項目である。
+Plannerは、残課題のすべてを、次の3つのどれか1つに入れ、1行の理由を付ける。残課題とは、`Fail`の行と、フォローアップノートの項目である。どの残課題も、IDで示す（`CWK-ACCEPT-009`、[マージ](../merge/index.md)の`CWK-MERGE-017`）。
 
 - この要求で直す: 要求の範囲の中の不具合、小さな修正、文書とコードのずれ
 - 判断が要る: 要求の範囲を変えるもの、選択が要るもの
@@ -149,7 +150,7 @@ Plannerは、次の順に問い、最初に当てはまった組に入れる。�
 
 #### `CWK-ACCEPT-012` 修正の実装Issue
 
-Plannerは、「この要求で直す」の項目ごとに、要求Issueの実装Issueを1つ作る。計画の実装Issueと同じ形式で書き（[計画](../plan/index.md)の`CWK-PLAN-009`）、リスクのラベルを1つ付け、状態ラベルは付けない。本文には元の項目へのリンクを書く。実装Issueをすべて作ってから、コメントを書く。コメントには、作った実装Issueの番号を書く。
+Plannerは、「この要求で直す」の項目ごとに、要求Issueの実装Issueを1つ作る。計画の実装Issueと同じ形式で書き（[計画](../plan/index.md)の`CWK-PLAN-009`）、リスクのラベルを1つ付け、状態ラベルは付けない。本文には元の残課題のIDを書く。実装Issueをすべて作ってから、コメントを書く。コメントには、作った実装Issueの番号を書く。
 
 - 検証: `demo` テスト用の実リポジトリでPlannerを動かして確認
 
@@ -183,9 +184,10 @@ Plannerは、受け入れ確認でコードを直さず、要求Issueの本文�
 
 #### `CWK-ACCEPT-016` やり直しで二重に作らない
 
-やり直しのPlannerは、同じ元の項目へのリンクを持つ実装Issueを作らず、足りない分だけを作る。リスクのラベルが1つだけでない実装Issueは、ラベルを直す。
+やり直しのPlannerは、前の実行の続きから進める。
 
-受け入れ確認のコメントは、最後の実装Issueが閉じたあとのものだけを書き直す。それより古いコメントしかなければ、新しく書く。古いコメントを書き直しても、完了と判断されないためである（`CWK-ACCEPT-002`）。
+- 修正の実装Issueは、同じIDを書いたものがあれば作らず、足りない分だけを作る。リスクのラベルが1つだけでないものは、ラベルを直す
+- 受け入れ確認のコメントは、最後の実装Issueが閉じたあとのものがあれば書き直し、なければ新しく書く。それより前のコメントを書き直しても、完了と判断されない（`CWK-ACCEPT-002`）。
 
 - 検証: `demo` テスト用の実リポジトリでPlannerを動かして確認
 
