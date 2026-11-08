@@ -85,7 +85,7 @@
 <h2 id="要件">要件</h2>
 <h3 id="利用制限の確認">利用制限の確認</h3>
 <section class="requirement"><h4 id="CWK-LIMIT-001"><code class="requirement-id">CWK-LIMIT-001</code> Agent起動の前に確認する</h4>
-<p>cuminは、Agentを起動する前に、5時間制限と週間制限の使用率から、起動してよいかを判断する。
+<p>cuminは、定期確認のたびに、Agent起動を決める前に、5時間制限と週間制限の使用率から、起動してよいかを判断する。
 どちらかの使用率がしきい値以上のときと、使用率を読めないときは、すべてのリポジトリでAgent起動を止める。</p>
 <p>すでに動いているAgentは止めない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでAgent起動判断を網羅的にテスト</li></ul></div>
