@@ -18,9 +18,9 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 #### `CWK-MERGE-001` マージを始める
 
-`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のすべてが成り立つとき、cuminは状態を`cumin/status/merging`に替える。
+`cumin/status/reviewing`の実装Issueで、次のすべてが成り立つとき、cuminは状態を`cumin/status/merging`に替える。
 
-- Reviewerの最新のレビューが、今の先頭のコミットへの`APPROVE`である
+- レビューが完了し（[レビュー](../review/index.md)の`CWK-REVIEW-004`）、そのレビューが`APPROVE`である
 - 必須チェックが、今の先頭のコミットで完了している（[チェック](../check/index.md)の`CWK-CHECK-002`）
 - リスクのラベルが`cumin/risk/low`である
 - blocked byのIssueを待たなくてよい（`CWK-MERGE-012`）
@@ -194,8 +194,8 @@ mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自�
 cuminは、次のものを決まった形式から機械的に拾う。何もなければ書かない。
 
 - Pull Requestの説明の`Follow-up`の文章。そのまま写す
-- Reviewerの提案のうち、Implementerの返答が`Fixed`でないもの（[レビュー](../review/index.md)の`CWK-REVIEW-021`）
-- 元からある問題（[レビュー](../review/index.md)の`CWK-REVIEW-014`）
+- Reviewerの提案のうち、Implementerの返答が`Fixed`でないもの（[レビュー](../review/index.md)の`CWK-REVIEW-020`）
+- 元からある問題（[レビュー](../review/index.md)の`CWK-REVIEW-013`）
 
 - 検証: `test` GitHub mockでテスト
 

@@ -153,7 +153,7 @@ cuminはJSONを確かめ、形式に合わないときや、`blocked`で`blocked
 
 #### `CWK-AGENT-013` 質問のコメント
 
-Agentが`blocked`を返したら、cuminは`blocked_reason`を、扱ったIssue（ReviewerではPull Request）にすぐコメントとして書く。これが各ページの「質問のコメント」である。
+Agentが`blocked`を返したら、cuminは`blocked_reason`を、扱ったIssueにすぐコメントとして書く。これが各ページの「質問のコメント」である。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
