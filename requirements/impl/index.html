@@ -214,7 +214,7 @@
 <ul>
 <li>その先頭のコミットから、マージされた中身までの差を読む</li>
 <li>この実装Issueの変更の前提が変わっていないかを確かめ、変わっていれば合わせて直す</li>
-<li>mainブランチを、強制pushをせずに、マージするコミットで取り込む</li>
+<li>mainブランチを、この実装Issueのブランチにマージするコミットで取り込む。rebaseして強制pushはしない。承認したコミットからの差分でレビューできるように、今までのコミットを残すためである。</li>
 </ul>
 <p>取り込んだあとは、必須チェックとレビューを経る。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
