@@ -214,7 +214,7 @@ cuminがPlannerを起動し、計画の結果をGitHubで確かめ、Assigneeの
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでPlannerを動かして確認</li></ul></div>
 </section><h3 id="assigneeに判断を求めるとき">Assigneeに判断を求めるとき</h3>
 <section class="requirement"><h4 id="CWK-PLAN-020"><code class="requirement-id">CWK-PLAN-020</code> 推測で計画しない</h4>
-<p>Plannerは、次のどれかに当たったら、推測で計画せずに<code>blocked</code>を返す。<code>blocked_reason</code>は、decision-request.mdの形式で、Assigneeに決めてほしいことを書く。cuminは、それを要求Issueのコメントに書く（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-013">CWK-AGENT-013</a></code>）。</p>
+<p>Plannerは、次のどれかに当たったら、推測で計画せずに<code>blocked</code>を返し、Assigneeに判断を求める（<a href="/cumin-works/requirements/ask/">判断の依頼</a>）。</p>
 <section class="requirement"><h5 id="CWK-PLAN-020.1"><code class="requirement-id">CWK-PLAN-020.1</code> 曖昧な要求</h5>
 <p>要求が曖昧で、実装Issueの完了の条件を書けないときはAssigneeに判断を求める。理由には、何が決まっていないかを書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでPlannerを動かして確認</li></ul></div>

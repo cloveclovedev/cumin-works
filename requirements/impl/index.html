@@ -246,7 +246,7 @@
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Implementerのroleのファイルに、この決まりがある</li></ul></div>
 </section><h3 id="implementerが判断を求めるとき">Implementerが判断を求めるとき</h3>
 <section class="requirement"><h4 id="CWK-IMPL-014"><code class="requirement-id">CWK-IMPL-014</code> 推測で実装しない</h4>
-<p>Implementerは、次のどれかに当たったら、推測で進めずに<code>blocked</code>を返す。<code>blocked_reason</code>は、decision-request.mdの形式で、Assigneeに決めてほしいことを書く。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-007">CWK-IMPL-007</a></code>）。</p>
+<p>Implementerは、次のどれかに当たったら、推測で進めずに<code>blocked</code>を返し、Assigneeに判断を求める（<a href="/cumin-works/requirements/ask/">判断の依頼</a>）。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-007">CWK-IMPL-007</a></code>）。</p>
 <section class="requirement"><h5 id="CWK-IMPL-014.1"><code class="requirement-id">CWK-IMPL-014.1</code> 足りない要件</h5>
 <p>実装に要る要件が足りないか、食い違っているときは、止まる。理由には、何が決まっていないかを書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
