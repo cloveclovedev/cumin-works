@@ -99,7 +99,7 @@ Assigneeは、要求Issueを閉じて受け入れる。判断が要る項目（`
 
 #### `CWK-ACCEPT-008` 差し戻し
 
-Assigneeは、要求Issueにsub-issueを足し、足したsub-issueに`cumin/status/ready`を付けて差し戻す。足したsub-issueがすべて閉じると、受け入れ確認がもう一度始まる。
+Assigneeは、要求Issueに実装Issueを足し、足した実装Issueに`cumin/status/ready`を付けて差し戻す。cuminは要求Issueを`cumin/status/implementing`に替え（[計画](../plan/index.md)の`CWK-PLAN-007`）、足した実装Issueがすべて閉じると、受け入れ確認をもう一度始める（`CWK-ACCEPT-001`）。
 
 - 検証: `test` GitHub mockでテスト
 

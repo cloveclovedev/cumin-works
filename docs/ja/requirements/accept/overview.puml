@@ -33,7 +33,7 @@ Accepting --> PlanReview : ask for the plan review\n[the acceptance check comple
 Accepting --> Accepting : request the acceptance check again\n[the Planner run has ended, no question, first time, and:\nno check comment, or an open sub-issue\nwithout exactly one risk label]\n/ cumin starts the Planner again
 Accepting --> Decision : stop the acceptance check\n[the Planner run has ended, and: the Planner asked,\nor the same failure after the retry]\n/ cumin notifies
 AwaitingAcceptance --> [*] : the Assignee closes the issue
-AwaitingAcceptance --> Implementing : send back\n[the Assignee adds ready to a new sub-issue]
+AwaitingAcceptance --> Implementing : send back\n[the Assignee adds ready to a new implementation issue]
 Decision --> Ready : the Assignee answers and adds ready
 
 @enduml
