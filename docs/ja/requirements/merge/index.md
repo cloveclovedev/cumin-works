@@ -39,7 +39,7 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 ---
 
-### マージ判断
+### Assigneeによるマージ判断
 
 cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビューのうち、`COMMENT`を除いた最新のものだけである（[権限](../access/index.md)の`CWK-ACCESS-012`）。古いコミットへのレビューは使わない。
 
@@ -101,7 +101,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 #### `CWK-MERGE-008` チェックに戻る
 
-`cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、`CWK-MERGE-006`の条件が成り立たないとき、cuminは状態を`cumin/status/checking`に替える。
+`cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、`CWK-MERGE-006`の条件が成り立たないとき、cuminは状態を`cumin/status/checking`に替える。どの条件が成り立たなくなっても、`checking`から確かめ直せば、チェック、レビュー、マージ判断の要件が、それぞれの原因に合わせて進めるためである。
 
 - 検証: `test` GitHub mockでテスト
 
