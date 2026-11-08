@@ -229,7 +229,7 @@
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
 </section><h3 id="reviewerが判断を求めるとき">Reviewerが判断を求めるとき</h3>
 <section class="requirement"><h4 id="CWK-REVIEW-022"><code class="requirement-id">CWK-REVIEW-022</code> 推測でレビューしない</h4>
-<p>Reviewerは、次のどれかに当たったら、レビューを出さずに<code>blocked</code>を返す。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-008">CWK-REVIEW-008</a></code>）。</p>
+<p>Reviewerは、次のどれかに当たったら、レビューを出さずに<code>blocked</code>を返し、Assigneeに判断を求める（<a href="/cumin-works/requirements/ask/">判断の依頼</a>）。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-008">CWK-REVIEW-008</a></code>）。</p>
 <section class="requirement"><h5 id="CWK-REVIEW-022.1"><code class="requirement-id">CWK-REVIEW-022.1</code> 合わないリスク</h5>
 <p>リスクのラベルが実際の変更と合わないときは、止まる。例えば<code>cumin/risk/low</code>なのに、データベースのマイグレーションを含む。認証、暗号、セッションの処理を変える変更は、リスクの基準の初期値では<code>cumin/risk/high</code>である。リスクを決め直すのはAssigneeなので、Implementerには回さない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
