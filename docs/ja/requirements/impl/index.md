@@ -85,7 +85,7 @@ Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つ
 
 #### `CWK-IMPL-007` 実装を止める
 
-`cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。
+`cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
 - `cumin/status/implementing`になったあとに、Implementerの質問のコメントがある。質問ではやり直さない。要件が足りず、AssigneeがIssueを直す必要があることが多いからである
 - やり直しのあとも、実装が完了していない
@@ -173,7 +173,7 @@ Implementerは、次のことをする。
 
 ##### `CWK-IMPL-008.6` blocked byのIssueを待つ実装を止める
 
-マージ前のblocked byのIssueのブランチから始めた実装Issueで、Agentの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替え、理由をコメントに書いて、通知する。
+マージ前のblocked byのIssueのブランチから始めた実装Issueで、Agentの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
 - blocked byのIssueのPull Requestが、マージされずに閉じた
 - この実装IssueのPull Requestが、マージされずに閉じた

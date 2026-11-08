@@ -38,6 +38,7 @@ IDの接頭辞は`CWK`である。カテゴリごとにディレクトリを分�
 | `REVIEW` | [レビュー](review/index.md) | レビューのAgent起動、ラウンド、指摘の修正、Reviewerの入力と出力 |
 | `MERGE` | [マージ](merge/index.md) | マージ判断、マージ判断に使うレビュー、マージ、実装Issueを閉じること、フォローアップノート |
 | `ACCEPT` | [受け入れ](accept/index.md) | 受け入れ確認、残りの項目の仕分けと修正のsub-issue、受け入れ、差し戻し |
+| `ASK` | [判断の依頼](ask/index.md) | IssueをAssigneeの判断に返すときのコメント、コメントを書く人、判断のあとの再開 |
 | `AGENT` | [Agent](agent/index.md) | Agent起動に共通のこと。結果の形式、指示の渡し方、権限、セッション、異常終了、ツール動作確認 |
 | `LIMIT` | [利用制限](limit/index.md) | 5時間制限と週間制限、Agent起動を止めることと再開すること |
 | `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHubの呼び出しの失敗、全部を読めないIssue、手元の状態 |

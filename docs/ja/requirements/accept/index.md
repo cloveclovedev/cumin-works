@@ -71,7 +71,7 @@ cuminは、`cumin-planner`が要求Issueに書いた`## Acceptance check`で始�
 
 #### `CWK-ACCEPT-006` 受け入れ確認を止める
 
-`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントでないときは、理由をコメントに書く。
+`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
 - Plannerの質問のコメントが、`cumin/status/accepting`になったあとにある
 - やり直しのあとも、`CWK-ACCEPT-005`の条件が成り立つ

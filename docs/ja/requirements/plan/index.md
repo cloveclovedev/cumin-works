@@ -79,7 +79,7 @@ cuminは計画の完了を判定したあと、未完了の実装Issueが1つ以
 
 #### `CWK-PLAN-006` 計画を止める
 
-`cumin/status/planning`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。
+`cumin/status/planning`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
 - `cumin/status/planning`になったあとに、Plannerの質問のコメントがある
 - やり直し条件に2回以上到達した

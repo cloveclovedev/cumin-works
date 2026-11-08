@@ -124,7 +124,7 @@ GitHubが、mainブランチが変わったことを理由にマージを断っ�
 
 #### `CWK-MERGE-011` マージを止める
 
-`cumin/status/merging`の実装Issueで、次のどちらかが起きたとき、cuminは状態を`cumin/status/awaiting-decision`に替え、理由をコメントに書いて、通知する。
+`cumin/status/merging`の実装Issueで、次のどちらかが起きたとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
 - GitHubが、衝突でもmainブランチの変更でもない理由で、マージを断った
 - マージのあとで、実装Issueを閉じられない

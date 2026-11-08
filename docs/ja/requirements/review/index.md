@@ -76,7 +76,7 @@ cuminは、`cumin-reviewer`が今の先頭のコミットに`APPROVE`か`REQUEST
 
 #### `CWK-REVIEW-007` レビューを止める
 
-`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。質問のコメントがないときは、止めた理由をコメントに書く。当たる理由はすべて書く。
+`cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
 - `cumin/status/reviewing`になったあとに、Reviewerの質問のコメントがある。質問ではやり直さない
 - やり直しのあとも、今の先頭のコミットにレビューがない
