@@ -233,7 +233,7 @@ Implementerは、Pull Requestを開いてpushしたら、チェックもレビ�
 
 #### `CWK-IMPL-014` 推測で実装しない
 
-Implementerは、次のどれかに当たったら、推測で進めずに`blocked`を返す。`blocked_reason`は、[decision-request.md](../../../../templates/decision-request.md)の形式で、Assigneeに決めてほしいことを書く。cuminは、やり直さずに止める（`CWK-IMPL-007`）。
+Implementerは、次のどれかに当たったら、推測で進めずに`blocked`を返し、Assigneeに判断を求める（[判断の依頼](../ask/index.md)）。cuminは、やり直さずに止める（`CWK-IMPL-007`）。
 
 ##### `CWK-IMPL-014.1` 足りない要件
 

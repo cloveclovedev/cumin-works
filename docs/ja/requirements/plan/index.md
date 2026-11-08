@@ -205,7 +205,7 @@ Plannerは、要求Issueの本文を書き換えず、書かれていないこ�
 
 #### `CWK-PLAN-020` 推測で計画しない
 
-Plannerは、次のどれかに当たったら、推測で計画せずに`blocked`を返す。`blocked_reason`は、[decision-request.md](../../../../templates/decision-request.md)の形式で、Assigneeに決めてほしいことを書く。cuminは、それを要求Issueのコメントに書く（`CWK-AGENT-013`）。
+Plannerは、次のどれかに当たったら、推測で計画せずに`blocked`を返し、Assigneeに判断を求める（[判断の依頼](../ask/index.md)）。
 
 ##### `CWK-PLAN-020.1` 曖昧な要求
 
