@@ -72,9 +72,9 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 ### マージ
 
-#### `CWK-MERGE-006` マージの条件
+#### `CWK-MERGE-006` GitHub上のマージ前の最終確認
 
-cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべてが成り立つときだけマージする。マージを送るたびに確かめ直す。
+cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべてが成り立つときだけマージする。GitHub上でマージ処理するたびに確かめ直す。
 
 - 必須チェックが、今の先頭のコミットで完了している
 - リスクのラベルが1つだけ付いている
@@ -86,9 +86,9 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 ---
 
-#### `CWK-MERGE-007` マージを送る
+#### `CWK-MERGE-007` GitHub上でマージ処理する
 
-`cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、マージの条件が成り立ち、衝突していないとき、cuminはマージを送る。
+`cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、`CWK-MERGE-006`の条件が成り立ち、衝突していないとき、cuminはGitHub上でマージ処理する。
 
 - マージの方法は、設定`merge_method`（初期値はsquash）に従う
 - 承認されたコミットだけをマージする。承認のあとにpushされたコミットは、マージしない。
@@ -101,7 +101,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 #### `CWK-MERGE-008` チェックに戻る
 
-`cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、マージの条件が成り立たないとき、cuminは状態を`cumin/status/checking`に替える。
+`cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、`CWK-MERGE-006`の条件が成り立たないとき、cuminは状態を`cumin/status/checking`に替える。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -109,7 +109,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 #### `CWK-MERGE-009` マージの前の衝突を解消する
 
-`cumin/status/merging`の実装Issueで、マージの条件が成り立ち、GitHubが衝突していると返したとき、または衝突でマージを断ったとき、cuminはマージを送らずに、状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで衝突の解消を頼む。チェックの修正の回数には含めない。
+`cumin/status/merging`の実装Issueで、`CWK-MERGE-006`の条件が成り立ち、GitHubが衝突していると返したとき、または衝突でマージを断ったとき、cuminはGitHub上でマージ処理せずに、状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで衝突の解消を頼む。チェックの修正の回数には含めない。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -117,7 +117,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 #### `CWK-MERGE-010` mainブランチが変わってマージを断られたとき
 
-GitHubが、mainブランチが変わったことを理由にマージを断ったとき（405、`Base branch was modified`）、cuminは`cumin/status/merging`のまま、次の定期確認でもう一度マージを送る。ほかのマージの直後に起きる、すぐに直る断り方だからである。
+GitHubが、mainブランチが変わったことを理由にマージを断ったとき（405、`Base branch was modified`）、cuminは`cumin/status/merging`のまま、次の定期確認でもう一度GitHub上でマージ処理する。ほかのマージの直後に起きる、すぐに直る断り方だからである。
 
 - 検証: `test` GitHub mockでテスト
 
