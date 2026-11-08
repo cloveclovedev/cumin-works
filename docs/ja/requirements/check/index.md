@@ -92,7 +92,7 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 
 ##### `CWK-CHECK-008.1` 保護されたパスの一覧
 
-保護されたパスの一覧は、対象のリポジトリの`.cumin/config.toml`の`protected_paths`に書く。ファイルかキーがなければ、初期値の`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md`を使う。書いた一覧は、初期値に足すのではなく、初期値を置き換える。`REVIEW.md`を含めるのは、Agentが書き換えると、Reviewerの判断が変わるためである（`CWK-REVIEW-003`）。
+保護されたパスの一覧は、対象のリポジトリの`.cumin/config.toml`の`protected_paths`に書く。ファイルかキーがなければ、初期値の`.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md`を使う。書いた一覧は、初期値に足すのではなく、初期値を置き換える。ただし`.cumin/`は外せない。書いた一覧に含めなくても、いつも保護されたパスとする（`CWK-CHECK-008.5`）。`REVIEW.md`を含めるのは、Agentが書き換えると、Reviewerの判断が変わるためである（`CWK-REVIEW-003`）。
 
 照合の決まりは、`.gitignore`の一部と同じである。
 
@@ -133,7 +133,7 @@ Agentは保護されたパスのファイルを変えない（`CWK-AGENT-021`）
 
 ##### `CWK-CHECK-008.5` mainブランチの一覧を読む
 
-ワークフローは、保護されたパスの一覧を、Pull Requestのブランチではなくmainブランチから読む。一覧のある`.cumin/`も、保護されたパスに含める。Pull Requestのブランチから読むと、同じPull Requestで一覧から自分の変更を外せば、チェックが成功してしまうためである。`.cumin/`を含めるのは、一覧を弱めるPull Requestがマージされないためである。
+ワークフローは、保護されたパスの一覧を、Pull Requestのブランチではなくmainブランチから読む。Pull Requestのブランチから読むと、同じPull Requestで一覧から自分の変更を外せば、チェックが成功してしまうためである。一覧を置く`.cumin/`を外せないのも（`CWK-CHECK-008.1`）、一覧を弱めるPull Requestをマージさせないためである。
 
 - 検証: `demo` テスト用の実リポジトリでPull Requestを開いて確認
 

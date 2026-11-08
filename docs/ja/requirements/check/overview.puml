@@ -27,6 +27,6 @@ Checking --> Implementing : request a check fix\n[a required check failed, below
 Checking --> Decision : stop for failed checks\n[a required check failed, at the limit]\n/ cumin notifies
 Checking --> Decision : stop for missing checks\n[a required check has no result\nafter the wait time]\n/ cumin notifies
 MergeDecision --> Implementing : request a conflict resolution\n[GitHub returns CONFLICTING]
-Checking --> Reviewing : [every required check passed]
+Checking --> Reviewing : [every required check completed]
 
 @enduml
