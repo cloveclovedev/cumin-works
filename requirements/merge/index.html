@@ -102,7 +102,7 @@
 <p>リスクのラベルが<code>cumin/risk/low</code>である</p>
 </li>
 <li>
-<p>blocked byのIssueを待たなくてよい（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-022">CWK-MERGE-022</a></code>）</p>
+<p>blocked byのIssueを待たなくてよい（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-012">CWK-MERGE-012</a></code>）</p>
 </li>
 
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
@@ -114,7 +114,7 @@
 </section><h3 id="マージ判断">マージ判断</h3>
 <p>cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビューのうち、<code>COMMENT</code>を除いた最新のものだけである（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-012">CWK-ACCESS-012</a></code>）。古いコミットへのレビューは使わない。</p>
 <section class="requirement"><h4 id="CWK-MERGE-003"><code class="requirement-id">CWK-MERGE-003</code> Assigneeの承認でマージを始める</h4>
-<p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>APPROVE</code>で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-022">CWK-MERGE-022</a></code>）とき、cuminは状態を<code>cumin/status/merging</code>に替える。</p>
+<p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>APPROVE</code>で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-012">CWK-MERGE-012</a></code>）とき、cuminは状態を<code>cumin/status/merging</code>に替える。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-MERGE-004"><code class="requirement-id">CWK-MERGE-004</code> Assigneeの指摘を修正する</h4>
 <p><code>cumin/status/awaiting-merge-decision</code>の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの<code>REQUEST_CHANGES</code>で、実装Issueが最後に<code>cumin/status/awaiting-merge-decision</code>になったあとに出たものであるとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで修正を頼む。</p>
@@ -152,7 +152,7 @@
 <p>リスクが<code>cumin/risk/medium</code>か<code>cumin/risk/high</code>なら、Assigneeの最新のレビューも、今の先頭のコミットへの<code>APPROVE</code>である</p>
 </li>
 <li>
-<p>Pull Requestのbaseがmainブランチで、blocked byのIssueがすべて閉じている（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-022">CWK-MERGE-022</a></code>）</p>
+<p>Pull Requestのbaseがmainブランチで、blocked byのIssueがすべて閉じている（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-012">CWK-MERGE-012</a></code>）</p>
 </li>
 
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
@@ -200,8 +200,8 @@
 <p><code>test</code> GitHub mockでテスト</p>
 </li></ul></div>
 </section><h3 id="blocked-byのissueを待つ">blocked byのIssueを待つ</h3>
-<p><a href="/cumin-works/requirements/impl/">実装</a>の<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>で始めた実装IssueのPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、GitHubはそのブランチを消し、このPull Requestのbaseをmainブランチに替える。</p>
-<section class="requirement"><h4 id="CWK-MERGE-022"><code class="requirement-id">CWK-MERGE-022</code> blocked byのIssueより先にマージしない</h4>
+<p><a href="/cumin-works/requirements/impl/">実装</a>のマージ前のblocked byのIssueのブランチから始めた実装Issue（<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>）のPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、GitHubはそのブランチを消し、このPull Requestのbaseをmainブランチに替える。</p>
+<section class="requirement"><h4 id="CWK-MERGE-012"><code class="requirement-id">CWK-MERGE-012</code> blocked byのIssueより先にマージしない</h4>
 <p>「blocked byのIssueを待たなくてよい」とは、次のすべてが成り立つことである。</p>
 <ul>
 <li>Pull Requestのbaseがmainブランチである</li>
@@ -210,41 +210,22 @@
 </ul>
 <p>cuminは、これが成り立つときだけマージに進む。<code>cumin/risk/low</code>でも同じである。<code>cumin/status/merging</code>の中では、初めの2つを確かめる（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-006">CWK-MERGE-006</a></code>）。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-020"><code class="requirement-id">CWK-MERGE-020</code> blocked byのIssueを待つ</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-013"><code class="requirement-id">CWK-MERGE-013</code> blocked byのIssueを待つ</h4>
 <p><code>cumin/status/reviewing</code>の実装Issueで、<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-001">CWK-MERGE-001</a></code>か<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-002">CWK-MERGE-002</a></code>の条件のうちblocked byのIssueを待たなくてよいことのほかが成り立ち、baseがmainブランチでないか、開いているblocked byのIssueがあるとき、cuminは状態を<code>cumin/status/awaiting-blocker-merge</code>に替える。この状態では、誰も作業しない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-021"><code class="requirement-id">CWK-MERGE-021</code> mainブランチを取り込む</h4>
-<p>実装Issueが次のすべてを満たすとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで、mainブランチを取り込むよう頼む。</p>
-<ul>
-<li><code>cumin/status/awaiting-blocker-merge</code>か、<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-020">CWK-MERGE-020</a></code>と同じ条件の<code>cumin/status/reviewing</code>である</li>
-<li>baseがmainブランチで、blocked byのIssueがすべて閉じている</li>
-<li>先頭のコミットが、blocked byのIssueを閉じたPull Requestのマージのコミットを含まない</li>
-</ul>
-<p>Implementerは強制pushをしないので、mainブランチをマージするコミットで取り込む。取り込んだあとは、必須チェックとレビューを経る。続きの作業なので、同時に進めるIssueの数に余裕ができるのを待たない。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-023"><code class="requirement-id">CWK-MERGE-023</code> blocked byのIssueを待つ実装を止める</h4>
-<p><code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>で始めた実装Issueで、Agentの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替え、理由をコメントに書いて、通知する。</p>
-<ul>
-<li>blocked byのIssueのPull Requestが、マージされずに閉じた</li>
-<li>この実装IssueのPull Requestが、マージされずに閉じた</li>
-<li><code>cumin/status/awaiting-blocker-merge</code>で、blocked byのIssueのPull Requestがマージされてから定期確認の間隔を過ぎても、baseがmainブランチにならない</li>
-<li>mainブランチの取り込みを頼んだあとも、先頭のコミットがマージのコミットを含まない</li>
-</ul>
-<p>却下されたblocked byのIssueのコミットはブランチに残るので、Assigneeは、それを除くかPull Requestを閉じてから、<code>cumin/status/ready</code>を付ける。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><h3 id="実装issueを閉じる">実装Issueを閉じる</h3>
-<section class="requirement"><h4 id="CWK-MERGE-012"><code class="requirement-id">CWK-MERGE-012</code> マージした実装Issueを閉じる</h4>
+<section class="requirement"><h4 id="CWK-MERGE-014"><code class="requirement-id">CWK-MERGE-014</code> マージした実装Issueを閉じる</h4>
 <p><code>cumin/status/merging</code>の実装Issueで、Pull Requestがマージ済みになったとき、GitHubが実装Issueを閉じていなければ、cuminが閉じる。cuminが実装Issueを閉じるのは、このときだけである。そのため、Maintainerが開き直した実装Issueは開いたままになる。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-013"><code class="requirement-id">CWK-MERGE-013</code> 人がマージしたとき</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-015"><code class="requirement-id">CWK-MERGE-015</code> 人がマージしたとき</h4>
 <p>mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自分でマージしてもよい。そのあとは、cuminがマージしたときと同じに扱う。GitHubが実装Issueを閉じなければ、そのMaintainerが閉じる。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><h3 id="フォローアップノート">フォローアップノート</h3>
 <p>マージでPull Requestに埋もれる残りの作業を、cuminが要求Issueに書き写す。受け入れ確認で、Plannerがそれを扱う（<a href="/cumin-works/requirements/accept/">受け入れ</a>）。</p>
-<section class="requirement"><h4 id="CWK-MERGE-014"><code class="requirement-id">CWK-MERGE-014</code> フォローアップノートを書く</h4>
+<section class="requirement"><h4 id="CWK-MERGE-016"><code class="requirement-id">CWK-MERGE-016</code> フォローアップノートを書く</h4>
 <p>実装Issueが閉じ、それを閉じるPull Requestがマージ済みで、そのPull Requestのフォローアップノートがまだないとき、cuminは要求Issueにフォローアップノートを1つ書く。誰が閉じたかは問わない。状態は替えない。形式はfollow-up-note.mdに従う。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-015"><code class="requirement-id">CWK-MERGE-015</code> フォローアップノートに書くもの</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-017"><code class="requirement-id">CWK-MERGE-017</code> フォローアップノートに書くもの</h4>
 <p>cuminは、次のものを決まった形式から機械的に拾う。何もなければ書かない。</p>
 <ul>
 <li>
@@ -260,16 +241,16 @@
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
 <p><code>test</code> GitHub mockでテスト</p>
 </li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-016"><code class="requirement-id">CWK-MERGE-016</code> 1つのPull Requestに1つ</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-018"><code class="requirement-id">CWK-MERGE-018</code> 1つのPull Requestに1つ</h4>
 <p>フォローアップノートは、1つのPull Requestに1つだけ書く。あるかどうかは、コメントの目印でGitHubから読む。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-017"><code class="requirement-id">CWK-MERGE-017</code> 開いている要求Issueだけに書く</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-019"><code class="requirement-id">CWK-MERGE-019</code> 開いている要求Issueだけに書く</h4>
 <p>閉じた要求Issueには、フォローアップノートを書かない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-018"><code class="requirement-id">CWK-MERGE-018</code> 受け入れ確認の前にそろえる</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-020"><code class="requirement-id">CWK-MERGE-020</code> 受け入れ確認の前にそろえる</h4>
 <p>sub-issueがすべて閉じたとき、cuminは、フォローアップノートを書き終えてから受け入れ確認を頼む（<a href="/cumin-works/requirements/accept/">受け入れ</a>）。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-019"><code class="requirement-id">CWK-MERGE-019</code> Issueにしない</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-021"><code class="requirement-id">CWK-MERGE-021</code> Issueにしない</h4>
 <p>cuminは、フォローアップノートからIssueを作らない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><h2 id="未決事項">未決事項</h2>
