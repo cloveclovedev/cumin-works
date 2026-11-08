@@ -20,6 +20,7 @@ GitHubのIssueとラベルを状態として、Agentに計画、実装、レビ�
 - [レビュー](requirements/review/index.md)
 - [マージ](requirements/merge/index.md)
 - [受け入れ](requirements/accept/index.md)
+- [判断の依頼](requirements/ask/index.md)
 - [Agent](requirements/agent/index.md)
 - [利用制限](requirements/limit/index.md)
 - [定期確認](requirements/poll/index.md)
