@@ -221,9 +221,9 @@ Implementerは、実装Issueと要求Issueの本文を書き換えない。
 
 ---
 
-#### `CWK-IMPL-013` 待たずに終わる
+#### `CWK-IMPL-013` pushしたら実行を終える
 
-Implementerは、Pull Requestを開いてpushしたら、チェックもレビューも待たずに終わる。待つのはcuminである。
+Implementerは、pushしたあと、GitHubで動く必須チェックの結果やレビューを待たずに、実行を終える。それらを待つのはcuminである（[チェック](../check/index.md)）。pushの前に、自分でテストを実行したり、変更を見直して直したりするのはよい。
 
 - 検証: `inspection` Implementerのroleのファイルに、この決まりがある
 
