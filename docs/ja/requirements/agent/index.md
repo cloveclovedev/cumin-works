@@ -31,7 +31,7 @@ cuminは、定期確認のたびに次の確認の結果を更新し、Agentを�
 - 利用制限（[利用制限](../limit/index.md)の`CWK-LIMIT-001`）: すべてのリポジトリ
 - リポジトリごとのツール動作確認（`CWK-AGENT-019.3`）: そのリポジトリだけ
 - リポジトリごとのruleset（[権限](../access/index.md)の`CWK-ACCESS-015`）: そのリポジトリだけ
-- 止める予約（[Hostでの動かし方](../host/index.md)の`CWK-HOST-007`）: すべてのリポジトリ
+- cuminの停止予約（[Hostでの動かし方](../host/index.md)の`CWK-HOST-007`）: すべてのリポジトリ
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 - 検証: `inspection` Agentを起動するコードの呼び出し元が1つだけで、その前に確認がある
