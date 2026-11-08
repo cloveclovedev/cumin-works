@@ -100,7 +100,7 @@ Operatorは、次のコマンドを使う。
 
 #### `CWK-HOST-008` スリープ
 
-Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（[Agent](../agent/index.md)の`CWK-AGENT-017`）。
+Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（[Agent](../agent/index.md)の`CWK-AGENT-018`）。
 
 - 検証: `demo` Hostでcuminを動かして確認
 
@@ -143,9 +143,9 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 | `quota.weekly.target` | 週間制限の目標（`CWK-LIMIT-008`）| 85% | Host |
 | `quota.weekly.lead` | 週間制限の前倒し。7日未満（`CWK-LIMIT-008`）| 1日 | Host |
 | `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps`が書く | なし | Host |
-| `roles.<role>.time_limit` | 実行の時間の上限。55分以下（`CWK-AGENT-015`）| 50分 | Host |
+| `roles.<role>.time_limit` | 実行の時間の上限。55分以下（`CWK-AGENT-016`）| 50分 | Host |
 | `roles.<role>.cli_path` | AgentのCLIの実行ファイル | `claude` | Host |
-| `roles.<role>.cli` | Agentを動かすCLI。今はClaude Codeだけ（`CWK-AGENT-019`）| Claude Code | 両方 |
+| `roles.<role>.cli` | Agentを動かすCLI。今はClaude Codeだけ（`CWK-AGENT-020`）| Claude Code | 両方 |
 | `roles.<role>.model` | Agentを動かすモデル。空ならCLIの既定 | 空 | 両方 |
 | `max_review_rounds` | レビューのラウンドの上限（[レビュー](../review/index.md)）| 5 | 両方 |
 | `max_check_fix_requests` | チェックの修正を頼む回数の上限（[チェック](../check/index.md)）| 3 | 両方 |
@@ -155,7 +155,7 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 | `notify.discord.enabled` | 通知を送るか。リポジトリで決めると、そのリポジトリについての通知に効く（[通知](../notify/index.md)）| true | 両方 |
 | `priority_labels` | 優先度のラベルの名前。高い順（`CWK-LABEL-006`）| `cumin/priority/P0`〜`P3` | リポジトリ |
 | `protected_paths` | 保護されたパス（`CWK-CHECK-008.1`）| `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md` | リポジトリ |
-| `tool_checks` | ツール動作確認（`CWK-AGENT-018.1`）| なし | リポジトリ |
+| `tool_checks` | ツール動作確認（`CWK-AGENT-019.1`）| なし | リポジトリ |
 | `max_unmerged_blockers` | マージされていないblocked byのIssueのブランチから始めるときの、たどる数の上限。0なら始めない（`CWK-IMPL-008`）| 0 | リポジトリ |
 
 - `<role>`は`planner`、`implementer`、`reviewer`のどれか、`<app>`は`cumin-core`とこの3つのどれかである
@@ -169,7 +169,7 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 
 #### `CWK-HOST-012` リスクの基準
 
-リスクの基準は、TOMLの値ではなく、Markdownのファイルで決める。cuminは中身を読まず、PlannerとReviewerへの指示にそのまま入れる（[Agent](../agent/index.md)の`CWK-AGENT-006`）。
+リスクの基準は、TOMLの値ではなく、Markdownのファイルで決める。cuminは中身を読まず、PlannerとReviewerへの指示にそのまま入れる（[Agent](../agent/index.md)の`CWK-AGENT-007`）。
 
 | 段 | 場所 |
 |---|---|

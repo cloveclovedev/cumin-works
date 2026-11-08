@@ -1,6 +1,6 @@
 # 定期確認
 
-cuminがGitHubをいつ、どの順に読み、どう次のアクションを決めるかを決める。状態ごとのアクションは各カテゴリのページで、Agent起動を止める条件は[利用制限](../limit/index.md)と[Agent](../agent/index.md)の`CWK-AGENT-018`で決める。
+cuminがGitHubをいつ、どの順に読み、どう次のアクションを決めるかを決める。状態ごとのアクションは各カテゴリのページで、Agent起動を止める条件は[利用制限](../limit/index.md)と[Agent](../agent/index.md)の`CWK-AGENT-019`で決める。
 
 ## 全体像
 
