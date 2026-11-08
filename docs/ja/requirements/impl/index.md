@@ -21,7 +21,6 @@
 - 要求IssueのAssigneeか、その実装IssueのAssigneeが`cumin/status/ready`を付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - `cumin/status/ready`のほかに状態ラベルがないか、ほかの状態ラベルが`cumin/status/awaiting-decision`である
 - blocked byのIssueがすべて閉じている。または`CWK-IMPL-008.1`の条件を満たす
-- 同時に進めるIssueの数に余裕がある
 - `cumin/type/owner-task`が付いていない（`CWK-LABEL-001`）
 
 - 検証: `test` GitHub mockとCLI mockでテスト
@@ -153,7 +152,6 @@ blocked byのIssueのPull Requestがマージされたあと、この実装Issue
 - 状態が`cumin/status/awaiting-blocker-merge`か、[マージ](../merge/index.md)の`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうち、blocked byのIssueを待たなくてよいこと（`CWK-MERGE-012`）のほかが成り立つ`cumin/status/reviewing`である
 - baseがmainブランチで、blocked byのIssueがすべて閉じている
 - この実装Issueのブランチが、まだblocked byのIssueのマージのあとのmainブランチを取り込んでいない（先頭のコミットが、blocked byのIssueを閉じたPull Requestのマージのコミットを含まない）
-- `cumin/status/awaiting-blocker-merge`から替えるときは、同時に進めるIssueの数に余裕がある（[定期確認](../poll/index.md)の`CWK-POLL-005`）
 
 cuminは、依頼に次の事実を足す。
 

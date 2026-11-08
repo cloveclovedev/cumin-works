@@ -26,7 +26,6 @@ Maintainerは、Plannerを通さずに自分でsub-issueを書いてもよい。
 
 - Maintainerが`cumin/status/ready`を付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - blocked byのIssueが、すべて閉じている
-- 同時に進めるIssueの数に余裕がある
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

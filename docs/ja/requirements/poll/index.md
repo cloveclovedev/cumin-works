@@ -63,6 +63,12 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 1つのリポジトリで同時に進めるIssueの数は、`max_issues_in_progress`（初期値は1）までである。含めるのは、状態が`planning`、`accepting`の要求Issueと、`implementing`、`checking`、`reviewing`、`merging`の開いている実装Issueである。`implementing`の要求Issue、`ready`のIssue、`awaiting-`で始まる状態のIssueは含めない。違うリポジトリのIssueは、並行して進めてよい。
 
+cuminは、Issueの状態を、この数に含める状態に替える前に、数がまだ上限に達していないかを確かめる。上限に達していれば、状態を替えずに、次の定期確認でもう一度確かめる。これは、`ready`から新しく作業を始めるときも、`awaiting-`で始まる状態（Assigneeの判断やほかのIssueのマージを待つ状態）から作業に戻すときも同じである。
+
+一方、数に含める状態から、別の数に含める状態に替えるときは、数が増えないので確かめない。たとえば、`checking`から`implementing`に戻してチェックの修正を頼むときである。
+
+Agentが動くのは、数に含める状態のIssueだけである。なので、1つのリポジトリで同時に動くAgentの数も、この上限を超えない。
+
 - 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
@@ -70,6 +76,8 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 #### `CWK-POLL-006` 着手の順番
 
 同時に進めるIssueの数より多くのIssueに着手できるとき、cuminは優先度の高い順に着手する。同じ優先度なら、Issueの番号の小さい順である。
+
+上限に達していて待っているIssueのうち、`awaiting-`で始まる状態から作業に戻すIssueは、`ready`から新しく始めるIssueより先にする。途中まで進んだIssueから片付けるためである。
 
 - 優先度のラベル（[ラベル](../label/index.md)の`CWK-LABEL-006`）のないIssueは、ラベルのあるIssueのあとに着手する
 - 優先度のラベルのない実装Issueは、その要求Issueの優先度を使う

@@ -43,7 +43,7 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 #### `CWK-MERGE-003` Assigneeの承認でマージを始める
 
-`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`APPROVE`で、必須チェックが完了していて、blocked byのIssueを待たなくてよく（`CWK-MERGE-012`）、同時に進めるIssueの数に余裕がある（[定期確認](../poll/index.md)の`CWK-POLL-005`）とき、cuminは状態を`cumin/status/merging`に替える。
+`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`APPROVE`で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（`CWK-MERGE-012`）とき、cuminは状態を`cumin/status/merging`に替える。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -51,7 +51,7 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 #### `CWK-MERGE-004` Assigneeの指摘を修正する
 
-`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、実装Issueが最後に`cumin/status/awaiting-merge-decision`になったあとに出たもので、同時に進めるIssueの数に余裕がある（[定期確認](../poll/index.md)の`CWK-POLL-005`）とき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで修正を頼む。
+`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`REQUEST_CHANGES`で、実装Issueが最後に`cumin/status/awaiting-merge-decision`になったあとに出たものであるとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで修正を頼む。
 
 - 修正のあとは、必須チェックとレビューを経て、もう一度`CWK-MERGE-002`に進む
 - この修正は、レビューのラウンドにもチェックの修正の回数にも含めない。`REQUEST_CHANGES`を出すのは毎回Assigneeなので、往復が止まらなくなることはない。
