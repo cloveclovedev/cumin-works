@@ -230,7 +230,7 @@
 <p>実装Issueが閉じ、それを閉じるPull Requestがマージ済みで、そのPull Requestのフォローアップノートがまだないとき、cuminは要求Issueにフォローアップノートを1つ書く。誰が閉じたかは問わない。状態は替えない。形式はfollow-up-note.mdに従う。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-MERGE-017"><code class="requirement-id">CWK-MERGE-017</code> フォローアップノートに書くもの</h4>
-<p>cuminは、次のものを決まった形式から機械的に拾う。何もなければ書かない。</p>
+<p>cuminは、次のものを決まった形式から機械的に拾う。何もなければ、ないことを1行で書く。</p>
 <ul>
 <li>
 <p>Pull Requestの説明の<code>Follow-up</code>の文章。そのまま写す</p>
@@ -251,10 +251,7 @@
 </section><section class="requirement"><h4 id="CWK-MERGE-019"><code class="requirement-id">CWK-MERGE-019</code> 開いている要求Issueだけに書く</h4>
 <p>閉じた要求Issueには、フォローアップノートを書かない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-020"><code class="requirement-id">CWK-MERGE-020</code> 受け入れ確認の前にそろえる</h4>
-<p>sub-issueがすべて閉じたとき、cuminは、フォローアップノートを書き終えてから受け入れ確認を頼む（<a href="/cumin-works/requirements/accept/">受け入れ</a>）。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-MERGE-021"><code class="requirement-id">CWK-MERGE-021</code> Issueにしない</h4>
+</section><section class="requirement"><h4 id="CWK-MERGE-020"><code class="requirement-id">CWK-MERGE-020</code> Issueにしない</h4>
 <p>cuminは、フォローアップノートからIssueを作らない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><h2 id="未決事項">未決事項</h2>
