@@ -22,8 +22,8 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 - レビューが完了し（[レビュー](../review/index.md)の`CWK-REVIEW-004`）、そのレビューが`APPROVE`である
 - 必須チェックが、今の先頭のコミットで完了している（[チェック](../check/index.md)の`CWK-CHECK-002`）
-- リスクのラベルが`cumin/risk/low`である
-- blocked byのIssueを待たなくてよい（`CWK-MERGE-012`）
+- リスクのラベルが、`merge_decision_risks`（`CWK-MERGE-002`）に入っていない
+- blocked byのIssueより先にマージすることにならない（`CWK-MERGE-012`）
 
 - 検証: `test` GitHub mockでテスト
 
@@ -31,7 +31,9 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 #### `CWK-MERGE-002` マージ判断を求める
 
-`CWK-MERGE-001`の条件のうち、リスクのラベルだけが`cumin/risk/medium`か`cumin/risk/high`のとき、cuminは状態を`cumin/status/awaiting-merge-decision`に替え、Pull RequestでAssigneeにレビューを頼み、通知する。レビューを頼むのに失敗しても、ログに残すだけで、実装Issueは止めない。
+`CWK-MERGE-001`の条件のうち、リスクのラベルだけが`merge_decision_risks`に入っているとき、cuminは状態を`cumin/status/awaiting-merge-decision`に替え、Pull RequestでAssigneeにレビューを頼み、通知する。レビューを頼むのに失敗しても、ログに残すだけで、実装Issueは止めない。
+
+マージ判断を求めるリスクは、対象のリポジトリの`.cumin/config.toml`の`merge_decision_risks`で決める。初期値は`medium`と`high`である。`.cumin/`は保護されたパスなので（[チェック](../check/index.md)の`CWK-CHECK-008.1`）、Agentはこの設定を変えられない。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -43,7 +45,7 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 #### `CWK-MERGE-003` Assigneeの承認でマージを始める
 
-`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`APPROVE`で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（`CWK-MERGE-012`）とき、cuminは状態を`cumin/status/merging`に替える。
+`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`APPROVE`で、必須チェックが完了していて、blocked byのIssueより先にマージすることにならない（`CWK-MERGE-012`）とき、cuminは状態を`cumin/status/merging`に替える。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -78,7 +80,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 - 必須チェックが、今の先頭のコミットで完了している
 - リスクのラベルが1つだけ付いている
 - Reviewerの最新のレビューが、今の先頭のコミットへの`APPROVE`である
-- リスクが`cumin/risk/medium`か`cumin/risk/high`なら、Assigneeの最新のレビューも、今の先頭のコミットへの`APPROVE`である
+- リスクのラベルが`merge_decision_risks`（`CWK-MERGE-002`）に入っていれば、Assigneeの最新のレビューも、今の先頭のコミットへの`APPROVE`である
 - Pull Requestのbaseがmainブランチで、blocked byのIssueがすべて閉じている（`CWK-MERGE-012`）
 
 - 検証: `test` GitHub mockでテスト
@@ -139,7 +141,7 @@ GitHubが、mainブランチが変わったことを理由にマージを断っ�
 
 #### `CWK-MERGE-012` blocked byのIssueより先にマージしない
 
-「blocked byのIssueを待たなくてよい」とは、次のすべてが成り立つことである。
+「blocked byのIssueより先にマージすることにならない」とは、次のすべてが成り立つことである。
 
 - Pull Requestのbaseがmainブランチである
 - blocked byのIssueがすべて閉じている
@@ -153,7 +155,7 @@ cuminは、これが成り立つときだけマージに進む。`cumin/risk/low
 
 #### `CWK-MERGE-013` blocked byのIssueを待つ
 
-`cumin/status/reviewing`の実装Issueで、`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうちblocked byのIssueを待たなくてよいことのほかが成り立ち、baseがmainブランチでないか、開いているblocked byのIssueがあるとき、cuminは状態を`cumin/status/awaiting-blocker-merge`に替える。この状態では、誰も作業しない。
+`cumin/status/reviewing`の実装Issueで、`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうち、`CWK-MERGE-012`のほかが成り立ち、baseがmainブランチでないか、開いているblocked byのIssueがあるとき、cuminは状態を`cumin/status/awaiting-blocker-merge`に替える。この状態では、誰も作業しない。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

@@ -28,8 +28,8 @@ Reviewing --> Reviewing : request the review again,\nrequest the cause
 Reviewing --> Implementing : request a review fix
 Reviewing --> Checking : go back to the checks
 Reviewing --> Decision : stop the review,\nstop at the round limit
-Reviewing --> Merging : start the merge (risk low)
-Reviewing --> MergeDecision : ask for the merge decision (risk medium, high)
+Reviewing --> Merging : start the merge (the risk needs no decision)
+Reviewing --> MergeDecision : ask for the merge decision (the risk needs a decision)
 Reviewing --> AwaitingBase : wait for the blocker merge
 MergeDecision --> Merging : start the merge
 MergeDecision --> Implementing : request an assignee review fix,\nrequest a conflict resolution
