@@ -98,9 +98,6 @@
 <p>blocked byのIssueがすべて閉じている。または<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008.1">CWK-IMPL-008.1</a></code>の条件を満たす</p>
 </li>
 <li>
-<p>同時に進めるIssueの数に余裕がある</p>
-</li>
-<li>
 <p><code>cumin/type/owner-task</code>が付いていない（<code><a href="/cumin-works/requirements/label/#CWK-LABEL-001">CWK-LABEL-001</a></code>）</p>
 </li>
 
@@ -207,7 +204,6 @@
 <li>状態が<code>cumin/status/awaiting-blocker-merge</code>か、<a href="/cumin-works/requirements/merge/">マージ</a>の<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-001">CWK-MERGE-001</a></code>か<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-002">CWK-MERGE-002</a></code>の条件のうち、blocked byのIssueを待たなくてよいこと（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-012">CWK-MERGE-012</a></code>）のほかが成り立つ<code>cumin/status/reviewing</code>である</li>
 <li>baseがmainブランチで、blocked byのIssueがすべて閉じている</li>
 <li>この実装Issueのブランチが、まだblocked byのIssueのマージのあとのmainブランチを取り込んでいない（先頭のコミットが、blocked byのIssueを閉じたPull Requestのマージのコミットを含まない）</li>
-<li><code>cumin/status/awaiting-blocker-merge</code>から替えるときは、同時に進めるIssueの数に余裕がある（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-005">CWK-POLL-005</a></code>）</li>
 </ul>
 <p>cuminは、依頼に次の事実を足す。</p>
 <ul>
