@@ -57,7 +57,6 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 - 修正のあとは、必須チェックとレビューを経て、もう一度`CWK-MERGE-002`に進む
 - この修正は、レビューのラウンドにもチェックの修正の回数にも含めない。`REQUEST_CHANGES`を出すのは毎回Assigneeなので、往復が止まらなくなることはない。
-- 1つの`REQUEST_CHANGES`で頼むのは1回だけである。Implementerがコミットせずに答えたときは、Assigneeがもう一度判断する。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
