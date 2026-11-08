@@ -93,7 +93,7 @@
 <p>あるIssueで あるroleの「Agentが動いている」とは、このcuminが、その実行を今持っていることである。各ページの「Plannerの実行が終わっている」などは、Agentが動いていないことを指す。cuminを再起動すると、どのAgentも動いていないとして扱う。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-002"><code class="requirement-id">CWK-AGENT-002</code> すべてのAgent起動の前の確認</h4>
-<p>cuminは、定期確認のたびに次の確認の結果を更新し、Agentを起動するかの判断に使う。どれかが止めることを示していれば、その定期確認では、次に書いた範囲でAgentを起動しない。計画、実装、レビュー、修正、受け入れ確認など、どの種類のAgent起動もこの判断に従う。</p>
+<p>cuminは、定期確認のたびに次の確認の結果を更新し、Agentを起動するかの判断に使う。どれかが止めることを示していれば、その定期確認では、次に書いた範囲でAgentを起動しない。</p>
 <ul>
 <li>
 <p>利用制限（<a href="/cumin-works/requirements/limit/">利用制限</a>の<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）: すべてのリポジトリ</p>
