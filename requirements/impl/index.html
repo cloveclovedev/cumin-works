@@ -241,8 +241,8 @@
 </section><section class="requirement"><h4 id="CWK-IMPL-012"><code class="requirement-id">CWK-IMPL-012</code> Issueを変えない</h4>
 <p>Implementerは、実装Issueと要求Issueの本文を書き換えない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-IMPL-013"><code class="requirement-id">CWK-IMPL-013</code> 待たずに終わる</h4>
-<p>Implementerは、Pull Requestを開いてpushしたら、チェックもレビューも待たずに終わる。待つのはcuminである。</p>
+</section><section class="requirement"><h4 id="CWK-IMPL-013"><code class="requirement-id">CWK-IMPL-013</code> pushしたら実行を終える</h4>
+<p>Implementerは、pushしたあと、GitHubで動く必須チェックの結果やレビューを待たずに、実行を終える。それらを待つのはcuminである（<a href="/cumin-works/requirements/check/">チェック</a>）。pushの前に、自分でテストを実行したり、変更を見直して直したりするのはよい。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> Implementerのroleのファイルに、この決まりがある</li></ul></div>
 </section><h3 id="implementerが判断を求めるとき">Implementerが判断を求めるとき</h3>
 <section class="requirement"><h4 id="CWK-IMPL-014"><code class="requirement-id">CWK-IMPL-014</code> 推測で実装しない</h4>
