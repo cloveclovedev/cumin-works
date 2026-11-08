@@ -59,7 +59,7 @@ Issueの状態は、次のどれかである。状態ラベルの名前は、`cu
 | `checking` | 実装Issue | GitHubが必須チェックを動かす |
 | `reviewing` | 実装Issue | ReviewerがPull Requestをレビューする |
 | `awaiting-merge-decision` | 実装Issue | AssigneeがPull Requestを見て、マージ判断をする |
-| `awaiting-blocker-merge` | 実装Issue | blocked byのIssueのPull Requestのマージを待つ。このIssueには、誰も作業しない（[マージ](../merge/index.md)の`CWK-MERGE-020`）|
+| `awaiting-blocker-merge` | 実装Issue | blocked byのIssueのPull Requestのマージを待つ。このIssueには、誰も作業しない（[マージ](../merge/index.md)の`CWK-MERGE-013`）|
 | `merging` | 実装Issue | cuminがPull Requestをマージし、実装Issueを閉じる |
 | `awaiting-decision` | 要求Issue、実装Issue | Assigneeが答える。cuminが先に進めない理由は、Issueのコメントにある |
 

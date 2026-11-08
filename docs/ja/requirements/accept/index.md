@@ -26,7 +26,7 @@ cuminが読むのは、受け入れ確認のコメントがあるか、sub-issue
 - その状態ラベルを、`cumin-core`のGitHub Appが付けている（[権限](../access/index.md)の`CWK-ACCESS-012`）
 - sub-issueが1つ以上あり、すべて閉じている
 - 最後のsub-issueが閉じたあとの受け入れ確認のコメント（`CWK-ACCEPT-002`）がない
-- フォローアップノートを書き終えている（[マージ](../merge/index.md)の`CWK-MERGE-018`）
+- フォローアップノートを書き終えている（[マージ](../merge/index.md)の`CWK-MERGE-020`）
 - そのリポジトリで同時に進めるIssueの数に余裕がある（[定期確認](../poll/index.md)の`CWK-POLL-005`）
 
 - 検証: `test` GitHub mockとCLI mockでテスト

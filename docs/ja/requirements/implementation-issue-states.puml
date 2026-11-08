@@ -30,10 +30,10 @@ Reviewing --> Checking : go back to the checks
 Reviewing --> Decision : stop the review,\nstop at the round limit
 Reviewing --> Merging : start the merge (risk low)
 Reviewing --> MergeDecision : ask for the merge decision (risk medium, high)
-Reviewing --> AwaitingBase : wait for the base
+Reviewing --> AwaitingBase : wait for the blocker merge
 MergeDecision --> Merging : start the merge
 MergeDecision --> Implementing : request an assignee review fix,\nrequest a conflict resolution
-AwaitingBase --> Implementing : update onto the default branch
+AwaitingBase --> Implementing : take in the main branch
 AwaitingBase --> Decision : stop the implementation
 Merging --> Merging : merge
 Merging --> Checking : go back to the checks

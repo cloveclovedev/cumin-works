@@ -137,6 +137,39 @@ blocked byのIssueのPull Requestが変わっても、cuminはこの実装Issue�
 
 ---
 
+##### `CWK-IMPL-008.4` blocked byのIssueのマージのあとに確かめ直す
+
+マージ前のblocked byのIssueのブランチから始めた実装Issueは、始めた時点のblocked byのIssueの上で作られている。blocked byのIssueは、そのあとも変わることがある。そこでcuminは、blocked byのIssueがマージされたら、衝突がなくても、最終的な中身と合わせて確かめ直させる。
+
+次のすべてが成り立つとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで、mainブランチの取り込みと確かめ直しを頼む。続きの作業なので、同時に進めるIssueの数に余裕ができるのを待たない。
+
+- 状態が`cumin/status/awaiting-blocker-merge`か、[マージ](../merge/index.md)の`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうち、blocked byのIssueを待たなくてよいこと（`CWK-MERGE-012`）のほかが成り立つ`cumin/status/reviewing`である
+- baseがmainブランチで、blocked byのIssueがすべて閉じている
+- この実装Issueのブランチが、まだblocked byのIssueのマージのあとのmainブランチを取り込んでいない（先頭のコミットが、blocked byのIssueを閉じたPull Requestのマージのコミットを含まない）
+
+cuminは、依頼に、blocked byのIssueとそのPull Requestの番号と、この実装Issueを始めた時点のblocked byのIssueの先頭のコミットを足す。Implementerは、そこからマージされた中身までの差を読み、この実装Issueの変更の前提が変わっていないかを確かめ、変わっていれば合わせて直す。mainブランチは、強制pushをせずに、マージするコミットで取り込む。取り込んだあとは、必須チェックとレビューを経る。
+
+- 検証: `test` GitHub mockとCLI mockでテスト
+- 検証: `demo` テスト用の実リポジトリでImplementerを動かして確認
+
+---
+
+##### `CWK-IMPL-008.5` blocked byのIssueを待つ実装を止める
+
+マージ前のblocked byのIssueのブランチから始めた実装Issueで、Agentの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替え、理由をコメントに書いて、通知する。
+
+- blocked byのIssueのPull Requestが、マージされずに閉じた
+- この実装IssueのPull Requestが、マージされずに閉じた
+- `cumin/status/awaiting-blocker-merge`で、blocked byのIssueのPull Requestがマージされてから定期確認の間隔を過ぎても、baseがmainブランチにならない
+- mainブランチの取り込みを頼んだあとも、先頭のコミットがマージのコミットを含まない
+
+却下されたblocked byのIssueのコミットはブランチに残るので、Assigneeは、それを除くかPull Requestを閉じてから、`cumin/status/ready`を付ける。
+
+- 検証: `test` GitHub mockとCLI mockでテスト
+
+---
+
+
 ### Implementerの成果物
 
 #### `CWK-IMPL-009` Pull Request
@@ -211,7 +244,15 @@ Implementerは、次のどれかに当たったら、推測で進めずに`block
 
 ##### `CWK-IMPL-014.4` blocked byのIssueで足りない作業
 
-blocked byのIssueで済んでいるはずの作業が足りないときは、止まる。`CWK-IMPL-008`で始めた実装Issueでは、blocked byのIssueのブランチにあるはずの作業である。
+blocked byのIssueで済んでいるはずの作業が足りないときは、止まる。マージ前のblocked byのIssueのブランチから始めた実装Issueでは、blocked byのIssueのブランチにあるはずの作業である。
+
+- 検証: `demo` テスト用の実リポジトリでImplementerを動かして確認
+
+---
+
+##### `CWK-IMPL-014.5` blocked byのIssueの変更で変わった前提
+
+blocked byのIssueのマージのあとの確かめ直し（`CWK-IMPL-008.4`）で、blocked byのIssueの変更によってこの実装Issueの前提が変わり、直しでは済まないときは、止まる。理由には、何が変わったかと、作り直すか、直して続けるかの案を書く。
 
 - 検証: `demo` テスト用の実リポジトリでImplementerを動かして確認
 

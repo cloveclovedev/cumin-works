@@ -23,7 +23,7 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 - Reviewerの最新のレビューが、今の先頭のコミットへの`APPROVE`である
 - 必須チェックが、今の先頭のコミットで完了している（[チェック](../check/index.md)の`CWK-CHECK-002`）
 - リスクのラベルが`cumin/risk/low`である
-- blocked byのIssueを待たなくてよい（`CWK-MERGE-022`）
+- blocked byのIssueを待たなくてよい（`CWK-MERGE-012`）
 
 - 検証: `test` GitHub mockでテスト
 
@@ -43,7 +43,7 @@ cuminがマージ判断に使うのは、実装Issueの今のAssigneeのレビ�
 
 #### `CWK-MERGE-003` Assigneeの承認でマージを始める
 
-`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`APPROVE`で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（`CWK-MERGE-022`）とき、cuminは状態を`cumin/status/merging`に替える。
+`cumin/status/awaiting-merge-decision`の実装Issueで、Assigneeの最新のレビューが今の先頭のコミットへの`APPROVE`で、必須チェックが完了していて、blocked byのIssueを待たなくてよい（`CWK-MERGE-012`）とき、cuminは状態を`cumin/status/merging`に替える。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -79,7 +79,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 - リスクのラベルが1つだけ付いている
 - Reviewerの最新のレビューが、今の先頭のコミットへの`APPROVE`である
 - リスクが`cumin/risk/medium`か`cumin/risk/high`なら、Assigneeの最新のレビューも、今の先頭のコミットへの`APPROVE`である
-- Pull Requestのbaseがmainブランチで、blocked byのIssueがすべて閉じている（`CWK-MERGE-022`）
+- Pull Requestのbaseがmainブランチで、blocked byのIssueがすべて閉じている（`CWK-MERGE-012`）
 
 - 検証: `test` GitHub mockでテスト
 
@@ -135,9 +135,9 @@ GitHubが、mainブランチが変わったことを理由にマージを断っ�
 
 ### blocked byのIssueを待つ
 
-[実装](../impl/index.md)の`CWK-IMPL-008`で始めた実装IssueのPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、GitHubはそのブランチを消し、このPull Requestのbaseをmainブランチに替える。
+[実装](../impl/index.md)のマージ前のblocked byのIssueのブランチから始めた実装Issue（`CWK-IMPL-008`）のPull Requestは、baseがblocked byのIssueのブランチである。blocked byのIssueのPull Requestがマージされると、GitHubはそのブランチを消し、このPull Requestのbaseをmainブランチに替える。
 
-#### `CWK-MERGE-022` blocked byのIssueより先にマージしない
+#### `CWK-MERGE-012` blocked byのIssueより先にマージしない
 
 「blocked byのIssueを待たなくてよい」とは、次のすべてが成り立つことである。
 
@@ -151,7 +151,7 @@ cuminは、これが成り立つときだけマージに進む。`cumin/risk/low
 
 ---
 
-#### `CWK-MERGE-020` blocked byのIssueを待つ
+#### `CWK-MERGE-013` blocked byのIssueを待つ
 
 `cumin/status/reviewing`の実装Issueで、`CWK-MERGE-001`か`CWK-MERGE-002`の条件のうちblocked byのIssueを待たなくてよいことのほかが成り立ち、baseがmainブランチでないか、開いているblocked byのIssueがあるとき、cuminは状態を`cumin/status/awaiting-blocker-merge`に替える。この状態では、誰も作業しない。
 
@@ -159,38 +159,9 @@ cuminは、これが成り立つときだけマージに進む。`cumin/risk/low
 
 ---
 
-#### `CWK-MERGE-021` mainブランチを取り込む
-
-実装Issueが次のすべてを満たすとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで、mainブランチを取り込むよう頼む。
-
-- `cumin/status/awaiting-blocker-merge`か、`CWK-MERGE-020`と同じ条件の`cumin/status/reviewing`である
-- baseがmainブランチで、blocked byのIssueがすべて閉じている
-- 先頭のコミットが、blocked byのIssueを閉じたPull Requestのマージのコミットを含まない
-
-Implementerは強制pushをしないので、mainブランチをマージするコミットで取り込む。取り込んだあとは、必須チェックとレビューを経る。続きの作業なので、同時に進めるIssueの数に余裕ができるのを待たない。
-
-- 検証: `test` GitHub mockとCLI mockでテスト
-
----
-
-#### `CWK-MERGE-023` blocked byのIssueを待つ実装を止める
-
-`CWK-IMPL-008`で始めた実装Issueで、Agentの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替え、理由をコメントに書いて、通知する。
-
-- blocked byのIssueのPull Requestが、マージされずに閉じた
-- この実装IssueのPull Requestが、マージされずに閉じた
-- `cumin/status/awaiting-blocker-merge`で、blocked byのIssueのPull Requestがマージされてから定期確認の間隔を過ぎても、baseがmainブランチにならない
-- mainブランチの取り込みを頼んだあとも、先頭のコミットがマージのコミットを含まない
-
-却下されたblocked byのIssueのコミットはブランチに残るので、Assigneeは、それを除くかPull Requestを閉じてから、`cumin/status/ready`を付ける。
-
-- 検証: `test` GitHub mockとCLI mockでテスト
-
----
-
 ### 実装Issueを閉じる
 
-#### `CWK-MERGE-012` マージした実装Issueを閉じる
+#### `CWK-MERGE-014` マージした実装Issueを閉じる
 
 `cumin/status/merging`の実装Issueで、Pull Requestがマージ済みになったとき、GitHubが実装Issueを閉じていなければ、cuminが閉じる。cuminが実装Issueを閉じるのは、このときだけである。そのため、Maintainerが開き直した実装Issueは開いたままになる。
 
@@ -198,7 +169,7 @@ Implementerは強制pushをしないので、mainブランチをマージする�
 
 ---
 
-#### `CWK-MERGE-013` 人がマージしたとき
+#### `CWK-MERGE-015` 人がマージしたとき
 
 mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自分でマージしてもよい。そのあとは、cuminがマージしたときと同じに扱う。GitHubが実装Issueを閉じなければ、そのMaintainerが閉じる。
 
@@ -210,7 +181,7 @@ mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自�
 
 マージでPull Requestに埋もれる残りの作業を、cuminが要求Issueに書き写す。受け入れ確認で、Plannerがそれを扱う（[受け入れ](../accept/index.md)）。
 
-#### `CWK-MERGE-014` フォローアップノートを書く
+#### `CWK-MERGE-016` フォローアップノートを書く
 
 実装Issueが閉じ、それを閉じるPull Requestがマージ済みで、そのPull Requestのフォローアップノートがまだないとき、cuminは要求Issueにフォローアップノートを1つ書く。誰が閉じたかは問わない。状態は替えない。形式は[follow-up-note.md](../../../../templates/follow-up-note.md)に従う。
 
@@ -218,7 +189,7 @@ mainブランチのrulesetを迂回できるMaintainerは、Pull Requestを自�
 
 ---
 
-#### `CWK-MERGE-015` フォローアップノートに書くもの
+#### `CWK-MERGE-017` フォローアップノートに書くもの
 
 cuminは、次のものを決まった形式から機械的に拾う。何もなければ書かない。
 
@@ -230,7 +201,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 ---
 
-#### `CWK-MERGE-016` 1つのPull Requestに1つ
+#### `CWK-MERGE-018` 1つのPull Requestに1つ
 
 フォローアップノートは、1つのPull Requestに1つだけ書く。あるかどうかは、コメントの目印でGitHubから読む。
 
@@ -238,7 +209,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 ---
 
-#### `CWK-MERGE-017` 開いている要求Issueだけに書く
+#### `CWK-MERGE-019` 開いている要求Issueだけに書く
 
 閉じた要求Issueには、フォローアップノートを書かない。
 
@@ -246,7 +217,7 @@ cuminは、次のものを決まった形式から機械的に拾う。何もな
 
 ---
 
-#### `CWK-MERGE-018` 受け入れ確認の前にそろえる
+#### `CWK-MERGE-020` 受け入れ確認の前にそろえる
 
 sub-issueがすべて閉じたとき、cuminは、フォローアップノートを書き終えてから受け入れ確認を頼む（[受け入れ](../accept/index.md)）。
 
@@ -254,7 +225,7 @@ sub-issueがすべて閉じたとき、cuminは、フォローアップノート
 
 ---
 
-#### `CWK-MERGE-019` Issueにしない
+#### `CWK-MERGE-021` Issueにしない
 
 cuminは、フォローアップノートからIssueを作らない。
 
