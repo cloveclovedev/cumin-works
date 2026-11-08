@@ -233,7 +233,7 @@
 <p>Implementerは、1つの実装Issueにつき、渡された名前のブランチにPull Requestを1つ開く。説明はpull-request.mdの形式で書き、本文に<code>Closes #&lt;実装Issueの番号&gt;</code>を書く。続きや修正では、同じPull Requestにコミットを足す。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-IMPL-010"><code class="requirement-id">CWK-IMPL-010</code> 範囲の外の作業</h4>
-<p>Implementerは、実装Issueの範囲の外に手を広げない。気づいた範囲の外の作業は、Pull Requestの説明の<code>Follow-up</code>に書き、Issueは作らない。マージのあとに、cuminがフォローアップノートに書く（<a href="/cumin-works/requirements/merge/">マージ</a>）。</p>
+<p>Implementerは、実装Issueの範囲の外に手を広げない。気づいた範囲の外の作業は、Pull Requestの説明の<code>Follow-up</code>に1項目ずつ箇条書きで書き、Issueは作らない。マージのあとに、cuminがフォローアップノートに書く（<a href="/cumin-works/requirements/merge/">マージ</a>）。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> レビューで、変更が範囲の中にあり、範囲の外の作業が<code>Follow-up</code>にあることを確かめる</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-IMPL-011"><code class="requirement-id">CWK-IMPL-011</code> Pull Requestの図</h4>
 <p>Implementerは、「Where this fits」の図を直すときは、直した図をブランチ<code>cumin/diagrams</code>に新しいファイルとして足す。Pull Requestのブランチに図のファイルを置くのは、設計文書の図を変えるときだけである。</p>
