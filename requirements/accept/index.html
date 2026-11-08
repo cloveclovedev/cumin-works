@@ -122,7 +122,7 @@
 <p>それより前のコメントは使わない。Plannerが返した結果も使わない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-ACCEPT-003"><code class="requirement-id">CWK-ACCEPT-003</code> 受け入れを求める</h4>
-<p><code>cumin/status/accepting</code>の要求Issueで、受け入れ確認が完了し（<code><a href="/cumin-works/requirements/accept/#CWK-ACCEPT-002">CWK-ACCEPT-002</a></code>）、sub-issueがすべて閉じているとき、cuminは状態を<code>cumin/status/awaiting-acceptance</code>に替えて、通知する。<code>Fail</code>があっても同じである。</p>
+<p><code>cumin/status/accepting</code>の要求Issueで、受け入れ確認が完了し（<code><a href="/cumin-works/requirements/accept/#CWK-ACCEPT-002">CWK-ACCEPT-002</a></code>）、sub-issueがすべて閉じているとき、cuminは状態を<code>cumin/status/awaiting-acceptance</code>に替えて、通知する。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-ACCEPT-004"><code class="requirement-id">CWK-ACCEPT-004</code> 修正のsub-issueの確認を求める</h4>
 <p><code>cumin/status/accepting</code>の要求Issueで、受け入れ確認が完了し（<code><a href="/cumin-works/requirements/accept/#CWK-ACCEPT-002">CWK-ACCEPT-002</a></code>）、開いているsub-issueがあり、そのすべてにリスクのラベルが1つだけ付いているとき、cuminは状態を<code>cumin/status/awaiting-plan-review</code>に替えて、通知する。そのあとは、計画のsub-issueと同じに進む（<a href="/cumin-works/requirements/plan/">計画</a>の<code><a href="/cumin-works/requirements/plan/#CWK-PLAN-007">CWK-PLAN-007</a></code>）。</p>
