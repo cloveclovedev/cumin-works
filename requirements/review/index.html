@@ -217,7 +217,7 @@
 </section><h3 id="implementerの指摘の修正">Implementerの指摘の修正</h3>
 <section class="requirement"><h4 id="CWK-REVIEW-020"><code class="requirement-id">CWK-REVIEW-020</code> 指摘への返答</h4>
 <p>Implementerは、修正が必要な指摘と提案のすべてに返答する。元からある問題には返答しなくてよい。形式はreview-reply.mdに従う。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-REVIEW-021"><code class="requirement-id">CWK-REVIEW-021</code> 提案の扱い</h4>
 <p>Implementerは、提案を次の3つに分け、1行の理由を付けて返答する。</p>
 <ul>
@@ -226,7 +226,7 @@
 <li>対応しない: 変えずに<code>Not changed</code>と返答する</li>
 </ul>
 <p>提案を<code>Follow-up</code>に写さない。直されなかった提案は、マージのあとにcuminがフォローアップノートに書く（<a href="/cumin-works/requirements/merge/">マージ</a>）。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでReviewerを動かして確認</li></ul></div>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでImplementerを動かして確認</li></ul></div>
 </section><h3 id="reviewerが判断を求めるとき">Reviewerが判断を求めるとき</h3>
 <section class="requirement"><h4 id="CWK-REVIEW-022"><code class="requirement-id">CWK-REVIEW-022</code> 推測でレビューしない</h4>
 <p>Reviewerは、次のどれかに当たったら、レビューを出さずに<code>blocked</code>を返す。cuminは、やり直さずに止める（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-007">CWK-REVIEW-007</a></code>）。</p>
