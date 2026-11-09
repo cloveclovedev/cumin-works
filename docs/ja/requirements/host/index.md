@@ -156,6 +156,7 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 | `priority_labels` | 優先度のラベルの名前。高い順（`CWK-LABEL-006`）| `cumin/priority/P0`〜`P3` | リポジトリ |
 | `protected_paths` | 保護されたパス（`CWK-CHECK-008.1`）| `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md` | リポジトリ |
 | `tool_checks` | ツール動作確認（`CWK-AGENT-019.1`）| なし | リポジトリ |
+| `plugins` | Agentに渡すplugin（`CWK-AGENT-025.1`）| なし | リポジトリ |
 | `max_unmerged_blockers` | マージされていないblocked byのIssueのブランチから始めるときの、たどる数の上限。0なら始めない（`CWK-IMPL-008`）| 0 | リポジトリ |
 
 - `<role>`は`planner`、`implementer`、`reviewer`のどれか、`<app>`は`cumin-core`とこの3つのどれかである

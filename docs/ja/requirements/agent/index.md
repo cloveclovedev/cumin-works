@@ -89,11 +89,52 @@ cuminは、次の4つをこの順につないで、roleの指示として渡す�
 
 ---
 
+#### `CWK-AGENT-024` リポジトリの追加の指示
+
+対象のリポジトリは、roleの指示に、追加の指示を足せる。cuminは、次のファイルがmainブランチにあれば、`CWK-AGENT-007`の対応するファイルのすぐあとにつなぐ。
+
+- `.cumin/roles/<role>.md`: roleのファイルのあと
+- `.cumin/disciplines/<専門知識>/<role>.md`: 専門知識のファイルのあと
+
+追加の指示は、cuminのファイルを置き換えない。食い違ったら、cuminのroleのファイルが勝つ。roleのファイルには、結果の形式やラベルの決まりなど、cuminとの約束があるためである。
+
+- 検証: `test` GitHub mockとCLI mockでテスト
+
+---
+
 #### `CWK-AGENT-008` テンプレートをskillで渡す
 
 cuminは、GitHubに残す文章のテンプレート（`templates/`）を、その文章を書くroleにskillとして渡す。Agentは、書く直前にskillを呼ぶ。
 
 - 検証: `test` CLI mockでテスト
+
+---
+
+#### `CWK-AGENT-025` pluginを渡す
+
+cuminは、対象のリポジトリが指定したClaude CodeのpluginをAgentに渡す。skillとMCPサーバも、pluginに入れて渡す。
+
+##### `CWK-AGENT-025.1` pluginの指定
+
+pluginは、対象のリポジトリの`.cumin/config.toml`の`plugins`に書く。1つのpluginは、名前、GitHubのリポジトリ、その中のパス、コミットを持つ。渡すroleと専門知識も書ける。省くと、すべてのroleと専門知識に渡す。Maintainerが承認したpluginだけを渡すために、保護されたパスの`.cumin/`に書き、コミットで中身を固定する。
+
+- 検証: `test` 設定の読み込みを単体テスト
+
+---
+
+##### `CWK-AGENT-025.2` pluginを取ってくる
+
+cuminは、指定されたコミットのpluginをHostに取ってきて、Agent作業ディレクトリの外に置き、起動のときに渡す（Claude Codeでは`--plugin-dir`）。取ってこられないpluginがあれば、そのAgent起動を異常終了とする（`CWK-AGENT-018`）。
+
+- 検証: `test` GitHub mockとCLI mockでテスト
+
+---
+
+##### `CWK-AGENT-025.3` MCPサーバはpluginのものだけ
+
+cuminは、渡したpluginのMCPサーバだけを読むようにAgentを起動する。対象のリポジトリの`.mcp.json`は読ませない。
+
+- 検証: `demo` テスト用の実リポジトリでAgentを動かして確認
 
 ---
 
@@ -110,8 +151,8 @@ cuminは、AgentがHostのユーザアカウントの指示と設定（Claude Co
 cuminは、実行の最初に出る起動の記録（Claude Codeでは`init`のイベント）を確かめ、次のどれかに当たったら、その場で止めて異常終了とする。
 
 - Agent作業ディレクトリの外の指示かメモリがある
-- ユーザアカウントのpluginかMCPサーバがある。CLIに組み込みのpluginは許す
-- cuminが渡したskillが1つでも欠けている
+- cuminが渡していないpluginかMCPサーバがある。CLIに組み込みのpluginは許す
+- cuminが渡したskill、plugin、MCPサーバが1つでも欠けている
 - 確かめる項目がないか、読めない
 - 起動の記録がないまま、実行が終わった
 
