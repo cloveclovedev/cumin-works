@@ -63,11 +63,11 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 1つのリポジトリで同時に進めるIssueの数は、`max_issues_in_progress`（初期値は1）までである。含めるのは、状態が`planning`、`accepting`の要求Issueと、`implementing`、`checking`、`reviewing`、`merging`の開いている実装Issueである。`implementing`の要求Issue、`ready`のIssue、`awaiting-`で始まる状態のIssueは含めない。違うリポジトリのIssueは、並行して進めてよい。
 
-cuminは、Issueの状態を、この数に含める状態に替える前に、数がまだ上限に達していないかを確かめる。上限に達していれば、状態を替えずに、次の定期確認でもう一度確かめる。これは、`ready`から新しく作業を始めるときも、`awaiting-`で始まる状態（Assigneeの判断やほかのIssueのマージを待つ状態）から作業に戻すときも同じである。
+cuminは、Issueの状態を上記の状態に替える前に、数がまだ上限に達していないかを確かめる。上限に達していれば、状態を替えずに、次の定期確認でもう一度確かめる。これは、`ready`から新しく作業を始めるときも、`awaiting-`で始まる状態（Assigneeの判断やほかのIssueのマージを待つ状態）から作業に戻すときも同じである。
 
-一方、数に含める状態から、別の数に含める状態に替えるときは、数が増えないので確かめない。たとえば、`checking`から`implementing`に戻してチェックの修正を頼むときである。
+一方、上記の状態から、上記の別の状態に替えるときは、数が増えないので確かめない。たとえば、`checking`から`implementing`に戻してチェックの修正を頼むときである。
 
-Agentが動くのは、数に含める状態のIssueだけである。なので、1つのリポジトリで同時に動くAgentの数も、この上限を超えない。
+Agentが動くのは、上記の状態のIssueだけである。なので、1つのリポジトリで同時に動くAgentの数も、この上限を超えない。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
