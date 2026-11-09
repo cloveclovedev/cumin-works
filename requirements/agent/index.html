@@ -199,11 +199,11 @@
 </table>
 <p>cuminはJSONを確かめ、形式に合わないときや、<code>blocked</code>で<code>blocked_reason</code>が空のときは、異常終了とする。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-AGENT-013"><code class="requirement-id">CWK-AGENT-013</code> doneは確かめ始めの合図</h4>
+</section><section class="requirement"><h4 id="CWK-AGENT-013"><code class="requirement-id">CWK-AGENT-013</code> <code>done</code>を作業の完了とは扱わない</h4>
 <p><code>done</code>は、GitHubを確かめ始めてよいという合図でしかない。作業が済んだかは、各ページの完了判断で決める。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-AGENT-014"><code class="requirement-id">CWK-AGENT-014</code> 質問のコメント</h4>
-<p>Agentが<code>blocked</code>を返したら、cuminは<code>blocked_reason</code>を、扱ったIssueにすぐコメントとして書く。これが各ページの「質問のコメント」である。</p>
+</section><section class="requirement"><h4 id="CWK-AGENT-014"><code class="requirement-id">CWK-AGENT-014</code> Agentが判断を求めて止まったときのコメント</h4>
+<p>Agentは、Assigneeの判断がないと進められないとき（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-022">CWK-AGENT-022</a></code>、<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-023">CWK-AGENT-023</a></code>）、<code>blocked</code>を返して実行を終える。これは異常終了ではない（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018">CWK-AGENT-018</a></code>）。cuminは、<code>blocked_reason</code>を、扱ったIssueにすぐコメントとして書く。各ページの「質問のコメント」は、このコメントを指す。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><h3 id="セッションと時間">セッションと時間</h3>
 <section class="requirement"><h4 id="CWK-AGENT-015"><code class="requirement-id">CWK-AGENT-015</code> セッション</h4>
