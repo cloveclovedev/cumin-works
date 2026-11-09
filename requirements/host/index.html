@@ -159,7 +159,7 @@
 <p><code>cumin run</code>は、SIGINTとSIGTERMで、動いているAgentも止めてすぐに終わる。ラベルは替えず、終了コードは0なのでlaunchdは起動し直さない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-007"><code class="requirement-id">CWK-HOST-007</code> 実行を待ってから止める</h4>
-<p><code>cumin stop --after-current-runs</code>を実行すると、cuminの停止を予約できる。予約のあと、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。cuminの停止予約は、次の定期確認から効く。次にcuminを起動したときには、予約は残っていない。</p>
+<p><code>cumin stop --after-current-runs</code>を実行すると、cuminの停止を予約できる。予約のあと、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。cuminの停止予約は、次の定期確認から効く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-008"><code class="requirement-id">CWK-HOST-008</code> スリープ</h4>
 <p>Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018">CWK-AGENT-018</a></code>）。</p>
