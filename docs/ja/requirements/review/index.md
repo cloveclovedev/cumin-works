@@ -104,7 +104,7 @@ cuminは、次のすべてが成り立つとき、レビューが完了したと
 
 #### `CWK-REVIEW-009` ラウンドの数え方
 
-ラウンドは、次の2つの新しいほうよりあとに出た`cumin-reviewer`のレビューの数とする。cuminはラウンドの数を手元に持たない。
+ラウンドは、次の2つの新しいほうよりあとに出た`cumin-reviewer`のレビューの数とする。cuminはラウンドの数をローカルに持たない。
 
 - 実装Issueに最後に`cumin/status/ready`が付いたとき
 - `cumin-reviewer`が最後に`APPROVE`を出したとき

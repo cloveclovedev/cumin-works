@@ -12,7 +12,7 @@ cuminは、Hostのユーザアカウントで常駐し、自分からGitHubを�
 
 - 設定: Operatorが書く。秘密の値は含めない。
 - 秘密の値: macOSのKeychainに置く
-- 手元の状態: cuminが書く。失っても作業を失わない（[定期確認](../poll/index.md)の`CWK-POLL-003`）。
+- cuminがローカルに持つ情報: cuminが書く。失っても作業を失わない（[定期確認](../poll/index.md)の`CWK-POLL-003`）。
 - モニターファイル: cuminが書き、cuminを外から見る道具が読む
 
 ## 要件
@@ -58,7 +58,7 @@ Operatorは、次のコマンドを使う。
 
 #### `CWK-HOST-004` 状態の表示
 
-`cumin status`は、次のことを表示する。GitHubのラベル、手元の状態、モニターファイル（`CWK-HOST-014`）から読み、GitHubに書き込まない。
+`cumin status`は、次のことを表示する。GitHubのラベル、cuminがローカルに持つ情報、モニターファイル（`CWK-HOST-014`）から読み、GitHubに書き込まない。
 
 - 作業中のAgentと、`awaiting-`で始まる状態のIssue
 - 5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因
@@ -187,7 +187,7 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 
 #### `CWK-HOST-013` 秘密の値
 
-GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSのKeychainに置く。設定ファイルとリポジトリには書かない。cuminは起動のときに読み、メモリにだけ持ち、手元の状態にもログにも書かない。
+GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSのKeychainに置く。設定ファイルとリポジトリには書かない。cuminは起動のときに読み、メモリにだけ持ち、ローカルに持つ情報にもログにも書かない。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
