@@ -104,9 +104,9 @@
 </section><h3 id="着手">着手</h3>
 <section class="requirement"><h4 id="CWK-POLL-005"><code class="requirement-id">CWK-POLL-005</code> 同時に進めるIssueの数</h4>
 <p>1つのリポジトリで同時に進めるIssueの数は、<code>max_issues_in_progress</code>（初期値は1）までである。含めるのは、状態が<code>planning</code>、<code>accepting</code>の要求Issueと、<code>implementing</code>、<code>checking</code>、<code>reviewing</code>、<code>merging</code>の開いている実装Issueである。<code>implementing</code>の要求Issue、<code>ready</code>のIssue、<code>awaiting-</code>で始まる状態のIssueは含めない。違うリポジトリのIssueは、並行して進めてよい。</p>
-<p>cuminは、Issueの状態を、この数に含める状態に替える前に、数がまだ上限に達していないかを確かめる。上限に達していれば、状態を替えずに、次の定期確認でもう一度確かめる。これは、<code>ready</code>から新しく作業を始めるときも、<code>awaiting-</code>で始まる状態（Assigneeの判断やほかのIssueのマージを待つ状態）から作業に戻すときも同じである。</p>
-<p>一方、数に含める状態から、別の数に含める状態に替えるときは、数が増えないので確かめない。たとえば、<code>checking</code>から<code>implementing</code>に戻してチェックの修正を頼むときである。</p>
-<p>Agentが動くのは、数に含める状態のIssueだけである。なので、1つのリポジトリで同時に動くAgentの数も、この上限を超えない。</p>
+<p>cuminは、Issueの状態を上記の状態に替える前に、数がまだ上限に達していないかを確かめる。上限に達していれば、状態を替えずに、次の定期確認でもう一度確かめる。これは、<code>ready</code>から新しく作業を始めるときも、<code>awaiting-</code>で始まる状態（Assigneeの判断やほかのIssueのマージを待つ状態）から作業に戻すときも同じである。</p>
+<p>一方、上記の状態から、上記の別の状態に替えるときは、数が増えないので確かめない。たとえば、<code>checking</code>から<code>implementing</code>に戻してチェックの修正を頼むときである。</p>
+<p>Agentが動くのは、上記の状態のIssueだけである。なので、1つのリポジトリで同時に動くAgentの数も、この上限を超えない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-POLL-006"><code class="requirement-id">CWK-POLL-006</code> 着手の順番</h4>
 <p>同時に進めるIssueの数より多くのIssueに着手できるとき、cuminは優先度の高い順に着手する。同じ優先度なら、Issueの番号の小さい順である。</p>
