@@ -95,25 +95,13 @@
 </section><section class="requirement"><h4 id="CWK-AGENT-002"><code class="requirement-id">CWK-AGENT-002</code> すべてのAgent起動の前の確認</h4>
 <p>cuminは、定期確認のたびに次の確認の結果を更新し、Agentを起動するかの判断に使う。どれかが止めることを示していれば、その定期確認では、次に書いた範囲でAgentを起動しない。</p>
 <ul>
-<li>
-<p>利用制限（<a href="/cumin-works/requirements/limit/">利用制限</a>の<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）: すべてのリポジトリ</p>
-</li>
-<li>
-<p>リポジトリごとのツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019.3">CWK-AGENT-019.3</a></code>）: そのリポジトリだけ</p>
-</li>
-<li>
-<p>リポジトリごとのruleset（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-015">CWK-ACCESS-015</a></code>）: そのリポジトリだけ</p>
-</li>
-<li>
-<p>cuminの停止予約（<a href="/cumin-works/requirements/host/">Hostでの動かし方</a>の<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>）: すべてのリポジトリ</p>
-</li>
-
-
-</ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
-<p><code>test</code> GitHub mockとCLI mockでテスト</p>
-</li><li>
-<p><code>inspection</code> Agentを起動するコードの呼び出し元が1つだけで、その前に確認がある</p>
-</li></ul></div>
+<li>利用制限（<a href="/cumin-works/requirements/limit/">利用制限</a>の<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-001">CWK-LIMIT-001</a></code>）: すべてのリポジトリ</li>
+<li>リポジトリごとのツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-019.3">CWK-AGENT-019.3</a></code>）: そのリポジトリだけ</li>
+<li>リポジトリごとのruleset（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-015">CWK-ACCESS-015</a></code>）: そのリポジトリだけ</li>
+<li>cuminの停止予約（<a href="/cumin-works/requirements/host/">Hostでの動かし方</a>の<code><a href="/cumin-works/requirements/host/#CWK-HOST-007">CWK-HOST-007</a></code>）: すべてのリポジトリ</li>
+</ul>
+<p>これらの確認は、状態ラベルを替える前に行う（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-003">CWK-AGENT-003</a></code>）。</p>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li><li><code>inspection</code> Agentを起動するコードの呼び出し元が1つだけで、その前に確認がある</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-003"><code class="requirement-id">CWK-AGENT-003</code> 状態を先に替える</h4>
 <p>cuminは、Agent起動の前に状態ラベルを替える。替えられなければ起動しない。1つのIssueで、同時に2つのAgentを起動しない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>

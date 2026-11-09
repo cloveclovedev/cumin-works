@@ -74,26 +74,31 @@
 <p>Host上で動作するAgentの利用制限を、cuminがどう守るかを決める。</p>
 <h2 id="全体像">全体像</h2>
 <p>利用制限で変わるのは、Issueの状態ではなく、cuminがAgent起動を止めているかどうかである。cuminはこれを手元の状態に持ち、GitHubには書かない。cumin 1つにつき1つで、すべてのリポジトリに適用される。</p>
-<p><img alt="利用制限の全体像" loading="lazy" decoding="async" width="774" height="357" src="/cumin-works/_astro/overview.BdKSZqBZ_Z1LoyK7.svg"></p>
+<p><img alt="利用制限の全体像" loading="lazy" decoding="async" width="826" height="357" src="/cumin-works/_astro/overview.DMP5IjDB_ZSv2UM.svg"></p>
 <p>図の元ファイル: overview.puml</p><details><summary>overview.puml</summary><div class="expressive-code"><link rel="stylesheet" href="/cumin-works/_astro/ec.w36nc.css"><script type="module" src="/cumin-works/_astro/ec.0vx5m.js"></script><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="plaintext"><code><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@startuml overview</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' cumin-works - the state of cumin itself for the agent starts under the usage limits.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' One instance for one cumin, kept on the Host, not on GitHub. It holds for every repository.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' A transition is written: action [guard] / what cumin does.</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">' Render: run scripts/render-diagrams.sh at the root of the repository.</span></div></div><div class="ec-line"><div class="code">
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">hide empty description</span></div></div><div class="ec-line"><div class="code">
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "starting agents" as Starting</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Starting : do / cumin starts the agent of each transition\nthat starts an agent</span></div></div><div class="ec-line"><div class="code">
 </div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">state "agent starts stopped" as Stopped</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Stopped : do / the running agents end; cumin starts no agent.\nEvery issue keeps its state.\nTransitions that start no agent go on</span></div></div><div class="ec-line"><div class="code">
-</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">[*] --&gt; Starting</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Starting --&gt; Stopped : stop agent starts\n[a usage is at its limit,\nor cumin cannot read the usage]\n/ cumin notifies once</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Stopped --&gt; Starting : resume agent starts\n[the Operator allows the 5-hour limit,\nthe weekly usage is under its limit]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Stopped --&gt; Starting : resume agent starts\n[the time of the next try passed,\nboth usages are under their limits]</span></div></div><div class="ec-line"><div class="code">
-</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@enduml</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="クリップボードにコピー" data-copied="コピーしました！" data-code="@startuml overview&#x27; cumin-works - the state of cumin itself for the agent starts under the usage limits.&#x27; One instance for one cumin, kept on the Host, not on GitHub. It holds for every repository.&#x27; A transition is written: action [guard] / what cumin does.&#x27; Render: run scripts/render-diagrams.sh at the root of the repository.hide empty descriptionstate &quot;starting agents&quot; as StartingStarting : do / cumin starts the agent of each transition\nthat starts an agentstate &quot;agent starts stopped&quot; as StoppedStopped : do / the running agents end; cumin starts no agent.\nEvery issue keeps its state.\nTransitions that start no agent go on[*] --> StartingStarting --> Stopped : stop agent starts\n[a usage is at its limit,\nor cumin cannot read the usage]\n/ cumin notifies onceStopped --> Starting : resume agent starts\n[the Operator allows the 5-hour limit,\nthe weekly usage is under its limit]Stopped --> Starting : resume agent starts\n[the time of the next try passed,\nboth usages are under their limits]@enduml"><div></div></button></div></figure></div></details>
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">[*] --&gt; Starting</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Starting --&gt; Stopped : stop agent starts\n[a usage is at its threshold,\nor cumin cannot read the usage]\n/ cumin notifies once</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Stopped --&gt; Starting : resume agent starts\n[the Operator allows the 5-hour limit,\nthe weekly usage is under its threshold]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">Stopped --&gt; Starting : resume agent starts\n[cumin reads the usages again,\nboth usages are under their thresholds]</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#d6deeb;--1:#403f53">@enduml</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="クリップボードにコピー" data-copied="コピーしました！" data-code="@startuml overview&#x27; cumin-works - the state of cumin itself for the agent starts under the usage limits.&#x27; One instance for one cumin, kept on the Host, not on GitHub. It holds for every repository.&#x27; A transition is written: action [guard] / what cumin does.&#x27; Render: run scripts/render-diagrams.sh at the root of the repository.hide empty descriptionstate &quot;starting agents&quot; as StartingStarting : do / cumin starts the agent of each transition\nthat starts an agentstate &quot;agent starts stopped&quot; as StoppedStopped : do / the running agents end; cumin starts no agent.\nEvery issue keeps its state.\nTransitions that start no agent go on[*] --> StartingStarting --> Stopped : stop agent starts\n[a usage is at its threshold,\nor cumin cannot read the usage]\n/ cumin notifies onceStopped --> Starting : resume agent starts\n[the Operator allows the 5-hour limit,\nthe weekly usage is under its threshold]Stopped --> Starting : resume agent starts\n[cumin reads the usages again,\nboth usages are under their thresholds]@enduml"><div></div></button></div></figure></div></details>
 <p>Agent起動を止めている間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ、Issueを閉じること）は続ける。</p>
 <h2 id="要件">要件</h2>
 <h3 id="利用制限の確認">利用制限の確認</h3>
-<section class="requirement"><h4 id="CWK-LIMIT-001"><code class="requirement-id">CWK-LIMIT-001</code> Agent起動の前に確認する</h4>
-<p>cuminは、定期確認のたびに、Agent起動を決める前に、5時間制限と週間制限の使用率から、起動してよいかを判断する。
-どちらかの使用率がしきい値以上のときと、使用率を読めないときは、すべてのリポジトリでAgent起動を止める。</p>
-<p>すでに動いているAgentは止めない。</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでAgent起動判断を網羅的にテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-LIMIT-002"><code class="requirement-id">CWK-LIMIT-002</code> Agent起動判定のタイミング</h4>
-<p>利用制限の起動判定はラベル操作などの前に実施し、ラベル操作後にAgent起動をやめたとき、ラベルの状態だけ変わることを避ける</p>
-<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockとGitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-LIMIT-003"><code class="requirement-id">CWK-LIMIT-003</code> 使用率判断のために取得する情報</h4>
-<p>以下の情報を読んで、読んだ時刻とともに保存する</p>
+<section class="requirement"><h4 id="CWK-LIMIT-001"><code class="requirement-id">CWK-LIMIT-001</code> Agent起動を止める判断</h4>
+<p>cuminは、次のどちらかのとき、利用制限によりAgent起動を止めると判断する。</p>
+<ul>
+<li>
+<p>5時間制限か週間制限の使用率がしきい値以上である</p>
+</li>
+<li>
+<p>使用率を読めない</p>
+</li>
+
+</ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
+<p><code>test</code> CLI mockでAgent起動判断を網羅的にテスト</p>
+</li></ul></div>
+</section><section class="requirement"><h4 id="CWK-LIMIT-002"><code class="requirement-id">CWK-LIMIT-002</code> 使用率判断のために取得する情報</h4>
+<p>以下の情報を読んで、読んだ時刻とともに保存する。</p>
 <ul>
 <li>
 <p>5時間制限の使用率</p>
@@ -111,11 +116,11 @@
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
 <p><code>demo</code> Claude Codeで要件の情報が取得できることを確認</p>
 </li></ul></div>
-</section><section class="requirement"><h4 id="CWK-LIMIT-004"><code class="requirement-id">CWK-LIMIT-004</code> 使用率の情報更新タイミング</h4>
-<p>設定した時間内に使用率を取得しているときは、再度使用率を取得しない</p>
+</section><section class="requirement"><h4 id="CWK-LIMIT-003"><code class="requirement-id">CWK-LIMIT-003</code> 使用率の情報更新タイミング</h4>
+<p><code>quota.read_interval</code>（初期値は5分）で設定した時間内に使用率を取得しているときは、再度使用率を取得しない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-LIMIT-005"><code class="requirement-id">CWK-LIMIT-005</code> 使用率がしきい値以上のときの情報更新タイミング</h4>
-<p>使用率がしきい値以上のとき、以下のタイミングまで再度使用率を取得しない</p>
+</section><section class="requirement"><h4 id="CWK-LIMIT-004"><code class="requirement-id">CWK-LIMIT-004</code> 使用率がしきい値以上のときの情報更新タイミング</h4>
+<p>使用率がしきい値以上のとき、以下のタイミングまで再度使用率を取得しない。</p>
 <ul>
 <li>
 <p>しきい値が時間で変動する場合は、使用率がしきい値を下回るとき</p>
@@ -127,23 +132,23 @@
 </ul><div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li>
 <p><code>test</code> CLI mockでテスト</p>
 </li></ul></div>
-</section><section class="requirement"><h4 id="CWK-LIMIT-006"><code class="requirement-id">CWK-LIMIT-006</code> 使用率によりAgent起動を止めたことを知らせる</h4>
+</section><section class="requirement"><h4 id="CWK-LIMIT-005"><code class="requirement-id">CWK-LIMIT-005</code> 使用率によりAgent起動を止めたことを知らせる</h4>
 <p>cuminは、Agent起動を止めたときに、止めた原因を書いて通知する。
 原因は5時間制限、週間制限、使用率を読めないことのどれかである。再開するまで、同じ原因について通知するのは1回だけである。再開したときは通知しない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
 </section><h3 id="しきい値">しきい値</h3>
-<section class="requirement"><h4 id="CWK-LIMIT-007"><code class="requirement-id">CWK-LIMIT-007</code> 5時間制限のしきい値</h4>
+<section class="requirement"><h4 id="CWK-LIMIT-006"><code class="requirement-id">CWK-LIMIT-006</code> 5時間制限のしきい値</h4>
 <p>5時間制限のしきい値は、<code>quota.five_hour.threshold</code>（初期値は85%）で決める。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> しきい値の判定を単体テスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-LIMIT-008"><code class="requirement-id">CWK-LIMIT-008</code> 週間制限のしきい値</h4>
+</section><section class="requirement"><h4 id="CWK-LIMIT-007"><code class="requirement-id">CWK-LIMIT-007</code> 週間制限のしきい値</h4>
 <p>週間制限のしきい値は、週の進み具合からcuminが算出する。
 現時点のしきい値は目標 × min(1, (経過時間 + 前倒し) ÷ 7日)である。経過時間は週間制限のリセット時刻の7日前からの時間である。
 目標は<code>quota.weekly.target</code>（初期値は85%）、前倒しは<code>quota.weekly.lead</code>（初期値は1日）で決める。しきい値は週の経過とともに上がり、目標を超えない。
-リセット時刻は<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-003">CWK-LIMIT-003</a></code>で取得した情報を用いる。</p>
+リセット時刻は<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-002">CWK-LIMIT-002</a></code>で取得した情報を用いる。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> しきい値の算出を単体テスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-LIMIT-009"><code class="requirement-id">CWK-LIMIT-009</code> 5時間制限を使い切る許可</h4>
+</section><section class="requirement"><h4 id="CWK-LIMIT-008"><code class="requirement-id">CWK-LIMIT-008</code> 5時間制限を使い切る許可</h4>
 <p>Operatorが<code>cumin quota allow</code>を実行すると、その5時間制限がリセットされるまで、5時間制限のしきい値を100%とする。
-週間制限のしきい値は影響を受けない。週間制限を使い切ると、Operatorが長時間使えなくなる可能性があるため。</p>
+週間制限のしきい値は影響を受けない。週間制限は、使い切ったときに制限がかかる時間が長いため。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
 </section><h2 id="未決事項">未決事項</h2>
 <p>なし</p>
