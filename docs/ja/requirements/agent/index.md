@@ -150,7 +150,7 @@ cuminはJSONを確かめ、形式に合わないときや、`blocked`で`blocked
 
 ---
 
-#### `CWK-AGENT-013` doneは確かめ始めの合図
+#### `CWK-AGENT-013` `done`を作業の完了とは扱わない
 
 `done`は、GitHubを確かめ始めてよいという合図でしかない。作業が済んだかは、各ページの完了判断で決める。
 
@@ -158,9 +158,9 @@ cuminはJSONを確かめ、形式に合わないときや、`blocked`で`blocked
 
 ---
 
-#### `CWK-AGENT-014` 質問のコメント
+#### `CWK-AGENT-014` Agentが判断を求めて止まったときのコメント
 
-Agentが`blocked`を返したら、cuminは`blocked_reason`を、扱ったIssueにすぐコメントとして書く。これが各ページの「質問のコメント」である。
+Agentは、Assigneeの判断がないと進められないとき（`CWK-AGENT-022`、`CWK-AGENT-023`）、`blocked`を返して実行を終える。これは異常終了ではない（`CWK-AGENT-018`）。cuminは、`blocked_reason`を、扱ったIssueにすぐコメントとして書く。各ページの「質問のコメント」は、このコメントを指す。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
