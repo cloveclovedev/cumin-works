@@ -79,3 +79,12 @@ tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるように
 - 見直すきっかけ: 秘密の値が要るMCPサーバを使いたい対象のリポジトリが出てきたとき
 
 ---
+
+### 非公開のリポジトリのplugin
+
+非公開のリポジトリにあるpluginも、Agentに渡せるようにする（[Agent](agent/index.md)の`CWK-AGENT-025`）。そのリポジトリに`cumin-core`のGitHub Appを入れれば、cuminは読める。ただし`cumin-core`は、入れたリポジトリでも同じ権限（[権限](access/index.md)の`CWK-ACCESS-004`）を持つ。
+
+- 後回しにした理由: pluginを読むだけのために、書き込みの権限まで渡すことになる。読むだけのGitHub Appを分けるかを決める必要がある
+- 見直すきっかけ: 非公開のリポジトリのpluginを使いたい対象のリポジトリが出てきたとき
+
+---
