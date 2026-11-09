@@ -125,10 +125,29 @@
 </ol>
 <p>食い違ったら、roleのファイルが勝つ。専門知識のファイルがないroleは、それを飛ばす。今の専門知識は<code>software-engineering</code>だけである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
+</section><section class="requirement"><h4 id="CWK-AGENT-024"><code class="requirement-id">CWK-AGENT-024</code> リポジトリの追加の指示</h4>
+<p>対象のリポジトリは、roleの指示に、追加の指示を足せる。cuminは、次のファイルがmainブランチにあれば、<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-007">CWK-AGENT-007</a></code>の対応するファイルのすぐあとにつなぐ。</p>
+<ul>
+<li><code>.cumin/roles/&lt;role&gt;.md</code>: roleのファイルのあと</li>
+<li><code>.cumin/disciplines/&lt;専門知識&gt;/&lt;role&gt;.md</code>: 専門知識のファイルのあと</li>
+</ul>
+<p>追加の指示は、cuminのファイルを置き換えない。食い違ったら、cuminのroleのファイルが勝つ。roleのファイルには、結果の形式やラベルの決まりなど、cuminとの約束があるためである。</p>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-008"><code class="requirement-id">CWK-AGENT-008</code> テンプレートをskillで渡す</h4>
 <p>cuminは、GitHubに残す文章のテンプレート（<code>templates/</code>）を、その文章を書くroleにskillとして渡す。Agentは、書く直前にskillを呼ぶ。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> CLI mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-AGENT-009"><code class="requirement-id">CWK-AGENT-009</code> Hostの指示を読ませない</h4>
+</section><section class="requirement"><h4 id="CWK-AGENT-025"><code class="requirement-id">CWK-AGENT-025</code> pluginを渡す</h4>
+<p>cuminは、対象のリポジトリが指定したClaude CodeのpluginをAgentに渡す。skillとMCPサーバも、pluginに入れて渡す。</p>
+<section class="requirement"><h5 id="CWK-AGENT-025.1"><code class="requirement-id">CWK-AGENT-025.1</code> pluginの指定</h5>
+<p>pluginは、対象のリポジトリの<code>.cumin/config.toml</code>の<code>plugins</code>に書く。1つのpluginは、名前、GitHubのリポジトリ、その中のパス、コミットを持つ。渡すroleと専門知識も書ける。省くと、すべてのroleと専門知識に渡す。Maintainerが承認したpluginだけを渡すために、保護されたパスの<code>.cumin/</code>に書き、コミットで中身を固定する。</p>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> 設定の読み込みを単体テスト</li></ul></div>
+</section><section class="requirement"><h5 id="CWK-AGENT-025.2"><code class="requirement-id">CWK-AGENT-025.2</code> pluginを取ってくる</h5>
+<p>cuminは、指定されたコミットのpluginをHostに取ってきて、Agent作業ディレクトリの外に置き、起動のときに渡す（Claude Codeでは<code>--plugin-dir</code>）。取ってこられないpluginがあれば、そのAgent起動を異常終了とする（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018">CWK-AGENT-018</a></code>）。</p>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
+</section><section class="requirement"><h5 id="CWK-AGENT-025.3"><code class="requirement-id">CWK-AGENT-025.3</code> MCPサーバはpluginのものだけ</h5>
+<p>cuminは、渡したpluginのMCPサーバだけを読むようにAgentを起動する。対象のリポジトリの<code>.mcp.json</code>は読ませない。</p>
+<div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでAgentを動かして確認</li></ul></div>
+</section></section><section class="requirement"><h4 id="CWK-AGENT-009"><code class="requirement-id">CWK-AGENT-009</code> Hostの指示を読ませない</h4>
 <p>cuminは、AgentがHostのユーザアカウントの指示と設定（Claude Codeでは<code>~/.claude</code>、plugin、MCPサーバ、claude.aiのコネクタ）を読まないように起動し、自動メモリも切る。何を根拠に動いたかを追えるようにするためである。対象のリポジトリの指示は読んでよい。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>demo</code> テスト用の実リポジトリでAgentを動かして確認</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-010"><code class="requirement-id">CWK-AGENT-010</code> 起動の記録を確かめる</h4>
@@ -138,10 +157,10 @@
 <p>Agent作業ディレクトリの外の指示かメモリがある</p>
 </li>
 <li>
-<p>ユーザアカウントのpluginかMCPサーバがある。CLIに組み込みのpluginは許す</p>
+<p>cuminが渡していないpluginかMCPサーバがある。CLIに組み込みのpluginは許す</p>
 </li>
 <li>
-<p>cuminが渡したskillが1つでも欠けている</p>
+<p>cuminが渡したskill、plugin、MCPサーバが1つでも欠けている</p>
 </li>
 <li>
 <p>確かめる項目がないか、読めない</p>
