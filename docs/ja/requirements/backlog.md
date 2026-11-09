@@ -88,3 +88,12 @@ tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるように
 - 見直すきっかけ: 非公開のリポジトリのpluginを使いたい対象のリポジトリが出てきたとき
 
 ---
+
+### Node.jsのパッケージに頼るplugin
+
+Node.jsのパッケージに頼るpluginも、動くように渡す（[Agent](agent/index.md)の`CWK-AGENT-025`）。Claude Codeは、marketplaceからインストールしたpluginにはパッケージを入れるが、`--plugin-dir`で渡したpluginには入れない。そのため今は、パッケージに頼るMCPサーバやhookが動かない。cuminが、取ってきたpluginにパッケージを入れることになる。
+
+- 後回しにした理由: パッケージを入れるときに、pluginのコードを動かさない方法と、入れる時間の上限を決める必要がある
+- 見直すきっかけ: Node.jsのパッケージに頼るpluginを使いたい対象のリポジトリが出てきたとき
+
+---
