@@ -83,7 +83,7 @@
 <ul>
 <li>設定: Operatorが書く。秘密の値は含めない。</li>
 <li>秘密の値: macOSのKeychainに置く</li>
-<li>手元の状態: cuminが書く。失っても作業を失わない（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-003">CWK-POLL-003</a></code>）。</li>
+<li>cuminがローカルに持つ情報: cuminが書く。失っても作業を失わない（<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-003">CWK-POLL-003</a></code>）。</li>
 <li>モニターファイル: cuminが書き、cuminを外から見る道具が読む</li>
 </ul>
 <h2 id="要件">要件</h2>
@@ -141,7 +141,7 @@
 </table>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> <code>cumin --help</code>の一覧が、この表と一致する</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-004"><code class="requirement-id">CWK-HOST-004</code> 状態の表示</h4>
-<p><code>cumin status</code>は、次のことを表示する。GitHubのラベル、手元の状態、モニターファイル（<code><a href="/cumin-works/requirements/host/#CWK-HOST-014">CWK-HOST-014</a></code>）から読み、GitHubに書き込まない。</p>
+<p><code>cumin status</code>は、次のことを表示する。GitHubのラベル、cuminがローカルに持つ情報、モニターファイル（<code><a href="/cumin-works/requirements/host/#CWK-HOST-014">CWK-HOST-014</a></code>）から読み、GitHubに書き込まない。</p>
 <ul>
 <li>作業中のAgentと、<code>awaiting-</code>で始まる状態のIssue</li>
 <li>5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因</li>
@@ -384,7 +384,7 @@
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><h3 id="秘密の値と外から見るためのファイル">秘密の値と外から見るためのファイル</h3>
 <section class="requirement"><h4 id="CWK-HOST-013"><code class="requirement-id">CWK-HOST-013</code> 秘密の値</h4>
-<p>GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSのKeychainに置く。設定ファイルとリポジトリには書かない。cuminは起動のときに読み、メモリにだけ持ち、手元の状態にもログにも書かない。</p>
+<p>GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSのKeychainに置く。設定ファイルとリポジトリには書かない。cuminは起動のときに読み、メモリにだけ持ち、ローカルに持つ情報にもログにも書かない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-014"><code class="requirement-id">CWK-HOST-014</code> モニターファイル</h4>
 <p>cuminは、定期確認のたびとAgentの実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、cuminの停止予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めないIssue、動いているAgent、<code>awaiting-</code>で始まる状態のIssueである。cuminを外から見る道具と<code>cumin status</code>が読む。cumin自身は読まず、ここからは何も決めない。</p>
