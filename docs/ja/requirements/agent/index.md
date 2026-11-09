@@ -33,6 +33,8 @@ cuminは、定期確認のたびに次の確認の結果を更新し、Agentを�
 - リポジトリごとのruleset（[権限](../access/index.md)の`CWK-ACCESS-015`）: そのリポジトリだけ
 - cuminの停止予約（[Hostでの動かし方](../host/index.md)の`CWK-HOST-007`）: すべてのリポジトリ
 
+これらの確認は、状態ラベルを替える前に行う（`CWK-AGENT-003`）。
+
 - 検証: `test` GitHub mockとCLI mockでテスト
 - 検証: `inspection` Agentを起動するコードの呼び出し元が1つだけで、その前に確認がある
 

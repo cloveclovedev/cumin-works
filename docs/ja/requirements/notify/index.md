@@ -41,7 +41,7 @@ cuminは、次の異常な状態のときに、通知する。
 | assigneeが1人のMaintainerでない | `CWK-ACCESS-013` |
 | 要求IssueにAssigneeがいない | `CWK-PLAN-007` |
 | 全部を読めないIssueがある | `CWK-POLL-012` |
-| 使用率を読めない | `CWK-LIMIT-006` |
+| 使用率を読めない | `CWK-LIMIT-005` |
 | ツール動作確認が失敗した | `CWK-AGENT-019.3` |
 | rulesetが効いていない | `CWK-ACCESS-015` |
 | 定期確認が続けて失敗した | `CWK-POLL-010` |
@@ -52,7 +52,7 @@ cuminは、次の異常な状態のときに、通知する。
 
 #### `CWK-NOTIFY-003` 利用制限の上限に達したとき
 
-cuminは、利用制限の上限に達してAgent起動を止めたときに、通知する（`CWK-LIMIT-006`）。再開したときは通知しない。
+cuminは、利用制限の上限に達してAgent起動を止めたときに、通知する（`CWK-LIMIT-005`）。再開したときは通知しない。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

@@ -13,8 +13,8 @@ state "agent starts stopped" as Stopped
 Stopped : do / the running agents end; cumin starts no agent.\nEvery issue keeps its state.\nTransitions that start no agent go on
 
 [*] --> Starting
-Starting --> Stopped : stop agent starts\n[a usage is at its limit,\nor cumin cannot read the usage]\n/ cumin notifies once
-Stopped --> Starting : resume agent starts\n[the Operator allows the 5-hour limit,\nthe weekly usage is under its limit]
-Stopped --> Starting : resume agent starts\n[the time of the next try passed,\nboth usages are under their limits]
+Starting --> Stopped : stop agent starts\n[a usage is at its threshold,\nor cumin cannot read the usage]\n/ cumin notifies once
+Stopped --> Starting : resume agent starts\n[the Operator allows the 5-hour limit,\nthe weekly usage is under its threshold]
+Stopped --> Starting : resume agent starts\n[cumin reads the usages again,\nboth usages are under their thresholds]
 
 @enduml
