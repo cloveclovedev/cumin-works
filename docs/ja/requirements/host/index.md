@@ -170,7 +170,7 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 
 #### `CWK-HOST-012` リスクの基準
 
-リスクの基準は、TOMLの値ではなく、Markdownのファイルで決める。cuminは中身を読まず、PlannerとReviewerへの指示にそのまま入れる（[Agent](../agent/index.md)の`CWK-AGENT-007`）。
+リスクの基準は、TOMLの値ではなく、Markdownのファイルで決める。cuminは中身を読まず、すべてのroleへの指示にそのまま入れる（[Agent](../agent/index.md)の`CWK-AGENT-007`）。
 
 | 段 | 場所 |
 |---|---|
