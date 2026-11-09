@@ -92,7 +92,7 @@ Operatorは、次のコマンドを使う。
 
 #### `CWK-HOST-007` 実行を待ってから止める
 
-`cumin stop --after-current-runs`を実行すると、cuminの停止を予約できる。予約のあと、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。cuminの停止予約は、次の定期確認から効く。次にcuminを起動したときには、予約は残っていない。
+`cumin stop --after-current-runs`を実行すると、cuminの停止を予約できる。予約のあと、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。cuminの停止予約は、次の定期確認から効く。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
