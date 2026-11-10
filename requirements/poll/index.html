@@ -109,11 +109,19 @@
 <p>Agentが動くのは、上記の状態のIssueだけである。なので、1つのリポジトリで同時に動くAgentの数も、この上限を超えない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-POLL-006"><code class="requirement-id">CWK-POLL-006</code> 着手の順番</h4>
-<p>同時に進めるIssueの数より多くのIssueに着手できるとき、cuminは優先度の高い順に着手する。同じ優先度なら、Issueの番号の小さい順である。</p>
-<p>上限に達していて待っているIssueのうち、<code>awaiting-</code>で始まる状態から作業に戻すIssueは、<code>ready</code>から新しく始めるIssueより先にする。途中まで進んだIssueから片付けるためである。</p>
+<p>同時に進めるIssueの数より多くのIssueに着手できるとき、cuminは次の決まりで着手の順番を決める。</p>
 <ul>
 <li>
-<p>優先度のラベル（<a href="/cumin-works/requirements/label/">ラベル</a>の<code><a href="/cumin-works/requirements/label/#CWK-LABEL-006">CWK-LABEL-006</a></code>）のないIssueは、ラベルのあるIssueのあとに着手する</p>
+<p><code>awaiting-</code>で始まる状態から作業に戻すIssueを、<code>ready</code>から新しく始めるIssueより先にする。途中まで進んだIssueから片付けるためである。</p>
+</li>
+<li>
+<p>次に、優先度の高い順にする</p>
+</li>
+<li>
+<p>同じ優先度なら、Issueの番号の小さい順にする</p>
+</li>
+<li>
+<p>優先度のラベル（<a href="/cumin-works/requirements/label/">ラベル</a>の<code><a href="/cumin-works/requirements/label/#CWK-LABEL-006">CWK-LABEL-006</a></code>）のないIssueは、ラベルのあるIssueのあとにする</p>
 </li>
 <li>
 <p>優先度のラベルのない実装Issueは、その要求Issueの優先度を使う</p>
