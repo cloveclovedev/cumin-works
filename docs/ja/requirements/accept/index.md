@@ -12,7 +12,7 @@
 
 受け入れ確認では、Plannerが、すべての実装Issueを合わせたmainブランチで、要求Issueの要求を1項目ずつ確かめる。Pull Requestは1つずつしか確かめられていないためである。Plannerは、残課題も仕分け、この要求で直すものを実装Issueにする。
 
-cuminが読むのは、受け入れ確認のコメントと質問のコメントがあるか、フォローアップノートがあるか、実装Issueが開いているか、開いている実装Issueのリスクのラベルだけである。コメントの中身は読まない。
+cuminが読むのは、受け入れ確認のコメントと判断を求めるコメントがあるか、フォローアップノートがあるか、実装Issueが開いているか、開いている実装Issueのリスクのラベルだけである。コメントの中身は読まない。
 
 ## 要件
 
@@ -66,7 +66,7 @@ cuminは、次のすべてが成り立つとき、受け入れ確認が完了し
 
 #### `CWK-ACCEPT-005` 受け入れ確認をやり直す
 
-`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、`cumin/status/accepting`になったあとにPlannerの質問のコメントがなく、次のどちらかが成り立つとき、cuminはPlannerをもう一度起動する。やり直すのは、1つの`cumin/status/accepting`の間に1回だけである。
+`cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、`cumin/status/accepting`になったあとにPlannerの判断を求めるコメントがなく、次のどちらかが成り立つとき、cuminはPlannerをもう一度起動する。やり直すのは、1つの`cumin/status/accepting`の間に1回だけである。
 
 - 受け入れ確認が完了していない（`CWK-ACCEPT-002`）
 - 受け入れ確認は完了したが、リスクのラベルが1つだけでない、開いている実装Issueがある
@@ -79,7 +79,7 @@ cuminは、次のすべてが成り立つとき、受け入れ確認が完了し
 
 `cumin/status/accepting`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
-- Plannerの質問のコメントが、`cumin/status/accepting`になったあとにある
+- Plannerの判断を求めるコメントが、`cumin/status/accepting`になったあとにある
 - やり直しのあとも、`CWK-ACCEPT-005`の条件が成り立つ
 
 Assigneeが答えを書いて要求Issueに`cumin/status/ready`を付けると、Plannerが要求Issueを読み直す（[計画](../plan/index.md)の`CWK-PLAN-001`）。

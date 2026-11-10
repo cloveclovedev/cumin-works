@@ -71,7 +71,7 @@ cuminは計画の完了を判定したあと、未完了の実装Issueが1つ以
 
 #### `CWK-PLAN-005` 計画をやり直す
 
-`cumin/status/planning`の要求Issueで、Plannerの実行が終わっていて、計画が完了しておらず、Plannerの質問のコメントもないとき、cuminは状態を替えずにPlannerをもう一度起動する。やり直しは、1つの`cumin/status/planning`の間に1回だけである。
+`cumin/status/planning`の要求Issueで、Plannerの実行が終わっていて、計画が完了しておらず、Plannerの判断を求めるコメントもないとき、cuminは状態を替えずにPlannerをもう一度起動する。やり直しは、1つの`cumin/status/planning`の間に1回だけである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -81,7 +81,7 @@ cuminは計画の完了を判定したあと、未完了の実装Issueが1つ以
 
 `cumin/status/planning`の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
-- `cumin/status/planning`になったあとに、Plannerの質問のコメントがある
+- `cumin/status/planning`になったあとに、Plannerの判断を求めるコメントがある
 - やり直し条件に2回以上到達した
 
 - 検証: `test` GitHub mockとCLI mockでテスト
