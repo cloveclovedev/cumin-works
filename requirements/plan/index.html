@@ -144,13 +144,13 @@ cuminがPlannerを起動し、計画の結果をGitHubで確かめ、Assigneeの
 <p>補足: 計画完了のタイミングで未完了の実装Issueがないときは、受け入れ確認の要件（<code><a href="/cumin-works/requirements/accept/#CWK-ACCEPT-001">CWK-ACCEPT-001</a></code>）に従う。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-PLAN-005"><code class="requirement-id">CWK-PLAN-005</code> 計画をやり直す</h4>
-<p><code>cumin/status/planning</code>の要求Issueで、Plannerの実行が終わっていて、計画が完了しておらず、Plannerの質問のコメントもないとき、cuminは状態を替えずにPlannerをもう一度起動する。やり直しは、1つの<code>cumin/status/planning</code>の間に1回だけである。</p>
+<p><code>cumin/status/planning</code>の要求Issueで、Plannerの実行が終わっていて、計画が完了しておらず、Plannerの判断を求めるコメントもないとき、cuminは状態を替えずにPlannerをもう一度起動する。やり直しは、1つの<code>cumin/status/planning</code>の間に1回だけである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-PLAN-006"><code class="requirement-id">CWK-PLAN-006</code> 計画を止める</h4>
 <p><code>cumin/status/planning</code>の要求Issueで、Plannerの実行が終わっていて、次のどちらかが成り立つとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
 <ul>
 <li>
-<p><code>cumin/status/planning</code>になったあとに、Plannerの質問のコメントがある</p>
+<p><code>cumin/status/planning</code>になったあとに、Plannerの判断を求めるコメントがある</p>
 </li>
 <li>
 <p>やり直し条件に2回以上到達した</p>
