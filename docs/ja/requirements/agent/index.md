@@ -201,7 +201,7 @@ cuminはJSONを確かめ、形式に合わないときや、`blocked`で`blocked
 
 #### `CWK-AGENT-016` Agentが判断を求めて止まったときのコメント
 
-Agentは、Assigneeの判断がないと進められないとき（`CWK-AGENT-024`、`CWK-AGENT-025`）、`blocked`を返して実行を終える。これは異常終了ではない（`CWK-AGENT-020`）。cuminは、`blocked_reason`を、扱ったIssueにすぐコメントとして書く。各ページの「質問のコメント」は、このコメントを指す。
+Agentは、Assigneeの判断がないと進められないとき（`CWK-AGENT-024`、`CWK-AGENT-025`）、`blocked`を返して実行を終える。これは異常終了ではない（`CWK-AGENT-020`）。cuminは、`blocked_reason`を対象のIssueにコメントとして残す。各ページの「質問のコメント」は、このコメントを指す。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
