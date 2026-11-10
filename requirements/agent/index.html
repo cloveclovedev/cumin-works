@@ -222,7 +222,7 @@
 <p><code>done</code>は、GitHubを確かめ始めてよいという合図でしかない。作業が済んだかは、各ページの完了判断で決める。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-AGENT-016"><code class="requirement-id">CWK-AGENT-016</code> Agentが判断を求めて止まったときのコメント</h4>
-<p>Agentは、Assigneeの判断がないと進められないとき（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-024">CWK-AGENT-024</a></code>、<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-025">CWK-AGENT-025</a></code>）、<code>blocked</code>を返して実行を終える。これは異常終了ではない（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-020">CWK-AGENT-020</a></code>）。cuminは、<code>blocked_reason</code>を、扱ったIssueにすぐコメントとして書く。各ページの「質問のコメント」は、このコメントを指す。</p>
+<p>Agentは、Assigneeの判断がないと進められないとき（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-024">CWK-AGENT-024</a></code>、<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-025">CWK-AGENT-025</a></code>）、<code>blocked</code>を返して実行を終える。これは異常終了ではない（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-020">CWK-AGENT-020</a></code>）。cuminは、<code>blocked_reason</code>を対象のIssueにコメントとして残す。各ページの「質問のコメント」は、このコメントを指す。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><h3 id="セッションと時間">セッションと時間</h3>
 <section class="requirement"><h4 id="CWK-AGENT-017"><code class="requirement-id">CWK-AGENT-017</code> セッション</h4>
