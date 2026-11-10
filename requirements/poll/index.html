@@ -143,8 +143,8 @@
 </section><section class="requirement"><h4 id="CWK-POLL-008"><code class="requirement-id">CWK-POLL-008</code> レート制限</h4>
 <p>レート制限に当たると、cuminはGitHubが返す時刻まで、そのGitHub AppのインストールでGitHubを呼ばない。一次のレート制限はリセットの時刻まで、二次のレート制限は<code>retry-after</code>の分、なければ1分待つ。呼び出しの中では待たず、その時刻のあとの定期確認でやり直す。待つ間も、ほかのリポジトリは進める。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
-</section><section class="requirement"><h4 id="CWK-POLL-009"><code class="requirement-id">CWK-POLL-009</code> 失敗のあとは何も持たない</h4>
-<p>やり直しても一時的な失敗で終わったとき、cuminは何も持っておかない。Issueは今の状態のまま残り、次の定期確認が同じ事実から同じアクションを決める。すでに済んだ書き込みは読み直しで見えるので、二重にはしない。</p>
+</section><section class="requirement"><h4 id="CWK-POLL-009"><code class="requirement-id">CWK-POLL-009</code> 失敗のあとは次の定期確認に任せる</h4>
+<p>やり直しても一時的な失敗で終わったとき、cuminは、失敗したアクションをローカルに残して後でやり直すことはしない。Issueは今の状態のまま残り、次の定期確認が、GitHubの事実から改めてアクションを決める。すでに済んだ書き込みは読み直しで見えるので、二重にはしない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-POLL-010"><code class="requirement-id">CWK-POLL-010</code> 続けて失敗したら知らせる</h4>
 <p>同じリポジトリの定期確認が、同じ理由で3回続けて失敗したら、cuminは通知する。次に知らせるのは、その間に定期確認が成功したあとである。一次のレート制限を使い切ったことも、この通知で分かる。</p>
