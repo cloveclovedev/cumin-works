@@ -87,7 +87,7 @@ Pull Requestは、本文の`Closes`ではなくブランチと作成者で見つ
 
 `cumin/status/implementing`の実装Issueで、Implementerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
-- `cumin/status/implementing`になったあとに、Implementerの判断を求めるコメントがある。質問ではやり直さない。要件が足りず、AssigneeがIssueを直す必要があることが多いからである
+- `cumin/status/implementing`になったあとに、Implementerの判断を求めるコメントがある。要件が足りず、AssigneeがIssueを直す必要があることが多いからである
 - やり直しのあとも、実装が完了していない
 - 衝突の解消（`CWK-CHECK-007`）を頼んだあとも、先頭のコミットが変わっていない。先頭のコミットの時刻と、最新の`cumin/status/implementing`が付いた時刻を比べて決める
 

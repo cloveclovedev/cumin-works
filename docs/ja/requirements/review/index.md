@@ -91,7 +91,7 @@ cuminは、次のすべてが成り立つとき、レビューが完了したと
 
 `cumin/status/reviewing`の実装Issueで、Reviewerの実行が終わっていて、次のどれかが成り立つとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
-- `cumin/status/reviewing`になったあとに、Reviewerの判断を求めるコメントがある。質問ではやり直さない
+- `cumin/status/reviewing`になったあとに、Reviewerの判断を求めるコメントがある
 - やり直しのあとも、今の先頭のコミットにレビューがない
 - リスクのラベルがないか、2つ以上ある
 - 実装Issueを閉じる開いているPull Requestがない
