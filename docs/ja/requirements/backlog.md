@@ -39,7 +39,7 @@ Pull Requestとは別に、Reviewerがmainブランチの既存のコードを�
 
 ReviewerをCodexなどのほかのCLIでも動かし、1ラウンド目でClaude Codeのレビューと合わせて使う。モデルが違えば見落とす点も違うので、同じskillを並列にいくつも動かすより、見落としを減らせる。書き込みの権限が小さいReviewerから試すのがよい。Codexに結果をJSON Schemaに従わせる機能があることは確かめた。Agent作業ディレクトリの隔離、指示の渡し方、起動の記録、セッションの再開、使用率を読めるかは、まだ確かめていない。
 
-- 後回しにした理由: AgentのCLIは今はClaude Codeだけで（`CWK-AGENT-020`）、ほかのCLIを入れると、利用制限、Hostの設定、Agentに渡す認証情報の要件も変わる。1ラウンド目では、コードレビューのskillがすでに並列に探して確かめている（`CWK-REVIEW-014.1`）
+- 後回しにした理由: AgentのCLIは今はClaude Codeだけで（`CWK-AGENT-022`）、ほかのCLIを入れると、利用制限、Hostの設定、Agentに渡す認証情報の要件も変わる。1ラウンド目では、コードレビューのskillがすでに並列に探して確かめている（`CWK-REVIEW-014.1`）
 - 見直すきっかけ: レビューの指標で、Claude Codeのレビューの見落としが目立ったとき。Codexの利用制限も使いたくなったとき
 
 ---
@@ -64,7 +64,7 @@ ReviewerをCodexなどのほかのCLIでも動かし、1ラウンド目でClaude
 
 ### リポジトリに置いたpluginを渡す
 
-対象のリポジトリの`.cumin/plugins/<pluginの名前>/`に置いたpluginも、Agentに渡せるようにする（[Agent](agent/index.md)の`CWK-AGENT-025`）。リポジトリ専用の小さなskillを、別のリポジトリに分けずに置ける。
+対象のリポジトリの`.cumin/plugins/<pluginの名前>/`に置いたpluginも、Agentに渡せるようにする（[Agent](agent/index.md)の`CWK-AGENT-010`）。リポジトリ専用の小さなskillを、別のリポジトリに分けずに置ける。
 
 - 後回しにした理由: 別のリポジトリに置いてコミットで指定すれば、同じものを渡せる。リポジトリに置くと、取ってきたpluginのライセンスを、pluginごとに確かめる必要も出る
 - 見直すきっかけ: 別のリポジトリに分けるのが手間になる場面が目立ってきたとき
@@ -73,7 +73,7 @@ ReviewerをCodexなどのほかのCLIでも動かし、1ラウンド目でClaude
 
 ### 秘密の値が要るMCPサーバ
 
-tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるようにする（[Agent](agent/index.md)の`CWK-AGENT-025`）。cuminがKeychainから値を読み、環境変数でMCPサーバに渡す。
+tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるようにする（[Agent](agent/index.md)の`CWK-AGENT-010`）。cuminがKeychainから値を読み、環境変数でMCPサーバに渡す。
 
 - 後回しにした理由: 秘密の値の置き場所、MCPサーバごとの渡し方、Agentに値を見せない方法を決める必要がある
 - 見直すきっかけ: 秘密の値が要るMCPサーバを使いたい対象のリポジトリが出てきたとき
@@ -82,7 +82,7 @@ tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるように
 
 ### 非公開のリポジトリのplugin
 
-非公開のリポジトリにあるpluginも、Agentに渡せるようにする（[Agent](agent/index.md)の`CWK-AGENT-025`）。そのリポジトリに`cumin-core`のGitHub Appを入れれば、cuminは読める。ただし`cumin-core`は、入れたリポジトリでも同じ権限（[権限](access/index.md)の`CWK-ACCESS-004`）を持つ。
+非公開のリポジトリにあるpluginも、Agentに渡せるようにする（[Agent](agent/index.md)の`CWK-AGENT-010`）。そのリポジトリに`cumin-core`のGitHub Appを入れれば、cuminは読める。ただし`cumin-core`は、入れたリポジトリでも同じ権限（[権限](access/index.md)の`CWK-ACCESS-004`）を持つ。
 
 - 後回しにした理由: pluginを読むだけのために、書き込みの権限まで渡すことになる。読むだけのGitHub Appを分けるかを決める必要がある
 - 見直すきっかけ: 非公開のリポジトリのpluginを使いたい対象のリポジトリが出てきたとき
@@ -91,7 +91,7 @@ tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるように
 
 ### Node.jsのパッケージに頼るplugin
 
-Node.jsのパッケージに頼るpluginも、動くように渡す（[Agent](agent/index.md)の`CWK-AGENT-025`）。Claude Codeは、marketplaceからインストールしたpluginにはパッケージを入れるが、`--plugin-dir`で渡したpluginには入れない。そのため今は、パッケージに頼るMCPサーバやhookが動かない。cuminが、取ってきたpluginにパッケージを入れることになる。
+Node.jsのパッケージに頼るpluginも、動くように渡す（[Agent](agent/index.md)の`CWK-AGENT-010`）。Claude Codeは、marketplaceからインストールしたpluginにはパッケージを入れるが、`--plugin-dir`で渡したpluginには入れない。そのため今は、パッケージに頼るMCPサーバやhookが動かない。cuminが、取ってきたpluginにパッケージを入れることになる。
 
 - 後回しにした理由: パッケージを入れるときに、pluginのコードを動かさない方法と、入れる時間の上限を決める必要がある
 - 見直すきっかけ: Node.jsのパッケージに頼るpluginを使いたい対象のリポジトリが出てきたとき

@@ -26,7 +26,7 @@ cuminは、Issueを`cumin/status/awaiting-decision`に替えるとき、そのIs
 
 #### `CWK-ASK-002` コメントを書く人
 
-Agentが判断を求めて止まったときは、Agentが[decision-request.md](../../../../templates/decision-request.md)の形式で書いた文が、このコメントになる。`blocked_reason`は、cuminがIssueにコメントとして書く（[Agent](../agent/index.md)の`CWK-AGENT-014`）。それ以外でcuminが止めたときは、cuminが[stop-note.md](../../../../templates/stop-note.md)の形式で書く。1回止めるごとに、コメントは1つである。
+Agentが判断を求めて止まったときは、Agentが[decision-request.md](../../../../templates/decision-request.md)の形式で書いた文が、このコメントになる。`blocked_reason`は、cuminがIssueにコメントとして書く（[Agent](../agent/index.md)の`CWK-AGENT-016`）。それ以外でcuminが止めたときは、cuminが[stop-note.md](../../../../templates/stop-note.md)の形式で書く。1回止めるごとに、コメントは1つである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 - 検証: `demo` テスト用の実リポジトリでAgentを動かして確認
