@@ -138,7 +138,7 @@
 </li></ul></div>
 </section><h3 id="githubの呼び出しの失敗">GitHubの呼び出しの失敗</h3>
 <section class="requirement"><h4 id="CWK-POLL-007"><code class="requirement-id">CWK-POLL-007</code> 一時的な失敗のやり直し</h4>
-<p>一時的な失敗は、ネットワークの誤り、5xxの応答、二次のレート制限、一次のレート制限を使い切ったことの4つである。ネットワークの誤りと5xxの応答は、読み取りに限り、数秒あけて3回までやり直す。書き込みはやり直さない。答えが届かなかった書き込みを、二重にしないためである。</p>
+<p>一時的な失敗は、接続の失敗（タイムアウトや、応答の途中で切れたことを含む）、5xxの応答、二次のレート制限、一次のレート制限を使い切ったことの4つである。接続の失敗と5xxの応答は、読み取りに限り、数秒あけて3回までやり直す。書き込みはやり直さない。答えが届かなかった書き込みを、二重にしないためである。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-POLL-008"><code class="requirement-id">CWK-POLL-008</code> レート制限</h4>
 <p>レート制限に当たると、cuminはGitHubが返す時刻まで、そのGitHub AppのインストールでGitHubを呼ばない。一次のレート制限はリセットの時刻まで、二次のレート制限は<code>retry-after</code>の分、なければ1分待つ。呼び出しの中では待たず、その時刻のあとの定期確認でやり直す。待つ間も、ほかのリポジトリは進める。</p>
