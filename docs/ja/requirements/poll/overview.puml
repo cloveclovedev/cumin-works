@@ -13,10 +13,10 @@ note right
   The same decision runs right after an agent run ends.
 end note
 :take the actions that start no agent\n(labels, comments, notifications, merges);
-if (agent starts stopped by a usage limit or a tool check?) then (yes)
+if (a check before agent starts says to stop?) then (yes)
   :start no agent; every issue keeps its state;
 else (no)
-  :start the agents, in the order of priority\nand of the issue number, up to the free slots;
+  :start the agents in the start order,\nup to max_issues_in_progress;
 endif
 stop
 
