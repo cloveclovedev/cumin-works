@@ -53,11 +53,9 @@ cuminは、利用制限のしきい値に達してAgent起動を止めたとき�
 
 #### `CWK-NOTIFY-004` 次に処理するIssueがないとき
 
-Maintainerが動かなければ何も進まなくなったとき、cuminは、待っていることを1回だけ通知する。次のすべてが成り立つときである。
+動いているAgentがなく、cuminが次に進められるIssueがないとき、cuminは、待っていることを通知する。Agent起動の前の確認（[Agent](../agent/index.md)の`CWK-AGENT-002`）だけで止めているIssueは、進められるIssueとする。止めた原因は`CWK-NOTIFY-002`か`CWK-NOTIFY-003`で知らせているからである。
 
-- 動いているAgentがない
-- cuminが次に進められるIssueがない。Agent起動の前の確認（[Agent](../agent/index.md)の`CWK-AGENT-002`）だけで止めているIssueは、進められるIssueとする。止めた原因は`CWK-NOTIFY-002`か`CWK-NOTIFY-003`で知らせているからである。
-- 前に待っていることを知らせたあとに、cuminが何かアクションをした
+通知したあとは、cuminのアクションを挟まない限り、再度通知しない。
 
 - 検証: `test` GitHub mockでテスト
 
