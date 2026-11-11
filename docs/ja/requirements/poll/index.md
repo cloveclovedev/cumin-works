@@ -34,7 +34,19 @@ cuminは、GitHubの事実と、Agentが動いているか（`CWK-AGENT-001`）�
 
 #### `CWK-POLL-003` cuminがローカルに持つ情報
 
-cuminがGitHubではなくHostのローカルに持つのは、失っても作業を失わない情報だけである。Agentのセッションの番号、チェックの修正を頼んだ回数、使用率とリセット時刻、5時間制限を使い切る許可、ツール動作確認の結果、cuminの停止予約、やり直しの回数、通知を送った記録がこれに当たる。レビューのラウンドの数はローカルに持たず、Pull Requestのレビューから読む。
+cuminがGitHubではなくHostのローカルに持つのは、失っても作業を失わない、次の情報だけである。
+
+- Agentのセッションの番号
+- Agentに同じ作業を頼んだ回数（チェックの修正、受け入れ確認など）
+- 使用率とリセット時刻
+- 利用制限でAgent起動を止めているか
+- 5時間制限を使い切る許可
+- ツール動作確認の結果
+- cuminの停止予約
+- 定期確認が続けて失敗した回数
+- 通知を送った記録
+
+レビューのラウンドの数はローカルに持たず、Pull Requestのレビューから読む。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -127,7 +139,7 @@ Agentが動くのは、上記の状態のIssueだけである。なので、1つ
 
 #### `CWK-POLL-011` 読む数の上限
 
-cuminは、1つのIssueについて読む数に上限を持つ。sub-issueは12件ずつ、3ページの36件までを読む。sub-issueが36件を超えたIssueは、全部を読めないIssueである。ラベル、blocked byのIssue、結び付いたPull Requestがcuminの読む数を超えたIssueも、同じである。sub-issueの1つが全部を読めないIssueなら、その要求Issueも全部を読めないIssueとする。
+cuminは、1つのIssueについて読む数に上限を持つ。sub-issueは36件まで読む（1回の分割の上限の12件を3回分）。sub-issueが36件を超えたIssueは、全部を読めないIssueである。ラベル、blocked byのIssue、結び付いたPull Requestがcuminの読む数を超えたIssueも、同じである。sub-issueの1つが全部を読めないIssueなら、その要求Issueも全部を読めないIssueとする。
 
 - 検証: `test` GitHub mockでテスト
 
