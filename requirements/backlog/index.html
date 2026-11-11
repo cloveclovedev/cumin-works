@@ -102,7 +102,7 @@
 <h3 id="claude-code以外のcliでのレビュー">Claude Code以外のCLIでのレビュー</h3>
 <p>ReviewerをCodexなどのほかのCLIでも動かし、1ラウンド目でClaude Codeのレビューと合わせて使う。モデルが違えば見落とす点も違うので、同じskillを並列にいくつも動かすより、見落としを減らせる。書き込みの権限が小さいReviewerから試すのがよい。Codexに結果をJSON Schemaに従わせる機能があることは確かめた。Agent作業ディレクトリの隔離、指示の渡し方、起動の記録、セッションの再開、使用率を読めるかは、まだ確かめていない。</p>
 <ul>
-<li>後回しにした理由: AgentのCLIは今はClaude Codeだけで（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-022">CWK-AGENT-022</a></code>）、ほかのCLIを入れると、利用制限、Hostの設定、Agentに渡す認証情報の要件も変わる。1ラウンド目では、コードレビューのskillがすでに並列に探して確かめている（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-014.1">CWK-REVIEW-014.1</a></code>）</li>
+<li>後回しにした理由: AgentのCLIは今はClaude Codeだけで（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-023">CWK-AGENT-023</a></code>）、ほかのCLIを入れると、利用制限、Hostの設定、Agentに渡す認証情報の要件も変わる。1ラウンド目では、コードレビューのskillがすでに並列に探して確かめている（<code><a href="/cumin-works/requirements/review/#CWK-REVIEW-014.1">CWK-REVIEW-014.1</a></code>）</li>
 <li>見直すきっかけ: レビューの指標で、Claude Codeのレビューの見落としが目立ったとき。Codexの利用制限も使いたくなったとき</li>
 </ul>
 <hr>
@@ -121,28 +121,28 @@
 </ul>
 <hr>
 <h3 id="リポジトリに置いたpluginを渡す">リポジトリに置いたpluginを渡す</h3>
-<p>対象のリポジトリの<code>.cumin/plugins/&lt;pluginの名前&gt;/</code>に置いたpluginも、Agentに渡せるようにする（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-010">CWK-AGENT-010</a></code>）。リポジトリ専用の小さなskillを、別のリポジトリに分けずに置ける。</p>
+<p>対象のリポジトリの<code>.cumin/plugins/&lt;pluginの名前&gt;/</code>に置いたpluginも、Agentに渡せるようにする（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-011">CWK-AGENT-011</a></code>）。リポジトリ専用の小さなskillを、別のリポジトリに分けずに置ける。</p>
 <ul>
 <li>後回しにした理由: 別のリポジトリに置いてコミットで指定すれば、同じものを渡せる。リポジトリに置くと、取ってきたpluginのライセンスを、pluginごとに確かめる必要も出る</li>
 <li>見直すきっかけ: 別のリポジトリに分けるのが手間になる場面が目立ってきたとき</li>
 </ul>
 <hr>
 <h3 id="秘密の値が要るmcpサーバ">秘密の値が要るMCPサーバ</h3>
-<p>tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるようにする（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-010">CWK-AGENT-010</a></code>）。cuminがKeychainから値を読み、環境変数でMCPサーバに渡す。</p>
+<p>tokenなどの秘密の値が要るMCPサーバを、pluginで渡せるようにする（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-011">CWK-AGENT-011</a></code>）。cuminがKeychainから値を読み、環境変数でMCPサーバに渡す。</p>
 <ul>
 <li>後回しにした理由: 秘密の値の置き場所、MCPサーバごとの渡し方、Agentに値を見せない方法を決める必要がある</li>
 <li>見直すきっかけ: 秘密の値が要るMCPサーバを使いたい対象のリポジトリが出てきたとき</li>
 </ul>
 <hr>
 <h3 id="非公開のリポジトリのplugin">非公開のリポジトリのplugin</h3>
-<p>非公開のリポジトリにあるpluginも、Agentに渡せるようにする（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-010">CWK-AGENT-010</a></code>）。そのリポジトリに<code>cumin-core</code>のGitHub Appを入れれば、cuminは読める。ただし<code>cumin-core</code>は、入れたリポジトリでも同じ権限（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-004">CWK-ACCESS-004</a></code>）を持つ。</p>
+<p>非公開のリポジトリにあるpluginも、Agentに渡せるようにする（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-011">CWK-AGENT-011</a></code>）。そのリポジトリに<code>cumin-core</code>のGitHub Appを入れれば、cuminは読める。ただし<code>cumin-core</code>は、入れたリポジトリでも同じ権限（<a href="/cumin-works/requirements/access/">権限</a>の<code><a href="/cumin-works/requirements/access/#CWK-ACCESS-004">CWK-ACCESS-004</a></code>）を持つ。</p>
 <ul>
 <li>後回しにした理由: pluginを読むだけのために、書き込みの権限まで渡すことになる。読むだけのGitHub Appを分けるかを決める必要がある</li>
 <li>見直すきっかけ: 非公開のリポジトリのpluginを使いたい対象のリポジトリが出てきたとき</li>
 </ul>
 <hr>
 <h3 id="nodejsのパッケージに頼るplugin">Node.jsのパッケージに頼るplugin</h3>
-<p>Node.jsのパッケージに頼るpluginも、動くように渡す（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-010">CWK-AGENT-010</a></code>）。Claude Codeは、marketplaceからインストールしたpluginにはパッケージを入れるが、<code>--plugin-dir</code>で渡したpluginには入れない。そのため今は、パッケージに頼るMCPサーバやhookが動かない。cuminが、取ってきたpluginにパッケージを入れることになる。</p>
+<p>Node.jsのパッケージに頼るpluginも、動くように渡す（<a href="/cumin-works/requirements/agent/">Agent</a>の<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-011">CWK-AGENT-011</a></code>）。Claude Codeは、marketplaceからインストールしたpluginにはパッケージを入れるが、<code>--plugin-dir</code>で渡したpluginには入れない。そのため今は、パッケージに頼るMCPサーバやhookが動かない。cuminが、取ってきたpluginにパッケージを入れることになる。</p>
 <ul>
 <li>後回しにした理由: パッケージを入れるときに、pluginのコードを動かさない方法と、入れる時間の上限を決める必要がある</li>
 <li>見直すきっかけ: Node.jsのパッケージに頼るpluginを使いたい対象のリポジトリが出てきたとき</li>
