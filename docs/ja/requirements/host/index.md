@@ -46,7 +46,8 @@ Operatorは、次のコマンドを使う。
 | `cumin run` | 常駐して動く。launchdから起動する |
 | `cumin status` | 今の状態を表示する（`CWK-HOST-004`）|
 | `cumin quota allow` | 今の5時間制限を使い切ってよいと許可する（[利用制限](../limit/index.md)の`CWK-LIMIT-008`）|
-| `cumin stop --after-current-runs` | 動いているAgentの実行が終わるのを待ってから止める（`CWK-HOST-007`）|
+| `cumin stop` | 動いているAgentの実行が終わるのを待ってから止める（`CWK-HOST-007`）|
+| `cumin stop --force` | 動いているAgentも止めて、すぐに止める（`CWK-HOST-006`）|
 | `cumin setup github-apps` | roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないGitHub Appだけを登録する |
 | `cumin setup launchd` | LaunchAgentの定義を書く（`CWK-HOST-005`）|
 | `cumin setup notify --discord-webhook` | 通知のwebhookのアドレスを標準入力から受け取り、Keychainに入れる |
@@ -84,7 +85,7 @@ Operatorは、次のコマンドを使う。
 
 #### `CWK-HOST-006` すぐに止める
 
-`cumin run`は、SIGINTとSIGTERMで、動いているAgentも止めてすぐに終わる。ラベルは替えず、終了コードは0なのでlaunchdは起動し直さない。
+`cumin stop --force`を実行したとき、または`cumin run`がSIGINTかSIGTERMを受けたとき、cuminは動いているAgentも止めてすぐに終わる。ラベルは替えず、終了コードは0なのでlaunchdは起動し直さない。
 
 - 検証: `test` CLI mockでテスト
 
@@ -92,7 +93,7 @@ Operatorは、次のコマンドを使う。
 
 #### `CWK-HOST-007` 実行を待ってから止める
 
-`cumin stop --after-current-runs`を実行すると、cuminの停止を予約できる。予約のあと、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。cuminの停止予約は、次の定期確認から効く。
+`cumin stop`を実行すると、cuminの停止を予約できる。予約のあと、cuminは新しいAgent起動をせず、動いているAgentの実行が終わるのを待ってから止まる。待つ間も、Agentを起動しないアクション（ラベルの付け替え、コメント、通知、マージ）は続ける。cuminの停止予約は、次の定期確認から効く。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
