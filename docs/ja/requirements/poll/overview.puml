@@ -16,7 +16,7 @@ end note
 if (a check before agent starts says to stop?) then (yes)
   :start no agent; every issue keeps its state;
 else (no)
-  :start the agents in the start order,\nup to max_issues_in_progress;
+  :start the agents in the start order,\nup to poll.max_issues_in_progress;
 endif
 stop
 

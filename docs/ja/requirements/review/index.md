@@ -62,7 +62,7 @@ cuminは、次のすべてが成り立つとき、レビューが完了したと
 
 #### `CWK-REVIEW-005` 指摘を修正する
 
-`cumin/status/reviewing`の実装Issueで、レビューが完了し（`CWK-REVIEW-004`）、そのレビューが`REQUEST_CHANGES`で、ラウンドが上限（`max_review_rounds`、初期値は5）に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで指摘の修正を頼む。
+`cumin/status/reviewing`の実装Issueで、レビューが完了し（`CWK-REVIEW-004`）、そのレビューが`REQUEST_CHANGES`で、ラウンドが上限（`review.max_rounds`、初期値は5）に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで指摘の修正を頼む。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 

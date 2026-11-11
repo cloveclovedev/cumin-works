@@ -100,7 +100,7 @@ MaintainerやAssigneeがタスクを終えてcuminにタスクを再開してほ
 #### `CWK-LABEL-006` 優先度のラベル
 
 優先度のラベルは、着手の順番を表す。初期値は`cumin/priority/P0`から`cumin/priority/P3`で、`P0`が最も高い。
-対象のリポジトリにすでにある優先度のラベルを使うときは、`.cumin/config.toml`の`priority_labels`に、名前を高い順に書く。
+対象のリポジトリにすでにある優先度のラベルを使うときは、`.cumin/config.toml`の`labels.priority`に、名前を高い順に書く。
 
 優先度のラベルは、要求Issueにも実装Issueにも付けてよい。付けるのはMaintainerだけで、cuminとAgentは付けも外しもせず、Pull Requestにも写さない。着手の順番は[定期確認](../poll/index.md)の`CWK-POLL-006`で決める。
 
@@ -123,7 +123,7 @@ cuminは、実装Issueの状態ラベルとリスクのラベルを、そのIssu
 #### `CWK-LABEL-008` ラベルを作る
 
 cuminは、対象のリポジトリに足りないラベルを作る。すでにあるラベルの色と説明は変えない。
-`priority_labels`で設定した優先度のラベルは、対象のリポジトリがすでに持つラベルなので、作らない。
+`labels.priority`で設定した優先度のラベルは、対象のリポジトリがすでに持つラベルなので、作らない。
 
 - 検証: `test` GitHub mockでテスト
 - 検証: `demo` テスト用の実リポジトリで確認

@@ -22,7 +22,7 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 - レビューが完了し（[レビュー](../review/index.md)の`CWK-REVIEW-004`）、そのレビューが`APPROVE`である
 - 必須チェックが、今の先頭のコミットで完了している（[チェック](../check/index.md)の`CWK-CHECK-002`）
-- リスクのラベルが、`merge_decision_risks`（`CWK-MERGE-002`）に入っていない
+- リスクのラベルが、`merge.decision_risks`（`CWK-MERGE-002`）に入っていない
 - blocked byのIssueに関するマージの準備ができている（`CWK-MERGE-003`）
 
 - 検証: `test` GitHub mockでテスト
@@ -31,9 +31,9 @@ Reviewerが承認したPull Requestをマージし、実装Issueを閉じるま�
 
 #### `CWK-MERGE-002` マージ判断を求める
 
-`CWK-MERGE-001`の条件のうち、リスクのラベルだけが`merge_decision_risks`に入っているとき、cuminは状態を`cumin/status/awaiting-merge-decision`に替え、Pull RequestでAssigneeにレビューを頼み、通知する。レビューを頼むのに失敗しても、ログに残すだけで、実装Issueは止めない。
+`CWK-MERGE-001`の条件のうち、リスクのラベルだけが`merge.decision_risks`に入っているとき、cuminは状態を`cumin/status/awaiting-merge-decision`に替え、Pull RequestでAssigneeにレビューを頼み、通知する。レビューを頼むのに失敗しても、ログに残すだけで、実装Issueは止めない。
 
-マージ判断を求めるリスクは、対象のリポジトリの`.cumin/config.toml`の`merge_decision_risks`で決める。初期値は`medium`と`high`である。`.cumin/`は保護されたパスなので（[チェック](../check/index.md)の`CWK-CHECK-008.1`）、Agentはこの設定を変えられない。
+マージ判断を求めるリスクは、対象のリポジトリの`.cumin/config.toml`の`merge.decision_risks`で決める。初期値は`medium`と`high`である。`.cumin/`は保護されたパスなので（[チェック](../check/index.md)の`CWK-CHECK-008.1`）、Agentはこの設定を変えられない。
 
 - 検証: `test` GitHub mockでテスト
 
@@ -100,7 +100,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 - 必須チェックが、今の先頭のコミットで完了している
 - リスクのラベルが1つだけ付いている
 - Reviewerの最新のレビューが、今の先頭のコミットへの`APPROVE`である
-- リスクのラベルが`merge_decision_risks`（`CWK-MERGE-002`）に入っていれば、Assigneeの最新のレビューも、今の先頭のコミットへの`APPROVE`である
+- リスクのラベルが`merge.decision_risks`（`CWK-MERGE-002`）に入っていれば、Assigneeの最新のレビューも、今の先頭のコミットへの`APPROVE`である
 - blocked byのIssueに関するマージの準備ができている（`CWK-MERGE-003`）
 
 - 検証: `test` GitHub mockでテスト
@@ -111,7 +111,7 @@ cuminは、`cumin/status/merging`の実装IssueのPull Requestを、次のすべ
 
 `cumin/status/merging`の実装Issueで、Pull Requestがマージされておらず、`CWK-MERGE-008`の条件が成り立ち、衝突していないとき、cuminはGitHub上でマージ処理する。
 
-- マージの方法は、設定`merge_method`（初期値はsquash）に従う
+- マージの方法は、設定`merge.method`（初期値はsquash）に従う
 - 承認されたコミットだけをマージする。承認のあとにpushされたコミットは、マージしない。
 - 答えが届かなかったときは、次の定期確認で、マージ済みかを読んでから決める。同じPull Requestを、GitHub上で2回マージ処理しない。
 - 1回の定期確認で2つ以上マージするときは、1つごとに数秒待つ

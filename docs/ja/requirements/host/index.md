@@ -65,7 +65,7 @@ Operatorは、次のコマンドを使う。
 - 5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因
 - cuminの停止予約があるか
 - 失敗しているツール動作確認と、全部を読めないIssue。Pull Requestの数で全部を読めないIssueは、通知だけで知らせる
-- 最後の定期確認の時刻と、そのエラー。モニターファイルがないとき、または最後の定期確認が`poll_interval`の3倍より古いときは、そのこと
+- 最後の定期確認の時刻と、そのエラー。モニターファイルがないとき、または最後の定期確認が`poll.interval`の3倍より古いときは、そのこと
 
 モニターファイルの中身で、終了コードは変えない。
 
@@ -130,37 +130,103 @@ Hostがスリープから戻ったとき、cuminと動いているAgentは続き
 
 #### `CWK-HOST-011` 設定の一覧
 
-設定のキーは、次のとおりである。「書く場所」の「Host」はHostの設定ファイルだけ、「両方」はHostの設定ファイルとリポジトリの設定、「リポジトリ」はリポジトリの設定だけに書けることを表す。
+設定のキーは、次のとおりである。
 
-| キー | 内容 | 初期値 | 書く場所 |
-|---|---|---|---|
-| `repositories` | 対象のリポジトリの一覧 | なし（必須）| Host |
-| `work_dir` | 作業ディレクトリ | なし（必須）| Host |
-| `poll_interval` | 作業中のリポジトリの定期確認の間隔（`CWK-POLL-004`）| 60秒 | Host |
-| `idle_poll_interval` | 作業中でないリポジトリの定期確認の間隔。`poll_interval`以上（`CWK-POLL-004`）| 5分 | Host |
-| `max_issues_in_progress` | リポジトリごとに同時に進めるIssueの数（`CWK-POLL-005`）| 1 | Host |
-| `quota.read_interval` | 使用率を読む最小の間隔（`CWK-LIMIT-003`）| 5分 | Host |
-| `quota.five_hour.threshold` | 5時間制限のしきい値（`CWK-LIMIT-006`）| 85% | Host |
-| `quota.weekly.target` | 週間制限の目標（`CWK-LIMIT-007`）| 85% | Host |
-| `quota.weekly.lead` | 週間制限の前倒し。7日未満（`CWK-LIMIT-007`）| 1日 | Host |
-| `github_apps.<organization>.<app>` | GitHub AppのClient ID。`cumin setup github-apps`が書く | なし | Host |
-| `roles.<role>.time_limit` | 実行の時間の上限。55分以下（`CWK-AGENT-018`）| 50分 | Host |
-| `roles.<role>.cli_path` | AgentのCLIの実行ファイル | `claude` | Host |
-| `roles.<role>.cli` | Agentを動かすCLI。今はClaude Codeだけ（`CWK-AGENT-022`）| Claude Code | 両方 |
-| `roles.<role>.model` | Agentを動かすモデル。空ならCLIの既定 | 空 | 両方 |
-| `max_review_rounds` | レビューのラウンドの上限（[レビュー](../review/index.md)）| 5 | 両方 |
-| `max_check_fix_requests` | チェックの修正を頼む回数の上限（[チェック](../check/index.md)）| 3 | 両方 |
-| `checks_wait_time` | 必須チェックの結果を待つ時間（[チェック](../check/index.md)）| 60分 | 両方 |
-| `merge_method` | マージの方法。squash、merge、rebaseのどれか（[マージ](../merge/index.md)）| squash | 両方 |
-| `merge_decision_risks` | Assigneeのマージ判断を求めるリスク。`low`、`medium`、`high`から選ぶ（`CWK-MERGE-002`）| `["medium", "high"]` | リポジトリ |
-| `notify.discord.enabled` | 通知を送るか。リポジトリで決めると、そのリポジトリについての通知に効く（[通知](../notify/index.md)）| true | 両方 |
-| `priority_labels` | 優先度のラベルの名前。高い順（`CWK-LABEL-006`）| `cumin/priority/P0`〜`P3` | リポジトリ |
-| `protected_paths` | 保護されたパス（`CWK-CHECK-008.1`）| `.cumin/`、`CLAUDE.md`、`AGENTS.md`、`.claude/`、`REVIEW.md` | リポジトリ |
-| `tool_checks` | ツール動作確認（`CWK-AGENT-021.1`）| なし | リポジトリ |
-| `plugins` | Agentに渡すplugin（`CWK-AGENT-010.1`）| なし | リポジトリ |
-| `max_unmerged_blockers` | マージされていないblocked byのIssueのブランチから始めるときの、たどる数の上限。0なら始めない（`CWK-IMPL-008`）| 0 | リポジトリ |
+```toml
+# 値は初期値である。かっこの中は書く場所で、「Host」はHostの設定ファイルだけ、
+# 「両方」はHostの設定ファイルとリポジトリの設定、「リポジトリ」はリポジトリの設定だけに書ける。
 
-- `<role>`は`planner`、`implementer`、`reviewer`のどれか、`<app>`は`cumin-core`とこの3つのどれかである
+# 対象のリポジトリの一覧。必須（Host）
+repositories = ["<owner>/<repository>"]
+# 作業ディレクトリ。必須（Host）
+work_dir = "<path>"
+# 保護されたパス（CWK-CHECK-008.1）（リポジトリ）
+protected_paths = [".cumin/", "CLAUDE.md", "AGENTS.md", ".claude/", "REVIEW.md"]
+
+[poll]
+# 作業中のリポジトリの定期確認の間隔（CWK-POLL-004）（Host）
+interval = "60s"
+# 作業中でないリポジトリの定期確認の間隔。interval以上（CWK-POLL-004）（Host）
+idle_interval = "5m"
+# リポジトリごとに同時に進めるIssueの数（CWK-POLL-005）（Host）
+max_issues_in_progress = 1
+
+[quota]
+# 使用率を読む最小の間隔（CWK-LIMIT-003）（Host）
+read_interval = "5m"
+
+[quota.five_hour]
+# 5時間制限のしきい値。単位は%（CWK-LIMIT-006）（Host）
+threshold = 85
+
+[quota.weekly]
+# 週間制限の目標。単位は%（CWK-LIMIT-007）（Host）
+target = 85
+# 週間制限の前倒し。7日未満（CWK-LIMIT-007）（Host）
+lead = "24h"
+
+# roleごとの設定。implementerのほかに、plannerとreviewerがある
+[roles.implementer]
+# Agentを動かすCLI。今はClaude Codeだけ（CWK-AGENT-022）（両方）
+cli = "claude-code"
+# AgentのCLIの実行ファイル（Host）
+cli_path = "claude"
+# Agentを動かすモデル。空ならCLIの既定（両方）
+model = ""
+# 実行の時間の上限。55分以下（CWK-AGENT-018）（Host）
+time_limit = "50m"
+
+[implementation]
+# マージされていないblocked byのIssueのブランチから始めるときの、たどる数の上限。
+# 0なら始めない（CWK-IMPL-008）（リポジトリ）
+max_unmerged_blockers = 0
+
+[pull_request_checks]
+# 必須チェックの結果を待つ時間（CWK-CHECK-006）（両方）
+wait_time = "60m"
+# チェックの修正を頼む回数の上限（CWK-CHECK-004）（両方）
+max_fix_requests = 3
+
+[review]
+# レビューのラウンドの上限（CWK-REVIEW-005）（両方）
+max_rounds = 5
+
+[merge]
+# マージの方法。squash、merge、rebaseのどれか（CWK-MERGE-009）（両方）
+method = "squash"
+# Assigneeのマージ判断を求めるリスク。low、medium、highから選ぶ（CWK-MERGE-002）（リポジトリ）
+decision_risks = ["medium", "high"]
+
+[labels]
+# 優先度のラベルの名前。高い順（CWK-LABEL-006）（リポジトリ）
+priority = ["cumin/priority/P0", "cumin/priority/P1", "cumin/priority/P2", "cumin/priority/P3"]
+
+[notify.discord]
+# 通知を送るか。リポジトリで決めると、そのリポジトリについての通知に効く（CWK-NOTIFY-006）（両方）
+enabled = true
+
+# GitHub AppのClient ID。cumin setup github-appsが書く（Host）
+[github_apps.<organization>]
+cumin-core = "<Client ID>"
+planner = "<Client ID>"
+implementer = "<Client ID>"
+reviewer = "<Client ID>"
+
+# ツール動作確認。初期値はなし。1つの確認ごとに1つ書く（CWK-AGENT-021.1）（リポジトリ）
+[[tool_checks]]
+command = ["docker", "info"]
+time_limit = "10s"
+
+# Agentに渡すplugin。初期値はなし。1つのpluginごとに1つ書く（CWK-AGENT-010.1）（リポジトリ）
+[[plugins]]
+name = "<name>"
+repository = "<owner>/<repository>"
+path = "<path>"
+commit = "<commit>"
+roles = ["implementer"]
+disciplines = ["software-engineering"]
+```
+
 - 時間は、`"60s"`や`"50m"`のように、単位を付けて書く
 - リポジトリだけのキーは、Hostの設定ファイルに書くと、知らないキーの誤りになる
 - 次の値は設定にせず、固定の値とする: GitHubの読み取りのやり直しの回数と間隔（`CWK-POLL-007`）、sub-issueを読む数（`CWK-POLL-011`）、続けて失敗したら知らせる回数（`CWK-POLL-010`）、1回の定期確認で2つ以上マージするときの間に待つ秒数（`CWK-MERGE-009`）

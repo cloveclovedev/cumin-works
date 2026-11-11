@@ -56,14 +56,14 @@ cuminがGitHubではなくHostのローカルに持つのは、失っても作�
 
 #### `CWK-POLL-004` 定期確認の間隔
 
-cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）ごとに、作業中でないリポジトリを`idle_poll_interval`（初期値は5分）ごとに確かめる。作業中とは、次のどれかが成り立つことである。
+cuminは、作業中のリポジトリを`poll.interval`（初期値は60秒）ごとに、作業中でないリポジトリを`poll.idle_interval`（初期値は5分）ごとに確かめる。作業中とは、次のどれかが成り立つことである。
 
 - そのリポジトリでAgentが動いている
 - 状態が`ready`、`planning`、`accepting`の要求Issueがある
 - 状態が`ready`、`implementing`、`checking`、`reviewing`、`merging`の実装Issueがある
 - 前回の定期確認で、アクションをしたか、失敗した
 
-`awaiting-`で始まる状態のIssueしかないリポジトリは、作業中でない。そのため、Maintainerの操作には`idle_poll_interval`のうちに気付く。
+`awaiting-`で始まる状態のIssueしかないリポジトリは、作業中でない。そのため、Maintainerの操作には`poll.idle_interval`のうちに気付く。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -73,7 +73,7 @@ cuminは、作業中のリポジトリを`poll_interval`（初期値は60秒）�
 
 #### `CWK-POLL-005` 同時に進めるIssueの数
 
-1つのリポジトリで同時に進めるIssueの数は、`max_issues_in_progress`（初期値は1）までである。含めるのは、状態が`planning`、`accepting`の要求Issueと、`implementing`、`checking`、`reviewing`、`merging`の開いている実装Issueである。`implementing`の要求Issue、`ready`のIssue、`awaiting-`で始まる状態のIssueは含めない。違うリポジトリのIssueは、並行して進めてよい。
+1つのリポジトリで同時に進めるIssueの数は、`poll.max_issues_in_progress`（初期値は1）までである。含めるのは、状態が`planning`、`accepting`の要求Issueと、`implementing`、`checking`、`reviewing`、`merging`の開いている実装Issueである。`implementing`の要求Issue、`ready`のIssue、`awaiting-`で始まる状態のIssueは含めない。違うリポジトリのIssueは、並行して進めてよい。
 
 cuminは、Issueの状態を上記の状態に替える前に、数がまだ上限に達していないかを確かめる。上限に達していれば、状態を替えずに、次の定期確認でもう一度確かめる。これは、`ready`から新しく作業を始めるときも、`awaiting-`で始まる状態（Assigneeの判断やほかのIssueのマージを待つ状態）から作業に戻すときも同じである。
 

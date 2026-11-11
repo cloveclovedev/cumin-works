@@ -42,7 +42,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 #### `CWK-CHECK-004` チェックの失敗を修正する
 
-`cumin/status/checking`の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が上限（`max_check_fix_requests`、初期値は3回）に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで、失敗したチェックの内容を添えて修正を頼む。
+`cumin/status/checking`の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が上限（`pull_request_checks.max_fix_requests`、初期値は3回）に達していないとき、cuminは状態を`cumin/status/implementing`に替えて、Implementerの直前のセッションで、失敗したチェックの内容を添えて修正を頼む。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -58,7 +58,7 @@ cuminは、一覧のすべてのチェックが、先頭のコミットで`succe
 
 #### `CWK-CHECK-006` チェックが来ないときに止める
 
-`cumin/status/checking`の実装Issueで、待ち時間（`checks_wait_time`、初期値は60分）を過ぎても、必須チェックのどれかが先頭のコミットで結果を返していないとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
+`cumin/status/checking`の実装Issueで、待ち時間（`pull_request_checks.wait_time`、初期値は60分）を過ぎても、必須チェックのどれかが先頭のコミットで結果を返していないとき、cuminは状態を`cumin/status/awaiting-decision`に替えて、通知する。
 
 - 待ち時間は、最新の`cumin/status/checking`が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える
 - 開いているPull Requestがないときも、ラベルの時刻から待ち時間を過ぎたら止める

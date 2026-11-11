@@ -110,9 +110,9 @@ blocked byのIssueのPull Requestがまだマージされていない間も、cu
 `cumin/status/ready`の実装Issueが、blocked byのほかは`CWK-IMPL-001`の条件を満たし、次のすべてが成り立つとき、cuminはblocked byのIssueのPull Requestのブランチから実装を始める。
 
 - 開いているblocked byのIssueが1つだけで、`cumin/status/awaiting-merge-decision`か`cumin/status/awaiting-blocker-merge`である。2つ以上のときは始めない（[バックログ](../backlog.md)）
-- マージされていないblocked byのIssueを、blocked byの向きに順にたどった数が、`.cumin/config.toml`の`max_unmerged_blockers`以下である
+- マージされていないblocked byのIssueを、blocked byの向きに順にたどった数が、`.cumin/config.toml`の`implementation.max_unmerged_blockers`以下である
 
-`max_unmerged_blockers`を1以上にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（`CWK-CHECK-006`）。
+`implementation.max_unmerged_blockers`を1以上にする前に、Maintainerは、必須チェックのワークフローが、baseがmainブランチでないPull Requestでも動くことを確かめる。動かないと、チェックが来ずに止まる（`CWK-CHECK-006`）。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
