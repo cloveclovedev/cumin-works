@@ -59,7 +59,7 @@ Operatorは、次のコマンドを使う。
 
 #### `CWK-HOST-004` 状態の表示
 
-`cumin status`は、次のことを表示する。GitHubのラベル、cuminがローカルに持つ情報、モニターファイル（`CWK-HOST-014`）から読み、GitHubに書き込まない。
+`cumin status`は、次のことを表示する。GitHubのラベル、cuminがローカルに持つ情報、モニターファイル（`CWK-HOST-013`）から読み、GitHubに書き込まない。
 
 - 作業中のAgentと、`awaiting-`で始まる状態のIssue
 - 5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因
@@ -101,7 +101,7 @@ Operatorは、次のコマンドを使う。
 
 #### `CWK-HOST-008` スリープ
 
-Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（[Agent](../agent/index.md)の`CWK-AGENT-020`）。
+Hostがスリープから戻ったとき、cuminと動いているAgentは続きから動く。戻ったことで起きた失敗（通信の失敗、tokenの失効、時間の上限）は、Agentの異常終了として扱う（[Agent](../agent/index.md)の`CWK-AGENT-021`）。
 
 - 検証: `demo` Hostでcuminを動かして確認
 
@@ -167,13 +167,13 @@ lead = "24h"
 
 # roleごとの設定。implementerのほかに、plannerとreviewerがある
 [roles.implementer]
-# Agentを動かすCLI。今はClaude Codeだけ（CWK-AGENT-022）（両方）
+# Agentを動かすCLI。今はClaude Codeだけ（CWK-AGENT-023）（両方）
 cli = "claude-code"
 # AgentのCLIの実行ファイル（Host）
 cli_path = "claude"
 # Agentを動かすモデル。空ならCLIの既定（両方）
 model = ""
-# 実行の時間の上限。55分以下（CWK-AGENT-018）（Host）
+# 実行の時間の上限。55分以下（CWK-AGENT-019）（Host）
 time_limit = "50m"
 
 [implementation]
@@ -212,12 +212,12 @@ planner = "<Client ID>"
 implementer = "<Client ID>"
 reviewer = "<Client ID>"
 
-# ツール動作確認。初期値はなし。1つの確認ごとに1つ書く（CWK-AGENT-021.1）（リポジトリ）
+# ツール動作確認。初期値はなし。1つの確認ごとに1つ書く（CWK-AGENT-022.1）（リポジトリ）
 [[tool_checks]]
 command = ["docker", "info"]
 time_limit = "10s"
 
-# Agentに渡すplugin。初期値はなし。1つのpluginごとに1つ書く（CWK-AGENT-010.1）（リポジトリ）
+# Agentに渡すplugin。初期値はなし。1つのpluginごとに1つ書く（CWK-AGENT-011.1）（リポジトリ）
 [[plugins]]
 name = "<name>"
 repository = "<owner>/<repository>"
@@ -235,25 +235,9 @@ disciplines = ["software-engineering"]
 
 ---
 
-#### `CWK-HOST-012` リスクの基準
-
-リスクの基準は、TOMLの値ではなく、Markdownのファイルで決める。cuminは中身を読まず、すべてのroleへの指示にそのまま入れる（[Agent](../agent/index.md)の`CWK-AGENT-007`）。
-
-| 段 | 場所 |
-|---|---|
-| 初期値 | cuminに入っている`disciplines/software-engineering/risk-criteria.md` |
-| Host | Hostの設定ファイルと同じディレクトリの`risk-criteria.md` |
-| リポジトリ | 対象のリポジトリのmainブランチの`.cumin/risk-criteria.md` |
-
-強い段のファイルがあれば、弱い段の基準を丸ごと置き換える。中身が空白だけのファイルは、そのリポジトリの設定の誤りとする。
-
-- 検証: `test` GitHub mockとCLI mockでテスト
-
----
-
 ### 秘密の値と外から見るためのファイル
 
-#### `CWK-HOST-013` 秘密の値
+#### `CWK-HOST-012` 秘密の値
 
 GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSのKeychainに置く。設定ファイルとリポジトリには書かない。cuminは起動のときに読み、メモリにだけ持ち、ローカルに持つ情報にもログにも書かない。
 
@@ -261,7 +245,7 @@ GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSの
 
 ---
 
-#### `CWK-HOST-014` モニターファイル
+#### `CWK-HOST-013` モニターファイル
 
 cuminは、定期確認のたびとAgentの実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、cuminの停止予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めないIssue、動いているAgent、`awaiting-`で始まる状態のIssueである。cuminを外から見る道具と`cumin status`が読む。cumin自身は読まず、ここからは何も決めない。
 

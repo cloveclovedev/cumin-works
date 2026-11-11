@@ -35,7 +35,7 @@ cuminは、次の異常な状態のときに、通知する。
 | 要求IssueにAssigneeがいない | `CWK-PLAN-007` |
 | 全部を読めないIssueがある | `CWK-POLL-012` |
 | 使用率を読めない | `CWK-LIMIT-005` |
-| ツール動作確認が失敗した | `CWK-AGENT-021.3` |
+| ツール動作確認が失敗した | `CWK-AGENT-022.3` |
 | rulesetが効いていない | `CWK-ACCESS-015` |
 | 定期確認が続けて失敗した | `CWK-POLL-010` |
 

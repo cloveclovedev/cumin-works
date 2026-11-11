@@ -146,7 +146,7 @@ Plannerは、実装Issueどうしの依存をblocked byで記録する。blocked
 
 #### `CWK-PLAN-013` リスクを仮に付ける
 
-Plannerは、実装Issueごとにリスクのラベルを1つだけ付ける。基準は、Plannerが受け取るリスクの基準である（`CWK-AGENT-007`）。迷ったら高いほうを付ける。`cumin/risk/high`に当たる変更は、それだけの最小の実装Issueに分ける。
+Plannerは、実装Issueごとにリスクのラベルを1つだけ付ける。基準は、Plannerが受け取るリスクの基準である（`CWK-AGENT-009`）。迷ったら高いほうを付ける。`cumin/risk/high`に当たる変更は、それだけの最小の実装Issueに分ける。
 
 - 検証: `demo` テスト用の実リポジトリでPlannerを動かして確認
 

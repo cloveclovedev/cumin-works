@@ -29,7 +29,7 @@ Agent起動に共通のことを決める。起動の手順、渡す指示と事
 cuminは、定期確認のたびに次の確認の結果を更新し、Agentを起動するかの判断に使う。どれかが止めることを示していれば、その定期確認では、次に書いた範囲でAgentを起動しない。
 
 - 利用制限（[利用制限](../limit/index.md)の`CWK-LIMIT-001`）: すべてのリポジトリ
-- リポジトリごとのツール動作確認（`CWK-AGENT-021`）: そのリポジトリだけ
+- リポジトリごとのツール動作確認（`CWK-AGENT-022`）: そのリポジトリだけ
 - リポジトリごとのruleset（[権限](../access/index.md)の`CWK-ACCESS-015`）: そのリポジトリだけ
 - cuminの停止予約（[Hostでの動かし方](../host/index.md)の`CWK-HOST-007`）: すべてのリポジトリ
 
@@ -81,7 +81,7 @@ cuminは、次の4つをこの順につないで、roleの指示として渡す�
 1. roleのファイル（`roles/<role>.md`）
 2. 専門知識のファイル（`disciplines/<専門知識>/<role>.md`）
 3. 平易な英語の決まり（`templates/writing-rules.md`）
-4. 対象のリポジトリのリスクの基準（[Hostでの動かし方](../host/index.md)）
+4. 対象のリポジトリのリスクの基準（`CWK-AGENT-009`）
 
 食い違ったら、roleのファイルが勝つ。専門知識のファイルがないroleは、それを飛ばす。今の専門知識は`software-engineering`だけである。
 
@@ -102,7 +102,23 @@ cuminは、次の4つをこの順につないで、roleの指示として渡す�
 
 ---
 
-#### `CWK-AGENT-009` テンプレートをskillで渡す
+#### `CWK-AGENT-009` リスクの基準
+
+リスクの基準は、TOMLの値ではなく、専門知識ごとのMarkdownのファイルで決める。cuminは中身を読まず、すべてのroleへの指示にそのまま入れる（`CWK-AGENT-007`）。
+
+| スコープ | 場所 |
+|---|---|
+| cumin | cuminに入っている`disciplines/<専門知識>/risk-criteria.md` |
+| Host | Hostの設定ファイルと同じディレクトリの`disciplines/<専門知識>/risk-criteria.md` |
+| リポジトリ | 対象のリポジトリのmainブランチの`.cumin/disciplines/<専門知識>/risk-criteria.md` |
+
+狭いスコープにファイルがあれば、そのファイルだけを使う。`CWK-AGENT-008`の追加の指示と違い、広いスコープの基準には足さない。中身が空白だけのファイルは、そのリポジトリの設定の誤りとする。
+
+- 検証: `test` GitHub mockとCLI mockでテスト
+
+---
+
+#### `CWK-AGENT-010` テンプレートをskillで渡す
 
 cuminは、GitHubに残す文章のテンプレート（`templates/`）を、その文章を書くroleにskillとして渡す。Agentは、書く直前にskillを呼ぶ。
 
@@ -110,11 +126,11 @@ cuminは、GitHubに残す文章のテンプレート（`templates/`）を、そ
 
 ---
 
-#### `CWK-AGENT-010` pluginを渡す
+#### `CWK-AGENT-011` pluginを渡す
 
 cuminは、対象のリポジトリが指定したClaude CodeのpluginをAgentに渡す。skillとMCPサーバも、pluginに入れて渡す。
 
-##### `CWK-AGENT-010.1` pluginの指定
+##### `CWK-AGENT-011.1` pluginの指定
 
 pluginは、対象のリポジトリの`.cumin/config.toml`の`plugins`に書く。1つのpluginは、名前、GitHubのリポジトリ、その中のパス、コミットを持つ。渡すroleと専門知識も書ける。省くと、すべてのroleと専門知識に渡す。Maintainerが承認したpluginだけを渡すために、保護されたパスの`.cumin/`に書き、コミットで中身を固定する。
 
@@ -122,15 +138,15 @@ pluginは、対象のリポジトリの`.cumin/config.toml`の`plugins`に書く
 
 ---
 
-##### `CWK-AGENT-010.2` pluginを取ってくる
+##### `CWK-AGENT-011.2` pluginを取ってくる
 
-cuminは、指定されたコミットのpluginをHostに取ってきて、Agent作業ディレクトリの外に置き、起動のときに渡す（Claude Codeでは`--plugin-dir`）。取ってこられないpluginがあれば、そのAgent起動を異常終了とする（`CWK-AGENT-020`）。
+cuminは、指定されたコミットのpluginをHostに取ってきて、Agent作業ディレクトリの外に置き、起動のときに渡す（Claude Codeでは`--plugin-dir`）。取ってこられないpluginがあれば、そのAgent起動を異常終了とする（`CWK-AGENT-021`）。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
 ---
 
-##### `CWK-AGENT-010.3` MCPサーバはpluginのものだけ
+##### `CWK-AGENT-011.3` MCPサーバはpluginのものだけ
 
 cuminは、渡したpluginのMCPサーバだけを読むようにAgentを起動する。対象のリポジトリの`.mcp.json`は読ませない。
 
@@ -138,7 +154,7 @@ cuminは、渡したpluginのMCPサーバだけを読むようにAgentを起動�
 
 ---
 
-#### `CWK-AGENT-011` Hostの指示を読ませない
+#### `CWK-AGENT-012` Hostの指示を読ませない
 
 cuminは、AgentがHostのユーザアカウントの指示と設定（Claude Codeでは`~/.claude`、plugin、MCPサーバ、claude.aiのコネクタ）を読まないように起動し、自動メモリも切る。何を根拠に動いたかを追えるようにするためである。対象のリポジトリの指示は読んでよい。
 
@@ -146,7 +162,7 @@ cuminは、AgentがHostのユーザアカウントの指示と設定（Claude Co
 
 ---
 
-#### `CWK-AGENT-012` 起動の記録を確かめる
+#### `CWK-AGENT-013` 起動の記録を確かめる
 
 cuminは、実行の最初に出る起動の記録（Claude Codeでは`init`のイベント）を確かめ、次のどれかに当たったら、その場で止めて異常終了とする。
 
@@ -160,7 +176,7 @@ cuminは、実行の最初に出る起動の記録（Claude Codeでは`init`の�
 
 ---
 
-#### `CWK-AGENT-013` Agentに渡す事実
+#### `CWK-AGENT-014` Agentに渡す事実
 
 cuminは、依頼の先頭に、次の事実を書く。roleごとに足す事実は、各ページで決める。
 
@@ -175,7 +191,7 @@ cuminは、依頼の先頭に、次の事実を書く。roleごとに足す事�
 
 ### 結果
 
-#### `CWK-AGENT-014` 結果の形式
+#### `CWK-AGENT-015` 結果の形式
 
 Agentは、実行の最後に、次の3つを持つJSONを返す。CLIが何であっても変わらない。
 
@@ -191,7 +207,7 @@ cuminはJSONを確かめ、形式に合わないときや、`blocked`で`blocked
 
 ---
 
-#### `CWK-AGENT-015` `done`を作業の完了とは扱わない
+#### `CWK-AGENT-016` `done`を作業の完了とは扱わない
 
 `done`は、GitHubを確かめ始めてよいという合図でしかない。作業が済んだかは、各ページの完了判断で決める。
 
@@ -199,9 +215,9 @@ cuminはJSONを確かめ、形式に合わないときや、`blocked`で`blocked
 
 ---
 
-#### `CWK-AGENT-016` Agentが判断を求めて止まったときのコメント
+#### `CWK-AGENT-017` Agentが判断を求めて止まったときのコメント
 
-Agentは、Assigneeの判断がないと進められないとき（`CWK-AGENT-024`、`CWK-AGENT-025`）、`blocked`を返して実行を終える。これは異常終了ではない（`CWK-AGENT-020`）。cuminは、`blocked_reason`を対象のIssueにコメントとして残す。これは、判断を求めるコメント（[判断の依頼](../ask/index.md)の`CWK-ASK-001`）の1つである。
+Agentは、Assigneeの判断がないと進められないとき（`CWK-AGENT-025`、`CWK-AGENT-026`）、`blocked`を返して実行を終える。これは異常終了ではない（`CWK-AGENT-021`）。cuminは、`blocked_reason`を対象のIssueにコメントとして残す。これは、判断を求めるコメント（[判断の依頼](../ask/index.md)の`CWK-ASK-001`）の1つである。
 
 - 検証: `test` GitHub mockとCLI mockでテスト
 
@@ -209,7 +225,7 @@ Agentは、Assigneeの判断がないと進められないとき（`CWK-AGENT-02
 
 ### セッションと時間
 
-#### `CWK-AGENT-017` セッション
+#### `CWK-AGENT-018` セッション
 
 Assigneeが間に入らない一続きの作業は、同じセッションで続ける。Assigneeが`cumin/status/ready`を付け直したあとは、新しいセッションにする。セッションの番号はHostに持ち、失ったら新しいセッションで起動する。異常終了した実行のセッションは残さない。
 
@@ -217,7 +233,7 @@ Assigneeが間に入らない一続きの作業は、同じセッションで続
 
 ---
 
-#### `CWK-AGENT-018` 実行の時間の上限
+#### `CWK-AGENT-019` 実行の時間の上限
 
 1回の実行には、roleごとの時間の上限（`roles.<role>.time_limit`、初期値は50分、最大55分）がある。上限を過ぎたら、cuminはAgentが起動したコマンドまで止め、異常終了とする。最大を55分にするのは、tokenが1時間で失効するためである。
 
@@ -225,7 +241,7 @@ Assigneeが間に入らない一続きの作業は、同じセッションで続
 
 ---
 
-#### `CWK-AGENT-019` 終わる時刻に合わせる
+#### `CWK-AGENT-020` 終わる時刻に合わせる
 
 Agentは、長い確認を、終わる時刻より十分前に終える。終わらないときは、収まる分で打ち切り、行った回数と結果をPull Requestの「How it was checked」に、足りない分を`Follow-up`に書く。完了の条件そのものが時間に収まらないときは、`blocked`を返す。この決まりは、各roleの専門知識のファイルに書く。
 
@@ -236,7 +252,7 @@ Agentは、長い確認を、終わる時刻より十分前に終える。終わ
 
 ### 異常終了
 
-#### `CWK-AGENT-020` 異常終了
+#### `CWK-AGENT-021` 異常終了
 
 CLIのプロセスの失敗、結果がないか形式に合わないこと、起動の記録の問題、時間の上限は、異常終了である。cuminは、異常終了をその場でやり直さず、何も残さなかった実行として扱う。次に何をするかは、各ページの完了判断がGitHubの事実から決める。
 
@@ -246,11 +262,11 @@ CLIのプロセスの失敗、結果がないか形式に合わないこと、�
 
 ### ツール動作確認
 
-#### `CWK-AGENT-021` ツール動作確認
+#### `CWK-AGENT-022` ツール動作確認
 
 対象のリポジトリが求めるツールがHostで動くかを、cuminがAgent起動の前に確かめる。動かないツールでAgentが作業しないためである。
 
-##### `CWK-AGENT-021.1` 確認の書き方
+##### `CWK-AGENT-022.1` 確認の書き方
 
 確認は、対象のリポジトリの`.cumin/config.toml`の`tool_checks`に書く。1つの確認は、コマンド（`command`、文字列の配列。シェルは通さない）と、時間の上限（`time_limit`、60秒以下、初期値は10秒）を持つ。Maintainerが承認したコマンドだけをHostで実行するために、保護されたパスの`.cumin/`に置く。
 
@@ -258,7 +274,7 @@ CLIのプロセスの失敗、結果がないか形式に合わないこと、�
 
 ---
 
-##### `CWK-AGENT-021.2` 確認の実行
+##### `CWK-AGENT-022.2` 確認の実行
 
 cuminは、すべての確認を書いた順に実行する。終了コードが0で、時間の上限の中に終わったときだけ成功とする。Agentと同じ環境変数で実行し、tokenは渡さない。
 
@@ -266,7 +282,7 @@ cuminは、すべての確認を書いた順に実行する。終了コードが
 
 ---
 
-##### `CWK-AGENT-021.3` 失敗の通知
+##### `CWK-AGENT-022.3` 失敗の通知
 
 ツールを直すのはOperatorである。失敗し始めたとき、cuminは、リポジトリの名前と失敗した確認を1回だけ通知する。すべて成功したあとにまた失敗したら、もう一度通知する。
 
@@ -276,7 +292,7 @@ cuminは、すべての確認を書いた順に実行する。終了コードが
 
 ### CLI
 
-#### `CWK-AGENT-022` CLIの違いを閉じ込める
+#### `CWK-AGENT-023` CLIの違いを閉じ込める
 
 Agentを動かすCLIは、今はClaude Codeだけである。CLIごとの違いは、cuminの中のCLIの接続部分1つに閉じ込める。
 
@@ -286,7 +302,7 @@ Agentを動かすCLIは、今はClaude Codeだけである。CLIごとの違い�
 
 ### どのroleも守ること
 
-#### `CWK-AGENT-023` ラベルを替えない
+#### `CWK-AGENT-024` ラベルを替えない
 
 Agentは、`cumin/*`のラベルを替えない。例外は、Plannerがsub-issueにリスクのラベルと`cumin/type/owner-task`を付けること、やり直しでリスクのラベルを直すことだけである。
 
@@ -294,7 +310,7 @@ Agentは、`cumin/*`のラベルを替えない。例外は、Plannerがsub-issu
 
 ---
 
-#### `CWK-AGENT-024` 保護されたパスを変えない
+#### `CWK-AGENT-025` 保護されたパスを変えない
 
 Agentは、保護されたパスのファイルを変えない。変える必要があれば、`blocked`を返す（[実装](../impl/index.md)の`CWK-IMPL-014.2`）。
 
@@ -302,7 +318,7 @@ Agentは、保護されたパスのファイルを変えない。変える必要
 
 ---
 
-#### `CWK-AGENT-025` 推測で進めない
+#### `CWK-AGENT-026` 推測で進めない
 
 Agentは、決まっていないことに当たったら、`blocked`を返す。何で止まるかは、各ページで決める。
 
