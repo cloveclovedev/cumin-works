@@ -151,7 +151,7 @@
 <li>5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因</li>
 <li>cuminの停止予約があるか</li>
 <li>失敗しているツール動作確認と、全部を読めないIssue。Pull Requestの数で全部を読めないIssueは、通知だけで知らせる</li>
-<li>最後の定期確認の時刻と、そのエラー。モニターファイルがないとき、または最後の定期確認が<code>poll_interval</code>の3倍より古いときは、そのこと</li>
+<li>最後の定期確認の時刻と、そのエラー。モニターファイルがないとき、または最後の定期確認が<code>poll.interval</code>の3倍より古いときは、そのこと</li>
 </ul>
 <p>モニターファイルの中身で、終了コードは変えない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> 表示を単体テスト</li></ul></div>
@@ -186,173 +186,24 @@
 <p><code>test</code> GitHub mockでテスト</p>
 </li></ul></div>
 </section><section class="requirement"><h4 id="CWK-HOST-011"><code class="requirement-id">CWK-HOST-011</code> 設定の一覧</h4>
-<p>設定のキーは、次のとおりである。「書く場所」の「Host」はHostの設定ファイルだけ、「両方」はHostの設定ファイルとリポジトリの設定、「リポジトリ」はリポジトリの設定だけに書けることを表す。</p>
-<table>
-<thead>
-<tr>
-<th>キー</th>
-<th>内容</th>
-<th>初期値</th>
-<th>書く場所</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>repositories</code></td>
-<td>対象のリポジトリの一覧</td>
-<td>なし（必須）</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>work_dir</code></td>
-<td>作業ディレクトリ</td>
-<td>なし（必須）</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>poll_interval</code></td>
-<td>作業中のリポジトリの定期確認の間隔（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-004">CWK-POLL-004</a></code>）</td>
-<td>60秒</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>idle_poll_interval</code></td>
-<td>作業中でないリポジトリの定期確認の間隔。<code>poll_interval</code>以上（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-004">CWK-POLL-004</a></code>）</td>
-<td>5分</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>max_issues_in_progress</code></td>
-<td>リポジトリごとに同時に進めるIssueの数（<code><a href="/cumin-works/requirements/poll/#CWK-POLL-005">CWK-POLL-005</a></code>）</td>
-<td>1</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>quota.read_interval</code></td>
-<td>使用率を読む最小の間隔（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-003">CWK-LIMIT-003</a></code>）</td>
-<td>5分</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>quota.five_hour.threshold</code></td>
-<td>5時間制限のしきい値（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-006">CWK-LIMIT-006</a></code>）</td>
-<td>85%</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>quota.weekly.target</code></td>
-<td>週間制限の目標（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-007">CWK-LIMIT-007</a></code>）</td>
-<td>85%</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>quota.weekly.lead</code></td>
-<td>週間制限の前倒し。7日未満（<code><a href="/cumin-works/requirements/limit/#CWK-LIMIT-007">CWK-LIMIT-007</a></code>）</td>
-<td>1日</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>github_apps.&lt;organization&gt;.&lt;app&gt;</code></td>
-<td>GitHub AppのClient ID。<code>cumin setup github-apps</code>が書く</td>
-<td>なし</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>roles.&lt;role&gt;.time_limit</code></td>
-<td>実行の時間の上限。55分以下（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-018">CWK-AGENT-018</a></code>）</td>
-<td>50分</td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>roles.&lt;role&gt;.cli_path</code></td>
-<td>AgentのCLIの実行ファイル</td>
-<td><code>claude</code></td>
-<td>Host</td>
-</tr>
-<tr>
-<td><code>roles.&lt;role&gt;.cli</code></td>
-<td>Agentを動かすCLI。今はClaude Codeだけ（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-022">CWK-AGENT-022</a></code>）</td>
-<td>Claude Code</td>
-<td>両方</td>
-</tr>
-<tr>
-<td><code>roles.&lt;role&gt;.model</code></td>
-<td>Agentを動かすモデル。空ならCLIの既定</td>
-<td>空</td>
-<td>両方</td>
-</tr>
-<tr>
-<td><code>max_review_rounds</code></td>
-<td>レビューのラウンドの上限（<a href="/cumin-works/requirements/review/">レビュー</a>）</td>
-<td>5</td>
-<td>両方</td>
-</tr>
-<tr>
-<td><code>max_check_fix_requests</code></td>
-<td>チェックの修正を頼む回数の上限（<a href="/cumin-works/requirements/check/">チェック</a>）</td>
-<td>3</td>
-<td>両方</td>
-</tr>
-<tr>
-<td><code>checks_wait_time</code></td>
-<td>必須チェックの結果を待つ時間（<a href="/cumin-works/requirements/check/">チェック</a>）</td>
-<td>60分</td>
-<td>両方</td>
-</tr>
-<tr>
-<td><code>merge_method</code></td>
-<td>マージの方法。squash、merge、rebaseのどれか（<a href="/cumin-works/requirements/merge/">マージ</a>）</td>
-<td>squash</td>
-<td>両方</td>
-</tr>
-<tr>
-<td><code>merge_decision_risks</code></td>
-<td>Assigneeのマージ判断を求めるリスク。<code>low</code>、<code>medium</code>、<code>high</code>から選ぶ（<code><a href="/cumin-works/requirements/merge/#CWK-MERGE-002">CWK-MERGE-002</a></code>）</td>
-<td><code>["medium", "high"]</code></td>
-<td>リポジトリ</td>
-</tr>
-<tr>
-<td><code>notify.discord.enabled</code></td>
-<td>通知を送るか。リポジトリで決めると、そのリポジトリについての通知に効く（<a href="/cumin-works/requirements/notify/">通知</a>）</td>
-<td>true</td>
-<td>両方</td>
-</tr>
-<tr>
-<td><code>priority_labels</code></td>
-<td>優先度のラベルの名前。高い順（<code><a href="/cumin-works/requirements/label/#CWK-LABEL-006">CWK-LABEL-006</a></code>）</td>
-<td><code>cumin/priority/P0</code>〜<code>P3</code></td>
-<td>リポジトリ</td>
-</tr>
-<tr>
-<td><code>protected_paths</code></td>
-<td>保護されたパス（<code><a href="/cumin-works/requirements/check/#CWK-CHECK-008.1">CWK-CHECK-008.1</a></code>）</td>
-<td><code>.cumin/</code>、<code>CLAUDE.md</code>、<code>AGENTS.md</code>、<code>.claude/</code>、<code>REVIEW.md</code></td>
-<td>リポジトリ</td>
-</tr>
-<tr>
-<td><code>tool_checks</code></td>
-<td>ツール動作確認（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-021.1">CWK-AGENT-021.1</a></code>）</td>
-<td>なし</td>
-<td>リポジトリ</td>
-</tr>
-<tr>
-<td><code>plugins</code></td>
-<td>Agentに渡すplugin（<code><a href="/cumin-works/requirements/agent/#CWK-AGENT-010.1">CWK-AGENT-010.1</a></code>）</td>
-<td>なし</td>
-<td>リポジトリ</td>
-</tr>
-<tr>
-<td><code>max_unmerged_blockers</code></td>
-<td>マージされていないblocked byのIssueのブランチから始めるときの、たどる数の上限。0なら始めない（<code><a href="/cumin-works/requirements/impl/#CWK-IMPL-008">CWK-IMPL-008</a></code>）</td>
-<td>0</td>
-<td>リポジトリ</td>
-</tr>
-</tbody>
-</table>
+<p>設定のキーは、次のとおりである。</p>
+<div class="expressive-code"><figure class="frame not-content"><figcaption class="header"></figcaption><pre data-language="toml"><code><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 値は初期値である。かっこの中は書く場所で、「Host」はHostの設定ファイルだけ、</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 「両方」はHostの設定ファイルとリポジトリの設定、「リポジトリ」はリポジトリの設定だけに書ける。</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 対象のリポジトリの一覧。必須（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">repositories</span><span style="--0:#D6DEEB;--1:#403F53"> = [</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;owner&gt;/&lt;repository&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 作業ディレクトリ。必須（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">work_dir</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;path&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 保護されたパス（CWK-CHECK-008.1）（リポジトリ）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">protected_paths</span><span style="--0:#D6DEEB;--1:#403F53"> = [</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">.cumin/</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">CLAUDE.md</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">AGENTS.md</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">.claude/</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">REVIEW.md</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">]</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[poll]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 作業中のリポジトリの定期確認の間隔（CWK-POLL-004）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">interval</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">60s</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 作業中でないリポジトリの定期確認の間隔。interval以上（CWK-POLL-004）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">idle_interval</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">5m</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># リポジトリごとに同時に進めるIssueの数（CWK-POLL-005）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">max_issues_in_progress</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#F78C6C;--1:#AA0982">1</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[quota]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 使用率を読む最小の間隔（CWK-LIMIT-003）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">read_interval</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">5m</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[quota.five_hour]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 5時間制限のしきい値。単位は%（CWK-LIMIT-006）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">threshold</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#F78C6C;--1:#AA0982">85</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[quota.weekly]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 週間制限の目標。単位は%（CWK-LIMIT-007）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">target</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#F78C6C;--1:#AA0982">85</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 週間制限の前倒し。7日未満（CWK-LIMIT-007）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">lead</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">24h</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># roleごとの設定。implementerのほかに、plannerとreviewerがある</span></div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[roles.implementer]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># Agentを動かすCLI。今はClaude Codeだけ（CWK-AGENT-022）（両方）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">cli</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">claude-code</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># AgentのCLIの実行ファイル（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">cli_path</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">claude</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># Agentを動かすモデル。空ならCLIの既定（両方）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">model</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">""</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 実行の時間の上限。55分以下（CWK-AGENT-018）（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">time_limit</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">50m</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[implementation]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># マージされていないblocked byのIssueのブランチから始めるときの、たどる数の上限。</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 0なら始めない（CWK-IMPL-008）（リポジトリ）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">max_unmerged_blockers</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#F78C6C;--1:#AA0982">0</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[pull_request_checks]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 必須チェックの結果を待つ時間（CWK-CHECK-006）（両方）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">wait_time</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">60m</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># チェックの修正を頼む回数の上限（CWK-CHECK-004）（両方）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">max_fix_requests</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#F78C6C;--1:#AA0982">3</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[review]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># レビューのラウンドの上限（CWK-REVIEW-005）（両方）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">max_rounds</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#F78C6C;--1:#AA0982">5</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[merge]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># マージの方法。squash、merge、rebaseのどれか（CWK-MERGE-009）（両方）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">method</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">squash</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># Assigneeのマージ判断を求めるリスク。low、medium、highから選ぶ（CWK-MERGE-002）（リポジトリ）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">decision_risks</span><span style="--0:#D6DEEB;--1:#403F53"> = [</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">medium</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">high</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">]</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[labels]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 優先度のラベルの名前。高い順（CWK-LABEL-006）（リポジトリ）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">priority</span><span style="--0:#D6DEEB;--1:#403F53"> = [</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">cumin/priority/P0</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">cumin/priority/P1</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">cumin/priority/P2</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">cumin/priority/P3</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">]</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[notify.discord]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># 通知を送るか。リポジトリで決めると、そのリポジトリについての通知に効く（CWK-NOTIFY-006）（両方）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">enabled</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#FF6A83;--1:#A24848">true</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># GitHub AppのClient ID。cumin setup github-appsが書く（Host）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[github_apps.&lt;organization&gt;]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">cumin-core</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;Client ID&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">planner</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;Client ID&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">implementer</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;Client ID&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">reviewer</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;Client ID&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># ツール動作確認。初期値はなし。1つの確認ごとに1つ書く（CWK-AGENT-021.1）（リポジトリ）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[[tool_checks]]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">command</span><span style="--0:#D6DEEB;--1:#403F53"> = [</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">docker</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">, </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">info</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">time_limit</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">10s</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code">
+</div></div><div class="ec-line"><div class="code"><span style="--0:#919F9F;--1:#5F636F"># Agentに渡すplugin。初期値はなし。1つのpluginごとに1つ書く（CWK-AGENT-010.1）（リポジトリ）</span></div></div><div class="ec-line"><div class="code"><span style="--0:#D6DEEB;--1:#403F53">[[plugins]]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">name</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;name&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">repository</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;owner&gt;/&lt;repository&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">path</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;path&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">commit</span><span style="--0:#D6DEEB;--1:#403F53"> = </span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">&lt;commit&gt;</span><span style="--0:#D9F5DD;--1:#111111">"</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">roles</span><span style="--0:#D6DEEB;--1:#403F53"> = [</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">implementer</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">]</span></div></div><div class="ec-line"><div class="code"><span style="--0:#C5E478;--1:#3B61B0">disciplines</span><span style="--0:#D6DEEB;--1:#403F53"> = [</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#ECC48D;--1:#984E4D">software-engineering</span><span style="--0:#D9F5DD;--1:#111111">"</span><span style="--0:#D6DEEB;--1:#403F53">]</span></div></div></code></pre><div class="copy"><div aria-live="polite"></div><button title="クリップボードにコピー" data-copied="コピーしました！" data-code="# 値は初期値である。かっこの中は書く場所で、「Host」はHostの設定ファイルだけ、# 「両方」はHostの設定ファイルとリポジトリの設定、「リポジトリ」はリポジトリの設定だけに書ける。# 対象のリポジトリの一覧。必須（Host）repositories = [&quot;<owner>/<repository>&quot;]# 作業ディレクトリ。必須（Host）work_dir = &quot;<path>&quot;# 保護されたパス（CWK-CHECK-008.1）（リポジトリ）protected_paths = [&quot;.cumin/&quot;, &quot;CLAUDE.md&quot;, &quot;AGENTS.md&quot;, &quot;.claude/&quot;, &quot;REVIEW.md&quot;][poll]# 作業中のリポジトリの定期確認の間隔（CWK-POLL-004）（Host）interval = &quot;60s&quot;# 作業中でないリポジトリの定期確認の間隔。interval以上（CWK-POLL-004）（Host）idle_interval = &quot;5m&quot;# リポジトリごとに同時に進めるIssueの数（CWK-POLL-005）（Host）max_issues_in_progress = 1[quota]# 使用率を読む最小の間隔（CWK-LIMIT-003）（Host）read_interval = &quot;5m&quot;[quota.five_hour]# 5時間制限のしきい値。単位は%（CWK-LIMIT-006）（Host）threshold = 85[quota.weekly]# 週間制限の目標。単位は%（CWK-LIMIT-007）（Host）target = 85# 週間制限の前倒し。7日未満（CWK-LIMIT-007）（Host）lead = &quot;24h&quot;# roleごとの設定。implementerのほかに、plannerとreviewerがある[roles.implementer]# Agentを動かすCLI。今はClaude Codeだけ（CWK-AGENT-022）（両方）cli = &quot;claude-code&quot;# AgentのCLIの実行ファイル（Host）cli_path = &quot;claude&quot;# Agentを動かすモデル。空ならCLIの既定（両方）model = &quot;&quot;# 実行の時間の上限。55分以下（CWK-AGENT-018）（Host）time_limit = &quot;50m&quot;[implementation]# マージされていないblocked byのIssueのブランチから始めるときの、たどる数の上限。# 0なら始めない（CWK-IMPL-008）（リポジトリ）max_unmerged_blockers = 0[pull_request_checks]# 必須チェックの結果を待つ時間（CWK-CHECK-006）（両方）wait_time = &quot;60m&quot;# チェックの修正を頼む回数の上限（CWK-CHECK-004）（両方）max_fix_requests = 3[review]# レビューのラウンドの上限（CWK-REVIEW-005）（両方）max_rounds = 5[merge]# マージの方法。squash、merge、rebaseのどれか（CWK-MERGE-009）（両方）method = &quot;squash&quot;# Assigneeのマージ判断を求めるリスク。low、medium、highから選ぶ（CWK-MERGE-002）（リポジトリ）decision_risks = [&quot;medium&quot;, &quot;high&quot;][labels]# 優先度のラベルの名前。高い順（CWK-LABEL-006）（リポジトリ）priority = [&quot;cumin/priority/P0&quot;, &quot;cumin/priority/P1&quot;, &quot;cumin/priority/P2&quot;, &quot;cumin/priority/P3&quot;][notify.discord]# 通知を送るか。リポジトリで決めると、そのリポジトリについての通知に効く（CWK-NOTIFY-006）（両方）enabled = true# GitHub AppのClient ID。cumin setup github-appsが書く（Host）[github_apps.<organization>]cumin-core = &quot;<Client ID>&quot;planner = &quot;<Client ID>&quot;implementer = &quot;<Client ID>&quot;reviewer = &quot;<Client ID>&quot;# ツール動作確認。初期値はなし。1つの確認ごとに1つ書く（CWK-AGENT-021.1）（リポジトリ）[[tool_checks]]command = [&quot;docker&quot;, &quot;info&quot;]time_limit = &quot;10s&quot;# Agentに渡すplugin。初期値はなし。1つのpluginごとに1つ書く（CWK-AGENT-010.1）（リポジトリ）[[plugins]]name = &quot;<name>&quot;repository = &quot;<owner>/<repository>&quot;path = &quot;<path>&quot;commit = &quot;<commit>&quot;roles = [&quot;implementer&quot;]disciplines = [&quot;software-engineering&quot;]"><div></div></button></div></figure></div>
 <ul>
-<li>
-<p><code>&lt;role&gt;</code>は<code>planner</code>、<code>implementer</code>、<code>reviewer</code>のどれか、<code>&lt;app&gt;</code>は<code>cumin-core</code>とこの3つのどれかである</p>
-</li>
 <li>
 <p>時間は、<code>"60s"</code>や<code>"50m"</code>のように、単位を付けて書く</p>
 </li>

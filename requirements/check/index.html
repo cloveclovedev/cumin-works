@@ -97,13 +97,13 @@
 <p><code>cumin/status/checking</code>の実装Issueでは、1回の定期確認で、衝突の解消（<code><a href="/cumin-works/requirements/check/#CWK-CHECK-007">CWK-CHECK-007</a></code>）、チェックの結果（レビューに進む、<code><a href="/cumin-works/requirements/check/#CWK-CHECK-004">CWK-CHECK-004</a></code>、<code><a href="/cumin-works/requirements/check/#CWK-CHECK-005">CWK-CHECK-005</a></code>）、<code><a href="/cumin-works/requirements/check/#CWK-CHECK-006">CWK-CHECK-006</a></code>の順に判定し、最初に成り立ったものだけを行う。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-CHECK-004"><code class="requirement-id">CWK-CHECK-004</code> チェックの失敗を修正する</h4>
-<p><code>cumin/status/checking</code>の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が上限（<code>max_check_fix_requests</code>、初期値は3回）に達していないとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで、失敗したチェックの内容を添えて修正を頼む。</p>
+<p><code>cumin/status/checking</code>の実装Issueで、必須チェックのどれかが失敗し、チェックの修正を頼んだ回数が上限（<code>pull_request_checks.max_fix_requests</code>、初期値は3回）に達していないとき、cuminは状態を<code>cumin/status/implementing</code>に替えて、Implementerの直前のセッションで、失敗したチェックの内容を添えて修正を頼む。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-CHECK-005"><code class="requirement-id">CWK-CHECK-005</code> チェックの失敗で止める</h4>
 <p><code>cumin/status/checking</code>の実装Issueで、必須チェックのどれかが失敗し、修正を頼んだ回数が上限に達しているとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。コメントと通知には、失敗したチェックの名前と、頼んだ回数を書く。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockとCLI mockでテスト</li></ul></div>
 </section><section class="requirement"><h4 id="CWK-CHECK-006"><code class="requirement-id">CWK-CHECK-006</code> チェックが来ないときに止める</h4>
-<p><code>cumin/status/checking</code>の実装Issueで、待ち時間（<code>checks_wait_time</code>、初期値は60分）を過ぎても、必須チェックのどれかが先頭のコミットで結果を返していないとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
+<p><code>cumin/status/checking</code>の実装Issueで、待ち時間（<code>pull_request_checks.wait_time</code>、初期値は60分）を過ぎても、必須チェックのどれかが先頭のコミットで結果を返していないとき、cuminは状態を<code>cumin/status/awaiting-decision</code>に替えて、通知する。</p>
 <ul>
 <li>
 <p>待ち時間は、最新の<code>cumin/status/checking</code>が付いた時刻と、先頭のコミットの時刻の、遅いほうから数える</p>

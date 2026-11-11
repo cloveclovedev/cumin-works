@@ -214,7 +214,7 @@
 </section><h3 id="優先度のラベル">優先度のラベル</h3>
 <section class="requirement"><h4 id="CWK-LABEL-006"><code class="requirement-id">CWK-LABEL-006</code> 優先度のラベル</h4>
 <p>優先度のラベルは、着手の順番を表す。初期値は<code>cumin/priority/P0</code>から<code>cumin/priority/P3</code>で、<code>P0</code>が最も高い。
-対象のリポジトリにすでにある優先度のラベルを使うときは、<code>.cumin/config.toml</code>の<code>priority_labels</code>に、名前を高い順に書く。</p>
+対象のリポジトリにすでにある優先度のラベルを使うときは、<code>.cumin/config.toml</code>の<code>labels.priority</code>に、名前を高い順に書く。</p>
 <p>優先度のラベルは、要求Issueにも実装Issueにも付けてよい。付けるのはMaintainerだけで、cuminとAgentは付けも外しもせず、Pull Requestにも写さない。着手の順番は<a href="/cumin-works/requirements/poll/">定期確認</a>の<code><a href="/cumin-works/requirements/poll/#CWK-POLL-006">CWK-POLL-006</a></code>で決める。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>inspection</code> ラベルの名前がコードの定義と一致すること</li></ul></div>
 </section><h3 id="pull-request">Pull Request</h3>
@@ -224,7 +224,7 @@
 </section><h3 id="リポジトリ">リポジトリ</h3>
 <section class="requirement"><h4 id="CWK-LABEL-008"><code class="requirement-id">CWK-LABEL-008</code> ラベルを作る</h4>
 <p>cuminは、対象のリポジトリに足りないラベルを作る。すでにあるラベルの色と説明は変えない。
-<code>priority_labels</code>で設定した優先度のラベルは、対象のリポジトリがすでに持つラベルなので、作らない。</p>
+<code>labels.priority</code>で設定した優先度のラベルは、対象のリポジトリがすでに持つラベルなので、作らない。</p>
 <div class="requirement-verification"><span class="requirement-verification-label">検証</span><ul><li><code>test</code> GitHub mockでテスト</li><li><code>demo</code> テスト用の実リポジトリで確認</li></ul></div>
 </section><h2 id="未決事項">未決事項</h2>
 <p>なし</p>
