@@ -30,10 +30,7 @@ cuminは、次の異常な状態のときに、通知する。
 
 | 場面 | 要件 |
 |---|---|
-| 権限外のアカウントが状態ラベルを付けたか、assigneeを替えた | `CWK-ACCESS-013` |
-| assigneeが1人のMaintainerでない | `CWK-ACCESS-013` |
-| 要求IssueにAssigneeがいない | `CWK-PLAN-007` |
-| 全部を読めないIssueがある | `CWK-POLL-012` |
+| 異常な状態のIssueがある。通知には、その理由を含める | `CWK-HOST-013` |
 | 使用率を読めない | `CWK-LIMIT-005` |
 | ツール動作確認が失敗した | `CWK-AGENT-022.3` |
 | rulesetが効いていない | `CWK-ACCESS-015` |

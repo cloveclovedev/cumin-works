@@ -135,19 +135,19 @@ Agentが動くのは、上記の状態のIssueだけである。なので、1つ
 
 ---
 
-### 全部を読めないIssue
+### 関連する情報の一部を読めないIssue
 
 #### `CWK-POLL-011` 読む数の上限
 
-cuminは、1つのIssueについて読む数に上限を持つ。sub-issueは36件まで読む（1回の分割の上限の12件を3回分）。sub-issueが36件を超えたIssueは、全部を読めないIssueである。ラベル、blocked byのIssue、結び付いたPull Requestがcuminの読む数を超えたIssueも、同じである。sub-issueの1つが全部を読めないIssueなら、その要求Issueも全部を読めないIssueとする。
+cuminは、1つのIssueについて読む数に上限を持つ。sub-issueは36件まで読む（1回の分割の上限の12件を3回分）。sub-issueが36件を超えたIssueは、関連する情報の一部を読めないIssueである。ラベル、blocked byのIssue、結び付いたPull Requestがcuminの読む数を超えたIssueも、同じである。sub-issueの1つが関連する情報の一部を読めないIssueなら、その要求Issueも関連する情報の一部を読めないIssueとする。
 
 - 検証: `test` GitHub mockでテスト
 
 ---
 
-#### `CWK-POLL-012` 全部を読めないIssueには何もしない
+#### `CWK-POLL-012` 関連する情報の一部を読めないIssueには何もしない
 
-全部を読めないIssueには、cuminは何もせず、ラベルも替えない。ほかのIssueは今までどおり進める。cuminは、Issueと超えた上限を書いて、1回だけ通知する。次に知らせるのは、そのIssueを全部読めたあとである。
+関連する情報の一部を読めないIssueには、cuminは何もせず、ラベルも替えない。ほかのIssueは今までどおり進める。cuminは、Issueと超えた上限を書いて、1回だけ通知する。次に知らせるのは、そのIssueの関連する情報をすべて読めたあとである。
 
 - 検証: `test` GitHub mockでテスト
 

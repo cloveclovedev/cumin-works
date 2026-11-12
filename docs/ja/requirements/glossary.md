@@ -56,7 +56,7 @@ cumin-worksの文書で使う語の意味を決める。「使わない言い方
 | Agent起動 | cuminがroleとIssueを決めてAgentを始め、作業を頼むこと。続きを頼むときも含む | 依頼、指示、起動 | agent start |
 | 通知 | Hostの設定で決めた通知先に知らせること。文書には相手の名前を書かない | 連絡、アラート | notify |
 | 作業中のリポジトリ | 短い間隔で定期確認する対象のリポジトリ | アクティブなリポジトリ | busy repository |
-| 全部を読めないIssue | sub-issue、ラベル、blocked byのIssue、結び付いたPull Requestのどれかが、cuminの読む数の上限を超えたIssue。cuminは何もしない | 大きすぎるIssue | issue that cumin cannot read whole |
+| 関連する情報の一部を読めないIssue | sub-issue、ラベル、blocked byのIssue、結び付いたPull Requestのどれかが、cuminの読む数の上限を超えたIssue。cuminは何もしない | 大きすぎるIssue | partly unreadable issue |
 
 ## 作業の流れ
 

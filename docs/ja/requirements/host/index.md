@@ -64,7 +64,7 @@ Operatorは、次のコマンドを使う。
 - 作業中のAgentと、`awaiting-`で始まる状態のIssue
 - 5時間制限と週間制限の使用率、読んだ時刻、今の上限、Agent起動を止めているかとその原因
 - cuminの停止予約があるか
-- 失敗しているツール動作確認と、全部を読めないIssue。Pull Requestの数で全部を読めないIssueは、通知だけで知らせる
+- 失敗しているツール動作確認と、異常な状態のIssueとその理由
 - 最後の定期確認の時刻と、そのエラー。モニターファイルがないとき、または最後の定期確認が`poll.interval`の3倍より古いときは、そのこと
 
 モニターファイルの中身で、終了コードは変えない。
@@ -247,7 +247,68 @@ GitHub Appの秘密鍵と、通知のwebhookのアドレスは、HostのmacOSの
 
 #### `CWK-HOST-013` モニターファイル
 
-cuminは、定期確認のたびとAgentの実行が終わるたびに、モニターファイルを書き直す。中身は、最後の定期確認の時刻とエラー、cuminの停止予約、利用制限で止めているか、失敗しているツール動作確認、全部を読めないIssue、動いているAgent、`awaiting-`で始まる状態のIssueである。cuminを外から見る道具と`cumin status`が読む。cumin自身は読まず、ここからは何も決めない。
+cuminは、定期確認のたびとAgentの実行が終わるたびに、モニターファイル（`~/.local/state/cumin/monitor.json`）を書き直す。cuminを外から見る道具と`cumin status`が読む。cumin自身は読まず、ここからは何も決めない。中身は次のとおりである。説明のためにコメントを付けたが、実際のファイルにはコメントはない。
+
+```jsonc
+{
+  // 形式の版。読む側が読めなくなる変更のときだけ上げる
+  "version": 1,
+  // 最後の定期確認
+  "last_poll": {
+    // 終わった時刻（UTC）
+    "at": "2026-11-11T12:00:00Z",
+    // 定期確認が失敗したリポジトリ
+    "errors": [
+      { "repository": "<owner>/<repository>", "message": "<理由>" }
+    ]
+  },
+  // cuminの停止予約があるか（CWK-HOST-007）
+  "stop_requested": false,
+  // 利用制限（CWK-LIMIT-001）。使用率の数字は書かない
+  "quota": {
+    // open: 起動する、stopped: 上限で止めている、unread: 使用率を読めずに止めている
+    "state": "stopped",
+    // 上限に達した制限。"5h"と"weekly"
+    "stopped_windows": ["5h"],
+    // 次にAgent起動を試す時刻（UTC）。止めていないときはキーがない
+    "next_try_at": "2026-11-11T15:00:00Z"
+  },
+  // 失敗しているツール動作確認（CWK-AGENT-022）
+  "failed_tool_checks": [
+    { "repository": "<owner>/<repository>", "commands": ["docker info"] }
+  ],
+  // 異常な状態のIssue。1つのIssueに理由が2つあれば、2つ書く
+  "issue_problems": [
+    { "repository": "<owner>/<repository>", "issue": 12, "title": "<タイトル>", "url": "<IssueのURL>",
+      // 理由。下の表の値のどれか
+      "reason": "partly_unreadable",
+      // 理由の詳しい内容を1行で。例えば、超えた上限
+      "detail": "<内容>" }
+  ],
+  // 動いているAgent
+  "agents": [
+    { "repository": "<owner>/<repository>", "issue": 34, "role": "implementer",
+      "request": "<依頼の種類>", "title": "<タイトル>", "url": "<IssueのURL>" }
+  ],
+  // awaiting-で始まる状態のIssue。kindは状態ラベルからawaiting-を除いたもの
+  "waiting": [
+    { "repository": "<owner>/<repository>", "issue": 56, "kind": "merge-decision",
+      "title": "<タイトル>", "url": "<Pull RequestのURL>" }
+  ]
+}
+```
+
+- 一覧は、空のときも`[]`と書く
+- `waiting`の`url`は、`merge-decision`ではPull Request、ほかはIssueのURLである
+
+`reason`は、次のどれかである。
+
+| `reason` | 場面 | 要件 |
+|---|---|---|
+| `partly_unreadable` | 関連する情報の一部を読めないIssue | `CWK-POLL-012` |
+| `unauthorized_change` | 権限外のアカウントが状態ラベルを付けたか、assigneeを替えた | `CWK-ACCESS-013` |
+| `assignee_not_one_maintainer` | assigneeが1人のMaintainerでない | `CWK-ACCESS-013` |
+| `no_assignee` | 要求IssueにAssigneeがいない | `CWK-PLAN-007` |
 
 - 検証: `test` GitHub mockでテスト
 

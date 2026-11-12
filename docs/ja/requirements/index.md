@@ -41,7 +41,7 @@ IDの接頭辞は`CWK`である。カテゴリごとにディレクトリを分�
 | `ASK` | [判断の依頼](ask/index.md) | IssueをAssigneeの判断に返すときのコメント、コメントを書く人、判断のあとの再開 |
 | `AGENT` | [Agent](agent/index.md) | Agent起動に共通のこと。結果の形式、指示の渡し方、権限、セッション、異常終了、ツール動作確認 |
 | `LIMIT` | [利用制限](limit/index.md) | 5時間制限と週間制限、Agent起動を止めることと再開すること |
-| `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHubの呼び出しの失敗、全部を読めないIssue、cuminがローカルに持つ情報 |
+| `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHubの呼び出しの失敗、関連する情報の一部を読めないIssue、cuminがローカルに持つ情報 |
 | `HOST` | [Hostでの動かし方](host/index.md) | コマンド、launchd、止め方、設定、Keychain、モニターファイル |
 | `NOTIFY` | [通知](notify/index.md) | 通知するとき、通知の中身と送り方 |
 
