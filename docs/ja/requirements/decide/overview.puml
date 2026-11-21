@@ -1,0 +1,20 @@
+@startuml overview
+' cumin-works - how an Assignee decides together with the Claude Code of a Maintainer.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+|Claude Code of a Maintainer|
+start
+if () then (start of work, or asked)
+  :list the issues that wait for\na decision of the Assignee, as trees;
+else (watching)
+  :read GitHub at an interval\nuntil a new issue waits for a decision;
+  :prepare the report;
+endif
+:report: what to decide, what was checked,\nconcerns, recommendation, choices;
+|Assignee|
+:decide, and say so\nfor one issue or pull request;
+|Claude Code of a Maintainer|
+:write the decision to GitHub;
+stop
+
+@enduml

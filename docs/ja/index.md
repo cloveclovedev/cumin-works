@@ -27,6 +27,7 @@ GitHubのIssueとラベルを状態として、Agentに計画、実装、レビ�
 - [Hostでの動かし方](requirements/host/index.md)
 - [通知](requirements/notify/index.md)
 - [plugin](requirements/plugin/index.md)
+- [判断](requirements/decide/index.md)
 - [リリース](requirements/release/index.md)
 
 ## 設計

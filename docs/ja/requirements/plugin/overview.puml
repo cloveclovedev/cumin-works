@@ -30,6 +30,7 @@ App --> Relay
 Browser --> Relay
 Claude --> Relay : outbound HTTPS only
 Ssh --> OperatorUser : the Operator
+Ssh --> MaintainerUser : start remote control,\nterminal use
 Claude --> GitHub : reads, writes\nwith the Maintainer's account
 Run --> GitHub : GitHub Apps
 

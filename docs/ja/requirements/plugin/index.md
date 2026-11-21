@@ -12,6 +12,7 @@ MaintainerのClaude Codeに入れるplugin `cumin-maintainer`の配り方と、c
 
 - Hostには、cuminを動かすユーザアカウント、Operatorのユーザアカウント、Maintainerのユーザアカウントを分けて作る。Maintainerのユーザアカウントは管理者にしない。
 - pluginは、Hostを変える操作（cuminの入れ替え、設定の変更）をしない。Hostの操作は、OperatorがOperatorのユーザアカウントで行う。
+- Maintainerは、最初の準備と、Hostの再起動のあとに、sshでMaintainerのユーザアカウントに入り、Remote Controlを起動する。チャットを始めるのと閉じるのは、スマホかノートPCから行う。
 - 作業の文脈の引き継ぎには、Claude Codeのメモリを使う
 
 ## 要件
@@ -34,4 +35,4 @@ MaintainerのClaude Codeは、作業の始めに、pluginのバージョンと�
 
 ## 未決事項
 
-なし
+- スマホから新しいチャットを始めるとき、どのディレクトリで始めるか。使ってみてから決める
