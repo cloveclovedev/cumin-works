@@ -51,7 +51,7 @@ Operatorは、次のコマンドを使う。
 | `cumin setup github-apps` | roleごとのGitHub Appを登録し、秘密鍵をKeychainに入れる。もう一度実行すると、足りないGitHub Appだけを登録する |
 | `cumin setup launchd` | LaunchAgentの定義を書く（`CWK-HOST-005`）|
 | `cumin setup notify --discord-webhook` | 通知のwebhookのアドレスを標準入力から受け取り、Keychainに入れる |
-| `cumin --version` | cuminの版を表示する |
+| `cumin --version` | cuminのバージョンを表示する（[リリース](../release/index.md)の`CWK-RELEASE-007`）|
 
 - 検証: `inspection` `cumin --help`の一覧が、この表と一致する
 
