@@ -235,6 +235,16 @@ disciplines = ["software-engineering"]
 
 ---
 
+### 入れ替え
+
+#### `CWK-HOST-014` cuminの入れ替え
+
+Operatorは、リリースのバイナリ（[リリース](../release/index.md)の`CWK-RELEASE-005`）をchecksumで確かめてから、cuminを入れ替える。入れる場所は、Hostのほかのユーザアカウントも実行できる場所にする（[plugin](../plugin/index.md)の`CWK-PLUGIN-002`）。
+
+- 検証: `demo` Hostで入れ替えて確認
+
+---
+
 ### 秘密の値と外から見るためのファイル
 
 #### `CWK-HOST-012` 秘密の値

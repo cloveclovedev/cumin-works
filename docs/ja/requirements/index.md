@@ -44,6 +44,8 @@ IDの接頭辞は`CWK`である。カテゴリごとにディレクトリを分�
 | `POLL` | [定期確認](poll/index.md) | 定期確認の間隔、着手の順番、GitHubの呼び出しの失敗、関連する情報の一部を読めないIssue、cuminがローカルに持つ情報 |
 | `HOST` | [Hostでの動かし方](host/index.md) | コマンド、launchd、止め方、設定、Keychain、モニターファイル |
 | `NOTIFY` | [通知](notify/index.md) | 通知するとき、通知の中身と送り方 |
+| `PLUGIN` | [plugin](plugin/index.md) | MaintainerのClaude Codeに入れるpluginの配り方、cuminとのバージョンの比較 |
+| `RELEASE` | [リリース](release/index.md) | バージョンの付け方、定期リリースと手動リリース、リリースに含めるもの |
 
 ## 要件の外の文書
 
