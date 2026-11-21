@@ -4,7 +4,7 @@ cumin-worksのバージョンの付け方、リリースする時期、リリー
 
 ## 全体像
 
-定期リリースと手動リリースは、同じ手順でリリースを作る。Operatorはリリースのバイナリでcuminを入れ替え（[Hostでの動かし方](../host/index.md)の`CWK-HOST-014`）、MaintainerのClaude Codeは`release`ブランチからpluginを更新する（[plugin](../plugin/index.md)の`CWK-PLUGIN-001`）。
+定期リリースと手動リリースは、同じ手順でリリースを作る。Operatorはリリースのバイナリでcuminを入れ替え（[Hostでの動かし方](../host/index.md)の`CWK-HOST-014`）、人が使うClaude Codeは`release`ブランチからpluginを更新する（[plugin](../plugin/index.md)の`CWK-PLUGIN-001`）。
 
 ![リリースの全体像](overview.svg)
 

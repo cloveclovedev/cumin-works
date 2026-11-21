@@ -1,10 +1,10 @@
 # plugin
 
-MaintainerのClaude Codeに入れるplugin `cumin-maintainer`の配り方と、cuminとのバージョンの比べ方を決める。
+人が使うClaude Codeに入れるplugin `cumin-maintainer`の配り方と、cuminとのバージョンの比べ方を決める。このページでのClaude Codeは、このpluginを入れて人が使うもので、Agentではない。
 
 ## 全体像
 
-次の図は、参考にする使い方である。HostでMaintainerのClaude Codeを動かし続け、ノートPCとスマホから、Claude CodeのRemote Controlで操作する。ノートPCを閉じていても、スマホから判断を続けられる。この使い方は要件ではない。MaintainerのClaude Codeを、手元のPCだけで動かしてもよい。
+次の図は、参考にする使い方である。HostでClaude Codeを動かし続け、ノートPCとスマホから、Claude CodeのRemote Controlで操作する。ノートPCを閉じていても、スマホから判断を続けられる。この使い方は要件ではない。Claude Codeを、手元のPCだけで動かしてもよい。
 
 ![pluginの全体像](overview.svg)
 
@@ -27,7 +27,7 @@ cumin-worksのリポジトリをClaude Codeのpluginのmarketplaceとし、plugi
 
 #### `CWK-PLUGIN-002` cuminとのバージョンの比較
 
-MaintainerのClaude Codeは、作業の始めに、pluginのバージョンと、`cumin --version`が表示するcuminのバージョンを比べる。違えば、そのことを最初に言う。`cumin`を実行できず比べられないときは、そう言う。
+Claude Codeは、作業の始めに、pluginのバージョンと、`cumin --version`が表示するcuminのバージョンを比べる。違えば、そのことを最初に言う。`cumin`を実行できず比べられないときは、そう言う。
 
 - 検証: `demo` バージョンが違う組み合わせで動かして確認
 

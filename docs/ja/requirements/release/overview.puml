@@ -19,7 +19,7 @@ endif
 fork
   :the Operator replaces cumin\nwith the released binary;
 fork again
-  :the Claude Code of a Maintainer\nupdates the plugin from the release branch;
+  :Claude Code with the plugin\nupdates the plugin from the release branch;
 end fork
 stop
 
