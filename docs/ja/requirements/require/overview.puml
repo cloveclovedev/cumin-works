@@ -16,7 +16,7 @@ else (no)
 endif
 :check the size, duplicates,\nblocked by, milestone, and assignee;
 |Maintainer|
-:agree, one action at a time;
+:agree;
 |Claude Code with the plugin|
 :open the pull request of the documents\nand the requirement issue;
 |Maintainer|

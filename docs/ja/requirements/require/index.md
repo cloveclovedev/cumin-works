@@ -52,17 +52,9 @@ Claude Codeは、受け入れ確認でPlannerが「判断が必要」に仕分�
 
 ---
 
-### GitHubに書く
+### 始める
 
-#### `CWK-REQUIRE-006` GitHubに書く前に1件ずつ確かめる
-
-Claude Codeは、Issueの作成、Pull Requestの作成、push、マージの前に、何をどこに書くかを示して、Maintainerの言葉を得る。1つの言葉で行う操作は1つである。
-
-- 検証: `demo` GitHubに書く前に、毎回Maintainerに聞くことを確認
-
----
-
-#### `CWK-REQUIRE-007` 要求Issueにreadyを付ける
+#### `CWK-REQUIRE-006` 要求Issueにreadyを付ける
 
 Claude Codeは、要求Issueの中身をMaintainerと確かめ終え、Maintainerの言葉を得てから、`cumin/status/ready`を付ける。
 

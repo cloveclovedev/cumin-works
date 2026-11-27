@@ -11,7 +11,7 @@ else (watching)
   endif
 :report: what to decide, what was checked,\nconcerns, recommendation, choices;
 |Assignee|
-:decide, and say so\nfor one issue or pull request;
+:decide, and tell Claude Code;
 |Claude Code with the plugin|
 :write the decision to GitHub;
 stop
