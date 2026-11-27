@@ -5,11 +5,10 @@
 |Claude Code with the plugin|
 start
 if () then (start of work, or asked)
-  :list the issues that wait for\na decision of the Assignee, as trees;
+  :list the issues that wait for\na decision of the Assignee, as a tree;
 else (watching)
   :read GitHub at an interval\nuntil a new issue waits for a decision;
-  :prepare the report;
-endif
+  endif
 :report: what to decide, what was checked,\nconcerns, recommendation, choices;
 |Assignee|
 :decide, and say so\nfor one issue or pull request;

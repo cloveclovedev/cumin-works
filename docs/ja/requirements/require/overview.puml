@@ -1,0 +1,28 @@
+@startuml overview
+' cumin-works - how a Maintainer opens a requirement issue together with Claude Code and the plugin.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+|Maintainer|
+start
+if () then (a new need)
+  :tell the need;
+else (an acceptance check left items\nthat need a decision)
+endif
+|Claude Code with the plugin|
+:draft the requirement issue;
+if (the repository has requirement documents\nand the need changes them?) then (yes)
+  :draft the change\nof the documents;
+else (no)
+endif
+:check the size, duplicates,\nblocked by, milestone, and assignee;
+|Maintainer|
+:agree, one action at a time;
+|Claude Code with the plugin|
+:open the pull request of the documents\nand the requirement issue;
+|Maintainer|
+:agree to start;
+|Claude Code with the plugin|
+:add cumin/status/ready;
+stop
+
+@enduml

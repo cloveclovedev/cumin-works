@@ -17,7 +17,7 @@
 
 ## 要件
 
-#### `CWK-PLUGIN-001` 配り方
+#### `CWK-PLUGIN-001` pluginをmarketplaceで配る
 
 cumin-worksのリポジトリをClaude Codeのpluginのmarketplaceとし、plugin `cumin-maintainer`を配る。Maintainerは、marketplaceを`release`ブランチで足す（`cloveclovedev/cumin-works#release`）。入れたpluginは、いつもリリースと同じものになる（[リリース](../release/index.md)の`CWK-RELEASE-006`）。
 
@@ -25,7 +25,7 @@ cumin-worksのリポジトリをClaude Codeのpluginのmarketplaceとし、plugi
 
 ---
 
-#### `CWK-PLUGIN-002` cuminとのバージョンの比較
+#### `CWK-PLUGIN-002` pluginとcuminのバージョンを比べる
 
 Claude Codeは、作業の始めに、pluginのバージョンと、`cumin --version`が表示するcuminのバージョンを比べる。違えば、そのことを最初に言う。`cumin`を実行できず比べられないときは、そう言う。
 

@@ -46,6 +46,7 @@ IDの接頭辞は`CWK`である。カテゴリごとにディレクトリを分�
 | `NOTIFY` | [通知](notify/index.md) | 通知するとき、通知の中身と送り方 |
 | `PLUGIN` | [plugin](plugin/index.md) | 人が使うClaude Codeに入れるpluginの配り方、cuminとのバージョンの比較 |
 | `DECIDE` | [判断](decide/index.md) | AssigneeがClaude Codeと判断するときに、Claude Codeがすること |
+| `REQUIRE` | [要求](require/index.md) | Maintainerが要求Issueを立てるときに、Claude Codeがすること |
 | `RELEASE` | [リリース](release/index.md) | バージョンの付け方、定期リリースと手動リリース、リリースに含めるもの |
 
 ## 要件の外の文書
