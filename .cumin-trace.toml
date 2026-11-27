@@ -3,3 +3,7 @@ prefix = "CWK"
 
 # The allowed areas. Add an area here before you write its first requirement.
 areas = ["LABEL", "ACCESS", "PLAN", "IMPL", "CHECK", "REVIEW", "MERGE", "ACCEPT", "ASK", "AGENT", "LIMIT", "POLL", "HOST", "NOTIFY", "PLUGIN", "DECIDE", "REQUIRE", "RELEASE"]
+
+[site]
+base = "/cumin-works/"
+name = "cumin-works"
