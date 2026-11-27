@@ -122,7 +122,7 @@ Plannerは、要求Issueを実装Issueに分け、要求Issueのsub-issueとし�
 
 #### `CWK-PLAN-010` 実装Issueの大きさ
 
-実装Issueは、どれも[実装Issueの大きさの基準](../../reference/issue-sizing.md)を満たし、合わせると要求Issueの範囲をすべて覆う。
+実装Issueは、どれも[実装Issueの分割基準](../../reference/issue-sizing.md)を満たし、合わせると要求Issueの範囲をすべて覆う。
 
 - 検証: `inspection` 計画結果の確認で、Assigneeが基準と範囲を確かめる
 
@@ -233,7 +233,7 @@ Plannerは、次のどれかに当たったら、推測で計画せずに`blocke
 
 ##### `CWK-PLAN-020.4` 大きすぎる要求
 
-実装Issueの見込みが[要求Issueの大きさの基準](../../reference/requirement-sizing.md)の上限を超えるときはAssigneeに判断を求める。理由には、要求Issueの分け方の案を書く。
+実装Issueの見込みが[要求Issueの分割基準](../../reference/requirement-sizing.md)の上限を超えるときはAssigneeに判断を求める。理由には、要求Issueの分け方の案を書く。
 
 - 検証: `demo` テスト用の実リポジトリでPlannerを動かして確認
 

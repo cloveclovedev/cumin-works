@@ -37,6 +37,6 @@ GitHubのIssueとラベルを状態として、Agentに計画、実装、レビ�
 
 ## 要件の外の文書
 
-- [要求Issueの大きさの基準](reference/requirement-sizing.md)
-- [実装Issueの大きさの基準](reference/issue-sizing.md)
+- [要求Issueの分割基準](reference/requirement-sizing.md)
+- [実装Issueの分割基準](reference/issue-sizing.md)
 - [GitHubに残す文章のテンプレート](reference/writing-templates.md)

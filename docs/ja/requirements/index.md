@@ -53,6 +53,6 @@ IDの接頭辞は`CWK`である。カテゴリごとにディレクトリを分�
 
 次の文書は人が読む説明で、要件ではない。Agentが受け取るのは、`disciplines/`と`templates/`の英語の文である。
 
-- [要求Issueの大きさの基準](../reference/requirement-sizing.md)
-- [実装Issueの大きさの基準](../reference/issue-sizing.md)
+- [要求Issueの分割基準](../reference/requirement-sizing.md)
+- [実装Issueの分割基準](../reference/issue-sizing.md)
 - [GitHubに残す文章のテンプレート](../reference/writing-templates.md)

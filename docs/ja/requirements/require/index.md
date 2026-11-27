@@ -30,7 +30,7 @@ Claude Codeは、要求Issueを[requirement-issue.md](../../../../templates/requ
 
 #### `CWK-REQUIRE-003` 要求Issueの規模を確かめる
 
-Claude Codeは、要求Issueを[要求Issueの大きさの基準](../../reference/requirement-sizing.md)で確かめ、超えていれば分け方の案を出す。この基準はcuminに入っていて、対象のリポジトリからは変えられない。
+Claude Codeは、要求Issueを[要求Issueの分割基準](../../reference/requirement-sizing.md)で確かめ、超えていれば分け方の案を出す。この基準はcuminに入っていて、対象のリポジトリからは変えられない。
 
 - 検証: `demo` 基準を超える要求で動かして確認
 
