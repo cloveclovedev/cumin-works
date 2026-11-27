@@ -83,7 +83,7 @@ cuminは、次の4つをこの順につないで、roleの指示として渡す�
 3. 平易な英語の決まり（`templates/writing-rules.md`）
 4. 対象のリポジトリのリスクの基準（`CWK-AGENT-009`）
 
-食い違ったら、roleのファイルが勝つ。専門知識のファイルがないroleは、それを飛ばす。今の専門知識は`software-engineering`だけである。
+専門知識のファイルがないroleは、それを飛ばす。今の専門知識は`software-engineering`だけである。
 
 - 検証: `test` CLI mockでテスト
 
