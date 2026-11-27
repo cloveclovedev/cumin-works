@@ -1,0 +1,26 @@
+@startuml overview
+' cumin-works - how a release is made and who takes it.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+start
+if () then (every Thursday 09:00 JST)
+  if (changes outside docs/ since the last tag?) then (yes)
+    :bump the patch;
+  else (no)
+    stop
+  endif
+else (a Maintainer starts it)
+  :bump the chosen part\n(major, minor, or patch);
+endif
+:set the version in plugin.json;
+:build the cumin binaries for macOS;
+:create the tag and the GitHub release\nwith the binaries and the checksums;
+:move the release branch to the tag;
+fork
+  :the Operator replaces cumin\nwith the released binary;
+fork again
+  :Claude Code with the plugin\nupdates the plugin from the release branch;
+end fork
+stop
+
+@enduml

@@ -1,0 +1,41 @@
+@startuml overview
+' cumin-works - the steps of one agent run on the Host.
+' A step is a stage of the run on the Host, not a label on GitHub.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "label changed" as Labeled
+Labeled : cumin changed the status label on GitHub
+
+state "prepared" as Prepared
+Prepared : the agent work directory, the token,\nthe instructions, the facts, the skills
+
+state "started" as Started
+Started : cumin reads the start record
+
+state "running" as Running
+Running : do / the agent works
+
+state "ended" as Ended
+Ended : cumin checks the result
+
+state "abnormal end" as Abnormal
+Abnormal : no result for cumin
+
+state "decided from GitHub" as Decided
+Decided : each area decides the next action\nfrom the facts on GitHub
+
+[*] --> Labeled : an area starts an agent\n[the tool checks of the repository pass]
+Labeled --> Prepared
+Prepared --> Started : cumin starts the CLI\nisolated from the Host user's settings
+Started --> Running : [the start record is clean,\nevery skill is there]
+Started --> Abnormal : [user-level context,\nor a missing skill]\n/ cumin stops the run
+Running --> Ended : the agent returns its result
+Running --> Abnormal : [the time limit passed,\nor the process failed]\n/ cumin stops the run and its commands
+Ended --> Decided : [the result has the right form]\n/ cumin posts blocked_reason if blocked
+Ended --> Abnormal : [the result has the wrong form]
+Abnormal --> Decided
+Decided --> [*]
+
+@enduml

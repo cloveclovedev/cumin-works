@@ -8,9 +8,10 @@ The first goal is that the rebuild of the `peppercheck` product runs on this eng
 
 ## Read first
 
-All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and follow the links to every document that your task touches. Read them before you change code. Two documents need special care:
+All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and follow the links to every document that your task touches. Read them before you change code. Take special care with these:
 
-- `docs/ja/requirements/workflow/issue-states.md` is the source of truth for every cumin action.
+- The requirement documents under `docs/ja/requirements/` are the source of truth for every cumin action. `docs/ja/requirements/index.md` lists the areas, and each requirement has an ID (`CWK-<AREA>-<number>`).
+- The design documents under `docs/ja/designs-old/` were written before the current requirements. They may link to pages that no longer exist. Where a design document and a requirement differ, the requirement holds.
 - `docs/ja/requirements/backlog.md` lists what is decided to be out of scope for now. Do not build those things.
 
 `roles/` holds the contract of each role with cumin, `disciplines/<discipline>/` holds the standards of one field of work for each role and the built-in risk criteria, and `templates/` holds the English templates for text on GitHub. `templates/embed.go` embeds the templates for the code. The headings in the templates are a contract between cumin, the agents, and the Maintainers.
@@ -27,18 +28,18 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 - Simple first. Look for the simplest way that meets the requirement.
 - Requirement first. Every behavior traces to a row in a requirement document. If no row covers the behavior, ask.
 - Document first. Documents stay current with the code, so that another person can read what works today.
-- Test first. Each requirement document ends with a table titled "上位要件のテスト" (tests of the top-level requirements). These tables are the starting point for acceptance tests. Prefer a few tests that prove a requirement over many unit tests.
+- Test first. Each requirement has a verification line (`検証`). The requirements verified by `test` are the starting point for acceptance tests. Prefer a few tests that prove a requirement over many unit tests.
 - Verify external APIs in the official documentation before you use them: GitHub REST and GraphQL API, Claude Code CLI, Go libraries. Do not rely on memory. Say which page you checked. Separate verified facts from your own reasoning.
 
 ## Design constraints
 
-- State lives on GitHub: issues, labels, pull requests, reviews, comments. cumin keeps locally only what it can lose without losing work (see `docs/ja/designs/cumin-core.md`). No local database.
+- State lives on GitHub: issues, labels, pull requests, reviews, comments. cumin keeps locally only what it can lose without losing work (see `docs/ja/designs-old/cumin-core.md`). No local database.
 - cumin decides completion from facts on GitHub, never from what an agent reports. `done` from an agent only means "start checking".
 - cumin changes the status label before it starts an agent. It never requests the same work twice.
 - The same state must always produce the same action. Keep the decision logic as pure functions from a snapshot of GitHub facts to actions. Keep I/O (GitHub, CLI, Keychain, Discord, git) at the edges.
 - Name each cumin action by one short English name, and use the same name in code, comments, log lines, and test names (for example "wait for the checks", "stop the implementation"). Do not add these names to the requirement documents.
-- Configuration is TOML. Do not hard-code values that the settings table in `cumin-core.md` lists. Secrets are in the macOS Keychain, never in files or in the repository.
-- An agent receives only the token of its own GitHub App, never the credentials of the Operator or of a Maintainer, and starts isolated from the Host user's settings (`docs/ja/designs/agent-run.md`).
+- Configuration is TOML. Do not hard-code values that the settings in `CWK-HOST-011` (`docs/ja/requirements/host/index.md`) list. Secrets are in the macOS Keychain, never in files or in the repository.
+- An agent receives only the token of its own GitHub App, never the credentials of the Operator or of a Maintainer, and starts isolated from the Host user's settings (`docs/ja/designs-old/agent-run.md`).
 - Differences between agent CLIs stay inside one adapter in `internal/agent/`.
 
 ## Code
@@ -55,7 +56,7 @@ All documents are in Japanese under `docs/ja/`. Start at `docs/ja/index.md` and 
 - `internal/platform/*` may import `internal/core/*`. `internal/core/*` never imports `internal/platform/*`. Feature packages never import each other's adapters.
 - Inside a feature package, separate roles by file: pure rules and models (`domain.go`), orchestration (`service.go`), outbound I/O (`store.go` or a file named for the external system). The pure rules import no HTTP client, no `os/exec`, and no provider type.
 - Do not add an interface unless a second implementation or a real testing need exists.
-- The packages and their files are listed in `docs/ja/designs/code-layout.md`. Do not create empty packages. Update that document in the pull request that changes the layout.
+- The packages and their files are listed in `docs/ja/designs-old/code-layout.md`. Do not create empty packages. Update that document in the pull request that changes the layout.
 - Logs are structured (`log/slog`, JSON) on stdout. Never log tokens, keys, webhook URLs, or quota numbers at info level.
 - Code, comments, test names, commit messages, and pull requests are in English.
 

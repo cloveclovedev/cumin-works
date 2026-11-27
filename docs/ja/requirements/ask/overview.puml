@@ -1,0 +1,21 @@
+@startuml overview
+' cumin-works - handing an issue back to its Assignee for a decision.
+' A state is a label on GitHub, written without "cumin/status/". "do /" says who works in the state.
+' A gray state belongs to another area.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "a state in work" as Work #EEEEEE
+Work : (planning, implementing, checking,\nreviewing, merging, accepting)
+
+state "awaiting-decision" as Decision
+Decision : do / the Assignee reads the comment,\nchooses, and writes the decision
+
+state "ready" as Ready #EEEEEE
+Ready : (each area decides what comes next)
+
+Work --> Decision : stop\n[the agent asked, or cumin stopped the work]\n/ the comment has the reason, the choices,\nand what the Assignee does for each\n/ cumin notifies
+Decision --> Ready : the Assignee adds ready
+
+@enduml

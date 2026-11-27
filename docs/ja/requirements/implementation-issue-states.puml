@@ -1,0 +1,45 @@
+@startuml implementation-issue-states
+' cumin-works - the states of an implementation issue, with the action names only.
+' Each category page holds the guards and what cumin does
+' (implementation, checks, review, merge).
+' A state is a label on GitHub, written without "cumin/status/".
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "ready" as Ready
+state "implementing" as Implementing
+state "checking" as Checking
+state "reviewing" as Reviewing
+state "awaiting-merge-decision" as MergeDecision
+state "awaiting-blocker-merge" as AwaitingBase
+state "merging" as Merging
+state "awaiting-decision" as Decision
+
+[*] --> Ready : an Assignee adds ready
+Ready --> Implementing : request the implementation
+Implementing --> Implementing : request the implementation again
+Implementing --> Checking : wait for the checks
+Implementing --> Decision : stop the implementation
+Checking --> Implementing : request a check fix,\nrequest a conflict resolution
+Checking --> Decision : stop for failed checks,\nstop for missing checks
+Checking --> Reviewing : request the review
+Reviewing --> Reviewing : request the review again,\nrequest the cause
+Reviewing --> Implementing : request a review fix
+Reviewing --> Checking : go back to the checks
+Reviewing --> Decision : stop the review,\nstop at the round limit
+Reviewing --> Merging : start the merge (the risk needs no decision)
+Reviewing --> MergeDecision : ask for the merge decision (the risk needs a decision)
+Reviewing --> AwaitingBase : wait for the blocker merge
+MergeDecision --> Merging : start the merge
+MergeDecision --> Implementing : request an assignee review fix,\nrequest a conflict resolution
+AwaitingBase --> Implementing : take in the main branch
+AwaitingBase --> Decision : stop the implementation
+Merging --> Merging : merge
+Merging --> Checking : go back to the checks
+Merging --> Implementing : request a conflict resolution
+Merging --> Decision : stop the merge
+Merging --> [*] : close the merged issue
+Decision --> Ready : the Assignee answers and adds ready
+
+@enduml

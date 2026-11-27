@@ -1,0 +1,37 @@
+@startuml overview
+' cumin-works - the reference setup for the Claude Code of a Maintainer.
+' This setup is a reference, not a requirement.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+left to right direction
+
+node "phone" as Phone {
+  rectangle "Claude app" as App
+}
+node "laptop" as Laptop {
+  rectangle "Claude app or browser" as Browser
+  rectangle "ssh" as Ssh
+}
+cloud "Remote Control relay" as Relay
+cloud "GitHub" as GitHub
+node "Host" as Host {
+  rectangle "cumin user" as CuminUser {
+    rectangle "cumin run and agents" as Run
+  }
+  rectangle "Operator user (admin)" as OperatorUser {
+    rectangle "tools and cumin updates" as Tools
+  }
+  rectangle "Maintainer user (not admin)" as MaintainerUser {
+    rectangle "Claude Code\n(remote control, cumin-maintainer plugin)" as Claude
+  }
+}
+
+App --> Relay
+Browser --> Relay
+Claude --> Relay : outbound HTTPS only
+Ssh --> OperatorUser : the Operator
+Ssh --> MaintainerUser : start remote control,\nterminal use
+Claude --> GitHub : reads, writes\nwith the Maintainer's account
+Run --> GitHub : GitHub Apps
+
+@enduml

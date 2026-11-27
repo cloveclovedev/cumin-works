@@ -1,0 +1,34 @@
+@startuml overview
+' cumin-works - what cumin keeps on the Host, and who reads and writes it.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+
+actor "Operator" as Operator
+rectangle "Host" {
+  rectangle "launchd" as Launchd
+  rectangle "cumin run" as Run
+  rectangle "cumin status,\nquota allow, stop, setup" as Commands
+  file "settings (TOML)" as Settings
+  database "Keychain\n(private keys, webhook address)" as Keychain
+  file "local state\n(sessions, counts, usage)" as State
+  file "monitor file" as Monitor
+  rectangle "agents" as Agents
+}
+cloud "GitHub" as GitHub
+cloud "notification channel" as Channel
+
+Operator --> Commands
+Operator --> Settings : writes
+Launchd --> Run : starts, restarts after a failure
+Run --> Settings : reads
+Run --> Keychain : reads at start
+Run --> State : reads, writes
+Run --> Monitor : writes
+Commands --> Monitor : status reads
+Commands --> Keychain : setup writes
+Run --> Agents : starts with a role token
+Run --> GitHub : polls, writes labels,\ncomments, merges
+Agents --> GitHub : work as the role
+Run --> Channel : notifies
+
+@enduml

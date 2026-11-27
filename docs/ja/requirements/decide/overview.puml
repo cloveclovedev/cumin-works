@@ -1,0 +1,19 @@
+@startuml overview
+' cumin-works - how an Assignee decides together with the Claude Code with the plugin.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+|Claude Code with the plugin|
+start
+if () then (start of work, or asked)
+  :list the issues that wait for\na decision of the Assignee, as a tree;
+else (watching)
+  :read GitHub at an interval\nuntil a new issue waits for a decision;
+  endif
+:report: what to decide, what was checked,\nconcerns, recommendation, choices;
+|Assignee|
+:decide, and tell Claude Code;
+|Claude Code with the plugin|
+:write the decision to GitHub;
+stop
+
+@enduml

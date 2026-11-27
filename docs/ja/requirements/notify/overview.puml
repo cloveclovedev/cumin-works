@@ -1,0 +1,21 @@
+@startuml overview
+' cumin-works - when cumin notifies. Each cause is notified once.
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+left to right direction
+
+rectangle "a person needs to decide\n(an awaiting- state)" as Decide
+rectangle "something is wrong\n(no permission, no Assignee, an unreadable issue,\nan unread usage, a failed tool check,\nno ruleset, failed polls)" as Wrong
+rectangle "a usage reaches its threshold" as Limit
+rectangle "no issue cumin can move on" as Waits
+
+rectangle "notify once:\na link and one line of the reason" as Notify
+rectangle "the issue and the pull request\nhold the details and the talk" as GitHub
+
+Decide --> Notify
+Wrong --> Notify
+Limit --> Notify
+Waits --> Notify
+Notify --> GitHub : the reader goes to
+
+@enduml

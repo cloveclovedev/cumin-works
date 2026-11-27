@@ -1,0 +1,39 @@
+@startuml requirement-issue-states
+' cumin-works - the states of a requirement issue, with the action names only.
+' Each category page holds the guards and what cumin does (plan, acceptance).
+' A state is a label on GitHub, written without "cumin/status/".
+' Render: run scripts/render-diagrams.sh at the root of the repository.
+
+hide empty description
+
+state "Draft (no status label)" as Draft
+state "ready" as Ready
+state "planning" as Planning
+state "awaiting-plan-review" as PlanReview
+state "implementing" as Implementing
+Implementing : the sub-issues are in work
+state "accepting" as Accepting
+state "awaiting-acceptance" as AwaitingAcceptance
+state "awaiting-decision" as Decision
+
+[*] --> Draft
+Draft --> Ready : a Maintainer adds ready
+Ready --> Planning : request the split
+Planning --> Planning : request the split again
+Planning --> PlanReview : ask for the plan review
+Planning --> Decision : stop the split
+Draft --> Implementing : mark the requirement as in work
+PlanReview --> Implementing : mark the requirement as in work
+Implementing --> PlanReview : ask about the remaining sub-issues
+Planning --> Accepting : request the acceptance check
+Implementing --> Accepting : request the acceptance check
+PlanReview --> Accepting : request the acceptance check
+Accepting --> Accepting : request the acceptance check again
+Accepting --> AwaitingAcceptance : ask for the acceptance
+Accepting --> PlanReview : ask for the plan review
+Accepting --> Decision : stop the acceptance check
+AwaitingAcceptance --> Implementing : send back
+AwaitingAcceptance --> [*] : the Assignee closes the issue
+Decision --> Ready : the Assignee answers and adds ready
+
+@enduml

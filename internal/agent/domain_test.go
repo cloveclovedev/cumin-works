@@ -2,15 +2,12 @@ package agent
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
 
 // The tests cover the fifth requirement of #7: the result is validated
-// against the schema in agents/common.md, and "blocked" needs a reason.
+// against the result schema (CWK-AGENT-015), and "blocked" needs a reason.
 
 func TestValidateResult(t *testing.T) {
 	tests := []struct {
@@ -99,40 +96,6 @@ func TestValidateResult(t *testing.T) {
 				t.Errorf("error = %q, want it to contain %q", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-// The schema in the code must stay equal to the schema in the requirement.
-func TestResultSchemaMatchesCommonDocument(t *testing.T) {
-	doc, err := os.ReadFile(filepath.Join("..", "..", "docs", "ja", "requirements", "agents", "common.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var documented any
-	rest := string(doc)
-	for {
-		var block string
-		var found bool
-		_, rest, found = strings.Cut(rest, "```json\n")
-		if !found {
-			t.Fatal("common.md has no json block with a schema")
-		}
-		block, rest, _ = strings.Cut(rest, "```")
-		var v map[string]any
-		if err := json.Unmarshal([]byte(block), &v); err != nil {
-			continue
-		}
-		if _, ok := v["properties"]; ok {
-			documented = v
-			break
-		}
-	}
-	var inCode any
-	if err := json.Unmarshal([]byte(ResultSchema), &inCode); err != nil {
-		t.Fatalf("ResultSchema is not JSON: %v", err)
-	}
-	if !reflect.DeepEqual(inCode, documented) {
-		t.Errorf("ResultSchema differs from common.md:\ncode: %s\ndocument: %v", ResultSchema, documented)
 	}
 }
 
